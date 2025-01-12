@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'fs';
+import * as fs from 'fs';
 import { join, dirname } from 'path';
 import { DirectiveNode } from 'meld-spec';
 import { DirectiveHandler } from './types';
@@ -23,13 +23,13 @@ class EmbedDirectiveHandler implements DirectiveHandler {
     const embedPath = join(currentDir, path);
 
     // Check if file exists
-    if (!existsSync(embedPath)) {
+    if (!fs.existsSync(embedPath)) {
       throw new MeldEmbedError('File not found', node.location?.start);
     }
 
     try {
       // Read content
-      let content = readFileSync(embedPath, 'utf-8');
+      let content = fs.readFileSync(embedPath, 'utf-8');
 
       // Extract section if specified
       if (section) {

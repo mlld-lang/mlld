@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'fs';
+import * as fs from 'fs';
 import { join, dirname } from 'path';
 import { DirectiveNode } from 'meld-spec';
 import { DirectiveHandler } from './types';
@@ -23,7 +23,7 @@ class ImportDirectiveHandler implements DirectiveHandler {
     const importPath = join(currentDir, from);
 
     // Check if file exists
-    if (!existsSync(importPath)) {
+    if (!fs.existsSync(importPath)) {
       throw new MeldImportError('File not found', node.location?.start);
     }
 
@@ -34,7 +34,7 @@ class ImportDirectiveHandler implements DirectiveHandler {
 
     try {
       // Read and parse imported content
-      const content = readFileSync(importPath, 'utf-8');
+      const content = fs.readFileSync(importPath, 'utf-8');
       const importedNodes = parseMeld(content);
 
       // Create child state for imported content
