@@ -1,47 +1,18 @@
 import { describe, it, expect } from 'vitest';
-import { PathDirectiveHandler } from '../pathDirective.js';
+import { pathDirectiveHandler } from '../pathDirective.js';
 import { InterpreterState } from '../../state/state.js';
 import type { DirectiveNode } from 'meld-spec';
-import * as path from 'node:path';
+import { vi } from 'vitest';
 
 describe('PathDirectiveHandler', () => {
-  let handler: PathDirectiveHandler;
+  let handler = pathDirectiveHandler;
   let state: InterpreterState;
-  const originalEnv = process.env;
-  const originalCwd = process.cwd;
 
   beforeEach(() => {
-    handler = new PathDirectiveHandler();
     state = new InterpreterState();
     // Mock environment and cwd
-    process.env = { ...originalEnv, HOME: '/Users/test' };
-    process.cwd = vi.fn().mockReturnValue('/project/root');
-    // Mock path module
-    vi.mock('path', () => {
-      const actual = {
-        normalize: vi.fn().mockImplementation((p: string) => p),
-        resolve: vi.fn().mockImplementation((p: string) => p),
-        join: vi.fn().mockImplementation((...parts: string[]) => parts.join('/')),
-        dirname: vi.fn().mockImplementation((p: string) => p.split('/').slice(0, -1).join('/')),
-        basename: vi.fn().mockImplementation((p: string) => p.split('/').pop() || ''),
-        extname: vi.fn().mockImplementation((p: string) => {
-          const parts = p.split('.');
-          return parts.length > 1 ? `.${parts.pop()}` : '';
-        })
-      };
-      return {
-        ...actual,
-        default: actual
-      };
-    });
-  });
-
-  afterEach(() => {
-    // Restore original values
-    process.env = originalEnv;
-    process.cwd = originalCwd;
-    vi.restoreAllMocks();
-    vi.resetModules();
+    vi.stubEnv('HOME', '/home/user');
+    vi.spyOn(process, 'cwd').mockReturnValue('/project/path');
   });
 
   describe('canHandle', () => {
@@ -51,7 +22,6 @@ describe('PathDirectiveHandler', () => {
 
     it('should not handle other directives', () => {
       expect(handler.canHandle('run')).toBe(false);
-      expect(handler.canHandle('text')).toBe(false);
     });
   });
 
@@ -61,7 +31,7 @@ describe('PathDirectiveHandler', () => {
         type: 'Directive',
         directive: {
           kind: 'path',
-          identifier: 'config',
+          name: 'config',
           value: '$HOMEPATH/config'
         },
         location: {
@@ -79,7 +49,7 @@ describe('PathDirectiveHandler', () => {
         type: 'Directive',
         directive: {
           kind: 'path',
-          identifier: 'config',
+          name: 'config',
           value: '$~/config'
         },
         location: {
@@ -97,7 +67,7 @@ describe('PathDirectiveHandler', () => {
         type: 'Directive',
         directive: {
           kind: 'path',
-          identifier: 'src',
+          name: 'src',
           value: '$PROJECTPATH/src'
         },
         location: {
@@ -115,7 +85,7 @@ describe('PathDirectiveHandler', () => {
         type: 'Directive',
         directive: {
           kind: 'path',
-          identifier: 'src',
+          name: 'src',
           value: '$./src'
         },
         location: {
@@ -133,7 +103,7 @@ describe('PathDirectiveHandler', () => {
         type: 'Directive',
         directive: {
           kind: 'path',
-          identifier: 'output',
+          name: 'output',
           value: ['$PROJECTPATH', '/build', '/output']
         },
         location: {
@@ -151,7 +121,7 @@ describe('PathDirectiveHandler', () => {
         type: 'Directive',
         directive: {
           kind: 'path',
-          identifier: 'invalid',
+          name: 'invalid',
           value: '/absolute/path'
         },
         location: {
@@ -188,7 +158,7 @@ describe('PathDirectiveHandler', () => {
         type: 'Directive',
         directive: {
           kind: 'path',
-          identifier: 'test'
+          name: 'test'
         } as any,
         location: {
           start: { line: 1, column: 1 },

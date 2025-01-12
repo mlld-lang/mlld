@@ -1,52 +1,44 @@
-import { DirectiveHandler } from './types.js';
-import { DirectiveNode, DirectiveData } from 'meld-spec';
+import type { DirectiveNode, DirectiveKind } from 'meld-spec';
+import { DirectiveHandler } from './index.js';
 import { InterpreterState } from '../state/state.js';
+import { MeldDirectiveError } from '../errors/errors.js';
 
-interface DefineDirectiveMetadata {
-  risk?: string;
-  about?: string;
-  meta?: Record<string, any>;
-}
-
-interface CommandDefinition {
-  parameters: string[];
-  metadata: DefineDirectiveMetadata;
-  body: DirectiveNode;
-  execute: Function;
-}
-
-interface DefineDirectiveData extends DirectiveData {
+interface DefineDirectiveData {
   kind: 'define';
   name: string;
-  parameters?: string[];
-  metadata?: DefineDirectiveMetadata;
-  body: DirectiveNode; // Must be a @run directive
+  body: string;
 }
 
-export class DefineDirectiveHandler implements DirectiveHandler {
-  canHandle(kind: string): boolean {
+/**
+ * Handler for @define directives
+ */
+class DefineDirectiveHandler implements DirectiveHandler {
+  canHandle(kind: DirectiveKind): boolean {
     return kind === 'define';
   }
 
   handle(node: DirectiveNode, state: InterpreterState): void {
     const data = node.directive as DefineDirectiveData;
     
-    // Validate that body is a @run directive
-    if (!data.body || data.body.directive.kind !== 'run') {
-      throw new Error('Define directive body must be a @run directive');
+    if (!data.name) {
+      throw new MeldDirectiveError(
+        'Define directive requires a name',
+        'define',
+        node.location?.start
+      );
     }
 
-    // Create the command definition with an execute function
-    const commandDef: CommandDefinition = {
-      parameters: data.parameters || [],
-      metadata: data.metadata || {},
-      body: data.body,
-      execute: function(...args: any[]) {
-        // TODO: Implement command execution
-        console.log('Executing command with args:', args);
-      }
-    };
+    if (!data.body) {
+      throw new MeldDirectiveError(
+        'Define directive requires a body',
+        'define',
+        node.location?.start
+      );
+    }
 
-    state.commands.set(data.name, commandDef.execute);
+    // Store the definition in state
+    state.setCommand(data.name, () => data.body);
   }
-} 
+}
+
+export const defineDirectiveHandler = new DefineDirectiveHandler(); 

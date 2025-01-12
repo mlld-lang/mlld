@@ -5,8 +5,10 @@ export interface Location {
 
 export interface DirectiveNode {
   type: 'Directive';
-  kind: string;
-  properties: Record<string, any>;
+  directive: {
+    kind: string;
+    [key: string]: any;
+  };
   location: Location;
 }
 
@@ -24,8 +26,8 @@ export function parse(content: string): Node[] {
     const [_, name, value] = content.match(/@text\s+(\w+)\s*=\s*"([^"]*)"/) || [];
     return [{
       type: 'Directive',
-      kind: 'text',
-      properties: {
+      directive: {
+        kind: 'text',
         name,
         value
       },
@@ -40,8 +42,8 @@ export function parse(content: string): Node[] {
     const [_, name, value] = content.match(/@data\s+(\w+)\s*=\s*({[^}]*})/) || [];
     return [{
       type: 'Directive',
-      kind: 'data',
-      properties: {
+      directive: {
+        kind: 'data',
         name,
         value: JSON.parse(value)
       },
@@ -52,71 +54,10 @@ export function parse(content: string): Node[] {
     }];
   }
 
-  if (content.startsWith('@define')) {
-    const [_, name, body] = content.match(/@define\s+(\w+)\s*{([^}]*)}/) || [];
-    return [{
-      type: 'Directive',
-      kind: 'define',
-      properties: {
-        name,
-        body
-      },
-      location: {
-        start: { line: 1, column: 1 },
-        end: { line: 1, column: content.length }
-      }
-    }];
-  }
-
-  if (content.startsWith('@run')) {
-    const [_, command] = content.match(/@run\s+(.*)/) || [];
-    return [{
-      type: 'Directive',
-      kind: 'run',
-      properties: {
-        command
-      },
-      location: {
-        start: { line: 1, column: 1 },
-        end: { line: 1, column: content.length }
-      }
-    }];
-  }
-
-  if (content.startsWith('@import')) {
-    const [_, from] = content.match(/@import\s+(.*)/) || [];
-    return [{
-      type: 'Directive',
-      kind: 'import',
-      properties: {
-        from
-      },
-      location: {
-        start: { line: 1, column: 1 },
-        end: { line: 1, column: content.length }
-      }
-    }];
-  }
-
-  if (content.startsWith('@embed')) {
-    const [_, path] = content.match(/@embed\s+(.*)/) || [];
-    return [{
-      type: 'Directive',
-      kind: 'embed',
-      properties: {
-        path
-      },
-      location: {
-        start: { line: 1, column: 1 },
-        end: { line: 1, column: content.length }
-      }
-    }];
-  }
-
-  // Default to text node
+  // Default case - return text node
   return [{
     type: 'Text',
-    content,
+    content: content,
     location: {
       start: { line: 1, column: 1 },
       end: { line: 1, column: content.length }

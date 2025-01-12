@@ -139,4 +139,10 @@ export class InterpreterState {
 
     return cloned;
   }
+
+  // Alias methods for backward compatibility
+  setText = this.setTextVar;
+  getText = this.getTextVar;
+  setData = this.setDataVar;
+  getData = this.getDataVar;
 } 

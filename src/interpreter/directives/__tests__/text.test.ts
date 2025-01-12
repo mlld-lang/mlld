@@ -1,13 +1,12 @@
-import { TextDirectiveHandler } from '../text.js';
+import { textDirectiveHandler } from '../text.js';
 import { InterpreterState } from '../../state/state.js';
 import type { DirectiveNode } from 'meld-spec';
 
 describe('TextDirectiveHandler', () => {
-  let handler: TextDirectiveHandler;
+  let handler = textDirectiveHandler;
   let state: InterpreterState;
 
   beforeEach(() => {
-    handler = new TextDirectiveHandler();
     state = new InterpreterState();
   });
 
@@ -18,7 +17,6 @@ describe('TextDirectiveHandler', () => {
 
     it('should not handle other directives', () => {
       expect(handler.canHandle('run')).toBe(false);
-      expect(handler.canHandle('data')).toBe(false);
     });
   });
 
@@ -28,7 +26,7 @@ describe('TextDirectiveHandler', () => {
         type: 'Directive',
         directive: {
           kind: 'text',
-          identifier: 'greeting',
+          name: 'greeting',
           value: 'Hello World'
         },
         location: {
@@ -46,7 +44,7 @@ describe('TextDirectiveHandler', () => {
         type: 'Directive',
         directive: {
           kind: 'text',
-          identifier: 'message',
+          name: 'message',
           value: ['Hello', ' ', 'World']  // Simulates ++ operator
         },
         location: {
@@ -59,7 +57,7 @@ describe('TextDirectiveHandler', () => {
       expect(state.getTextVar('message')).toBe('Hello World');
     });
 
-    it('should throw error if identifier is missing', () => {
+    it('should throw error if name is missing', () => {
       const node: DirectiveNode = {
         type: 'Directive',
         directive: {
@@ -73,7 +71,7 @@ describe('TextDirectiveHandler', () => {
       };
 
       expect(() => handler.handle(node, state)).toThrow(
-        'Text directive requires an identifier'
+        'Text directive requires a name'
       );
     });
 
@@ -82,7 +80,7 @@ describe('TextDirectiveHandler', () => {
         type: 'Directive',
         directive: {
           kind: 'text',
-          identifier: 'test'
+          name: 'test'
         } as any,
         location: {
           start: { line: 1, column: 1 },

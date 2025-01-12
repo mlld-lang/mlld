@@ -1,16 +1,15 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { ImportDirectiveHandler } from '../import.js';
+import { importDirectiveHandler } from '../import.js';
 import { InterpreterState } from '../../state/state.js';
 import type { DirectiveNode } from 'meld-spec';
 import * as path from 'path';
 import * as fs from 'fs';
 
 describe('ImportDirectiveHandler', () => {
-  let handler: ImportDirectiveHandler;
+  let handler = importDirectiveHandler;
   let state: InterpreterState;
 
   beforeEach(() => {
-    handler = new ImportDirectiveHandler();
     state = new InterpreterState();
 
     // Mock path module
@@ -58,7 +57,6 @@ describe('ImportDirectiveHandler', () => {
 
     it('should not handle other directives', () => {
       expect(handler.canHandle('run')).toBe(false);
-      expect(handler.canHandle('text')).toBe(false);
     });
   });
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { EmbedDirectiveHandler } from '../embed.js';
+import { embedDirectiveHandler } from '../embed.js';
 import { InterpreterState } from '../../state/state.js';
 import type { DirectiveNode } from 'meld-spec';
 import * as fs from 'fs';
@@ -23,12 +23,11 @@ vi.mock('path', () => ({
 }));
 
 describe('EmbedDirectiveHandler', () => {
-  let handler: EmbedDirectiveHandler;
+  let handler = embedDirectiveHandler;
   let state: InterpreterState;
 
   beforeEach(() => {
     vi.resetAllMocks();
-    handler = new EmbedDirectiveHandler();
     state = new InterpreterState();
 
     // Setup default mock implementations

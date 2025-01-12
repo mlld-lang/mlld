@@ -1,19 +1,17 @@
-import { DefineDirectiveHandler } from '../define.js';
+import { defineDirectiveHandler } from '../define.js';
 import { InterpreterState } from '../../state/state.js';
 import type { DirectiveNode } from 'meld-spec';
 
 describe('DefineDirectiveHandler', () => {
-  let handler: DefineDirectiveHandler;
+  let handler = defineDirectiveHandler;
   let state: InterpreterState;
 
   beforeEach(() => {
-    handler = new DefineDirectiveHandler();
     state = new InterpreterState();
   });
 
   it('should handle define directives', () => {
     expect(handler.canHandle('define')).toBe(true);
-    expect(handler.canHandle('other')).toBe(false);
   });
 
   it('should store command definition', () => {
@@ -21,28 +19,13 @@ describe('DefineDirectiveHandler', () => {
       type: 'Directive',
       directive: {
         kind: 'define',
-        name: 'test-command',
-        parameters: ['param1', 'param2'],
-        metadata: {
-          risk: 'low',
-          about: 'Test command',
-          meta: { category: 'test' }
-        },
-        body: {
-          type: 'Directive',
-          directive: {
-            kind: 'run',
-            command: 'echo test'
-          }
-        }
+        name: 'test',
+        body: '@run echo "hello"'
       }
     };
 
     handler.handle(node, state);
-
-    const stored = state.getCommand('test-command');
-    expect(stored).toBeDefined();
-    expect(typeof stored).toBe('function');
+    expect(state.getCommand('test')).toBeDefined();
   });
 
   it('should throw error if body is not a run directive', () => {

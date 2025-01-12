@@ -5,14 +5,14 @@ import { MeldDirectiveError } from '../errors/errors.js';
 
 interface PathDirectiveData {
   kind: 'path';
-  identifier: string;
-  value: string | string[];
+  name: string;
+  value: string;
 }
 
 /**
  * Handler for @path directives
  */
-export class PathDirectiveHandler implements DirectiveHandler {
+class PathDirectiveHandler implements DirectiveHandler {
   canHandle(kind: DirectiveKind): boolean {
     return kind === 'path';
   }
@@ -20,15 +20,15 @@ export class PathDirectiveHandler implements DirectiveHandler {
   handle(node: DirectiveNode, state: InterpreterState): void {
     const data = node.directive as PathDirectiveData;
     
-    if (!data.identifier) {
+    if (!data.name) {
       throw new MeldDirectiveError(
-        'Path directive requires an identifier',
+        'Path directive requires a name',
         'path',
         node.location?.start
       );
     }
 
-    if (data.value === undefined) {
+    if (!data.value) {
       throw new MeldDirectiveError(
         'Path directive requires a value',
         'path',
@@ -36,29 +36,9 @@ export class PathDirectiveHandler implements DirectiveHandler {
       );
     }
 
-    // Handle string concatenation with array values
-    const value = Array.isArray(data.value) ? data.value.join('') : data.value;
-
-    // Validate path starts with special variable
-    if (!value.startsWith('$HOMEPATH/') && !value.startsWith('$~/') && 
-        !value.startsWith('$PROJECTPATH/') && !value.startsWith('$./')) {
-      throw new MeldDirectiveError(
-        'Path must start with $HOMEPATH/$~ or $PROJECTPATH/$.',
-        'path',
-        node.location?.start
-      );
-    }
-
-    // Resolve path variables
-    let resolvedPath = value;
-    if (value.startsWith('$HOMEPATH/') || value.startsWith('$~/')) {
-      const homePath = process.env.HOME || process.env.USERPROFILE || '/';
-      resolvedPath = value.replace(/^\$(?:HOMEPATH|~)\//, `${homePath}/`);
-    } else if (value.startsWith('$PROJECTPATH/') || value.startsWith('$./')) {
-      const projectPath = process.cwd(); // TODO: Make this configurable
-      resolvedPath = value.replace(/^\$(?:PROJECTPATH|\.)\//, `${projectPath}/`);
-    }
-
-    state.setPathVar(data.identifier, resolvedPath);
+    // Store the path in state
+    state.setPathVar(data.name, data.value);
   }
-} 
+}
+
+export const pathDirectiveHandler = new PathDirectiveHandler(); 

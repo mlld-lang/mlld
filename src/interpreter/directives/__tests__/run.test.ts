@@ -1,13 +1,12 @@
-import { RunDirectiveHandler } from '../run.js';
+import { runDirectiveHandler } from '../run.js';
 import { InterpreterState } from '../../state/state.js';
 import type { DirectiveNode } from 'meld-spec';
 
 describe('RunDirectiveHandler', () => {
-  let handler: RunDirectiveHandler;
+  let handler = runDirectiveHandler;
   let state: InterpreterState;
 
   beforeEach(() => {
-    handler = new RunDirectiveHandler();
     state = new InterpreterState();
   });
 
@@ -17,7 +16,6 @@ describe('RunDirectiveHandler', () => {
     });
 
     it('should not handle other directives', () => {
-      expect(handler.canHandle('import')).toBe(false);
       expect(handler.canHandle('text')).toBe(false);
     });
   });

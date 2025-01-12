@@ -1,12 +1,12 @@
 import type { DirectiveKind } from 'meld-spec';
 import { DirectiveHandler } from './types.js';
-import { DataDirectiveHandler } from './data.js';
-import { RunDirectiveHandler } from './run.js';
-import { ImportDirectiveHandler } from './import.js';
-import { DefineDirectiveHandler } from './define.js';
-import { TextDirectiveHandler } from './text.js';
-import { PathDirectiveHandler } from './pathDirective.js';
-import { EmbedDirectiveHandler } from './embed.js';
+import { dataDirectiveHandler } from './data.js';
+import { runDirectiveHandler } from './run.js';
+import { importDirectiveHandler } from './import.js';
+import { defineDirectiveHandler } from './define.js';
+import { textDirectiveHandler } from './text.js';
+import { pathDirectiveHandler } from './pathDirective.js';
+import { embedDirectiveHandler } from './embed.js';
 
 const DIRECTIVE_KINDS: DirectiveKind[] = [
   'run',
@@ -41,10 +41,10 @@ export class DirectiveRegistry {
 }
 
 // Register built-in handlers
-DirectiveRegistry.registerHandler(new DataDirectiveHandler());
-DirectiveRegistry.registerHandler(new RunDirectiveHandler());
-DirectiveRegistry.registerHandler(new ImportDirectiveHandler());
-DirectiveRegistry.registerHandler(new DefineDirectiveHandler());
-DirectiveRegistry.registerHandler(new TextDirectiveHandler());
-DirectiveRegistry.registerHandler(new PathDirectiveHandler());
-DirectiveRegistry.registerHandler(new EmbedDirectiveHandler()); 
+DirectiveRegistry.registerHandler(dataDirectiveHandler);
+DirectiveRegistry.registerHandler(runDirectiveHandler);
+DirectiveRegistry.registerHandler(importDirectiveHandler);
+DirectiveRegistry.registerHandler(defineDirectiveHandler);
+DirectiveRegistry.registerHandler(textDirectiveHandler);
+DirectiveRegistry.registerHandler(pathDirectiveHandler);
+DirectiveRegistry.registerHandler(embedDirectiveHandler); 

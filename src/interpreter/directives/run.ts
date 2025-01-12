@@ -6,13 +6,13 @@ import { MeldDirectiveError } from '../errors/errors.js';
 interface RunDirectiveData {
   kind: 'run';
   command: string;
-  background?: boolean;
+  name?: string;
 }
 
 /**
  * Handler for @run directives
  */
-export class RunDirectiveHandler implements DirectiveHandler {
+class RunDirectiveHandler implements DirectiveHandler {
   canHandle(kind: DirectiveKind): boolean {
     return kind === 'run';
   }
@@ -28,11 +28,9 @@ export class RunDirectiveHandler implements DirectiveHandler {
       );
     }
 
-    // Store command in state for execution
-    state.setDataVar('__pendingCommand', {
-      command: data.command,
-      background: !!data.background,
-      location: node.location
-    });
+    // Store the command in state
+    state.setCommand(data.name || 'default', () => data.command);
   }
-} 
+}
+
+export const runDirectiveHandler = new RunDirectiveHandler(); 

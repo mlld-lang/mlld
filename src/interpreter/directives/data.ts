@@ -12,7 +12,7 @@ interface DataDirectiveData {
 /**
  * Handler for @data directives
  */
-export class DataDirectiveHandler implements DirectiveHandler {
+class DataDirectiveHandler implements DirectiveHandler {
   canHandle(kind: DirectiveKind): boolean {
     return kind === 'data';
   }
@@ -39,4 +39,6 @@ export class DataDirectiveHandler implements DirectiveHandler {
     // Store the value in state
     state.setDataVar(data.identifier, data.value);
   }
-} 
+}
+
+export const dataDirectiveHandler = new DataDirectiveHandler(); 

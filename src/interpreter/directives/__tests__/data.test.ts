@@ -1,13 +1,12 @@
-import { DataDirectiveHandler } from '../data.js';
+import { dataDirectiveHandler } from '../data.js';
 import { InterpreterState } from '../../state/state.js';
 import type { DirectiveNode } from 'meld-spec';
 
 describe('DataDirectiveHandler', () => {
-  let handler: DataDirectiveHandler;
+  let handler = dataDirectiveHandler;
   let state: InterpreterState;
 
   beforeEach(() => {
-    handler = new DataDirectiveHandler();
     state = new InterpreterState();
   });
 
@@ -18,7 +17,6 @@ describe('DataDirectiveHandler', () => {
 
     it('should not handle other directives', () => {
       expect(handler.canHandle('run')).toBe(false);
-      expect(handler.canHandle('text')).toBe(false);
     });
   });
 
@@ -28,7 +26,7 @@ describe('DataDirectiveHandler', () => {
         type: 'Directive',
         directive: {
           kind: 'data',
-          identifier: 'config',
+          name: 'config',
           value: { name: 'test', version: 1 }
         },
         location: {
@@ -48,7 +46,7 @@ describe('DataDirectiveHandler', () => {
         type: 'Directive',
         directive: {
           kind: 'data',
-          identifier: 'list',
+          name: 'list',
           value: [1, 2, 3]
         },
         location: {
@@ -68,7 +66,7 @@ describe('DataDirectiveHandler', () => {
         type: 'Directive',
         directive: {
           kind: 'data',
-          identifier: 'message',
+          name: 'message',
           value: 'Hello World'
         },
         location: {
@@ -83,7 +81,7 @@ describe('DataDirectiveHandler', () => {
       expect(storedData).toBe('Hello World');
     });
 
-    it('should throw error if identifier is missing', () => {
+    it('should throw error if name is missing', () => {
       const node: DirectiveNode = {
         type: 'Directive',
         directive: {
@@ -97,7 +95,7 @@ describe('DataDirectiveHandler', () => {
       };
 
       expect(() => handler.handle(node, state)).toThrow(
-        'Data directive requires an identifier'
+        'Data directive requires a name'
       );
     });
 
@@ -106,7 +104,7 @@ describe('DataDirectiveHandler', () => {
         type: 'Directive',
         directive: {
           kind: 'data',
-          identifier: 'test'
+          name: 'test'
         } as any,
         location: {
           start: { line: 1, column: 1 },

@@ -5,14 +5,14 @@ import { MeldDirectiveError } from '../errors/errors.js';
 
 interface TextDirectiveData {
   kind: 'text';
-  identifier: string;
-  value: string | string[];
+  name: string;
+  value: string;
 }
 
 /**
  * Handler for @text directives
  */
-export class TextDirectiveHandler implements DirectiveHandler {
+class TextDirectiveHandler implements DirectiveHandler {
   canHandle(kind: DirectiveKind): boolean {
     return kind === 'text';
   }
@@ -20,15 +20,15 @@ export class TextDirectiveHandler implements DirectiveHandler {
   handle(node: DirectiveNode, state: InterpreterState): void {
     const data = node.directive as TextDirectiveData;
     
-    if (!data.identifier) {
+    if (!data.name) {
       throw new MeldDirectiveError(
-        'Text directive requires an identifier',
+        'Text directive requires a name',
         'text',
         node.location?.start
       );
     }
 
-    if (data.value === undefined) {
+    if (!data.value) {
       throw new MeldDirectiveError(
         'Text directive requires a value',
         'text',
@@ -36,10 +36,9 @@ export class TextDirectiveHandler implements DirectiveHandler {
       );
     }
 
-    // Handle string concatenation with array values
-    const value = Array.isArray(data.value) ? data.value.join('') : data.value;
-    
-    // Store the value in state
-    state.setTextVar(data.identifier, value);
+    // Store the text in state
+    state.setTextVar(data.name, data.value);
   }
-} 
+}
+
+export const textDirectiveHandler = new TextDirectiveHandler(); 
