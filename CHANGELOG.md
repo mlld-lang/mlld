@@ -42,3 +42,11 @@ All notable changes to this project will be documented in this file.
   - Background process handling
   - Error handling for missing commands
   - Comprehensive test coverage 
+- Added `@embed` directive with support for:
+  - Basic file embedding
+  - Section extraction with header preservation
+  - Header level adjustment
+  - Item extraction with subsection preservation
+  - Adding content under headers
+  - Proper text node integration
+  - Comprehensive test coverage 

@@ -1,6 +1,7 @@
 import type { DirectiveNode, DirectiveKind } from 'meld-spec';
 import { DirectiveHandler } from './index.js';
 import { InterpreterState } from '../state/state.js';
+import { MeldDirectiveError } from '../errors/errors.js';
 
 interface RunDirectiveData {
   kind: 'run';
@@ -20,13 +21,17 @@ export class RunDirectiveHandler implements DirectiveHandler {
     const data = node.directive as RunDirectiveData;
     
     if (!data.command) {
-      throw new Error('Run directive requires a command');
+      throw new MeldDirectiveError(
+        'Run directive requires a command',
+        'run',
+        node.location?.start
+      );
     }
 
-    // Store the command in state for execution
+    // Store command in state for execution
     state.setDataVar('__pendingCommand', {
       command: data.command,
-      background: data.background || false,
+      background: !!data.background,
       location: node.location
     });
   }

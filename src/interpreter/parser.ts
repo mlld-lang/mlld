@@ -1,5 +1,6 @@
 import { parse } from 'meld-ast';
 import type { MeldNode } from 'meld-spec';
+import { MeldParseError } from './errors/errors.js';
 
 /**
  * Parses Meld content into an AST
@@ -8,9 +9,9 @@ import type { MeldNode } from 'meld-spec';
  */
 export function parseMeldContent(content: string): MeldNode[] {
   try {
-    return parse(content) as MeldNode[];
-  } catch (error: unknown) {
+    return parse(content);
+  } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`Failed to parse Meld content: ${message}`);
+    throw new MeldParseError(`Failed to parse Meld content: ${message}`);
   }
 } 

@@ -1,6 +1,7 @@
 import type { DirectiveNode, DirectiveKind } from 'meld-spec';
 import { DirectiveHandler } from './index.js';
 import { InterpreterState } from '../state/state.js';
+import { MeldDirectiveError } from '../errors/errors.js';
 
 interface DataDirectiveData {
   kind: 'data';
@@ -20,11 +21,19 @@ export class DataDirectiveHandler implements DirectiveHandler {
     const data = node.directive as DataDirectiveData;
     
     if (!data.identifier) {
-      throw new Error('Data directive requires an identifier');
+      throw new MeldDirectiveError(
+        'Data directive requires an identifier',
+        'data',
+        node.location?.start
+      );
     }
 
     if (data.value === undefined) {
-      throw new Error('Data directive requires a value');
+      throw new MeldDirectiveError(
+        'Data directive requires a value',
+        'data',
+        node.location?.start
+      );
     }
 
     // Store the value in state

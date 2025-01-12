@@ -4,6 +4,9 @@
   "description": "Official interpreter for the Meld language",
   "type": "module",
   "main": "dist/index.js",
+  "bin": {
+    "meld": "./dist/bin/meld.js"
+  },
   "scripts": {
     "build": "tsc",
     "test": "vitest --run",
