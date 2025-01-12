@@ -57,8 +57,6 @@ export class ImportDirectiveHandler implements DirectiveHandler {
   }
 }
 
-// Export mock handlers
-export const mockHandlers = {
-  EmbedDirectiveHandler,
-  ImportDirectiveHandler
-}; 
+// Export instances instead of classes
+export const embedDirectiveHandler = new EmbedDirectiveHandler();
+export const importDirectiveHandler = new ImportDirectiveHandler(); 
