@@ -4,6 +4,8 @@ import { DataDirectiveHandler } from './data.js';
 import { RunDirectiveHandler } from './run.js';
 import { ImportDirectiveHandler } from './import.js';
 import { DefineDirectiveHandler } from './define.js';
+import { TextDirectiveHandler } from './text.js';
+import { PathDirectiveHandler } from './path.js';
 
 const DIRECTIVE_KINDS: DirectiveKind[] = [
   'run',
@@ -49,8 +51,12 @@ export class DirectiveRegistry {
 DirectiveRegistry.registerHandler(new DataDirectiveHandler());
 DirectiveRegistry.registerHandler(new RunDirectiveHandler());
 DirectiveRegistry.registerHandler(new ImportDirectiveHandler());
-DirectiveRegistry.registerHandler(new DefineDirectiveHandler()); 
+DirectiveRegistry.registerHandler(new DefineDirectiveHandler());
+DirectiveRegistry.registerHandler(new TextDirectiveHandler());
+DirectiveRegistry.registerHandler(new PathDirectiveHandler());
 
 export function registerBuiltinDirectives(registry: DirectiveRegistry): void {
   registry.register(new DefineDirectiveHandler());
+  registry.register(new TextDirectiveHandler());
+  registry.register(new PathDirectiveHandler());
 } 

@@ -1,8 +1,8 @@
 import type { DirectiveNode, DirectiveKind, MeldNode } from 'meld-spec';
-import { DirectiveHandler } from './index.js';
+import { DirectiveHandler } from './types.js';
 import { InterpreterState } from '../state/state.js';
-import path from 'path';
-import fs from 'fs';
+import * as path from 'path';
+import * as fs from 'fs';
 import { parseMeldContent } from '../parser.js';
 import { interpret } from '../interpreter.js';
 

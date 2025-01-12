@@ -20,5 +20,15 @@ export default {
   },
   transformIgnorePatterns: [
     'node_modules/(?!(meld-spec|meld-ast)/)'
+  ],
+  testPathIgnorePatterns: [
+    '/node_modules/',
+    '/dist/'
+  ],
+  modulePathIgnorePatterns: [
+    '<rootDir>/dist/'
+  ],
+  watchPathIgnorePatterns: [
+    '<rootDir>/dist/'
   ]
 }; 

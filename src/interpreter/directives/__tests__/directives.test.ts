@@ -1,7 +1,8 @@
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { DirectiveRegistry } from '../registry.js';
-import { DirectiveHandler } from '../types.js';
+import type { DirectiveHandler } from '../types.js';
+import type { DirectiveKind } from 'meld-spec';
 import { InterpreterState } from '../../state/state.js';
-import type { DirectiveNode, DirectiveKind } from 'meld-spec';
 
 describe('DirectiveRegistry', () => {
   beforeEach(() => {
@@ -12,64 +13,55 @@ describe('DirectiveRegistry', () => {
     it('should register and find handlers', () => {
       const mockHandler: DirectiveHandler = {
         canHandle: (kind: DirectiveKind) => kind === 'run',
-        handle: jest.fn()
+        handle: vi.fn()
       };
 
       DirectiveRegistry.registerHandler(mockHandler);
-      const found = DirectiveRegistry.findHandler('run');
+      const handler = DirectiveRegistry.findHandler('run');
 
-      expect(found).toBe(mockHandler);
+      expect(handler).toBeDefined();
+      expect(handler).toBe(mockHandler);
     });
 
     it('should return undefined for unknown directive kinds', () => {
-      const found = DirectiveRegistry.findHandler('run');
-      expect(found).toBeUndefined();
+      expect(DirectiveRegistry.findHandler('unknown')).toBeUndefined();
     });
 
     it('should find the correct handler when multiple are registered', () => {
       const handler1: DirectiveHandler = {
         canHandle: (kind: DirectiveKind) => kind === 'run',
-        handle: jest.fn()
+        handle: vi.fn()
       };
 
       const handler2: DirectiveHandler = {
-        canHandle: (kind: DirectiveKind) => kind === 'import',
-        handle: jest.fn()
+        canHandle: (kind: DirectiveKind) => kind === 'data',
+        handle: vi.fn()
       };
 
       DirectiveRegistry.registerHandler(handler1);
       DirectiveRegistry.registerHandler(handler2);
 
       expect(DirectiveRegistry.findHandler('run')).toBe(handler1);
-      expect(DirectiveRegistry.findHandler('import')).toBe(handler2);
+      expect(DirectiveRegistry.findHandler('data')).toBe(handler2);
     });
   });
 
   describe('handler execution', () => {
     it('should properly execute handlers with state', () => {
-      const state = new InterpreterState();
-      const mockNode: DirectiveNode = {
-        type: 'Directive',
-        directive: {
-          kind: 'run',
-          command: 'echo "test"'
-        },
-        location: {
-          start: { line: 1, column: 1 },
-          end: { line: 1, column: 10 }
-        }
-      };
-
       const mockHandler: DirectiveHandler = {
         canHandle: (kind: DirectiveKind) => kind === 'run',
-        handle: jest.fn()
+        handle: vi.fn()
       };
 
       DirectiveRegistry.registerHandler(mockHandler);
       const handler = DirectiveRegistry.findHandler('run');
-      handler?.handle(mockNode, state);
+      const state = new InterpreterState();
 
-      expect(mockHandler.handle).toHaveBeenCalledWith(mockNode, state);
+      handler?.handle({ type: 'Directive', directive: { kind: 'run' } }, state);
+      expect(mockHandler.handle).toHaveBeenCalledWith(
+        { type: 'Directive', directive: { kind: 'run' } },
+        state
+      );
     });
   });
 
@@ -77,7 +69,7 @@ describe('DirectiveRegistry', () => {
     it('should remove all registered handlers', () => {
       const mockHandler: DirectiveHandler = {
         canHandle: (kind: DirectiveKind) => kind === 'run',
-        handle: jest.fn()
+        handle: vi.fn()
       };
 
       DirectiveRegistry.registerHandler(mockHandler);
