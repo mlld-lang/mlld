@@ -18,7 +18,7 @@ class DefineDirectiveHandler implements DirectiveHandler {
   }
 
   handle(node: DirectiveNode, state: InterpreterState): void {
-    const data = node.directive as DefineDirectiveData;
+    const data = node.directive;
     
     if (!data.name) {
       throw new MeldDirectiveError(
@@ -36,8 +36,31 @@ class DefineDirectiveHandler implements DirectiveHandler {
       );
     }
 
-    // Store the definition in state
-    state.setCommand(data.name, () => data.body);
+    // Handle both string and object run directives
+    if (typeof data.body === 'string') {
+      if (!data.body.trim().startsWith('@run')) {
+        throw new MeldDirectiveError(
+          'Define directive body must be a @run directive',
+          'define',
+          node.location?.start
+        );
+      }
+    } else if (data.body.type === 'Directive' && data.body.directive?.kind === 'run') {
+      // Valid run directive object
+    } else {
+      throw new MeldDirectiveError(
+        'Define directive body must be a @run directive',
+        'define',
+        node.location?.start
+      );
+    }
+
+    // Store the command
+    const command = typeof data.body === 'string' ? 
+      data.body.replace(/^@run\s+/, '') : 
+      data.body.directive.command;
+
+    state.setCommand(data.name, () => command);
   }
 }
 

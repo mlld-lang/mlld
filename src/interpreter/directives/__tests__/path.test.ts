@@ -149,7 +149,7 @@ describe('PathDirectiveHandler', () => {
       };
 
       expect(() => handler.handle(node, state)).toThrow(
-        'Path directive requires an identifier'
+        'Path directive requires a name'
       );
     });
 

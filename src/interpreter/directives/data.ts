@@ -18,17 +18,17 @@ class DataDirectiveHandler implements DirectiveHandler {
   }
 
   handle(node: DirectiveNode, state: InterpreterState): void {
-    const data = node.directive as DataDirectiveData;
+    const data = node.directive;
     
-    if (!data.identifier) {
+    if (!data.name) {
       throw new MeldDirectiveError(
-        'Data directive requires an identifier',
+        'Data directive requires a name',
         'data',
         node.location?.start
       );
     }
 
-    if (data.value === undefined) {
+    if (!data.value) {
       throw new MeldDirectiveError(
         'Data directive requires a value',
         'data',
@@ -36,8 +36,7 @@ class DataDirectiveHandler implements DirectiveHandler {
       );
     }
 
-    // Store the value in state
-    state.setDataVar(data.identifier, data.value);
+    state.setDataVar(data.name, data.value);
   }
 }
 

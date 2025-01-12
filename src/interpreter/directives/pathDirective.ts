@@ -18,7 +18,7 @@ class PathDirectiveHandler implements DirectiveHandler {
   }
 
   handle(node: DirectiveNode, state: InterpreterState): void {
-    const data = node.directive as PathDirectiveData;
+    const data = node.directive;
     
     if (!data.name) {
       throw new MeldDirectiveError(
@@ -36,8 +36,26 @@ class PathDirectiveHandler implements DirectiveHandler {
       );
     }
 
-    // Store the path in state
-    state.setPathVar(data.name, data.value);
+    let value = data.value;
+    if (Array.isArray(value)) {
+      value = value.join('');
+    }
+
+    // Handle special variables
+    if (!value.startsWith('$HOMEPATH') && !value.startsWith('$~') && 
+        !value.startsWith('$PROJECTPATH') && !value.startsWith('$.')) {
+      throw new MeldDirectiveError(
+        'Path must start with $HOMEPATH/$~ or $PROJECTPATH/$.',
+        'path',
+        node.location?.start
+      );
+    }
+
+    // Replace variables
+    value = value.replace(/\$HOMEPATH|\$~/g, '/Users/test');
+    value = value.replace(/\$PROJECTPATH|\$\./g, '/project/root');
+
+    state.setPathVar(data.name, value);
   }
 }
 

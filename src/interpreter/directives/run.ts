@@ -7,6 +7,7 @@ interface RunDirectiveData {
   kind: 'run';
   command: string;
   name?: string;
+  background?: boolean;
 }
 
 /**
@@ -18,7 +19,7 @@ class RunDirectiveHandler implements DirectiveHandler {
   }
 
   handle(node: DirectiveNode, state: InterpreterState): void {
-    const data = node.directive as RunDirectiveData;
+    const data = node.directive;
     
     if (!data.command) {
       throw new MeldDirectiveError(
@@ -28,7 +29,14 @@ class RunDirectiveHandler implements DirectiveHandler {
       );
     }
 
-    // Store the command in state
+    // Store command metadata in state
+    state.setDataVar('__pendingCommand', {
+      command: data.command,
+      background: data.background || false,
+      location: node.location
+    });
+
+    // Store the command function
     state.setCommand(data.name || 'default', () => data.command);
   }
 }

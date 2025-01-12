@@ -18,7 +18,7 @@ class TextDirectiveHandler implements DirectiveHandler {
   }
 
   handle(node: DirectiveNode, state: InterpreterState): void {
-    const data = node.directive as TextDirectiveData;
+    const data = node.directive;
     
     if (!data.name) {
       throw new MeldDirectiveError(
@@ -36,8 +36,12 @@ class TextDirectiveHandler implements DirectiveHandler {
       );
     }
 
-    // Store the text in state
-    state.setTextVar(data.name, data.value);
+    let value = data.value;
+    if (Array.isArray(value)) {
+      value = value.join('');
+    }
+
+    state.setTextVar(data.name, value);
   }
 }
 
