@@ -3,7 +3,7 @@ import { InterpreterState } from '../../src/interpreter/state/state.js';
 import { MeldDirectiveError } from '../../src/interpreter/errors/errors.js';
 import { DirectiveHandler } from '../../src/interpreter/directives/types.js';
 
-export class EmbedDirectiveHandler implements DirectiveHandler {
+class EmbedDirectiveHandler implements DirectiveHandler {
   canHandle(kind: string): boolean {
     return kind === 'embed';
   }
@@ -21,7 +21,7 @@ export class EmbedDirectiveHandler implements DirectiveHandler {
   }
 }
 
-export class ImportDirectiveHandler implements DirectiveHandler {
+class ImportDirectiveHandler implements DirectiveHandler {
   canHandle(kind: string): boolean {
     return kind === 'import';
   }
@@ -35,4 +35,7 @@ export class ImportDirectiveHandler implements DirectiveHandler {
     state.setTextVar('text1', 'value1');
     state.setDataVar('data1', { key: 'value' });
   }
-} 
+}
+
+export const embedDirectiveHandler = new EmbedDirectiveHandler();
+export const importDirectiveHandler = new ImportDirectiveHandler(); 

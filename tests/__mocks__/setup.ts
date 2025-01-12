@@ -2,12 +2,18 @@ import { vi } from 'vitest';
 import type { DirectiveNode, MeldNode } from 'meld-spec';
 import { InterpreterState, type StateConfig } from '../../src/interpreter/state/state.js';
 import type { LocationData } from '../../src/interpreter/subInterpreter.js';
-import { EmbedDirectiveHandler, ImportDirectiveHandler } from './directive-handlers.js';
+import { embedDirectiveHandler, importDirectiveHandler } from './directive-handlers.js';
 
 // Mock fs module
 vi.mock('fs', () => ({
   readFileSync: vi.fn().mockReturnValue('Mock embedded content'),
-  writeFileSync: vi.fn()
+  writeFileSync: vi.fn(),
+  promises: {
+    readFile: vi.fn().mockResolvedValue('Mock embedded content'),
+    writeFile: vi.fn().mockResolvedValue(undefined),
+    mkdtemp: vi.fn().mockResolvedValue('/tmp/meld-test'),
+    rm: vi.fn().mockResolvedValue(undefined)
+  }
 }));
 
 // Mock path module
@@ -17,10 +23,6 @@ vi.mock('path', () => ({
   dirname: vi.fn((p) => p.split('/').slice(0, -1).join('/')),
   basename: vi.fn((p) => p.split('/').pop())
 }));
-
-// Export handler instances
-export const embedDirectiveHandler = new EmbedDirectiveHandler();
-export const importDirectiveHandler = new ImportDirectiveHandler();
 
 // Mock InterpreterState
 export class MockInterpreterState extends InterpreterState {
