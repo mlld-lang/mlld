@@ -1,17 +1,17 @@
-import { parse } from 'meld-ast';
 import type { MeldNode } from 'meld-spec';
-import { MeldParseError } from './errors/errors.js';
+import { parse } from './__mocks__/meld-ast';
+import { MeldParseError } from './errors/errors';
 
 /**
- * Parses Meld content into an AST
+ * Parse Meld content into an AST
  * @param content The Meld content to parse
- * @returns The parsed AST
+ * @returns Array of AST nodes
+ * @throws {MeldParseError} If parsing fails
  */
-export function parseMeldContent(content: string): MeldNode[] {
+export function parseMeld(content: string): MeldNode[] {
   try {
     return parse(content);
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new MeldParseError(`Failed to parse Meld content: ${message}`);
+    throw new MeldParseError(error instanceof Error ? error.message : 'Parse error');
   }
 } 

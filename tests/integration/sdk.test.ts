@@ -7,17 +7,23 @@ import { tmpdir } from 'os';
 
 vi.mock('fs', () => ({
   existsSync: vi.fn((path: string) => path === 'test.meld'),
-}));
-
-vi.mock('fs/promises', () => ({
-  readFile: vi.fn().mockResolvedValue('test content'),
-  writeFile: vi.fn().mockResolvedValue(undefined),
+  promises: {
+    readFile: vi.fn().mockImplementation((path: string) => {
+      if (path === 'test.meld') {
+        return Promise.resolve('@text test = "value"');
+      }
+      throw new Error('File not found');
+    }),
+    writeFile: vi.fn().mockResolvedValue(undefined)
+  }
 }));
 
 vi.mock('path', () => ({
   resolve: vi.fn((path: string) => path),
   join: vi.fn((...paths: string[]) => paths.join('/')),
   dirname: vi.fn((path: string) => path.split('/').slice(0, -1).join('/')),
+  extname: vi.fn((path: string) => '.meld'),
+  basename: vi.fn((path: string) => path.split('/').pop() || '')
 }));
 
 describe('SDK Integration Tests', () => {

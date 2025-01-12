@@ -8,8 +8,11 @@ vi.mock('../parser', () => ({
     if (content === '@text test = "value"') {
       return [{
         type: 'Directive',
-        kind: '@text',
-        data: { name: 'test', value: 'value' },
+        directive: {
+          kind: '@text',
+          name: 'test',
+          value: 'value'
+        },
         location: { start: { line: 1, column: 1 }, end: { line: 1, column: 21 } }
       }];
     } else if (content === '{parent}') {
@@ -24,13 +27,12 @@ vi.mock('../parser', () => ({
 }));
 
 vi.mock('../interpreter', () => ({
-  interpretMeld: vi.fn((nodes, state) => {
-    if (nodes[0].type === 'Directive' && nodes[0].kind === '@text') {
-      state.setText(nodes[0].data.name, nodes[0].data.value);
+  interpret: vi.fn((nodes, state, context) => {
+    if (nodes[0].type === 'Directive' && nodes[0].directive.kind === '@text') {
+      state.setTextVar(nodes[0].directive.name, nodes[0].directive.value);
     } else if (nodes[0].type === 'Text') {
       state.addNode(nodes[0]);
     }
-    return state;
   })
 }));
 
@@ -50,7 +52,7 @@ describe('subInterpreter', () => {
     const content = '@text test = "value"';
     const state = interpretSubDirectives(content, baseLocation, parentState);
     
-    expect(state.getTextVar('test')).toBe('value');
+    expect(state.getText('test')).toBe('value');
   });
 
   it('should handle location offsets correctly', () => {
@@ -63,12 +65,11 @@ describe('subInterpreter', () => {
     const state = interpretSubDirectives(content, baseLocation, parentState);
     const nodes = state.getNodes();
     
-    expect(nodes[0].location?.start.line).toBe(10);
-    expect(nodes[0].location?.start.column).toBe(5);
+    expect(nodes[0].location?.start).toEqual({ line: 10, column: 5 });
   });
 
   it('should inherit parent state variables', () => {
-    parentState.setText('parent', 'value');
+    parentState.setTextVar('parent', 'value');
     const content = '{parent}';
 
     const state = interpretSubDirectives(content, baseLocation, parentState);
@@ -79,10 +80,10 @@ describe('subInterpreter', () => {
   });
 
   it('should merge child state back to parent', () => {
-    const content = '@text child = "value"';
+    const content = '@text test = "value"';
     const state = interpretSubDirectives(content, baseLocation, parentState);
     
-    expect(state.getTextVar('child')).toBe('value');
+    expect(parentState.getText('test')).toBe('value');
   });
 
   it('should handle nested errors with correct location', () => {

@@ -98,4 +98,28 @@ export const DIRECTIVE_KINDS: Record<DirectiveKindString, DirectiveKind> = {
       args: { type: 'object', required: false }
     }
   }
-}; 
+};
+
+export function parse(content: string): MeldNode[] {
+  if (content === 'invalid') {
+    throw new Error('Failed to parse Meld content: Parse error');
+  }
+  if (content.startsWith('>>')) {
+    return [{
+      type: 'Text',
+      content: content.substring(2).trim(),
+      location: {
+        start: { line: 1, column: 1 },
+        end: { line: 1, column: content.length }
+      }
+    }];
+  }
+  return [{
+    type: 'Text',
+    content,
+    location: {
+      start: { line: 1, column: 1 },
+      end: { line: 1, column: content.length }
+    }
+  }];
+} 

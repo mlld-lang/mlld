@@ -13,31 +13,28 @@ export class DirectiveRegistry {
   private static handlers: DirectiveHandler[] = [];
   private static initialized = false;
 
-  static {
-    // Initialize built-in handlers
-    DirectiveRegistry.initializeBuiltInHandlers();
-  }
-
   private static initializeBuiltInHandlers(): void {
     if (DirectiveRegistry.initialized) return;
 
-    const builtInHandlers = [
-      runDirectiveHandler,
-      importDirectiveHandler,
-      embedDirectiveHandler,
-      defineDirectiveHandler,
-      textDirectiveHandler,
-      pathDirectiveHandler,
-      dataDirectiveHandler,
-      apiDirectiveHandler,
-      callDirectiveHandler
-    ];
-
-    for (const handler of builtInHandlers) {
-      DirectiveRegistry.registerHandler(handler);
-    }
+    // Register built-in handlers
+    DirectiveRegistry.registerHandler(runDirectiveHandler);
+    DirectiveRegistry.registerHandler(importDirectiveHandler);
+    DirectiveRegistry.registerHandler(embedDirectiveHandler);
+    DirectiveRegistry.registerHandler(defineDirectiveHandler);
+    DirectiveRegistry.registerHandler(textDirectiveHandler);
+    DirectiveRegistry.registerHandler(pathDirectiveHandler);
+    DirectiveRegistry.registerHandler(dataDirectiveHandler);
+    DirectiveRegistry.registerHandler(apiDirectiveHandler);
+    DirectiveRegistry.registerHandler(callDirectiveHandler);
 
     DirectiveRegistry.initialized = true;
+  }
+
+  /**
+   * Normalizes a directive kind by ensuring it has the @ prefix
+   */
+  private static normalizeDirectiveKind(kind: string): string {
+    return kind.startsWith('@') ? kind : `@${kind}`;
   }
 
   static registerHandler(handler: DirectiveHandler): void {
@@ -47,8 +44,16 @@ export class DirectiveRegistry {
     DirectiveRegistry.handlers.push(handler);
   }
 
-  static findHandler(kind: string): DirectiveHandler | undefined {
-    return DirectiveRegistry.handlers.find(handler => handler.canHandle(kind));
+  /**
+   * Finds a handler that can handle the specified kind in the given mode.
+   * Automatically adds @ prefix if not present.
+   */
+  static findHandler(kind: string, mode: 'toplevel' | 'rightside'): DirectiveHandler | undefined {
+    // Ensure handlers are initialized
+    DirectiveRegistry.initializeBuiltInHandlers();
+
+    const normalizedKind = DirectiveRegistry.normalizeDirectiveKind(kind);
+    return DirectiveRegistry.handlers.find(h => h.canHandle(normalizedKind, mode));
   }
 
   static clear(): void {

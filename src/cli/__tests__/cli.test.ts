@@ -1,59 +1,39 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { cli } from '../cli.js';
+import { cli } from '../cli';
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import { existsSync } from 'fs';
 import { resolve } from 'path';
 
+// Consolidated mock setup
+vi.mock('path', () => ({
+  resolve: vi.fn((p: string) => p),
+  dirname: vi.fn((p: string) => p.split('/').slice(0, -1).join('/')),
+  basename: vi.fn((p: string) => p.split('/').pop() || ''),
+  extname: vi.fn((p: string) => '.meld'),
+  join: vi.fn((...parts: string[]) => parts.join('/'))
+}));
+
 vi.mock('fs', () => ({
   existsSync: vi.fn((path: string) => path === 'test.meld'),
   promises: {
-    readFile: vi.fn().mockResolvedValue('Mock content'),
+    readFile: vi.fn().mockImplementation((path: string) => {
+      if (path === 'test.meld') {
+        return Promise.resolve('@text test = "value"');
+      }
+      throw new Error('File not found');
+    }),
     writeFile: vi.fn().mockResolvedValue(undefined)
   }
 }));
 
-vi.mock('path', () => ({
-  resolve: vi.fn((path: string) => path),
-  extname: vi.fn((path: string) => '.meld')
-}));
-
 describe('cli', () => {
   beforeEach(() => {
-    // Mock path module
-    vi.mock('path', () => {
-      const actual = {
-        dirname: vi.fn().mockImplementation((p: string) => p.split('/').slice(0, -1).join('/')),
-        basename: vi.fn().mockImplementation((p: string) => p.split('/').pop() || ''),
-        extname: vi.fn().mockImplementation((p: string) => '.meld'),
-        join: vi.fn().mockImplementation((...parts: string[]) => parts.join('/'))
-      };
-      return {
-        ...actual,
-        default: actual
-      };
-    });
-
-    // Mock fs module
-    vi.mock('fs', () => ({
-      existsSync: vi.fn().mockImplementation((path: string) => path === 'test.meld')
-    }));
-
-    // Mock fs/promises module
-    vi.mock('fs/promises', () => ({
-      readFile: vi.fn().mockImplementation((path: string) => {
-        if (path === 'test.meld') {
-          return Promise.resolve('@text test = "value"');
-        }
-        throw new Error('File not found');
-      }),
-      writeFile: vi.fn().mockResolvedValue(undefined)
-    }));
+    vi.clearAllMocks();
   });
 
   afterEach(() => {
-    vi.restoreAllMocks();
-    vi.resetModules();
+    vi.clearAllMocks();
   });
 
   it('should process input file with default options', async () => {

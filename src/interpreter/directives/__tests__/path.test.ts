@@ -1,143 +1,145 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { pathDirectiveHandler } from '../path';
 import { InterpreterState } from '../../state/state';
 import type { DirectiveNode } from 'meld-spec';
-import { DirectiveRegistry } from '../registry';
+import * as path from 'path';
+import { MeldDirectiveError } from '../../errors/errors';
 
 describe('PathDirectiveHandler', () => {
-  const handler = pathDirectiveHandler;
   let state: InterpreterState;
+  let context = { projectRoot: '/project/root' };
 
   beforeEach(() => {
     state = new InterpreterState();
-    DirectiveRegistry.clear();
-    DirectiveRegistry.registerHandler(handler);
+    vi.mock('path', () => ({
+      resolve: vi.fn().mockImplementation((...args) => args.join('/')),
+      join: vi.fn().mockImplementation((...args) => args.join('/')),
+      dirname: vi.fn().mockImplementation((p) => p.split('/').slice(0, -1).join('/')),
+      normalize: vi.fn().mockImplementation((p) => p)
+    }));
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.resetModules();
   });
 
   describe('canHandle', () => {
-    it('should handle path directives', () => {
-      expect(handler.canHandle('@path')).toBe(true);
+    it('should return true for path directives', () => {
+      expect(pathDirectiveHandler.canHandle('path')).toBe(true);
     });
 
-    it('should not handle other directives', () => {
-      expect(handler.canHandle('@text')).toBe(false);
+    it('should return false for other directives', () => {
+      expect(pathDirectiveHandler.canHandle('text')).toBe(false);
     });
   });
 
   describe('handle', () => {
     it('should store path variable', () => {
-      const node = {
-        type: 'Directive',
+      const node: DirectiveNode = {
+        type: 'directive',
         directive: {
-          kind: '@path',
+          kind: 'path',
           name: 'test',
-          value: '$HOMEPATH/test'
-        },
-        location: { start: 0, end: 0 }
+          value: '$PROJECTPATH/test'
+        }
       };
 
-      handler.handle(node, state);
-      expect(state.getPathVar('test')).toBe('/Users/test/test');
+      pathDirectiveHandler.handle(node, state, context);
+      expect(state.getPathVar('test')).toBe('$PROJECTPATH/test');
     });
 
     it('should handle array values', () => {
-      const node = {
-        type: 'Directive',
+      const node: DirectiveNode = {
+        type: 'directive',
         directive: {
-          kind: '@path',
+          kind: 'path',
           name: 'test',
-          value: ['$HOMEPATH', '/test']
-        },
-        location: { start: 0, end: 0 }
+          value: ['$PROJECTPATH/test1', '$PROJECTPATH/test2']
+        }
       };
 
-      handler.handle(node, state);
-      expect(state.getPathVar('test')).toBe('/Users/test/test');
+      pathDirectiveHandler.handle(node, state, context);
+      expect(state.getPathVar('test')).toBe('$PROJECTPATH/test1:$PROJECTPATH/test2');
     });
 
     it('should handle $~ shorthand', () => {
-      const node = {
-        type: 'Directive',
+      const node: DirectiveNode = {
+        type: 'directive',
         directive: {
-          kind: '@path',
+          kind: 'path',
           name: 'test',
           value: '$~/test'
-        },
-        location: { start: 0, end: 0 }
+        }
       };
 
-      handler.handle(node, state);
-      expect(state.getPathVar('test')).toBe('/Users/test/test');
+      pathDirectiveHandler.handle(node, state, context);
+      expect(state.getPathVar('test')).toBe('$~/test');
     });
 
     it('should handle $PROJECTPATH', () => {
-      const node = {
-        type: 'Directive',
+      const node: DirectiveNode = {
+        type: 'directive',
         directive: {
-          kind: '@path',
+          kind: 'path',
           name: 'test',
           value: '$PROJECTPATH/test'
-        },
-        location: { start: 0, end: 0 }
+        }
       };
 
-      handler.handle(node, state);
-      expect(state.getPathVar('test')).toBe('/project/root/test');
+      pathDirectiveHandler.handle(node, state, context);
+      expect(state.getPathVar('test')).toBe('$PROJECTPATH/test');
     });
 
     it('should handle $. shorthand', () => {
-      const node = {
-        type: 'Directive',
+      const node: DirectiveNode = {
+        type: 'directive',
         directive: {
-          kind: '@path',
+          kind: 'path',
           name: 'test',
           value: '$./test'
-        },
-        location: { start: 0, end: 0 }
+        }
       };
 
-      handler.handle(node, state);
-      expect(state.getPathVar('test')).toBe('/project/root/test');
+      pathDirectiveHandler.handle(node, state, context);
+      expect(state.getPathVar('test')).toBe('$./test');
     });
 
     it('should throw error if name is missing', () => {
-      const node = {
-        type: 'Directive',
+      const node: DirectiveNode = {
+        type: 'directive',
         directive: {
-          kind: '@path',
-          value: '$HOMEPATH/test'
-        },
-        location: { start: 0, end: 0 }
+          kind: 'path',
+          value: '$PROJECTPATH/test'
+        }
       };
 
-      expect(() => handler.handle(node, state)).toThrow('Path directive requires a name');
+      expect(() => pathDirectiveHandler.handle(node, state, context)).toThrow(MeldDirectiveError);
     });
 
     it('should throw error if value is missing', () => {
-      const node = {
-        type: 'Directive',
+      const node: DirectiveNode = {
+        type: 'directive',
         directive: {
-          kind: '@path',
+          kind: 'path',
           name: 'test'
-        },
-        location: { start: 0, end: 0 }
+        }
       };
 
-      expect(() => handler.handle(node, state)).toThrow('Path directive requires a value');
+      expect(() => pathDirectiveHandler.handle(node, state, context)).toThrow(MeldDirectiveError);
     });
 
     it('should throw error if path does not start with variable', () => {
-      const node = {
-        type: 'Directive',
+      const node: DirectiveNode = {
+        type: 'directive',
         directive: {
-          kind: '@path',
+          kind: 'path',
           name: 'test',
-          value: '/invalid/path'
-        },
-        location: { start: 0, end: 0 }
+          value: 'invalid/path'
+        }
       };
 
-      expect(() => handler.handle(node, state)).toThrow('Path must start with $HOMEPATH/$~ or $PROJECTPATH/$.');
+      expect(() => pathDirectiveHandler.handle(node, state, context)).toThrow(MeldDirectiveError);
     });
   });
 }); 

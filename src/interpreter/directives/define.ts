@@ -1,53 +1,44 @@
-import type { DirectiveNode, DirectiveKind } from 'meld-spec';
-import { DirectiveHandler } from './types';
+import type { DirectiveNode } from 'meld-spec';
+import { DirectiveHandler, HandlerContext } from './types';
 import { InterpreterState } from '../state/state';
 import { MeldDirectiveError } from '../errors/errors';
+import { adjustLocation } from '../utils/location';
 
-interface DefineDirectiveData {
-  kind: '@define';
-  name: string;
-  body: string;
-}
-
-class DefineDirectiveHandler implements DirectiveHandler {
-  canHandle(kind: DirectiveKind): boolean {
+export class DefineDirectiveHandler implements DirectiveHandler {
+  canHandle(kind: string, mode: 'toplevel' | 'rightside'): boolean {
     return kind === '@define';
   }
 
-  handle(node: DirectiveNode, state: InterpreterState): void {
+  handle(node: DirectiveNode, state: InterpreterState, context: HandlerContext): void {
     const data = node.directive;
     if (!data.name) {
-      throw new MeldDirectiveError('Define directive requires a name', 'define', node.location?.start);
-    }
-    if (!data.body) {
-      throw new MeldDirectiveError('Define directive requires a body', 'define', node.location?.start);
-    }
-
-    // Handle both string and object run directives
-    if (typeof data.body === 'string') {
-      if (!data.body.trim().startsWith('@run')) {
-        throw new MeldDirectiveError(
-          'Define directive body must be a @run directive',
-          'define',
-          node.location?.start
-        );
-      }
-    } else if (data.body.type === 'Directive' && data.body.directive?.kind === '@run') {
-      // Valid run directive object
-    } else {
       throw new MeldDirectiveError(
-        'Define directive body must be a @run directive',
+        'Define directive requires a name',
         'define',
-        node.location?.start
+        context.mode === 'rightside'
+          ? adjustLocation(node.location, context.baseLocation)?.start
+          : node.location?.start
       );
     }
 
-    // Store the command
-    const command = typeof data.body === 'string' ? 
-      data.body.replace(/^@run\s+/, '') : 
-      data.body.directive.command;
+    if (!data.value) {
+      throw new MeldDirectiveError(
+        'Define directive requires a value',
+        'define',
+        context.mode === 'rightside'
+          ? adjustLocation(node.location, context.baseLocation)?.start
+          : node.location?.start
+      );
+    }
 
-    state.setCommand(data.name, command);
+    // Store the definition in state
+    state.setDataVar(`define:${data.name}`, {
+      name: data.name,
+      value: data.value,
+      location: context.mode === 'rightside'
+        ? adjustLocation(node.location, context.baseLocation)
+        : node.location
+    });
   }
 }
 

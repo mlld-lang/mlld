@@ -1,59 +1,78 @@
-import { existsSync } from 'fs';
-import { join } from 'path';
-import { runMeld } from '../sdk/index.js';
+import { promises as fs } from 'fs';
+import { resolve } from 'path';
+import { parseMeld } from '../interpreter/parser';
+import { interpret } from '../interpreter/interpreter';
+import { InterpreterState } from '../interpreter/state/state';
+import { toMarkdown } from '../converter/converter';
 
-const VALID_EXTENSIONS = ['.meld', '.meld.md', '.mll', '.mll.md'];
-
-function validateFileExtension(filePath: string): void {
-  const ext = VALID_EXTENSIONS.find(e => filePath.endsWith(e));
-  if (!ext) {
-    throw new Error(`Invalid file extension. Supported extensions: ${VALID_EXTENSIONS.join(', ')}`);
-  }
+interface CliOptions {
+  input: string;
+  output?: string;
+  format?: 'md' | 'llm';
 }
 
-function validateFile(filePath: string): void {
-  if (!existsSync(filePath)) {
-    throw new Error('File not found');
-  }
-  validateFileExtension(filePath);
-}
+/**
+ * Parse command line arguments
+ */
+function parseArgs(args: string[]): CliOptions {
+  const options: CliOptions = {
+    input: '',
+    format: 'llm'
+  };
 
-export async function cli(args: string[]): Promise<void> {
-  const [,, inputFile, ...options] = args;
-  
-  if (!inputFile) {
+  for (let i = 2; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === '--input' || arg === '-i') {
+      options.input = args[++i];
+    } else if (arg === '--output' || arg === '-o') {
+      options.output = args[++i];
+    } else if (arg === '--format' || arg === '-f') {
+      options.format = args[++i] as 'md' | 'llm';
+    } else {
+      options.input = arg;
+    }
+  }
+
+  if (!options.input) {
     throw new Error('Input file is required');
   }
 
-  // Validate file before processing
-  validateFile(inputFile);
+  return options;
+}
 
-  // Parse options
-  const format = options.includes('--md') ? 'md' : 'llm';
-  const stdout = options.includes('--stdout');
-  let outputFile = options.find(opt => opt.startsWith('--output='))?.split('=')[1];
+/**
+ * Run the CLI
+ */
+export async function run(args: string[]): Promise<void> {
+  const options = parseArgs(args);
+  const inputFile = resolve(options.input);
+  const outputFile = options.output ? resolve(options.output) : undefined;
 
-  if (!stdout && !outputFile) {
-    // Default output file
-    const ext = format === 'md' ? '.md' : '.llm';
-    outputFile = inputFile.replace(/\.(meld|mll)(\.md)?$/, ext);
-  }
+  // Read and parse input
+  const content = await fs.readFile(inputFile, 'utf8');
+  const nodes = parseMeld(content);
 
-  // Run meld
-  const { output } = await runMeld(inputFile, { format });
+  // Interpret nodes
+  const state = new InterpreterState();
+  interpret(nodes, state);
 
-  if (stdout) {
+  // Convert to output format
+  const output = toMarkdown(state.getNodes());
+
+  // Write output
+  if (outputFile) {
+    await fs.writeFile(outputFile, output);
+  } else {
     console.log(output);
-  } else if (outputFile) {
-    // Write to file
-    await Bun.write(outputFile, output);
   }
 }
 
-// Only execute if run directly
-if (process.argv[1] === import.meta.url) {
-  cli(process.argv).catch(err => {
-    console.error(err.message);
+export const cli = run;
+
+// Run if called directly
+if (require.main === module) {
+  run(process.argv).catch(error => {
+    console.error('Error:', error.message);
     process.exit(1);
   });
 } 

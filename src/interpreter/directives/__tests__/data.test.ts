@@ -1,26 +1,24 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { dataDirectiveHandler } from '../data';
+import { DirectiveNode } from 'meld-spec';
 import { InterpreterState } from '../../state/state';
-import type { DirectiveNode } from 'meld-spec';
+import { dataDirectiveHandler } from '../data';
 import { MeldDirectiveError } from '../../errors/errors';
-import { DirectiveRegistry } from '../registry';
+import { HandlerContext } from '../types';
 
 describe('DataDirectiveHandler', () => {
   let state: InterpreterState;
+  const context: HandlerContext = { mode: 'toplevel' };
 
   beforeEach(() => {
     state = new InterpreterState();
-    DirectiveRegistry.clear();
-    DirectiveRegistry.registerHandler(dataDirectiveHandler);
   });
 
   describe('canHandle', () => {
-    it('should handle data directives', () => {
-      expect(dataDirectiveHandler.canHandle('@data')).toBe(true);
+    it('returns true for @data directives in top-level mode', () => {
+      expect(dataDirectiveHandler.canHandle('@data', 'toplevel')).toBe(true);
     });
 
-    it('should not handle other directives', () => {
-      expect(dataDirectiveHandler.canHandle('@run')).toBe(false);
+    it('returns true for @data directives in right-side mode', () => {
+      expect(dataDirectiveHandler.canHandle('@data', 'rightside')).toBe(true);
     });
   });
 
@@ -30,8 +28,8 @@ describe('DataDirectiveHandler', () => {
         type: 'Directive',
         directive: {
           kind: '@data',
-          identifier: 'config',
-          value: { name: 'test', version: 1 }
+          name: 'config',
+          value: { key: 'value' }
         },
         location: {
           start: { line: 1, column: 1 },
@@ -39,10 +37,8 @@ describe('DataDirectiveHandler', () => {
         }
       };
 
-      dataDirectiveHandler.handle(node, state);
-
-      const storedData = state.getDataVar('config');
-      expect(storedData).toEqual({ name: 'test', version: 1 });
+      dataDirectiveHandler.handle(node, state, context);
+      expect(state.getDataVar('config')).toEqual({ key: 'value' });
     });
 
     it('should store array literal in state', () => {
@@ -50,7 +46,7 @@ describe('DataDirectiveHandler', () => {
         type: 'Directive',
         directive: {
           kind: '@data',
-          identifier: 'list',
+          name: 'list',
           value: [1, 2, 3]
         },
         location: {
@@ -59,10 +55,8 @@ describe('DataDirectiveHandler', () => {
         }
       };
 
-      dataDirectiveHandler.handle(node, state);
-
-      const storedData = state.getDataVar('list');
-      expect(storedData).toEqual([1, 2, 3]);
+      dataDirectiveHandler.handle(node, state, context);
+      expect(state.getDataVar('list')).toEqual([1, 2, 3]);
     });
 
     it('should store string literal in state', () => {
@@ -70,8 +64,8 @@ describe('DataDirectiveHandler', () => {
         type: 'Directive',
         directive: {
           kind: '@data',
-          identifier: 'message',
-          value: 'Hello World'
+          name: 'message',
+          value: 'hello'
         },
         location: {
           start: { line: 1, column: 1 },
@@ -79,10 +73,8 @@ describe('DataDirectiveHandler', () => {
         }
       };
 
-      dataDirectiveHandler.handle(node, state);
-
-      const storedData = state.getDataVar('message');
-      expect(storedData).toBe('Hello World');
+      dataDirectiveHandler.handle(node, state, context);
+      expect(state.getDataVar('message')).toBe('hello');
     });
 
     it('should throw error if identifier is missing', () => {
@@ -90,16 +82,16 @@ describe('DataDirectiveHandler', () => {
         type: 'Directive',
         directive: {
           kind: '@data',
-          value: 'test'
-        } as any,
+          value: { key: 'value' }
+        },
         location: {
           start: { line: 1, column: 1 },
           end: { line: 1, column: 10 }
         }
       };
 
-      expect(() => dataDirectiveHandler.handle(node, state)).toThrow(
-        'Data directive requires an identifier'
+      expect(() => dataDirectiveHandler.handle(node, state, context)).toThrow(
+        'Data directive requires a name'
       );
     });
 
@@ -108,15 +100,15 @@ describe('DataDirectiveHandler', () => {
         type: 'Directive',
         directive: {
           kind: '@data',
-          identifier: 'test'
-        } as any,
+          name: 'config'
+        },
         location: {
           start: { line: 1, column: 1 },
           end: { line: 1, column: 10 }
         }
       };
 
-      expect(() => dataDirectiveHandler.handle(node, state)).toThrow(
+      expect(() => dataDirectiveHandler.handle(node, state, context)).toThrow(
         'Data directive requires a value'
       );
     });

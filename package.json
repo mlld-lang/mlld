@@ -17,9 +17,9 @@
     "build": "npm run build:cjs && npm run build:esm",
     "build:cjs": "tsc -p tsconfig.cjs.json",
     "build:esm": "tsc -p tsconfig.esm.json",
-    "test": "vitest --run",
-    "test:watch": "vitest watch",
-    "test:coverage": "vitest run --coverage",
+    "test": "npm run build && vitest --run",
+    "test:watch": "npm run build && vitest watch",
+    "test:coverage": "npm run build && vitest run --coverage",
     "lint": "eslint src/**/*.ts"
   },
   "repository": {

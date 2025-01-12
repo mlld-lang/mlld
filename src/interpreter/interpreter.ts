@@ -1,7 +1,8 @@
-import type { MeldNode, DirectiveNode } from 'meld-spec';
+import type { MeldNode, DirectiveNode, Location } from 'meld-spec';
 import { DirectiveRegistry } from './directives/registry';
 import { InterpreterState } from './state/state';
 import { MeldInterpretError } from './errors/errors';
+import { HandlerContext } from './directives/types';
 
 function logNode(node: MeldNode, context: string) {
   console.log(`[Interpreter] ${context}:`, {
@@ -28,12 +29,18 @@ function logError(error: unknown, node: MeldNode) {
  * Interprets a Meld AST
  * @param nodes The AST nodes to interpret
  * @param state The interpreter state
+ * @param context Optional context for directive handlers. Defaults to top-level mode.
  */
-export function interpret(nodes: MeldNode[], state: InterpreterState): void {
+export function interpret(
+  nodes: MeldNode[], 
+  state: InterpreterState,
+  context: Partial<HandlerContext> = { mode: 'toplevel' }
+): void {
   console.log('[Interpreter] Starting interpretation:', {
     nodeCount: nodes?.length ?? 'undefined',
     stateHasParent: !!state.getParentState(),
-    currentNodes: state.getNodes().length
+    currentNodes: state.getNodes().length,
+    mode: context.mode
   });
 
   if (!nodes) {
@@ -46,6 +53,13 @@ export function interpret(nodes: MeldNode[], state: InterpreterState): void {
     throw new MeldInterpretError('Nodes must be an array', 'Unknown');
   }
 
+  // Ensure we have a complete context with defaults
+  const handlerContext: HandlerContext = {
+    mode: context.mode ?? 'toplevel',
+    parentState: context.parentState ?? state.getParentState(),
+    baseLocation: context.baseLocation,
+  };
+
   for (const node of nodes) {
     try {
       logNode(node, 'Processing node');
@@ -54,10 +68,11 @@ export function interpret(nodes: MeldNode[], state: InterpreterState): void {
         const directiveNode = node as DirectiveNode;
         console.log('[Interpreter] Processing directive:', {
           kind: directiveNode.directive.kind,
-          data: directiveNode.directive
+          data: directiveNode.directive,
+          mode: handlerContext.mode
         });
 
-        const handler = DirectiveRegistry.findHandler(directiveNode.directive.kind);
+        const handler = DirectiveRegistry.findHandler(directiveNode.directive.kind, handlerContext.mode);
         if (!handler) {
           console.error('[Interpreter] No handler found:', directiveNode.directive.kind);
           throw new MeldInterpretError(
@@ -68,7 +83,7 @@ export function interpret(nodes: MeldNode[], state: InterpreterState): void {
         }
 
         console.log('[Interpreter] Found handler, executing...');
-        handler.handle(directiveNode, state);
+        handler.handle(directiveNode, state, handlerContext);
         console.log('[Interpreter] Handler completed successfully');
       } else {
         console.log('[Interpreter] Adding non-directive node to state');

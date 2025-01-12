@@ -1,10 +1,11 @@
-import { vi } from 'vitest';
+import { beforeEach } from 'vitest';
+import { InterpreterState } from '../state/state';
 
-// Set up global mocks
-vi.mock('fs');
-vi.mock('path');
+// Mock state for testing
+let mockState: InterpreterState;
 
-// Reset all mocks before each test
 beforeEach(() => {
-  vi.resetAllMocks();
-}); 
+  mockState = new InterpreterState();
+});
+
+export { mockState }; 

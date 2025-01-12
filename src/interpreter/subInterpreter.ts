@@ -1,60 +1,72 @@
-import { DirectiveNode, Location, Node } from 'meld-spec';
-import { MeldInterpretError } from './errors/errors';
+import { Location, MeldNode } from 'meld-spec';
 import { InterpreterState } from './state/state';
 import { parseMeld } from './parser';
-import { interpretMeld } from './interpreter';
+import { interpret } from './interpreter';
+import { MeldInterpretError } from './errors/errors';
+import { adjustLocation } from './utils/location';
 
-function logLocation(node: Node, context: string, baseLocation?: Location) {
-  console.log(`[SubInterpreter] ${context}:`, {
-    nodeType: node.type,
-    originalLocation: node.location ? { ...node.location } : undefined,
-    baseLocation,
-    hasLocation: !!node.location,
-    hasStart: !!node.location?.start,
-    hasEnd: !!node.location?.end
-  });
-}
+/**
+ * Adjusts the location of a node and all its children based on a base location.
+ * This handles multi-line content by properly calculating line offsets.
+ */
+function adjustNodeLocation(node: MeldNode, baseLocation: Location): void {
+  if (!node.location) return;
 
-function logLocationAdjustment(node: Node, baseLocation: Location, adjustedLocation: Location) {
-  console.log('[SubInterpreter] Location adjustment:', {
-    nodeType: node.type,
-    original: node.location,
-    base: baseLocation,
-    adjusted: adjustedLocation,
-    startLineDelta: adjustedLocation.start.line - (node.location?.start.line ?? 0),
-    startColumnDelta: adjustedLocation.start.column - (node.location?.start.column ?? 0)
-  });
-}
+  // Calculate line offset based on base location
+  const lineOffset = baseLocation.start.line - 1;
+  
+  // For the first line, we need to add the base column offset
+  if (node.location.start.line === 1) {
+    node.location.start.column += baseLocation.start.column - 1;
+  }
+  node.location.start.line += lineOffset;
 
-function adjustNodeLocation(node: Node, baseLocation: Location): void {
-  if (!node.location) {
-    console.log('[SubInterpreter] Node missing location, skipping adjustment:', {
-      nodeType: node.type
-    });
-    return;
+  if (node.location.end) {
+    if (node.location.end.line === 1) {
+      node.location.end.column += baseLocation.start.column - 1;
+    }
+    node.location.end.line += lineOffset;
   }
 
-  logLocation(node, 'Pre-adjustment', baseLocation);
-
-  const startLine = node.location.start.line + baseLocation.start.line - 1;
-  const startColumn = node.location.start.line === 1 
-    ? node.location.start.column + baseLocation.start.column - 1 
-    : node.location.start.column;
-
-  const endLine = node.location.end.line + baseLocation.start.line - 1;
-  const endColumn = node.location.end.line === 1 
-    ? node.location.end.column + baseLocation.start.column - 1 
-    : node.location.end.column;
-
-  const adjustedLocation = {
-    start: { line: startLine, column: startColumn },
-    end: { line: endLine, column: endColumn }
-  };
-
-  logLocationAdjustment(node, baseLocation, adjustedLocation);
-  node.location = adjustedLocation;
+  // Recursively adjust locations of any child nodes
+  if ('nodes' in node) {
+    for (const childNode of (node as any).nodes) {
+      adjustNodeLocation(childNode, baseLocation);
+    }
+  }
 }
 
+/**
+ * Creates an error with properly adjusted location information.
+ */
+function createLocationAwareError(
+  error: Error,
+  baseLocation: Location,
+  nodeType: string = 'SubDirective'
+): MeldInterpretError {
+  const meldError = new MeldInterpretError(
+    `Failed to parse or interpret sub-directives: ${error.message}`,
+    nodeType,
+    baseLocation.start
+  );
+
+  // If the original error had location info, adjust it
+  if ('location' in error && error.location) {
+    const adjustedLocation = adjustLocation(error.location as Location, baseLocation);
+    if (adjustedLocation) {
+      meldError.location = adjustedLocation.start;
+    }
+  } else {
+    meldError.location = baseLocation.start;
+  }
+
+  return meldError;
+}
+
+/**
+ * Interprets sub-directives found within content, returning a child state.
+ * Handles proper location adjustments and state inheritance.
+ */
 export function interpretSubDirectives(
   content: string,
   baseLocation: Location,
@@ -69,8 +81,8 @@ export function interpretSubDirectives(
 
   try {
     // Create child state that inherits from parent
-    const childState = new InterpreterState();
-    childState.parentState = parentState;
+    const childState = new InterpreterState(parentState);
+    childState.setCurrentFilePath(parentState.getCurrentFilePath() || '');
 
     console.log('[SubInterpreter] Created child state:', {
       hasParentState: !!childState.parentState,
@@ -88,22 +100,47 @@ export function interpretSubDirectives(
       types: nodes.map(n => n.type)
     });
 
-    console.log('[SubInterpreter] Adjusting node locations...');
-    nodes.forEach(node => adjustNodeLocation(node, baseLocation));
-    
-    // Interpret nodes in child state
+    // Adjust locations for all nodes before interpretation
+    for (const node of nodes) {
+      adjustNodeLocation(node, baseLocation);
+    }
+
+    // Interpret nodes in child state with right-side context
     console.log('[SubInterpreter] Interpreting nodes in child state...');
-    interpretMeld(nodes, childState);
+    interpret(nodes, childState, {
+      mode: 'rightside',
+      parentState,
+      baseLocation
+    });
+
+    // Merge child state back to parent before making it immutable
+    console.log('[SubInterpreter] Merging child state back to parent...');
+    if (!parentState.isImmutable) {
+      // Merge child state back to all parent states in the chain
+      let currentParent: InterpreterState | undefined = parentState;
+      
+      // Merge child state into each parent state in the chain
+      while (currentParent && !currentParent.isImmutable) {
+        console.log('[SubInterpreter] Merging child state into parent:', {
+          parentVars: Array.from(currentParent.getAllTextVars().keys()),
+          childVars: Array.from(childState.getLocalTextVars().keys()),
+          childChanges: Array.from(childState.getLocalChanges())
+        });
+        currentParent.mergeChildState(childState);
+        currentParent = currentParent.parentState;
+      }
+    }
 
     console.log('[SubInterpreter] Making child state immutable...');
-    childState.isImmutable = true;
+    childState.setImmutable();
 
     console.log('[SubInterpreter] Interpretation completed:', {
       nodeCount: childState.getNodes().length,
       vars: {
         text: Array.from(childState.getAllTextVars().keys()),
         data: Array.from(childState.getAllDataVars().keys())
-      }
+      },
+      changes: Array.from(childState.getLocalChanges())
     });
 
     return childState;
@@ -115,11 +152,7 @@ export function interpretSubDirectives(
     });
 
     if (error instanceof Error) {
-      throw new MeldInterpretError(
-        `Failed to parse or interpret sub-directives: ${error.message}`,
-        'SubDirective',
-        baseLocation.start
-      );
+      throw createLocationAwareError(error, baseLocation);
     }
     throw error;
   }

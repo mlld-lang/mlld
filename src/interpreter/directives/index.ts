@@ -1,20 +1,6 @@
-import type { DirectiveNode, DirectiveKind } from 'meld-spec';
+import type { DirectiveNode } from 'meld-spec';
 import { InterpreterState } from '../state/state.js';
-
-/**
- * Interface for handling Meld directives
- */
-export interface DirectiveHandler {
-  /**
-   * Check if this handler can handle the given directive kind
-   */
-  canHandle(kind: DirectiveKind): boolean;
-
-  /**
-   * Handle the directive node with the given state
-   */
-  handle(node: DirectiveNode, state: InterpreterState): void;
-}
+import { DirectiveHandler } from './types';
 
 /**
  * Registry for directive handlers
@@ -32,8 +18,8 @@ export class DirectiveRegistry {
   /**
    * Find a handler for the given directive kind
    */
-  findHandler(kind: DirectiveKind): DirectiveHandler | undefined {
-    return this.handlers.find(handler => handler.canHandle(kind));
+  findHandler(kind: string, mode: 'toplevel' | 'rightside'): DirectiveHandler | undefined {
+    return this.handlers.find(handler => handler.canHandle(kind, mode));
   }
 
   /**

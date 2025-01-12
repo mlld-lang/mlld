@@ -6,7 +6,7 @@ export { InterpreterState } from '../interpreter/state/state.js';
 export { MeldParseError, MeldInterpretError } from '../interpreter/errors/errors.js';
 
 // Internal imports
-import { parseMeldContent } from '../interpreter/parser.js';
+import { parseMeld as parseContent } from '../interpreter/parser.js';
 import { interpret } from '../interpreter/interpreter.js';
 import { InterpreterState } from '../interpreter/state/state.js';
 import { MeldParseError, MeldInterpretError } from '../interpreter/errors/errors.js';
@@ -38,7 +38,7 @@ export interface MeldOptions {
  * @throws {MeldParseError} If parsing fails
  */
 export function parseMeld(content: string): MeldNode[] {
-  return parseMeldContent(content);
+  return parseContent(content);
 }
 
 /**

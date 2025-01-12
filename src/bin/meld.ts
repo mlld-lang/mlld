@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
-import { cli } from '../cli/index.js';
+import { cli } from '../cli';
 
-cli(process.argv).catch((error) => {
-  console.error('Fatal error:', error);
+cli(process.argv).catch((error: Error) => {
+  console.error('Error:', error.message);
   process.exit(1);
 }); 

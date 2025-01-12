@@ -1,35 +1,40 @@
 import * as fs from 'fs';
 import { join, dirname } from 'path';
 import { DirectiveNode } from 'meld-spec';
-import { DirectiveHandler } from './types';
+import { DirectiveHandler, HandlerContext } from './types';
 import { InterpreterState } from '../state/state';
 import { MeldImportError } from '../errors/errors';
 import { parseMeld } from '../parser';
+import { interpret } from '../interpreter';
+import { adjustLocation } from '../utils/location';
 
-class ImportDirectiveHandler implements DirectiveHandler {
-  canHandle(kind: string): boolean {
-    return kind === '@import' || kind === 'import';
+export class ImportDirectiveHandler implements DirectiveHandler {
+  canHandle(kind: string, mode: 'toplevel' | 'rightside'): boolean {
+    return kind === '@import';
   }
 
-  handle(node: DirectiveNode, state: InterpreterState): void {
-    const { from, import: importSpec } = node.data || {};
+  handle(node: DirectiveNode, state: InterpreterState, context: HandlerContext): void {
+    const data = node.directive;
+    const errorLocation = context.mode === 'rightside'
+      ? adjustLocation(node.location, context.baseLocation)?.start
+      : node.location?.start;
 
-    if (!from) {
-      throw new MeldImportError('Import source is required', node.location?.start);
+    if (!data.from) {
+      throw new MeldImportError('Import source is required', errorLocation);
     }
 
     // Resolve path relative to current file
     const currentDir = dirname(state.getCurrentFilePath() || '');
-    const importPath = join(currentDir, from);
+    const importPath = join(currentDir, data.from);
 
     // Check if file exists
     if (!fs.existsSync(importPath)) {
-      throw new MeldImportError('File not found', node.location?.start);
+      throw new MeldImportError('File not found', errorLocation);
     }
 
     // Check for circular imports
     if (state.hasImport(importPath)) {
-      throw new MeldImportError('Circular import detected', node.location?.start);
+      throw new MeldImportError('Circular import detected', errorLocation);
     }
 
     try {
@@ -43,40 +48,37 @@ class ImportDirectiveHandler implements DirectiveHandler {
       importedState.setCurrentFilePath(importPath);
 
       // Interpret imported content
-      const { interpretMeld } = require('../interpreter');
-      interpretMeld(importedNodes, importedState);
+      interpret(importedNodes, importedState, {
+        mode: context.mode,
+        baseLocation: context.baseLocation
+      });
 
       // Track import to prevent circular imports
       state.addImport(importPath);
 
       // Handle import specifiers
-      if (importSpec === '*') {
+      if (data.import === '*') {
         // Import all variables
-        state.mergeFrom(importedState);
-      } else if (Array.isArray(importSpec)) {
+        for (const [key, value] of importedState.getAllTextVars()) {
+          state.setTextVar(key, value);
+        }
+        for (const [key, value] of importedState.getAllDataVars()) {
+          state.setDataVar(key, value);
+        }
+      } else if (Array.isArray(data.import)) {
         // Import specific variables with optional aliases
-        for (const spec of importSpec) {
+        for (const spec of data.import) {
           const { name, as } = typeof spec === 'string' ? { name: spec, as: spec } : spec;
           
           // Copy variables with aliases
           const textVar = importedState.getText(name);
           if (textVar !== undefined) {
-            state.setText(as, textVar);
+            state.setTextVar(as, textVar);
           }
 
           const dataVar = importedState.getDataVar(name);
           if (dataVar !== undefined) {
             state.setDataVar(as, dataVar);
-          }
-
-          const pathVar = importedState.getPathVar(name);
-          if (pathVar !== undefined) {
-            state.setPathVar(as, pathVar);
-          }
-
-          const command = importedState.getCommand(name);
-          if (command !== undefined) {
-            state.setCommand(as, command);
           }
         }
       }
@@ -84,7 +86,7 @@ class ImportDirectiveHandler implements DirectiveHandler {
       if (error instanceof Error) {
         throw new MeldImportError(
           `Failed to read or parse imported file: ${error.message}`,
-          node.location?.start
+          errorLocation
         );
       }
       throw error;
