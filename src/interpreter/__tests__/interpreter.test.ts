@@ -1,8 +1,10 @@
+import { describe, it, expect, beforeEach } from 'vitest';
 import { interpret } from '../interpreter.js';
 import { InterpreterState } from '../state/state.js';
 import { DirectiveRegistry } from '../directives/registry.js';
 import { DataDirectiveHandler } from '../directives/data.js';
-import type { MeldNode, NodeType, DirectiveNode, TextNode, CodeFenceNode } from 'meld-spec';
+import type { MeldNode, DirectiveNode, TextNode, CodeFenceNode } from 'meld-spec';
+import { MeldInterpretError } from '../errors/errors.js';
 
 describe('interpret', () => {
   let state: InterpreterState;

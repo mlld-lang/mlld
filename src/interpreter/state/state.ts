@@ -8,6 +8,7 @@ export class InterpreterState {
   private pathVars: Map<string, string> = new Map();
   private commands: Map<string, string> = new Map();
   private imports: Set<string> = new Set();
+  private isImmutable: boolean = false;
 
   constructor(parentState?: InterpreterState) {
     this.parentState = parentState;
@@ -22,7 +23,10 @@ export class InterpreterState {
   }
 
   setText(name: string, value: string): void {
-    this.textVars.set(name, value);
+    this.checkMutable();
+    if (!this.parentState?.getText(name) || this.textVars.has(name)) {
+      this.textVars.set(name, value);
+    }
   }
 
   getText(name: string): string | undefined {
@@ -51,7 +55,10 @@ export class InterpreterState {
   }
 
   setDataVar(name: string, value: unknown): void {
-    this.dataVars.set(name, value);
+    this.checkMutable();
+    if (!this.parentState?.getDataVar(name) || this.dataVars.has(name)) {
+      this.dataVars.set(name, structuredClone(value));
+    }
   }
 
   getDataVar(name: string): unknown | undefined {
@@ -72,7 +79,10 @@ export class InterpreterState {
   }
 
   setPathVar(name: string, value: string): void {
-    this.pathVars.set(name, value);
+    this.checkMutable();
+    if (!this.parentState?.getPathVar(name) || this.pathVars.has(name)) {
+      this.pathVars.set(name, value);
+    }
   }
 
   getPathVar(name: string): string | undefined {
@@ -93,7 +103,10 @@ export class InterpreterState {
   }
 
   setCommand(name: string, command: string): void {
-    this.commands.set(name, command);
+    this.checkMutable();
+    if (!this.parentState?.getCommand(name) || this.commands.has(name)) {
+      this.commands.set(name, command);
+    }
   }
 
   getCommand(name: string): string | undefined {
@@ -126,12 +139,13 @@ export class InterpreterState {
   }
 
   mergeFrom(other: InterpreterState): void {
-    // Merge variables
+    this.checkMutable();
+    
     for (const [key, value] of other.getAllTextVars()) {
       this.setTextVar(key, value);
     }
     for (const [key, value] of other.getAllDataVars()) {
-      this.setDataVar(key, value);
+      this.setDataVar(key, structuredClone(value));
     }
     for (const [key, value] of other.getAllPathVars()) {
       this.setPathVar(key, value);
@@ -140,18 +154,26 @@ export class InterpreterState {
       this.setCommand(key, value);
     }
 
-    // Merge nodes
-    this.nodes.push(...other.getNodes());
+    this.nodes.push(...other.getNodes().map(node => structuredClone(node)));
 
-    // Merge imports
     for (const importPath of other.imports) {
       this.addImport(importPath);
     }
   }
 
   clone(): InterpreterState {
-    const cloned = new InterpreterState();
+    const cloned = new InterpreterState(this.parentState);
     cloned.mergeFrom(this);
     return cloned;
+  }
+
+  setImmutable(): void {
+    this.isImmutable = true;
+  }
+
+  private checkMutable(): void {
+    if (this.isImmutable) {
+      throw new Error('Cannot modify an immutable state');
+    }
   }
 } 

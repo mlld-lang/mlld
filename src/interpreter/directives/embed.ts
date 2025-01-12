@@ -1,180 +1,137 @@
-import { promises as fs } from 'fs';
-import { DirectiveNode, DirectiveKind } from 'meld-spec';
-import { DirectiveHandler } from './types.js';
-import { MeldDirectiveError } from '../errors.js';
-import { InterpreterState } from '../state/state.js';
-import { interpretSubDirectives } from '../subInterpreter.js';
-
-interface EmbedDirectiveData {
-  kind: DirectiveKind;
-  path: string;
-  section?: string;
-  items?: string[];
-  headerLevel?: number;
-  underHeader?: string;
-  interpret?: boolean;
-}
+import { existsSync, readFileSync } from 'fs';
+import { join, dirname } from 'path';
+import { DirectiveNode } from 'meld-spec';
+import { DirectiveHandler } from './types';
+import { InterpreterState } from '../state/state';
+import { MeldEmbedError } from '../errors/errors';
+import { parseMeld } from '../parser.js';
+import { interpretMeld } from '../interpreter.js';
 
 export class EmbedDirectiveHandler implements DirectiveHandler {
-  canHandle(kind: DirectiveKind): boolean {
-    return kind === 'embed';
+  canHandle(kind: string): boolean {
+    return kind === '@embed';
   }
 
-  async handle(node: DirectiveNode, state: InterpreterState): Promise<void> {
-    const data = node.directive as EmbedDirectiveData;
+  handle(node: DirectiveNode, state: InterpreterState): void {
+    const { path, section, items, headerLevel, underHeader, interpret } = node.data || {};
 
-    if (!data.path) {
-      throw new MeldDirectiveError(
-        'Embed directive requires a path',
-        'embed',
-        node.location?.start
-      );
+    if (!path) {
+      throw new MeldEmbedError('Embed path is required', node.location?.start);
     }
 
-    // Read file content
-    let content: string;
+    // Resolve path relative to current file
+    const currentDir = dirname(state.getCurrentFilePath() || '');
+    const embedPath = join(currentDir, path);
+
+    // Check if file exists
+    if (!existsSync(embedPath)) {
+      throw new MeldEmbedError('File not found', node.location?.start);
+    }
+
     try {
-      content = await fs.readFile(data.path, 'utf-8');
-    } catch (err: any) {
-      if (err.code === 'ENOENT') {
-        throw new MeldDirectiveError(
-          'File not found',
-          'embed',
+      // Read content
+      let content = readFileSync(embedPath, 'utf-8');
+
+      // Extract section if specified
+      if (section) {
+        content = this.extractSection(content, section);
+      }
+
+      // Extract specific items if specified
+      if (items) {
+        content = this.extractItems(content, items);
+      }
+
+      // Adjust header levels if specified
+      if (headerLevel) {
+        content = this.adjustHeaderLevels(content, headerLevel);
+      }
+
+      // Add content under specified header
+      if (underHeader) {
+        content = `# ${underHeader}\n\n${content}`;
+      }
+
+      if (interpret) {
+        // Parse and interpret content if requested
+        const nodes = parseMeld(content);
+        const embedState = new InterpreterState();
+        embedState.parentState = state;
+        embedState.setCurrentFilePath(embedPath);
+        interpretMeld(nodes, embedState);
+        state.mergeFrom(embedState);
+      } else {
+        // Add content as text node
+        state.addNode({
+          type: 'Text',
+          content,
+          location: node.location
+        });
+      }
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new MeldEmbedError(
+          `Failed to embed content: ${error.message}`,
           node.location?.start
         );
       }
-      throw new MeldDirectiveError(
-        `Failed to read file: ${err.message}`,
-        'embed',
-        node.location?.start
-      );
-    }
-
-    // Extract section if specified
-    if (data.section) {
-      content = this.extractSection(content, data.section);
-    }
-
-    // Extract items if specified
-    if (data.items) {
-      content = this.extractItems(content, data.items);
-    }
-
-    // Adjust header levels if specified
-    if (data.headerLevel !== undefined || data.underHeader) {
-      content = this.adjustHeaderLevels(content, data.headerLevel, data.underHeader);
-    }
-
-    // Interpret nested directives if specified
-    if (data.interpret) {
-      interpretSubDirectives(content, state, node.location?.start);
-    } else {
-      state.addNode({
-        type: 'Text',
-        content,
-        location: node.location
-      });
+      throw error;
     }
   }
 
   private extractSection(content: string, sectionName: string): string {
     const lines = content.split('\n');
     const sectionRegex = new RegExp(`^#+\\s+${sectionName}\\s*$`);
-    let result = '';
-    let inSection = false;
-    let currentLevel = 0;
+    const startIndex = lines.findIndex(line => sectionRegex.test(line));
 
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      const headerMatch = line.match(/^(#+)\s+/);
-
-      if (headerMatch) {
-        const level = headerMatch[1].length;
-
-        if (sectionRegex.test(line)) {
-          inSection = true;
-          currentLevel = level;
-          continue;
-        } else if (inSection && level <= currentLevel) {
-          break;
-        }
-      }
-
-      if (inSection) {
-        result += (result ? '\n' : '') + line;
-      }
+    if (startIndex === -1) {
+      throw new Error(`Section "${sectionName}" not found in content`);
     }
 
-    return result;
+    const headerLevel = lines[startIndex].match(/^#+/)?.[0].length || 1;
+    const endIndex = lines.slice(startIndex + 1).findIndex(line => {
+      const match = line.match(/^(#+)/);
+      return match && match[0].length <= headerLevel;
+    });
+
+    return endIndex === -1
+      ? lines.slice(startIndex).join('\n')
+      : lines.slice(startIndex, startIndex + endIndex + 1).join('\n');
   }
 
   private extractItems(content: string, items: string[]): string {
     const lines = content.split('\n');
     const result: string[] = [];
-    let currentItem = '';
 
-    for (const line of lines) {
-      const itemMatch = line.match(/^#+\s+(.+)$/);
-      if (itemMatch) {
-        const itemName = itemMatch[1].trim();
-        if (items.includes(itemName)) {
-          if (currentItem) {
-            result.push(currentItem.trim());
-          }
-          currentItem = line;
-        } else if (currentItem) {
-          currentItem += '\n' + line;
-        }
-      } else if (currentItem) {
-        currentItem += '\n' + line;
+    for (const item of items) {
+      const itemRegex = new RegExp(`^#+\\s+${item}\\s*$`);
+      const startIndex = lines.findIndex(line => itemRegex.test(line));
+
+      if (startIndex === -1) {
+        throw new Error(`Item "${item}" not found in content`);
       }
-    }
 
-    if (currentItem) {
-      result.push(currentItem.trim());
+      const headerLevel = lines[startIndex].match(/^#+/)?.[0].length || 1;
+      const endIndex = lines.slice(startIndex + 1).findIndex(line => {
+        const match = line.match(/^(#+)/);
+        return match && match[0].length <= headerLevel;
+      });
+
+      result.push(
+        endIndex === -1
+          ? lines.slice(startIndex).join('\n')
+          : lines.slice(startIndex, startIndex + endIndex + 1).join('\n')
+      );
     }
 
     return result.join('\n\n');
   }
 
-  private adjustHeaderLevels(content: string, baseLevel?: number, underHeader?: string): string {
-    let lines = content.split('\n');
-    let minLevel = 6;
-
-    // Find minimum header level in content
-    for (const line of lines) {
-      const headerMatch = line.match(/^(#+)\s+/);
-      if (headerMatch) {
-        minLevel = Math.min(minLevel, headerMatch[1].length);
-      }
-    }
-
-    // Calculate level adjustment
-    let levelAdjustment = 0;
-    if (baseLevel !== undefined) {
-      levelAdjustment = baseLevel - minLevel;
-    } else if (underHeader) {
-      const underHeaderMatch = underHeader.match(/^(#+)\s+/);
-      if (underHeaderMatch) {
-        levelAdjustment = underHeaderMatch[1].length + 1 - minLevel;
-      }
-    }
-
-    // Adjust header levels
-    lines = lines.map(line => {
-      const headerMatch = line.match(/^(#+)(\s+.+)$/);
-      if (headerMatch) {
-        const newLevel = Math.min(headerMatch[1].length + levelAdjustment, 6);
-        return '#'.repeat(newLevel) + headerMatch[2];
-      }
-      return line;
+  private adjustHeaderLevels(content: string, baseLevel: number): string {
+    return content.replace(/^(#+)/gm, match => {
+      const currentLevel = match.length;
+      const newLevel = currentLevel + baseLevel - 1;
+      return '#'.repeat(Math.min(newLevel, 6));
     });
-
-    // Add parent header if specified
-    if (underHeader) {
-      lines.unshift(underHeader, '');
-    }
-
-    return lines.join('\n');
   }
 } 

@@ -5,6 +5,7 @@ import type { DirectiveNode } from 'meld-spec';
 import * as fs from 'fs';
 import * as path from 'path';
 import { DirectiveRegistry } from '../registry.js';
+import { MeldDirectiveError } from '../../errors/errors.js';
 
 // Mock external dependencies
 vi.mock('fs', () => ({

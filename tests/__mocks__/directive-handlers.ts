@@ -5,7 +5,7 @@ import { DirectiveHandler } from '../../src/interpreter/directives/types.js';
 
 class EmbedDirectiveHandler implements DirectiveHandler {
   canHandle(kind: string): boolean {
-    return kind === 'embed';
+    return kind === '@embed';
   }
 
   handle(node: DirectiveNode, state: InterpreterState): void {
@@ -23,7 +23,7 @@ class EmbedDirectiveHandler implements DirectiveHandler {
 
 class ImportDirectiveHandler implements DirectiveHandler {
   canHandle(kind: string): boolean {
-    return kind === 'import';
+    return kind === '@import';
   }
 
   handle(node: DirectiveNode, state: InterpreterState): void {

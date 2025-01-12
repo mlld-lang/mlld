@@ -1,71 +1,67 @@
-import { defineDirectiveHandler } from '../define.js';
-import { InterpreterState } from '../../state/state.js';
-import type { DirectiveNode } from 'meld-spec';
+import { defineDirectiveHandler } from '../define';
+import { InterpreterState } from '../../state/state';
+import { DirectiveRegistry } from '../registry';
 
 describe('DefineDirectiveHandler', () => {
-  let handler = defineDirectiveHandler;
+  const handler = defineDirectiveHandler;
   let state: InterpreterState;
 
   beforeEach(() => {
     state = new InterpreterState();
+    DirectiveRegistry.clear();
+    DirectiveRegistry.registerHandler(handler);
   });
 
   it('should handle define directives', () => {
-    expect(handler.canHandle('define')).toBe(true);
+    expect(handler.canHandle('@define')).toBe(true);
   });
 
   it('should store command definition', () => {
-    const node: DirectiveNode = {
+    const node = {
       type: 'Directive',
       directive: {
-        kind: 'define',
+        kind: '@define',
         name: 'test',
-        body: '@run echo "hello"'
-      }
+        body: '@run echo hello'
+      },
+      location: { start: 0, end: 0 }
     };
 
     handler.handle(node, state);
-    expect(state.getCommand('test')).toBeDefined();
+    expect(state.getCommand('test')).toBe('echo hello');
   });
 
   it('should throw error if body is not a run directive', () => {
-    const node: DirectiveNode = {
+    const node = {
       type: 'Directive',
       directive: {
-        kind: 'define',
-        name: 'invalid-command',
-        body: {
-          type: 'Directive',
-          directive: {
-            kind: 'data'
-          }
-        }
-      }
+        kind: '@define',
+        name: 'test',
+        body: 'not a run directive'
+      },
+      location: { start: 0, end: 0 }
     };
 
     expect(() => handler.handle(node, state)).toThrow('Define directive body must be a @run directive');
   });
 
   it('should handle command definition without optional fields', () => {
-    const node: DirectiveNode = {
+    const node = {
       type: 'Directive',
       directive: {
-        kind: 'define',
-        name: 'simple-command',
+        kind: '@define',
+        name: 'test',
         body: {
           type: 'Directive',
           directive: {
-            kind: 'run',
-            command: 'echo simple'
+            kind: '@run',
+            command: 'echo hello'
           }
         }
       }
     };
 
     handler.handle(node, state);
-
-    const stored = state.getCommand('simple-command');
-    expect(stored).toBeDefined();
-    expect(typeof stored).toBe('function');
+    expect(state.getCommand('test')).toBe('echo hello');
   });
 }); 

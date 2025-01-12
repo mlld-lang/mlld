@@ -1,10 +1,11 @@
+import { describe, it, expect, beforeEach } from 'vitest';
 import { dataDirectiveHandler } from '../data.js';
 import { InterpreterState } from '../../state/state.js';
 import type { DirectiveNode } from 'meld-spec';
+import { MeldDirectiveError } from '../../errors/errors.js';
 import { DirectiveRegistry } from '../registry.js';
 
 describe('DataDirectiveHandler', () => {
-  let handler = dataDirectiveHandler;
   let state: InterpreterState;
 
   beforeEach(() => {
@@ -15,11 +16,11 @@ describe('DataDirectiveHandler', () => {
 
   describe('canHandle', () => {
     it('should handle data directives', () => {
-      expect(handler.canHandle('data')).toBe(true);
+      expect(dataDirectiveHandler.canHandle('@data')).toBe(true);
     });
 
     it('should not handle other directives', () => {
-      expect(handler.canHandle('run')).toBe(false);
+      expect(dataDirectiveHandler.canHandle('@run')).toBe(false);
     });
   });
 
@@ -28,7 +29,7 @@ describe('DataDirectiveHandler', () => {
       const node: DirectiveNode = {
         type: 'Directive',
         directive: {
-          kind: 'data',
+          kind: '@data',
           identifier: 'config',
           value: { name: 'test', version: 1 }
         },
@@ -38,7 +39,7 @@ describe('DataDirectiveHandler', () => {
         }
       };
 
-      handler.handle(node, state);
+      dataDirectiveHandler.handle(node, state);
 
       const storedData = state.getDataVar('config');
       expect(storedData).toEqual({ name: 'test', version: 1 });
@@ -48,7 +49,7 @@ describe('DataDirectiveHandler', () => {
       const node: DirectiveNode = {
         type: 'Directive',
         directive: {
-          kind: 'data',
+          kind: '@data',
           identifier: 'list',
           value: [1, 2, 3]
         },
@@ -58,7 +59,7 @@ describe('DataDirectiveHandler', () => {
         }
       };
 
-      handler.handle(node, state);
+      dataDirectiveHandler.handle(node, state);
 
       const storedData = state.getDataVar('list');
       expect(storedData).toEqual([1, 2, 3]);
@@ -68,7 +69,7 @@ describe('DataDirectiveHandler', () => {
       const node: DirectiveNode = {
         type: 'Directive',
         directive: {
-          kind: 'data',
+          kind: '@data',
           identifier: 'message',
           value: 'Hello World'
         },
@@ -78,7 +79,7 @@ describe('DataDirectiveHandler', () => {
         }
       };
 
-      handler.handle(node, state);
+      dataDirectiveHandler.handle(node, state);
 
       const storedData = state.getDataVar('message');
       expect(storedData).toBe('Hello World');
@@ -88,7 +89,7 @@ describe('DataDirectiveHandler', () => {
       const node: DirectiveNode = {
         type: 'Directive',
         directive: {
-          kind: 'data',
+          kind: '@data',
           value: 'test'
         } as any,
         location: {
@@ -97,7 +98,7 @@ describe('DataDirectiveHandler', () => {
         }
       };
 
-      expect(() => handler.handle(node, state)).toThrow(
+      expect(() => dataDirectiveHandler.handle(node, state)).toThrow(
         'Data directive requires an identifier'
       );
     });
@@ -106,7 +107,7 @@ describe('DataDirectiveHandler', () => {
       const node: DirectiveNode = {
         type: 'Directive',
         directive: {
-          kind: 'data',
+          kind: '@data',
           identifier: 'test'
         } as any,
         location: {
@@ -115,7 +116,7 @@ describe('DataDirectiveHandler', () => {
         }
       };
 
-      expect(() => handler.handle(node, state)).toThrow(
+      expect(() => dataDirectiveHandler.handle(node, state)).toThrow(
         'Data directive requires a value'
       );
     });

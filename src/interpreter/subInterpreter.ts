@@ -1,56 +1,55 @@
-import { MeldNode, Location } from 'meld-spec';
+import { DirectiveNode, Location, Node } from 'meld-spec';
+import { MeldInterpretError } from './errors/errors.js';
 import { InterpreterState } from './state/state.js';
-import { parseMeld } from './interpreter.js';
+import { parseMeld } from './parser.js';
+import { interpretMeld } from './interpreter.js';
 
-export interface LocationData {
-  line: number;
-  column: number;
+function adjustNodeLocation(node: Node, baseLocation: Location): void {
+  if (!node.location) return;
+
+  const startLine = node.location.start.line + baseLocation.start.line - 1;
+  const startColumn = node.location.start.line === 1 
+    ? node.location.start.column + baseLocation.start.column - 1 
+    : node.location.start.column;
+
+  const endLine = node.location.end.line + baseLocation.start.line - 1;
+  const endColumn = node.location.end.line === 1 
+    ? node.location.end.column + baseLocation.start.column - 1 
+    : node.location.end.column;
+
+  node.location = {
+    start: { line: startLine, column: startColumn },
+    end: { line: endLine, column: endColumn }
+  };
 }
 
 export function interpretSubDirectives(
   content: string,
-  parentState: InterpreterState,
-  baseLocation?: LocationData
-): void {
+  baseLocation: Location,
+  parentState: InterpreterState
+): InterpreterState {
   try {
-    // Parse content into AST
-    const nodes = parseMeld(content);
-
     // Create child state that inherits from parent
-    const childState = new InterpreterState(parentState);
+    const childState = new InterpreterState();
+    childState.parentState = parentState;
 
-    // Adjust node locations based on base location
-    if (baseLocation) {
-      for (const node of nodes) {
-        if (node.location) {
-          const lineOffset = baseLocation.line - 1;
-          const columnOffset = baseLocation.column - 1;
+    // Parse and interpret sub-directives
+    const nodes = parseMeld(content);
+    nodes.forEach(node => adjustNodeLocation(node, baseLocation));
+    
+    // Interpret nodes in child state
+    interpretMeld(nodes, childState);
 
-          // Adjust start position
-          node.location.start.line += lineOffset;
-          if (node.location.start.line === baseLocation.line) {
-            node.location.start.column += columnOffset;
-          }
-
-          // Adjust end position
-          node.location.end.line += lineOffset;
-          if (node.location.end.line === baseLocation.line) {
-            node.location.end.column += columnOffset;
-          }
-        }
-      }
-    }
-
-    // Process nodes in child state
-    for (const node of nodes) {
-      childState.addNode(node);
-    }
-
-    // Merge child state back to parent
-    parentState.mergeFrom(childState);
+    // Make child state immutable before merging back to parent
+    childState.isImmutable = true;
+    return childState;
   } catch (error) {
     if (error instanceof Error) {
-      throw new Error(`Failed to parse or interpret sub-directives: ${error.message}`);
+      throw new MeldInterpretError(
+        `Failed to parse or interpret sub-directives: ${error.message}`,
+        'SubDirective',
+        baseLocation.start
+      );
     }
     throw error;
   }

@@ -12,11 +12,11 @@ describe('TextDirectiveHandler', () => {
 
   describe('canHandle', () => {
     it('should handle text directives', () => {
-      expect(handler.canHandle('text')).toBe(true);
+      expect(handler.canHandle('@text')).toBe(true);
     });
 
     it('should not handle other directives', () => {
-      expect(handler.canHandle('run')).toBe(false);
+      expect(handler.canHandle('@data')).toBe(false);
     });
   });
 
@@ -25,31 +25,23 @@ describe('TextDirectiveHandler', () => {
       const node: DirectiveNode = {
         type: 'Directive',
         directive: {
-          kind: 'text',
-          name: 'greeting',
+          kind: '@text',
+          name: 'message',
           value: 'Hello World'
-        },
-        location: {
-          start: { line: 1, column: 1 },
-          end: { line: 1, column: 10 }
         }
       };
 
       handler.handle(node, state);
-      expect(state.getTextVar('greeting')).toBe('Hello World');
+      expect(state.getTextVar('message')).toBe('Hello World');
     });
 
     it('should handle string concatenation with array values', () => {
       const node: DirectiveNode = {
         type: 'Directive',
         directive: {
-          kind: 'text',
+          kind: '@text',
           name: 'message',
-          value: ['Hello', ' ', 'World']  // Simulates ++ operator
-        },
-        location: {
-          start: { line: 1, column: 1 },
-          end: { line: 1, column: 10 }
+          value: ['Hello', ' ', 'World']
         }
       };
 
@@ -61,36 +53,24 @@ describe('TextDirectiveHandler', () => {
       const node: DirectiveNode = {
         type: 'Directive',
         directive: {
-          kind: 'text',
+          kind: '@text',
           value: 'test'
-        } as any,
-        location: {
-          start: { line: 1, column: 1 },
-          end: { line: 1, column: 10 }
-        }
+        } as any
       };
 
-      expect(() => handler.handle(node, state)).toThrow(
-        'Text directive requires a name'
-      );
+      expect(() => handler.handle(node, state)).toThrow('Text directive requires a name');
     });
 
     it('should throw error if value is missing', () => {
       const node: DirectiveNode = {
         type: 'Directive',
         directive: {
-          kind: 'text',
+          kind: '@text',
           name: 'test'
-        } as any,
-        location: {
-          start: { line: 1, column: 1 },
-          end: { line: 1, column: 10 }
-        }
+        } as any
       };
 
-      expect(() => handler.handle(node, state)).toThrow(
-        'Text directive requires a value'
-      );
+      expect(() => handler.handle(node, state)).toThrow('Text directive requires a value');
     });
   });
 }); 

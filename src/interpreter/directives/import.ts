@@ -1,135 +1,93 @@
-import type { DirectiveNode, DirectiveKind } from 'meld-spec';
-import { DirectiveHandler } from './index.js';
-import { InterpreterState } from '../state/state.js';
-import { MeldDirectiveError, MeldImportError } from '../errors/errors.js';
-import * as fs from 'fs';
-import * as path from 'path';
-import { parseMeldContent } from '../parser.js';
-import { interpret } from '../interpreter.js';
+import { existsSync, readFileSync } from 'fs';
+import { join, dirname } from 'path';
+import { DirectiveNode } from 'meld-spec';
+import { DirectiveHandler } from './types';
+import { InterpreterState } from '../state/state';
+import { MeldImportError } from '../errors/errors';
+import { parseMeld } from '../parser.js';
+import { interpretMeld } from '../interpreter.js';
 
-interface ImportDirectiveData {
-  kind: 'import';
-  from: string;
-  imports?: string[];
-  as?: string;
-}
-
-/**
- * Handler for @import directives
- */
-class ImportDirectiveHandler implements DirectiveHandler {
-  canHandle(kind: DirectiveKind): boolean {
-    return kind === 'import';
+export class ImportDirectiveHandler implements DirectiveHandler {
+  canHandle(kind: string): boolean {
+    return kind === '@import';
   }
 
   handle(node: DirectiveNode, state: InterpreterState): void {
-    const data = node.directive as ImportDirectiveData;
-    
-    if (!data.from) {
-      throw new MeldDirectiveError(
-        'Import directive requires a path',
-        'import',
-        node.location?.start
-      );
+    const { from, import: importSpec } = node.data || {};
+
+    if (!from) {
+      throw new MeldImportError('Import source is required', node.location?.start);
+    }
+
+    // Resolve path relative to current file
+    const currentDir = dirname(state.getCurrentFilePath() || '');
+    const importPath = join(currentDir, from);
+
+    // Check if file exists
+    if (!existsSync(importPath)) {
+      throw new MeldImportError('File not found', node.location?.start);
+    }
+
+    // Check for circular imports
+    if (state.hasImport(importPath)) {
+      throw new MeldImportError('Circular import detected', node.location?.start);
     }
 
     try {
-      // Resolve the import path
-      const resolvedPath = path.resolve(data.from);
+      // Read and parse imported content
+      const content = readFileSync(importPath, 'utf-8');
+      const importedNodes = parseMeld(content);
 
-      // Check for circular imports
-      if (state.hasImport(resolvedPath)) {
-        throw new MeldImportError(
-          `Circular import detected: ${data.from}`,
-          node.location?.start
-        );
-      }
+      // Create child state for imported content
+      const importedState = new InterpreterState();
+      importedState.parentState = state;
+      importedState.setCurrentFilePath(importPath);
 
-      // Read the file content
-      let content: string;
-      try {
-        content = fs.readFileSync(resolvedPath, 'utf8');
-      } catch (error) {
-        if (error.code === 'ENOENT') {
-          throw new MeldImportError(
-            'File not found',
-            node.location?.start
-          );
-        }
-        throw error;
-      }
+      // Interpret imported content
+      interpretMeld(importedNodes, importedState);
 
-      // Parse the content
-      let importedNodes;
-      try {
-        importedNodes = parseMeldContent(content);
-      } catch (error) {
-        throw new MeldImportError(
-          `Failed to parse imported content: ${error.message}`,
-          node.location?.start
-        );
-      }
+      // Track import to prevent circular imports
+      state.addImport(importPath);
 
-      // Add to import tracking to prevent circular imports
-      state.addImport(resolvedPath);
-
-      // Create a new state for the imported content
-      const importState = new InterpreterState();
-
-      // Process all nodes in the imported file
-      try {
-        interpret(importedNodes, importState);
-      } catch (error) {
-        throw new MeldImportError(
-          `Failed to interpret imported content: ${error.message}`,
-          node.location?.start
-        );
-      }
-
-      // Import all nodes if no specific imports
-      if (!data.imports) {
-        // Copy all variables from import state to current state
-        importState.getAllTextVars().forEach((value, key) => {
-          state.setTextVar(key, value);
-        });
-        importState.getAllDataVars().forEach((value, key) => {
-          state.setDataVar(key, value);
-        });
-        importState.getAllCommands().forEach((value, key) => {
-          state.setCommand(key, value);
-        });
-      } else {
+      // Handle import specifiers
+      if (importSpec === '*') {
+        // Import all variables
+        state.mergeFrom(importedState);
+      } else if (Array.isArray(importSpec)) {
         // Import specific variables with optional aliases
-        for (const importName of data.imports) {
-          const alias = data.as || importName;
-          const textVar = importState.getTextVar(importName);
-          const dataVar = importState.getDataVar(importName);
-          const command = importState.getCommand(importName);
-
+        for (const spec of importSpec) {
+          const { name, as } = typeof spec === 'string' ? { name: spec, as: spec } : spec;
+          
+          // Copy variables with aliases
+          const textVar = importedState.getText(name);
           if (textVar !== undefined) {
-            state.setTextVar(alias, textVar);
-          } else if (dataVar !== undefined) {
-            state.setDataVar(alias, dataVar);
-          } else if (command !== undefined) {
-            state.setCommand(alias, command);
-          } else {
-            throw new MeldImportError(
-              `Variable or command '${importName}' not found in imported file`,
-              node.location?.start
-            );
+            state.setText(as, textVar);
+          }
+
+          const dataVar = importedState.getDataVar(name);
+          if (dataVar !== undefined) {
+            state.setDataVar(as, dataVar);
+          }
+
+          const pathVar = importedState.getPathVar(name);
+          if (pathVar !== undefined) {
+            state.setPathVar(as, pathVar);
+          }
+
+          const command = importedState.getCommand(name);
+          if (command !== undefined) {
+            state.setCommand(as, command);
           }
         }
       }
     } catch (error) {
-      if (error instanceof MeldImportError) {
-        throw error;
+      if (error instanceof Error) {
+        throw new MeldImportError(
+          `Failed to read or parse imported file: ${error.message}`,
+          node.location?.start
+        );
       }
-      throw new MeldImportError(
-        `Failed to import from ${data.from}: ${error.message}`,
-        node.location?.start
-      );
+      throw error;
     }
   }
-}
-
-export const importDirectiveHandler = new ImportDirectiveHandler(); 
+} 

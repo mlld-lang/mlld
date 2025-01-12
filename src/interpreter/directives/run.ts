@@ -1,21 +1,18 @@
-import type { DirectiveNode, DirectiveKind } from 'meld-spec';
-import { DirectiveHandler } from './index.js';
-import { InterpreterState } from '../state/state.js';
-import { MeldDirectiveError } from '../errors/errors.js';
+import type { DirectiveNode } from 'meld-spec';
+import { DirectiveHandler } from './types';
+import { InterpreterState } from '../state/state';
+import { MeldDirectiveError } from '../errors/errors';
 
 interface RunDirectiveData {
-  kind: 'run';
+  kind: '@run';
   command: string;
   name?: string;
   background?: boolean;
 }
 
-/**
- * Handler for @run directives
- */
 class RunDirectiveHandler implements DirectiveHandler {
-  canHandle(kind: DirectiveKind): boolean {
-    return kind === 'run';
+  canHandle(kind: string): boolean {
+    return kind === '@run';
   }
 
   handle(node: DirectiveNode, state: InterpreterState): void {
@@ -37,7 +34,7 @@ class RunDirectiveHandler implements DirectiveHandler {
     });
 
     // Store the command function
-    state.setCommand(data.name || 'default', () => data.command);
+    state.setCommand(data.name || 'default', data.command);
   }
 }
 

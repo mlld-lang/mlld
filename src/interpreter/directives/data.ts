@@ -1,44 +1,24 @@
-import type { DirectiveNode, DirectiveKind } from 'meld-spec';
-import { DirectiveHandler } from './index.js';
-import { InterpreterState } from '../state/state.js';
-import { MeldDirectiveError } from '../errors/errors.js';
+import type { DirectiveNode } from 'meld-spec';
+import { DirectiveHandler } from './types';
+import { InterpreterState } from '../state/state';
+import { MeldDirectiveError } from '../errors/errors';
 
-interface DataDirectiveData {
-  kind: 'data';
-  identifier: string;
-  value: any;
-}
-
-/**
- * Handler for @data directives
- */
-export class DataDirectiveHandler implements DirectiveHandler {
-  canHandle(kind: DirectiveKind): boolean {
-    return kind === 'data';
+class DataDirectiveHandler implements DirectiveHandler {
+  canHandle(kind: string): boolean {
+    return kind === '@data';
   }
 
   handle(node: DirectiveNode, state: InterpreterState): void {
-    const data = node.directive as DataDirectiveData;
-    
+    const data = node.directive;
     if (!data.identifier) {
-      throw new MeldDirectiveError(
-        'Data directive requires an identifier',
-        'data',
-        node.location?.start
-      );
+      throw new MeldDirectiveError('Data directive requires an identifier', 'data', node.location?.start);
     }
-
-    if (data.value === undefined) {
-      throw new MeldDirectiveError(
-        'Data directive requires a value',
-        'data',
-        node.location?.start
-      );
+    if (!data.value) {
+      throw new MeldDirectiveError('Data directive requires a value', 'data', node.location?.start);
     }
 
     state.setDataVar(data.identifier, data.value);
   }
 }
 
-// Export singleton instance for use in the main application
 export const dataDirectiveHandler = new DataDirectiveHandler(); 

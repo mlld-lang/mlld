@@ -1,12 +1,12 @@
 import type { DirectiveNode, DirectiveKind } from 'meld-spec';
-import { DirectiveHandler } from './index.js';
-import { InterpreterState } from '../state/state.js';
-import { MeldDirectiveError } from '../errors/errors.js';
+import { DirectiveHandler } from './types';
+import { InterpreterState } from '../state/state';
+import { MeldDirectiveError } from '../errors/errors';
 
 interface TextDirectiveData {
-  kind: 'text';
+  kind: '@text';
   name: string;
-  value: string;
+  value: string | string[];
 }
 
 /**
@@ -14,7 +14,7 @@ interface TextDirectiveData {
  */
 class TextDirectiveHandler implements DirectiveHandler {
   canHandle(kind: DirectiveKind): boolean {
-    return kind === 'text';
+    return kind === '@text';
   }
 
   handle(node: DirectiveNode, state: InterpreterState): void {

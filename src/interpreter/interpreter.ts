@@ -1,7 +1,7 @@
 import type { MeldNode, DirectiveNode } from 'meld-spec';
-import { DirectiveRegistry } from './directives/registry.js';
-import { InterpreterState } from './state/state.js';
-import { MeldInterpretError } from './errors/errors.js';
+import { DirectiveRegistry } from './directives/registry';
+import { InterpreterState } from './state/state';
+import { MeldInterpretError } from './errors/errors';
 
 /**
  * Interprets a Meld AST

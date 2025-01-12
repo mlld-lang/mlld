@@ -1,5 +1,5 @@
-import { DirectiveNode } from 'meld-spec';
-import { InterpreterState } from '../state/state.js';
+import type { DirectiveNode } from 'meld-spec';
+import type { InterpreterState } from '../state/state.js';
 
 export interface DirectiveHandler {
   canHandle(kind: string): boolean;

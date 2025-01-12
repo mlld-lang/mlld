@@ -5,6 +5,7 @@ import type { DirectiveNode } from 'meld-spec';
 import * as path from 'path';
 import * as fs from 'fs';
 import { DirectiveRegistry } from '../registry.js';
+import { MeldImportError } from '../../errors/errors.js';
 
 describe('ImportDirectiveHandler', () => {
   let handler = importDirectiveHandler;

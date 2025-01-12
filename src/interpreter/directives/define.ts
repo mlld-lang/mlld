@@ -1,39 +1,26 @@
 import type { DirectiveNode, DirectiveKind } from 'meld-spec';
-import { DirectiveHandler } from './index.js';
-import { InterpreterState } from '../state/state.js';
-import { MeldDirectiveError } from '../errors/errors.js';
+import { DirectiveHandler } from './types';
+import { InterpreterState } from '../state/state';
+import { MeldDirectiveError } from '../errors/errors';
 
 interface DefineDirectiveData {
-  kind: 'define';
+  kind: '@define';
   name: string;
   body: string;
 }
 
-/**
- * Handler for @define directives
- */
 class DefineDirectiveHandler implements DirectiveHandler {
   canHandle(kind: DirectiveKind): boolean {
-    return kind === 'define';
+    return kind === '@define';
   }
 
   handle(node: DirectiveNode, state: InterpreterState): void {
     const data = node.directive;
-    
     if (!data.name) {
-      throw new MeldDirectiveError(
-        'Define directive requires a name',
-        'define',
-        node.location?.start
-      );
+      throw new MeldDirectiveError('Define directive requires a name', 'define', node.location?.start);
     }
-
     if (!data.body) {
-      throw new MeldDirectiveError(
-        'Define directive requires a body',
-        'define',
-        node.location?.start
-      );
+      throw new MeldDirectiveError('Define directive requires a body', 'define', node.location?.start);
     }
 
     // Handle both string and object run directives
@@ -45,7 +32,7 @@ class DefineDirectiveHandler implements DirectiveHandler {
           node.location?.start
         );
       }
-    } else if (data.body.type === 'Directive' && data.body.directive?.kind === 'run') {
+    } else if (data.body.type === 'Directive' && data.body.directive?.kind === '@run') {
       // Valid run directive object
     } else {
       throw new MeldDirectiveError(
@@ -60,7 +47,7 @@ class DefineDirectiveHandler implements DirectiveHandler {
       data.body.replace(/^@run\s+/, '') : 
       data.body.directive.command;
 
-    state.setCommand(data.name, () => command);
+    state.setCommand(data.name, command);
   }
 }
 
