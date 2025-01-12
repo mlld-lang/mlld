@@ -5,7 +5,6 @@ import { DirectiveHandler } from './types';
 import { InterpreterState } from '../state/state';
 import { MeldImportError } from '../errors/errors';
 import { parseMeld } from '../parser';
-import { interpretMeld } from '../interpreter';
 
 class ImportDirectiveHandler implements DirectiveHandler {
   canHandle(kind: string): boolean {
@@ -44,6 +43,7 @@ class ImportDirectiveHandler implements DirectiveHandler {
       importedState.setCurrentFilePath(importPath);
 
       // Interpret imported content
+      const { interpretMeld } = require('../interpreter');
       interpretMeld(importedNodes, importedState);
 
       // Track import to prevent circular imports

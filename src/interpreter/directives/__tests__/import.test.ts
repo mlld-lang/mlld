@@ -33,8 +33,9 @@ describe('ImportDirectiveHandler', () => {
     });
 
     // Mock fs module
-    vi.mock('fs', () => ({
-      readFileSync: vi.fn().mockImplementation((path: string) => {
+    vi.mock('fs', () => {
+      const existsSync = vi.fn().mockImplementation((path: string) => path === './config.meld');
+      const readFileSync = vi.fn().mockImplementation((path: string) => {
         if (path === './config.meld') {
           return `
             @text text1 = "value1"
@@ -45,8 +46,13 @@ describe('ImportDirectiveHandler', () => {
           `;
         }
         throw new Error('File not found');
-      })
-    }));
+      });
+      return {
+        existsSync,
+        readFileSync,
+        default: { existsSync, readFileSync }
+      };
+    });
   });
 
   afterEach(() => {

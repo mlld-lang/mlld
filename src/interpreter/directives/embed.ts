@@ -5,7 +5,6 @@ import { DirectiveHandler } from './types';
 import { InterpreterState } from '../state/state';
 import { MeldEmbedError } from '../errors/errors';
 import { parseMeld } from '../parser';
-import { interpretMeld } from '../interpreter';
 
 class EmbedDirectiveHandler implements DirectiveHandler {
   canHandle(kind: string): boolean {
@@ -58,6 +57,7 @@ class EmbedDirectiveHandler implements DirectiveHandler {
         const embedState = new InterpreterState();
         embedState.parentState = state;
         embedState.setCurrentFilePath(embedPath);
+        const { interpretMeld } = require('../interpreter');
         interpretMeld(nodes, embedState);
         state.mergeFrom(embedState);
       } else {

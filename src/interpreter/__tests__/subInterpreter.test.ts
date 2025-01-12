@@ -8,27 +8,29 @@ vi.mock('../parser', () => ({
     if (content === '@text test = "value"') {
       return [{
         type: 'Directive',
-        directive: {
-          kind: '@text',
-          name: 'test',
-          value: 'value'
-        },
-        location: {
-          start: { line: 1, column: 1 },
-          end: { line: 1, column: 21 }
-        }
+        kind: '@text',
+        data: { name: 'test', value: 'value' },
+        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 21 } }
       }];
     } else if (content === '{parent}') {
       return [{
         type: 'Text',
         content: 'value',
-        location: {
-          start: { line: 1, column: 1 },
-          end: { line: 1, column: 8 }
-        }
+        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 8 } }
       }];
     }
     throw new Error('Failed to parse');
+  })
+}));
+
+vi.mock('../interpreter', () => ({
+  interpretMeld: vi.fn((nodes, state) => {
+    if (nodes[0].type === 'Directive' && nodes[0].kind === '@text') {
+      state.setText(nodes[0].data.name, nodes[0].data.value);
+    } else if (nodes[0].type === 'Text') {
+      state.addNode(nodes[0]);
+    }
+    return state;
   })
 }));
 

@@ -6,16 +6,16 @@ import { existsSync } from 'fs';
 import { resolve } from 'path';
 
 vi.mock('fs', () => ({
-  existsSync: vi.fn((path) => path === 'test.meld')
+  existsSync: vi.fn((path: string) => path === 'test.meld'),
+  promises: {
+    readFile: vi.fn().mockResolvedValue('Mock content'),
+    writeFile: vi.fn().mockResolvedValue(undefined)
+  }
 }));
 
 vi.mock('path', () => ({
-  resolve: vi.fn((path) => path)
-}));
-
-vi.mock('fs/promises', () => ({
-  readFile: vi.fn().mockResolvedValue('Mock content'),
-  writeFile: vi.fn().mockResolvedValue(undefined)
+  resolve: vi.fn((path: string) => path),
+  extname: vi.fn((path: string) => '.meld')
 }));
 
 describe('cli', () => {

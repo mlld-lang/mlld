@@ -55,4 +55,13 @@ export class MeldDirectiveError extends MeldError {
   ) {
     super(message, location);
   }
+}
+
+/**
+ * Error thrown during embed operations
+ */
+export class MeldEmbedError extends MeldError {
+  constructor(message: string, location?: Location['start']) {
+    super(message, location);
+  }
 } 
