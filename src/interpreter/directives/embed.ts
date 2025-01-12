@@ -14,7 +14,7 @@ interface EmbedDirectiveData {
   interpret?: boolean;
 }
 
-export class EmbedDirectiveHandler implements DirectiveHandler {
+class EmbedDirectiveHandler implements DirectiveHandler {
   canHandle(kind: DirectiveKind): boolean {
     return kind === 'embed';
   }
@@ -150,4 +150,6 @@ export class EmbedDirectiveHandler implements DirectiveHandler {
 
     return itemContent.length > 0 ? itemContent.join('\n') : null;
   }
-} 
+}
+
+export const embedDirectiveHandler = new EmbedDirectiveHandler(); 

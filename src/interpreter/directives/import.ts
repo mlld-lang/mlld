@@ -17,7 +17,7 @@ interface ImportDirectiveData {
 /**
  * Handler for @import directives
  */
-export class ImportDirectiveHandler implements DirectiveHandler {
+class ImportDirectiveHandler implements DirectiveHandler {
   canHandle(kind: DirectiveKind): boolean {
     return kind === 'import';
   }
@@ -99,4 +99,6 @@ export class ImportDirectiveHandler implements DirectiveHandler {
       );
     }
   }
-} 
+}
+
+export const importDirectiveHandler = new ImportDirectiveHandler(); 
