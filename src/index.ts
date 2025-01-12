@@ -1,3 +1,3 @@
 // Re-export core functionality
-export * from './sdk';
-export * from './cli'; 
+export * from './sdk/index.js';
+export * from './cli/index.js'; 

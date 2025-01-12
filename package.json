@@ -2,6 +2,7 @@
   "name": "meld",
   "version": "0.1.0",
   "description": "Official interpreter for the Meld language",
+  "type": "module",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
@@ -24,8 +25,7 @@
   },
   "homepage": "https://github.com/adamavenir/meld#readme",
   "dependencies": {
-    "meld-ast": "^0.2.1",
-    "meld-spec": "^0.2.0",
+    "meld-spec": "^0.3.10",
     "yargs": "^17.7.2"
   },
   "devDependencies": {
