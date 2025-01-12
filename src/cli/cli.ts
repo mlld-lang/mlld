@@ -5,6 +5,7 @@ import fs from 'fs/promises';
 import { parseMeldContent } from '../interpreter/parser.js';
 import { interpret } from '../interpreter/interpreter.js';
 import { InterpreterState } from '../interpreter/state/state.js';
+import { mdToLlm, mdToMarkdown } from 'md-llm';
 
 // Supported file extensions
 const VALID_EXTENSIONS = ['.meld', '.meld.md', '.mll', '.mll.md'];
@@ -52,12 +53,11 @@ function getDefaultOutputPath(inputPath: string, format: OutputFormat): string {
   return path.join(dir, `${baseName}.${format}`);
 }
 
-// Convert state to output format
-function stateToOutput(state: InterpreterState, format: OutputFormat): string {
+// Convert state to output format using md-llm
+async function stateToOutput(state: InterpreterState, format: OutputFormat): Promise<string> {
   const nodes = state.getNodes();
   
-  // For now, just concatenate text nodes
-  // TODO: Implement proper format conversion using md-llm
+  // Convert nodes to markdown
   const content = nodes
     .map(node => {
       if (node.type === 'Text') {
@@ -69,12 +69,12 @@ function stateToOutput(state: InterpreterState, format: OutputFormat): string {
     })
     .join('\n');
 
+  // Convert to requested format using md-llm
   if (format === 'llm') {
-    // TODO: Use md-llm to convert to .llm format
-    return `<content>\n${content}\n</content>`;
+    return await mdToLlm(content);
+  } else {
+    return await mdToMarkdown(content);
   }
-
-  return content;
 }
 
 // Main CLI function
@@ -124,7 +124,7 @@ export async function cli(args: string[]): Promise<void> {
   await interpret(nodes, state);
 
   // Generate output
-  const output = stateToOutput(state, format);
+  const output = await stateToOutput(state, format);
 
   // Write output
   if (argv.stdout) {

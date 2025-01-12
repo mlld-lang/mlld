@@ -38,14 +38,6 @@ export class DirectiveRegistry {
   static clear(): void {
     this.handlers.clear();
   }
-
-  register(handler: DirectiveHandler): void {
-    for (const kind of DIRECTIVE_KINDS) {
-      if (handler.canHandle(kind)) {
-        DirectiveRegistry.handlers.set(kind, handler);
-      }
-    }
-  }
 }
 
 // Register built-in handlers
@@ -55,11 +47,4 @@ DirectiveRegistry.registerHandler(new ImportDirectiveHandler());
 DirectiveRegistry.registerHandler(new DefineDirectiveHandler());
 DirectiveRegistry.registerHandler(new TextDirectiveHandler());
 DirectiveRegistry.registerHandler(new PathDirectiveHandler());
-DirectiveRegistry.registerHandler(new EmbedDirectiveHandler());
-
-export function registerBuiltinDirectives(registry: DirectiveRegistry): void {
-  registry.register(new DefineDirectiveHandler());
-  registry.register(new TextDirectiveHandler());
-  registry.register(new PathDirectiveHandler());
-  registry.register(new EmbedDirectiveHandler());
-} 
+DirectiveRegistry.registerHandler(new EmbedDirectiveHandler()); 
