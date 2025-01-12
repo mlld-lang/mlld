@@ -1,8 +1,8 @@
 import { DirectiveNode, Location, Node } from 'meld-spec';
-import { MeldInterpretError } from './errors/errors.js';
-import { InterpreterState } from './state/state.js';
-import { parseMeld } from './parser.js';
-import { interpretMeld } from './interpreter.js';
+import { MeldInterpretError } from './errors/errors';
+import { InterpreterState } from './state/state';
+import { parseMeld } from './parser';
+import { interpretMeld } from './interpreter';
 
 function adjustNodeLocation(node: Node, baseLocation: Location): void {
   if (!node.location) return;

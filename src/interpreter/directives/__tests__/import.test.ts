@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { importDirectiveHandler } from '../import.js';
-import { InterpreterState } from '../../state/state.js';
+import { importDirectiveHandler } from '../import';
+import { InterpreterState } from '../../state/state';
 import type { DirectiveNode } from 'meld-spec';
 import * as path from 'path';
 import * as fs from 'fs';
-import { DirectiveRegistry } from '../registry.js';
-import { MeldImportError } from '../../errors/errors.js';
+import { DirectiveRegistry } from '../registry';
+import { MeldImportError } from '../../errors/errors';
 
 describe('ImportDirectiveHandler', () => {
   let handler = importDirectiveHandler;

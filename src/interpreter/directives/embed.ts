@@ -4,12 +4,12 @@ import { DirectiveNode } from 'meld-spec';
 import { DirectiveHandler } from './types';
 import { InterpreterState } from '../state/state';
 import { MeldEmbedError } from '../errors/errors';
-import { parseMeld } from '../parser.js';
-import { interpretMeld } from '../interpreter.js';
+import { parseMeld } from '../parser';
+import { interpretMeld } from '../interpreter';
 
-export class EmbedDirectiveHandler implements DirectiveHandler {
+class EmbedDirectiveHandler implements DirectiveHandler {
   canHandle(kind: string): boolean {
-    return kind === '@embed';
+    return kind === '@embed' || kind === 'embed';
   }
 
   handle(node: DirectiveNode, state: InterpreterState): void {
@@ -134,4 +134,6 @@ export class EmbedDirectiveHandler implements DirectiveHandler {
       return '#'.repeat(Math.min(newLevel, 6));
     });
   }
-} 
+}
+
+export const embedDirectiveHandler = new EmbedDirectiveHandler(); 

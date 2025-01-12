@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { embedDirectiveHandler } from '../embed.js';
-import { InterpreterState } from '../../state/state.js';
+import { embedDirectiveHandler } from '../embed';
+import { InterpreterState } from '../../state/state';
 import type { DirectiveNode } from 'meld-spec';
 import * as fs from 'fs';
 import * as path from 'path';
-import { DirectiveRegistry } from '../registry.js';
-import { MeldDirectiveError } from '../../errors/errors.js';
+import { DirectiveRegistry } from '../registry';
+import { MeldDirectiveError } from '../../errors/errors';
 
 // Mock external dependencies
 vi.mock('fs', () => ({

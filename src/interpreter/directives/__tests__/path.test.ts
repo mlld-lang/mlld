@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { pathDirectiveHandler } from '../path.js';
-import { InterpreterState } from '../../state/state.js';
+import { pathDirectiveHandler } from '../path';
+import { InterpreterState } from '../../state/state';
 import type { DirectiveNode } from 'meld-spec';
-import { DirectiveRegistry } from '../registry.js';
+import { DirectiveRegistry } from '../registry';
 
 describe('PathDirectiveHandler', () => {
   const handler = pathDirectiveHandler;

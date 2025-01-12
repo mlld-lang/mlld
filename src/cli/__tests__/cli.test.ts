@@ -2,6 +2,21 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { cli } from '../cli.js';
 import * as path from 'path';
 import * as fs from 'fs/promises';
+import { existsSync } from 'fs';
+import { resolve } from 'path';
+
+vi.mock('fs', () => ({
+  existsSync: vi.fn((path) => path === 'test.meld')
+}));
+
+vi.mock('path', () => ({
+  resolve: vi.fn((path) => path)
+}));
+
+vi.mock('fs/promises', () => ({
+  readFile: vi.fn().mockResolvedValue('Mock content'),
+  writeFile: vi.fn().mockResolvedValue(undefined)
+}));
 
 describe('cli', () => {
   beforeEach(() => {
@@ -20,6 +35,11 @@ describe('cli', () => {
     });
 
     // Mock fs module
+    vi.mock('fs', () => ({
+      existsSync: vi.fn().mockImplementation((path: string) => path === 'test.meld')
+    }));
+
+    // Mock fs/promises module
     vi.mock('fs/promises', () => ({
       readFile: vi.fn().mockImplementation((path: string) => {
         if (path === 'test.meld') {

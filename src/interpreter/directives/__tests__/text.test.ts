@@ -1,5 +1,5 @@
-import { textDirectiveHandler } from '../text.js';
-import { InterpreterState } from '../../state/state.js';
+import { textDirectiveHandler } from '../text';
+import { InterpreterState } from '../../state/state';
 import type { DirectiveNode } from 'meld-spec';
 
 describe('TextDirectiveHandler', () => {

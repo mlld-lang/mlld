@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { DirectiveRegistry } from '../registry.js';
-import type { DirectiveHandler, DirectiveKind } from '../types.js';
-import { InterpreterState } from '../../state/state.js';
+import { DirectiveRegistry } from '../registry';
+import type { DirectiveHandler, DirectiveKind } from '../types';
+import { InterpreterState } from '../../state/state';
 import type { DirectiveNode } from 'meld-spec';
 
 describe('DirectiveRegistry', () => {

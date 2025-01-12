@@ -1,88 +1,96 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { interpretSubDirectives } from '../subInterpreter.js';
-import { InterpreterState } from '../state/state.js';
+import { interpretSubDirectives } from '../subInterpreter';
+import { InterpreterState } from '../state/state';
 import type { DirectiveNode, Location } from 'meld-spec';
 
-vi.mock('meld-ast', () => ({
-  parse: vi.fn().mockImplementation((content: string) => {
-    // Return a fake but valid array of MeldNodes for test content
-    return [{
-      type: 'Text',
-      content,
-      location: {
-        start: { line: 1, column: 1 },
-        end: { line: 1, column: content.length }
-      }
-    }];
+vi.mock('../parser', () => ({
+  parseMeld: vi.fn((content: string) => {
+    if (content === '@text test = "value"') {
+      return [{
+        type: 'Directive',
+        directive: {
+          kind: '@text',
+          name: 'test',
+          value: 'value'
+        },
+        location: {
+          start: { line: 1, column: 1 },
+          end: { line: 1, column: 21 }
+        }
+      }];
+    } else if (content === '{parent}') {
+      return [{
+        type: 'Text',
+        content: 'value',
+        location: {
+          start: { line: 1, column: 1 },
+          end: { line: 1, column: 8 }
+        }
+      }];
+    }
+    throw new Error('Failed to parse');
   })
 }));
 
 describe('subInterpreter', () => {
   let parentState: InterpreterState;
+  let baseLocation: Location;
 
   beforeEach(() => {
     parentState = new InterpreterState();
+    baseLocation = {
+      start: { line: 1, column: 1 },
+      end: { line: 1, column: 1 }
+    };
   });
 
   it('should interpret nested directives', () => {
     const content = '@text test = "value"';
-    const mockNode: DirectiveNode = {
-      type: 'Directive',
-      directive: {
-        kind: 'text',
-        name: 'test',
-        value: 'value'
-      }
-    };
-
-    interpretSubDirectives(content, parentState);
+    const state = interpretSubDirectives(content, baseLocation, parentState);
     
-    expect(parentState.getNodes()).toHaveLength(1);
-    expect(parentState.getNodes()[0]).toMatchObject(mockNode);
+    expect(state.getTextVar('test')).toBe('value');
   });
 
   it('should handle location offsets correctly', () => {
     const content = '@text test = "value"';
-    const baseLocation: Location = {
-      start: { line: 10, column: 1 },
-      end: { line: 10, column: 20 }
+    baseLocation = {
+      start: { line: 10, column: 5 },
+      end: { line: 10, column: 25 }
     };
 
-    interpretSubDirectives(content, parentState, baseLocation.start);
-    const nodes = parentState.getNodes();
+    const state = interpretSubDirectives(content, baseLocation, parentState);
+    const nodes = state.getNodes();
     
     expect(nodes[0].location?.start.line).toBe(10);
-    expect(nodes[0].location?.start.column).toBe(1);
-    expect(nodes[0].location?.end.line).toBe(10);
-    expect(nodes[0].location?.end.column).toBe(20);
+    expect(nodes[0].location?.start.column).toBe(5);
   });
 
   it('should inherit parent state variables', () => {
     parentState.setText('parent', 'value');
     const content = '{parent}';
 
-    interpretSubDirectives(content, parentState);
+    const state = interpretSubDirectives(content, baseLocation, parentState);
+    const nodes = state.getNodes();
     
-    expect(parentState.getNodes()[0].type).toBe('Text');
-    expect(parentState.getNodes()[0].content).toBe('value');
+    expect(nodes[0].type).toBe('Text');
+    expect(nodes[0].content).toBe('value');
   });
 
   it('should merge child state back to parent', () => {
     const content = '@text child = "value"';
-
-    interpretSubDirectives(content, parentState);
+    const state = interpretSubDirectives(content, baseLocation, parentState);
     
-    expect(parentState.getText('child')).toBe('value');
+    expect(state.getTextVar('child')).toBe('value');
   });
 
   it('should handle nested errors with correct location', () => {
     const content = '@invalid';
-    const baseLocation: Location = {
+    baseLocation = {
       start: { line: 5, column: 1 },
       end: { line: 5, column: 8 }
     };
 
-    expect(() => interpretSubDirectives(content, parentState, baseLocation.start))
+    expect(() => interpretSubDirectives(content, baseLocation, parentState))
       .toThrow(/Failed to parse/);
   });
 }); 

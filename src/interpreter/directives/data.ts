@@ -3,9 +3,9 @@ import { DirectiveHandler } from './types';
 import { InterpreterState } from '../state/state';
 import { MeldDirectiveError } from '../errors/errors';
 
-class DataDirectiveHandler implements DirectiveHandler {
-  canHandle(kind: string): boolean {
-    return kind === '@data';
+export class DataDirectiveHandler implements DirectiveHandler {
+  canHandle(kind: DirectiveKind): boolean {
+    return kind === '@data' || kind === 'data';
   }
 
   handle(node: DirectiveNode, state: InterpreterState): void {

@@ -4,12 +4,12 @@ import { DirectiveNode } from 'meld-spec';
 import { DirectiveHandler } from './types';
 import { InterpreterState } from '../state/state';
 import { MeldImportError } from '../errors/errors';
-import { parseMeld } from '../parser.js';
-import { interpretMeld } from '../interpreter.js';
+import { parseMeld } from '../parser';
+import { interpretMeld } from '../interpreter';
 
-export class ImportDirectiveHandler implements DirectiveHandler {
+class ImportDirectiveHandler implements DirectiveHandler {
   canHandle(kind: string): boolean {
-    return kind === '@import';
+    return kind === '@import' || kind === 'import';
   }
 
   handle(node: DirectiveNode, state: InterpreterState): void {
@@ -90,4 +90,6 @@ export class ImportDirectiveHandler implements DirectiveHandler {
       throw error;
     }
   }
-} 
+}
+
+export const importDirectiveHandler = new ImportDirectiveHandler(); 

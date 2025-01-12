@@ -1,5 +1,5 @@
-import { runDirectiveHandler } from '../run.js';
-import { InterpreterState } from '../../state/state.js';
+import { runDirectiveHandler } from '../run';
+import { InterpreterState } from '../../state/state';
 import type { DirectiveNode } from 'meld-spec';
 
 describe('RunDirectiveHandler', () => {
