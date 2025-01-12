@@ -1,69 +1,68 @@
-import type { DirectiveKind } from 'meld-spec';
+import { DirectiveKind } from 'meld-spec';
 import { DirectiveHandler } from './types.js';
-import { dataDirectiveHandler } from './data.js';
-import { runDirectiveHandler } from './run.js';
-import { importDirectiveHandler } from './import.js';
-import { defineDirectiveHandler } from './define.js';
-import { textDirectiveHandler } from './text.js';
-import { pathDirectiveHandler } from './pathDirective.js';
-import { embedDirectiveHandler } from './embed.js';
-
-const DIRECTIVE_KINDS: DirectiveKind[] = [
-  'run',
-  'import',
-  'embed',
-  'define',
-  'text',
-  'path',
-  'data',
-  'api',
-  'call'
-];
+import { RunDirectiveHandler } from './run.js';
+import { ImportDirectiveHandler } from './import.js';
+import { EmbedDirectiveHandler } from './embed.js';
+import { DefineDirectiveHandler } from './define.js';
+import { TextDirectiveHandler } from './text.js';
+import { PathDirectiveHandler } from './path.js';
+import { DataDirectiveHandler } from './data.js';
+import { ApiDirectiveHandler } from './api.js';
+import { CallDirectiveHandler } from './call.js';
 
 export class DirectiveRegistry {
-  private static handlers: Map<DirectiveKind, DirectiveHandler> = new Map();
+  private static handlers = new Map<DirectiveKind, DirectiveHandler>();
   private static initialized = false;
+
+  static {
+    // Initialize built-in handlers
+    DirectiveRegistry.initializeBuiltInHandlers();
+  }
+
+  private static initializeBuiltInHandlers(): void {
+    if (DirectiveRegistry.initialized) return;
+
+    const builtInHandlers = [
+      new RunDirectiveHandler(),
+      new ImportDirectiveHandler(),
+      new EmbedDirectiveHandler(),
+      new DefineDirectiveHandler(),
+      new TextDirectiveHandler(),
+      new PathDirectiveHandler(),
+      new DataDirectiveHandler(),
+      new ApiDirectiveHandler(),
+      new CallDirectiveHandler()
+    ];
+
+    for (const handler of builtInHandlers) {
+      DirectiveRegistry.registerHandler(handler);
+    }
+
+    DirectiveRegistry.initialized = true;
+  }
 
   static registerHandler(handler: DirectiveHandler): void {
     if (!handler) {
       throw new Error('Cannot register null or undefined handler');
     }
-    
-    for (const kind of DIRECTIVE_KINDS) {
-      try {
-        if (handler.canHandle(kind)) {
-          this.handlers.set(kind, handler);
-        }
-      } catch (error) {
-        console.error(`Failed to register handler for kind ${kind}:`, error);
+
+    const kinds = Array.isArray(handler.canHandle) 
+      ? handler.canHandle 
+      : [handler.canHandle];
+
+    for (const kind of kinds) {
+      if (typeof kind === 'string') {
+        DirectiveRegistry.handlers.set(kind as DirectiveKind, handler);
       }
     }
   }
 
   static findHandler(kind: DirectiveKind): DirectiveHandler | undefined {
-    this.initializeIfNeeded();
-    return this.handlers.get(kind);
+    return DirectiveRegistry.handlers.get(kind);
   }
 
   static clear(): void {
-    this.handlers.clear();
-    this.initialized = false;
+    DirectiveRegistry.handlers.clear();
+    DirectiveRegistry.initialized = false;
   }
-
-  private static initializeIfNeeded(): void {
-    if (!this.initialized) {
-      // Register built-in handlers
-      this.registerHandler(dataDirectiveHandler);
-      this.registerHandler(runDirectiveHandler);
-      this.registerHandler(importDirectiveHandler);
-      this.registerHandler(defineDirectiveHandler);
-      this.registerHandler(textDirectiveHandler);
-      this.registerHandler(pathDirectiveHandler);
-      this.registerHandler(embedDirectiveHandler);
-      this.initialized = true;
-    }
-  }
-}
-
-// Initialize handlers on first import
-DirectiveRegistry.initializeIfNeeded(); 
+} 

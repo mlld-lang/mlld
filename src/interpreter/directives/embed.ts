@@ -1,27 +1,28 @@
-import type { DirectiveNode, DirectiveKind } from 'meld-spec';
-import { DirectiveHandler } from './index.js';
+import { promises as fs } from 'fs';
+import { DirectiveNode, DirectiveKind } from 'meld-spec';
+import { DirectiveHandler } from './types.js';
+import { MeldDirectiveError } from '../errors.js';
 import { InterpreterState } from '../state/state.js';
-import { MeldDirectiveError } from '../errors/errors.js';
 import { interpretSubDirectives } from '../subInterpreter.js';
-import * as fs from 'fs';
-import * as path from 'path';
 
 interface EmbedDirectiveData {
-  kind: 'embed';
+  kind: DirectiveKind;
   path: string;
   section?: string;
   items?: string[];
+  headerLevel?: number;
+  underHeader?: string;
   interpret?: boolean;
 }
 
-class EmbedDirectiveHandler implements DirectiveHandler {
+export class EmbedDirectiveHandler implements DirectiveHandler {
   canHandle(kind: DirectiveKind): boolean {
     return kind === 'embed';
   }
 
-  handle(node: DirectiveNode, state: InterpreterState): void {
+  async handle(node: DirectiveNode, state: InterpreterState): Promise<void> {
     const data = node.directive as EmbedDirectiveData;
-    
+
     if (!data.path) {
       throw new MeldDirectiveError(
         'Embed directive requires a path',
@@ -33,10 +34,17 @@ class EmbedDirectiveHandler implements DirectiveHandler {
     // Read file content
     let content: string;
     try {
-      content = fs.readFileSync(data.path, 'utf8');
-    } catch (error) {
+      content = await fs.readFile(data.path, 'utf-8');
+    } catch (err: any) {
+      if (err.code === 'ENOENT') {
+        throw new MeldDirectiveError(
+          'File not found',
+          'embed',
+          node.location?.start
+        );
+      }
       throw new MeldDirectiveError(
-        `Failed to read file: ${error.message}`,
+        `Failed to read file: ${err.message}`,
         'embed',
         node.location?.start
       );
@@ -44,35 +52,23 @@ class EmbedDirectiveHandler implements DirectiveHandler {
 
     // Extract section if specified
     if (data.section) {
-      const sectionContent = this.extractSection(content, data.section);
-      if (!sectionContent) {
-        throw new MeldDirectiveError(
-          `Section "${data.section}" not found in content`,
-          'embed',
-          node.location?.start
-        );
-      }
-      content = sectionContent;
+      content = this.extractSection(content, data.section);
     }
 
     // Extract items if specified
     if (data.items) {
-      const itemContent = this.extractItems(content, data.items);
-      if (!itemContent) {
-        throw new MeldDirectiveError(
-          `Items not found in content: ${data.items.join(', ')}`,
-          'embed',
-          node.location?.start
-        );
-      }
-      content = itemContent;
+      content = this.extractItems(content, data.items);
     }
 
-    // If interpret flag is set, process nested directives
+    // Adjust header levels if specified
+    if (data.headerLevel !== undefined || data.underHeader) {
+      content = this.adjustHeaderLevels(content, data.headerLevel, data.underHeader);
+    }
+
+    // Interpret nested directives if specified
     if (data.interpret) {
       interpretSubDirectives(content, state, node.location?.start);
     } else {
-      // Otherwise, add content as text node
       state.addNode({
         type: 'Text',
         content,
@@ -81,75 +77,104 @@ class EmbedDirectiveHandler implements DirectiveHandler {
     }
   }
 
-  private extractSection(content: string, sectionTitle: string): string | null {
+  private extractSection(content: string, sectionName: string): string {
     const lines = content.split('\n');
+    const sectionRegex = new RegExp(`^#+\\s+${sectionName}\\s*$`);
+    let result = '';
     let inSection = false;
-    let sectionContent: string[] = [];
     let currentLevel = 0;
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
-      const match = line.match(/^(#{1,6})\s+(.+)$/);
+      const headerMatch = line.match(/^(#+)\s+/);
 
-      if (match) {
-        const level = match[1].length;
-        const title = match[2];
+      if (headerMatch) {
+        const level = headerMatch[1].length;
 
-        if (title === sectionTitle) {
+        if (sectionRegex.test(line)) {
           inSection = true;
           currentLevel = level;
-          sectionContent.push(line);
-        } else if (inSection) {
-          if (level <= currentLevel) {
-            break;
-          }
-          sectionContent.push(line);
+          continue;
+        } else if (inSection && level <= currentLevel) {
+          break;
         }
-      } else if (inSection) {
-        sectionContent.push(line);
+      }
+
+      if (inSection) {
+        result += (result ? '\n' : '') + line;
       }
     }
 
-    return sectionContent.length > 0 ? sectionContent.join('\n') : null;
+    return result;
   }
 
-  private extractItems(content: string, items: string[]): string | null {
+  private extractItems(content: string, items: string[]): string {
     const lines = content.split('\n');
-    const itemContent: string[] = [];
-    let inItem = false;
+    const result: string[] = [];
     let currentItem = '';
-    let currentLevel = 0;
 
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      const match = line.match(/^(#{1,6})\s+(.+)$/);
-
-      if (match) {
-        const level = match[1].length;
-        const title = match[2];
-
-        if (items.includes(title)) {
-          if (inItem) {
-            itemContent.push('');  // Add separator between items
+    for (const line of lines) {
+      const itemMatch = line.match(/^#+\s+(.+)$/);
+      if (itemMatch) {
+        const itemName = itemMatch[1].trim();
+        if (items.includes(itemName)) {
+          if (currentItem) {
+            result.push(currentItem.trim());
           }
-          inItem = true;
-          currentItem = title;
-          currentLevel = level;
-          itemContent.push(line);
-        } else if (inItem) {
-          if (level <= currentLevel) {
-            inItem = false;
-          } else {
-            itemContent.push(line);
-          }
+          currentItem = line;
+        } else if (currentItem) {
+          currentItem += '\n' + line;
         }
-      } else if (inItem) {
-        itemContent.push(line);
+      } else if (currentItem) {
+        currentItem += '\n' + line;
       }
     }
 
-    return itemContent.length > 0 ? itemContent.join('\n') : null;
-  }
-}
+    if (currentItem) {
+      result.push(currentItem.trim());
+    }
 
-export const embedDirectiveHandler = new EmbedDirectiveHandler(); 
+    return result.join('\n\n');
+  }
+
+  private adjustHeaderLevels(content: string, baseLevel?: number, underHeader?: string): string {
+    let lines = content.split('\n');
+    let minLevel = 6;
+
+    // Find minimum header level in content
+    for (const line of lines) {
+      const headerMatch = line.match(/^(#+)\s+/);
+      if (headerMatch) {
+        minLevel = Math.min(minLevel, headerMatch[1].length);
+      }
+    }
+
+    // Calculate level adjustment
+    let levelAdjustment = 0;
+    if (baseLevel !== undefined) {
+      levelAdjustment = baseLevel - minLevel;
+    } else if (underHeader) {
+      const underHeaderMatch = underHeader.match(/^(#+)\s+/);
+      if (underHeaderMatch) {
+        levelAdjustment = underHeaderMatch[1].length + 1 - minLevel;
+      }
+    }
+
+    // Adjust header levels
+    lines = lines.map(line => {
+      const headerMatch = line.match(/^(#+)(\s+.+)$/);
+      if (headerMatch) {
+        const newLevel = Math.min(headerMatch[1].length + levelAdjustment, 6);
+        return '#'.repeat(newLevel) + headerMatch[2];
+      }
+      return line;
+    });
+
+    // Add parent header if specified
+    if (underHeader) {
+      lines.unshift(underHeader, '');
+    }
+
+    return lines.join('\n');
+  }
+} 

@@ -1,38 +1,19 @@
-import type { MeldNode } from 'meld-spec';
-import type { LocationData } from '../subInterpreter.js';
-
-export interface StateConfig {
-  parentState?: InterpreterState;
-  baseLocation?: LocationData;
-}
+import { MeldNode } from 'meld-spec';
 
 export class InterpreterState {
+  private parentState?: InterpreterState;
   private nodes: MeldNode[] = [];
   private textVars: Map<string, string> = new Map();
-  private dataVars: Map<string, any> = new Map();
+  private dataVars: Map<string, unknown> = new Map();
   private pathVars: Map<string, string> = new Map();
-  private commands: Map<string, Function> = new Map();
+  private commands: Map<string, string> = new Map();
   private imports: Set<string> = new Set();
-  private parentState?: InterpreterState;
-  private baseLocation?: LocationData;
 
-  constructor(config?: StateConfig) {
-    this.parentState = config?.parentState;
-    this.baseLocation = config?.baseLocation;
+  constructor(parentState?: InterpreterState) {
+    this.parentState = parentState;
   }
 
   addNode(node: MeldNode): void {
-    // Adjust node location if we have a base location
-    if (this.baseLocation && node.location) {
-      node.location.start.line += this.baseLocation.line - 1;
-      node.location.end.line += this.baseLocation.line - 1;
-      if (node.location.start.line === this.baseLocation.line) {
-        node.location.start.column += this.baseLocation.column - 1;
-      }
-      if (node.location.end.line === this.baseLocation.line) {
-        node.location.end.column += this.baseLocation.column - 1;
-      }
-    }
     this.nodes.push(node);
   }
 
@@ -40,59 +21,98 @@ export class InterpreterState {
     return this.nodes;
   }
 
-  // Text variables
-  setTextVar(name: string, value: string): void {
+  setText(name: string, value: string): void {
     this.textVars.set(name, value);
   }
 
+  getText(name: string): string | undefined {
+    return this.textVars.get(name) || this.parentState?.getText(name);
+  }
+
+  setTextVar(name: string, value: string): void {
+    this.setText(name, value);
+  }
+
   getTextVar(name: string): string | undefined {
-    return this.textVars.get(name) ?? this.parentState?.getTextVar(name);
+    return this.getText(name);
   }
 
   getAllTextVars(): Map<string, string> {
-    return new Map(this.textVars);
+    const allVars = new Map<string, string>();
+    if (this.parentState) {
+      for (const [key, value] of this.parentState.getAllTextVars()) {
+        allVars.set(key, value);
+      }
+    }
+    for (const [key, value] of this.textVars) {
+      allVars.set(key, value);
+    }
+    return allVars;
   }
 
-  // Data variables
-  setDataVar(name: string, value: any): void {
+  setDataVar(name: string, value: unknown): void {
     this.dataVars.set(name, value);
   }
 
-  getDataVar(name: string): any {
-    return this.dataVars.get(name) ?? this.parentState?.getDataVar(name);
+  getDataVar(name: string): unknown | undefined {
+    return this.dataVars.get(name) || this.parentState?.getDataVar(name);
   }
 
-  getAllDataVars(): Map<string, any> {
-    return new Map(this.dataVars);
+  getAllDataVars(): Map<string, unknown> {
+    const allVars = new Map<string, unknown>();
+    if (this.parentState) {
+      for (const [key, value] of this.parentState.getAllDataVars()) {
+        allVars.set(key, value);
+      }
+    }
+    for (const [key, value] of this.dataVars) {
+      allVars.set(key, value);
+    }
+    return allVars;
   }
 
-  hasDataVar(name: string): boolean {
-    return this.dataVars.has(name) || !!this.parentState?.hasDataVar(name);
-  }
-
-  // Path variables
   setPathVar(name: string, value: string): void {
     this.pathVars.set(name, value);
   }
 
   getPathVar(name: string): string | undefined {
-    return this.pathVars.get(name) ?? this.parentState?.getPathVar(name);
+    return this.pathVars.get(name) || this.parentState?.getPathVar(name);
   }
 
-  // Commands
-  setCommand(name: string, command: Function): void {
+  getAllPathVars(): Map<string, string> {
+    const allVars = new Map<string, string>();
+    if (this.parentState) {
+      for (const [key, value] of this.parentState.getAllPathVars()) {
+        allVars.set(key, value);
+      }
+    }
+    for (const [key, value] of this.pathVars) {
+      allVars.set(key, value);
+    }
+    return allVars;
+  }
+
+  setCommand(name: string, command: string): void {
     this.commands.set(name, command);
   }
 
-  getCommand(name: string): Function | undefined {
-    return this.commands.get(name) ?? this.parentState?.getCommand(name);
+  getCommand(name: string): string | undefined {
+    return this.commands.get(name) || this.parentState?.getCommand(name);
   }
 
-  getAllCommands(): Map<string, Function> {
-    return new Map(this.commands);
+  getAllCommands(): Map<string, string> {
+    const allCommands = new Map<string, string>();
+    if (this.parentState) {
+      for (const [key, value] of this.parentState.getAllCommands()) {
+        allCommands.set(key, value);
+      }
+    }
+    for (const [key, value] of this.commands) {
+      allCommands.set(key, value);
+    }
+    return allCommands;
   }
 
-  // Import tracking
   addImport(path: string): void {
     this.imports.add(path);
   }
@@ -101,48 +121,37 @@ export class InterpreterState {
     return this.imports.has(path) || !!this.parentState?.hasImport(path);
   }
 
-  // State merging
-  mergeChildState(childState: InterpreterState): void {
-    // Merge nodes
-    for (const node of childState.getNodes()) {
-      this.addNode(node);
+  getParentState(): InterpreterState | undefined {
+    return this.parentState;
+  }
+
+  mergeFrom(other: InterpreterState): void {
+    // Merge variables
+    for (const [key, value] of other.getAllTextVars()) {
+      this.setTextVar(key, value);
+    }
+    for (const [key, value] of other.getAllDataVars()) {
+      this.setDataVar(key, value);
+    }
+    for (const [key, value] of other.getAllPathVars()) {
+      this.setPathVar(key, value);
+    }
+    for (const [key, value] of other.getAllCommands()) {
+      this.setCommand(key, value);
     }
 
-    // Merge variables
-    childState.getAllTextVars().forEach((value, key) => {
-      this.setTextVar(key, value);
-    });
+    // Merge nodes
+    this.nodes.push(...other.getNodes());
 
-    childState.getAllDataVars().forEach((value, key) => {
-      this.setDataVar(key, value);
-    });
-
-    childState.getAllCommands().forEach((value, key) => {
-      this.setCommand(key, value);
-    });
+    // Merge imports
+    for (const importPath of other.imports) {
+      this.addImport(importPath);
+    }
   }
 
-  // Cloning
   clone(): InterpreterState {
-    const cloned = new InterpreterState({
-      parentState: this.parentState,
-      baseLocation: this.baseLocation
-    });
-
-    // Clone all state
-    cloned.nodes = [...this.nodes];
-    cloned.textVars = new Map(this.textVars);
-    cloned.dataVars = new Map(this.dataVars);
-    cloned.pathVars = new Map(this.pathVars);
-    cloned.commands = new Map(this.commands);
-    cloned.imports = new Set(this.imports);
-
+    const cloned = new InterpreterState();
+    cloned.mergeFrom(this);
     return cloned;
   }
-
-  // Alias methods for backward compatibility
-  setText = this.setTextVar;
-  getText = this.getTextVar;
-  setData = this.setDataVar;
-  getData = this.getDataVar;
 } 

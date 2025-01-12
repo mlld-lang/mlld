@@ -34,31 +34,57 @@ class ImportDirectiveHandler implements DirectiveHandler {
     }
 
     try {
-      // Check for circular imports
+      // Resolve the import path
       const resolvedPath = path.resolve(data.from);
+
+      // Check for circular imports
       if (state.hasImport(resolvedPath)) {
         throw new MeldImportError(
           `Circular import detected: ${data.from}`,
           node.location?.start
         );
       }
-      state.addImport(resolvedPath);
 
-      // Read and parse imported file
+      // Read the file content
       let content: string;
       try {
         content = fs.readFileSync(resolvedPath, 'utf8');
       } catch (error) {
-        throw new Error('File not found');
+        if (error.code === 'ENOENT') {
+          throw new MeldImportError(
+            'File not found',
+            node.location?.start
+          );
+        }
+        throw error;
       }
 
-      const importedNodes = parseMeldContent(content);
+      // Parse the content
+      let importedNodes;
+      try {
+        importedNodes = parseMeldContent(content);
+      } catch (error) {
+        throw new MeldImportError(
+          `Failed to parse imported content: ${error.message}`,
+          node.location?.start
+        );
+      }
+
+      // Add to import tracking to prevent circular imports
+      state.addImport(resolvedPath);
 
       // Create a new state for the imported content
       const importState = new InterpreterState();
 
       // Process all nodes in the imported file
-      interpret(importedNodes, importState);
+      try {
+        interpret(importedNodes, importState);
+      } catch (error) {
+        throw new MeldImportError(
+          `Failed to interpret imported content: ${error.message}`,
+          node.location?.start
+        );
+      }
 
       // Import all nodes if no specific imports
       if (!data.imports) {
@@ -80,12 +106,17 @@ class ImportDirectiveHandler implements DirectiveHandler {
           const dataVar = importState.getDataVar(importName);
           const command = importState.getCommand(importName);
 
-          if (textVar) {
+          if (textVar !== undefined) {
             state.setTextVar(alias, textVar);
-          } else if (dataVar) {
+          } else if (dataVar !== undefined) {
             state.setDataVar(alias, dataVar);
-          } else if (command) {
+          } else if (command !== undefined) {
             state.setCommand(alias, command);
+          } else {
+            throw new MeldImportError(
+              `Variable or command '${importName}' not found in imported file`,
+              node.location?.start
+            );
           }
         }
       }

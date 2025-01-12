@@ -1,25 +1,11 @@
-import * as fs from 'fs/promises';
-import * as path from 'path';
+import { promises as fs } from 'fs';
+import { join, parse } from 'path';
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
-import { parseMeldContent } from '../interpreter/parser.js';
-import { interpret } from '../interpreter/interpreter.js';
-import { InterpreterState } from '../interpreter/state/state.js';
+import { parseMeld, interpretMeld } from '../interpreter/interpreter.js';
 import { convertToFormat } from '../converter/converter.js';
 
-export type OutputFormat = 'llm' | 'md';
-
 const VALID_EXTENSIONS = ['.meld', '.meld.md', '.mll', '.mll.md'];
-
-function normalizeFormat(format: string): OutputFormat {
-  const formatMap: Record<string, OutputFormat> = {
-    llm: 'llm',
-    md: 'md',
-    markdown: 'md',
-    xml: 'llm'
-  };
-  return formatMap[format.toLowerCase()] || 'llm';
-}
 
 function validateFileExtension(filePath: string): void {
   const ext = VALID_EXTENSIONS.find(e => filePath.endsWith(e));
@@ -28,10 +14,9 @@ function validateFileExtension(filePath: string): void {
   }
 }
 
-function getDefaultOutputPath(inputPath: string, format: OutputFormat): string {
-  const dir = path.dirname(inputPath);
-  const base = path.basename(inputPath, path.extname(inputPath));
-  return path.join(dir, `${base}.${format}`);
+function getDefaultOutputPath(inputPath: string, format: string): string {
+  const { dir, name } = parse(inputPath);
+  return join(dir, `${name}.${format}`);
 }
 
 export async function cli(args: string[]): Promise<void> {
@@ -43,15 +28,15 @@ export async function cli(args: string[]): Promise<void> {
         demandOption: true
       });
     })
-    .option('output', {
-      describe: 'Output file path',
-      type: 'string'
-    })
     .option('format', {
-      describe: 'Output format',
-      type: 'string',
+      alias: 'f',
+      describe: 'Output format (llm or md)',
       choices: ['llm', 'md'],
       default: 'llm'
+    })
+    .option('output', {
+      alias: 'o',
+      describe: 'Output file path'
     })
     .option('stdout', {
       describe: 'Write output to stdout instead of file',
@@ -61,38 +46,45 @@ export async function cli(args: string[]): Promise<void> {
     .help()
     .argv;
 
-  const inputPath = argv.input;
-  let format = normalizeFormat(argv.format as OutputFormat);
-  let outputPath = argv.output;
+  const inputPath = argv.input as string;
+  const format = argv.format as string;
+  const stdout = argv.stdout as boolean;
+  const outputPath = argv.output as string | undefined;
 
-  // First check if file exists and can be read
+  // First validate file extension
+  validateFileExtension(inputPath);
+
+  // Then check if file exists and try to read it
   let content: string;
   try {
     content = await fs.readFile(inputPath, 'utf-8');
-  } catch (err) {
+  } catch (err: any) {
     if (err.code === 'ENOENT') {
       throw new Error('File not found');
     }
-    throw err;
+    throw new Error(`Failed to read file: ${err.message}`);
   }
-
-  // Then validate file extension
-  validateFileExtension(inputPath);
 
   // Parse and interpret content
-  const state = new InterpreterState();
-  const nodes = parseMeldContent(content);
-  await interpret(nodes, state);
+  const nodes = parseMeld(content);
+  const state = interpretMeld(nodes);
 
-  // Convert to output format
-  const output = convertToFormat(state.getNodes(), format);
+  // Convert to specified format
+  const output = convertToFormat(state, format);
 
-  // Write output
-  if (argv.stdout) {
+  // Handle output
+  if (stdout) {
     console.log(output);
   } else {
-    outputPath = outputPath || getDefaultOutputPath(inputPath, format);
-    await fs.writeFile(outputPath, output);
-    console.log(`Output written to: ${outputPath}`);
+    const finalOutputPath = outputPath || getDefaultOutputPath(inputPath, format);
+    await fs.writeFile(finalOutputPath, output);
   }
+}
+
+// Only execute if run directly
+if (process.argv[1] === import.meta.url) {
+  cli(hideBin(process.argv)).catch(err => {
+    console.error(err.message);
+    process.exit(1);
+  });
 } 
