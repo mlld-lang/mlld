@@ -25,6 +25,7 @@
   },
   "homepage": "https://github.com/adamavenir/meld#readme",
   "dependencies": {
+    "meld-ast": "^0.4.2",
     "meld-spec": "^0.3.10",
     "yargs": "^17.7.2"
   },

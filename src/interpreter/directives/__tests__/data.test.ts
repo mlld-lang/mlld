@@ -1,6 +1,6 @@
-import { DataDirectiveHandler } from '../data';
-import { InterpreterState } from '../../state/state';
-import type { DirectiveNode } from 'meld-ast';
+import { DataDirectiveHandler } from '../data.js';
+import { InterpreterState } from '../../state/state.js';
+import type { DirectiveNode } from 'meld-spec';
 
 describe('DataDirectiveHandler', () => {
   let handler: DataDirectiveHandler;

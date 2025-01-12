@@ -1,6 +1,6 @@
-import { RunDirectiveHandler } from '../run';
-import { InterpreterState } from '../../state/state';
-import type { DirectiveNode } from 'meld-ast';
+import { RunDirectiveHandler } from '../run.js';
+import { InterpreterState } from '../../state/state.js';
+import type { DirectiveNode } from 'meld-spec';
 
 describe('RunDirectiveHandler', () => {
   let handler: RunDirectiveHandler;

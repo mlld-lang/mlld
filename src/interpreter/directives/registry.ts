@@ -1,8 +1,9 @@
 import type { DirectiveKind } from 'meld-spec';
-import { DirectiveHandler } from './index.js';
+import { DirectiveHandler } from './types.js';
 import { DataDirectiveHandler } from './data.js';
 import { RunDirectiveHandler } from './run.js';
 import { ImportDirectiveHandler } from './import.js';
+import { DefineDirectiveHandler } from './define.js';
 
 const DIRECTIVE_KINDS: DirectiveKind[] = [
   'run',
@@ -34,9 +35,22 @@ export class DirectiveRegistry {
   static clear(): void {
     this.handlers.clear();
   }
+
+  register(handler: DirectiveHandler): void {
+    for (const kind of DIRECTIVE_KINDS) {
+      if (handler.canHandle(kind)) {
+        DirectiveRegistry.handlers.set(kind, handler);
+      }
+    }
+  }
 }
 
 // Register built-in handlers
 DirectiveRegistry.registerHandler(new DataDirectiveHandler());
 DirectiveRegistry.registerHandler(new RunDirectiveHandler());
-DirectiveRegistry.registerHandler(new ImportDirectiveHandler()); 
+DirectiveRegistry.registerHandler(new ImportDirectiveHandler());
+DirectiveRegistry.registerHandler(new DefineDirectiveHandler()); 
+
+export function registerBuiltinDirectives(registry: DirectiveRegistry): void {
+  registry.register(new DefineDirectiveHandler());
+} 

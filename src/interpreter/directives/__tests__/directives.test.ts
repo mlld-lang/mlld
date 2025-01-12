@@ -1,12 +1,11 @@
-import { DirectiveHandler, DirectiveRegistry } from '../index';
-import { InterpreterState } from '../../state/state';
-import type { DirectiveNode, DirectiveKind } from 'meld-ast';
+import { DirectiveRegistry } from '../registry.js';
+import { DirectiveHandler } from '../types.js';
+import { InterpreterState } from '../../state/state.js';
+import type { DirectiveNode, DirectiveKind } from 'meld-spec';
 
 describe('DirectiveRegistry', () => {
-  let registry: DirectiveRegistry;
-
   beforeEach(() => {
-    registry = new DirectiveRegistry();
+    DirectiveRegistry.clear();
   });
 
   describe('registration', () => {
@@ -16,14 +15,14 @@ describe('DirectiveRegistry', () => {
         handle: jest.fn()
       };
 
-      registry.register(mockHandler);
-      const found = registry.findHandler('run');
+      DirectiveRegistry.registerHandler(mockHandler);
+      const found = DirectiveRegistry.findHandler('run');
 
       expect(found).toBe(mockHandler);
     });
 
     it('should return undefined for unknown directive kinds', () => {
-      const found = registry.findHandler('run');
+      const found = DirectiveRegistry.findHandler('run');
       expect(found).toBeUndefined();
     });
 
@@ -38,11 +37,11 @@ describe('DirectiveRegistry', () => {
         handle: jest.fn()
       };
 
-      registry.register(handler1);
-      registry.register(handler2);
+      DirectiveRegistry.registerHandler(handler1);
+      DirectiveRegistry.registerHandler(handler2);
 
-      expect(registry.findHandler('run')).toBe(handler1);
-      expect(registry.findHandler('import')).toBe(handler2);
+      expect(DirectiveRegistry.findHandler('run')).toBe(handler1);
+      expect(DirectiveRegistry.findHandler('import')).toBe(handler2);
     });
   });
 
@@ -66,8 +65,8 @@ describe('DirectiveRegistry', () => {
         handle: jest.fn()
       };
 
-      registry.register(mockHandler);
-      const handler = registry.findHandler('run');
+      DirectiveRegistry.registerHandler(mockHandler);
+      const handler = DirectiveRegistry.findHandler('run');
       handler?.handle(mockNode, state);
 
       expect(mockHandler.handle).toHaveBeenCalledWith(mockNode, state);
@@ -81,10 +80,10 @@ describe('DirectiveRegistry', () => {
         handle: jest.fn()
       };
 
-      registry.register(mockHandler);
-      registry.clear();
+      DirectiveRegistry.registerHandler(mockHandler);
+      DirectiveRegistry.clear();
 
-      expect(registry.findHandler('run')).toBeUndefined();
+      expect(DirectiveRegistry.findHandler('run')).toBeUndefined();
     });
   });
 }); 

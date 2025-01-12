@@ -4,7 +4,8 @@ export default {
   extensionsToTreatAsEsm: ['.ts'],
   moduleNameMapper: {
     '^(\\.{1,2}/.*)\\.js$': '$1',
-    '^meld-spec$': '<rootDir>/node_modules/meld-spec/dist/esm/index.js'
+    '^meld-spec$': '<rootDir>/node_modules/meld-spec/dist/esm/index.js',
+    '^meld-ast$': '<rootDir>/node_modules/meld-ast/dist/esm/index.js'
   },
   transform: {
     '^.+\\.ts$': ['ts-jest', {
