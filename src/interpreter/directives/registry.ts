@@ -5,7 +5,7 @@ import { RunDirectiveHandler } from './run.js';
 import { ImportDirectiveHandler } from './import.js';
 import { DefineDirectiveHandler } from './define.js';
 import { TextDirectiveHandler } from './text.js';
-import { PathDirectiveHandler } from './path.js';
+import { PathDirectiveHandler } from './pathDirective.js';
 import { EmbedDirectiveHandler } from './embed.js';
 
 const DIRECTIVE_KINDS: DirectiveKind[] = [

@@ -1,4 +1,4 @@
-import { InterpreterState } from '../state';
+import { InterpreterState } from '../state.js';
 
 describe('InterpreterState', () => {
   let state: InterpreterState;

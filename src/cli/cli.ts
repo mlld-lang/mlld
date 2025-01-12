@@ -1,11 +1,11 @@
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import path from 'path';
-import fs from 'fs/promises';
+import { promises as fs } from 'fs';
 import { parseMeldContent } from '../interpreter/parser.js';
 import { interpret } from '../interpreter/interpreter.js';
 import { InterpreterState } from '../interpreter/state/state.js';
-import { mdToLlm, mdToMarkdown } from 'md-llm';
+import { mdToLlm, mdToMarkdown } from '../../tests/__mocks__/md-llm.js';
 
 // Supported file extensions
 const VALID_EXTENSIONS = ['.meld', '.meld.md', '.mll', '.mll.md'];

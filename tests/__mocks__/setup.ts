@@ -1,6 +1,8 @@
 import { vi } from 'vitest';
-import { DirectiveNode } from 'meld-ast';
-import { InterpreterState } from '../../src/interpreter/state/state';
+import type { DirectiveNode, MeldNode } from 'meld-spec';
+import { InterpreterState, type StateConfig } from '../../src/interpreter/state/state.js';
+import type { LocationData } from '../../src/interpreter/subInterpreter.js';
+import { EmbedDirectiveHandler, ImportDirectiveHandler } from './directive-handlers.js';
 
 // Mock fs module
 vi.mock('fs', () => ({
@@ -16,77 +18,14 @@ vi.mock('path', () => ({
   basename: vi.fn((p) => p.split('/').pop())
 }));
 
+// Export handler instances
+export const embedDirectiveHandler = new EmbedDirectiveHandler();
+export const importDirectiveHandler = new ImportDirectiveHandler();
+
 // Mock InterpreterState
-class MockInterpreterState {
-  private nodes: any[] = [];
-  private textVars: Map<string, string> = new Map();
-  private dataVars: Map<string, any> = new Map();
-  private pathVars: Map<string, string> = new Map();
-  private commands: Map<string, Function> = new Map();
-  private imports: Set<string> = new Set();
-
-  addNode(node: any) {
-    this.nodes.push(node);
-  }
-
-  getNodes() {
-    return this.nodes;
-  }
-
-  setTextVar(name: string, value: string) {
-    this.textVars.set(name, value);
-  }
-
-  getTextVar(name: string) {
-    return this.textVars.get(name);
-  }
-
-  setDataVar(name: string, value: any) {
-    this.dataVars.set(name, value);
-  }
-
-  getDataVar(name: string) {
-    return this.dataVars.get(name);
-  }
-
-  setPathVar(name: string, value: string) {
-    this.pathVars.set(name, value);
-  }
-
-  getPathVar(name: string) {
-    return this.pathVars.get(name);
-  }
-
-  setCommand(name: string, fn: Function) {
-    this.commands.set(name, fn);
-  }
-
-  getCommand(name: string) {
-    return this.commands.get(name);
-  }
-
-  addImport(path: string) {
-    this.imports.add(path);
-  }
-
-  hasImport(path: string) {
-    return this.imports.has(path);
-  }
-
-  getAllTextVars() {
-    return new Map(this.textVars);
-  }
-
-  getAllDataVars() {
-    return new Map(this.dataVars);
-  }
-
-  getAllPathVars() {
-    return new Map(this.pathVars);
-  }
-
-  getAllCommands() {
-    return new Map(this.commands);
+export class MockInterpreterState extends InterpreterState {
+  constructor(config?: StateConfig) {
+    super(config);
   }
 
   // Alias methods for backward compatibility
@@ -94,67 +33,142 @@ class MockInterpreterState {
   getText = this.getTextVar;
   setData = this.setDataVar;
   getData = this.getDataVar;
-}
 
-vi.mock('../interpreter/state/state', () => ({
-  InterpreterState: MockInterpreterState
-}));
+  override addNode(node: MeldNode): void {
+    super.addNode(node);
+  }
+
+  override getNodes(): MeldNode[] {
+    return super.getNodes();
+  }
+
+  override setTextVar(name: string, value: string): void {
+    super.setTextVar(name, value);
+  }
+
+  override getTextVar(name: string): string | undefined {
+    return super.getTextVar(name);
+  }
+
+  override getAllTextVars(): Map<string, string> {
+    return super.getAllTextVars();
+  }
+
+  override setDataVar(name: string, value: any): void {
+    super.setDataVar(name, value);
+  }
+
+  override getDataVar(name: string): any {
+    return super.getDataVar(name);
+  }
+
+  override getAllDataVars(): Map<string, any> {
+    return super.getAllDataVars();
+  }
+
+  override hasDataVar(name: string): boolean {
+    return super.hasDataVar(name);
+  }
+
+  override setPathVar(name: string, value: string): void {
+    super.setPathVar(name, value);
+  }
+
+  override getPathVar(name: string): string | undefined {
+    return super.getPathVar(name);
+  }
+
+  override setCommand(name: string, fn: Function): void {
+    super.setCommand(name, fn);
+  }
+
+  override getCommand(name: string): Function | undefined {
+    return super.getCommand(name);
+  }
+
+  override getAllCommands(): Map<string, Function> {
+    return super.getAllCommands();
+  }
+
+  override addImport(path: string): void {
+    super.addImport(path);
+  }
+
+  override hasImport(path: string): boolean {
+    return super.hasImport(path);
+  }
+
+  override mergeChildState(childState: InterpreterState): void {
+    super.mergeChildState(childState);
+  }
+
+  override clone(): InterpreterState {
+    return super.clone();
+  }
+}
 
 // Mock handler factory
 function createMockHandler(kind: string) {
-  return {
-    canHandle: (k: string) => k === kind,
-    handle: vi.fn((node: any, state: any) => {
-      // Basic implementation that stores values in state
-      if (node.properties) {
-        if (node.properties.identifier) {
-          state.setTextVar(node.properties.identifier, node.properties.value);
+  switch (kind) {
+    case 'data':
+      return {
+        canHandle: (k: string) => k === 'data',
+        handle: (node: DirectiveNode, state: InterpreterState) => {
+          const data = node.directive;
+          if (!data.name) {
+            throw new Error('Data directive requires a name');
+          }
+          state.setDataVar(data.name, data.value);
         }
-        if (node.properties.name) {
-          state.setDataVar(node.properties.name, node.properties.value);
+      };
+    case 'text':
+      return {
+        canHandle: (k: string) => k === 'text',
+        handle: (node: DirectiveNode, state: InterpreterState) => {
+          const data = node.directive;
+          if (!data.name) {
+            throw new Error('Text directive requires a name');
+          }
+          state.setTextVar(data.name, data.value);
         }
-        if (node.properties.command) {
-          state.setDataVar('__pendingCommand', {
-            command: node.properties.command,
-            background: !!node.properties.background,
-            location: node.location
-          });
+      };
+    case 'run':
+      return {
+        canHandle: (k: string) => k === 'run',
+        handle: (node: DirectiveNode, state: InterpreterState) => {
+          const data = node.directive;
+          const command = state.getCommand(data.command);
+          if (command) {
+            command(data.args);
+          }
         }
-      }
-    })
-  };
+      };
+    case 'define':
+      return {
+        canHandle: (k: string) => k === 'define',
+        handle: (node: DirectiveNode, state: InterpreterState) => {
+          const data = node.directive;
+          if (!data.name) {
+            throw new Error('Define directive requires a name');
+          }
+          state.setCommand(data.name, data.fn);
+        }
+      };
+    case 'path':
+      return {
+        canHandle: (k: string) => k === 'path',
+        handle: (node: DirectiveNode, state: InterpreterState) => {
+          const data = node.directive;
+          if (!data.name) {
+            throw new Error('Path directive requires a name');
+          }
+          state.setPathVar(data.name, data.value);
+        }
+      };
+    default:
+      return undefined;
+  }
 }
 
-// Mock directive handlers
-vi.mock('../interpreter/directives/embed', () => ({
-  EmbedDirectiveHandler: vi.fn().mockImplementation(() => createMockHandler('embed'))
-}));
-
-vi.mock('../interpreter/directives/import', () => ({
-  ImportDirectiveHandler: vi.fn().mockImplementation(() => createMockHandler('import'))
-}));
-
-vi.mock('../interpreter/directives/run', () => ({
-  RunDirectiveHandler: vi.fn().mockImplementation(() => createMockHandler('run'))
-}));
-
-vi.mock('../interpreter/directives/text', () => ({
-  TextDirectiveHandler: vi.fn().mockImplementation(() => createMockHandler('text'))
-}));
-
-vi.mock('../interpreter/directives/data', () => ({
-  DataDirectiveHandler: vi.fn().mockImplementation(() => createMockHandler('data'))
-}));
-
-vi.mock('../interpreter/directives/path', () => ({
-  PathDirectiveHandler: vi.fn().mockImplementation(() => createMockHandler('path'))
-}));
-
-vi.mock('../interpreter/directives/define', () => ({
-  DefineDirectiveHandler: vi.fn().mockImplementation(() => createMockHandler('define'))
-}));
-
-export {
-  MockInterpreterState,
-  createMockHandler
-}; 
+// Export mock handler factory
+export { createMockHandler }; 

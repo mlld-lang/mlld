@@ -1,7 +1,21 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { interpretSubDirectives } from '../subInterpreter.js';
 import { InterpreterState } from '../state/state.js';
 import type { DirectiveNode, Location } from 'meld-spec';
+
+vi.mock('meld-ast', () => ({
+  parse: vi.fn().mockImplementation((content: string) => {
+    // Return a fake but valid array of MeldNodes for test content
+    return [{
+      type: 'Text',
+      content,
+      location: {
+        start: { line: 1, column: 1 },
+        end: { line: 1, column: content.length }
+      }
+    }];
+  })
+}));
 
 describe('subInterpreter', () => {
   let parentState: InterpreterState;
