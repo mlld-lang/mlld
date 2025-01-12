@@ -17,22 +17,6 @@ export function interpretSubDirectives(
     // Parse content into AST
     const nodes = parseMeldContent(content);
 
-    // Adjust node locations if base location is provided
-    if (baseLocation) {
-      for (const node of nodes) {
-        if (node.location) {
-          node.location.start.line += baseLocation.line - 1;
-          node.location.end.line += baseLocation.line - 1;
-          if (node.location.start.line === baseLocation.line) {
-            node.location.start.column += baseLocation.column - 1;
-          }
-          if (node.location.end.line === baseLocation.line) {
-            node.location.end.column += baseLocation.column - 1;
-          }
-        }
-      }
-    }
-
     // Create child state with parent state and base location
     const childState = new InterpreterState({
       parentState,
@@ -41,6 +25,29 @@ export function interpretSubDirectives(
 
     // Process all nodes in child state
     interpret(nodes, childState);
+
+    // Adjust node locations if base location is provided
+    if (baseLocation) {
+      for (const node of childState.getNodes()) {
+        if (node.location) {
+          // Adjust start position
+          if (node.location.start) {
+            node.location.start = {
+              line: baseLocation.line,
+              column: baseLocation.column + (node.location.start.column - 1)
+            };
+          }
+          
+          // Adjust end position
+          if (node.location.end) {
+            node.location.end = {
+              line: baseLocation.line,
+              column: baseLocation.column + (node.location.end.column - 1)
+            };
+          }
+        }
+      }
+    }
 
     // Merge child state back to parent
     parentState.mergeChildState(childState);

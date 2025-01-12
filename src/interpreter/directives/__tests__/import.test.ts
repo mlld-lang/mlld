@@ -4,6 +4,7 @@ import { InterpreterState } from '../../state/state.js';
 import type { DirectiveNode } from 'meld-spec';
 import * as path from 'path';
 import * as fs from 'fs';
+import { DirectiveRegistry } from '../registry.js';
 
 describe('ImportDirectiveHandler', () => {
   let handler = importDirectiveHandler;
@@ -11,6 +12,8 @@ describe('ImportDirectiveHandler', () => {
 
   beforeEach(() => {
     state = new InterpreterState();
+    DirectiveRegistry.clear();
+    DirectiveRegistry.registerHandler(importDirectiveHandler);
 
     // Mock path module
     vi.mock('path', () => {

@@ -1,6 +1,7 @@
 import { dataDirectiveHandler } from '../data.js';
 import { InterpreterState } from '../../state/state.js';
 import type { DirectiveNode } from 'meld-spec';
+import { DirectiveRegistry } from '../registry.js';
 
 describe('DataDirectiveHandler', () => {
   let handler = dataDirectiveHandler;
@@ -8,6 +9,8 @@ describe('DataDirectiveHandler', () => {
 
   beforeEach(() => {
     state = new InterpreterState();
+    DirectiveRegistry.clear();
+    DirectiveRegistry.registerHandler(dataDirectiveHandler);
   });
 
   describe('canHandle', () => {
@@ -26,7 +29,7 @@ describe('DataDirectiveHandler', () => {
         type: 'Directive',
         directive: {
           kind: 'data',
-          name: 'config',
+          identifier: 'config',
           value: { name: 'test', version: 1 }
         },
         location: {
@@ -46,7 +49,7 @@ describe('DataDirectiveHandler', () => {
         type: 'Directive',
         directive: {
           kind: 'data',
-          name: 'list',
+          identifier: 'list',
           value: [1, 2, 3]
         },
         location: {
@@ -66,7 +69,7 @@ describe('DataDirectiveHandler', () => {
         type: 'Directive',
         directive: {
           kind: 'data',
-          name: 'message',
+          identifier: 'message',
           value: 'Hello World'
         },
         location: {
@@ -81,7 +84,7 @@ describe('DataDirectiveHandler', () => {
       expect(storedData).toBe('Hello World');
     });
 
-    it('should throw error if name is missing', () => {
+    it('should throw error if identifier is missing', () => {
       const node: DirectiveNode = {
         type: 'Directive',
         directive: {
@@ -95,7 +98,7 @@ describe('DataDirectiveHandler', () => {
       };
 
       expect(() => handler.handle(node, state)).toThrow(
-        'Data directive requires a name'
+        'Data directive requires an identifier'
       );
     });
 
@@ -104,7 +107,7 @@ describe('DataDirectiveHandler', () => {
         type: 'Directive',
         directive: {
           kind: 'data',
-          name: 'test'
+          identifier: 'test'
         } as any,
         location: {
           start: { line: 1, column: 1 },

@@ -12,23 +12,23 @@ interface DataDirectiveData {
 /**
  * Handler for @data directives
  */
-class DataDirectiveHandler implements DirectiveHandler {
+export class DataDirectiveHandler implements DirectiveHandler {
   canHandle(kind: DirectiveKind): boolean {
     return kind === 'data';
   }
 
   handle(node: DirectiveNode, state: InterpreterState): void {
-    const data = node.directive;
+    const data = node.directive as DataDirectiveData;
     
-    if (!data.name) {
+    if (!data.identifier) {
       throw new MeldDirectiveError(
-        'Data directive requires a name',
+        'Data directive requires an identifier',
         'data',
         node.location?.start
       );
     }
 
-    if (!data.value) {
+    if (data.value === undefined) {
       throw new MeldDirectiveError(
         'Data directive requires a value',
         'data',
@@ -36,8 +36,9 @@ class DataDirectiveHandler implements DirectiveHandler {
       );
     }
 
-    state.setDataVar(data.name, data.value);
+    state.setDataVar(data.identifier, data.value);
   }
 }
 
+// Export singleton instance for use in the main application
 export const dataDirectiveHandler = new DataDirectiveHandler(); 

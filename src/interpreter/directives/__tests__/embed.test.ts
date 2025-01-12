@@ -4,6 +4,7 @@ import { InterpreterState } from '../../state/state.js';
 import type { DirectiveNode } from 'meld-spec';
 import * as fs from 'fs';
 import * as path from 'path';
+import { DirectiveRegistry } from '../registry.js';
 
 // Mock external dependencies
 vi.mock('fs', () => ({
@@ -29,6 +30,8 @@ describe('EmbedDirectiveHandler', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     state = new InterpreterState();
+    DirectiveRegistry.clear();
+    DirectiveRegistry.registerHandler(embedDirectiveHandler);
 
     // Setup default mock implementations
     vi.mocked(fs.readFileSync).mockReturnValue('mock content');

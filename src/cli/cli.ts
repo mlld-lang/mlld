@@ -31,9 +31,6 @@ function normalizeFormat(format: string): OutputFormat {
 
 // Validate file extension
 function validateFileExtension(filePath: string): void {
-  if (!filePath) {
-    throw new Error('File path is required');
-  }
   const ext = VALID_EXTENSIONS.find(e => filePath.endsWith(e));
   if (!ext) {
     throw new Error(`Invalid file extension. Supported extensions: ${VALID_EXTENSIONS.join(', ')}`);
@@ -42,9 +39,6 @@ function validateFileExtension(filePath: string): void {
 
 // Get default output path
 function getDefaultOutputPath(inputPath: string, format: OutputFormat): string {
-  if (!inputPath) {
-    throw new Error('Input path is required');
-  }
   const dir = path.dirname(inputPath);
   const ext = path.extname(inputPath);
   const baseName = path.basename(inputPath, ext)
@@ -79,11 +73,13 @@ async function stateToOutput(state: InterpreterState, format: OutputFormat): Pro
 
 // Main CLI function
 export async function cli(args: string[]): Promise<void> {
-  const argv = await yargs(hideBin(args))
-    .positional('input', {
-      describe: 'Input file path',
-      type: 'string',
-      demandOption: true
+  const argv = await yargs(args)
+    .command('$0 <input>', 'Convert meld file to specified format', (yargs) => {
+      yargs.positional('input', {
+        describe: 'Input file path',
+        type: 'string',
+        demandOption: true
+      });
     })
     .option('output', {
       alias: 'o',
@@ -104,19 +100,28 @@ export async function cli(args: string[]): Promise<void> {
     .argv;
 
   const inputPath = argv.input;
-  const format = normalizeFormat(argv.format);
-  const outputPath = argv.output || getDefaultOutputPath(inputPath, format);
+  
+  // Validate input path exists
+  if (!inputPath) {
+    throw new Error('Input path is required');
+  }
 
-  // Validate input file extension
-  validateFileExtension(inputPath);
-
-  // Read and parse input file
+  // Read and validate input file
   let content: string;
   try {
     content = await fs.readFile(inputPath, 'utf8');
   } catch (error) {
+    if (error.code === 'ENOENT') {
+      throw new Error('File not found');
+    }
     throw new Error(`Failed to read file: ${error.message}`);
   }
+
+  // Validate file extension after confirming file exists
+  validateFileExtension(inputPath);
+
+  const format = normalizeFormat(argv.format);
+  const outputPath = argv.output || getDefaultOutputPath(inputPath, format);
 
   // Parse and interpret content
   const nodes = parseMeldContent(content);
