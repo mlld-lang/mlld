@@ -6,6 +6,7 @@ import { ImportDirectiveHandler } from './import.js';
 import { DefineDirectiveHandler } from './define.js';
 import { TextDirectiveHandler } from './text.js';
 import { PathDirectiveHandler } from './path.js';
+import { EmbedDirectiveHandler } from './embed.js';
 
 const DIRECTIVE_KINDS: DirectiveKind[] = [
   'run',
@@ -54,9 +55,11 @@ DirectiveRegistry.registerHandler(new ImportDirectiveHandler());
 DirectiveRegistry.registerHandler(new DefineDirectiveHandler());
 DirectiveRegistry.registerHandler(new TextDirectiveHandler());
 DirectiveRegistry.registerHandler(new PathDirectiveHandler());
+DirectiveRegistry.registerHandler(new EmbedDirectiveHandler());
 
 export function registerBuiltinDirectives(registry: DirectiveRegistry): void {
   registry.register(new DefineDirectiveHandler());
   registry.register(new TextDirectiveHandler());
   registry.register(new PathDirectiveHandler());
+  registry.register(new EmbedDirectiveHandler());
 } 
