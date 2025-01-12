@@ -22,29 +22,48 @@ const DIRECTIVE_KINDS: DirectiveKind[] = [
 
 export class DirectiveRegistry {
   private static handlers: Map<DirectiveKind, DirectiveHandler> = new Map();
+  private static initialized = false;
 
   static registerHandler(handler: DirectiveHandler): void {
+    if (!handler) {
+      throw new Error('Cannot register null or undefined handler');
+    }
+    
     for (const kind of DIRECTIVE_KINDS) {
-      if (handler.canHandle(kind)) {
-        this.handlers.set(kind, handler);
+      try {
+        if (handler.canHandle(kind)) {
+          this.handlers.set(kind, handler);
+        }
+      } catch (error) {
+        console.error(`Failed to register handler for kind ${kind}:`, error);
       }
     }
   }
 
   static findHandler(kind: DirectiveKind): DirectiveHandler | undefined {
+    this.initializeIfNeeded();
     return this.handlers.get(kind);
   }
 
   static clear(): void {
     this.handlers.clear();
+    this.initialized = false;
+  }
+
+  private static initializeIfNeeded(): void {
+    if (!this.initialized) {
+      // Register built-in handlers
+      this.registerHandler(dataDirectiveHandler);
+      this.registerHandler(runDirectiveHandler);
+      this.registerHandler(importDirectiveHandler);
+      this.registerHandler(defineDirectiveHandler);
+      this.registerHandler(textDirectiveHandler);
+      this.registerHandler(pathDirectiveHandler);
+      this.registerHandler(embedDirectiveHandler);
+      this.initialized = true;
+    }
   }
 }
 
-// Register built-in handlers
-DirectiveRegistry.registerHandler(dataDirectiveHandler);
-DirectiveRegistry.registerHandler(runDirectiveHandler);
-DirectiveRegistry.registerHandler(importDirectiveHandler);
-DirectiveRegistry.registerHandler(defineDirectiveHandler);
-DirectiveRegistry.registerHandler(textDirectiveHandler);
-DirectiveRegistry.registerHandler(pathDirectiveHandler);
-DirectiveRegistry.registerHandler(embedDirectiveHandler); 
+// Initialize handlers on first import
+DirectiveRegistry.initializeIfNeeded(); 

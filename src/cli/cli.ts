@@ -1,35 +1,26 @@
+import * as fs from 'fs/promises';
+import * as path from 'path';
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
-import path from 'path';
-import { promises as fs } from 'fs';
 import { parseMeldContent } from '../interpreter/parser.js';
 import { interpret } from '../interpreter/interpreter.js';
 import { InterpreterState } from '../interpreter/state/state.js';
-import { mdToLlm, mdToMarkdown } from '../../tests/__mocks__/md-llm.js';
+import { convertToFormat } from '../converter/converter.js';
 
-// Supported file extensions
+export type OutputFormat = 'llm' | 'md';
+
 const VALID_EXTENSIONS = ['.meld', '.meld.md', '.mll', '.mll.md'];
 
-// Output format types
-type OutputFormat = 'llm' | 'md' | 'xml' | 'llmxml' | 'markdown';
-
-// Normalize format aliases
 function normalizeFormat(format: string): OutputFormat {
-  switch (format.toLowerCase()) {
-    case 'xml':
-    case 'llmxml':
-      return 'llm';
-    case 'markdown':
-      return 'md';
-    case 'llm':
-    case 'md':
-      return format as OutputFormat;
-    default:
-      throw new Error(`Unsupported format: ${format}`);
-  }
+  const formatMap: Record<string, OutputFormat> = {
+    llm: 'llm',
+    md: 'md',
+    markdown: 'md',
+    xml: 'llm'
+  };
+  return formatMap[format.toLowerCase()] || 'llm';
 }
 
-// Validate file extension
 function validateFileExtension(filePath: string): void {
   const ext = VALID_EXTENSIONS.find(e => filePath.endsWith(e));
   if (!ext) {
@@ -37,41 +28,12 @@ function validateFileExtension(filePath: string): void {
   }
 }
 
-// Get default output path
 function getDefaultOutputPath(inputPath: string, format: OutputFormat): string {
   const dir = path.dirname(inputPath);
-  const ext = path.extname(inputPath);
-  const baseName = path.basename(inputPath, ext)
-    .replace(/\.meld$/, '')
-    .replace(/\.mll$/, '');
-  return path.join(dir, `${baseName}.${format}`);
+  const base = path.basename(inputPath, path.extname(inputPath));
+  return path.join(dir, `${base}.${format}`);
 }
 
-// Convert state to output format using md-llm
-async function stateToOutput(state: InterpreterState, format: OutputFormat): Promise<string> {
-  const nodes = state.getNodes();
-  
-  // Convert nodes to markdown
-  const content = nodes
-    .map(node => {
-      if (node.type === 'Text') {
-        return node.content;
-      } else if (node.type === 'CodeFence') {
-        return `\`\`\`${node.language || ''}\n${node.content}\n\`\`\``;
-      }
-      return '';
-    })
-    .join('\n');
-
-  // Convert to requested format using md-llm
-  if (format === 'llm') {
-    return await mdToLlm(content);
-  } else {
-    return await mdToMarkdown(content);
-  }
-}
-
-// Main CLI function
 export async function cli(args: string[]): Promise<void> {
   const argv = await yargs(args)
     .command('$0 <input>', 'Convert meld file to specified format', (yargs) => {
@@ -82,64 +44,55 @@ export async function cli(args: string[]): Promise<void> {
       });
     })
     .option('output', {
-      alias: 'o',
       describe: 'Output file path',
       type: 'string'
     })
     .option('format', {
-      alias: 'f',
-      describe: 'Output format (llm, md, xml)',
+      describe: 'Output format',
       type: 'string',
+      choices: ['llm', 'md'],
       default: 'llm'
     })
     .option('stdout', {
-      describe: 'Print to stdout instead of file',
+      describe: 'Write output to stdout instead of file',
       type: 'boolean',
       default: false
     })
+    .help()
     .argv;
 
   const inputPath = argv.input;
-  
-  // Validate input path exists
-  if (!inputPath) {
-    throw new Error('Input path is required');
-  }
+  let format = normalizeFormat(argv.format as OutputFormat);
+  let outputPath = argv.output;
 
-  // Read and validate input file
+  // First check if file exists and can be read
   let content: string;
   try {
-    content = await fs.readFile(inputPath, 'utf8');
-  } catch (error) {
-    if (error.code === 'ENOENT') {
+    content = await fs.readFile(inputPath, 'utf-8');
+  } catch (err) {
+    if (err.code === 'ENOENT') {
       throw new Error('File not found');
     }
-    throw new Error(`Failed to read file: ${error.message}`);
+    throw err;
   }
 
-  // Validate file extension after confirming file exists
+  // Then validate file extension
   validateFileExtension(inputPath);
 
-  const format = normalizeFormat(argv.format);
-  const outputPath = argv.output || getDefaultOutputPath(inputPath, format);
-
   // Parse and interpret content
-  const nodes = parseMeldContent(content);
   const state = new InterpreterState();
+  const nodes = parseMeldContent(content);
   await interpret(nodes, state);
 
-  // Generate output
-  const output = await stateToOutput(state, format);
+  // Convert to output format
+  const output = convertToFormat(state.getNodes(), format);
 
   // Write output
   if (argv.stdout) {
     console.log(output);
   } else {
-    try {
-      await fs.writeFile(outputPath, output);
-      console.log(`Output written to: ${outputPath}`);
-    } catch (error) {
-      throw new Error(`Failed to write output: ${error.message}`);
-    }
+    outputPath = outputPath || getDefaultOutputPath(inputPath, format);
+    await fs.writeFile(outputPath, output);
+    console.log(`Output written to: ${outputPath}`);
   }
 } 
