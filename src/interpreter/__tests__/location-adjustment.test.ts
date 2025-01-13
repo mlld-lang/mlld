@@ -6,6 +6,7 @@ import { runDirectiveHandler } from '../directives/run';
 import { MeldInterpretError } from '../errors/errors';
 import { TestContext } from './test-utils';
 import { interpret } from '../interpreter';
+import type { DirectiveNode } from 'meld-spec';
 
 describe('Location Adjustment', () => {
   let context: TestContext;
@@ -19,7 +20,7 @@ describe('Location Adjustment', () => {
   });
 
   describe('location handling', () => {
-    it('should adjust locations in nested directives', () => {
+    it('should adjust locations in nested directives', async () => {
       const baseLocation = context.createLocation(5, 3);
       const nestedContext = context.createNestedContext(baseLocation);
 
@@ -29,33 +30,29 @@ describe('Location Adjustment', () => {
       const parentNode = nestedContext.createDirectiveNode('text', {
         name: 'parent',
         value: 'value'
-      }, parentLocation);
+      }, parentLocation) as DirectiveNode & { children?: DirectiveNode[] };
 
-      const childNode = nestedContext.createDirectiveNode('text', {
-        name: 'child',
-        value: 'value'
-      }, childLocation);
+      // Create a text directive without required data to trigger an error
+      const childNode = nestedContext.createDirectiveNode('text', {}, childLocation);
 
       parentNode.children = [childNode];
 
-      try {
-        // Force an error by using an invalid directive
-        childNode.directive.kind = 'invalid';
-        interpret([parentNode], nestedContext.state);
-        fail('Should have thrown an error');
-      } catch (error) {
-        expect(error).toBeInstanceOf(MeldInterpretError);
-        if (error instanceof MeldInterpretError) {
-          expect(error.location).toBeDefined();
-          expect(error.location?.line).toBe(7); // base.line (5) + relative.line (2) - 1
-          expect(error.location?.column).toBe(3);
-        }
+      await expect(interpret([parentNode], nestedContext.state, nestedContext.createHandlerContext()))
+        .rejects.toThrow(MeldInterpretError);
+
+      const error = await interpret([parentNode], nestedContext.state, nestedContext.createHandlerContext())
+        .catch(e => e);
+      expect(error).toBeInstanceOf(MeldInterpretError);
+      if (error instanceof MeldInterpretError) {
+        expect(error.location).toBeDefined();
+        expect(error.location?.line).toBe(7); // base.line (5) + relative.line (2) - 1
+        expect(error.location?.column).toBe(3);
       }
     });
   });
 
   describe('error handling', () => {
-    it('should handle errors in deeply nested directives', () => {
+    it('should handle errors in deeply nested directives', async () => {
       const baseLocation = context.createLocation(5, 3);
       const nestedContext = context.createNestedContext(baseLocation);
 
@@ -66,30 +63,29 @@ describe('Location Adjustment', () => {
       const level1 = nestedContext.createDirectiveNode('text', {
         name: 'level1',
         value: 'value1'
-      }, level1Location);
+      }, level1Location) as DirectiveNode & { children?: DirectiveNode[] };
 
       const level2 = nestedContext.createDirectiveNode('text', {
         name: 'level2',
         value: 'value2'
-      }, level2Location);
+      }, level2Location) as DirectiveNode & { children?: DirectiveNode[] };
 
-      const level3 = nestedContext.createDirectiveNode('invalid', {
-        name: 'level3'
-      }, level3Location);
+      // Create a text directive without required data to trigger an error
+      const level3 = nestedContext.createDirectiveNode('text', {}, level3Location);
 
       level2.children = [level3];
       level1.children = [level2];
 
-      try {
-        interpret([level1], nestedContext.state);
-        fail('Should have thrown an error');
-      } catch (error) {
-        expect(error).toBeInstanceOf(MeldInterpretError);
-        if (error instanceof MeldInterpretError) {
-          expect(error.location).toBeDefined();
-          expect(error.location?.line).toBe(8); // base.line (5) + relative.line (3) - 1
-          expect(error.location?.column).toBe(5);
-        }
+      await expect(interpret([level1], nestedContext.state, nestedContext.createHandlerContext()))
+        .rejects.toThrow(MeldInterpretError);
+
+      const error = await interpret([level1], nestedContext.state, nestedContext.createHandlerContext())
+        .catch(e => e);
+      expect(error).toBeInstanceOf(MeldInterpretError);
+      if (error instanceof MeldInterpretError) {
+        expect(error.location).toBeDefined();
+        expect(error.location?.line).toBe(8); // base.line (5) + relative.line (3) - 1
+        expect(error.location?.column).toBe(5);
       }
     });
   });

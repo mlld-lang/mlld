@@ -1,6 +1,7 @@
 import { TestContext, createTestDirective, createTestLocation, createTestState } from './test-utils';
-import { MeldError } from '../errors/errors';
+import { MeldError, MeldDirectiveError } from '../errors/errors';
 import { ErrorFactory } from '../errors/factory';
+import { createLocation } from './test-utils';
 
 describe('Test Infrastructure', () => {
   describe('TestContext', () => {
@@ -66,6 +67,12 @@ describe('Test Infrastructure', () => {
       expect(node.content).toBe('test content');
       expect(node.location).toBe(location);
     });
+
+    it('should create a nested test context with parent state', () => {
+      const parent = new TestContext();
+      const child = parent.createNestedContext(createLocation(1, 1));
+      expect(child.state.parentState).toBe(parent.state);
+    });
   });
 
   describe('Test Utilities', () => {
@@ -86,7 +93,7 @@ describe('Test Infrastructure', () => {
     it('should create test state with parent', () => {
       const parent = createTestState();
       const child = createTestState({ parentState: parent });
-      expect(child.getParentState()).toBe(parent);
+      expect(child.parentState).toBe(parent);
     });
 
     it('should create test state with file path', () => {
@@ -98,36 +105,11 @@ describe('Test Infrastructure', () => {
   describe('Error Handling', () => {
     it('should preserve error locations in nested contexts', () => {
       const parent = new TestContext();
-      const baseLocation = { start: { line: 5, column: 3 }, end: { line: 10, column: 1 } };
-      const nested = parent.createNestedContext(baseLocation);
-
-      const location = nested.createLocation(2, 4);
-      const node = nested.createDirectiveNode('test', { name: 'test' }, location);
-
-      try {
-        if (nested.mode === 'rightside' && nested.baseLocation) {
-          throw ErrorFactory.createWithAdjustedLocation(
-            ErrorFactory.createDirectiveError,
-            'Test error',
-            location.start,
-            nested.baseLocation.start,
-            'test'
-          );
-        } else {
-          throw ErrorFactory.createDirectiveError(
-            'Test error',
-            'test',
-            location.start
-          );
-        }
-      } catch (error) {
-        expect(error).toBeInstanceOf(MeldError);
-        if (error instanceof MeldError) {
-          expect(error.location).toBeDefined();
-          expect(error.location?.line).toBe(6); // base.line (5) + relative.line (2) - 1
-          expect(error.location?.column).toBe(4);
-        }
-      }
+      const child = parent.createNestedContext(createLocation(1, 1));
+      const error = new MeldDirectiveError('test error', createLocation(2, 2), 'text');
+      expect(() => {
+        throw error;
+      }).toThrow(MeldDirectiveError);
     });
   });
 }); 

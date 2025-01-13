@@ -4,6 +4,7 @@ import { parseMeld } from './parser';
 import { interpret } from './interpreter';
 import { ErrorFactory } from './errors/factory';
 import { interpreterLogger } from '../utils/logger';
+import { MeldError } from './errors/errors';
 
 /**
  * Adjusts the location of a node and all its children based on a base location.
@@ -94,8 +95,8 @@ export function interpretSubDirectives(
       baseLocation
     });
 
-    if (error instanceof Error) {
-      throw ErrorFactory.createLocationAwareError(error as Error & { location?: Location }, baseLocation);
+    if (error instanceof MeldError) {
+      throw ErrorFactory.createWithAdjustedLocation(error, baseLocation);
     }
     throw error;
   }

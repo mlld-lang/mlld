@@ -27,6 +27,10 @@ export class InterpreterState {
     return value;
   }
 
+  getTextVar(name: string): string | undefined {
+    return this.getText(name);
+  }
+
   setTextVar(name: string, value: string): void {
     this.checkMutable();
     this.textVars.set(name, value);

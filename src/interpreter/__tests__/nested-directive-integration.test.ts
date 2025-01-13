@@ -5,6 +5,7 @@ import { dataDirectiveHandler } from '../directives/data';
 import { runDirectiveHandler } from '../directives/run';
 import { TestContext } from './test-utils';
 import { interpret } from '../interpreter';
+import type { DirectiveNode } from 'meld-spec';
 
 describe('Nested Directives Integration', () => {
   let context: TestContext;
@@ -18,14 +19,14 @@ describe('Nested Directives Integration', () => {
   });
 
   describe('basic nesting', () => {
-    it('should handle simple nested directives', () => {
+    it('should handle simple nested directives', async () => {
       const parentLocation = context.createLocation(1, 1);
       const childLocation = context.createLocation(2, 3);
 
       const parentNode = context.createDirectiveNode('text', {
         name: 'parent',
         value: 'parent-value'
-      }, parentLocation);
+      }, parentLocation) as DirectiveNode & { children?: DirectiveNode[] };
 
       const childNode = context.createDirectiveNode('text', {
         name: 'child',
@@ -34,13 +35,13 @@ describe('Nested Directives Integration', () => {
 
       parentNode.children = [childNode];
 
-      interpret([parentNode], context.state);
+      await interpret([parentNode], context.state, context.createHandlerContext());
 
       expect(context.state.getTextVar('parent')).toBe('parent-value');
       expect(context.state.getTextVar('child')).toBe('child-value');
     });
 
-    it('should handle multiple levels of nesting', () => {
+    it('should handle multiple levels of nesting', async () => {
       const level1Location = context.createLocation(1, 1);
       const level2Location = context.createLocation(2, 3);
       const level3Location = context.createLocation(3, 5);
@@ -48,12 +49,12 @@ describe('Nested Directives Integration', () => {
       const level1 = context.createDirectiveNode('text', {
         name: 'level1',
         value: 'value1'
-      }, level1Location);
+      }, level1Location) as DirectiveNode & { children?: DirectiveNode[] };
 
       const level2 = context.createDirectiveNode('text', {
         name: 'level2',
         value: 'value2'
-      }, level2Location);
+      }, level2Location) as DirectiveNode & { children?: DirectiveNode[] };
 
       const level3 = context.createDirectiveNode('text', {
         name: 'level3',
@@ -63,7 +64,7 @@ describe('Nested Directives Integration', () => {
       level2.children = [level3];
       level1.children = [level2];
 
-      interpret([level1], context.state);
+      await interpret([level1], context.state, context.createHandlerContext());
 
       expect(context.state.getTextVar('level1')).toBe('value1');
       expect(context.state.getTextVar('level2')).toBe('value2');
@@ -72,7 +73,7 @@ describe('Nested Directives Integration', () => {
   });
 
   describe('state inheritance', () => {
-    it('should inherit parent state in nested directives', () => {
+    it('should inherit parent state in nested directives', async () => {
       const parentLocation = context.createLocation(1, 1);
       const childLocation = context.createLocation(2, 3);
 
@@ -81,7 +82,7 @@ describe('Nested Directives Integration', () => {
       const parentNode = context.createDirectiveNode('text', {
         name: 'parent',
         value: '{inherited}'
-      }, parentLocation);
+      }, parentLocation) as DirectiveNode & { children?: DirectiveNode[] };
 
       const childNode = context.createDirectiveNode('text', {
         name: 'child',
@@ -90,13 +91,13 @@ describe('Nested Directives Integration', () => {
 
       parentNode.children = [childNode];
 
-      interpret([parentNode], context.state);
+      await interpret([parentNode], context.state, context.createHandlerContext());
 
       expect(context.state.getTextVar('parent')).toBe('value');
       expect(context.state.getTextVar('child')).toBe('value');
     });
 
-    it('should handle variable shadowing in nested scopes', () => {
+    it('should handle variable shadowing in nested scopes', async () => {
       const parentLocation = context.createLocation(1, 1);
       const child1Location = context.createLocation(2, 3);
       const child2Location = context.createLocation(3, 3);
@@ -104,12 +105,12 @@ describe('Nested Directives Integration', () => {
       const parentNode = context.createDirectiveNode('text', {
         name: 'shared',
         value: 'parent'
-      }, parentLocation);
+      }, parentLocation) as DirectiveNode & { children?: DirectiveNode[] };
 
       const child1 = context.createDirectiveNode('text', {
         name: 'shared',
         value: 'child1'
-      }, child1Location);
+      }, child1Location) as DirectiveNode & { children?: DirectiveNode[] };
 
       const child2 = context.createDirectiveNode('text', {
         name: 'test',
@@ -119,7 +120,7 @@ describe('Nested Directives Integration', () => {
       child1.children = [child2];
       parentNode.children = [child1];
 
-      interpret([parentNode], context.state);
+      await interpret([parentNode], context.state, context.createHandlerContext());
 
       expect(context.state.getTextVar('shared')).toBe('child1');
       expect(context.state.getTextVar('test')).toBe('child1');

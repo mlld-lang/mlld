@@ -40,22 +40,13 @@ export class RunDirectiveHandler implements DirectiveHandler {
         mode: context.mode
       });
 
-      const error = ErrorFactory.createDirectiveError(
+      throwWithContext(
+        ErrorFactory.createDirectiveError,
         'Run directive requires a command parameter',
-        'run',
-        node.location?.start
+        node.location,
+        context,
+        'run'
       );
-      
-      if (context.mode === 'rightside' && node.location && context.baseLocation) {
-        throw ErrorFactory.createWithAdjustedLocation(
-          () => error,
-          error.message,
-          node.location.start,
-          context.baseLocation.start,
-          'run'
-        );
-      }
-      throw error;
     }
 
     try {
@@ -78,7 +69,13 @@ export class RunDirectiveHandler implements DirectiveHandler {
         error: error instanceof Error ? error.message : String(error),
         location: node.location
       });
-      throw error;
+      throwWithContext(
+        ErrorFactory.createDirectiveError,
+        `Command execution failed: ${error instanceof Error ? error.message : String(error)}`,
+        node.location,
+        context,
+        'run'
+      );
     }
   }
 }
