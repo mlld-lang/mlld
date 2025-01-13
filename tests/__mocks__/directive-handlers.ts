@@ -1,38 +1,75 @@
 import type { DirectiveNode } from 'meld-spec';
-import { InterpreterState } from '../../src/interpreter/state/state.js';
-import { MeldDirectiveError } from '../../src/interpreter/errors/errors.js';
-import { DirectiveHandler } from '../../src/interpreter/directives/types.js';
+import { InterpreterState } from '../../src/interpreter/state/state';
+import { ErrorFactory } from '../../src/interpreter/errors/factory';
+import { DirectiveHandler, HandlerContext } from '../../src/interpreter/directives/types';
 import { vi } from 'vitest';
 import type { MeldNode } from 'meld-spec';
 
 class EmbedDirectiveHandler implements DirectiveHandler {
-  canHandle(kind: string): boolean {
+  canHandle(kind: string, mode: 'toplevel' | 'rightside'): boolean {
     return kind === '@embed';
   }
 
-  handle(node: DirectiveNode, state: InterpreterState): void {
+  handle(node: DirectiveNode, state: InterpreterState, context: HandlerContext): void {
     const data = node.directive;
     if (!data.path) {
-      throw new MeldDirectiveError('Embed path is required', 'embed', node.location?.start);
+      if (context.mode === 'rightside' && node.location && context.baseLocation) {
+        throw ErrorFactory.createWithAdjustedLocation(
+          ErrorFactory.createDirectiveError,
+          'Embed path is required',
+          node.location.start,
+          context.baseLocation.start,
+          'embed'
+        );
+      } else {
+        throw ErrorFactory.createDirectiveError(
+          'Embed path is required',
+          'embed',
+          node.location?.start
+        );
+      }
     }
+
     // Mock implementation
-    state.addNode({
+    const mockNode: MeldNode = {
       type: 'Text',
-      content: 'Mock embedded content'
-    });
+      content: 'Mock embedded content',
+      location: context.mode === 'rightside' && node.location && context.baseLocation
+        ? {
+            start: ErrorFactory.adjustLocation(node.location.start, context.baseLocation.start),
+            end: ErrorFactory.adjustLocation(node.location.end, context.baseLocation.start)
+          }
+        : node.location
+    };
+    state.addNode(mockNode);
   }
 }
 
 class ImportDirectiveHandler implements DirectiveHandler {
-  canHandle(kind: string): boolean {
+  canHandle(kind: string, mode: 'toplevel' | 'rightside'): boolean {
     return kind === '@import';
   }
 
-  handle(node: DirectiveNode, state: InterpreterState): void {
+  handle(node: DirectiveNode, state: InterpreterState, context: HandlerContext): void {
     const data = node.directive;
     if (!data.from) {
-      throw new MeldDirectiveError('Import source is required', 'import', node.location?.start);
+      if (context.mode === 'rightside' && node.location && context.baseLocation) {
+        throw ErrorFactory.createWithAdjustedLocation(
+          ErrorFactory.createDirectiveError,
+          'Import source is required',
+          node.location.start,
+          context.baseLocation.start,
+          'import'
+        );
+      } else {
+        throw ErrorFactory.createDirectiveError(
+          'Import source is required',
+          'import',
+          node.location?.start
+        );
+      }
     }
+
     // Mock implementation
     state.setTextVar('text1', 'value1');
     state.setDataVar('data1', { key: 'value' });
@@ -50,10 +87,10 @@ export const parseMeld = vi.fn((content: string): MeldNode[] => {
   try {
     if (typeof content !== 'string') {
       console.error('[Parser Mock] Invalid input type:', typeof content);
-      throw new Error('Parser input must be a string');
+      throw ErrorFactory.createParseError('Parser input must be a string');
     }
 
-    // Handle basic test directive
+    // Handle basic text directive
     if (content.startsWith('@text')) {
       const node: DirectiveNode = {
         type: 'Directive',
@@ -91,7 +128,7 @@ export const parseMeld = vi.fn((content: string): MeldNode[] => {
 
     // Handle invalid content
     console.error('[Parser Mock] Failed to parse content:', content);
-    throw new Error('Failed to parse content');
+    throw ErrorFactory.createParseError('Failed to parse content');
   } catch (error) {
     console.error('[Parser Mock] Error during parsing:', {
       error: error instanceof Error ? error.message : String(error),

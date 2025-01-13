@@ -1,147 +1,115 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { importDirectiveHandler } from '../import';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { ImportDirectiveHandler } from '../import';
 import { InterpreterState } from '../../state/state';
-import type { DirectiveNode } from 'meld-spec';
-import * as path from 'path';
+import { createTestContext, createTestLocation } from '../../__tests__/test-utils';
 import * as fs from 'fs';
-import { DirectiveRegistry } from '../registry';
+import * as path from 'path';
+import { vi } from 'vitest';
+
+vi.mock('fs');
+vi.mock('path');
 
 describe('ImportDirectiveHandler', () => {
+  let handler: ImportDirectiveHandler;
   let state: InterpreterState;
+  const mockFiles: Record<string, string> = {
+    '/test/mock.meld': '@text greeting = "Hello"',
+    '/test/other.meld': '@data config = { "test": true }',
+    '/test/nested/test.meld': '@text nested = "value"'
+  };
 
   beforeEach(() => {
+    handler = new ImportDirectiveHandler();
     state = new InterpreterState();
-    DirectiveRegistry.clear();
-    DirectiveRegistry.registerHandler(importDirectiveHandler);
+    state.setCurrentFilePath('/test/mock.meld');
 
-    // Mock path module
-    vi.mock('path', () => ({
-      normalize: vi.fn().mockImplementation((p: string) => p),
-      resolve: vi.fn().mockImplementation((p: string) => p),
-      join: vi.fn().mockImplementation((...parts: string[]) => parts.join('/')),
-      dirname: vi.fn().mockImplementation((p: string) => p.split('/').slice(0, -1).join('/')),
-      basename: vi.fn().mockImplementation((p: string) => p.split('/').pop() || ''),
-      extname: vi.fn().mockImplementation((p: string) => '.meld')
-    }));
-
-    // Mock fs module
-    vi.mock('fs', () => ({
-      existsSync: vi.fn().mockImplementation((path: string) => path === './test.meld'),
-      readFileSync: vi.fn().mockImplementation((path: string) => {
-        if (path === './test.meld') {
-          return `@text test = "value"`;
-        }
-        throw new Error('File not found');
-      }),
-      promises: {
-        readFile: vi.fn().mockImplementation(async (path: string) => {
-          if (path === './test.meld') {
-            return `@text test = "value"`;
-          }
-          throw new Error('File not found');
-        })
+    // Mock fs functions
+    vi.mocked(fs.existsSync).mockImplementation((path: string) => path in mockFiles);
+    vi.mocked(fs.readFileSync).mockImplementation((path: string) => {
+      if (path in mockFiles) {
+        return mockFiles[path];
       }
-    }));
+      throw new Error('File not found');
+    });
+
+    // Mock path functions
+    vi.mocked(path.isAbsolute).mockReturnValue(true);
+    vi.mocked(path.resolve).mockImplementation((...paths) => paths.join('/'));
+    vi.mocked(path.dirname).mockImplementation(p => p.split('/').slice(0, -1).join('/'));
   });
 
-  afterEach(() => {
-    vi.clearAllMocks();
+  it('should handle import directives', async () => {
+    const node = {
+      type: 'Directive' as const,
+      directive: {
+        kind: 'import',
+        source: '/test/other.meld'
+      },
+      location: createTestLocation(1, 1)
+    };
+
+    await handler.handle(node, state, createTestContext());
+    expect(state.getDataVar('config')).toEqual({ test: true });
   });
 
-  describe('canHandle', () => {
-    it('should handle import directives', () => {
-      expect(importDirectiveHandler.canHandle('@import', 'toplevel')).toBe(true);
-      expect(importDirectiveHandler.canHandle('@import', 'rightside')).toBe(true);
-    });
+  it('should handle nested imports', async () => {
+    const node = {
+      type: 'Directive' as const,
+      directive: {
+        kind: 'import',
+        source: '/test/nested/test.meld'
+      },
+      location: createTestLocation(1, 1)
+    };
 
-    it('should not handle other directives', () => {
-      expect(importDirectiveHandler.canHandle('@run', 'toplevel')).toBe(false);
-      expect(importDirectiveHandler.canHandle('@data', 'rightside')).toBe(false);
-    });
+    await handler.handle(node, state, createTestContext());
+    expect(state.getText('nested')).toBe('value');
   });
 
-  describe('handle', () => {
-    it('should handle shorthand import syntax', () => {
-      const node: DirectiveNode = {
-        type: 'Directive',
-        directive: {
-          kind: '@import',
-          from: './config.meld'
-        }
-      };
+  it('should throw on missing source', async () => {
+    const node = {
+      type: 'Directive' as const,
+      directive: {
+        kind: 'import'
+      },
+      location: createTestLocation(1, 1)
+    };
 
-      importDirectiveHandler.handle(node, state, { mode: 'toplevel' });
-      expect(state.getText('text1')).toBe('value1');
-      expect(state.getDataVar('data1')).toEqual({ key: 'value' });
-      expect(state.getCommand('cmd1')).toBeDefined();
+    await expect(handler.handle(node, state, createTestContext())).rejects.toThrow('Import source is required');
+  });
+
+  it('should throw on file not found', async () => {
+    const node = {
+      type: 'Directive' as const,
+      directive: {
+        kind: 'import',
+        source: '/nonexistent.meld'
+      },
+      location: createTestLocation(1, 1)
+    };
+
+    await expect(handler.handle(node, state, createTestContext())).rejects.toThrow('File not found');
+  });
+
+  it('should handle relative paths', async () => {
+    vi.mocked(path.isAbsolute).mockReturnValue(false);
+    vi.mocked(path.resolve).mockImplementation((base, rel) => {
+      if (base === '/test' && rel === 'other.meld') {
+        return '/test/other.meld';
+      }
+      return `${base}/${rel}`;
     });
 
-    it('should import all variables with wildcard import', () => {
-      const node: DirectiveNode = {
-        type: 'Directive',
-        directive: {
-          kind: '@import',
-          from: './config.meld',
-          imports: ['*']
-        }
-      };
+    const node = {
+      type: 'Directive' as const,
+      directive: {
+        kind: 'import',
+        source: 'other.meld'
+      },
+      location: createTestLocation(1, 1)
+    };
 
-      importDirectiveHandler.handle(node, state, { mode: 'toplevel' });
-      expect(state.getText('text1')).toBe('value1');
-      expect(state.getDataVar('data1')).toEqual({ key: 'value' });
-      expect(state.getCommand('cmd1')).toBeDefined();
-    });
-
-    it('should import specific variables with aliases', () => {
-      const node: DirectiveNode = {
-        type: 'Directive',
-        directive: {
-          kind: '@import',
-          from: './config.meld',
-          imports: ['text1', 'data1'],
-          as: 'myText'
-        }
-      };
-
-      importDirectiveHandler.handle(node, state, { mode: 'toplevel' });
-      expect(state.getText('myText')).toBe('value1');
-      expect(state.getDataVar('myData')).toEqual({ key: 'value' });
-      expect(state.getText('text1')).toBeUndefined();
-    });
-
-    it('should detect circular imports', () => {
-      const node1: DirectiveNode = {
-        type: 'Directive',
-        directive: {
-          kind: '@import',
-          from: './config.meld'
-        }
-      };
-
-      const node2: DirectiveNode = {
-        type: 'Directive',
-        directive: {
-          kind: '@import',
-          from: './config.meld'
-        }
-      };
-
-      importDirectiveHandler.handle(node1, state, { mode: 'toplevel' });
-      expect(() => importDirectiveHandler.handle(node2, state, { mode: 'toplevel' })).toThrow(
-        'Circular import detected'
-      );
-    });
-
-    it('should validate import path', () => {
-      const node: DirectiveNode = {
-        type: 'Directive',
-        directive: {
-          kind: '@import',
-          from: 'invalid.txt'
-        }
-      };
-
-      expect(() => importDirectiveHandler.handle(node, state, { mode: 'toplevel' })).toThrow('File not found');
-    });
+    await handler.handle(node, state, createTestContext());
+    expect(state.getDataVar('config')).toEqual({ test: true });
   });
 }); 

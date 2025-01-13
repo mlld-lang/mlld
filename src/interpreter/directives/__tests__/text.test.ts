@@ -1,156 +1,106 @@
-import { DirectiveNode, Location } from 'meld-spec';
-import { InterpreterState } from '../../state/state';
 import { textDirectiveHandler } from '../text';
-import { MeldDirectiveError } from '../../errors/errors';
-import { HandlerContext } from '../types';
+import { TestContext } from '../../__tests__/test-utils';
+import { MeldError } from '../../errors/errors';
 
 describe('TextDirectiveHandler', () => {
-  let state: InterpreterState;
+  let context: TestContext;
 
   beforeEach(() => {
-    state = new InterpreterState();
+    context = new TestContext();
   });
 
-  describe('canHandle', () => {
-    it('returns true for @text directives in top-level mode', () => {
-      expect(textDirectiveHandler.canHandle('@text', 'toplevel')).toBe(true);
+  describe('basic text handling', () => {
+    it('should handle simple text content', () => {
+      const location = context.createLocation(1, 1);
+      const node = context.createDirectiveNode('text', {
+        name: 'test',
+        value: 'Hello world'
+      }, location);
+
+      textDirectiveHandler.handle(node, context.state, context.createHandlerContext());
+
+      expect(context.state.getTextVar('test')).toBe('Hello world');
     });
 
-    it('returns true for @text directives in right-side mode', () => {
-      expect(textDirectiveHandler.canHandle('@text', 'rightside')).toBe(true);
-    });
+    it('should handle empty text content', () => {
+      const location = context.createLocation(1, 1);
+      const node = context.createDirectiveNode('text', {
+        name: 'test',
+        value: ''
+      }, location);
 
-    it('returns false for other directives', () => {
-      expect(textDirectiveHandler.canHandle('@data', 'toplevel')).toBe(false);
-      expect(textDirectiveHandler.canHandle('@data', 'rightside')).toBe(false);
-    });
-  });
+      textDirectiveHandler.handle(node, context.state, context.createHandlerContext());
 
-  describe('handle in top-level mode', () => {
-    const context: HandlerContext = { mode: 'toplevel' };
-
-    it('sets text variable with string value', () => {
-      const node: DirectiveNode = {
-        type: 'Directive',
-        directive: {
-          kind: '@text',
-          name: 'test',
-          value: 'hello'
-        },
-        location: {
-          start: { line: 1, column: 1 },
-          end: { line: 1, column: 10 }
-        }
-      };
-
-      textDirectiveHandler.handle(node, state, context);
-      expect(state.getText('test')).toBe('hello');
-    });
-
-    it('joins array values', () => {
-      const node: DirectiveNode = {
-        type: 'Directive',
-        directive: {
-          kind: '@text',
-          name: 'test',
-          value: ['hello', ' ', 'world']
-        },
-        location: {
-          start: { line: 1, column: 1 },
-          end: { line: 1, column: 10 }
-        }
-      };
-
-      textDirectiveHandler.handle(node, state, context);
-      expect(state.getText('test')).toBe('hello world');
-    });
-
-    it('throws if name is missing', () => {
-      const node: DirectiveNode = {
-        type: 'Directive',
-        directive: {
-          kind: '@text',
-          value: 'hello'
-        },
-        location: {
-          start: { line: 1, column: 1 },
-          end: { line: 1, column: 10 }
-        }
-      };
-
-      expect(() => textDirectiveHandler.handle(node, state, context))
-        .toThrow(MeldDirectiveError);
-    });
-
-    it('throws if value is missing', () => {
-      const node: DirectiveNode = {
-        type: 'Directive',
-        directive: {
-          kind: '@text',
-          name: 'test'
-        },
-        location: {
-          start: { line: 1, column: 1 },
-          end: { line: 1, column: 10 }
-        }
-      };
-
-      expect(() => textDirectiveHandler.handle(node, state, context))
-        .toThrow(MeldDirectiveError);
+      expect(context.state.getTextVar('test')).toBe('');
     });
   });
 
-  describe('handle in right-side mode', () => {
-    const baseLocation: Location = {
-      start: { line: 10, column: 3 },
-      end: { line: 15, column: 1 }
-    };
-    const context: HandlerContext = { 
-      mode: 'rightside',
-      baseLocation
-    };
+  describe('error handling', () => {
+    it('should throw error for missing name', () => {
+      const location = context.createLocation(5, 3);
+      const node = context.createDirectiveNode('text', {
+        value: 'test'
+      }, location);
 
-    it('sets text variable with string value', () => {
-      const node: DirectiveNode = {
-        type: 'Directive',
-        directive: {
-          kind: '@text',
-          name: 'test',
-          value: 'hello'
-        },
-        location: {
-          start: { line: 1, column: 1 },
-          end: { line: 1, column: 10 }
-        }
-      };
-
-      textDirectiveHandler.handle(node, state, context);
-      expect(state.getText('test')).toBe('hello');
+      expect(() => 
+        textDirectiveHandler.handle(node, context.state, context.createHandlerContext())
+      ).toThrow(MeldError);
     });
 
-    it('adjusts error location in right-side mode', () => {
-      const node: DirectiveNode = {
-        type: 'Directive',
-        directive: {
-          kind: '@text',
-          value: 'hello'
-        },
-        location: {
-          start: { line: 1, column: 5 },
-          end: { line: 1, column: 10 }
-        }
-      };
+    it('should preserve error locations in right-side mode', () => {
+      const baseLocation = context.createLocation(5, 3);
+      const nestedContext = context.createNestedContext(baseLocation);
+      const textLocation = nestedContext.createLocation(2, 4);
+      const node = context.createDirectiveNode('text', {
+        value: 'test'
+      }, textLocation);
 
       try {
-        textDirectiveHandler.handle(node, state, context);
-        fail('Expected error to be thrown');
+        textDirectiveHandler.handle(node, nestedContext.state, nestedContext.createHandlerContext());
+        fail('Should have thrown an error');
       } catch (error) {
-        expect(error).toBeInstanceOf(MeldDirectiveError);
-        expect((error as MeldDirectiveError).location).toEqual({
-          line: 10,
-          column: 7
-        });
+        expect(error).toBeInstanceOf(MeldError);
+        if (error instanceof MeldError) {
+          expect(error.location).toBeDefined();
+          expect(error.location?.line).toBe(6); // base.line (5) + relative.line (2) - 1
+          expect(error.location?.column).toBe(4);
+        }
       }
+    });
+  });
+
+  describe('nested text handling', () => {
+    it('should handle text in nested contexts', () => {
+      const baseLocation = context.createLocation(5, 3);
+      const nestedContext = context.createNestedContext(baseLocation);
+      const textLocation = nestedContext.createLocation(2, 4);
+      const node = context.createDirectiveNode('text', {
+        name: 'test',
+        value: 'nested text'
+      }, textLocation);
+
+      textDirectiveHandler.handle(node, nestedContext.state, nestedContext.createHandlerContext());
+
+      expect(nestedContext.state.getTextVar('test')).toBe('nested text');
+    });
+
+    it('should preserve parent context text variables', () => {
+      const parentNode = context.createDirectiveNode('text', {
+        name: 'parent',
+        value: 'parent text'
+      }, context.createLocation(1, 1));
+
+      const nestedContext = context.createNestedContext(context.createLocation(5, 3));
+      const childNode = context.createDirectiveNode('text', {
+        name: 'child',
+        value: 'child text'
+      }, nestedContext.createLocation(2, 4));
+
+      textDirectiveHandler.handle(parentNode, context.state, context.createHandlerContext());
+      textDirectiveHandler.handle(childNode, nestedContext.state, nestedContext.createHandlerContext());
+
+      expect(context.state.getTextVar('parent')).toBe('parent text');
+      expect(nestedContext.state.getTextVar('child')).toBe('child text');
     });
   });
 }); 

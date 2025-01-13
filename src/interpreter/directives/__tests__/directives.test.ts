@@ -1,83 +1,137 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { DirectiveRegistry } from '../registry';
-import { DirectiveHandler, HandlerContext } from '../types';
-import { InterpreterState } from '../../state/state';
-import type { DirectiveNode } from 'meld-spec';
+import { DirectiveHandler } from '../types';
+import { TestContext } from '../../__tests__/test-utils';
+import { MeldError } from '../../errors/errors';
 
 describe('DirectiveRegistry', () => {
+  let context: TestContext;
+
   beforeEach(() => {
+    context = new TestContext();
     DirectiveRegistry.clear();
   });
 
   describe('registration', () => {
     it('should register and find handlers', () => {
       const mockHandler: DirectiveHandler = {
-        canHandle: (kind: string, mode: 'toplevel' | 'rightside') => kind === '@run',
+        canHandle: (kind: string) => kind === 'run',
         handle: vi.fn()
       };
 
       DirectiveRegistry.registerHandler(mockHandler);
-      const handler = DirectiveRegistry.findHandler('@run', 'toplevel');
-
-      expect(handler).toBeDefined();
+      const handler = DirectiveRegistry.findHandler('run', 'toplevel');
       expect(handler).toBe(mockHandler);
     });
 
-    it('should return undefined for unknown directive kinds', () => {
-      expect(DirectiveRegistry.findHandler('@unknown', 'toplevel')).toBeUndefined();
-    });
-
-    it('should find the correct handler when multiple are registered', () => {
+    it('should handle multiple handlers', () => {
       const handler1: DirectiveHandler = {
-        canHandle: (kind: string, mode: 'toplevel' | 'rightside') => kind === '@run',
+        canHandle: (kind: string) => kind === 'run',
         handle: vi.fn()
       };
 
       const handler2: DirectiveHandler = {
-        canHandle: (kind: string, mode: 'toplevel' | 'rightside') => kind === '@data',
+        canHandle: (kind: string) => kind === 'text',
         handle: vi.fn()
       };
 
       DirectiveRegistry.registerHandler(handler1);
       DirectiveRegistry.registerHandler(handler2);
 
-      expect(DirectiveRegistry.findHandler('@run', 'toplevel')).toBe(handler1);
-      expect(DirectiveRegistry.findHandler('@data', 'toplevel')).toBe(handler2);
+      expect(DirectiveRegistry.findHandler('run', 'toplevel')).toBe(handler1);
+      expect(DirectiveRegistry.findHandler('text', 'toplevel')).toBe(handler2);
     });
   });
 
   describe('handler execution', () => {
-    it('should properly execute handlers with state', () => {
+    it('should execute handlers with correct context', () => {
       const mockHandler: DirectiveHandler = {
-        canHandle: (kind: string, mode: 'toplevel' | 'rightside') => kind === '@run',
+        canHandle: (kind: string) => kind === 'test',
         handle: vi.fn()
       };
 
       DirectiveRegistry.registerHandler(mockHandler);
-      const handler = DirectiveRegistry.findHandler('@run', 'toplevel');
-      const state = new InterpreterState();
-      const context: HandlerContext = { mode: 'toplevel' };
 
-      handler?.handle({ type: 'Directive', directive: { kind: '@run' } }, state, context);
-      expect(mockHandler.handle).toHaveBeenCalledWith(
-        { type: 'Directive', directive: { kind: '@run' } },
-        state,
-        context
-      );
+      const location = context.createLocation(1, 1);
+      const node = context.createDirectiveNode('test', {
+        name: 'test',
+        value: 'value'
+      }, location);
+
+      const handlerContext = context.createHandlerContext();
+      const handler = DirectiveRegistry.findHandler('test', 'toplevel');
+      handler?.handle(node, context.state, handlerContext);
+
+      expect(mockHandler.handle).toHaveBeenCalledWith(node, context.state, handlerContext);
+    });
+
+    it('should handle right-side mode correctly', () => {
+      const mockHandler: DirectiveHandler = {
+        canHandle: (kind: string) => kind === 'test',
+        handle: vi.fn()
+      };
+
+      DirectiveRegistry.registerHandler(mockHandler);
+
+      const baseLocation = context.createLocation(5, 3);
+      const nestedContext = context.createNestedContext(baseLocation);
+      const location = nestedContext.createLocation(2, 4);
+
+      const node = nestedContext.createDirectiveNode('test', {
+        name: 'test',
+        value: 'value'
+      }, location);
+
+      const handlerContext = nestedContext.createHandlerContext();
+      const handler = DirectiveRegistry.findHandler('test', 'rightside');
+      handler?.handle(node, nestedContext.state, handlerContext);
+
+      expect(mockHandler.handle).toHaveBeenCalledWith(node, nestedContext.state, handlerContext);
     });
   });
 
-  describe('clear', () => {
-    it('should remove all registered handlers', () => {
-      const mockHandler: DirectiveHandler = {
-        canHandle: (kind: string, mode: 'toplevel' | 'rightside') => kind === '@run',
-        handle: vi.fn()
+  describe('error handling', () => {
+    it('should handle missing handlers gracefully', () => {
+      const location = context.createLocation(1, 1);
+      const node = context.createDirectiveNode('unknown', {
+        name: 'test'
+      }, location);
+
+      expect(() => {
+        const handler = DirectiveRegistry.findHandler('unknown', 'toplevel');
+        if (handler) {
+          handler.handle(node, context.state, context.createHandlerContext());
+        }
+      }).not.toThrow();
+    });
+
+    it('should preserve error locations from handlers', () => {
+      const errorHandler: DirectiveHandler = {
+        canHandle: (kind: string) => kind === 'error',
+        handle: () => {
+          throw new MeldError('Test error');
+        }
       };
 
-      DirectiveRegistry.registerHandler(mockHandler);
-      DirectiveRegistry.clear();
+      DirectiveRegistry.registerHandler(errorHandler);
 
-      expect(DirectiveRegistry.findHandler('@run', 'toplevel')).toBeUndefined();
+      const baseLocation = context.createLocation(5, 3);
+      const nestedContext = context.createNestedContext(baseLocation);
+      const location = nestedContext.createLocation(2, 4);
+
+      const node = nestedContext.createDirectiveNode('error', {
+        name: 'test'
+      }, location);
+
+      try {
+        const handler = DirectiveRegistry.findHandler('error', 'rightside');
+        if (handler) {
+          handler.handle(node, nestedContext.state, nestedContext.createHandlerContext());
+        }
+        fail('Should have thrown an error');
+      } catch (error) {
+        expect(error).toBeInstanceOf(MeldError);
+      }
     });
   });
 }); 

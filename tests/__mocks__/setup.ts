@@ -1,176 +1,223 @@
 import { vi } from 'vitest';
 import type { DirectiveNode, MeldNode } from 'meld-spec';
-import { InterpreterState, type StateConfig } from '../../src/interpreter/state/state.js';
-import type { LocationData } from '../../src/interpreter/subInterpreter.js';
-import { embedDirectiveHandler, importDirectiveHandler } from './directive-handlers.js';
+import { InterpreterState } from '../../src/interpreter/state/state';
+import { ErrorFactory } from '../../src/interpreter/errors/factory';
+import { HandlerContext } from '../../src/interpreter/directives/types';
+import { embedDirectiveHandler, importDirectiveHandler } from './directive-handlers';
+
+// Mock file system state
+const mockFiles: Record<string, string> = {};
 
 // Mock fs module
 vi.mock('fs', () => ({
-  readFileSync: vi.fn().mockReturnValue('Mock embedded content'),
-  writeFileSync: vi.fn(),
+  readFileSync: vi.fn((path: string) => {
+    if (path in mockFiles) {
+      return mockFiles[path];
+    }
+    throw new Error(`Mock file not found: ${path}`);
+  }),
+  writeFileSync: vi.fn((path: string, content: string) => {
+    mockFiles[path] = content;
+  }),
+  existsSync: vi.fn((path: string) => path in mockFiles),
   promises: {
-    readFile: vi.fn().mockResolvedValue('Mock embedded content'),
-    writeFile: vi.fn().mockResolvedValue(undefined),
-    mkdtemp: vi.fn().mockResolvedValue('/tmp/meld-test'),
-    rm: vi.fn().mockResolvedValue(undefined)
+    readFile: vi.fn(async (path: string) => {
+      if (path in mockFiles) {
+        return mockFiles[path];
+      }
+      throw new Error(`Mock file not found: ${path}`);
+    }),
+    writeFile: vi.fn(async (path: string, content: string) => {
+      mockFiles[path] = content;
+    })
   }
 }));
 
 // Mock path module
 vi.mock('path', () => ({
-  join: vi.fn((...args) => args.join('/')),
-  resolve: vi.fn((...args) => args.join('/')),
-  dirname: vi.fn((p) => p.split('/').slice(0, -1).join('/')),
-  basename: vi.fn((p) => p.split('/').pop())
+  isAbsolute: vi.fn((path: string) => path.startsWith('/')),
+  normalize: vi.fn((path: string) => path.replace(/\/\.\//g, '/').replace(/\/[^/]+\/\.\./g, '')),
+  resolve: vi.fn((...paths: string[]) => paths.join('/')),
+  join: vi.fn((...paths: string[]) => paths.join('/')),
+  dirname: vi.fn((path: string) => path.split('/').slice(0, -1).join('/'))
 }));
 
-// Mock InterpreterState
+// Mock InterpreterState with enhanced tracking
 export class MockInterpreterState extends InterpreterState {
-  constructor(config?: StateConfig) {
-    super(config);
+  private nodeHistory: MeldNode[] = [];
+  private textVarHistory: Map<string, string[]> = new Map();
+  private dataVarHistory: Map<string, any[]> = new Map();
+
+  constructor() {
+    super();
   }
 
-  // Alias methods for backward compatibility
-  setText = this.setTextVar;
-  getText = this.getTextVar;
-  setData = this.setDataVar;
-  getData = this.getDataVar;
-
+  // Track node history
   override addNode(node: MeldNode): void {
+    this.nodeHistory.push({ ...node });
     super.addNode(node);
   }
 
-  override getNodes(): MeldNode[] {
-    return super.getNodes();
+  getNodeHistory(): MeldNode[] {
+    return [...this.nodeHistory];
   }
 
+  // Track text var history
   override setTextVar(name: string, value: string): void {
+    const history = this.textVarHistory.get(name) || [];
+    history.push(value);
+    this.textVarHistory.set(name, history);
     super.setTextVar(name, value);
   }
 
-  override getTextVar(name: string): string | undefined {
-    return super.getTextVar(name);
+  getTextVarHistory(name: string): string[] {
+    return this.textVarHistory.get(name) || [];
   }
 
-  override getAllTextVars(): Map<string, string> {
-    return super.getAllTextVars();
-  }
-
+  // Track data var history
   override setDataVar(name: string, value: any): void {
+    const history = this.dataVarHistory.get(name) || [];
+    history.push(value);
+    this.dataVarHistory.set(name, history);
     super.setDataVar(name, value);
   }
 
-  override getDataVar(name: string): any {
-    return super.getDataVar(name);
+  getDataVarHistory(name: string): any[] {
+    return this.dataVarHistory.get(name) || [];
   }
 
-  override getAllDataVars(): Map<string, any> {
-    return super.getAllDataVars();
+  // Clear history
+  clearHistory(): void {
+    this.nodeHistory = [];
+    this.textVarHistory.clear();
+    this.dataVarHistory.clear();
   }
 
-  override hasDataVar(name: string): boolean {
-    return super.hasDataVar(name);
-  }
-
-  override setPathVar(name: string, value: string): void {
-    super.setPathVar(name, value);
-  }
-
-  override getPathVar(name: string): string | undefined {
-    return super.getPathVar(name);
-  }
-
-  override setCommand(name: string, fn: Function): void {
-    super.setCommand(name, fn);
-  }
-
-  override getCommand(name: string): Function | undefined {
-    return super.getCommand(name);
-  }
-
-  override getAllCommands(): Map<string, Function> {
-    return super.getAllCommands();
-  }
-
-  override addImport(path: string): void {
-    super.addImport(path);
-  }
-
-  override hasImport(path: string): boolean {
-    return super.hasImport(path);
-  }
-
+  // Existing methods with proper error handling
   override mergeChildState(childState: InterpreterState): void {
-    super.mergeChildState(childState);
-  }
-
-  override clone(): InterpreterState {
-    return super.clone();
+    try {
+      super.mergeChildState(childState);
+    } catch (error) {
+      throw ErrorFactory.createInterpretError(
+        `Failed to merge child state: ${error instanceof Error ? error.message : String(error)}`,
+        'State'
+      );
+    }
   }
 }
 
-// Mock handler factory
+// Mock handler factory with enhanced error handling
 function createMockHandler(kind: string) {
-  switch (kind) {
-    case 'data':
-      return {
-        canHandle: (k: string) => k === 'data',
-        handle: (node: DirectiveNode, state: InterpreterState) => {
-          const data = node.directive;
-          if (!data.name) {
-            throw new Error('Data directive requires a name');
+  const handlers: Record<string, any> = {
+    data: {
+      canHandle: (k: string) => k === 'data',
+      handle: async (node: DirectiveNode, state: InterpreterState, context: HandlerContext) => {
+        const data = node.directive;
+        if (!data.name) {
+          const error = ErrorFactory.createDirectiveError(
+            'Data directive requires a name',
+            'data',
+            node.location?.start
+          );
+          if (context.mode === 'rightside' && node.location && context.baseLocation) {
+            throw ErrorFactory.createWithAdjustedLocation(
+              () => error,
+              error.message,
+              node.location.start,
+              context.baseLocation.start
+            );
           }
-          state.setDataVar(data.name, data.value);
+          throw error;
         }
-      };
-    case 'text':
-      return {
-        canHandle: (k: string) => k === 'text',
-        handle: (node: DirectiveNode, state: InterpreterState) => {
-          const data = node.directive;
-          if (!data.name) {
-            throw new Error('Text directive requires a name');
+        state.setDataVar(data.name, data.value);
+      }
+    },
+    text: {
+      canHandle: (k: string) => k === 'text',
+      handle: async (node: DirectiveNode, state: InterpreterState, context: HandlerContext) => {
+        const data = node.directive;
+        if (!data.name) {
+          const error = ErrorFactory.createDirectiveError(
+            'Text directive requires a name',
+            'text',
+            node.location?.start
+          );
+          if (context.mode === 'rightside' && node.location && context.baseLocation) {
+            throw ErrorFactory.createWithAdjustedLocation(
+              () => error,
+              error.message,
+              node.location.start,
+              context.baseLocation.start
+            );
           }
-          state.setTextVar(data.name, data.value);
+          throw error;
         }
-      };
-    case 'run':
-      return {
-        canHandle: (k: string) => k === 'run',
-        handle: (node: DirectiveNode, state: InterpreterState) => {
-          const data = node.directive;
-          const command = state.getCommand(data.command);
-          if (command) {
-            command(data.args);
+        state.setTextVar(data.name, data.value, node.location?.start);
+      }
+    },
+    run: {
+      canHandle: (k: string) => k === 'run',
+      handle: async (node: DirectiveNode, state: InterpreterState, context: HandlerContext) => {
+        const data = node.directive;
+        if (!data.command) {
+          const error = ErrorFactory.createDirectiveError(
+            'Run directive requires a command',
+            'run',
+            node.location?.start
+          );
+          if (context.mode === 'rightside' && node.location && context.baseLocation) {
+            throw ErrorFactory.createWithAdjustedLocation(
+              () => error,
+              error.message,
+              node.location.start,
+              context.baseLocation.start
+            );
           }
+          throw error;
         }
-      };
-    case 'define':
-      return {
-        canHandle: (k: string) => k === 'define',
-        handle: (node: DirectiveNode, state: InterpreterState) => {
-          const data = node.directive;
-          if (!data.name) {
-            throw new Error('Define directive requires a name');
+        const commandData = state.getCommand(data.command);
+        if (commandData && typeof commandData === 'object' && 'command' in commandData) {
+          const { command, options } = commandData as { command: string; options?: Record<string, unknown> };
+          console.log(`[MOCK] Executing command: ${command}`, options);
+          state.appendOutput(`Executed: ${command}`, node.location?.start);
+        }
+      }
+    },
+    define: {
+      canHandle: (k: string) => k === 'define',
+      handle: async (node: DirectiveNode, state: InterpreterState, context: HandlerContext) => {
+        const data = node.directive;
+        if (!data.name) {
+          const error = ErrorFactory.createDirectiveError(
+            'Define directive requires a name',
+            'define',
+            node.location?.start
+          );
+          if (context.mode === 'rightside' && node.location && context.baseLocation) {
+            throw ErrorFactory.createWithAdjustedLocation(
+              () => error,
+              error.message,
+              node.location.start,
+              context.baseLocation.start
+            );
           }
-          state.setCommand(data.name, data.fn);
+          throw error;
         }
-      };
-    case 'path':
-      return {
-        canHandle: (k: string) => k === 'path',
-        handle: (node: DirectiveNode, state: InterpreterState) => {
-          const data = node.directive;
-          if (!data.name) {
-            throw new Error('Path directive requires a name');
-          }
-          state.setPathVar(data.name, data.value);
-        }
-      };
-    default:
-      return undefined;
-  }
+        state.setCommand(data.name, data.command || '', data.options);
+      }
+    }
+  };
+  return handlers[kind];
 }
 
-// Export mock handler factory
-export { createMockHandler }; 
+// File system utilities
+export function mockFile(path: string, content: string): void {
+  mockFiles[path] = content;
+}
+
+export function clearMockFiles(): void {
+  Object.keys(mockFiles).forEach(key => delete mockFiles[key]);
+}
+
+// Export utilities
+export { createMockHandler, mockFiles }; 

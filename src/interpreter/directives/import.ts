@@ -3,24 +3,29 @@ import { join, dirname } from 'path';
 import { DirectiveNode } from 'meld-spec';
 import { DirectiveHandler, HandlerContext } from './types';
 import { InterpreterState } from '../state/state';
-import { MeldImportError } from '../errors/errors';
+import { ErrorFactory } from '../errors/factory';
 import { parseMeld } from '../parser';
 import { interpret } from '../interpreter';
-import { adjustLocation } from '../utils/location';
+import { throwWithContext } from '../utils/location-helpers';
 
 export class ImportDirectiveHandler implements DirectiveHandler {
+  public static readonly directiveKind = 'import';
+
   canHandle(kind: string, mode: 'toplevel' | 'rightside'): boolean {
-    return kind === '@import';
+    return kind === ImportDirectiveHandler.directiveKind;
   }
 
-  handle(node: DirectiveNode, state: InterpreterState, context: HandlerContext): void {
+  async handle(node: DirectiveNode, state: InterpreterState, context: HandlerContext): Promise<void> {
     const data = node.directive;
-    const errorLocation = context.mode === 'rightside'
-      ? adjustLocation(node.location, context.baseLocation)?.start
-      : node.location?.start;
 
     if (!data.from) {
-      throw new MeldImportError('Import source is required', errorLocation);
+      throwWithContext(
+        ErrorFactory.createImportError,
+        'Import source is required',
+        node.location,
+        context,
+        'import'
+      );
     }
 
     // Resolve path relative to current file
@@ -29,12 +34,24 @@ export class ImportDirectiveHandler implements DirectiveHandler {
 
     // Check if file exists
     if (!fs.existsSync(importPath)) {
-      throw new MeldImportError('File not found', errorLocation);
+      throwWithContext(
+        ErrorFactory.createImportError,
+        'File not found',
+        node.location,
+        context,
+        'import'
+      );
     }
 
     // Check for circular imports
     if (state.hasImport(importPath)) {
-      throw new MeldImportError('Circular import detected', errorLocation);
+      throwWithContext(
+        ErrorFactory.createImportError,
+        'Circular import detected',
+        node.location,
+        context,
+        'import'
+      );
     }
 
     try {
@@ -48,9 +65,10 @@ export class ImportDirectiveHandler implements DirectiveHandler {
       importedState.setCurrentFilePath(importPath);
 
       // Interpret imported content
-      interpret(importedNodes, importedState, {
+      await interpret(importedNodes, importedState, {
         mode: context.mode,
-        baseLocation: context.baseLocation
+        baseLocation: context.baseLocation,
+        currentPath: importPath
       });
 
       // Track import to prevent circular imports
@@ -71,7 +89,7 @@ export class ImportDirectiveHandler implements DirectiveHandler {
           const { name, as } = typeof spec === 'string' ? { name: spec, as: spec } : spec;
           
           // Copy variables with aliases
-          const textVar = importedState.getText(name);
+          const textVar = importedState.getTextVar(name);
           if (textVar !== undefined) {
             state.setTextVar(as, textVar);
           }
@@ -83,13 +101,13 @@ export class ImportDirectiveHandler implements DirectiveHandler {
         }
       }
     } catch (error) {
-      if (error instanceof Error) {
-        throw new MeldImportError(
-          `Failed to read or parse imported file: ${error.message}`,
-          errorLocation
-        );
-      }
-      throw error;
+      throwWithContext(
+        ErrorFactory.createImportError,
+        `Failed to read or parse imported file: ${error instanceof Error ? error.message : String(error)}`,
+        node.location,
+        context,
+        'import'
+      );
     }
   }
 }

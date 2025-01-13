@@ -1,47 +1,86 @@
 import type { DirectiveNode } from 'meld-spec';
 import { DirectiveHandler, HandlerContext } from './types';
 import { InterpreterState } from '../state/state';
-import { MeldDirectiveError } from '../errors/errors';
-import { adjustLocation } from '../utils/location';
+import { ErrorFactory } from '../errors/factory';
+import * as os from 'os';
+import * as path from 'path';
+import { throwWithContext } from '../utils/location-helpers';
 
 export class PathDirectiveHandler implements DirectiveHandler {
+  public static readonly directiveKind = 'path';
+
   canHandle(kind: string, mode: 'toplevel' | 'rightside'): boolean {
-    return kind === '@path';
+    return kind === PathDirectiveHandler.directiveKind;
   }
 
   handle(node: DirectiveNode, state: InterpreterState, context: HandlerContext): void {
     const data = node.directive;
-    const errorLocation = context.mode === 'rightside'
-      ? adjustLocation(node.location, context.baseLocation)?.start
-      : node.location?.start;
 
-    if (!data.name) {
-      throw new MeldDirectiveError('Path directive requires a name', 'path', errorLocation);
-    }
-    if (!data.value) {
-      throw new MeldDirectiveError('Path directive requires a value', 'path', errorLocation);
-    }
-
-    let value = data.value;
-    if (Array.isArray(value)) {
-      value = value.join('');
-    }
-
-    // Handle special variables
-    if (!value.startsWith('$HOMEPATH') && !value.startsWith('$~') && 
-        !value.startsWith('$PROJECTPATH') && !value.startsWith('$.')) {
-      throw new MeldDirectiveError(
-        'Path must start with $HOMEPATH/$~ or $PROJECTPATH/$.',
-        'path',
-        errorLocation
+    // Validate name parameter
+    if (!data.name || typeof data.name !== 'string') {
+      throwWithContext(
+        ErrorFactory.createDirectiveError,
+        'Path directive requires a name parameter',
+        node.location,
+        context,
+        'path'
       );
     }
 
-    // Replace variables
-    value = value.replace(/\$HOMEPATH|\$~/g, '/Users/test');
-    value = value.replace(/\$PROJECTPATH|\$\./g, '/project/root');
+    // Validate value parameter
+    if (data.value === undefined || data.value === null) {
+      throwWithContext(
+        ErrorFactory.createDirectiveError,
+        'Path directive requires a value parameter',
+        node.location,
+        context,
+        'path'
+      );
+    }
 
-    state.setPathVar(data.name, value);
+    // Get the value and handle special variables
+    let value = String(data.value);
+
+    // Handle special path variables
+    value = value.replace(/\$HOMEPATH|\$~/g, os.homedir());
+    value = value.replace(/\$PROJECTPATH/g, process.cwd());
+
+    // Handle variable substitution
+    value = value.replace(/\{([^}]+)\}/g, (match, varName) => {
+      const varValue = state.getPathVar(varName);
+      if (!varValue) {
+        throwWithContext(
+          ErrorFactory.createDirectiveError,
+          `Path variable '${varName}' not found`,
+          node.location,
+          context,
+          'path'
+        );
+      }
+      return varValue;
+    });
+
+    try {
+      // Resolve relative paths
+      if (!path.isAbsolute(value)) {
+        const basePath = context.currentPath || process.cwd();
+        value = path.resolve(path.dirname(basePath), value);
+      }
+
+      // Normalize path (resolve . and ..)
+      value = path.normalize(value);
+
+      // Store in state
+      state.setPathVar(data.name, value);
+    } catch (error) {
+      throwWithContext(
+        ErrorFactory.createDirectiveError,
+        `Invalid path: ${error instanceof Error ? error.message : String(error)}`,
+        node.location,
+        context,
+        'path'
+      );
+    }
   }
 }
 

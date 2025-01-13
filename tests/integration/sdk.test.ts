@@ -5,19 +5,27 @@ import { resolve, join, dirname } from 'path';
 import { readFile, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 
+// Mock file system state
+const mockFiles = new Map<string, string>();
+
+// Mock fs module
 vi.mock('fs', () => ({
-  existsSync: vi.fn((path: string) => path === 'test.meld'),
+  existsSync: vi.fn((path: string) => mockFiles.has(path)),
   promises: {
-    readFile: vi.fn().mockImplementation((path: string) => {
-      if (path === 'test.meld') {
-        return Promise.resolve('@text test = "value"');
+    readFile: vi.fn((path: string) => {
+      if (mockFiles.has(path)) {
+        return Promise.resolve(mockFiles.get(path));
       }
       throw new Error('File not found');
     }),
-    writeFile: vi.fn().mockResolvedValue(undefined)
+    writeFile: vi.fn((path: string, content: string) => {
+      mockFiles.set(path, content);
+      return Promise.resolve();
+    })
   }
 }));
 
+// Mock path module
 vi.mock('path', () => ({
   resolve: vi.fn((path: string) => path),
   join: vi.fn((...paths: string[]) => paths.join('/')),
@@ -33,10 +41,13 @@ describe('SDK Integration Tests', () => {
   beforeEach(() => {
     tempDir = join(tmpdir(), 'meld-test');
     testFilePath = join(tempDir, 'test.meld');
+    mockFiles.clear();
+    mockFiles.set('test.meld', '@text test = "value"');
     vi.clearAllMocks();
   });
 
   afterEach(() => {
+    mockFiles.clear();
     vi.clearAllMocks();
   });
 

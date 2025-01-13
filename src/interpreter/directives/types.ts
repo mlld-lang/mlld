@@ -23,6 +23,11 @@ export interface HandlerContext {
   baseLocation?: Location;
 
   /**
+   * The current file path being processed
+   */
+  currentPath?: string;
+
+  /**
    * You can add any additional flags you need here in the future
    */
 }

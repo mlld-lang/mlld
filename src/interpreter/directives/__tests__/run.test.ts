@@ -1,82 +1,119 @@
-import { DirectiveNode } from 'meld-spec';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { RunDirectiveHandler } from '../run';
 import { InterpreterState } from '../../state/state';
-import { runDirectiveHandler } from '../run';
-import { MeldDirectiveError } from '../../errors/errors';
-import { HandlerContext } from '../types';
+import { createTestContext, createTestLocation } from '../../__tests__/test-utils';
+import { exec } from 'child_process';
+import { vi } from 'vitest';
+import { promisify } from 'util';
+
+vi.mock('child_process');
+vi.mock('util');
 
 describe('RunDirectiveHandler', () => {
+  let handler: RunDirectiveHandler;
   let state: InterpreterState;
-  const context: HandlerContext = { mode: 'toplevel' };
+  const mockExec = vi.fn();
 
   beforeEach(() => {
+    handler = new RunDirectiveHandler();
     state = new InterpreterState();
+    vi.mocked(promisify).mockReturnValue(mockExec);
+    mockExec.mockReset();
   });
 
-  describe('canHandle', () => {
-    it('returns true for @run directives in top-level mode', () => {
-      expect(runDirectiveHandler.canHandle('@run', 'toplevel')).toBe(true);
-    });
+  it('should handle run directives with command', async () => {
+    mockExec.mockResolvedValue({ stdout: 'test output', stderr: '' });
 
-    it('returns true for @run directives in right-side mode', () => {
-      expect(runDirectiveHandler.canHandle('@run', 'rightside')).toBe(true);
-    });
+    const node = {
+      type: 'Directive' as const,
+      directive: {
+        kind: 'run',
+        command: 'echo "test"'
+      },
+      location: createTestLocation(1, 1)
+    };
+
+    await handler.handle(node, state, createTestContext());
+    expect(mockExec).toHaveBeenCalledWith('echo "test"');
+    expect(state.getCommand('echo "test"')).toBe('test output');
   });
 
-  describe('handle', () => {
-    it('should store command in state', () => {
-      const node: DirectiveNode = {
-        type: 'Directive',
-        directive: {
-          kind: '@run',
-          command: 'echo "Hello World"'
-        },
-        location: {
-          start: { line: 1, column: 1 },
-          end: { line: 1, column: 10 }
-        }
-      };
+  it('should handle run directives with variables', async () => {
+    mockExec.mockResolvedValue({ stdout: 'variable output', stderr: '' });
+    state.setDataVar('cmd', 'echo "test"');
 
-      runDirectiveHandler.handle(node, state, context);
-      const command = state.getCommand();
-      expect(command).toBeDefined();
-      expect(command?.command).toBe('echo "Hello World"');
-      expect(command?.background).toBe(false);
-    });
+    const node = {
+      type: 'Directive' as const,
+      directive: {
+        kind: 'run',
+        command: '${cmd}'
+      },
+      location: createTestLocation(1, 1)
+    };
 
-    it('should store command with custom name', () => {
-      const node: DirectiveNode = {
-        type: 'Directive',
-        directive: {
-          kind: '@run',
-          command: 'echo "Hello World"',
-          name: 'greet'
-        },
-        location: {
-          start: { line: 1, column: 1 },
-          end: { line: 1, column: 10 }
-        }
-      };
+    await handler.handle(node, state, createTestContext());
+    expect(mockExec).toHaveBeenCalledWith('echo "test"');
+    expect(state.getCommand('echo "test"')).toBe('variable output');
+  });
 
-      runDirectiveHandler.handle(node, state, context);
-      const command = state.getCommand('greet');
-      expect(command).toBeDefined();
-      expect(command?.command).toBe('echo "Hello World"');
-      expect(command?.background).toBe(false);
-    });
+  it('should throw on missing command', async () => {
+    const node = {
+      type: 'Directive' as const,
+      directive: {
+        kind: 'run'
+      },
+      location: createTestLocation(1, 1)
+    };
 
-    it('should throw error if command is missing', () => {
-      const node: DirectiveNode = {
-        type: 'Directive',
-        directive: {
-          kind: '@run'
-        },
-        location: {
-          start: { line: 1, column: 1 },
-          end: { line: 1, column: 10 }
-        }
-      };
+    await expect(handler.handle(node, state, createTestContext())).rejects.toThrow('Run directive requires a command parameter');
+  });
 
-      expect(() => runDirectiveHandler.handle(node, state, context)).toThrow('Run directive requires a command');
-    });
+  it('should handle command errors', async () => {
+    mockExec.mockRejectedValue(new Error('Command failed'));
+
+    const node = {
+      type: 'Directive' as const,
+      directive: {
+        kind: 'run',
+        command: 'invalid-command'
+      },
+      location: createTestLocation(1, 1)
+    };
+
+    await expect(handler.handle(node, state, createTestContext())).rejects.toThrow('Command failed');
+  });
+
+  it('should handle stderr output', async () => {
+    mockExec.mockResolvedValue({ stdout: 'output', stderr: 'warning message' });
+
+    const node = {
+      type: 'Directive' as const,
+      directive: {
+        kind: 'run',
+        command: 'echo "test" >&2'
+      },
+      location: createTestLocation(1, 1)
+    };
+
+    await handler.handle(node, state, createTestContext());
+    expect(state.getCommand('echo "test" >&2')).toBe('output');
+  });
+
+  it('should handle working directory', async () => {
+    mockExec.mockResolvedValue({ stdout: 'pwd output', stderr: '' });
+    state.setCurrentFilePath('/test/dir/file.meld');
+
+    const node = {
+      type: 'Directive' as const,
+      directive: {
+        kind: 'run',
+        command: 'pwd'
+      },
+      location: createTestLocation(1, 1)
+    };
+
+    await handler.handle(node, state, createTestContext());
+    expect(mockExec).toHaveBeenCalledWith('pwd');
+    expect(state.getCommand('pwd')).toBe('pwd output');
   });
 }); 

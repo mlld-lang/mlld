@@ -1,116 +1,138 @@
-import { DirectiveNode } from 'meld-spec';
-import { InterpreterState } from '../../state/state';
 import { dataDirectiveHandler } from '../data';
-import { MeldDirectiveError } from '../../errors/errors';
-import { HandlerContext } from '../types';
+import { TestContext } from '../../__tests__/test-utils';
+import { MeldError } from '../../errors/errors';
 
 describe('DataDirectiveHandler', () => {
-  let state: InterpreterState;
-  const context: HandlerContext = { mode: 'toplevel' };
+  let context: TestContext;
 
   beforeEach(() => {
-    state = new InterpreterState();
+    context = new TestContext();
   });
 
-  describe('canHandle', () => {
-    it('returns true for @data directives in top-level mode', () => {
-      expect(dataDirectiveHandler.canHandle('@data', 'toplevel')).toBe(true);
+  describe('basic data handling', () => {
+    it('should handle simple data values', () => {
+      const location = context.createLocation(1, 1);
+      const node = context.createDirectiveNode('data', {
+        name: 'test',
+        value: 'value'
+      }, location);
+
+      dataDirectiveHandler.handle(node, context.state, context.createHandlerContext());
+
+      expect(context.state.getDataVar('test')).toBe('value');
     });
 
-    it('returns true for @data directives in right-side mode', () => {
-      expect(dataDirectiveHandler.canHandle('@data', 'rightside')).toBe(true);
+    it('should handle object values', () => {
+      const location = context.createLocation(1, 1);
+      const node = context.createDirectiveNode('data', {
+        name: 'test',
+        value: { key: 'value' }
+      }, location);
+
+      dataDirectiveHandler.handle(node, context.state, context.createHandlerContext());
+
+      expect(context.state.getDataVar('test')).toEqual({ key: 'value' });
+    });
+
+    it('should handle array values', () => {
+      const location = context.createLocation(1, 1);
+      const node = context.createDirectiveNode('data', {
+        name: 'test',
+        value: [1, 2, 3]
+      }, location);
+
+      dataDirectiveHandler.handle(node, context.state, context.createHandlerContext());
+
+      expect(context.state.getDataVar('test')).toEqual([1, 2, 3]);
     });
   });
 
-  describe('handle', () => {
-    it('should store object literal in state', () => {
-      const node: DirectiveNode = {
-        type: 'Directive',
-        directive: {
-          kind: '@data',
-          name: 'config',
-          value: { key: 'value' }
-        },
-        location: {
-          start: { line: 1, column: 1 },
-          end: { line: 1, column: 10 }
-        }
-      };
+  describe('error handling', () => {
+    it('should throw error for missing name', () => {
+      const location = context.createLocation(5, 3);
+      const node = context.createDirectiveNode('data', {
+        value: 'test'
+      }, location);
 
-      dataDirectiveHandler.handle(node, state, context);
-      expect(state.getDataVar('config')).toEqual({ key: 'value' });
+      expect(() => 
+        dataDirectiveHandler.handle(node, context.state, context.createHandlerContext())
+      ).toThrow(MeldError);
     });
 
-    it('should store array literal in state', () => {
-      const node: DirectiveNode = {
-        type: 'Directive',
-        directive: {
-          kind: '@data',
-          name: 'list',
-          value: [1, 2, 3]
-        },
-        location: {
-          start: { line: 1, column: 1 },
-          end: { line: 1, column: 10 }
-        }
-      };
+    it('should throw error for missing value', () => {
+      const location = context.createLocation(5, 3);
+      const node = context.createDirectiveNode('data', {
+        name: 'test'
+      }, location);
 
-      dataDirectiveHandler.handle(node, state, context);
-      expect(state.getDataVar('list')).toEqual([1, 2, 3]);
+      expect(() => 
+        dataDirectiveHandler.handle(node, context.state, context.createHandlerContext())
+      ).toThrow(MeldError);
     });
 
-    it('should store string literal in state', () => {
-      const node: DirectiveNode = {
-        type: 'Directive',
-        directive: {
-          kind: '@data',
-          name: 'message',
-          value: 'hello'
-        },
-        location: {
-          start: { line: 1, column: 1 },
-          end: { line: 1, column: 10 }
-        }
-      };
+    it('should preserve error locations in right-side mode', () => {
+      const baseLocation = context.createLocation(5, 3);
+      const nestedContext = context.createNestedContext(baseLocation);
+      const dataLocation = nestedContext.createLocation(2, 4);
 
-      dataDirectiveHandler.handle(node, state, context);
-      expect(state.getDataVar('message')).toBe('hello');
+      const node = nestedContext.createDirectiveNode('data', {
+        name: 'test'
+      }, dataLocation);
+
+      try {
+        dataDirectiveHandler.handle(node, nestedContext.state, nestedContext.createHandlerContext());
+        fail('Should have thrown an error');
+      } catch (error) {
+        expect(error).toBeInstanceOf(MeldError);
+        if (error instanceof MeldError) {
+          expect(error.location).toBeDefined();
+          expect(error.location?.line).toBe(6); // base.line (5) + relative.line (2) - 1
+          expect(error.location?.column).toBe(4);
+        }
+      }
+    });
+  });
+
+  describe('variable scoping', () => {
+    it('should handle variable shadowing', () => {
+      const location1 = context.createLocation(1, 1);
+      const location2 = context.createLocation(2, 1);
+
+      const node1 = context.createDirectiveNode('data', {
+        name: 'test',
+        value: 'original'
+      }, location1);
+
+      const node2 = context.createDirectiveNode('data', {
+        name: 'test',
+        value: 'shadowed'
+      }, location2);
+
+      dataDirectiveHandler.handle(node1, context.state, context.createHandlerContext());
+      dataDirectiveHandler.handle(node2, context.state, context.createHandlerContext());
+
+      expect(context.state.getDataVar('test')).toBe('shadowed');
     });
 
-    it('should throw error if identifier is missing', () => {
-      const node: DirectiveNode = {
-        type: 'Directive',
-        directive: {
-          kind: '@data',
-          value: { key: 'value' }
-        },
-        location: {
-          start: { line: 1, column: 1 },
-          end: { line: 1, column: 10 }
-        }
-      };
+    it('should handle nested scopes', () => {
+      const baseLocation = context.createLocation(5, 3);
+      const nestedContext = context.createNestedContext(baseLocation);
 
-      expect(() => dataDirectiveHandler.handle(node, state, context)).toThrow(
-        'Data directive requires a name'
-      );
-    });
+      const parentNode = context.createDirectiveNode('data', {
+        name: 'test',
+        value: 'parent'
+      }, context.createLocation(1, 1));
 
-    it('should throw error if value is missing', () => {
-      const node: DirectiveNode = {
-        type: 'Directive',
-        directive: {
-          kind: '@data',
-          name: 'config'
-        },
-        location: {
-          start: { line: 1, column: 1 },
-          end: { line: 1, column: 10 }
-        }
-      };
+      const childNode = nestedContext.createDirectiveNode('data', {
+        name: 'test',
+        value: 'child'
+      }, nestedContext.createLocation(2, 4));
 
-      expect(() => dataDirectiveHandler.handle(node, state, context)).toThrow(
-        'Data directive requires a value'
-      );
+      dataDirectiveHandler.handle(parentNode, context.state, context.createHandlerContext());
+      dataDirectiveHandler.handle(childNode, nestedContext.state, nestedContext.createHandlerContext());
+
+      expect(context.state.getDataVar('test')).toBe('parent');
+      expect(nestedContext.state.getDataVar('test')).toBe('child');
     });
   });
 }); 

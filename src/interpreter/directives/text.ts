@@ -1,51 +1,34 @@
 import type { DirectiveNode } from 'meld-spec';
 import { DirectiveHandler, HandlerContext } from './types';
 import { InterpreterState } from '../state/state';
-import { MeldDirectiveError } from '../errors/errors';
-import { adjustLocation } from '../utils/location';
+import { ErrorFactory } from '../errors/factory';
+import { throwWithContext, maybeAdjustLocation } from '../utils/location-helpers';
 
 export class TextDirectiveHandler implements DirectiveHandler {
+  public static readonly directiveKind = 'text';
+
   canHandle(kind: string, mode: 'toplevel' | 'rightside'): boolean {
-    return kind === '@text';
+    return kind === TextDirectiveHandler.directiveKind;
   }
 
   handle(node: DirectiveNode, state: InterpreterState, context: HandlerContext): void {
     const data = node.directive;
     
-    if (!data.name) {
-      throw new MeldDirectiveError(
-        'Text directive requires a name',
-        'text',
-        context.mode === 'rightside'
-          ? adjustLocation(node.location, context.baseLocation)?.start
-          : node.location?.start
+    // Validate name parameter
+    if (!data.name || typeof data.name !== 'string') {
+      throwWithContext(
+        ErrorFactory.createDirectiveError,
+        'Text directive requires a name parameter',
+        node.location,
+        context,
+        'text'
       );
     }
 
-    // Allow empty string values
-    let value = data.value === undefined ? '' : data.value;
-    if (Array.isArray(value)) {
-      value = value.join('');
-    }
-
-    // If we're in a right-side context, adjust any locations in the value
-    if (context.mode === 'rightside' && context.baseLocation && node.location) {
-      // Create a copy of the node to avoid modifying the original
-      const nodeCopy = { ...node, location: { ...node.location } };
-      
-      // Adjust location based on the base location
-      const adjustedLocation = adjustLocation(nodeCopy.location, context.baseLocation);
-      if (adjustedLocation) {
-        nodeCopy.location = adjustedLocation;
-      }
-
-      // Add the adjusted node to the state
-      state.addNode(nodeCopy);
-    } else {
-      // Add the original node if not in right-side context
-      state.addNode(node);
-    }
-
+    // Handle value - ensure it's a string and handle undefined/null
+    const value = data.value !== undefined && data.value !== null ? String(data.value) : '';
+    
+    // Store in state with proper location tracking
     state.setTextVar(data.name, value);
   }
 }

@@ -1,97 +1,161 @@
-import { DirectiveNode } from 'meld-spec';
-import { InterpreterState } from '../../state/state';
 import { defineDirectiveHandler } from '../define';
-import { MeldDirectiveError } from '../../errors/errors';
-import { HandlerContext } from '../types';
+import { TestContext } from '../../__tests__/test-utils';
+import { MeldError } from '../../errors/errors';
 
 describe('DefineDirectiveHandler', () => {
-  let state: InterpreterState;
-  const context: HandlerContext = { mode: 'toplevel' };
-  const handler = defineDirectiveHandler;
+  let context: TestContext;
 
   beforeEach(() => {
-    state = new InterpreterState();
+    context = new TestContext();
   });
 
-  it('should handle define directives', () => {
-    expect(handler.canHandle('@define', 'toplevel')).toBe(true);
-    expect(handler.canHandle('@define', 'rightside')).toBe(true);
-  });
-
-  it('should store command definition', () => {
-    const node: DirectiveNode = {
-      type: 'Directive',
-      directive: {
-        kind: '@define',
+  describe('basic command definition', () => {
+    it('should define simple commands', () => {
+      const location = context.createLocation(1, 1);
+      const node = context.createDirectiveNode('define', {
         name: 'test',
-        description: 'Test command',
-        value: {
-          type: 'Directive',
-          directive: {
-            kind: '@run',
-            command: 'echo "test"'
-          }
-        }
-      },
-      location: {
-        start: { line: 1, column: 1 },
-        end: { line: 1, column: 10 }
-      }
-    };
+        fn: () => 'test result'
+      }, location);
 
-    handler.handle(node, state, context);
-    const command = state.getCommand('test');
-    expect(command).toBeDefined();
-    expect(command?.command).toBe('echo "test"');
+      defineDirectiveHandler.handle(node, context.state, context.createHandlerContext());
+
+      const command = context.state.getCommand('test');
+      expect(command).toBeDefined();
+      expect(command?.()).toBe('test result');
+    });
+
+    it('should handle commands with arguments', () => {
+      const location = context.createLocation(1, 1);
+      const node = context.createDirectiveNode('define', {
+        name: 'greet',
+        fn: (name: string) => `Hello, ${name}!`
+      }, location);
+
+      defineDirectiveHandler.handle(node, context.state, context.createHandlerContext());
+
+      const command = context.state.getCommand('greet');
+      expect(command).toBeDefined();
+      expect(command?.('world')).toBe('Hello, world!');
+    });
   });
 
-  it('should throw error if body is not a run directive', () => {
-    const node: DirectiveNode = {
-      type: 'Directive',
-      directive: {
-        kind: '@define',
-        name: 'test',
-        value: {
-          type: 'Directive',
-          directive: {
-            kind: '@text',
-            name: 'test',
-            value: 'test'
-          }
-        }
-      },
-      location: {
-        start: { line: 1, column: 1 },
-        end: { line: 1, column: 10 }
-      }
-    };
+  describe('error handling', () => {
+    it('should throw error for missing name', () => {
+      const location = context.createLocation(5, 3);
+      const node = context.createDirectiveNode('define', {
+        fn: () => 'test'
+      }, location);
 
-    expect(() => handler.handle(node, state, context)).toThrow('Define directive body must be a @run directive');
+      expect(() => 
+        defineDirectiveHandler.handle(node, context.state, context.createHandlerContext())
+      ).toThrow(MeldError);
+    });
+
+    it('should throw error for missing function', () => {
+      const location = context.createLocation(5, 3);
+      const node = context.createDirectiveNode('define', {
+        name: 'test'
+      }, location);
+
+      expect(() => 
+        defineDirectiveHandler.handle(node, context.state, context.createHandlerContext())
+      ).toThrow(MeldError);
+    });
+
+    it('should preserve error locations in right-side mode', () => {
+      const baseLocation = context.createLocation(5, 3);
+      const nestedContext = context.createNestedContext(baseLocation);
+      const defineLocation = nestedContext.createLocation(2, 4);
+
+      const node = nestedContext.createDirectiveNode('define', {
+        name: 'test'
+      }, defineLocation);
+
+      try {
+        defineDirectiveHandler.handle(node, nestedContext.state, nestedContext.createHandlerContext());
+        fail('Should have thrown an error');
+      } catch (error) {
+        expect(error).toBeInstanceOf(MeldError);
+        if (error instanceof MeldError) {
+          expect(error.location).toBeDefined();
+          expect(error.location?.line).toBe(6); // base.line (5) + relative.line (2) - 1
+          expect(error.location?.column).toBe(4);
+        }
+      }
+    });
   });
 
-  it('should handle command definition without optional fields', () => {
-    const node: DirectiveNode = {
-      type: 'Directive',
-      directive: {
-        kind: '@define',
-        name: 'test',
-        value: {
-          type: 'Directive',
-          directive: {
-            kind: '@run',
-            command: 'echo "test"'
-          }
-        }
-      },
-      location: {
-        start: { line: 1, column: 1 },
-        end: { line: 1, column: 10 }
-      }
-    };
+  describe('command scoping', () => {
+    it('should handle command shadowing', () => {
+      const location1 = context.createLocation(1, 1);
+      const location2 = context.createLocation(2, 1);
 
-    handler.handle(node, state, context);
-    const command = state.getCommand('test');
-    expect(command).toBeDefined();
-    expect(command?.command).toBe('echo "test"');
+      const node1 = context.createDirectiveNode('define', {
+        name: 'test',
+        fn: () => 'original'
+      }, location1);
+
+      const node2 = context.createDirectiveNode('define', {
+        name: 'test',
+        fn: () => 'shadowed'
+      }, location2);
+
+      defineDirectiveHandler.handle(node1, context.state, context.createHandlerContext());
+      defineDirectiveHandler.handle(node2, context.state, context.createHandlerContext());
+
+      const command = context.state.getCommand('test');
+      expect(command?.()).toBe('shadowed');
+    });
+
+    it('should handle nested scopes', () => {
+      const baseLocation = context.createLocation(5, 3);
+      const nestedContext = context.createNestedContext(baseLocation);
+
+      const parentNode = context.createDirectiveNode('define', {
+        name: 'test',
+        fn: () => 'parent'
+      }, context.createLocation(1, 1));
+
+      const childNode = nestedContext.createDirectiveNode('define', {
+        name: 'test',
+        fn: () => 'child'
+      }, nestedContext.createLocation(2, 4));
+
+      defineDirectiveHandler.handle(parentNode, context.state, context.createHandlerContext());
+      defineDirectiveHandler.handle(childNode, nestedContext.state, nestedContext.createHandlerContext());
+
+      expect(context.state.getCommand('test')?.()).toBe('parent');
+      expect(nestedContext.state.getCommand('test')?.()).toBe('child');
+    });
+  });
+
+  describe('command execution', () => {
+    it('should handle command errors', () => {
+      const location = context.createLocation(5, 3);
+      const node = context.createDirectiveNode('define', {
+        name: 'error',
+        fn: () => { throw new Error('Command error'); }
+      }, location);
+
+      defineDirectiveHandler.handle(node, context.state, context.createHandlerContext());
+
+      const command = context.state.getCommand('error');
+      expect(command).toBeDefined();
+      expect(() => command?.()).toThrow('Command error');
+    });
+
+    it('should preserve this context in commands', () => {
+      const location = context.createLocation(1, 1);
+      const obj = { value: 'test' };
+      const node = context.createDirectiveNode('define', {
+        name: 'getValue',
+        fn: function(this: typeof obj) { return this.value; }
+      }, location);
+
+      defineDirectiveHandler.handle(node, context.state, context.createHandlerContext());
+
+      const command = context.state.getCommand('getValue');
+      expect(command?.call(obj)).toBe('test');
+    });
   });
 }); 

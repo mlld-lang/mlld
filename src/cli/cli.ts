@@ -1,9 +1,6 @@
-import { promises as fs } from 'fs';
 import { resolve } from 'path';
-import { parseMeld } from '../interpreter/parser';
-import { interpret } from '../interpreter/interpreter';
-import { InterpreterState } from '../interpreter/state/state';
-import { toMarkdown } from '../converter/converter';
+import { promises as fs } from 'fs';
+import { runMeld } from '../sdk/index.js';
 
 interface CliOptions {
   input: string;
@@ -27,7 +24,11 @@ function parseArgs(args: string[]): CliOptions {
     } else if (arg === '--output' || arg === '-o') {
       options.output = args[++i];
     } else if (arg === '--format' || arg === '-f') {
-      options.format = args[++i] as 'md' | 'llm';
+      const format = args[++i];
+      if (format !== 'md' && format !== 'llm') {
+        throw new Error('Format must be either "md" or "llm"');
+      }
+      options.format = format;
     } else {
       options.input = arg;
     }
@@ -48,22 +49,21 @@ export async function run(args: string[]): Promise<void> {
   const inputFile = resolve(options.input);
   const outputFile = options.output ? resolve(options.output) : undefined;
 
-  // Read and parse input
-  const content = await fs.readFile(inputFile, 'utf8');
-  const nodes = parseMeld(content);
+  try {
+    // Run Meld using the SDK function
+    const output = await runMeld(inputFile, {
+      format: options.format
+    });
 
-  // Interpret nodes
-  const state = new InterpreterState();
-  interpret(nodes, state);
-
-  // Convert to output format
-  const output = toMarkdown(state.getNodes());
-
-  // Write output
-  if (outputFile) {
-    await fs.writeFile(outputFile, output);
-  } else {
-    console.log(output);
+    // Write output
+    if (outputFile) {
+      await fs.writeFile(outputFile, output);
+    } else {
+      console.log(output);
+    }
+  } catch (error) {
+    console.error('Error:', error instanceof Error ? error.message : String(error));
+    process.exit(1);
   }
 }
 

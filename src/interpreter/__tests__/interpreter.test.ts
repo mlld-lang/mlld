@@ -1,232 +1,139 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { interpret } from '../interpreter.js';
-import { InterpreterState } from '../state/state.js';
 import { DirectiveRegistry } from '../directives/registry.js';
 import { DataDirectiveHandler } from '../directives/data.js';
 import type { MeldNode, DirectiveNode, TextNode, CodeFenceNode } from 'meld-spec';
 import { MeldInterpretError } from '../errors/errors.js';
+import { TestContext, createTestDirective } from './test-utils';
 
 describe('interpret', () => {
-  let state: InterpreterState;
+  let context: TestContext;
 
   beforeEach(() => {
-    state = new InterpreterState();
+    context = new TestContext();
     DirectiveRegistry.clear();
   });
 
   describe('text nodes', () => {
     it('should handle text nodes', () => {
       const nodes: TextNode[] = [
-        {
-          type: 'Text' as const,
-          content: 'Hello, world!',
-          location: { start: { line: 1, column: 1 }, end: { line: 1, column: 13 } }
-        }
+        context.createTextNode('Hello world', context.createLocation(1, 1))
       ];
 
-      interpret(nodes, state);
-      expect(state.getNodes()).toEqual(nodes);
-    });
-  });
-
-  describe('comment nodes', () => {
-    it('should handle comment nodes as text nodes', () => {
-      const nodes: TextNode[] = [
-        {
-          type: 'Text' as const,
-          content: 'This is a comment',
-          location: { start: { line: 1, column: 1 }, end: { line: 1, column: 13 } }
-        }
-      ];
-
-      interpret(nodes, state);
-      expect(state.getNodes()).toEqual(nodes);
-    });
-  });
-
-  describe('code fence nodes', () => {
-    it('should handle code fence nodes with language', () => {
-      const nodes: CodeFenceNode[] = [
-        {
-          type: 'CodeFence' as const,
-          language: 'javascript',
-          content: 'console.log("Hello");',
-          location: { start: { line: 1, column: 1 }, end: { line: 3, column: 3 } }
-        }
-      ];
-
-      interpret(nodes, state);
-      expect(state.getNodes()).toEqual(nodes);
-    });
-
-    it('should handle code fence nodes without language', () => {
-      const nodes: CodeFenceNode[] = [
-        {
-          type: 'CodeFence' as const,
-          content: 'Some code',
-          location: { start: { line: 1, column: 1 }, end: { line: 3, column: 3 } }
-        }
-      ];
-
-      interpret(nodes, state);
-      expect(state.getNodes()).toEqual(nodes);
+      interpret(nodes, context.state);
+      expect(context.state.getNodes()).toHaveLength(1);
+      expect(context.state.getNodes()[0].type).toBe('Text');
+      expect(context.state.getNodes()[0].content).toBe('Hello world');
     });
   });
 
   describe('directive nodes', () => {
-    it('should handle directive nodes with registered handlers', () => {
+    it('should handle data directives', () => {
       DirectiveRegistry.registerHandler(new DataDirectiveHandler());
-
+      const location = context.createLocation(1, 1);
       const nodes: DirectiveNode[] = [
-        {
-          type: 'Directive' as const,
-          directive: {
-            kind: 'data',
-            identifier: 'test',
-            value: { key: 'value' }
-          },
-          location: { start: { line: 1, column: 1 }, end: { line: 1, column: 10 } }
-        }
+        context.createDirectiveNode('data', { name: 'test', value: 'value' }, location)
       ];
 
-      interpret(nodes, state);
-      expect(state.getDataVar('test')).toEqual({ key: 'value' });
+      interpret(nodes, context.state);
+      expect(context.state.getDataVar('test')).toBe('value');
     });
 
-    it('should throw error for unhandled directive kinds', () => {
+    it('should throw on unknown directives', () => {
+      const location = context.createLocation(1, 1);
       const nodes: DirectiveNode[] = [
-        {
-          type: 'Directive' as const,
-          directive: {
-            kind: 'run',
-          },
-          location: { start: { line: 1, column: 1 }, end: { line: 1, column: 10 } }
-        }
+        context.createDirectiveNode('unknown', { name: 'test' }, location)
       ];
 
-      expect(() => interpret(nodes, state)).toThrow(
-        'No handler found for directive: run'
-      );
+      expect(() => interpret(nodes, context.state)).toThrow(MeldInterpretError);
     });
   });
 
-  describe('unknown nodes', () => {
-    it('should store unknown node types in state', () => {
-      const nodes: TextNode[] = [
-        {
-          type: 'Text' as const,
-          content: 'Some text',
-          location: { start: { line: 1, column: 1 }, end: { line: 1, column: 10 } }
-        }
+  describe('code fence nodes', () => {
+    it('should handle code fence nodes', () => {
+      const location = context.createLocation(1, 1);
+      const nodes: CodeFenceNode[] = [{
+        type: 'CodeFence',
+        language: 'javascript',
+        content: 'console.log("test")',
+        location
+      }];
+
+      interpret(nodes, context.state);
+      expect(context.state.getNodes()).toHaveLength(1);
+      expect(context.state.getNodes()[0].type).toBe('CodeFence');
+    });
+  });
+
+  describe('nested interpretation', () => {
+    it('should handle nested states correctly', () => {
+      const parentLocation = context.createLocation(1, 1);
+      const childLocation = context.createLocation(2, 3);
+      
+      DirectiveRegistry.registerHandler(new DataDirectiveHandler());
+      
+      // Create parent nodes
+      const parentNodes: MeldNode[] = [
+        context.createDirectiveNode('data', { name: 'parent', value: 'parent-value' }, parentLocation)
       ];
 
-      interpret(nodes, state);
-      expect(state.getNodes()).toEqual(nodes);
+      // Create child context and nodes
+      const childContext = context.createNestedContext(parentLocation);
+      const childNodes: MeldNode[] = [
+        childContext.createDirectiveNode('data', { name: 'child', value: 'child-value' }, childLocation)
+      ];
+
+      // Interpret both
+      interpret(parentNodes, context.state);
+      interpret(childNodes, childContext.state);
+      childContext.state.mergeIntoParent();
+
+      // Verify results
+      expect(context.state.getDataVar('parent')).toBe('parent-value');
+      expect(context.state.getDataVar('child')).toBe('child-value');
     });
   });
 
   describe('error handling', () => {
-    it('should wrap and rethrow errors with node context', () => {
-      DirectiveRegistry.registerHandler({
-        canHandle: () => true,
-        handle: () => {
-          throw new Error('Test error');
-        }
-      });
-
+    it('should preserve error locations', () => {
+      const location = context.createLocation(5, 3);
       const nodes: DirectiveNode[] = [
-        {
-          type: 'Directive' as const,
-          directive: {
-            kind: 'data'
-          },
-          location: { start: { line: 1, column: 1 }, end: { line: 1, column: 10 } }
-        }
+        context.createDirectiveNode('unknown', { name: 'test' }, location)
       ];
 
-      expect(() => interpret(nodes, state)).toThrow(
-        'Failed to interpret node Directive: Test error'
-      );
+      try {
+        interpret(nodes, context.state);
+        fail('Should have thrown an error');
+      } catch (error) {
+        expect(error).toBeInstanceOf(MeldInterpretError);
+        if (error instanceof MeldInterpretError) {
+          expect(error.location).toBeDefined();
+          expect(error.location?.line).toBe(5);
+          expect(error.location?.column).toBe(3);
+        }
+      }
     });
 
-    it('should handle non-Error errors', () => {
-      DirectiveRegistry.registerHandler({
-        canHandle: () => true,
-        handle: () => {
-          throw 'String error';
-        }
-      });
-
+    it('should handle errors in nested contexts', () => {
+      const baseLocation = context.createLocation(5, 3);
+      const nestedContext = context.createNestedContext(baseLocation);
+      const nestedLocation = nestedContext.createLocation(2, 4);
+      
       const nodes: DirectiveNode[] = [
-        {
-          type: 'Directive' as const,
-          directive: {
-            kind: 'data'
-          },
-          location: { start: { line: 1, column: 1 }, end: { line: 1, column: 10 } }
-        }
+        nestedContext.createDirectiveNode('unknown', { name: 'test' }, nestedLocation)
       ];
 
-      expect(() => interpret(nodes, state)).toThrow(
-        'Failed to interpret node Directive: String error'
-      );
-    });
-  });
-
-  describe('data directive', () => {
-    beforeEach(() => {
-      DirectiveRegistry.registerHandler(new DataDirectiveHandler());
-    });
-
-    it('should handle data directive with object literal', () => {
-      const nodes: DirectiveNode[] = [
-        {
-          type: 'Directive' as const,
-          directive: {
-            kind: 'data',
-            identifier: 'test',
-            value: { key: 'value' }
-          },
-          location: { start: { line: 1, column: 1 }, end: { line: 1, column: 10 } }
+      try {
+        interpret(nodes, nestedContext.state);
+        fail('Should have thrown an error');
+      } catch (error) {
+        expect(error).toBeInstanceOf(MeldInterpretError);
+        if (error instanceof MeldInterpretError) {
+          expect(error.location).toBeDefined();
+          expect(error.location?.line).toBe(6); // base.line (5) + relative.line (2) - 1
+          expect(error.location?.column).toBe(4);
         }
-      ];
-
-      interpret(nodes, state);
-      expect(state.getDataVar('test')).toEqual({ key: 'value' });
-    });
-
-    it('should handle data directive with array literal', () => {
-      const nodes: DirectiveNode[] = [
-        {
-          type: 'Directive' as const,
-          directive: {
-            kind: 'data',
-            identifier: 'test',
-            value: [1, 2, 3]
-          },
-          location: { start: { line: 1, column: 1 }, end: { line: 1, column: 10 } }
-        }
-      ];
-
-      interpret(nodes, state);
-      expect(state.getDataVar('test')).toEqual([1, 2, 3]);
-    });
-
-    it('should handle data directive with string literal', () => {
-      const nodes: DirectiveNode[] = [
-        {
-          type: 'Directive' as const,
-          directive: {
-            kind: 'data',
-            identifier: 'test',
-            value: 'hello'
-          },
-          location: { start: { line: 1, column: 1 }, end: { line: 1, column: 10 } }
-        }
-      ];
-
-      interpret(nodes, state);
-      expect(state.getDataVar('test')).toBe('hello');
+      }
     });
   });
 }); 

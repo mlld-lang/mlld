@@ -1,44 +1,40 @@
 import type { DirectiveNode } from 'meld-spec';
 import { DirectiveHandler, HandlerContext } from './types';
 import { InterpreterState } from '../state/state';
-import { MeldDirectiveError } from '../errors/errors';
-import { adjustLocation } from '../utils/location';
+import { ErrorFactory } from '../errors/factory';
+import { throwWithContext } from '../utils/location-helpers';
 
 export class DefineDirectiveHandler implements DirectiveHandler {
+  public static readonly directiveKind = 'define';
+
   canHandle(kind: string, mode: 'toplevel' | 'rightside'): boolean {
-    return kind === '@define';
+    return kind === DefineDirectiveHandler.directiveKind;
   }
 
   handle(node: DirectiveNode, state: InterpreterState, context: HandlerContext): void {
     const data = node.directive;
     if (!data.name) {
-      throw new MeldDirectiveError(
+      throwWithContext(
+        ErrorFactory.createDirectiveError,
         'Define directive requires a name',
-        'define',
-        context.mode === 'rightside'
-          ? adjustLocation(node.location, context.baseLocation)?.start
-          : node.location?.start
+        node.location,
+        context,
+        'define'
       );
     }
 
     if (!data.value) {
-      throw new MeldDirectiveError(
+      throwWithContext(
+        ErrorFactory.createDirectiveError,
         'Define directive requires a value',
-        'define',
-        context.mode === 'rightside'
-          ? adjustLocation(node.location, context.baseLocation)?.start
-          : node.location?.start
+        node.location,
+        context,
+        'define'
       );
     }
 
-    // Store the definition in state
-    state.setDataVar(`define:${data.name}`, {
-      name: data.name,
-      value: data.value,
-      location: context.mode === 'rightside'
-        ? adjustLocation(node.location, context.baseLocation)
-        : node.location
-    });
+    // Store the command in state
+    state.setCommand(data.value, data.name, data.options);
   }
 }
 

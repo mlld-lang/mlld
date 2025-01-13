@@ -1,56 +1,63 @@
 import type { DirectiveNode } from 'meld-spec';
 import { DirectiveHandler, HandlerContext } from './types';
 import { InterpreterState } from '../state/state';
-import { MeldDirectiveError } from '../errors/errors';
+import { ErrorFactory } from '../errors/factory';
 import { interpretSubDirectives } from '../subInterpreter';
-import { adjustLocation } from '../utils/location';
+import { throwWithContext, maybeAdjustLocation } from '../utils/location-helpers';
 
 export class EmbedDirectiveHandler implements DirectiveHandler {
+  public static readonly directiveKind = 'embed';
+
   canHandle(kind: string, mode: 'toplevel' | 'rightside'): boolean {
-    return kind === '@embed';
+    return kind === EmbedDirectiveHandler.directiveKind;
   }
 
   handle(node: DirectiveNode, state: InterpreterState, context: HandlerContext): void {
     const data = node.directive;
     if (!data.content) {
-      throw new MeldDirectiveError(
+      throwWithContext(
+        ErrorFactory.createDirectiveError,
         'Embed directive requires content',
-        'embed',
-        context.mode === 'rightside'
-          ? adjustLocation(node.location, context.baseLocation)?.start
-          : node.location?.start
+        node.location,
+        context,
+        'embed'
       );
     }
 
     // Get the location for sub-directives
-    const embedLocation = context.mode === 'rightside'
-      ? adjustLocation(node.location, context.baseLocation)
-      : node.location;
+    const embedLocation = maybeAdjustLocation(node.location, context);
 
     if (!embedLocation) {
-      throw new MeldDirectiveError(
+      throwWithContext(
+        ErrorFactory.createDirectiveError,
         'Embed directive requires a valid location',
-        'embed',
-        context.mode === 'rightside'
-          ? adjustLocation(node.location, context.baseLocation)?.start
-          : node.location?.start
+        node.location,
+        context,
+        'embed'
       );
     }
 
-    // Interpret sub-directives with the embed location as base
-    const childState = interpretSubDirectives(
+    // Check for circular embedding
+    const currentPath = state.getCurrentFilePath();
+    if (currentPath && state.hasImport(currentPath)) {
+      throwWithContext(
+        ErrorFactory.createDirectiveError,
+        'Circular embedding detected',
+        node.location,
+        context,
+        'embed'
+      );
+    }
+
+    // Create a new state for the embedded content
+    const embeddedState = interpretSubDirectives(
       data.content,
       embedLocation,
       state
     );
 
-    // Store any results in parent state
-    for (const [key, value] of childState.getAllTextVars()) {
-      state.setTextVar(key, value);
-    }
-    for (const [key, value] of childState.getAllDataVars()) {
-      state.setDataVar(key, value);
-    }
+    // Merge the embedded state back to parent
+    state.mergeChildState(embeddedState);
   }
 }
 

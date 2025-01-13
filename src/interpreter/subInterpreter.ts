@@ -2,8 +2,7 @@ import { Location, MeldNode } from 'meld-spec';
 import { InterpreterState } from './state/state';
 import { parseMeld } from './parser';
 import { interpret } from './interpreter';
-import { MeldInterpretError } from './errors/errors';
-import { adjustLocation } from './utils/location';
+import { ErrorFactory } from './errors/factory';
 
 /**
  * Adjusts the location of a node and all its children based on a base location.
@@ -43,24 +42,22 @@ function createLocationAwareError(
   error: Error,
   baseLocation: Location,
   nodeType: string = 'SubDirective'
-): MeldInterpretError {
-  const meldError = new MeldInterpretError(
-    `Failed to parse or interpret sub-directives: ${error.message}`,
-    nodeType,
-    baseLocation.start
-  );
-
-  // If the original error had location info, adjust it
+): Error {
   if ('location' in error && error.location) {
-    const adjustedLocation = adjustLocation(error.location as Location, baseLocation);
-    if (adjustedLocation) {
-      meldError.location = adjustedLocation.start;
-    }
+    return ErrorFactory.createWithAdjustedLocation(
+      ErrorFactory.createInterpretError,
+      `Failed to parse or interpret sub-directives: ${error.message}`,
+      (error.location as Location).start,
+      baseLocation.start,
+      nodeType
+    );
   } else {
-    meldError.location = baseLocation.start;
+    return ErrorFactory.createInterpretError(
+      `Failed to parse or interpret sub-directives: ${error.message}`,
+      nodeType,
+      baseLocation.start
+    );
   }
-
-  return meldError;
 }
 
 /**

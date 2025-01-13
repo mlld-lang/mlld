@@ -1,33 +1,35 @@
 import type { DirectiveNode } from 'meld-spec';
 import { DirectiveHandler, HandlerContext } from './types';
 import { InterpreterState } from '../state/state';
-import { MeldDirectiveError } from '../errors/errors';
-import { adjustLocation } from '../utils/location';
+import { ErrorFactory } from '../errors/factory';
+import { throwWithContext } from '../utils/location-helpers';
 
 export class DataDirectiveHandler implements DirectiveHandler {
+  public static readonly directiveKind = 'data';
+
   canHandle(kind: string, mode: 'toplevel' | 'rightside'): boolean {
-    return kind === '@data';
+    return kind === DataDirectiveHandler.directiveKind;
   }
 
   handle(node: DirectiveNode, state: InterpreterState, context: HandlerContext): void {
     const data = node.directive;
     if (!data.name) {
-      throw new MeldDirectiveError(
+      throwWithContext(
+        ErrorFactory.createDirectiveError,
         'Data directive requires a name',
-        'data',
-        context.mode === 'rightside'
-          ? adjustLocation(node.location, context.baseLocation)?.start
-          : node.location?.start
+        node.location,
+        context,
+        'data'
       );
     }
 
     if (!data.value) {
-      throw new MeldDirectiveError(
+      throwWithContext(
+        ErrorFactory.createDirectiveError,
         'Data directive requires a value',
-        'data',
-        context.mode === 'rightside'
-          ? adjustLocation(node.location, context.baseLocation)?.start
-          : node.location?.start
+        node.location,
+        context,
+        'data'
       );
     }
 

@@ -10,10 +10,12 @@ import { parseMeld as parseContent } from '../interpreter/parser.js';
 import { interpret } from '../interpreter/interpreter.js';
 import { InterpreterState } from '../interpreter/state/state.js';
 import { MeldParseError, MeldInterpretError } from '../interpreter/errors/errors.js';
-import { mdToLlm, mdToMarkdown } from '../../tests/__mocks__/md-llm.js';
+import { mdToLlm, mdToMarkdown } from 'md-llm';
 import type { MeldNode } from 'meld-spec';
 import { promises as fs } from 'fs';
 import { resolve } from 'path';
+import { existsSync } from 'fs';
+import { readFile } from 'fs/promises';
 
 /**
  * Options for running Meld
@@ -29,6 +31,11 @@ export interface MeldOptions {
    * Initial state to use for interpretation
    */
   initialState?: InterpreterState;
+
+  /**
+   * Whether to include metadata in the output
+   */
+  includeMetadata?: boolean;
 }
 
 /**
@@ -48,9 +55,12 @@ export function parseMeld(content: string): MeldNode[] {
  * @returns The final interpreter state after interpretation
  * @throws {MeldInterpretError} If interpretation fails
  */
-export function interpretMeld(nodes: MeldNode[], initialState?: InterpreterState): InterpreterState {
-  const state = initialState ?? new InterpreterState();
-  interpret(nodes, state);
+export async function interpretMeld(
+  nodes: MeldNode[],
+  initialState?: InterpreterState
+): Promise<InterpreterState> {
+  const state = initialState || new InterpreterState();
+  await interpret(nodes, state, { mode: 'toplevel' });
   return state;
 }
 
@@ -60,7 +70,7 @@ export function interpretMeld(nodes: MeldNode[], initialState?: InterpreterState
  * @param format The desired output format
  * @returns The formatted output string
  */
-async function stateToOutput(state: InterpreterState, format: 'llm' | 'md'): Promise<string> {
+async function stateToOutput(state: InterpreterState, options: MeldOptions): Promise<string> {
   const nodes = state.getNodes();
   
   // Convert nodes to markdown
@@ -75,8 +85,10 @@ async function stateToOutput(state: InterpreterState, format: 'llm' | 'md'): Pro
     })
     .join('\n');
 
-  // Convert to requested format using md-llm
-  return format === 'llm' ? await mdToLlm(content) : await mdToMarkdown(content);
+  // Convert to requested format using our implementation
+  return options.format === 'llm' 
+    ? await mdToLlm(content, { includeMetadata: options.includeMetadata })
+    : await mdToMarkdown(content, { includeMetadata: options.includeMetadata });
 }
 
 /**
@@ -87,19 +99,26 @@ async function stateToOutput(state: InterpreterState, format: 'llm' | 'md'): Pro
  * @throws {MeldParseError} If parsing fails
  * @throws {MeldInterpretError} If interpretation fails
  */
-export async function runMeld(filePath: string, options: MeldOptions = {}): Promise<{ state: InterpreterState; output: string }> {
-  const { format = 'llm', initialState } = options;
-  
-  // Read and parse the file
-  const absolutePath = resolve(filePath);
-  const content = await fs.readFile(absolutePath, 'utf8');
-  const nodes = parseMeld(content);
-  
-  // Interpret the content
-  const state = interpretMeld(nodes, initialState);
-  
-  // Convert to requested format
-  const output = await stateToOutput(state, format);
-  
-  return { state, output };
+export async function runMeld(filePath: string, options: MeldOptions = {}): Promise<string> {
+  try {
+    // Validate file path
+    const absolutePath = resolve(filePath);
+    if (!existsSync(absolutePath)) {
+      throw new Error(`File not found: ${filePath}`);
+    }
+
+    // Read and parse the content
+    const content = await readFile(absolutePath, 'utf8');
+    const parsedNodes = parseMeld(content);
+    
+    // Interpret the content
+    const state = options.initialState || new InterpreterState();
+    await interpret(parsedNodes, state, { mode: 'toplevel', currentPath: absolutePath });
+    
+    // Convert to requested format
+    return stateToOutput(state, options);
+  } catch (error) {
+    console.error('Error running Meld:', error);
+    throw error;
+  }
 } 

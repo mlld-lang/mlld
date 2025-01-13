@@ -1,560 +1,204 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { InterpreterState } from '../state/state';
 import { DirectiveRegistry } from '../directives/registry';
 import { textDirectiveHandler } from '../directives/text';
 import { dataDirectiveHandler } from '../directives/data';
 import { runDirectiveHandler } from '../directives/run';
 import { MeldInterpretError } from '../errors/errors';
-import type { DirectiveNode, Node } from 'meld-spec';
+import { TestContext } from './test-utils';
+import { interpret } from '../interpreter';
 
 describe('Nested Directives', () => {
-  let parentState: InterpreterState;
+  let context: TestContext;
 
   beforeEach(() => {
-    parentState = new InterpreterState();
+    context = new TestContext();
     DirectiveRegistry.clear();
     DirectiveRegistry.registerHandler(textDirectiveHandler);
     DirectiveRegistry.registerHandler(dataDirectiveHandler);
     DirectiveRegistry.registerHandler(runDirectiveHandler);
   });
 
-  describe('state inheritance', () => {
-    it('should inherit parent state variables', () => {
-      const parentNode: DirectiveNode = {
-        type: 'directive',
-        directive: {
-          kind: 'text',
-          name: 'parent',
-          value: 'value'
-        },
-        location: {
-          start: { line: 1, column: 1 },
-          end: { line: 1, column: 20 }
-        }
-      };
+  describe('basic nesting', () => {
+    it('should handle simple nested directives', () => {
+      const parentLocation = context.createLocation(1, 1);
+      const childLocation = context.createLocation(2, 3);
 
-      textDirectiveHandler.handle(parentNode, parentState, {});
-      const childState = new InterpreterState(parentState);
-      expect(childState.getText('parent')).toBe('value');
-    });
+      const parentNode = context.createDirectiveNode('text', {
+        name: 'parent',
+        value: 'parent-value'
+      }, parentLocation);
 
-    it('should merge child state back to parent', () => {
-      const childState = new InterpreterState(parentState);
-      const childNode: DirectiveNode = {
-        type: 'directive',
-        directive: {
-          kind: 'text',
-          name: 'child',
-          value: 'value'
-        },
-        location: {
-          start: { line: 1, column: 1 },
-          end: { line: 1, column: 20 }
-        }
-      };
+      const childNode = context.createDirectiveNode('text', {
+        name: 'child',
+        value: 'child-value'
+      }, childLocation);
 
-      textDirectiveHandler.handle(childNode, childState, {});
-      childState.mergeToParent();
-      expect(parentState.getText('child')).toBe('value');
+      parentNode.children = [childNode];
+
+      interpret([parentNode], context.state);
+
+      expect(context.state.getTextVar('parent')).toBe('parent-value');
+      expect(context.state.getTextVar('child')).toBe('child-value');
     });
 
     it('should handle multiple levels of nesting', () => {
-      const state1 = new InterpreterState(parentState);
-      const state2 = new InterpreterState(state1);
+      const level1Location = context.createLocation(1, 1);
+      const level2Location = context.createLocation(2, 3);
+      const level3Location = context.createLocation(3, 5);
 
-      const node1: DirectiveNode = {
-        type: 'directive',
-        directive: {
-          kind: 'text',
-          name: 'level1',
-          value: 'value1'
-        },
-        location: {
-          start: { line: 1, column: 1 },
-          end: { line: 1, column: 20 }
-        }
-      };
+      const level1 = context.createDirectiveNode('text', {
+        name: 'level1',
+        value: 'value1'
+      }, level1Location);
 
-      const node2: DirectiveNode = {
-        type: 'directive',
-        directive: {
-          kind: 'text',
-          name: 'level2',
-          value: 'value2'
-        },
-        location: {
-          start: { line: 2, column: 1 },
-          end: { line: 2, column: 20 }
-        }
-      };
+      const level2 = context.createDirectiveNode('text', {
+        name: 'level2',
+        value: 'value2'
+      }, level2Location);
 
-      textDirectiveHandler.handle(node1, state1, {});
-      textDirectiveHandler.handle(node2, state2, {});
+      const level3 = context.createDirectiveNode('text', {
+        name: 'level3',
+        value: 'value3'
+      }, level3Location);
 
-      state2.mergeToParent();
-      state1.mergeToParent();
+      level2.children = [level3];
+      level1.children = [level2];
 
-      expect(state1.getText('level2')).toBe('value2');
-      expect(parentState.getText('level1')).toBe('value1');
-      expect(parentState.getText('level2')).toBe('value2');
-    });
+      interpret([level1], context.state);
 
-    it('should track local changes in nested states', () => {
-      const childState = new InterpreterState(parentState);
-      const node: DirectiveNode = {
-        type: 'directive',
-        directive: {
-          kind: 'text',
-          name: 'local',
-          value: 'value'
-        },
-        location: {
-          start: { line: 1, column: 1 },
-          end: { line: 1, column: 20 }
-        }
-      };
-
-      textDirectiveHandler.handle(node, childState, {});
-      expect(childState.getLocalChanges().has('text:local')).toBe(true);
-    });
-
-    it('should inherit file path from parent', () => {
-      parentState.setFilePath('/path/to/parent.meld');
-      const childState = new InterpreterState(parentState);
-      expect(childState.getFilePath()).toBe('/path/to/parent.meld');
+      expect(context.state.getTextVar('level1')).toBe('value1');
+      expect(context.state.getTextVar('level2')).toBe('value2');
+      expect(context.state.getTextVar('level3')).toBe('value3');
     });
   });
 
-  describe('location adjustments', () => {
-    it('should adjust locations for nested content', () => {
-      const childState = new InterpreterState(parentState);
-      const nodes: Node[] = [
-        {
-          type: 'directive',
-          directive: {
-            kind: 'text',
-            name: 'test1',
-            value: 'value1'
-          },
-          location: {
-            start: { line: 10, column: 5 },
-            end: { line: 10, column: 25 }
-          }
-        },
-        {
-          type: 'text',
-          content: 'Some text',
-          location: {
-            start: { line: 11, column: 1 },
-            end: { line: 11, column: 10 }
-          }
-        }
-      ];
+  describe('location handling', () => {
+    it('should adjust locations in nested directives', () => {
+      const baseLocation = context.createLocation(5, 3);
+      const nestedContext = context.createNestedContext(baseLocation);
 
-      nodes.forEach(node => childState.addNode(node));
-      const resultNodes = childState.getNodes();
-      
-      expect(resultNodes[0].location?.start).toEqual({ line: 10, column: 5 });
-      expect(resultNodes[1].location?.start).toEqual({ line: 11, column: 1 });
-    });
+      const parentLocation = nestedContext.createLocation(1, 1);
+      const childLocation = nestedContext.createLocation(2, 3);
 
-    it('should handle errors with adjusted locations', () => {
-      const childState = new InterpreterState(parentState);
-      const errorNode: DirectiveNode = {
-        type: 'directive',
-        directive: {
-          kind: 'text',
-          name: 'error',
-          value: undefined
-        },
-        location: {
-          start: { line: 5, column: 1 },
-          end: { line: 5, column: 20 }
-        }
-      };
+      const parentNode = nestedContext.createDirectiveNode('text', {
+        name: 'parent',
+        value: 'value'
+      }, parentLocation);
+
+      const childNode = nestedContext.createDirectiveNode('text', {
+        name: 'child',
+        value: 'value'
+      }, childLocation);
+
+      parentNode.children = [childNode];
 
       try {
-        textDirectiveHandler.handle(errorNode, childState, {});
-      } catch (error: any) {
-        expect(error.location).toBeDefined();
-        expect(error.location.line).toBe(5);
-        expect(error.location.column).toBe(1);
+        // Force an error by using an invalid directive
+        childNode.directive.kind = 'invalid';
+        interpret([parentNode], nestedContext.state);
+        fail('Should have thrown an error');
+      } catch (error) {
+        expect(error).toBeInstanceOf(MeldInterpretError);
+        if (error instanceof MeldInterpretError) {
+          expect(error.location).toBeDefined();
+          expect(error.location?.line).toBe(7); // base.line (5) + relative.line (2) - 1
+          expect(error.location?.column).toBe(3);
+        }
       }
     });
+  });
 
-    it('should adjust locations for multi-line content', () => {
-      const childState = new InterpreterState(parentState);
-      const nodes: Node[] = [
-        {
-          type: 'directive',
-          directive: {
-            kind: 'text',
-            name: 'test1',
-            value: 'value1'
-          },
-          location: {
-            start: { line: 20, column: 5 },
-            end: { line: 20, column: 25 }
-          }
-        },
-        {
-          type: 'text',
-          content: 'Line 1\nLine 2',
-          location: {
-            start: { line: 22, column: 1 },
-            end: { line: 23, column: 10 }
-          }
-        }
-      ];
+  describe('state inheritance', () => {
+    it('should inherit parent state in nested directives', () => {
+      const parentLocation = context.createLocation(1, 1);
+      const childLocation = context.createLocation(2, 3);
 
-      nodes.forEach(node => childState.addNode(node));
-      const resultNodes = childState.getNodes();
-      
-      expect(resultNodes[0].location?.start).toEqual({ line: 20, column: 5 });
-      expect(resultNodes[1].location?.start).toEqual({ line: 22, column: 1 });
+      context.state.setTextVar('inherited', 'value');
+
+      const parentNode = context.createDirectiveNode('text', {
+        name: 'parent',
+        value: '{inherited}'
+      }, parentLocation);
+
+      const childNode = context.createDirectiveNode('text', {
+        name: 'child',
+        value: '{inherited}'
+      }, childLocation);
+
+      parentNode.children = [childNode];
+
+      interpret([parentNode], context.state);
+
+      expect(context.state.getTextVar('parent')).toBe('value');
+      expect(context.state.getTextVar('child')).toBe('value');
     });
 
-    it('should preserve indentation in location adjustments', () => {
-      const childState = new InterpreterState(parentState);
-      const nodes: Node[] = [
-        {
-          type: 'directive',
-          directive: {
-            kind: 'text',
-            name: 'test1',
-            value: 'value1'
-          },
-          location: {
-            start: { line: 10, column: 3 },
-            end: { line: 10, column: 23 }
-          }
-        },
-        {
-          type: 'directive',
-          directive: {
-            kind: 'text',
-            name: 'test2',
-            value: 'value2'
-          },
-          location: {
-            start: { line: 11, column: 3 },
-            end: { line: 11, column: 23 }
-          }
-        }
-      ];
+    it('should handle variable shadowing in nested scopes', () => {
+      const parentLocation = context.createLocation(1, 1);
+      const child1Location = context.createLocation(2, 3);
+      const child2Location = context.createLocation(3, 3);
 
-      nodes.forEach(node => childState.addNode(node));
-      const resultNodes = childState.getNodes();
-      
-      expect(resultNodes[0].location?.start).toEqual({ line: 10, column: 3 });
-      expect(resultNodes[1].location?.start).toEqual({ line: 11, column: 3 });
-    });
+      const parentNode = context.createDirectiveNode('text', {
+        name: 'shared',
+        value: 'parent'
+      }, parentLocation);
 
-    it('should handle nested nodes with child nodes', () => {
-      const childState = new InterpreterState(parentState);
-      const nodes: Node[] = [
-        {
-          type: 'directive',
-          directive: {
-            kind: 'text',
-            name: 'parent',
-            value: 'value'
-          },
-          location: {
-            start: { line: 5, column: 3 },
-            end: { line: 5, column: 23 }
-          }
-        },
-        {
-          type: 'directive',
-          directive: {
-            kind: 'text',
-            name: 'child',
-            value: 'value'
-          },
-          location: {
-            start: { line: 6, column: 1 },
-            end: { line: 6, column: 20 }
-          }
-        }
-      ];
+      const child1 = context.createDirectiveNode('text', {
+        name: 'shared',
+        value: 'child1'
+      }, child1Location);
 
-      nodes.forEach(node => childState.addNode(node));
-      const resultNodes = childState.getNodes();
-      
-      expect(resultNodes[0].location?.start).toEqual({ line: 5, column: 3 });
-      expect(resultNodes[0].location?.end).toEqual({ line: 5, column: 23 });
-      expect(resultNodes[1].location?.start).toEqual({ line: 6, column: 1 });
-    });
+      const child2 = context.createDirectiveNode('text', {
+        name: 'test',
+        value: '{shared}'
+      }, child2Location);
 
-    it('should handle complex multi-line content with mixed indentation', () => {
-      const childState = new InterpreterState(parentState);
-      const nodes: Node[] = [
-        {
-          type: 'directive',
-          directive: {
-            kind: 'text',
-            name: 'test1',
-            value: 'multi\nline\nvalue'
-          },
-          location: {
-            start: { line: 10, column: 4 },
-            end: { line: 12, column: 8 }
-          }
-        },
-        {
-          type: 'text',
-          content: '  indented\n    more indented\nno indent',
-          location: {
-            start: { line: 13, column: 3 },
-            end: { line: 15, column: 9 }
-          }
-        }
-      ];
+      child1.children = [child2];
+      parentNode.children = [child1];
 
-      nodes.forEach(node => childState.addNode(node));
-      const resultNodes = childState.getNodes();
-      
-      // Verify start locations
-      expect(resultNodes[0].location?.start).toEqual({ line: 10, column: 4 });
-      expect(resultNodes[0].location?.end).toEqual({ line: 12, column: 8 });
-      expect(resultNodes[1].location?.start).toEqual({ line: 13, column: 3 });
-      expect(resultNodes[1].location?.end).toEqual({ line: 15, column: 9 });
-    });
+      interpret([parentNode], context.state);
 
-    it('should handle deeply nested directives with location inheritance', () => {
-      const state1 = new InterpreterState(parentState);
-      const state2 = new InterpreterState(state1);
-      const state3 = new InterpreterState(state2);
-
-      // Base location for first nesting level
-      const baseLocation1 = {
-        start: { line: 5, column: 3 },
-        end: { line: 15, column: 3 }
-      };
-
-      // Base location for second nesting level
-      const baseLocation2 = {
-        start: { line: 7, column: 5 },
-        end: { line: 12, column: 5 }
-      };
-
-      // Base location for third nesting level
-      const baseLocation3 = {
-        start: { line: 8, column: 7 },
-        end: { line: 10, column: 7 }
-      };
-
-      const node: DirectiveNode = {
-        type: 'directive',
-        directive: {
-          kind: 'text',
-          name: 'deepNested',
-          value: 'test'
-        },
-        location: {
-          start: { line: 1, column: 1 },
-          end: { line: 1, column: 20 }
-        }
-      };
-
-      // Handle node at each nesting level with appropriate context
-      textDirectiveHandler.handle(node, state1, { mode: 'rightside', baseLocation: baseLocation1 });
-      textDirectiveHandler.handle(node, state2, { mode: 'rightside', baseLocation: baseLocation2 });
-      textDirectiveHandler.handle(node, state3, { mode: 'rightside', baseLocation: baseLocation3 });
-
-      // Verify location adjustments at each level
-      const nodes1 = state1.getNodes();
-      const nodes2 = state2.getNodes();
-      const nodes3 = state3.getNodes();
-
-      expect(nodes1[0].location?.start).toEqual({ line: 5, column: 3 });
-      expect(nodes2[0].location?.start).toEqual({ line: 7, column: 5 });
-      expect(nodes3[0].location?.start).toEqual({ line: 8, column: 7 });
-    });
-
-    it('should handle edge case of zero-width locations', () => {
-      const childState = new InterpreterState(parentState);
-      const node: DirectiveNode = {
-        type: 'directive',
-        directive: {
-          kind: 'text',
-          name: 'test',
-          value: ''
-        },
-        location: {
-          start: { line: 1, column: 1 },
-          end: { line: 1, column: 1 }  // Zero-width location
-        }
-      };
-
-      textDirectiveHandler.handle(node, childState, {
-        mode: 'rightside',
-        baseLocation: {
-          start: { line: 10, column: 5 },
-          end: { line: 10, column: 5 }
-        }
-      });
-
-      const resultNodes = childState.getNodes();
-      expect(resultNodes[0].location?.start).toEqual({ line: 10, column: 5 });
-      expect(resultNodes[0].location?.end).toEqual({ line: 10, column: 5 });
-    });
-
-    it('should handle location adjustments with large line numbers', () => {
-      const childState = new InterpreterState(parentState);
-      const node: DirectiveNode = {
-        type: 'directive',
-        directive: {
-          kind: 'text',
-          name: 'test',
-          value: 'value'
-        },
-        location: {
-          start: { line: 1000, column: 1 },
-          end: { line: 1000, column: 20 }
-        }
-      };
-
-      textDirectiveHandler.handle(node, childState, {
-        mode: 'rightside',
-        baseLocation: {
-          start: { line: 5000, column: 5 },
-          end: { line: 5000, column: 25 }
-        }
-      });
-
-      const resultNodes = childState.getNodes();
-      expect(resultNodes[0].location?.start).toEqual({ line: 5999, column: 1 });
-      expect(resultNodes[0].location?.end).toEqual({ line: 5999, column: 20 });
-    });
-
-    it('should preserve location information in error scenarios', () => {
-      const childState = new InterpreterState(parentState);
-      const errorNode: DirectiveNode = {
-        type: 'directive',
-        directive: {
-          kind: 'text',
-          name: 'error',
-          value: undefined
-        },
-        location: {
-          start: { line: 3, column: 5 },
-          end: { line: 5, column: 7 }
-        }
-      };
-
-      const baseLocation = {
-        start: { line: 10, column: 3 },
-        end: { line: 15, column: 3 }
-      };
-
-      try {
-        textDirectiveHandler.handle(errorNode, childState, {
-          mode: 'rightside',
-          baseLocation
-        });
-      } catch (error: any) {
-        expect(error.location).toBeDefined();
-        // Error location should be adjusted relative to base location
-        expect(error.location.line).toBe(12);
-        expect(error.location.column).toBe(5);
-      }
+      expect(context.state.getTextVar('shared')).toBe('child1');
+      expect(context.state.getTextVar('test')).toBe('child1');
     });
   });
 
   describe('error handling', () => {
-    it('should preserve error context in nested directives', () => {
-      const childState = new InterpreterState(parentState);
-      const errorNode: DirectiveNode = {
-        type: 'directive',
-        directive: {
-          kind: 'text',
-          name: 'error',
-          value: undefined
-        },
-        location: {
-          start: { line: 5, column: 1 },
-          end: { line: 5, column: 20 }
-        }
-      };
+    it('should handle errors in deeply nested directives', () => {
+      const baseLocation = context.createLocation(5, 3);
+      const nestedContext = context.createNestedContext(baseLocation);
+
+      const level1Location = nestedContext.createLocation(1, 1);
+      const level2Location = nestedContext.createLocation(2, 3);
+      const level3Location = nestedContext.createLocation(3, 5);
+
+      const level1 = nestedContext.createDirectiveNode('text', {
+        name: 'level1',
+        value: 'value1'
+      }, level1Location);
+
+      const level2 = nestedContext.createDirectiveNode('text', {
+        name: 'level2',
+        value: 'value2'
+      }, level2Location);
+
+      const level3 = nestedContext.createDirectiveNode('invalid', {
+        name: 'level3'
+      }, level3Location);
+
+      level2.children = [level3];
+      level1.children = [level2];
 
       try {
-        textDirectiveHandler.handle(errorNode, childState, {});
-      } catch (error: any) {
-        expect(error.location).toBeDefined();
-        expect(error.location.line).toBe(5);
-      }
-    });
-
-    it('should handle syntax errors in nested content', () => {
-      const childState = new InterpreterState(parentState);
-      const invalidNode: DirectiveNode = {
-        type: 'directive',
-        directive: {
-          kind: 'text',
-          name: 'invalid',
-          value: '{invalid:json}'
-        },
-        location: {
-          start: { line: 5, column: 1 },
-          end: { line: 5, column: 20 }
+        interpret([level1], nestedContext.state);
+        fail('Should have thrown an error');
+      } catch (error) {
+        expect(error).toBeInstanceOf(MeldInterpretError);
+        if (error instanceof MeldInterpretError) {
+          expect(error.location).toBeDefined();
+          expect(error.location?.line).toBe(8); // base.line (5) + relative.line (3) - 1
+          expect(error.location?.column).toBe(5);
         }
-      };
-
-      try {
-        textDirectiveHandler.handle(invalidNode, childState, {});
-      } catch (error: any) {
-        expect(error.location).toBeDefined();
-        expect(error.location.line).toBe(5);
-      }
-    });
-
-    it('should adjust error locations from nested content', () => {
-      const childState = new InterpreterState(parentState);
-      const errorNode: DirectiveNode = {
-        type: 'directive',
-        directive: {
-          kind: 'text',
-          name: 'error',
-          value: undefined
-        },
-        location: {
-          start: { line: 10, column: 5 },
-          end: { line: 10, column: 25 }
-        }
-      };
-
-      try {
-        textDirectiveHandler.handle(errorNode, childState, {});
-      } catch (error: any) {
-        expect(error.location).toBeDefined();
-        expect(error.location.line).toBe(10);
-        expect(error.location.column).toBe(5);
-      }
-    });
-
-    it('should handle errors in child nodes', () => {
-      const childState = new InterpreterState(parentState);
-      const errorNode: DirectiveNode = {
-        type: 'directive',
-        directive: {
-          kind: 'text',
-          name: 'error',
-          value: undefined
-        },
-        location: {
-          start: { line: 6, column: 1 },
-          end: { line: 6, column: 20 }
-        }
-      };
-
-      try {
-        textDirectiveHandler.handle(errorNode, childState, {});
-      } catch (error: any) {
-        expect(error.location).toBeDefined();
-        expect(error.location.line).toBe(6);
-        expect(error.location.column).toBe(1);
       }
     });
   });

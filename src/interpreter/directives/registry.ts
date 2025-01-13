@@ -6,11 +6,9 @@ import { defineDirectiveHandler } from './define';
 import { textDirectiveHandler } from './text';
 import { pathDirectiveHandler } from './path';
 import { dataDirectiveHandler } from './data';
-import { apiDirectiveHandler } from './api';
-import { callDirectiveHandler } from './call';
 
 export class DirectiveRegistry {
-  private static handlers: DirectiveHandler[] = [];
+  private static handlers: Map<string, DirectiveHandler> = new Map();
   private static initialized = false;
 
   private static initializeBuiltInHandlers(): void {
@@ -24,40 +22,41 @@ export class DirectiveRegistry {
     DirectiveRegistry.registerHandler(textDirectiveHandler);
     DirectiveRegistry.registerHandler(pathDirectiveHandler);
     DirectiveRegistry.registerHandler(dataDirectiveHandler);
-    DirectiveRegistry.registerHandler(apiDirectiveHandler);
-    DirectiveRegistry.registerHandler(callDirectiveHandler);
 
     DirectiveRegistry.initialized = true;
-  }
-
-  /**
-   * Normalizes a directive kind by ensuring it has the @ prefix
-   */
-  private static normalizeDirectiveKind(kind: string): string {
-    return kind.startsWith('@') ? kind : `@${kind}`;
   }
 
   static registerHandler(handler: DirectiveHandler): void {
     if (!handler) {
       throw new Error('Cannot register null or undefined handler');
     }
-    DirectiveRegistry.handlers.push(handler);
+
+    const ctor = handler.constructor as any;
+    if (!ctor.directiveKind) {
+      throw new Error('Handler is missing a static directiveKind property');
+    }
+    const kind: string = ctor.directiveKind;
+    DirectiveRegistry.handlers.set(kind, handler);
   }
 
-  /**
-   * Finds a handler that can handle the specified kind in the given mode.
-   * Automatically adds @ prefix if not present.
-   */
   static findHandler(kind: string, mode: 'toplevel' | 'rightside'): DirectiveHandler | undefined {
     // Ensure handlers are initialized
     DirectiveRegistry.initializeBuiltInHandlers();
 
-    const normalizedKind = DirectiveRegistry.normalizeDirectiveKind(kind);
-    return DirectiveRegistry.handlers.find(h => h.canHandle(normalizedKind, mode));
+    // Remove @ prefix if present for consistency
+    const normalizedKind = kind.startsWith('@') ? kind.slice(1) : kind;
+
+    // First try exact match
+    const handler = DirectiveRegistry.handlers.get(normalizedKind);
+    if (handler && handler.canHandle(normalizedKind, mode)) {
+      return handler;
+    }
+
+    return undefined;
   }
 
   static clear(): void {
-    DirectiveRegistry.handlers = [];
+    DirectiveRegistry.handlers.clear();
     DirectiveRegistry.initialized = false;
   }
 } 
