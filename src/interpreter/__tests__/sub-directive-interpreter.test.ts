@@ -1,31 +1,32 @@
 import { describe, it, expect } from 'vitest';
-import { SubInterpreter } from '../subInterpreter.js';
+import { interpretSubDirectives } from '../subInterpreter';
 import { TestContext } from './test-utils';
-import { DirectiveRegistry } from '../directives/registry.js';
-import { DataDirectiveHandler } from '../directives/data.js';
-import { MeldInterpretError } from '../errors/errors.js';
+import { DirectiveRegistry } from '../directives/registry';
+import { dataDirectiveHandler } from '../directives/data';
+import { MeldInterpretError } from '../errors/errors';
 
-describe('SubInterpreter', () => {
+describe('Sub-directive Interpreter', () => {
   let context: TestContext;
-  let subInterpreter: SubInterpreter;
 
   beforeEach(() => {
     context = new TestContext();
-    subInterpreter = new SubInterpreter();
     DirectiveRegistry.clear();
-    DirectiveRegistry.registerHandler(new DataDirectiveHandler());
+    DirectiveRegistry.registerHandler(dataDirectiveHandler);
   });
 
   describe('basic interpretation', () => {
     it('should interpret text content', () => {
-      const result = subInterpreter.interpret('Hello world', context.state);
-      expect(result.getNodes()).toHaveLength(1);
-      expect(result.getNodes()[0].type).toBe('Text');
-      expect(result.getNodes()[0].content).toBe('Hello world');
+      const baseLocation = context.createLocation(1, 1);
+      const result = interpretSubDirectives('Hello world', baseLocation, context.state);
+      const nodes = result.getNodes();
+      expect(nodes).toHaveLength(1);
+      expect(nodes[0].type).toBe('Text');
+      expect(nodes[0].content).toBe('Hello world');
     });
 
     it('should interpret directives', () => {
-      const result = subInterpreter.interpret('@data name="test" value="value"', context.state);
+      const baseLocation = context.createLocation(1, 1);
+      const result = interpretSubDirectives('@data name="test" value="value"', baseLocation, context.state);
       expect(result.getDataVar('test')).toBe('value');
     });
   });
@@ -33,17 +34,13 @@ describe('SubInterpreter', () => {
   describe('nested interpretation', () => {
     it('should handle nested content with location adjustment', () => {
       const baseLocation = context.createLocation(5, 3);
-      const nestedContext = context.createNestedContext(baseLocation);
 
       const content = `
 Hello world
 @data name="test" value="nested"
       `;
 
-      const result = subInterpreter.interpret(content, nestedContext.state, {
-        mode: 'rightside',
-        baseLocation
-      });
+      const result = interpretSubDirectives(content, baseLocation, context.state);
 
       const nodes = result.getNodes();
       expect(nodes).toHaveLength(2);
@@ -53,13 +50,9 @@ Hello world
 
     it('should preserve error locations in nested content', () => {
       const baseLocation = context.createLocation(5, 3);
-      const nestedContext = context.createNestedContext(baseLocation);
 
       try {
-        subInterpreter.interpret('@unknown', nestedContext.state, {
-          mode: 'rightside',
-          baseLocation
-        });
+        interpretSubDirectives('@unknown', baseLocation, context.state);
         fail('Should have thrown an error');
       } catch (error) {
         expect(error).toBeInstanceOf(MeldInterpretError);
@@ -74,8 +67,9 @@ Hello world
 
   describe('state management', () => {
     it('should create new state for each interpretation', () => {
-      const state1 = subInterpreter.interpret('@data name="test1" value="value1"', context.state);
-      const state2 = subInterpreter.interpret('@data name="test2" value="value2"', context.state);
+      const baseLocation = context.createLocation(1, 1);
+      const state1 = interpretSubDirectives('@data name="test1" value="value1"', baseLocation, context.state);
+      const state2 = interpretSubDirectives('@data name="test2" value="value2"', baseLocation, context.state);
 
       expect(state1.getDataVar('test1')).toBe('value1');
       expect(state1.getDataVar('test2')).toBeUndefined();
@@ -84,8 +78,9 @@ Hello world
     });
 
     it('should inherit parent state when specified', () => {
+      const baseLocation = context.createLocation(1, 1);
       context.state.setDataVar('parent', 'value');
-      const childState = subInterpreter.interpret('Hello', context.state);
+      const childState = interpretSubDirectives('Hello', baseLocation, context.state);
 
       expect(childState.getDataVar('parent')).toBe('value');
     });
@@ -93,14 +88,16 @@ Hello world
 
   describe('error handling', () => {
     it('should handle parse errors', () => {
+      const baseLocation = context.createLocation(1, 1);
       expect(() => 
-        subInterpreter.interpret('@invalid-syntax', context.state)
+        interpretSubDirectives('@invalid-syntax', baseLocation, context.state)
       ).toThrow(MeldInterpretError);
     });
 
     it('should handle interpretation errors', () => {
+      const baseLocation = context.createLocation(1, 1);
       expect(() =>
-        subInterpreter.interpret('@unknown', context.state)
+        interpretSubDirectives('@unknown', baseLocation, context.state)
       ).toThrow(MeldInterpretError);
     });
   });
