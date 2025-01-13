@@ -1,4 +1,5 @@
 import type { MeldNode } from 'meld-spec';
+import { interpreterLogger } from '../../utils/logger';
 
 export class InterpreterState {
   private nodes: MeldNode[] = [];
@@ -14,19 +15,23 @@ export class InterpreterState {
 
   constructor(parentState?: InterpreterState) {
     this.parentState = parentState;
+    interpreterLogger.debug('Created new interpreter state', {
+      hasParent: !!parentState
+    });
   }
 
   // Text variables
   getText(name: string): string | undefined {
-    return this.textVars.get(name) ?? this.parentState?.getText(name);
+    const value = this.textVars.get(name) ?? this.parentState?.getText(name);
+    interpreterLogger.debug('Getting text variable', { name, found: !!value });
+    return value;
   }
 
   setTextVar(name: string, value: string): void {
-    if (this._isImmutable) {
-      throw new Error('Cannot modify immutable state');
-    }
+    this.checkMutable();
     this.textVars.set(name, value);
     this.localChanges.add(`text:${name}`);
+    interpreterLogger.debug('Set text variable', { name, value });
   }
 
   getAllTextVars(): Map<string, string> {
@@ -40,15 +45,16 @@ export class InterpreterState {
 
   // Data variables
   getDataVar(name: string): any {
-    return this.dataVars.get(name) ?? this.parentState?.getDataVar(name);
+    const value = this.dataVars.get(name) ?? this.parentState?.getDataVar(name);
+    interpreterLogger.debug('Getting data variable', { name, found: !!value });
+    return value;
   }
 
   setDataVar(name: string, value: any): void {
-    if (this._isImmutable) {
-      throw new Error('Cannot modify immutable state');
-    }
+    this.checkMutable();
     this.dataVars.set(name, value);
     this.localChanges.add(`data:${name}`);
+    interpreterLogger.debug('Set data variable', { name, valueType: typeof value });
   }
 
   getAllDataVars(): Map<string, any> {
@@ -57,28 +63,30 @@ export class InterpreterState {
 
   // Path variables
   getPathVar(name: string): string | undefined {
-    return this.pathVars.get(name) ?? this.parentState?.getPathVar(name);
+    const value = this.pathVars.get(name) ?? this.parentState?.getPathVar(name);
+    interpreterLogger.debug('Getting path variable', { name, found: !!value });
+    return value;
   }
 
   setPathVar(name: string, value: string): void {
-    if (this._isImmutable) {
-      throw new Error('Cannot modify immutable state');
-    }
+    this.checkMutable();
     this.pathVars.set(name, value);
     this.localChanges.add(`path:${name}`);
+    interpreterLogger.debug('Set path variable', { name, value });
   }
 
   // Commands
   getCommand(name: string): any {
-    return this.commands.get(name) ?? this.parentState?.getCommand(name);
+    const value = this.commands.get(name) ?? this.parentState?.getCommand(name);
+    interpreterLogger.debug('Getting command', { name, found: !!value });
+    return value;
   }
 
   setCommand(name: string, command: string, options?: Record<string, unknown>): void {
-    if (this._isImmutable) {
-      throw new Error('Cannot modify immutable state');
-    }
-    this.commands.set(name, { command, options });
+    this.checkMutable();
+    this.commands.set(name, { output: command, options });
     this.localChanges.add(`command:${name}`);
+    interpreterLogger.debug('Set command', { name, hasOptions: !!options });
   }
 
   getCommandWithOptions(command: string): { output: string; options?: Record<string, unknown> } | undefined {
@@ -94,15 +102,22 @@ export class InterpreterState {
     this.checkMutable();
     this.nodes.push(node);
     this.localChanges.add(`node:${this.nodes.length}`);
+    interpreterLogger.debug('Added node', { 
+      type: node.type,
+      location: node.location
+    });
   }
 
   // Imports
   addImport(path: string): void {
-    if (this._isImmutable) {
-      throw new Error('Cannot modify immutable state');
-    }
+    this.checkMutable();
     this.imports.add(path);
     this.localChanges.add(`import:${path}`);
+    interpreterLogger.debug('Added import', { path });
+  }
+
+  hasImport(path: string): boolean {
+    return this.imports.has(path) || !!this.parentState?.hasImport(path);
   }
 
   getImports(): Set<string> {
@@ -115,11 +130,10 @@ export class InterpreterState {
   }
 
   setCurrentFilePath(path: string): void {
-    if (this._isImmutable) {
-      throw new Error('Cannot modify immutable state');
-    }
+    this.checkMutable();
     this.currentFilePath = path;
     this.localChanges.add(`file:${path}`);
+    interpreterLogger.debug('Set current file path', { path });
   }
 
   // Local changes tracking
@@ -133,6 +147,9 @@ export class InterpreterState {
 
   // Mutability control
   setImmutable(): void {
+    interpreterLogger.debug('Making state immutable', {
+      changes: Array.from(this.localChanges)
+    });
     this._isImmutable = true;
   }
 
@@ -142,6 +159,12 @@ export class InterpreterState {
 
   // State merging
   mergeChildState(childState: InterpreterState): void {
+    interpreterLogger.info('Merging child state', {
+      childChanges: Array.from(childState.localChanges),
+      childHasParent: !!childState.parentState,
+      isParentImmutable: this.isImmutable
+    });
+
     this.checkMutable();
     
     // Merge text variables
@@ -182,16 +205,25 @@ export class InterpreterState {
     if (childState.currentFilePath) {
       this.currentFilePath = childState.currentFilePath;
     }
+
+    interpreterLogger.debug('Child state merged', {
+      totalNodes: this.nodes.length,
+      totalTextVars: this.textVars.size,
+      totalDataVars: this.dataVars.size,
+      totalImports: this.imports.size
+    });
   }
 
   private checkMutable(): void {
     if (this.isImmutable) {
+      interpreterLogger.error('Attempted to modify immutable state');
       throw new Error('Cannot modify immutable state');
     }
   }
 
   // Clone state
   clone(): InterpreterState {
+    interpreterLogger.debug('Cloning state');
     const newState = new InterpreterState();
     newState.textVars = new Map(this.textVars);
     newState.dataVars = new Map(this.dataVars);

@@ -41,6 +41,7 @@
     "md-llm": "^0.1.0",
     "meld-ast": "^0.4.2",
     "meld-spec": "^0.3.10",
+    "winston": "^3.17.0",
     "yargs": "^17.7.2"
   },
   "devDependencies": {

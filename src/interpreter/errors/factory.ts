@@ -1,4 +1,4 @@
-import type { Location } from 'meld-spec';
+import { Location, LocationPoint } from 'meld-spec';
 import {
   MeldError,
   MeldParseError,
@@ -7,77 +7,93 @@ import {
   MeldDirectiveError,
   MeldEmbedError
 } from './errors';
+import { interpreterLogger } from '../../utils/logger';
 
 /**
- * Factory class for creating Meld errors with proper location context
+ * Create a parse error with location information
  */
-export class ErrorFactory {
-  /**
-   * Create a parse error with location context
-   */
-  static createParseError(message: string, location?: Location['start']): MeldParseError {
-    return new MeldParseError(message, location);
+export function createParseError(message: string, location?: LocationPoint): MeldParseError {
+  interpreterLogger.error('Parse error occurred', {
+    message,
+    location
+  });
+  return new MeldParseError(message, location);
+}
+
+/**
+ * Create an interpret error with location information
+ */
+export function createInterpretError(
+  message: string,
+  nodeType?: string,
+  location?: LocationPoint
+): MeldInterpretError {
+  interpreterLogger.error('Interpret error occurred', {
+    message,
+    nodeType,
+    location
+  });
+  return new MeldInterpretError(message, nodeType, location);
+}
+
+/**
+ * Create an import error with location information
+ */
+export function createImportError(message: string, location?: LocationPoint): MeldImportError {
+  interpreterLogger.error('Import error occurred', {
+    message,
+    location
+  });
+  return new MeldImportError(message, location);
+}
+
+/**
+ * Create a directive error with location information
+ */
+export function createDirectiveError(message: string, location?: LocationPoint): MeldDirectiveError {
+  interpreterLogger.error('Directive error occurred', {
+    message,
+    location
+  });
+  return new MeldDirectiveError(message, location);
+}
+
+/**
+ * Create an embed error with location information
+ */
+export function createEmbedError(message: string, location?: LocationPoint): MeldEmbedError {
+  interpreterLogger.error('Embed error occurred', {
+    message,
+    location
+  });
+  return new MeldEmbedError(message, location);
+}
+
+/**
+ * Create a location-aware error by adjusting the location based on a base location
+ */
+export function createLocationAwareError(error: MeldError, baseLocation: Location): MeldError {
+  if (!error.location || !baseLocation.start) {
+    interpreterLogger.warn('Cannot create location-aware error - missing location information', {
+      hasErrorLocation: !!error.location,
+      hasBaseLocation: !!baseLocation.start
+    });
+    return error;
   }
 
-  /**
-   * Create an interpret error with location context and optional node type
-   */
-  static createInterpretError(
-    message: string,
-    nodeType?: string,
-    location?: Location['start']
-  ): MeldInterpretError {
-    return new MeldInterpretError(message, nodeType, location);
-  }
+  const newLocation = {
+    line: error.location.line + baseLocation.start.line - 1,
+    column: error.location.line === 1 
+      ? error.location.column + baseLocation.start.column - 1
+      : error.location.column
+  };
 
-  /**
-   * Create an import error with location context
-   */
-  static createImportError(message: string, location?: Location['start']): MeldImportError {
-    return new MeldImportError(message, location);
-  }
+  interpreterLogger.debug('Created location-aware error', {
+    originalLocation: error.location,
+    baseLocation: baseLocation.start,
+    adjustedLocation: newLocation
+  });
 
-  /**
-   * Create a directive error with location context
-   */
-  static createDirectiveError(
-    message: string,
-    directiveKind: string,
-    location?: Location['start']
-  ): MeldDirectiveError {
-    return new MeldDirectiveError(message, directiveKind, location);
-  }
-
-  /**
-   * Create an embed error with location context
-   */
-  static createEmbedError(message: string, location?: Location['start']): MeldEmbedError {
-    return new MeldEmbedError(message, location);
-  }
-
-  /**
-   * Adjust a location based on a base location
-   * For right-side mode, we need to adjust the line and column numbers
-   * based on where the content appears in the parent
-   */
-  static adjustLocation(location: Location['start'], baseLocation: Location['start']): Location['start'] {
-    return {
-      line: baseLocation.line + location.line - 1,
-      column: location.line === 1 ? baseLocation.column + location.column - 1 : location.column
-    };
-  }
-
-  /**
-   * Create an error with adjusted location for right-side mode
-   */
-  static createWithAdjustedLocation<T extends MeldError>(
-    createFn: (message: string, ...args: any[]) => T,
-    message: string,
-    location: Location['start'],
-    baseLocation: Location['start'],
-    ...rest: any[]
-  ): T {
-    const adjustedLocation = this.adjustLocation(location, baseLocation);
-    return createFn(message, ...rest, adjustedLocation);
-  }
+  error.location = newLocation;
+  return error;
 } 

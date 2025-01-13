@@ -16,6 +16,7 @@ import { promises as fs } from 'fs';
 import { resolve } from 'path';
 import { existsSync } from 'fs';
 import { readFile } from 'fs/promises';
+import { interpreterLogger } from '../utils/logger';
 
 /**
  * Options for running Meld
@@ -45,7 +46,23 @@ export interface MeldOptions {
  * @throws {MeldParseError} If parsing fails
  */
 export function parseMeld(content: string): MeldNode[] {
-  return parseContent(content);
+  interpreterLogger.debug('Parsing Meld content', {
+    contentLength: content.length
+  });
+  
+  try {
+    const nodes = parseContent(content);
+    interpreterLogger.debug('Successfully parsed Meld content', {
+      nodeCount: nodes.length,
+      nodeTypes: nodes.map(n => n.type)
+    });
+    return nodes;
+  } catch (error) {
+    interpreterLogger.error('Failed to parse Meld content', {
+      error: error instanceof Error ? error.message : String(error)
+    });
+    throw error;
+  }
 }
 
 /**
@@ -59,9 +76,27 @@ export async function interpretMeld(
   nodes: MeldNode[],
   initialState?: InterpreterState
 ): Promise<InterpreterState> {
-  const state = initialState || new InterpreterState();
-  await interpret(nodes, state, { mode: 'toplevel' });
-  return state;
+  interpreterLogger.debug('Starting Meld interpretation', {
+    nodeCount: nodes.length,
+    hasInitialState: !!initialState
+  });
+
+  try {
+    const state = initialState || new InterpreterState();
+    await interpret(nodes, state, { mode: 'toplevel' });
+    
+    interpreterLogger.debug('Successfully interpreted Meld content', {
+      finalNodeCount: state.getNodes().length,
+      changes: Array.from(state.getLocalChanges())
+    });
+    
+    return state;
+  } catch (error) {
+    interpreterLogger.error('Failed to interpret Meld content', {
+      error: error instanceof Error ? error.message : String(error)
+    });
+    throw error;
+  }
 }
 
 /**
@@ -71,6 +106,12 @@ export async function interpretMeld(
  * @returns The formatted output string
  */
 async function stateToOutput(state: InterpreterState, options: MeldOptions): Promise<string> {
+  interpreterLogger.debug('Converting state to output', {
+    format: options.format || 'llm',
+    includeMetadata: options.includeMetadata,
+    nodeCount: state.getNodes().length
+  });
+
   const nodes = state.getNodes();
   
   // Convert nodes to markdown
@@ -85,10 +126,25 @@ async function stateToOutput(state: InterpreterState, options: MeldOptions): Pro
     })
     .join('\n');
 
-  // Convert to requested format using our implementation
-  return options.format === 'llm' 
-    ? await mdToLlm(content, { includeMetadata: options.includeMetadata })
-    : await mdToMarkdown(content, { includeMetadata: options.includeMetadata });
+  try {
+    // Convert to requested format using our implementation
+    const output = options.format === 'llm' 
+      ? await mdToLlm(content, { includeMetadata: options.includeMetadata })
+      : await mdToMarkdown(content, { includeMetadata: options.includeMetadata });
+
+    interpreterLogger.debug('Successfully converted state to output', {
+      format: options.format || 'llm',
+      outputLength: output.length
+    });
+
+    return output;
+  } catch (error) {
+    interpreterLogger.error('Failed to convert state to output', {
+      format: options.format || 'llm',
+      error: error instanceof Error ? error.message : String(error)
+    });
+    throw error;
+  }
 }
 
 /**
@@ -100,25 +156,47 @@ async function stateToOutput(state: InterpreterState, options: MeldOptions): Pro
  * @throws {MeldInterpretError} If interpretation fails
  */
 export async function runMeld(filePath: string, options: MeldOptions = {}): Promise<string> {
+  interpreterLogger.info('Running Meld file', {
+    filePath,
+    format: options.format || 'llm',
+    hasInitialState: !!options.initialState
+  });
+
   try {
-    // Validate file path
-    const absolutePath = resolve(filePath);
-    if (!existsSync(absolutePath)) {
-      throw new Error(`File not found: ${filePath}`);
+    // Resolve and validate file path
+    const resolvedPath = resolve(filePath);
+    if (!existsSync(resolvedPath)) {
+      interpreterLogger.error('Meld file not found', { filePath: resolvedPath });
+      throw new Error(`File not found: ${resolvedPath}`);
     }
 
-    // Read and parse the content
-    const content = await readFile(absolutePath, 'utf8');
-    const parsedNodes = parseMeld(content);
-    
-    // Interpret the content
-    const state = options.initialState || new InterpreterState();
-    await interpret(parsedNodes, state, { mode: 'toplevel', currentPath: absolutePath });
-    
-    // Convert to requested format
-    return stateToOutput(state, options);
+    // Read file content
+    const content = await readFile(resolvedPath, 'utf-8');
+    interpreterLogger.debug('Read Meld file', {
+      filePath: resolvedPath,
+      contentLength: content.length
+    });
+
+    // Parse content
+    const nodes = parseMeld(content);
+
+    // Interpret nodes
+    const state = await interpretMeld(nodes, options.initialState);
+
+    // Convert to output format
+    const output = await stateToOutput(state, options);
+
+    interpreterLogger.info('Successfully ran Meld file', {
+      filePath: resolvedPath,
+      outputLength: output.length
+    });
+
+    return output;
   } catch (error) {
-    console.error('Error running Meld:', error);
+    interpreterLogger.error('Failed to run Meld file', {
+      filePath,
+      error: error instanceof Error ? error.message : String(error)
+    });
     throw error;
   }
 } 

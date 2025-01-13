@@ -5,6 +5,7 @@ import { ErrorFactory } from '../errors/factory';
 import { throwWithContext } from '../utils/location-helpers';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { directiveLogger } from '../../utils/logger';
 
 const execAsync = promisify(exec);
 
@@ -26,9 +27,19 @@ export class RunDirectiveHandler implements DirectiveHandler {
 
   async handle(node: DirectiveNode, state: InterpreterState, context: HandlerContext): Promise<void> {
     const data = node.directive;
+    directiveLogger.debug('Processing run directive', { 
+      command: data.command,
+      mode: context.mode,
+      location: node.location
+    });
 
     // Validate command parameter
     if (!data.command || typeof data.command !== 'string') {
+      directiveLogger.error('Run directive missing command parameter', {
+        location: node.location,
+        mode: context.mode
+      });
+
       const error = ErrorFactory.createDirectiveError(
         'Run directive requires a command parameter',
         'run',
@@ -48,46 +59,26 @@ export class RunDirectiveHandler implements DirectiveHandler {
     }
 
     try {
-      // Get working directory from context or current process
-      const cwd = context.currentPath || process.cwd();
-
-      // Execute command and capture output
-      const result = await execAsync(data.command, {
-        cwd,
-        env: { ...process.env },
-        maxBuffer: 10 * 1024 * 1024 // 10MB buffer
+      directiveLogger.info(`Executing command: ${data.command}`, {
+        background: data.background,
+        mode: context.mode
       });
 
-      // Combine stdout and stderr, ensuring proper line endings
-      const output = [
-        result.stdout && result.stdout.trim(),
-        result.stderr && `Error: ${result.stderr.trim()}`
-      ].filter(Boolean).join('\n');
-
-      if (output) {
-        // Store output in state
-        const commandName = `run_${Date.now()}`;
-        state.setCommand(commandName, output);
-      }
-    } catch (error: any) {
-      // Handle command execution errors
-      const errorMessage = `Command execution failed: ${error.message}`;
-      const commandError = ErrorFactory.createDirectiveError(
-        errorMessage,
-        'run',
-        node.location?.start
-      );
+      const { stdout, stderr } = await execAsync(data.command);
       
-      if (context.mode === 'rightside' && node.location && context.baseLocation) {
-        throw ErrorFactory.createWithAdjustedLocation(
-          () => commandError,
-          errorMessage,
-          node.location.start,
-          context.baseLocation.start,
-          'run'
-        );
+      if (stdout) {
+        directiveLogger.debug('Command stdout', { stdout });
       }
-      throw commandError;
+      if (stderr) {
+        directiveLogger.warn('Command stderr', { stderr });
+      }
+    } catch (error) {
+      directiveLogger.error('Command execution failed', {
+        command: data.command,
+        error: error instanceof Error ? error.message : String(error),
+        location: node.location
+      });
+      throw error;
     }
   }
 }

@@ -2,10 +2,7 @@ import { DirectiveNode, MeldNode } from 'meld-spec';
 import { DirectiveRegistry } from './directives/registry';
 import { InterpreterState } from './state/state';
 import { HandlerContext } from './directives/types';
-
-function logStateOp(op: string, details?: Record<string, unknown>): void {
-  console.log(`[${new Date().toISOString()}] Interpreter ${op}`, details);
-}
+import { interpreterLogger } from '../utils/logger';
 
 export async function interpret(
   nodes: MeldNode[],
@@ -15,7 +12,7 @@ export async function interpret(
   // Ensure we have a complete context with defaults
   const mode = context.mode ?? 'toplevel';
 
-  logStateOp('interpret start', {
+  interpreterLogger.info('Starting interpretation', {
     mode,
     stateHasParent: !!state.parentState,
     currentNodes: state.getNodes().length,
@@ -35,35 +32,54 @@ export async function interpret(
     if (node.type === 'Directive') {
       const directiveNode = node as DirectiveNode;
       try {
-        logStateOp('processing directive', {
+        interpreterLogger.debug('Processing directive', {
           kind: directiveNode.directive.kind,
           data: directiveNode.directive,
-          mode: newContext.mode
+          mode: newContext.mode,
+          location: directiveNode.location
         });
 
         const handler = DirectiveRegistry.findHandler(directiveNode.directive.kind, newContext.mode);
         if (!handler) {
-          console.error('[Interpreter] No handler found:', directiveNode.directive.kind);
+          interpreterLogger.warn('No handler found for directive', {
+            kind: directiveNode.directive.kind,
+            mode: newContext.mode
+          });
           continue;
         }
 
-        console.log('[Interpreter] Found handler, executing...');
+        interpreterLogger.debug('Executing directive handler', {
+          kind: directiveNode.directive.kind,
+          handler: handler.constructor.name
+        });
         await handler.handle(directiveNode, state, newContext);
-        console.log('[Interpreter] Handler completed successfully');
+        interpreterLogger.debug('Handler execution completed', {
+          kind: directiveNode.directive.kind,
+          handler: handler.constructor.name
+        });
       } catch (error) {
-        console.error('[Interpreter] Error handling directive:', error);
+        interpreterLogger.error('Error handling directive', {
+          kind: directiveNode.directive.kind,
+          error: error instanceof Error ? error.message : String(error),
+          location: directiveNode.location
+        });
         throw error;
       }
     } else {
+      interpreterLogger.debug('Adding non-directive node', {
+        type: node.type,
+        location: node.location
+      });
       state.addNode(node);
     }
   }
 
-  logStateOp('interpret complete', {
+  interpreterLogger.info('Interpretation completed', {
     finalNodeCount: state.getNodes().length,
     vars: {
       text: Array.from(state.getAllTextVars().keys()),
       data: Array.from(state.getAllDataVars().keys())
-    }
+    },
+    changes: Array.from(state.getLocalChanges())
   });
 } 

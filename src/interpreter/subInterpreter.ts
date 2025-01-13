@@ -3,6 +3,7 @@ import { InterpreterState } from './state/state';
 import { parseMeld } from './parser';
 import { interpret } from './interpreter';
 import { ErrorFactory } from './errors/factory';
+import { interpreterLogger } from '../utils/logger';
 
 /**
  * Adjusts the location of a node and all its children based on a base location.
@@ -36,31 +37,6 @@ function adjustNodeLocation(node: MeldNode, baseLocation: Location): void {
 }
 
 /**
- * Creates an error with properly adjusted location information.
- */
-function createLocationAwareError(
-  error: Error,
-  baseLocation: Location,
-  nodeType: string = 'SubDirective'
-): Error {
-  if ('location' in error && error.location) {
-    return ErrorFactory.createWithAdjustedLocation(
-      ErrorFactory.createInterpretError,
-      `Failed to parse or interpret sub-directives: ${error.message}`,
-      (error.location as Location).start,
-      baseLocation.start,
-      nodeType
-    );
-  } else {
-    return ErrorFactory.createInterpretError(
-      `Failed to parse or interpret sub-directives: ${error.message}`,
-      nodeType,
-      baseLocation.start
-    );
-  }
-}
-
-/**
  * Interprets sub-directives found within content, returning a child state.
  * Handles proper location adjustments and state inheritance.
  */
@@ -69,69 +45,39 @@ export function interpretSubDirectives(
   baseLocation: Location,
   parentState: InterpreterState
 ): InterpreterState {
-  console.log('[SubInterpreter] Starting interpretation:', {
-    contentLength: content.length,
-    baseLocation,
-    hasParentState: !!parentState,
-    parentStateNodes: parentState.getNodes().length
-  });
-
   try {
+    interpreterLogger.debug('Starting sub-directive interpretation', {
+      contentLength: content.length,
+      baseLocation
+    });
+
+    // Parse the content into nodes
+    const nodes = parseMeld(content);
+    interpreterLogger.debug('Parsed sub-directives', {
+      nodeCount: nodes.length
+    });
+
     // Create child state that inherits from parent
     const childState = new InterpreterState(parentState);
     childState.setCurrentFilePath(parentState.getCurrentFilePath() || '');
-
-    console.log('[SubInterpreter] Created child state:', {
-      hasParentState: !!childState.parentState,
-      inheritedVars: {
-        text: Array.from(parentState.getAllTextVars().keys()),
-        data: Array.from(parentState.getAllDataVars().keys())
-      }
-    });
-
-    // Parse and interpret sub-directives
-    console.log('[SubInterpreter] Parsing content...');
-    const nodes = parseMeld(content);
-    console.log('[SubInterpreter] Parsed nodes:', {
-      count: nodes.length,
-      types: nodes.map(n => n.type)
-    });
+    interpreterLogger.debug('Created child state with parent inheritance');
 
     // Adjust locations for all nodes before interpretation
     for (const node of nodes) {
       adjustNodeLocation(node, baseLocation);
     }
 
-    // Interpret nodes in child state with right-side context
-    console.log('[SubInterpreter] Interpreting nodes in child state...');
+    // Interpret the nodes with proper location context
     interpret(nodes, childState, {
       mode: 'rightside',
-      parentState,
-      baseLocation
+      baseLocation,
+      parentState
     });
 
-    // Merge child state back to parent before making it immutable
-    console.log('[SubInterpreter] Merging child state back to parent...');
-    if (!parentState.isImmutable) {
-      // Merge child state back to all parent states in the chain
-      let currentParent: InterpreterState | undefined = parentState;
-      
-      // Merge child state into each parent state in the chain
-      while (currentParent && !currentParent.isImmutable) {
-        console.log('[SubInterpreter] Merging child state into parent:', {
-          parentVars: Array.from(currentParent.getAllTextVars().keys()),
-          childVars: Array.from(childState.getLocalTextVars().keys()),
-          childChanges: Array.from(childState.getLocalChanges())
-        });
-        currentParent.mergeChildState(childState);
-        currentParent = currentParent.parentState;
-      }
-    }
-
-    console.log('[SubInterpreter] Making child state immutable...');
+    interpreterLogger.debug('Making child state immutable');
     childState.setImmutable();
 
-    console.log('[SubInterpreter] Interpretation completed:', {
+    interpreterLogger.info('Sub-directive interpretation completed', {
       nodeCount: childState.getNodes().length,
       vars: {
         text: Array.from(childState.getAllTextVars().keys()),
@@ -142,14 +88,14 @@ export function interpretSubDirectives(
 
     return childState;
   } catch (error) {
-    console.error('[SubInterpreter] Error during interpretation:', {
+    interpreterLogger.error('Error during sub-directive interpretation', {
       errorType: error instanceof Error ? error.constructor.name : typeof error,
       errorMessage: error instanceof Error ? error.message : String(error),
       baseLocation
     });
 
     if (error instanceof Error) {
-      throw createLocationAwareError(error, baseLocation);
+      throw ErrorFactory.createLocationAwareError(error as Error & { location?: Location }, baseLocation);
     }
     throw error;
   }

@@ -1,5 +1,6 @@
 import type { DirectiveNode, Location, MeldNode, TextNode, DirectiveKind } from 'meld-spec';
 import { ErrorFactory } from './errors/factory';
+import { interpreterLogger } from '../utils/logger';
 
 interface Token {
   type: 'text' | 'directive';
@@ -8,6 +9,10 @@ interface Token {
 }
 
 function tokenize(content: string): Token[] {
+  interpreterLogger.debug('Starting tokenization', {
+    contentLength: content.length
+  });
+
   const lines = content.split('\n');
   const tokens: Token[] = [];
   let currentToken: Token | null = null;
@@ -27,6 +32,10 @@ function tokenize(content: string): Token[] {
           column: line.lastIndexOf('"""') + 4
         };
         tokens.push(currentToken!);
+        interpreterLogger.debug('Completed multiline token', {
+          type: currentToken!.type,
+          location: currentToken!.location
+        });
         currentToken = null;
         inMultilineContent = false;
         continue;
@@ -50,21 +59,37 @@ function tokenize(content: string): Token[] {
           end: { line: lineNum + 1, column: line.length + 1 }
         }
       };
-
-      // Check for multi-line content
-      if (trimmedLine.includes('content="""')) {
-        if (!trimmedLine.endsWith('"""')) {
-          inMultilineContent = true;
-          multilineStart = { line: lineNum + 1, column: startColumn };
-          continue;
-        }
-      } else {
+      interpreterLogger.debug('Found directive token', {
+        content: trimmedLine,
+        location: currentToken.location
+      });
+      tokens.push(currentToken);
+      currentToken = null;
+    }
+    // Start of multi-line content
+    else if (trimmedLine.startsWith('"""')) {
+      if (currentToken?.type === 'text') {
         tokens.push(currentToken);
-        currentToken = null;
       }
-    } else if (!inMultilineContent) {
-      // Handle regular text content
-      if (!currentToken || currentToken.type === 'directive') {
+
+      const startColumn = line.indexOf('"""') + 1;
+      multilineStart = { line: lineNum + 1, column: startColumn };
+      currentToken = {
+        type: 'text',
+        content: line.slice(line.indexOf('"""') + 3),
+        location: {
+          start: { line: lineNum + 1, column: startColumn },
+          end: { line: lineNum + 1, column: line.length + 1 }
+        }
+      };
+      inMultilineContent = true;
+      interpreterLogger.debug('Starting multiline content', {
+        location: { line: lineNum + 1, column: startColumn }
+      });
+    }
+    // Regular text content
+    else {
+      if (!currentToken) {
         currentToken = {
           type: 'text',
           content: line,
@@ -83,151 +108,101 @@ function tokenize(content: string): Token[] {
     }
   }
 
-  // Add final token if exists
-  if (currentToken && !inMultilineContent) {
+  if (currentToken) {
     tokens.push(currentToken);
   }
 
-  // Handle unclosed multi-line content
-  if (inMultilineContent && multilineStart) {
-    throw ErrorFactory.createParseError(
-      'Unclosed multi-line content block',
-      multilineStart
-    );
-  }
+  interpreterLogger.debug('Tokenization completed', {
+    tokenCount: tokens.length
+  });
 
   return tokens;
 }
 
 function parseDirective(content: string, location: Location): DirectiveNode {
-  const match = content.match(/@(\w+)(?:\s+([^]*))?\s*$/);
-  if (!match) {
-    throw ErrorFactory.createParseError('Invalid directive syntax', location.start);
-  }
-
-  const [, kind, rawArgs = ''] = match;
-  const validKinds: DirectiveKind[] = ['text', 'data', 'run', 'define', 'path', 'embed', 'import'];
-  if (!validKinds.includes(kind as DirectiveKind)) {
-    throw ErrorFactory.createParseError(`Invalid directive kind: ${kind}`, location.start);
-  }
-
-  const data: Record<string, any> = {};
-  let args = rawArgs;
-
-  // Handle multi-line content for embed directives first
-  if (kind === 'embed') {
-    const contentMatch = args.match(/content="""([\s\S]*?)"""/);
-    if (contentMatch) {
-      data.content = contentMatch[1].trim();
-      // Remove the content part from args to not interfere with other parsing
-      args = args.replace(/content="""[\s\S]*?"""/, '');
-    }
-  }
-
-  // Parse all key-value pairs
-  let currentPos = 0;
-  while (currentPos < args.length) {
-    // Find next key=value pair
-    const keyMatch = args.slice(currentPos).match(/(\w+)=/);
-    if (!keyMatch) break;
-
-    const key = keyMatch[1];
-    currentPos += keyMatch.index! + keyMatch[0].length;
-
-    // Determine the type of value
-    const char = args[currentPos];
-    let value: any;
-    let valueEnd: number;
-
-    if (char === '"') {
-      // String value
-      const stringMatch = args.slice(currentPos).match(/"([^"]*)"/)!;
-      value = stringMatch[1];
-      valueEnd = currentPos + stringMatch[0].length;
-    } else if (char === '{' || char === '[') {
-      // Object or Array - find matching closing bracket
-      let depth = 1;
-      let i = currentPos + 1;
-      const closingChar = char === '{' ? '}' : ']';
-      
-      while (depth > 0 && i < args.length) {
-        if (args[i] === char) depth++;
-        if (args[i] === closingChar) depth--;
-        i++;
-      }
-
-      if (depth > 0) {
-        throw ErrorFactory.createParseError(
-          `Unclosed ${char === '{' ? 'object' : 'array'} in value for ${key}`,
-          location.start
-        );
-      }
-
-      try {
-        value = JSON.parse(args.slice(currentPos, i));
-        valueEnd = i;
-      } catch (error) {
-        throw ErrorFactory.createParseError(
-          `Invalid JSON value for ${key}: ${error instanceof Error ? error.message : String(error)}`,
-          location.start
-        );
-      }
-    } else {
-      // Other values (number, boolean, null)
-      const valueMatch = args.slice(currentPos).match(/([^\s,}]+)/);
-      if (!valueMatch) {
-        throw ErrorFactory.createParseError(
-          `Missing value for ${key}`,
-          location.start
-        );
-      }
-
-      const rawValue = valueMatch[1];
-      try {
-        // Try parsing as JSON to handle numbers, booleans, and null
-        value = JSON.parse(rawValue);
-      } catch {
-        // If not valid JSON, treat as string
-        value = rawValue;
-      }
-      valueEnd = currentPos + valueMatch[0].length;
-    }
-
-    data[key] = value;
-    currentPos = valueEnd;
-  }
-
-  return {
-    type: 'Directive',
-    directive: {
-      kind: kind as DirectiveKind,
-      ...data
-    },
+  interpreterLogger.debug('Parsing directive', {
+    content,
     location
-  };
+  });
+
+  try {
+    // Remove @ prefix
+    const directiveContent = content.startsWith('@') ? content.slice(1) : content;
+
+    // Split into kind and arguments
+    const [kind, ...args] = directiveContent.split(/\s+/);
+    const argsStr = args.join(' ');
+
+    // Parse arguments as JSON if present
+    let directive: any = { kind };
+    if (argsStr) {
+      try {
+        const argsObj = JSON.parse(argsStr);
+        directive = { ...directive, ...argsObj };
+      } catch (error) {
+        interpreterLogger.error('Failed to parse directive arguments', {
+          content: argsStr,
+          error: error instanceof Error ? error.message : String(error),
+          location
+        });
+        throw ErrorFactory.createParseError(
+          `Invalid directive arguments: ${error instanceof Error ? error.message : String(error)}`,
+          location.start
+        );
+      }
+    }
+
+    interpreterLogger.debug('Successfully parsed directive', {
+      kind,
+      location
+    });
+
+    return {
+      type: 'Directive',
+      directive,
+      location
+    };
+  } catch (error) {
+    interpreterLogger.error('Failed to parse directive', {
+      content,
+      error: error instanceof Error ? error.message : String(error),
+      location
+    });
+    throw error;
+  }
 }
 
-/**
- * Parse Meld content into an AST
- * @param content The Meld content to parse
- * @returns Array of AST nodes
- * @throws {MeldParseError} If parsing fails
- */
 export function parseMeld(content: string): MeldNode[] {
+  interpreterLogger.info('Starting Meld content parsing', {
+    contentLength: content.length
+  });
+
   try {
     const tokens = tokenize(content);
-    return tokens.map(token => {
+    const nodes: MeldNode[] = [];
+
+    for (const token of tokens) {
       if (token.type === 'directive') {
-        return parseDirective(token.content, token.location);
+        nodes.push(parseDirective(token.content, token.location));
       } else {
-        return {
+        nodes.push({
           type: 'Text',
           content: token.content,
           location: token.location
-        } as TextNode;
+        });
       }
+    }
+
+    interpreterLogger.info('Meld parsing completed', {
+      nodeCount: nodes.length,
+      nodeTypes: nodes.map(n => n.type)
     });
+
+    return nodes;
   } catch (error) {
-    throw ErrorFactory.createParseError(error instanceof Error ? error.message : 'Parse error');
+    interpreterLogger.error('Failed to parse Meld content', {
+      error: error instanceof Error ? error.message : String(error)
+    });
+    throw error;
   }
 } 
