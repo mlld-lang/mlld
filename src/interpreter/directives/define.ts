@@ -55,7 +55,10 @@ export class DefineDirectiveHandler implements DirectiveHandler {
     });
 
     // Store the command in state
-    state.setCommand(data.value, data.name, data.options);
+    state.setCommand(data.name, {
+      output: data.value,
+      options: data.options
+    });
   }
 }
 

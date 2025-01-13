@@ -17,22 +17,32 @@ describe('EmbedDirectiveHandler', () => {
     DirectiveRegistry.registerHandler(embedDirectiveHandler);
 
     // Mock path module
-    vi.mock('path', () => ({
-      resolve: vi.fn((p: string) => p),
-      join: vi.fn((...paths: string[]) => paths.join('/')),
-      dirname: vi.fn((p: string) => p.split('/').slice(0, -1).join('/'))
-    }));
+    vi.mock('path', async () => {
+      const actualPath = await vi.importActual<typeof import('path')>('path');
+      return {
+        ...actualPath,
+        resolve: vi.fn((p: string) => p),
+        join: vi.fn((...paths: string[]) => paths.join('/')),
+        dirname: vi.fn((p: string) => p.split('/').slice(0, -1).join('/')),
+        isAbsolute: vi.fn(),
+      };
+    });
 
     // Mock fs module
-    vi.mock('fs', () => ({
-      readFileSync: vi.fn((path: string) => {
-        if (path in mockFiles) {
-          return mockFiles[path];
-        }
-        throw new Error(`Mock file not found: ${path}`);
-      }),
-      existsSync: vi.fn((path: string) => path in mockFiles)
-    }));
+    vi.mock('fs', async () => {
+      const actualFs = await vi.importActual<typeof import('fs')>('fs');
+      return {
+        ...actualFs,
+        readFileSync: vi.fn((path: string) => {
+          if (path in mockFiles) {
+            return mockFiles[path];
+          }
+          throw new Error(`Mock file not found: ${path}`);
+        }),
+        existsSync: vi.fn((path: string) => path in mockFiles),
+        mkdirSync: vi.fn(),
+      };
+    });
   });
 
   afterEach(() => {

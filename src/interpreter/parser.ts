@@ -133,23 +133,19 @@ function parseDirective(content: string, location: Location): DirectiveNode {
     const [kind, ...args] = directiveContent.split(/\s+/);
     const argsStr = args.join(' ');
 
-    // Parse arguments as JSON if present
+    // Parse arguments
     let directive: any = { kind };
     if (argsStr) {
-      try {
-        const argsObj = JSON.parse(argsStr);
-        directive = { ...directive, ...argsObj };
-      } catch (error) {
-        interpreterLogger.error('Failed to parse directive arguments', {
-          content: argsStr,
-          error: error instanceof Error ? error.message : String(error),
-          location
-        });
-        throw ErrorFactory.createParseError(
-          `Invalid directive arguments: ${error instanceof Error ? error.message : String(error)}`,
-          location.start
-        );
-      }
+      const argsObj = argsStr.split(/\s+/).reduce((acc, arg) => {
+        const [key, value] = arg.split('=');
+        if (key && value) {
+          // Remove quotes if present
+          acc[key] = value.replace(/^"|"$/g, '');
+        }
+        return acc;
+      }, {} as Record<string, string>);
+      
+      directive = { ...directive, ...argsObj };
     }
 
     interpreterLogger.debug('Successfully parsed directive', {

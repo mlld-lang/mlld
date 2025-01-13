@@ -6,8 +6,25 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { vi } from 'vitest';
 
-vi.mock('fs');
-vi.mock('path');
+vi.mock('fs', async () => {
+  const actualFs = await vi.importActual<typeof import('fs')>('fs');
+  return {
+    ...actualFs,
+    existsSync: vi.fn(),
+    readFileSync: vi.fn(),
+    mkdirSync: vi.fn(),
+  };
+});
+
+vi.mock('path', async () => {
+  const actualPath = await vi.importActual<typeof import('path')>('path');
+  return {
+    ...actualPath,
+    isAbsolute: vi.fn(),
+    resolve: vi.fn(),
+    dirname: vi.fn(),
+  };
+});
 
 describe('ImportDirectiveHandler', () => {
   let handler: ImportDirectiveHandler;

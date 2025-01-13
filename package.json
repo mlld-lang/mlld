@@ -20,7 +20,9 @@
     "test": "npm run build && vitest --run",
     "test:watch": "npm run build && vitest watch",
     "test:coverage": "npm run build && vitest run --coverage",
-    "lint": "eslint src/**/*.ts"
+    "lint": "eslint src/**/*.ts",
+    "fixmytests": "meld FIXMYTESTS.meld.md --overwrite ; oneshot FIXMYTESTS.md --model o1-preview -o FIXMYTESTS-PLAN.md",
+    "fixmytests:sonnet": "meld FIXMYTESTS.meld.md --overwrite ; oneshot FIXMYTESTS.md --model sonnet -o FIXMYTESTS-SONNET.md"
   },
   "repository": {
     "type": "git",
@@ -46,6 +48,7 @@
   },
   "devDependencies": {
     "eslint": "^9.18.0",
+    "rimraf": "^6.0.1",
     "typescript": "^5.7.3",
     "vitest": "^2.1.8"
   }

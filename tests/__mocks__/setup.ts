@@ -20,6 +20,7 @@ vi.mock('fs', () => ({
     mockFiles[path] = content;
   }),
   existsSync: vi.fn((path: string) => path in mockFiles),
+  mkdirSync: vi.fn(),
   promises: {
     readFile: vi.fn(async (path: string) => {
       if (path in mockFiles) {

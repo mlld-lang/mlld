@@ -26,7 +26,7 @@ export class RunDirectiveHandler implements DirectiveHandler {
   }
 
   async handle(node: DirectiveNode, state: InterpreterState, context: HandlerContext): Promise<void> {
-    const data = node.directive;
+    const data = node.directive as RunDirectiveData;
     directiveLogger.debug('Processing run directive', { 
       command: data.command,
       mode: context.mode,
@@ -50,25 +50,28 @@ export class RunDirectiveHandler implements DirectiveHandler {
     }
 
     try {
-      directiveLogger.info(`Executing command: ${data.command}`, {
-        background: data.background,
-        mode: context.mode
+      // Execute the command
+      const { stdout, stderr } = await execAsync(data.command, {
+        cwd: context.workspaceRoot || process.cwd()
       });
 
-      const { stdout, stderr } = await execAsync(data.command);
-      
+      // Handle output
       if (stdout) {
         directiveLogger.debug('Command stdout', { stdout });
       }
       if (stderr) {
         directiveLogger.warn('Command stderr', { stderr });
       }
+
+      // Store the result
+      state.setCommand(data.command, stdout.trim());
     } catch (error) {
       directiveLogger.error('Command execution failed', {
+        error,
         command: data.command,
-        error: error instanceof Error ? error.message : String(error),
         location: node.location
       });
+
       throwWithContext(
         ErrorFactory.createDirectiveError,
         `Command execution failed: ${error instanceof Error ? error.message : String(error)}`,

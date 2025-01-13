@@ -70,7 +70,7 @@ describe('Test Infrastructure', () => {
 
     it('should create a nested test context with parent state', () => {
       const parent = new TestContext();
-      const child = parent.createNestedContext(createLocation(1, 1));
+      const child = parent.createNestedContext(parent.createLocation(1, 1));
       expect(child.state.parentState).toBe(parent.state);
     });
   });
@@ -105,8 +105,8 @@ describe('Test Infrastructure', () => {
   describe('Error Handling', () => {
     it('should preserve error locations in nested contexts', () => {
       const parent = new TestContext();
-      const child = parent.createNestedContext(createLocation(1, 1));
-      const error = new MeldDirectiveError('test error', createLocation(2, 2), 'text');
+      const child = parent.createNestedContext(parent.createLocation(1, 1));
+      const error = new MeldDirectiveError('test error', parent.createLocation(2, 2), 'text');
       expect(() => {
         throw error;
       }).toThrow(MeldDirectiveError);

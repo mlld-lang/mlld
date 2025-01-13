@@ -10,11 +10,12 @@ export class InterpreterState {
   private imports: Set<string> = new Set();
   private currentFilePath: string | null = null;
   private _isImmutable: boolean = false;
-  private localChanges: Set<string> = new Set();
+  private localChanges: Set<string>;
   public parentState?: InterpreterState;
 
   constructor(parentState?: InterpreterState) {
     this.parentState = parentState;
+    this.localChanges = new Set();
     interpreterLogger.debug('Created new interpreter state', {
       hasParent: !!parentState
     });
@@ -65,6 +66,11 @@ export class InterpreterState {
     return new Map(this.dataVars);
   }
 
+  getLocalDataVars(): Map<string, any> {
+    return new Map(Array.from(this.dataVars.entries())
+      .filter(([key]) => !this.imports.has(key)));
+  }
+
   // Path variables
   getPathVar(name: string): string | undefined {
     const value = this.pathVars.get(name) ?? this.parentState?.getPathVar(name);
@@ -80,17 +86,25 @@ export class InterpreterState {
   }
 
   // Commands
-  getCommand(name: string): any {
-    const value = this.commands.get(name) ?? this.parentState?.getCommand(name);
-    interpreterLogger.debug('Getting command', { name, found: !!value });
-    return value;
+  getCommand(name: string): string | undefined {
+    const value = this.commands.get(name);
+    if (value !== undefined) {
+      return value.output;
+    }
+    const parentValue = this.parentState?.getCommand(name);
+    interpreterLogger.debug('Getting command', { name, found: !!value || !!parentValue });
+    return parentValue;
   }
 
-  setCommand(name: string, command: string, options?: Record<string, unknown>): void {
+  setCommand(name: string, command: string | { output: string; options?: Record<string, unknown> }): void {
     this.checkMutable();
-    this.commands.set(name, { output: command, options });
+    if (typeof command === 'string') {
+      this.commands.set(name, { output: command });
+    } else {
+      this.commands.set(name, command);
+    }
     this.localChanges.add(`command:${name}`);
-    interpreterLogger.debug('Set command', { name, hasOptions: !!options });
+    interpreterLogger.debug('Set command', { name, command });
   }
 
   getCommandWithOptions(command: string): { output: string; options?: Record<string, unknown> } | undefined {
@@ -163,6 +177,10 @@ export class InterpreterState {
 
   // State merging
   mergeChildState(childState: InterpreterState): void {
+    this.mergeIntoParent(childState);
+  }
+
+  mergeIntoParent(childState: InterpreterState): void {
     interpreterLogger.info('Merging child state', {
       childChanges: Array.from(childState.localChanges),
       childHasParent: !!childState.parentState,
@@ -174,21 +192,25 @@ export class InterpreterState {
     // Merge text variables
     for (const [key, value] of childState.textVars) {
       this.textVars.set(key, value);
+      this.localChanges.add(`text:${key}`);
     }
 
     // Merge data variables
     for (const [key, value] of childState.dataVars) {
       this.dataVars.set(key, value);
+      this.localChanges.add(`data:${key}`);
     }
 
     // Merge path variables
     for (const [key, value] of childState.pathVars) {
       this.pathVars.set(key, value);
+      this.localChanges.add(`path:${key}`);
     }
 
     // Merge commands
     for (const [key, value] of childState.commands) {
       this.commands.set(key, value);
+      this.localChanges.add(`command:${key}`);
     }
 
     // Merge nodes (avoiding duplicates)
@@ -197,12 +219,14 @@ export class InterpreterState {
       const nodeId = JSON.stringify(node);
       if (!existingNodeIds.has(nodeId)) {
         this.nodes.push(node);
+        this.localChanges.add(`node:${this.nodes.length}`);
       }
     }
 
     // Merge imports
     for (const imp of childState.imports) {
       this.imports.add(imp);
+      this.localChanges.add(`import:${imp}`);
     }
 
     // Update file path if child has one

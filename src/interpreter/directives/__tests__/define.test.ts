@@ -14,7 +14,7 @@ describe('DefineDirectiveHandler', () => {
       const location = context.createLocation(1, 1);
       const node = context.createDirectiveNode('define', {
         name: 'test',
-        fn: () => 'test result'
+        value: () => 'test result'
       }, location);
 
       defineDirectiveHandler.handle(node, context.state, context.createHandlerContext());
@@ -28,7 +28,7 @@ describe('DefineDirectiveHandler', () => {
       const location = context.createLocation(1, 1);
       const node = context.createDirectiveNode('define', {
         name: 'greet',
-        fn: (name: string) => `Hello, ${name}!`
+        value: (name: string) => `Hello, ${name}!`
       }, location);
 
       defineDirectiveHandler.handle(node, context.state, context.createHandlerContext());
@@ -43,7 +43,7 @@ describe('DefineDirectiveHandler', () => {
     it('should throw error for missing name', () => {
       const location = context.createLocation(5, 3);
       const node = context.createDirectiveNode('define', {
-        fn: () => 'test'
+        value: () => 'test'
       }, location);
 
       expect(() => 
@@ -92,12 +92,12 @@ describe('DefineDirectiveHandler', () => {
 
       const node1 = context.createDirectiveNode('define', {
         name: 'test',
-        fn: () => 'original'
+        value: () => 'original'
       }, location1);
 
       const node2 = context.createDirectiveNode('define', {
         name: 'test',
-        fn: () => 'shadowed'
+        value: () => 'shadowed'
       }, location2);
 
       defineDirectiveHandler.handle(node1, context.state, context.createHandlerContext());
@@ -113,12 +113,12 @@ describe('DefineDirectiveHandler', () => {
 
       const parentNode = context.createDirectiveNode('define', {
         name: 'test',
-        fn: () => 'parent'
+        value: () => 'parent'
       }, context.createLocation(1, 1));
 
       const childNode = nestedContext.createDirectiveNode('define', {
         name: 'test',
-        fn: () => 'child'
+        value: () => 'child'
       }, nestedContext.createLocation(2, 4));
 
       defineDirectiveHandler.handle(parentNode, context.state, context.createHandlerContext());
@@ -134,7 +134,7 @@ describe('DefineDirectiveHandler', () => {
       const location = context.createLocation(5, 3);
       const node = context.createDirectiveNode('define', {
         name: 'error',
-        fn: () => { throw new Error('Command error'); }
+        value: () => { throw new Error('Command error'); }
       }, location);
 
       defineDirectiveHandler.handle(node, context.state, context.createHandlerContext());
@@ -149,7 +149,7 @@ describe('DefineDirectiveHandler', () => {
       const obj = { value: 'test' };
       const node = context.createDirectiveNode('define', {
         name: 'getValue',
-        fn: function(this: typeof obj) { return this.value; }
+        value: function(this: typeof obj) { return this.value; }
       }, location);
 
       defineDirectiveHandler.handle(node, context.state, context.createHandlerContext());

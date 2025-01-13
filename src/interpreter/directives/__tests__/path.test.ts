@@ -12,12 +12,17 @@ describe('PathDirectiveHandler', () => {
     context = new TestContext();
     context.state.setCurrentFilePath('/project/root/test.meld');
 
-    vi.mock('path', () => ({
-      resolve: vi.fn((...args) => args.join('/')),
-      join: vi.fn((...args) => args.join('/')),
-      dirname: vi.fn((p) => p.split('/').slice(0, -1).join('/')),
-      normalize: vi.fn((p) => p)
-    }));
+    vi.mock('path', async () => {
+      const actualPath = await vi.importActual<typeof import('path')>('path');
+      return {
+        ...actualPath,
+        resolve: vi.fn((...args) => args.join('/')),
+        join: vi.fn((...args) => args.join('/')),
+        dirname: vi.fn((p) => p.split('/').slice(0, -1).join('/')),
+        normalize: vi.fn((p) => p),
+        isAbsolute: vi.fn(),
+      };
+    });
   });
 
   afterEach(() => {

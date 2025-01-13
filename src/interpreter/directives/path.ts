@@ -43,12 +43,12 @@ export class PathDirectiveHandler implements DirectiveHandler {
 
     // Handle special path variables
     value = value.replace(/\$HOMEPATH|\$~/g, os.homedir());
-    value = value.replace(/\$PROJECTPATH/g, process.cwd());
+    value = value.replace(/\$PROJECTPATH/g, context.workspaceRoot || process.cwd());
 
     // Handle variable substitution
     value = value.replace(/\{([^}]+)\}/g, (match, varName) => {
       const varValue = state.getPathVar(varName);
-      if (!varValue) {
+      if (varValue === undefined) {
         throwWithContext(
           ErrorFactory.createDirectiveError,
           `Path variable '${varName}' not found`,
@@ -60,26 +60,14 @@ export class PathDirectiveHandler implements DirectiveHandler {
       return varValue;
     });
 
-    try {
-      // Resolve relative paths
-      if (!path.isAbsolute(value)) {
-        const basePath = context.currentPath || process.cwd();
-        value = path.resolve(path.dirname(basePath), value);
-      }
-
-      // Normalize path (resolve . and ..)
-      value = path.normalize(value);
-
-      // Store in state
-      state.setPathVar(data.name, value);
-    } catch (error) {
-      throwWithContext(
-        ErrorFactory.createDirectiveError,
-        `Invalid path: ${error instanceof Error ? error.message : String(error)}`,
-        node.location,
-        context,
-        'path'
-      );
+    // Resolve the path
+    const workspaceRoot = context.workspaceRoot || process.cwd();
+    if (path.isAbsolute(value)) {
+      // For absolute paths, use as is without prepending workspace root
+      state.setPathVar(data.name, path.normalize(value));
+    } else {
+      // For relative paths, resolve relative to workspace root
+      state.setPathVar(data.name, path.normalize(path.resolve(workspaceRoot, value)));
     }
   }
 }

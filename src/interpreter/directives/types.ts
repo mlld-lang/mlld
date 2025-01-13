@@ -28,6 +28,11 @@ export interface HandlerContext {
   currentPath?: string;
 
   /**
+   * The root directory of the workspace
+   */
+  workspaceRoot?: string;
+
+  /**
    * You can add any additional flags you need here in the future
    */
 }

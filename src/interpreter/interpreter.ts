@@ -3,6 +3,7 @@ import { DirectiveRegistry } from './directives/registry';
 import { InterpreterState } from './state/state';
 import { HandlerContext } from './directives/types';
 import { interpreterLogger } from '../utils/logger';
+import { ErrorFactory } from './errors/factory';
 
 export async function interpret(
   nodes: MeldNode[],
@@ -41,11 +42,15 @@ export async function interpret(
 
         const handler = DirectiveRegistry.findHandler(directiveNode.directive.kind, newContext.mode);
         if (!handler) {
-          interpreterLogger.warn('No handler found for directive', {
+          interpreterLogger.error('No handler found for directive', {
             kind: directiveNode.directive.kind,
             mode: newContext.mode
           });
-          continue;
+          throw ErrorFactory.createInterpretError(
+            `No handler found for directive '${directiveNode.directive.kind}'`,
+            directiveNode.directive.kind,
+            directiveNode.location ? directiveNode.location.start : undefined
+          );
         }
 
         interpreterLogger.debug('Executing directive handler', {

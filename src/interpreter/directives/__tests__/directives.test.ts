@@ -14,10 +14,12 @@ describe('DirectiveRegistry', () => {
 
   describe('registration', () => {
     it('should register and find handlers', () => {
-      const mockHandler: DirectiveHandler = {
-        canHandle: (kind: string) => kind === 'run',
-        handle: vi.fn()
-      };
+      class MockHandler implements DirectiveHandler {
+        public static readonly directiveKind = 'run';
+        canHandle(kind: string) { return kind === 'run'; }
+        handle = vi.fn();
+      }
+      const mockHandler = new MockHandler();
 
       DirectiveRegistry.registerHandler(mockHandler);
       const handler = DirectiveRegistry.findHandler('run', 'toplevel');
@@ -25,15 +27,20 @@ describe('DirectiveRegistry', () => {
     });
 
     it('should handle multiple handlers', () => {
-      const handler1: DirectiveHandler = {
-        canHandle: (kind: string) => kind === 'run',
-        handle: vi.fn()
-      };
+      class RunHandler implements DirectiveHandler {
+        public static readonly directiveKind = 'run';
+        canHandle(kind: string) { return kind === 'run'; }
+        handle = vi.fn();
+      }
 
-      const handler2: DirectiveHandler = {
-        canHandle: (kind: string) => kind === 'text',
-        handle: vi.fn()
-      };
+      class TextHandler implements DirectiveHandler {
+        public static readonly directiveKind = 'text';
+        canHandle(kind: string) { return kind === 'text'; }
+        handle = vi.fn();
+      }
+
+      const handler1 = new RunHandler();
+      const handler2 = new TextHandler();
 
       DirectiveRegistry.registerHandler(handler1);
       DirectiveRegistry.registerHandler(handler2);
@@ -45,10 +52,12 @@ describe('DirectiveRegistry', () => {
 
   describe('handler execution', () => {
     it('should execute handlers with correct context', () => {
-      const mockHandler: DirectiveHandler = {
-        canHandle: (kind: string) => kind === 'test',
-        handle: vi.fn()
-      };
+      class TestHandler implements DirectiveHandler {
+        public static readonly directiveKind = 'test';
+        canHandle(kind: string) { return kind === 'test'; }
+        handle = vi.fn();
+      }
+      const mockHandler = new TestHandler();
 
       DirectiveRegistry.registerHandler(mockHandler);
 
@@ -66,10 +75,12 @@ describe('DirectiveRegistry', () => {
     });
 
     it('should handle right-side mode correctly', () => {
-      const mockHandler: DirectiveHandler = {
-        canHandle: (kind: string) => kind === 'test',
-        handle: vi.fn()
-      };
+      class TestHandler implements DirectiveHandler {
+        public static readonly directiveKind = 'test';
+        canHandle(kind: string) { return kind === 'test'; }
+        handle = vi.fn();
+      }
+      const mockHandler = new TestHandler();
 
       DirectiveRegistry.registerHandler(mockHandler);
 
@@ -106,12 +117,14 @@ describe('DirectiveRegistry', () => {
     });
 
     it('should preserve error locations from handlers', () => {
-      const errorHandler: DirectiveHandler = {
-        canHandle: (kind: string) => kind === 'error',
-        handle: () => {
+      class ErrorHandler implements DirectiveHandler {
+        public static readonly directiveKind = 'error';
+        canHandle(kind: string) { return kind === 'error'; }
+        handle = () => {
           throw new MeldError('Test error');
-        }
-      };
+        };
+      }
+      const errorHandler = new ErrorHandler();
 
       DirectiveRegistry.registerHandler(errorHandler);
 
