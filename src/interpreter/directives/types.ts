@@ -36,11 +36,6 @@ export interface HandlerContext {
  */
 export interface DirectiveHandler {
   /**
-   * The kind of directive this handler can handle
-   */
-  readonly directiveKind: string;
-
-  /**
    * Check if this handler can handle the given directive kind
    */
   canHandle(kind: string, mode: 'toplevel' | 'rightside'): boolean;

@@ -6,39 +6,41 @@ import { throwWithContext } from '../utils/location-helpers';
 import { directiveLogger } from '../../utils/logger';
 
 export class DataDirectiveHandler implements DirectiveHandler {
-  readonly directiveKind = 'data';
+  public static readonly directiveKind = 'data';
 
   canHandle(kind: string, mode: 'toplevel' | 'rightside'): boolean {
-    return kind === 'data';
+    return kind === DataDirectiveHandler.directiveKind;
   }
 
   async handle(node: DirectiveNode, state: InterpreterState, context: HandlerContext): Promise<void> {
     const data = node.directive;
+    directiveLogger.debug('Processing data directive', {
+      name: data.name,
+      mode: context.mode,
+      location: node.location
+    });
 
     // Validate name parameter
-    if (!data.name) {
+    if (!data.name || typeof data.name !== 'string') {
+      directiveLogger.error('Data directive missing name', {
+        location: node.location,
+        mode: context.mode
+      });
       throwWithContext(
-        ErrorFactory.createDirectiveError,
+        ErrorFactory.createDataError,
         'Data directive requires a name parameter',
         node.location,
-        context,
-        'data'
+        context
       );
     }
 
-    // Validate value parameter
-    if (data.value === undefined || data.value === null) {
-      throwWithContext(
-        ErrorFactory.createDirectiveError,
-        'Data directive requires a value parameter',
-        node.location,
-        context,
-        'data'
-      );
-    }
-
-    // Set the data variable
+    // Store data in state
     state.setDataVar(data.name, data.value);
+
+    directiveLogger.info('Data stored successfully', {
+      name: data.name,
+      mode: context.mode
+    });
   }
 }
 

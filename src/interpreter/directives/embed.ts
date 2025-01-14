@@ -8,48 +8,61 @@ import { readFile } from 'fs/promises';
 import { dirname, resolve } from 'path';
 
 export class EmbedDirectiveHandler implements DirectiveHandler {
-  readonly directiveKind = 'embed';
+  public static readonly directiveKind = 'embed';
 
   canHandle(kind: string, mode: 'toplevel' | 'rightside'): boolean {
-    return kind === 'embed';
+    return kind === EmbedDirectiveHandler.directiveKind;
   }
 
   async handle(node: DirectiveNode, state: InterpreterState, context: HandlerContext): Promise<void> {
     const data = node.directive;
+    directiveLogger.debug('Processing embed directive', {
+      source: data.source,
+      mode: context.mode,
+      location: node.location
+    });
 
     // Validate source parameter
-    if (!data.source) {
+    if (!data.source || typeof data.source !== 'string') {
+      directiveLogger.error('Embed directive missing source', {
+        location: node.location,
+        mode: context.mode
+      });
       throwWithContext(
-        ErrorFactory.createDirectiveError,
-        'Embed directive requires a source parameter',
+        ErrorFactory.createEmbedError,
+        'Embed source is required',
         node.location,
-        context,
-        'embed'
+        context
       );
     }
 
     try {
-      // Resolve the source path relative to the current file
-      const basePath = context.currentPath ? dirname(context.currentPath) : context.workspaceRoot || process.cwd();
-      const sourcePath = resolve(basePath, data.source);
+      // Resolve the embed path
+      const currentPath = context.currentPath || '';
+      const currentDir = dirname(currentPath);
+      const embedPath = resolve(currentDir, data.source);
 
       // Read the file
-      const content = await readFile(sourcePath, 'utf8');
+      const content = await readFile(embedPath, 'utf8');
 
-      // Create a text node with the embedded content
-      state.addNode({
-        type: 'Text',
-        content,
-        location: node.location
+      directiveLogger.info('Embed successful', {
+        source: data.source,
+        path: embedPath,
+        contentLength: content.length
       });
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+
+      // Store the embedded content in state
+      state.setTextVar(`embed:${data.source}`, content);
+    } catch (error) {
+      directiveLogger.error('Embed failed', {
+        source: data.source,
+        error: error instanceof Error ? error.message : String(error)
+      });
       throwWithContext(
-        ErrorFactory.createDirectiveError,
-        `Embed failed: ${errorMessage}`,
+        ErrorFactory.createEmbedError,
+        `Failed to embed file: ${error instanceof Error ? error.message : String(error)}`,
         node.location,
-        context,
-        'embed'
+        context
       );
     }
   }

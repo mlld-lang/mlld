@@ -10,20 +10,29 @@ import { promisify } from 'util';
 const execAsync = promisify(exec);
 
 export class RunDirectiveHandler implements DirectiveHandler {
-  readonly directiveKind = 'run';
+  public static readonly directiveKind = 'run';
 
   canHandle(kind: string, mode: 'toplevel' | 'rightside'): boolean {
-    return kind === 'run';
+    return kind === RunDirectiveHandler.directiveKind;
   }
 
   async handle(node: DirectiveNode, state: InterpreterState, context: HandlerContext): Promise<void> {
     const data = node.directive;
+    directiveLogger.debug('Processing run directive', {
+      command: data.command,
+      mode: context.mode,
+      location: node.location
+    });
 
     // Validate command parameter
-    if (!data.command) {
+    if (!data.command || typeof data.command !== 'string') {
+      directiveLogger.error('Run directive missing command', {
+        location: node.location,
+        mode: context.mode
+      });
       throwWithContext(
         ErrorFactory.createDirectiveError,
-        'Run directive requires a command parameter',
+        'Run directive requires a command',
         node.location,
         context,
         'run'
@@ -31,25 +40,32 @@ export class RunDirectiveHandler implements DirectiveHandler {
     }
 
     try {
-      const { stdout, stderr } = await execAsync(data.command);
-      
-      if (stderr) {
-        throwWithContext(
-          ErrorFactory.createDirectiveError,
-          `Command failed: ${stderr}`,
-          node.location,
-          context,
-          'run'
-        );
-      }
+      // Execute the command
+      const { stdout, stderr } = await execAsync(data.command, {
+        cwd: context.workspaceRoot || process.cwd()
+      });
 
       // Store output in state
-      state.setTextVar('output', stdout);
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (stdout) {
+        state.setTextVar('stdout', stdout);
+      }
+      if (stderr) {
+        state.setTextVar('stderr', stderr);
+      }
+
+      directiveLogger.info('Command executed successfully', {
+        command: data.command,
+        stdout: stdout.length,
+        stderr: stderr.length
+      });
+    } catch (error) {
+      directiveLogger.error('Command execution failed', {
+        command: data.command,
+        error: error instanceof Error ? error.message : String(error)
+      });
       throwWithContext(
         ErrorFactory.createDirectiveError,
-        `Command failed: ${errorMessage}`,
+        `Command execution failed: ${error instanceof Error ? error.message : String(error)}`,
         node.location,
         context,
         'run'

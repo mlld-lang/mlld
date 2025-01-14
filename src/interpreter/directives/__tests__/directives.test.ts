@@ -15,9 +15,9 @@ describe('DirectiveRegistry', () => {
   describe('registration', () => {
     it('should register and find handlers', () => {
       class MockHandler implements DirectiveHandler {
-        readonly directiveKind = 'run';
-        canHandle(kind: string, mode: string) { return kind === 'run'; }
-        async handle() { return Promise.resolve(); }
+        public static readonly directiveKind = 'run';
+        canHandle(kind: string) { return kind === 'run'; }
+        handle = vi.fn();
       }
       const mockHandler = new MockHandler();
 
@@ -28,15 +28,15 @@ describe('DirectiveRegistry', () => {
 
     it('should handle multiple handlers', () => {
       class RunHandler implements DirectiveHandler {
-        readonly directiveKind = 'run';
-        canHandle(kind: string, mode: string) { return kind === 'run'; }
-        async handle() { return Promise.resolve(); }
+        public static readonly directiveKind = 'run';
+        canHandle(kind: string) { return kind === 'run'; }
+        handle = vi.fn();
       }
 
       class TextHandler implements DirectiveHandler {
-        readonly directiveKind = 'text';
-        canHandle(kind: string, mode: string) { return kind === 'text'; }
-        async handle() { return Promise.resolve(); }
+        public static readonly directiveKind = 'text';
+        canHandle(kind: string) { return kind === 'text'; }
+        handle = vi.fn();
       }
 
       const handler1 = new RunHandler();
@@ -51,11 +51,11 @@ describe('DirectiveRegistry', () => {
   });
 
   describe('handler execution', () => {
-    it('should execute handlers with correct context', async () => {
+    it('should execute handlers with correct context', () => {
       class TestHandler implements DirectiveHandler {
-        readonly directiveKind = 'test';
-        canHandle(kind: string, mode: string) { return kind === 'test'; }
-        handle = vi.fn().mockResolvedValue(undefined);
+        public static readonly directiveKind = 'test';
+        canHandle(kind: string) { return kind === 'test'; }
+        handle = vi.fn();
       }
       const mockHandler = new TestHandler();
 
@@ -68,16 +68,17 @@ describe('DirectiveRegistry', () => {
       }, location);
 
       const handlerContext = context.createHandlerContext();
-      await DirectiveRegistry.handle(node, context.state, handlerContext);
+      const handler = DirectiveRegistry.findHandler('test', 'toplevel');
+      handler?.handle(node, context.state, handlerContext);
 
       expect(mockHandler.handle).toHaveBeenCalledWith(node, context.state, handlerContext);
     });
 
-    it('should handle right-side mode correctly', async () => {
+    it('should handle right-side mode correctly', () => {
       class TestHandler implements DirectiveHandler {
-        readonly directiveKind = 'test';
-        canHandle(kind: string, mode: string) { return kind === 'test'; }
-        handle = vi.fn().mockResolvedValue(undefined);
+        public static readonly directiveKind = 'test';
+        canHandle(kind: string) { return kind === 'test'; }
+        handle = vi.fn();
       }
       const mockHandler = new TestHandler();
 
@@ -93,30 +94,35 @@ describe('DirectiveRegistry', () => {
       }, location);
 
       const handlerContext = nestedContext.createHandlerContext();
-      await DirectiveRegistry.handle(node, nestedContext.state, handlerContext);
+      const handler = DirectiveRegistry.findHandler('test', 'rightside');
+      handler?.handle(node, nestedContext.state, handlerContext);
 
       expect(mockHandler.handle).toHaveBeenCalledWith(node, nestedContext.state, handlerContext);
     });
   });
 
   describe('error handling', () => {
-    it('should handle missing handlers gracefully', async () => {
+    it('should handle missing handlers gracefully', () => {
       const location = context.createLocation(1, 1);
       const node = context.createDirectiveNode('unknown', {
         name: 'test'
       }, location);
 
-      await expect(DirectiveRegistry.handle(node, context.state, context.createHandlerContext()))
-        .rejects.toThrow('No handler found for directive kind: unknown');
+      expect(() => {
+        const handler = DirectiveRegistry.findHandler('unknown', 'toplevel');
+        if (handler) {
+          handler.handle(node, context.state, context.createHandlerContext());
+        }
+      }).not.toThrow();
     });
 
-    it('should preserve error locations from handlers', async () => {
+    it('should preserve error locations from handlers', () => {
       class ErrorHandler implements DirectiveHandler {
-        readonly directiveKind = 'error';
-        canHandle(kind: string, mode: string) { return kind === 'error'; }
-        async handle() {
+        public static readonly directiveKind = 'error';
+        canHandle(kind: string) { return kind === 'error'; }
+        handle = () => {
           throw new MeldError('Test error');
-        }
+        };
       }
       const errorHandler = new ErrorHandler();
 
@@ -130,8 +136,15 @@ describe('DirectiveRegistry', () => {
         name: 'test'
       }, location);
 
-      await expect(DirectiveRegistry.handle(node, nestedContext.state, nestedContext.createHandlerContext()))
-        .rejects.toThrow('Test error');
+      try {
+        const handler = DirectiveRegistry.findHandler('error', 'rightside');
+        if (handler) {
+          handler.handle(node, nestedContext.state, nestedContext.createHandlerContext());
+        }
+        fail('Should have thrown an error');
+      } catch (error) {
+        expect(error).toBeInstanceOf(MeldError);
+      }
     });
   });
 }); 

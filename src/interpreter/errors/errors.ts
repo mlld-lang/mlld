@@ -28,7 +28,7 @@ export class MeldParseError extends MeldError {
 export class MeldInterpretError extends MeldError {
   constructor(
     message: string,
-    public nodeType?: string,
+    public directiveKind: string,
     location?: Location['start']
   ) {
     super(message, location);
@@ -39,6 +39,15 @@ export class MeldInterpretError extends MeldError {
  * Error thrown during import operations
  */
 export class MeldImportError extends MeldError {
+  constructor(message: string, location?: Location['start']) {
+    super(message, location);
+  }
+}
+
+/**
+ * Error thrown during embed operations
+ */
+export class MeldEmbedError extends MeldError {
   constructor(message: string, location?: Location['start']) {
     super(message, location);
   }
@@ -58,9 +67,27 @@ export class MeldDirectiveError extends MeldError {
 }
 
 /**
- * Error thrown during embed operations
+ * Error thrown during data directive operations
  */
-export class MeldEmbedError extends MeldError {
+export class MeldDataError extends MeldError {
+  constructor(message: string, location?: Location['start']) {
+    super(message, location);
+  }
+}
+
+/**
+ * Error thrown during define directive operations
+ */
+export class MeldDefineError extends MeldError {
+  constructor(message: string, location?: Location['start']) {
+    super(message, location);
+  }
+}
+
+/**
+ * Error thrown during path directive operations
+ */
+export class MeldPathError extends MeldError {
   constructor(message: string, location?: Location['start']) {
     super(message, location);
   }
