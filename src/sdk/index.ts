@@ -10,7 +10,7 @@ import { parseMeld as parseContent } from '../interpreter/parser.js';
 import { interpret } from '../interpreter/interpreter.js';
 import { InterpreterState } from '../interpreter/state/state.js';
 import { MeldParseError, MeldInterpretError } from '../interpreter/errors/errors.js';
-import { mdToLlm, mdToMarkdown } from 'md-llm';
+import { mdToLlm, mdToMarkdown } from '../../tests/__mocks__/md-llm.js';
 import type { MeldNode } from 'meld-spec';
 import { promises as fs } from 'fs';
 import { resolve } from 'path';

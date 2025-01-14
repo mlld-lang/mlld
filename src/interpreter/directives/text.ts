@@ -2,30 +2,21 @@ import type { DirectiveNode } from 'meld-spec';
 import { DirectiveHandler, HandlerContext } from './types';
 import { InterpreterState } from '../state/state';
 import { ErrorFactory } from '../errors/factory';
-import { throwWithContext, maybeAdjustLocation } from '../utils/location-helpers';
+import { throwWithContext } from '../utils/location-helpers';
 import { directiveLogger } from '../../utils/logger';
 
 export class TextDirectiveHandler implements DirectiveHandler {
-  public static readonly directiveKind = 'text';
+  readonly directiveKind = 'text';
 
   canHandle(kind: string, mode: 'toplevel' | 'rightside'): boolean {
-    return kind === TextDirectiveHandler.directiveKind;
+    return kind === 'text';
   }
 
-  handle(node: DirectiveNode, state: InterpreterState, context: HandlerContext): void {
+  async handle(node: DirectiveNode, state: InterpreterState, context: HandlerContext): Promise<void> {
     const data = node.directive;
-    directiveLogger.debug('Processing text directive', {
-      name: data.name,
-      mode: context.mode,
-      location: node.location
-    });
-    
+
     // Validate name parameter
-    if (!data.name || typeof data.name !== 'string') {
-      directiveLogger.error('Text directive missing name parameter', {
-        location: node.location,
-        mode: context.mode
-      });
+    if (!data.name) {
       throwWithContext(
         ErrorFactory.createDirectiveError,
         'Text directive requires a name parameter',
@@ -35,17 +26,21 @@ export class TextDirectiveHandler implements DirectiveHandler {
       );
     }
 
-    // Handle value - ensure it's a string and handle undefined/null
-    const value = data.value !== undefined && data.value !== null ? String(data.value) : '';
-    
-    directiveLogger.info(`Setting text variable: ${data.name}`, {
-      value,
-      mode: context.mode
-    });
-    
-    // Store in state with proper location tracking
-    state.setTextVar(data.name, value);
+    // Validate value parameter
+    if (data.value === undefined || data.value === null) {
+      throwWithContext(
+        ErrorFactory.createDirectiveError,
+        'Text directive requires a value parameter',
+        node.location,
+        context,
+        'text'
+      );
+    }
+
+    // Set the text variable
+    state.setTextVar(data.name, String(data.value));
   }
 }
 
+// Export a singleton instance
 export const textDirectiveHandler = new TextDirectiveHandler();

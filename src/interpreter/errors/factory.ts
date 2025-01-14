@@ -1,82 +1,66 @@
-import { Location } from 'meld-spec';
-import { LocationPoint } from './types';
+import { LocationPoint, Location } from 'meld-spec';
 import {
   MeldError,
   MeldParseError,
   MeldInterpretError,
-  MeldImportError,
   MeldDirectiveError,
-  MeldEmbedError
+  MeldImportError,
+  MeldEmbedError,
+  MeldDataError,
+  MeldDefineError,
+  MeldPathError
 } from './errors';
-import { interpreterLogger } from '../../utils/logger';
 
-export const ErrorFactory = {
-  adjustLocation(location: LocationPoint, baseLocation: LocationPoint): LocationPoint {
+export class ErrorFactory {
+  static adjustLocation(location: LocationPoint, baseLocation: LocationPoint): LocationPoint {
     return {
       line: location.line + baseLocation.line - 1,
-      column: location.line === 1 
-        ? location.column + baseLocation.column - 1
-        : location.column
+      column: location.line === 1 ? location.column + baseLocation.column - 1 : location.column
     };
-  },
+  }
 
-  createWithAdjustedLocation(error: MeldError, baseLocation: Location): MeldError {
-    if (!error.location || !baseLocation.start) {
-      interpreterLogger.warn('Cannot create location-aware error - missing location information', {
-        hasErrorLocation: !!error.location,
-        hasBaseLocation: !!baseLocation.start
-      });
-      return error;
-    }
-
-    const newLocation = this.adjustLocation(error.location, baseLocation.start);
-    error.location = newLocation;
+  static createWithAdjustedLocation(error: MeldError, baseLocation: Location): MeldError {
+    if (!error.location || !baseLocation) return error;
+    error.location = this.adjustLocation(error.location, baseLocation.start);
     return error;
-  },
+  }
 
-  createParseError(message: string, location?: LocationPoint): MeldParseError {
-    interpreterLogger.error('Parse error occurred', {
-      message,
-      location
-    });
+  static createParseError(message: string, location?: LocationPoint): MeldParseError {
     return new MeldParseError(message, location);
-  },
+  }
 
-  createInterpretError(
+  static createInterpretError(
     message: string,
-    nodeType?: string,
+    directiveKind: string,
     location?: LocationPoint
   ): MeldInterpretError {
-    interpreterLogger.error('Interpret error occurred', {
-      message,
-      nodeType,
-      location
-    });
-    return new MeldInterpretError(message, nodeType, location);
-  },
+    return new MeldInterpretError(message, directiveKind, location);
+  }
 
-  createImportError(message: string, location?: LocationPoint): MeldImportError {
-    interpreterLogger.error('Import error occurred', {
-      message,
-      location
-    });
+  static createDirectiveError(
+    message: string,
+    location?: LocationPoint
+  ): MeldDirectiveError {
+    return new MeldDirectiveError(message, location);
+  }
+
+  static createImportError(message: string, location?: LocationPoint): MeldImportError {
     return new MeldImportError(message, location);
-  },
+  }
 
-  createDirectiveError(message: string, directiveKind: string, location?: LocationPoint): MeldDirectiveError {
-    interpreterLogger.error('Directive error occurred', {
-      message,
-      directiveKind,
-      location
-    });
-    return new MeldDirectiveError(message, directiveKind, location);
-  },
-
-  createEmbedError(message: string, location?: LocationPoint): MeldEmbedError {
-    interpreterLogger.error('Embed error occurred', {
-      message,
-      location
-    });
+  static createEmbedError(message: string, location?: LocationPoint): MeldEmbedError {
     return new MeldEmbedError(message, location);
   }
-}; 
+
+  static createDataError(message: string, location?: LocationPoint): MeldDataError {
+    return new MeldDataError(message, location);
+  }
+
+  static createDefineError(message: string, location?: LocationPoint): MeldDefineError {
+    return new MeldDefineError(message, location);
+  }
+
+  static createPathError(message: string, location?: LocationPoint): MeldPathError {
+    return new MeldPathError(message, location);
+  }
+} 

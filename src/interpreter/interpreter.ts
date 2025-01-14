@@ -4,12 +4,16 @@ import { InterpreterState } from './state/state';
 import { HandlerContext } from './directives/types';
 import { interpreterLogger } from '../utils/logger';
 import { ErrorFactory } from './errors/factory';
+import { MeldDirectiveError, MeldInterpretError } from './errors/errors';
 
 export async function interpret(
   nodes: MeldNode[],
   state: InterpreterState,
   context: HandlerContext
 ): Promise<void> {
+  // Initialize directive handlers if needed
+  DirectiveRegistry.initializeBuiltInHandlers();
+
   // Ensure we have a complete context with defaults
   const mode = context.mode ?? 'toplevel';
 
@@ -68,6 +72,13 @@ export async function interpret(
           error: error instanceof Error ? error.message : String(error),
           location: directiveNode.location
         });
+        if (error instanceof MeldDirectiveError) {
+          throw ErrorFactory.createInterpretError(
+            error.message,
+            error.directiveKind,
+            error.location
+          );
+        }
         throw error;
       }
     } else {

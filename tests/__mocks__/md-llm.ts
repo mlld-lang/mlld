@@ -1,5 +1,9 @@
 // Mock implementation of md-llm for testing
-export async function mdToLlm(content: string): Promise<string> {
+interface ConversionOptions {
+  includeMetadata?: boolean;
+}
+
+export async function mdToLlm(content: string, options: ConversionOptions = {}): Promise<string> {
   // Simple mock conversion
   const lines = content.split('\n');
   const converted = lines.map(line => {
@@ -15,10 +19,17 @@ export async function mdToLlm(content: string): Promise<string> {
     }
     return line ? `<paragraph>${line}</paragraph>` : '';
   });
-  return `<content>\n${converted.join('\n')}\n</content>`;
+  const result = `<content>\n${converted.join('\n')}\n</content>`;
+  if (options.includeMetadata) {
+    return `<metadata></metadata>\n${result}`;
+  }
+  return result;
 }
 
-export async function mdToMarkdown(content: string): Promise<string> {
-  // For markdown, just return the content as is
+export async function mdToMarkdown(content: string, options: ConversionOptions = {}): Promise<string> {
+  // Mock implementation - just return the content as is
+  if (options.includeMetadata) {
+    return `<!-- metadata -->\n${content}`;
+  }
   return content;
 } 

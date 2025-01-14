@@ -1,0 +1,35 @@
+# Meld License
+(tl;dr: the license is overwhelmingly permissive so long as you are not creating a product intended to deliver security advisories and security policies for tool usage by LLMs or AI agents.)
+
+Copyright (c) 2025 Adam Avenir
+
+The "Meld Technology" shall be defined as the Meld scripting language, llmxml file format (.llm), the `meld` and `oneshot` command line tools, and the meld ecosystem libraries upon which they depend.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of the Meld scripting language and associated documentation files (collectively, the "Meld Technology"), to deal in the Meld Technology without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Meld Technology, and to permit persons to whom the Meld Technology is furnished to do so, subject to the following conditions:
+
+1. The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Meld Technology.
+
+2. By accessing, viewing, or using the Meld Technology in any way, you agree that you will not create, maintain, or contribute to any commercial product or service that aims to provide security advisories as a service for tools used by LLMs or AI agents. (If it is your intent to do so, you may acquire a license from the author for a fee.)
+   
+This restriction applies regardless of:
+
+   - Whether the Meld Technology is copied, modified, or independently recreated
+   - The methodology used to create such services
+   - The timeframe in which such services are created
+   - The specific technical implementation or delivery mechanism
+
+3. This competitive restriction is narrowly focused on LLM/AI security advisory-adjacent products. 
+
+The following uses are explicitly *permitted*:
+
+   - Using the scripting language for any other commercial or non-commercial purpose
+   - Internal security tools and automation
+   - Part of security tools for any other purpose than LLM / AI agent tool-usage
+   - General purpose development tools and platforms
+   - Code quality, testing, or analysis tools
+   - Educational resources and security research
+   - Using advisory data for internal security purposes
+   - Building on the scripting language for non-security purposes
+   - Integration of the technology into broader platforms where security scanning is not a primary function
+
+THE MELD TECHNOLOGY IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE MELD TECHNOLOGY OR THE USE OR OTHER DEALINGS IN THE MELD TECHNOLOGY.

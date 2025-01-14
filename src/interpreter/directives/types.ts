@@ -1,29 +1,27 @@
-import type { DirectiveNode, Location } from 'meld-spec';
+import type { DirectiveNode } from 'meld-spec';
 import type { InterpreterState } from '../state/state';
 
 /**
- * Context passed to directive handlers indicating whether they are being called
- * at the top level or in a right-side operation context
+ * Context for directive handlers
  */
 export interface HandlerContext {
   /**
-   * 'toplevel' means the directive is processed at the file's top level
-   * 'rightside' means the directive is processed in a right-side operation context
+   * Mode of operation ('toplevel' | 'rightside')
    */
   mode: 'toplevel' | 'rightside';
 
   /**
-   * If there's a parent state from which we inherit variables
+   * Base location for adjusting error locations
+   */
+  baseLocation?: { start: { line: number; column: number } };
+
+  /**
+   * Parent state for inheritance
    */
   parentState?: InterpreterState;
 
   /**
-   * If there's a "base" location for right-side operations
-   */
-  baseLocation?: Location;
-
-  /**
-   * The current file path being processed
+   * Current file path
    */
   currentPath?: string;
 
@@ -31,13 +29,24 @@ export interface HandlerContext {
    * The root directory of the workspace
    */
   workspaceRoot?: string;
-
-  /**
-   * You can add any additional flags you need here in the future
-   */
 }
 
+/**
+ * Interface for directive handlers
+ */
 export interface DirectiveHandler {
+  /**
+   * The kind of directive this handler can handle
+   */
+  readonly directiveKind: string;
+
+  /**
+   * Check if this handler can handle the given directive kind
+   */
   canHandle(kind: string, mode: 'toplevel' | 'rightside'): boolean;
-  handle(node: DirectiveNode, state: InterpreterState, context: HandlerContext): void;
+
+  /**
+   * Handle a directive node
+   */
+  handle(node: DirectiveNode, state: InterpreterState, context: HandlerContext): Promise<void>;
 } 

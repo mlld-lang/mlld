@@ -6,55 +6,41 @@ import { throwWithContext } from '../utils/location-helpers';
 import { directiveLogger } from '../../utils/logger';
 
 export class DataDirectiveHandler implements DirectiveHandler {
-  public static readonly directiveKind = 'data';
+  readonly directiveKind = 'data';
 
   canHandle(kind: string, mode: 'toplevel' | 'rightside'): boolean {
-    return kind === DataDirectiveHandler.directiveKind;
+    return kind === 'data';
   }
 
-  handle(node: DirectiveNode, state: InterpreterState, context: HandlerContext): void {
+  async handle(node: DirectiveNode, state: InterpreterState, context: HandlerContext): Promise<void> {
     const data = node.directive;
-    directiveLogger.debug('Processing data directive', {
-      name: data.name,
-      mode: context.mode,
-      location: node.location
-    });
 
+    // Validate name parameter
     if (!data.name) {
-      directiveLogger.error('Data directive missing name parameter', {
-        location: node.location,
-        mode: context.mode
-      });
       throwWithContext(
         ErrorFactory.createDirectiveError,
-        'Data directive requires a name',
+        'Data directive requires a name parameter',
         node.location,
         context,
         'data'
       );
     }
 
-    if (!data.value) {
-      directiveLogger.error('Data directive missing value parameter', {
-        name: data.name,
-        location: node.location,
-        mode: context.mode
-      });
+    // Validate value parameter
+    if (data.value === undefined || data.value === null) {
       throwWithContext(
         ErrorFactory.createDirectiveError,
-        'Data directive requires a value',
+        'Data directive requires a value parameter',
         node.location,
         context,
         'data'
       );
     }
 
-    directiveLogger.info(`Setting data variable: ${data.name}`, {
-      value: data.value,
-      mode: context.mode
-    });
+    // Set the data variable
     state.setDataVar(data.name, data.value);
   }
 }
 
+// Export a singleton instance
 export const dataDirectiveHandler = new DataDirectiveHandler();

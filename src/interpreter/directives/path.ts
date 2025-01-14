@@ -1,23 +1,24 @@
-import type { DirectiveNode } from 'meld-spec';
+import { DirectiveNode } from 'meld-spec';
 import { DirectiveHandler, HandlerContext } from './types';
 import { InterpreterState } from '../state/state';
 import { ErrorFactory } from '../errors/factory';
-import * as os from 'os';
-import * as path from 'path';
 import { throwWithContext } from '../utils/location-helpers';
+import { directiveLogger } from '../../utils/logger';
+import * as path from 'path';
+import * as os from 'os';
 
 export class PathDirectiveHandler implements DirectiveHandler {
-  public static readonly directiveKind = 'path';
+  readonly directiveKind = 'path';
 
   canHandle(kind: string, mode: 'toplevel' | 'rightside'): boolean {
-    return kind === PathDirectiveHandler.directiveKind;
+    return kind === 'path';
   }
 
-  handle(node: DirectiveNode, state: InterpreterState, context: HandlerContext): void {
+  async handle(node: DirectiveNode, state: InterpreterState, context: HandlerContext): Promise<void> {
     const data = node.directive;
 
     // Validate name parameter
-    if (!data.name || typeof data.name !== 'string') {
+    if (!data.name) {
       throwWithContext(
         ErrorFactory.createDirectiveError,
         'Path directive requires a name parameter',
@@ -72,4 +73,5 @@ export class PathDirectiveHandler implements DirectiveHandler {
   }
 }
 
+// Export a singleton instance
 export const pathDirectiveHandler = new PathDirectiveHandler(); 

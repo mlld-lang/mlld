@@ -6,60 +6,41 @@ import { throwWithContext } from '../utils/location-helpers';
 import { directiveLogger } from '../../utils/logger';
 
 export class DefineDirectiveHandler implements DirectiveHandler {
-  public static readonly directiveKind = 'define';
+  readonly directiveKind = 'define';
 
   canHandle(kind: string, mode: 'toplevel' | 'rightside'): boolean {
-    return kind === DefineDirectiveHandler.directiveKind;
+    return kind === 'define';
   }
 
-  handle(node: DirectiveNode, state: InterpreterState, context: HandlerContext): void {
+  async handle(node: DirectiveNode, state: InterpreterState, context: HandlerContext): Promise<void> {
     const data = node.directive;
-    directiveLogger.debug('Processing define directive', {
-      name: data.name,
-      mode: context.mode,
-      location: node.location
-    });
 
+    // Validate name parameter
     if (!data.name) {
-      directiveLogger.error('Define directive missing name', {
-        location: node.location,
-        mode: context.mode
-      });
       throwWithContext(
         ErrorFactory.createDirectiveError,
-        'Define directive requires a name',
+        'Define directive requires a name parameter',
         node.location,
         context,
         'define'
       );
     }
 
-    if (!data.value) {
-      directiveLogger.error('Define directive missing value', {
-        name: data.name,
-        location: node.location,
-        mode: context.mode
-      });
+    // Validate command parameter
+    if (!data.command) {
       throwWithContext(
         ErrorFactory.createDirectiveError,
-        'Define directive requires a value',
+        'Define directive requires a command parameter',
         node.location,
         context,
         'define'
       );
     }
-
-    directiveLogger.info(`Defining command: ${data.name}`, {
-      options: data.options,
-      mode: context.mode
-    });
 
     // Store the command in state
-    state.setCommand(data.name, {
-      output: data.value,
-      options: data.options
-    });
+    state.setCommand(data.name, data.command);
   }
 }
 
+// Export a singleton instance
 export const defineDirectiveHandler = new DefineDirectiveHandler(); 

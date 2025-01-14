@@ -41,11 +41,11 @@ function adjustNodeLocation(node: MeldNode, baseLocation: Location): void {
  * Interprets sub-directives found within content, returning a child state.
  * Handles proper location adjustments and state inheritance.
  */
-export function interpretSubDirectives(
+export async function interpretSubDirectives(
   content: string,
   baseLocation: Location,
   parentState: InterpreterState
-): InterpreterState {
+): Promise<{ state: InterpreterState }> {
   try {
     interpreterLogger.debug('Starting sub-directive interpretation', {
       contentLength: content.length,
@@ -69,7 +69,7 @@ export function interpretSubDirectives(
     }
 
     // Interpret the nodes with proper location context
-    interpret(nodes, childState, {
+    await interpret(nodes, childState, {
       mode: 'rightside',
       baseLocation,
       parentState
@@ -87,7 +87,7 @@ export function interpretSubDirectives(
       changes: Array.from(childState.getLocalChanges())
     });
 
-    return childState;
+    return { state: childState };
   } catch (error) {
     interpreterLogger.error('Error during sub-directive interpretation', {
       errorType: error instanceof Error ? error.constructor.name : typeof error,
