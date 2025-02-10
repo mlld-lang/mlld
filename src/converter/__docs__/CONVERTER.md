@@ -46,7 +46,6 @@ Similarly for toMarkdown:
 #### `toXml(nodes: MeldNode[]): string`
 - Converts nodes to XML format
 - Maintains node hierarchy
-- Preserves attributes and metadata
 
 ## Implementation Details
 

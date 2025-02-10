@@ -1,8 +1,8 @@
-import { DirectiveNode } from 'meld-spec';
+import { DirectiveNode, MeldNode } from 'meld-spec';
 import { DirectiveHandler, HandlerContext } from './types';
 import { InterpreterState } from '../state/state';
 import { ErrorFactory } from '../errors/factory';
-import { throwWithContext } from '../utils/location-helpers';
+import { throwWithContext, maybeAdjustLocation } from '../utils/location-helpers';
 import { directiveLogger } from '../../utils/logger';
 import { readFile } from 'fs/promises';
 import { dirname, resolve } from 'path';
@@ -10,6 +10,18 @@ import { extractSection, MeldLLMXMLError } from '../../converter/llmxml-utils';
 
 export class EmbedDirectiveHandler implements DirectiveHandler {
   public static readonly directiveKind = 'embed';
+  private embeddedPaths: Set<string>;
+
+  constructor() {
+    this.embeddedPaths = new Set();
+  }
+
+  /**
+   * Clear the set of embedded paths. Used for testing.
+   */
+  public clearEmbeddedPaths(): void {
+    this.embeddedPaths.clear();
+  }
 
   canHandle(kind: string, mode: 'toplevel' | 'rightside'): boolean {
     return kind === EmbedDirectiveHandler.directiveKind;
@@ -30,7 +42,7 @@ export class EmbedDirectiveHandler implements DirectiveHandler {
         location: node.location,
         mode: context.mode
       });
-      throwWithContext(
+      await throwWithContext(
         ErrorFactory.createEmbedError,
         'Embed source is required',
         node.location,
@@ -38,18 +50,33 @@ export class EmbedDirectiveHandler implements DirectiveHandler {
       );
     }
 
-    try {
-      // Resolve the embed path
-      const currentPath = state.getCurrentFilePath() || context.workspaceRoot || process.cwd();
-      const embedPath = resolve(dirname(currentPath), data.source);
+    // Resolve the embed path
+    const currentPath = state.getCurrentFilePath() || context.workspaceRoot || process.cwd();
+    const embedPath = resolve(dirname(currentPath), data.source);
 
+    // Check for circular references before any file operations
+    if (this.embeddedPaths.has(embedPath)) {
+      directiveLogger.error('Circular reference detected', {
+        source: data.source,
+        path: embedPath
+      });
+      throw await ErrorFactory.createEmbedError(
+        `Circular reference detected: ${data.source}`,
+        node.location?.start
+      );
+    }
+
+    // Add path to set before reading file to catch circular references
+    this.embeddedPaths.add(embedPath);
+
+    try {
       // Read the file
       let content: string;
       try {
         content = await readFile(embedPath, 'utf8');
       } catch (error) {
         if (error instanceof Error && error.message.includes('ENOENT')) {
-          throwWithContext(
+          await throwWithContext(
             ErrorFactory.createEmbedError,
             error.message,
             node.location,
@@ -59,29 +86,35 @@ export class EmbedDirectiveHandler implements DirectiveHandler {
         throw error;
       }
 
-      // Extract section if specified
-      let finalContent = content;
+      // Process the content
       if (data.section) {
         try {
-          finalContent = await extractSection(content, data.section, {
-            fuzzyThreshold: data.fuzzyMatch ? 0.5 : 0.8,
-            includeNested: data.includeNested !== false
-          });
-          directiveLogger.info('Section extraction successful', {
-            source: data.source,
-            section: data.section,
-            contentLength: finalContent.length
+          // Extract section from markdown
+          content = await extractSection(content, data.section, {
+            fuzzyThreshold: data.fuzzyMatch ? 0.7 : 0.9
           });
         } catch (error) {
-          if (error instanceof MeldLLMXMLError && error.code === 'SECTION_NOT_FOUND') {
-            directiveLogger.error('Section not found in file', {
-              source: data.source,
-              section: data.section,
-              error: error.message
-            });
-            throwWithContext(
+          if (error instanceof MeldLLMXMLError) {
+            let message = '';
+            switch (error.code) {
+              case 'SECTION_NOT_FOUND':
+                message = `Section "${data.section}" not found in ${data.source}${error.details?.bestMatch ? `. Did you mean "${error.details.bestMatch}"?` : ''}`;
+                break;
+              case 'PARSE_ERROR':
+                message = `Failed to parse markdown in ${data.source}: ${error.message}`;
+                break;
+              case 'INVALID_LEVEL':
+                message = `Invalid heading level in section "${data.section}" in ${data.source}`;
+                break;
+              case 'INVALID_SECTION_OPTIONS':
+                message = `Invalid section options for "${data.section}" in ${data.source}: ${error.message}`;
+                break;
+              default:
+                throw error;
+            }
+            await throwWithContext(
               ErrorFactory.createEmbedError,
-              `Section "${data.section}" not found`,
+              message,
               node.location,
               context
             );
@@ -90,15 +123,25 @@ export class EmbedDirectiveHandler implements DirectiveHandler {
         }
       }
 
+      // Store the content in state
+      state.setTextVar(`embed:${data.source}`, content);
+
+      // Create a text node with the content
+      const contentNode: MeldNode = {
+        type: 'Text',
+        content,
+        location: maybeAdjustLocation(node.location, context)
+      };
+
+      // Add node to state
+      state.addNode(contentNode);
+
       directiveLogger.info('Embed successful', {
         source: data.source,
         path: embedPath,
         section: data.section,
-        contentLength: finalContent.length
+        contentLength: content.length
       });
-
-      // Store the embedded content in state
-      state.setTextVar(`embed:${data.source}`, finalContent);
     } catch (error) {
       if (error instanceof MeldLLMXMLError) {
         directiveLogger.error('Embed failed with llmxml error', {
@@ -115,12 +158,7 @@ export class EmbedDirectiveHandler implements DirectiveHandler {
           section: data.section,
           error: error instanceof Error ? error.message : String(error)
         });
-        throwWithContext(
-          ErrorFactory.createEmbedError,
-          error instanceof Error ? error.message : String(error),
-          node.location,
-          context
-        );
+        throw error;
       }
     }
   }
