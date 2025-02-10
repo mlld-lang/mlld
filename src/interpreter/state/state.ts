@@ -6,7 +6,7 @@ export class InterpreterState {
   private textVars: Map<string, string> = new Map();
   private dataVars: Map<string, any> = new Map();
   private pathVars: Map<string, string> = new Map();
-  private commands: Map<string, { output: string; options?: Record<string, unknown> }> = new Map();
+  private commands: Map<string, { command: string; options?: Record<string, unknown> }> = new Map();
   private imports: Set<string> = new Set();
   private currentFilePath: string | null = null;
   private _isImmutable: boolean = false;
@@ -86,20 +86,16 @@ export class InterpreterState {
   }
 
   // Commands
-  getCommand(name: string): string | undefined {
-    const value = this.commands.get(name);
-    if (value !== undefined) {
-      return value.output;
-    }
-    const parentValue = this.parentState?.getCommand(name);
-    interpreterLogger.debug('Getting command', { name, found: !!value || !!parentValue });
-    return parentValue;
+  getCommand(name: string): { command: string; options?: Record<string, unknown> } | undefined {
+    const command = this.commands.get(name) ?? this.parentState?.getCommand(name);
+    interpreterLogger.debug('Getting command', { name, found: !!command });
+    return command;
   }
 
-  setCommand(name: string, command: string | { output: string; options?: Record<string, unknown> }): void {
+  setCommand(name: string, command: string | { command: string; options?: Record<string, unknown> }): void {
     this.checkMutable();
     if (typeof command === 'string') {
-      this.commands.set(name, { output: command });
+      this.commands.set(name, { command });
     } else {
       this.commands.set(name, command);
     }
@@ -107,8 +103,8 @@ export class InterpreterState {
     interpreterLogger.debug('Set command', { name, command });
   }
 
-  getCommandWithOptions(command: string): { output: string; options?: Record<string, unknown> } | undefined {
-    return this.commands.get(command);
+  getCommandWithOptions(name: string): { command: string; options?: Record<string, unknown> } | undefined {
+    return this.getCommand(name);
   }
 
   // Nodes
@@ -177,68 +173,43 @@ export class InterpreterState {
 
   // State merging
   mergeChildState(childState: InterpreterState): void {
-    this.mergeIntoParent(childState);
-  }
-
-  mergeIntoParent(childState: InterpreterState): void {
-    interpreterLogger.info('Merging child state', {
-      childChanges: Array.from(childState.localChanges),
-      childHasParent: !!childState.parentState,
-      isParentImmutable: this.isImmutable
+    interpreterLogger.debug('Merging child state', {
+      parentChanges: Array.from(this.localChanges),
+      childChanges: Array.from(childState.localChanges)
     });
 
-    this.checkMutable();
-    
     // Merge text variables
     for (const [key, value] of childState.textVars) {
-      this.textVars.set(key, value);
-      this.localChanges.add(`text:${key}`);
+      this.setTextVar(key, value);
     }
 
     // Merge data variables
     for (const [key, value] of childState.dataVars) {
-      this.dataVars.set(key, value);
-      this.localChanges.add(`data:${key}`);
+      this.setDataVar(key, value);
     }
 
     // Merge path variables
     for (const [key, value] of childState.pathVars) {
-      this.pathVars.set(key, value);
-      this.localChanges.add(`path:${key}`);
+      this.setPathVar(key, value);
     }
 
     // Merge commands
     for (const [key, value] of childState.commands) {
-      this.commands.set(key, value);
-      this.localChanges.add(`command:${key}`);
-    }
-
-    // Merge nodes (avoiding duplicates)
-    const existingNodeIds = new Set(this.nodes.map(n => JSON.stringify(n)));
-    for (const node of childState.nodes) {
-      const nodeId = JSON.stringify(node);
-      if (!existingNodeIds.has(nodeId)) {
-        this.nodes.push(node);
-        this.localChanges.add(`node:${this.nodes.length}`);
-      }
+      this.setCommand(key, value);
     }
 
     // Merge imports
-    for (const imp of childState.imports) {
-      this.imports.add(imp);
-      this.localChanges.add(`import:${imp}`);
+    for (const importPath of childState.imports) {
+      this.addImport(importPath);
     }
 
-    // Update file path if child has one
-    if (childState.currentFilePath) {
-      this.currentFilePath = childState.currentFilePath;
+    // Merge nodes
+    for (const node of childState.nodes) {
+      this.addNode(node);
     }
 
-    interpreterLogger.debug('Child state merged', {
-      totalNodes: this.nodes.length,
-      totalTextVars: this.textVars.size,
-      totalDataVars: this.dataVars.size,
-      totalImports: this.imports.size
+    interpreterLogger.debug('Merged child state', {
+      resultingChanges: Array.from(this.localChanges)
     });
   }
 

@@ -1,94 +1,123 @@
-# Meld Project - Architecture Overview
+# Meld Architecture Documentation
 
-## Purpose
-Meld is a system for parsing, interpreting, and transforming content (written in "Meld language") into various outputs or states. At its core, Meld revolves around three processes:
+## Overview
 
-1. **Parsing**: Breaking Meld content into an internal AST (Abstract Syntax Tree)
-2. **Interpreting**: Executing "directives" found in the AST to modify an in-memory state or trigger side effects
-3. **Converting**: Rendering the interpreted state into final output formats (like LLM-friendly text or Markdown)
+Meld is a powerful document processing system that combines markdown content with directives for dynamic content generation. It uses llmxml for markdown processing and section extraction, providing robust support for both LLM-friendly XML output and standard markdown.
 
-## System Architecture
+## Core Components
+
+### Converter
+The converter module handles transformation between formats:
+- Uses llmxml for markdown ↔ XML conversion
+- Supports section extraction with fuzzy matching
+- Handles error cases with typed errors
+- Provides consistent XML structure for LLMs
 
 ```
-+-------------------+        +--------------------+        +----------------------+
-|   Meld Content    | --->   |      Parser        | --->   |    Interpreter       |
-| (input files)     |        | (parseMeld)        |        | (directiveRegistry)  |
-+-------------------+        +--------------------+        +-----------+----------+
-                                                                      |
-                                                                      v
-                                                        +----------------------------+
-                                                        |    Interpreter State       |
-                                                        | (stores variables, data)   |
-                                                        +----------------------------+
-                                                                      |
-                                                                      v
-                                                        +----------------------------+
-                                                        |   Output Conversion       |
-                                                        | (mdToLlm, mdToMarkdown)   |
-                                                        +----------------------------+
-                                                                      |
-                                                                      v
-                                                        +----------------------------+
-                                                        |      Final Output         |
-                                                        +----------------------------+
+   +----------------+        +----------------+
+   |    Markdown    |  --->  |    LLM-XML     |
+   |    Content     |  <---  |    Content     |
+   +----------------+        +----------------+
+           |                        |
+           |        llmxml          |
+           +----------------------->+
+           |                       |
+           +<----------------------+
 ```
 
-## Key Components
+### Directives
+Directives are special commands that modify or generate content:
 
-### Entry Points
-- **CLI** (`bin/meld.ts`): Command-line interface entry point
-- **SDK** (`sdk/index.ts`): Programmatic interface for using Meld
+#### @embed
+- Includes external file content
+- Supports section extraction with fuzzy matching
+- Handles nested content
+- Example: `@embed [file.md # Section Name >> fuzzy=0.7]`
 
-### Core Modules
-- **Parser** (`src/parser`): Tokenizes and parses Meld content into AST nodes
-- **Interpreter** (`src/interpreter`): Executes directives and manages state
-- **Converter** (`src/converter`): Transforms interpreted content into output formats
+#### @import
+- Imports and processes Meld files
+- Merges state into current context
+- Example: `@import path/to/file.meld`
 
-### Supporting Modules
-- **Types** (`src/types`): Core type definitions and interfaces
-- **Utils** (`src/utils`): Shared utilities and helpers
-- **CLI** (`src/cli`): Command-line argument parsing and execution
+#### @define
+- Creates reusable variables
+- Example: `@define name = value`
 
-## Directory Structure
-```
-src/
-├── bin/           # CLI entry point
-├── cli/           # CLI implementation
-├── converter/     # Output format conversion
-├── interpreter/   # Core interpreter logic
-│   ├── directives/  # Directive implementations
-│   └── state/      # State management
-├── sdk/           # Public API
-├── types/         # Type definitions
-└── utils/         # Shared utilities
-```
+### Interpreter
+The interpreter processes Meld content:
+1. Parses directives and content
+2. Executes directives in order
+3. Maintains state
+4. Handles errors and logging
 
 ## Error Handling
-- All errors extend from `MeldError`
-- Specialized error types for parsing, interpretation, and directives
-- Location tracking for precise error reporting
+
+### Converter Errors
+- PARSE_ERROR: Failed to parse markdown
+- INVALID_FORMAT: Invalid document format
+- SECTION_NOT_FOUND: Section extraction failed
+- INVALID_LEVEL: Invalid header level
+- INVALID_SECTION_OPTIONS: Invalid extraction options
+
+### Directive Errors
+- File not found
+- Permission denied
+- Invalid syntax
+- Circular references
+- Section extraction failures
+
+### State Errors
+- Invalid variable names
+- Type mismatches
+- Undefined references
 
 ## Logging
-- Winston-based logging system
-- Separate loggers for directives and interpreter
-- Configurable log levels and output formats
+- Structured logging with winston
+- Debug-level content tracking
+- Error reporting with context
+- Performance metrics
 
-## Troubleshooting
+## File Processing
 
-### Common Issues
-- **"File not found"**: Check input file paths and working directory
-- **"Unknown directive"**: Verify directive spelling and registration
-- **"Parse error"**: Check syntax, especially with multiline content
-- **"State modification error"**: Ensure state is not immutable when modifying
+### Content Types
+- Markdown (.md)
+- Meld files (.meld)
+- Text files (.txt)
+- Other supported formats
 
-### Debugging Tips
-1. Enable debug logging for detailed execution flow
-2. Check error stack traces for precise locations
-3. Verify directive syntax against documentation
-4. Ensure all required dependencies are available
+### Section Extraction
+- Fuzzy matching for headings
+- Configurable threshold (default 0.8)
+- Nested section handling
+- Ambiguous match detection
+
+## State Management
+- Variable tracking
+- Content accumulation
+- Directive results
+- Error context
+
+## Testing
+- Unit tests for components
+- Integration tests for directives
+- Format conversion tests
+- Error handling coverage
+- Section extraction verification
+
+## Security
+- Path validation
+- Permission checks
+- Content validation
+- Error isolation
+
+## Performance
+- Async file operations
+- Efficient content processing
+- Minimal memory usage
+- Caching where appropriate
 
 ## References
-- [CLI Documentation](../src/cli/__docs__/README.md)
+- [CLI Documentation](../src/cli/__docs__/CLI.md)
 - [Interpreter Documentation](../src/interpreter/__docs__/README.md)
-- [Parser Documentation](../src/parser/__docs__/README.md)
-- [SDK Documentation](../src/sdk/__docs__/README.md) 
+- [Converter Documentation](../src/converter/__docs__/CONVERTER.md)
+- [Directive Documentation](../src/interpreter/directives/__docs__/DIRECTIVES.md) 

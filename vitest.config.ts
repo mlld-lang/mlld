@@ -3,7 +3,10 @@ import { resolve } from 'path';
 
 export default defineConfig({
   test: {
-    setupFiles: ['./tests/__mocks__/setup.ts'],
+    setupFiles: [
+      'tests/__mocks__/setup.ts',
+      'src/__tests__/setup.ts'
+    ],
     environment: 'node',
     globals: true,
     alias: {

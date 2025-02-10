@@ -34,7 +34,7 @@ describe('PathDirectiveHandler', () => {
       const location = context.createLocation(1, 1);
       const node = context.createDirectiveNode('path', {
         name: 'test',
-        value: '/absolute/path'
+        path: '/absolute/path'
       }, location);
 
       pathDirectiveHandler.handle(node, context.state, context.createHandlerContext());
@@ -46,7 +46,7 @@ describe('PathDirectiveHandler', () => {
       const location = context.createLocation(1, 1);
       const node = context.createDirectiveNode('path', {
         name: 'test',
-        value: './relative/path'
+        path: './relative/path'
       }, location);
 
       pathDirectiveHandler.handle(node, context.state, context.createHandlerContext());
@@ -59,7 +59,7 @@ describe('PathDirectiveHandler', () => {
       const location = context.createLocation(1, 1);
       const node = context.createDirectiveNode('path', {
         name: 'test',
-        value: '../parent/path'
+        path: '../parent/path'
       }, location);
 
       pathDirectiveHandler.handle(node, context.state, context.createHandlerContext());
@@ -73,7 +73,7 @@ describe('PathDirectiveHandler', () => {
     it('should throw error for missing name', () => {
       const location = context.createLocation(5, 3);
       const node = context.createDirectiveNode('path', {
-        value: '/some/path'
+        path: '/some/path'
       }, location);
 
       expect(() => 
@@ -122,7 +122,7 @@ describe('PathDirectiveHandler', () => {
       const location = context.createLocation(1, 1);
       const node = context.createDirectiveNode('path', {
         name: 'test',
-        value: './relative/path'
+        path: './relative/path'
       }, location);
 
       pathDirectiveHandler.handle(node, context.state, context.createHandlerContext());
@@ -137,12 +137,12 @@ describe('PathDirectiveHandler', () => {
 
       const node1 = context.createDirectiveNode('path', {
         name: 'base',
-        value: '/base/path'
+        path: '/base/path'
       }, location1);
 
       const node2 = context.createDirectiveNode('path', {
         name: 'test',
-        value: '{base}/subdir'
+        path: '{base}/subdir'
       }, location2);
 
       pathDirectiveHandler.handle(node1, context.state, context.createHandlerContext());

@@ -5,74 +5,41 @@ import { DirectiveHandler, HandlerContext } from '../../src/interpreter/directiv
 import { vi } from 'vitest';
 import type { MeldNode } from 'meld-spec';
 
-class EmbedDirectiveHandler implements DirectiveHandler {
+export class EmbedDirectiveHandler implements DirectiveHandler {
   canHandle(kind: string, mode: 'toplevel' | 'rightside'): boolean {
-    return kind === '@embed';
+    return kind === 'embed';
   }
 
-  handle(node: DirectiveNode, state: InterpreterState, context: HandlerContext): void {
+  async handle(node: DirectiveNode, state: InterpreterState, context: HandlerContext): Promise<void> {
     const data = node.directive;
-    if (!data.path) {
-      if (context.mode === 'rightside' && node.location && context.baseLocation) {
-        throw ErrorFactory.createWithAdjustedLocation(
-          ErrorFactory.createDirectiveError,
-          'Embed path is required',
-          node.location.start,
-          context.baseLocation.start,
-          'embed'
-        );
-      } else {
-        throw ErrorFactory.createDirectiveError(
-          'Embed path is required',
-          'embed',
-          node.location?.start
-        );
-      }
+    if (!data.source) {
+      throw ErrorFactory.createDirectiveError(
+        'Embed source is required',
+        'embed',
+        node.location?.start
+      );
     }
-
     // Mock implementation
-    const mockNode: MeldNode = {
-      type: 'Text',
-      content: 'Mock embedded content',
-      location: context.mode === 'rightside' && node.location && context.baseLocation
-        ? {
-            start: ErrorFactory.adjustLocation(node.location.start, context.baseLocation.start),
-            end: ErrorFactory.adjustLocation(node.location.end, context.baseLocation.start)
-          }
-        : node.location
-    };
-    state.addNode(mockNode);
+    state.setTextVar(`embed:${data.source}`, 'Mock embedded content');
   }
 }
 
-class ImportDirectiveHandler implements DirectiveHandler {
+export class ImportDirectiveHandler implements DirectiveHandler {
   canHandle(kind: string, mode: 'toplevel' | 'rightside'): boolean {
-    return kind === '@import';
+    return kind === 'import';
   }
 
-  handle(node: DirectiveNode, state: InterpreterState, context: HandlerContext): void {
+  async handle(node: DirectiveNode, state: InterpreterState, context: HandlerContext): Promise<void> {
     const data = node.directive;
-    if (!data.from) {
-      if (context.mode === 'rightside' && node.location && context.baseLocation) {
-        throw ErrorFactory.createWithAdjustedLocation(
-          ErrorFactory.createDirectiveError,
-          'Import source is required',
-          node.location.start,
-          context.baseLocation.start,
-          'import'
-        );
-      } else {
-        throw ErrorFactory.createDirectiveError(
-          'Import source is required',
-          'import',
-          node.location?.start
-        );
-      }
+    if (!data.source) {
+      throw ErrorFactory.createDirectiveError(
+        'Import source is required',
+        'import',
+        node.location?.start
+      );
     }
-
     // Mock implementation
-    state.setTextVar('text1', 'value1');
-    state.setDataVar('data1', { key: 'value' });
+    state.setTextVar(`import:${data.source}`, 'Mock imported content');
   }
 }
 
@@ -146,5 +113,6 @@ export const DirectiveRegistry = {
   clear: vi.fn()
 };
 
+// Export singleton instances
 export const embedDirectiveHandler = new EmbedDirectiveHandler();
 export const importDirectiveHandler = new ImportDirectiveHandler(); 

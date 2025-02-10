@@ -16,10 +16,25 @@ export class PathDirectiveHandler implements DirectiveHandler {
   async handle(node: DirectiveNode, state: InterpreterState, context: HandlerContext): Promise<void> {
     const data = node.directive;
     directiveLogger.debug('Processing path directive', {
+      name: data.name,
       path: data.path,
       mode: context.mode,
       location: node.location
     });
+
+    // Validate name parameter
+    if (!data.name || typeof data.name !== 'string') {
+      directiveLogger.error('Path directive missing name', {
+        location: node.location,
+        mode: context.mode
+      });
+      throwWithContext(
+        ErrorFactory.createPathError,
+        'Path directive requires a name parameter',
+        node.location,
+        context
+      );
+    }
 
     // Validate path parameter
     if (!data.path || typeof data.path !== 'string') {
@@ -35,14 +50,15 @@ export class PathDirectiveHandler implements DirectiveHandler {
       );
     }
 
-    // Resolve path relative to workspace root
-    const workspaceRoot = context.workspaceRoot || process.cwd();
-    const resolvedPath = resolve(workspaceRoot, data.path);
+    // Resolve path relative to current file or workspace root
+    const basePath = state.getCurrentFilePath() || context.workspaceRoot || process.cwd();
+    const resolvedPath = resolve(dirname(basePath), data.path);
 
     // Store path in state
-    state.setCurrentFilePath(resolvedPath);
+    state.setPathVar(data.name, resolvedPath);
 
     directiveLogger.info('Path set successfully', {
+      name: data.name,
       path: resolvedPath,
       mode: context.mode
     });

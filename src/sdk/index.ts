@@ -10,7 +10,7 @@ import { parseMeld as parseContent } from '../interpreter/parser.js';
 import { interpret } from '../interpreter/interpreter.js';
 import { InterpreterState } from '../interpreter/state/state.js';
 import { MeldParseError, MeldInterpretError } from '../interpreter/errors/errors.js';
-import { mdToLlm, mdToMarkdown } from '../../tests/__mocks__/md-llm.js';
+import { toLLMXml, toMarkdown, MeldLLMXMLError } from '../converter/llmxml-utils.js';
 import type { MeldNode } from 'meld-spec';
 import { promises as fs } from 'fs';
 import { resolve } from 'path';
@@ -32,11 +32,6 @@ export interface MeldOptions {
    * Initial state to use for interpretation
    */
   initialState?: InterpreterState;
-
-  /**
-   * Whether to include metadata in the output
-   */
-  includeMetadata?: boolean;
 }
 
 /**
@@ -108,7 +103,6 @@ export async function interpretMeld(
 async function stateToOutput(state: InterpreterState, options: MeldOptions): Promise<string> {
   interpreterLogger.debug('Converting state to output', {
     format: options.format || 'llm',
-    includeMetadata: options.includeMetadata,
     nodeCount: state.getNodes().length
   });
 
@@ -127,10 +121,10 @@ async function stateToOutput(state: InterpreterState, options: MeldOptions): Pro
     .join('\n');
 
   try {
-    // Convert to requested format using our implementation
+    // Convert to requested format using llmxml
     const output = options.format === 'llm' 
-      ? await mdToLlm(content, { includeMetadata: options.includeMetadata })
-      : await mdToMarkdown(content, { includeMetadata: options.includeMetadata });
+      ? await toLLMXml(content)
+      : await toMarkdown(content);
 
     interpreterLogger.debug('Successfully converted state to output', {
       format: options.format || 'llm',
@@ -139,10 +133,19 @@ async function stateToOutput(state: InterpreterState, options: MeldOptions): Pro
 
     return output;
   } catch (error) {
-    interpreterLogger.error('Failed to convert state to output', {
-      format: options.format || 'llm',
-      error: error instanceof Error ? error.message : String(error)
-    });
+    if (error instanceof MeldLLMXMLError) {
+      interpreterLogger.error('Failed to convert content format', {
+        format: options.format || 'llm',
+        errorCode: error.code,
+        errorMessage: error.message,
+        details: error.details
+      });
+    } else {
+      interpreterLogger.error('Unexpected error during format conversion', {
+        format: options.format || 'llm',
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
     throw error;
   }
 }

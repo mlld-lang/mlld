@@ -1,4 +1,4 @@
-import { vi } from 'vitest';
+import { vi, beforeEach } from 'vitest';
 import type { DirectiveNode, MeldNode } from 'meld-spec';
 import { InterpreterState } from '../../src/interpreter/state/state';
 import { ErrorFactory } from '../../src/interpreter/errors/factory';
@@ -8,25 +8,62 @@ import { embedDirectiveHandler, importDirectiveHandler } from './directive-handl
 // Mock file system state
 const mockFiles: Record<string, string> = {};
 
+// Mock file management functions
+function getMockFiles(): Record<string, string> {
+  return mockFiles;
+}
+
+export function addMockFile(path: string, content: string) {
+  mockFiles[path] = content;
+}
+
+export function clearMockFiles() {
+  Object.keys(mockFiles).forEach(key => delete mockFiles[key]);
+}
+
 // Mock fs module
 vi.mock('fs', () => ({
+  default: {
+    readFileSync: vi.fn((path: string) => {
+      if (mockFiles[path]) {
+        return mockFiles[path];
+      }
+      throw new Error(`ENOENT: no such file or directory, open '${path}'`);
+    }),
+    writeFileSync: vi.fn((path: string, content: string) => {
+      mockFiles[path] = content;
+    }),
+    existsSync: vi.fn((path: string) => !!mockFiles[path]),
+    mkdirSync: vi.fn(),
+    promises: {
+      readFile: vi.fn(async (path: string) => {
+        if (mockFiles[path]) {
+          return mockFiles[path];
+        }
+        throw new Error(`ENOENT: no such file or directory, open '${path}'`);
+      }),
+      writeFile: vi.fn(async (path: string, content: string) => {
+        mockFiles[path] = content;
+      })
+    }
+  },
   readFileSync: vi.fn((path: string) => {
-    if (path in mockFiles) {
+    if (mockFiles[path]) {
       return mockFiles[path];
     }
-    throw new Error(`Mock file not found: ${path}`);
+    throw new Error(`ENOENT: no such file or directory, open '${path}'`);
   }),
   writeFileSync: vi.fn((path: string, content: string) => {
     mockFiles[path] = content;
   }),
-  existsSync: vi.fn((path: string) => path in mockFiles),
+  existsSync: vi.fn((path: string) => !!mockFiles[path]),
   mkdirSync: vi.fn(),
   promises: {
     readFile: vi.fn(async (path: string) => {
-      if (path in mockFiles) {
+      if (mockFiles[path]) {
         return mockFiles[path];
       }
-      throw new Error(`Mock file not found: ${path}`);
+      throw new Error(`ENOENT: no such file or directory, open '${path}'`);
     }),
     writeFile: vi.fn(async (path: string, content: string) => {
       mockFiles[path] = content;
@@ -35,13 +72,46 @@ vi.mock('fs', () => ({
 }));
 
 // Mock path module
-vi.mock('path', () => ({
-  isAbsolute: vi.fn((path: string) => path.startsWith('/')),
-  normalize: vi.fn((path: string) => path.replace(/\/\.\//g, '/').replace(/\/[^/]+\/\.\./g, '')),
-  resolve: vi.fn((...paths: string[]) => paths.join('/')),
-  join: vi.fn((...paths: string[]) => paths.join('/')),
-  dirname: vi.fn((path: string) => path.split('/').slice(0, -1).join('/'))
-}));
+vi.mock('path', () => {
+  return {
+    default: {
+      isAbsolute: vi.fn((path: string) => path.startsWith('/')),
+      normalize: vi.fn((path: string) => {
+        const normalized = path.replace(/\/\.\//g, '/').replace(/\/[^/]+\/\.\./g, '');
+        return normalized.startsWith('/') ? normalized : `/${normalized}`;
+      }),
+      resolve: vi.fn((...paths: string[]) => {
+        const joined = paths.join('/').replace(/\/\.\//g, '/').replace(/\/[^/]+\/\.\./g, '');
+        return joined.startsWith('/') ? joined : `/${joined}`;
+      }),
+      join: vi.fn((...paths: string[]) => {
+        const joined = paths.join('/').replace(/\/\.\//g, '/').replace(/\/[^/]+\/\.\./g, '');
+        return joined.startsWith('/') ? joined : `/${joined}`;
+      }),
+      dirname: vi.fn((path: string) => {
+        const dir = path.split('/').slice(0, -1).join('/');
+        return dir || '/';
+      })
+    },
+    isAbsolute: vi.fn((path: string) => path.startsWith('/')),
+    normalize: vi.fn((path: string) => {
+      const normalized = path.replace(/\/\.\//g, '/').replace(/\/[^/]+\/\.\./g, '');
+      return normalized.startsWith('/') ? normalized : `/${normalized}`;
+    }),
+    resolve: vi.fn((...paths: string[]) => {
+      const joined = paths.join('/').replace(/\/\.\//g, '/').replace(/\/[^/]+\/\.\./g, '');
+      return joined.startsWith('/') ? joined : `/${joined}`;
+    }),
+    join: vi.fn((...paths: string[]) => {
+      const joined = paths.join('/').replace(/\/\.\//g, '/').replace(/\/[^/]+\/\.\./g, '');
+      return joined.startsWith('/') ? joined : `/${joined}`;
+    }),
+    dirname: vi.fn((path: string) => {
+      const dir = path.split('/').slice(0, -1).join('/');
+      return dir || '/';
+    })
+  };
+});
 
 // Mock InterpreterState with enhanced tracking
 export class MockInterpreterState extends InterpreterState {
@@ -115,20 +185,11 @@ function createMockHandler(kind: string) {
       handle: async (node: DirectiveNode, state: InterpreterState, context: HandlerContext) => {
         const data = node.directive;
         if (!data.name) {
-          const error = ErrorFactory.createDirectiveError(
+          throw ErrorFactory.createDirectiveError(
             'Data directive requires a name',
             'data',
             node.location?.start
           );
-          if (context.mode === 'rightside' && node.location && context.baseLocation) {
-            throw ErrorFactory.createWithAdjustedLocation(
-              () => error,
-              error.message,
-              node.location.start,
-              context.baseLocation.start
-            );
-          }
-          throw error;
         }
         state.setDataVar(data.name, data.value);
       }
@@ -138,22 +199,13 @@ function createMockHandler(kind: string) {
       handle: async (node: DirectiveNode, state: InterpreterState, context: HandlerContext) => {
         const data = node.directive;
         if (!data.name) {
-          const error = ErrorFactory.createDirectiveError(
+          throw ErrorFactory.createDirectiveError(
             'Text directive requires a name',
             'text',
             node.location?.start
           );
-          if (context.mode === 'rightside' && node.location && context.baseLocation) {
-            throw ErrorFactory.createWithAdjustedLocation(
-              () => error,
-              error.message,
-              node.location.start,
-              context.baseLocation.start
-            );
-          }
-          throw error;
         }
-        state.setTextVar(data.name, data.value, node.location?.start);
+        state.setTextVar(data.name, data.value);
       }
     },
     run: {
@@ -161,26 +213,16 @@ function createMockHandler(kind: string) {
       handle: async (node: DirectiveNode, state: InterpreterState, context: HandlerContext) => {
         const data = node.directive;
         if (!data.command) {
-          const error = ErrorFactory.createDirectiveError(
+          throw ErrorFactory.createDirectiveError(
             'Run directive requires a command',
             'run',
             node.location?.start
           );
-          if (context.mode === 'rightside' && node.location && context.baseLocation) {
-            throw ErrorFactory.createWithAdjustedLocation(
-              () => error,
-              error.message,
-              node.location.start,
-              context.baseLocation.start
-            );
-          }
-          throw error;
         }
         const commandData = state.getCommand(data.command);
         if (commandData && typeof commandData === 'object' && 'command' in commandData) {
-          const { command, options } = commandData as { command: string; options?: Record<string, unknown> };
-          console.log(`[MOCK] Executing command: ${command}`, options);
-          state.appendOutput(`Executed: ${command}`, node.location?.start);
+          const { command } = commandData as { command: string };
+          console.log(`[MOCK] Executing command: ${command}`);
         }
       }
     },
@@ -189,22 +231,13 @@ function createMockHandler(kind: string) {
       handle: async (node: DirectiveNode, state: InterpreterState, context: HandlerContext) => {
         const data = node.directive;
         if (!data.name) {
-          const error = ErrorFactory.createDirectiveError(
+          throw ErrorFactory.createDirectiveError(
             'Define directive requires a name',
             'define',
             node.location?.start
           );
-          if (context.mode === 'rightside' && node.location && context.baseLocation) {
-            throw ErrorFactory.createWithAdjustedLocation(
-              () => error,
-              error.message,
-              node.location.start,
-              context.baseLocation.start
-            );
-          }
-          throw error;
         }
-        state.setCommand(data.name, data.command || '', data.options);
+        state.setCommand(data.name, data.command || '');
       }
     }
   };
@@ -216,9 +249,128 @@ export function mockFile(path: string, content: string): void {
   mockFiles[path] = content;
 }
 
-export function clearMockFiles(): void {
-  Object.keys(mockFiles).forEach(key => delete mockFiles[key]);
+// Add test fixtures
+beforeEach(() => {
+  clearMockFiles();
+  
+  // Basic fixtures
+  addMockFile('/Users/adam/dev/meld/src/__fixtures__/markdown/basic.md', `
+# Basic Document
+
+## Section One
+Some content in section one
+
+## Section Two
+Some content in section two
+
+### Nested Section
+This is a nested section
+\`\`\`typescript
+function test() {
+  console.log('Hello');
 }
+\`\`\`
+`);
+
+  addMockFile('/Users/adam/dev/meld/src/__fixtures__/xml/expected/basic.xml', `<BasicDocument title="Basic Document"><Section title="Section One" hlevel="2">Some content in section one</Section><Section title="Section Two" hlevel="2">Some content in section two<Section title="Nested Section" hlevel="3">This is a nested section\`\`\`typescript
+function test() {
+  console.log('Hello');
+}
+\`\`\`</Section></Section></BasicDocument>`);
+
+  // Complex fixtures
+  addMockFile('/Users/adam/dev/meld/src/__fixtures__/markdown/complex.md', `
+# Complex Document
+
+## 你好，世界
+Some unicode content
+
+## 🎉 Emoji Title 🚀
+こんにちは and Café
+
+## Code Blocks
+\`\`\`typescript
+interface Test {
+  name: string;
+}
+\`\`\`
+\`\`\`python
+def hello():
+    print("Hello")
+\`\`\`
+
+## About the Project
+Project info
+
+### About Development
+Dev info
+
+## Getting Started (Quick Guide)
+This section has a title with parentheses
+`);
+
+  addMockFile('/Users/adam/dev/meld/src/__fixtures__/xml/expected/complex.xml', `<ComplexDocument title="Complex Document"><Section title="你好，世界" hlevel="2">Some unicode content</Section><Section title="🎉 Emoji Title 🚀" hlevel="2">こんにちは and Café</Section><Section title="Code Blocks" hlevel="2">\`\`\`typescript
+interface Test {
+  name: string;
+}
+\`\`\`
+\`\`\`python
+def hello():
+    print("Hello")
+\`\`\`</Section><Section title="About the Project" hlevel="2">Project info<Section title="About Development" hlevel="3">Dev info</Section></Section><Section title="Getting Started (Quick Guide)" hlevel="2">This section has a title with parentheses</Section></ComplexDocument>`);
+
+  // Edge cases
+  addMockFile('/Users/adam/dev/meld/src/__fixtures__/markdown/edge-cases.md', `
+# Edge Cases
+
+## Malformed Code Block
+\`\`\`typescript
+const x = {
+  // Missing closing brace
+
+## Incomplete Code Fence
+\`\`\`python
+def test():
+    print("No closing fence")
+
+## Empty Section
+
+## HTML in Markdown
+<h1>Raw HTML header</h1>
+<div class="test">
+  Some content
+</div>
+`);
+
+  // Real-world examples
+  addMockFile('/Users/adam/dev/meld/src/__fixtures__/real-world/architecture.md', `
+# Architecture Documentation
+
+## System Overview
+The system consists of multiple components:
+- Frontend
+- Backend
+- Database
+
+## Component Details
+### Frontend
+Built with React & TypeScript
+
+### Backend
+Node.js with Express
+
+### Database
+PostgreSQL for persistence
+
+## Deployment
+Using Docker & Kubernetes
+`);
+
+  addMockFile('/Users/adam/dev/meld/src/__fixtures__/xml/expected/real-world/architecture.xml', `<ArchitectureDocumentation title="Architecture Documentation"><Section title="System Overview" hlevel="2">The system consists of multiple components:
+- Frontend
+- Backend
+- Database</Section><Section title="Component Details" hlevel="2"><Section title="Frontend" hlevel="3">Built with React &amp; TypeScript</Section><Section title="Backend" hlevel="3">Node.js with Express</Section><Section title="Database" hlevel="3">PostgreSQL for persistence</Section></Section><Section title="Deployment" hlevel="2">Using Docker &amp; Kubernetes</Section></ArchitectureDocumentation>`);
+});
 
 // Export utilities
 export { createMockHandler, mockFiles }; 

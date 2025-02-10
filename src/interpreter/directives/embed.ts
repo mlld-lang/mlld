@@ -6,6 +6,7 @@ import { throwWithContext } from '../utils/location-helpers';
 import { directiveLogger } from '../../utils/logger';
 import { readFile } from 'fs/promises';
 import { dirname, resolve } from 'path';
+import { extractSection, MeldLLMXMLError } from '../../converter/llmxml-utils';
 
 export class EmbedDirectiveHandler implements DirectiveHandler {
   public static readonly directiveKind = 'embed';
@@ -18,6 +19,7 @@ export class EmbedDirectiveHandler implements DirectiveHandler {
     const data = node.directive;
     directiveLogger.debug('Processing embed directive', {
       source: data.source,
+      section: data.section,
       mode: context.mode,
       location: node.location
     });
@@ -38,32 +40,88 @@ export class EmbedDirectiveHandler implements DirectiveHandler {
 
     try {
       // Resolve the embed path
-      const currentPath = context.currentPath || '';
-      const currentDir = dirname(currentPath);
-      const embedPath = resolve(currentDir, data.source);
+      const currentPath = state.getCurrentFilePath() || context.workspaceRoot || process.cwd();
+      const embedPath = resolve(dirname(currentPath), data.source);
 
       // Read the file
-      const content = await readFile(embedPath, 'utf8');
+      let content: string;
+      try {
+        content = await readFile(embedPath, 'utf8');
+      } catch (error) {
+        if (error instanceof Error && error.message.includes('ENOENT')) {
+          throwWithContext(
+            ErrorFactory.createEmbedError,
+            error.message,
+            node.location,
+            context
+          );
+        }
+        throw error;
+      }
+
+      // Extract section if specified
+      let finalContent = content;
+      if (data.section) {
+        try {
+          finalContent = await extractSection(content, data.section, {
+            fuzzyThreshold: data.fuzzyMatch ? 0.5 : 0.8,
+            includeNested: data.includeNested !== false
+          });
+          directiveLogger.info('Section extraction successful', {
+            source: data.source,
+            section: data.section,
+            contentLength: finalContent.length
+          });
+        } catch (error) {
+          if (error instanceof MeldLLMXMLError && error.code === 'SECTION_NOT_FOUND') {
+            directiveLogger.error('Section not found in file', {
+              source: data.source,
+              section: data.section,
+              error: error.message
+            });
+            throwWithContext(
+              ErrorFactory.createEmbedError,
+              `Section "${data.section}" not found`,
+              node.location,
+              context
+            );
+          }
+          throw error;
+        }
+      }
 
       directiveLogger.info('Embed successful', {
         source: data.source,
         path: embedPath,
-        contentLength: content.length
+        section: data.section,
+        contentLength: finalContent.length
       });
 
       // Store the embedded content in state
-      state.setTextVar(`embed:${data.source}`, content);
+      state.setTextVar(`embed:${data.source}`, finalContent);
     } catch (error) {
-      directiveLogger.error('Embed failed', {
-        source: data.source,
-        error: error instanceof Error ? error.message : String(error)
-      });
-      throwWithContext(
-        ErrorFactory.createEmbedError,
-        `Failed to embed file: ${error instanceof Error ? error.message : String(error)}`,
-        node.location,
-        context
-      );
+      if (error instanceof MeldLLMXMLError) {
+        directiveLogger.error('Embed failed with llmxml error', {
+          source: data.source,
+          section: data.section,
+          errorCode: error.code,
+          errorMessage: error.message,
+          details: error.details
+        });
+        throw error;
+      } else {
+        directiveLogger.error('Embed failed', {
+          source: data.source,
+          section: data.section,
+          error: error instanceof Error ? error.message : String(error)
+        });
+        throwWithContext(
+          ErrorFactory.createEmbedError,
+          error instanceof Error ? error.message : String(error),
+          node.location,
+          context
+        );
+      }
     }
   }
 }

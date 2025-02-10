@@ -1,6 +1,7 @@
 import { textDirectiveHandler } from '../text';
 import { TestContext } from '../../__tests__/test-utils';
 import { MeldError } from '../../errors/errors';
+import { ErrorFactory } from '../../errors/factory';
 
 describe('TextDirectiveHandler', () => {
   let context: TestContext;
@@ -10,44 +11,56 @@ describe('TextDirectiveHandler', () => {
   });
 
   describe('basic text handling', () => {
-    it('should handle simple text content', () => {
+    it('should handle simple text content', async () => {
       const location = context.createLocation(1, 1);
       const node = context.createDirectiveNode('text', {
         name: 'test',
         value: 'Hello world'
       }, location);
 
-      textDirectiveHandler.handle(node, context.state, context.createHandlerContext());
+      await textDirectiveHandler.handle(node, context.state, context.createHandlerContext());
 
       expect(context.state.getTextVar('test')).toBe('Hello world');
     });
 
-    it('should handle empty text content', () => {
+    it('should handle empty text content', async () => {
       const location = context.createLocation(1, 1);
       const node = context.createDirectiveNode('text', {
         name: 'test',
         value: ''
       }, location);
 
-      textDirectiveHandler.handle(node, context.state, context.createHandlerContext());
+      await textDirectiveHandler.handle(node, context.state, context.createHandlerContext());
+
+      expect(context.state.getTextVar('test')).toBe('');
+    });
+
+    it('should handle undefined/null values', async () => {
+      const location = context.createLocation(1, 1);
+      const node = context.createDirectiveNode('text', {
+        name: 'test',
+        value: undefined
+      }, location);
+
+      await textDirectiveHandler.handle(node, context.state, context.createHandlerContext());
 
       expect(context.state.getTextVar('test')).toBe('');
     });
   });
 
   describe('error handling', () => {
-    it('should throw error for missing name', () => {
+    it('should throw error for missing name', async () => {
       const location = context.createLocation(5, 3);
       const node = context.createDirectiveNode('text', {
         value: 'test'
       }, location);
 
-      expect(() => 
+      await expect(
         textDirectiveHandler.handle(node, context.state, context.createHandlerContext())
-      ).toThrow(MeldError);
+      ).rejects.toThrow('Text directive requires a name parameter');
     });
 
-    it('should preserve error locations in right-side mode', () => {
+    it('should preserve error locations in right-side mode', async () => {
       const baseLocation = context.createLocation(5, 3);
       const nestedContext = context.createNestedContext(baseLocation);
       const textLocation = nestedContext.createLocation(2, 4);
@@ -56,7 +69,7 @@ describe('TextDirectiveHandler', () => {
       }, textLocation);
 
       try {
-        textDirectiveHandler.handle(node, nestedContext.state, nestedContext.createHandlerContext());
+        await textDirectiveHandler.handle(node, nestedContext.state, nestedContext.createHandlerContext());
         fail('Should have thrown an error');
       } catch (error) {
         expect(error).toBeInstanceOf(MeldError);
@@ -70,7 +83,7 @@ describe('TextDirectiveHandler', () => {
   });
 
   describe('nested text handling', () => {
-    it('should handle text in nested contexts', () => {
+    it('should handle text in nested contexts', async () => {
       const baseLocation = context.createLocation(5, 3);
       const nestedContext = context.createNestedContext(baseLocation);
       const textLocation = nestedContext.createLocation(2, 4);
@@ -79,12 +92,12 @@ describe('TextDirectiveHandler', () => {
         value: 'nested text'
       }, textLocation);
 
-      textDirectiveHandler.handle(node, nestedContext.state, nestedContext.createHandlerContext());
+      await textDirectiveHandler.handle(node, nestedContext.state, nestedContext.createHandlerContext());
 
       expect(nestedContext.state.getTextVar('test')).toBe('nested text');
     });
 
-    it('should preserve parent context text variables', () => {
+    it('should preserve parent context text variables', async () => {
       const parentNode = context.createDirectiveNode('text', {
         name: 'parent',
         value: 'parent text'
@@ -96,8 +109,8 @@ describe('TextDirectiveHandler', () => {
         value: 'child text'
       }, nestedContext.createLocation(2, 4));
 
-      textDirectiveHandler.handle(parentNode, context.state, context.createHandlerContext());
-      textDirectiveHandler.handle(childNode, nestedContext.state, nestedContext.createHandlerContext());
+      await textDirectiveHandler.handle(parentNode, context.state, context.createHandlerContext());
+      await textDirectiveHandler.handle(childNode, nestedContext.state, nestedContext.createHandlerContext());
 
       expect(context.state.getTextVar('parent')).toBe('parent text');
       expect(nestedContext.state.getTextVar('child')).toBe('child text');
