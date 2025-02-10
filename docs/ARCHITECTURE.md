@@ -8,15 +8,31 @@ Meld is a powerful document processing system that combines markdown content wit
 
 ### Converter
 The converter module handles transformation between formats:
-- Uses llmxml for markdown ↔ XML conversion
-- Supports section extraction with fuzzy matching
-- Handles error cases with typed errors
-- Provides consistent XML structure for LLMs
+- Uses llmxml as the core library for markdown processing
+- Provides markdown ↔ XML conversion
+- Supports basic section extraction with fuzzy matching
+- Implements error handling with typed errors
+
+The XML format currently supports:
+```xml
+<code language="language-name">
+  Code content here
+</code>
+
+<directive kind="directive-name">
+</directive>
+```
+
+Key features of the XML format:
+- Basic structural elements for code and directives
+- Language attribution for code blocks
+- Directive type preservation
+- Plain text content handling
 
 ```
    +----------------+        +----------------+
-   |    Markdown    |  --->  |    LLM-XML     |
-   |    Content     |  <---  |    Content     |
+   |    Markdown    |  --->  |      XML      |
+   |    Content     |  <---  |    Content    |
    +----------------+        +----------------+
            |                        |
            |        llmxml          |
@@ -53,11 +69,17 @@ The interpreter processes Meld content:
 ## Error Handling
 
 ### Converter Errors
-- PARSE_ERROR: Failed to parse markdown
-- INVALID_FORMAT: Invalid document format
-- SECTION_NOT_FOUND: Section extraction failed
-- INVALID_LEVEL: Invalid header level
-- INVALID_SECTION_OPTIONS: Invalid extraction options
+The system implements basic error handling:
+- PARSE_ERROR: Indicates markdown parsing failures
+- INVALID_FORMAT: Reports structural issues
+- SECTION_NOT_FOUND: Occurs when section extraction fails
+- INVALID_LEVEL: Reports issues with heading levels
+- INVALID_SECTION_OPTIONS: Indicates problems with extraction options
+
+Each error includes:
+- Specific error code
+- Error message
+- Basic error details when available
 
 ### Directive Errors
 - File not found
@@ -86,10 +108,22 @@ The interpreter processes Meld content:
 - Other supported formats
 
 ### Section Extraction
-- Fuzzy matching for headings
-- Configurable threshold (default 0.8)
-- Nested section handling
-- Ambiguous match detection
+Section extraction provides:
+- Basic fuzzy matching for headings
+- Configurable threshold
+- Optional nested section inclusion
+- Simple error reporting
+
+Example section extraction:
+```
+@embed [file.md # Setup Guide >> fuzzy=0.9]  // Custom threshold
+@embed [file.md # Getting Started]           // Default threshold
+```
+
+The matching system:
+- Supports basic fuzzy matching
+- Uses configurable thresholds
+- Allows nested section inclusion
 
 ## State Management
 - Variable tracking

@@ -70,23 +70,60 @@ class EmbedDirectiveHandler implements DirectiveHandler {
 6. Logs progress via `directiveLogger`
 
 ## Section Extraction
-- Uses llmxml for section extraction
-- Supports fuzzy matching for section titles
-- Default fuzzy threshold of 0.8
-- Includes nested subsections by default
-- Handles ambiguous matches with warnings
+- Uses llmxml for basic section extraction
+- Configurable fuzzy matching threshold
+- Optional nested section inclusion
+- Basic error handling
 
-## File Handling
-- Uses fs/promises for async file operations
-- Resolves paths relative to working directory
-- Supports variable substitution in paths
-- Handles different file types appropriately
+### Fuzzy Matching Details
+The fuzzy matching system provides:
+- Basic string similarity matching
+- Configurable threshold (default 0.8)
+- Simple match/no-match determination
+
+### Examples with Explanations
+
+#### Basic Section Extraction
+```markdown
+# Source file (guide.md):
+## Getting Started
+Content here...
+
+## Installation
+More content...
+
+# Meld file:
+@embed [guide.md # Getting Started]
+```
+Extracts exact section match
+
+#### Fuzzy Matching
+```markdown
+# Source file (guide.md):
+## Getting Started Guide
+Content here...
+
+# Meld file:
+@embed [guide.md # Getting Started >> fuzzy=0.9]  # Stricter matching
+@embed [guide.md # Getting Started]               # Default threshold
+```
+Shows threshold configuration
 
 ## Error Handling
+The handler implements basic error handling:
+
+### Section Extraction Errors
+- SECTION_NOT_FOUND
+  - Basic error message
+  - Section title in details
+- INVALID_SECTION_OPTIONS
+  - Reports configuration issues
+  - Basic error context
+
+### File System Errors
 - File not found errors
 - Permission errors
 - Invalid path errors
-- Section not found errors
 - Meld processing errors
 - Circular reference detection
 
@@ -138,19 +175,19 @@ class EmbedDirectiveHandler implements DirectiveHandler {
 - **"Permission denied"**
   - Solution: Verify file access permissions
 - **"Section not found"**
-  - Solution: Check section name or lower fuzzy threshold
-- **"Circular reference detected"**
-  - Solution: Check for recursive embed chains
-- **"Invalid file type"**
-  - Solution: Ensure file type is supported
+  - Check section name in source file
+  - Try adjusting fuzzy threshold
+  - Verify markdown is valid
+- **"Invalid section options"**
+  - Check fuzzy threshold is between 0 and 1
+  - Verify section name is provided
 
 ### Debugging Tips
-1. Check file paths
-2. Verify file permissions
-3. Enable debug logging
-4. Review section names
-5. Check fuzzy threshold
-6. Review embed chain
+1. Enable debug logging
+2. Check section names carefully
+3. Verify file content
+4. Test different thresholds
+5. Review error messages
 
 ## References
 - [Interpreter Documentation](../../__docs__/README.md)

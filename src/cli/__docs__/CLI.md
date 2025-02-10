@@ -23,6 +23,53 @@ The CLI module handles command-line parsing and orchestrates the Meld flow by ca
 - `--input`: Path to input Meld file (required)
 - `--output`: Path for output file (optional)
 - `--format`: Output format ('md' or 'llm', defaults to 'md')
+  - 'md': Standard markdown output
+  - 'llm': XML format with basic structure
+
+### Output Formats
+
+#### Markdown Format
+Standard markdown output preserves the original document structure while applying any directive transformations:
+```markdown
+# Title
+Content text...
+
+## Section
+- List item 1
+- List item 2
+```
+
+#### XML Format
+When using `--format llm`, output uses a simple XML structure:
+```xml
+<code language="typescript">
+const example = "code block";
+</code>
+
+<directive kind="embed">
+</directive>
+
+Plain text content
+```
+
+Key XML format features:
+- Code block handling with language support
+- Directive type preservation
+- Plain text content
+- Basic structural elements
+
+### Section Extraction
+The CLI supports basic section extraction through the @embed directive:
+```bash
+# Extract with default fuzzy matching
+meld --input doc.md --output result.md
+
+# Content of doc.md:
+@embed [source.md # Getting Started]
+
+# Extract with custom fuzzy threshold
+@embed [source.md # Setup Guide >> fuzzy=0.9]
+```
 
 ### Key Functions
 
@@ -62,12 +109,17 @@ The CLI module handles command-line parsing and orchestrates the Meld flow by ca
   - Solution: Use 'md' or 'llm' for `--format`
 - **"Output file access denied"**
   - Solution: Check file permissions and path
+- **"Section not found in source file"**
+  - Check section heading exists in source
+  - Try adjusting fuzzy threshold
+  - Verify file content is valid markdown
 
 ### Debugging Tips
 1. Run with DEBUG=true for verbose output
 2. Check logs in logs/error.log
 3. Verify file paths are correct
 4. Ensure proper permissions
+5. Use `--debug` for basic extraction details
 
 ## References
 - [Architecture Overview](../../../docs/ARCHITECTURE.md)
