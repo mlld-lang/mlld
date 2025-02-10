@@ -41,11 +41,12 @@
   "homepage": "https://github.com/adamavenir/meld#readme",
   "dependencies": {
     "llmxml": "^1.1.2",
-    "md-llm": "^0.1.0",
     "meld-ast": "^0.4.2",
     "meld-spec": "^0.3.10",
     "winston": "^3.17.0",
-    "yargs": "^17.7.2"
+    "yargs": "^17.7.2",
+    "marked": "^4.0.12",
+    "minimatch": "^3.0.4"
   },
   "devDependencies": {
     "eslint": "^9.18.0",
