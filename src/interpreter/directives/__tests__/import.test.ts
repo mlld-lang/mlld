@@ -1,6 +1,16 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { ImportDirectiveHandler } from '../import';
 import { TestContext } from '../../__tests__/test-utils';
+import path from 'path';
+
+// Mock path module
+vi.mock('path', async () => {
+  const actual = await vi.importActual<typeof import('path')>('path');
+  return {
+    ...actual,
+    default: actual,
+  };
+});
 
 describe('ImportDirectiveHandler', () => {
   let context: TestContext;

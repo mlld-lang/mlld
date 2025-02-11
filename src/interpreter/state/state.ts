@@ -130,6 +130,13 @@ export class InterpreterState {
     interpreterLogger.debug('Added import', { path });
   }
 
+  removeImport(path: string): void {
+    this.checkMutable();
+    this.imports.delete(path);
+    this.localChanges.delete(`import:${path}`);
+    interpreterLogger.debug('Removed import', { path });
+  }
+
   hasImport(path: string): boolean {
     return this.imports.has(path) || !!this.parentState?.hasImport(path);
   }

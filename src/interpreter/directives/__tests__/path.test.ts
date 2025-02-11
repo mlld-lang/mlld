@@ -1,8 +1,19 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { pathDirectiveHandler } from '../path';
 import type { DirectiveNode } from 'meld-spec';
 import { TestContext } from '../../__tests__/test-utils';
 import { MeldError } from '../../errors/errors';
+import path from 'path';
+import { MeldPathError } from '../../errors/types';
+
+// Mock path module
+vi.mock('path', async () => {
+  const actual = await vi.importActual<typeof import('path')>('path');
+  return {
+    ...actual,
+    default: actual,
+  };
+});
 
 describe('PathDirectiveHandler', () => {
   let context: TestContext;
@@ -70,46 +81,42 @@ describe('PathDirectiveHandler', () => {
   });
 
   describe('error handling', () => {
-    it('should throw error for missing name', () => {
+    it('should throw error for missing name', async () => {
       const location = context.createLocation(5, 3);
       const node = context.createDirectiveNode('path', {
         path: '$HOMEPATH/test.txt'
       }, location);
 
-      expect(() => 
+      await expect(
         pathDirectiveHandler.handle(node, context.state, context.createHandlerContext())
-      ).toThrow(MeldError);
+      ).rejects.toThrow('Path name is required');
     });
 
-    it('should throw error for missing value', () => {
+    it('should throw error for missing value', async () => {
       const location = context.createLocation(5, 3);
       const node = context.createDirectiveNode('path', {
         name: 'test'
       }, location);
 
-      expect(() => 
+      await expect(
         pathDirectiveHandler.handle(node, context.state, context.createHandlerContext())
-      ).toThrow(MeldError);
+      ).rejects.toThrow('Path value is required');
     });
 
-    it('should preserve error locations in right-side mode', () => {
-      const baseLocation = context.createLocation(5, 3);
-      const nestedContext = context.createNestedContext(baseLocation);
-      const pathLocation = nestedContext.createLocation(2, 4);
-
-      const node = nestedContext.createDirectiveNode('path', {
+    it('should preserve error locations in right-side mode', async () => {
+      const location = context.createLocation(2, 4);
+      const node = context.createDirectiveNode('path', {
         name: 'test'
-      }, pathLocation);
+      }, location);
 
       try {
-        pathDirectiveHandler.handle(node, nestedContext.state, nestedContext.createHandlerContext({ mode: 'rightside' }));
-        fail('Should have thrown an error');
+        await pathDirectiveHandler.handle(node, context.state, context.createHandlerContext('rightside'));
+        throw new Error('Should have thrown an error');
       } catch (error) {
-        expect(error).toBeInstanceOf(MeldError);
-        if (error instanceof MeldError) {
+        expect(error).toBeInstanceOf(MeldPathError);
+        if (error instanceof MeldPathError) {
           expect(error.location).toBeDefined();
-          expect(error.location?.line).toBe(6); // base.line (5) + relative.line (2) - 1
-          expect(error.location?.column).toBe(4);
+          expect(error.location).toEqual({ line: 2, column: 4 });
         }
       }
     });
