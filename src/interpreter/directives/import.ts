@@ -79,10 +79,17 @@ export class ImportDirectiveHandler implements DirectiveHandler {
     try {
       // Set current path for relative path resolution
       const currentPath = state.getCurrentFilePath() || context.workspaceRoot || process.cwd();
+      directiveLogger.debug('Setting current path', { currentPath });
       pathService.setCurrentPath(currentPath);
 
       // Resolve the import path
       const importPath = await pathService.resolvePath(resolvedSource);
+      directiveLogger.debug('Resolved import path', { 
+        importPath,
+        resolvedSource,
+        currentPath,
+        workspaceRoot: context.workspaceRoot
+      });
 
       // Validate path format after variable substitution and resolution
       if (!path.isAbsolute(importPath) && 
@@ -103,10 +110,17 @@ export class ImportDirectiveHandler implements DirectiveHandler {
       }
 
       // Check for circular imports
+      directiveLogger.debug('Checking for circular imports', { 
+        path: importPath, 
+        hasImport: state.hasImport(importPath),
+        allImports: Array.from(state.getImports()),
+        resolvedSource: resolvedSource
+      });
       if (state.hasImport(importPath)) {
         directiveLogger.error('Circular import detected', { path: importPath });
-        const error = await ErrorFactory.createImportError('Circular import detected', node.location?.start);
-        return Promise.reject(error);
+        return Promise.reject(
+          ErrorFactory.createImportError('Circular import detected', node.location?.start)
+        );
       }
 
       // Add import to state before reading file to detect circular imports

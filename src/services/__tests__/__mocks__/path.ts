@@ -103,10 +103,18 @@ defaultMock.win32 = win32Mock;
 
 // Export the mock creation function
 export async function createPathMock() {
+  const actual = await vi.importActual<typeof import('path')>('path');
   return {
     __esModule: true,
-    default: defaultMock,
+    // Spread actual path exports first
+    ...actual,
+    // Override with our mock implementations
     ...defaultMock,
+    // Ensure default export exists and has all properties
+    default: {
+      ...actual,
+      ...defaultMock
+    }
   };
 }
 

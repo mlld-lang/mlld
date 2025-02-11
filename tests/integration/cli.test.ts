@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { cli } from '../../src/cli/cli';
+import { cmd } from '../../src/cli/cmd';
 import * as fs from 'fs';
 import path from 'path';
 import { pathTestUtils } from '../__mocks__/path';
