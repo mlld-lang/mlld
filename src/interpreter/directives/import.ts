@@ -56,8 +56,24 @@ export class ImportDirectiveHandler implements DirectiveHandler {
           node.location,
           context
         );
+        continue; // Skip this iteration after throwing
       }
-      resolvedSource = resolvedSource.replace(match[0], varValue);
+      
+      // Convert absolute paths to project-relative paths
+      let prefixedValue = varValue;
+      if (path.isAbsolute(varValue)) {
+        const projectPath = context.workspaceRoot || process.cwd();
+        if (varValue.startsWith(projectPath)) {
+          prefixedValue = `$PROJECTPATH/${path.relative(projectPath, varValue)}`;
+        }
+      } else if (!varValue.startsWith('$HOMEPATH/') && 
+                 !varValue.startsWith('$~/') && 
+                 !varValue.startsWith('$PROJECTPATH/') && 
+                 !varValue.startsWith('$./')) {
+        prefixedValue = `$PROJECTPATH/${varValue}`;
+      }
+        
+      resolvedSource = resolvedSource.replace(match[0], prefixedValue);
     }
 
     try {
@@ -89,13 +105,8 @@ export class ImportDirectiveHandler implements DirectiveHandler {
       // Check for circular imports
       if (state.hasImport(importPath)) {
         directiveLogger.error('Circular import detected', { path: importPath });
-        await throwWithContext(
-          ErrorFactory.createImportError,
-          'Circular import detected',
-          node.location,
-          context
-        );
-        return;
+        const error = await ErrorFactory.createImportError('Circular import detected', node.location?.start);
+        return Promise.reject(error);
       }
 
       // Add import to state before reading file to detect circular imports
