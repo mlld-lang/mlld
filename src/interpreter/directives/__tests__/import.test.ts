@@ -1,132 +1,174 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { ImportDirectiveHandler } from '../import';
-import { InterpreterState } from '../../state/state';
-import { createTestContext, createTestLocation } from '../../__tests__/test-utils';
-import * as fs from 'fs';
-import * as path from 'path';
-import { vi } from 'vitest';
-
-vi.mock('fs', async () => {
-  const actualFs = await vi.importActual<typeof import('fs')>('fs');
-  return {
-    ...actualFs,
-    existsSync: vi.fn(),
-    readFileSync: vi.fn(),
-    mkdirSync: vi.fn(),
-  };
-});
-
-vi.mock('path', async () => {
-  const actualPath = await vi.importActual<typeof import('path')>('path');
-  return {
-    ...actualPath,
-    isAbsolute: vi.fn(),
-    resolve: vi.fn(),
-    dirname: vi.fn(),
-  };
-});
+import { TestContext } from '../../__tests__/test-utils';
 
 describe('ImportDirectiveHandler', () => {
+  let context: TestContext;
   let handler: ImportDirectiveHandler;
-  let state: InterpreterState;
-  const mockFiles: Record<string, string> = {
-    '/test/mock.meld': '@text greeting = "Hello"',
-    '/test/other.meld': '@data config = { "test": true }',
-    '/test/nested/test.meld': '@text nested = "value"'
-  };
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    context = new TestContext();
+    await context.initialize();
     handler = new ImportDirectiveHandler();
-    state = new InterpreterState();
-    state.setCurrentFilePath('/test/mock.meld');
 
-    // Mock fs functions
-    vi.mocked(fs.existsSync).mockImplementation((path: string) => path in mockFiles);
-    vi.mocked(fs.readFileSync).mockImplementation((path: string) => {
-      if (path in mockFiles) {
-        return mockFiles[path];
-      }
-      throw new Error('File not found');
-    });
+    // Set up test files
+    await context.writeFile('project/mock.meld', '@text greeting = "Hello"');
+    await context.writeFile('project/other.meld', '@data config = { "test": true }');
+    await context.writeFile('project/nested/test.meld', '@text nested = "value"');
 
-    // Mock path functions
-    vi.mocked(path.isAbsolute).mockReturnValue(true);
-    vi.mocked(path.resolve).mockImplementation((...paths) => paths.join('/'));
-    vi.mocked(path.dirname).mockImplementation(p => p.split('/').slice(0, -1).join('/'));
+    // Set current file path
+    context.state.setCurrentFilePath(context.fs.getPath('project/mock.meld'));
+  });
+
+  afterEach(async () => {
+    await context.cleanup();
   });
 
   it('should handle import directives', async () => {
-    const node = {
-      type: 'Directive' as const,
-      directive: {
-        kind: 'import',
-        source: '/test/other.meld'
-      },
-      location: createTestLocation(1, 1)
-    };
+    const location = context.createLocation(1, 1);
+    const node = context.createDirectiveNode('import', {
+      source: '$PROJECTPATH/other.meld'
+    }, location);
 
-    await handler.handle(node, state, createTestContext());
-    expect(state.getDataVar('config')).toEqual({ test: true });
+    await handler.handle(node, context.state, context.createHandlerContext());
+    expect(context.state.getDataVar('config')).toEqual({ test: true });
   });
 
   it('should handle nested imports', async () => {
-    const node = {
-      type: 'Directive' as const,
-      directive: {
-        kind: 'import',
-        source: '/test/nested/test.meld'
-      },
-      location: createTestLocation(1, 1)
-    };
+    const location = context.createLocation(1, 1);
+    const node = context.createDirectiveNode('import', {
+      source: '$PROJECTPATH/nested/test.meld'
+    }, location);
 
-    await handler.handle(node, state, createTestContext());
-    expect(state.getText('nested')).toBe('value');
+    await handler.handle(node, context.state, context.createHandlerContext());
+    expect(context.state.getText('nested')).toBe('value');
   });
 
   it('should throw on missing source', async () => {
-    const node = {
-      type: 'Directive' as const,
-      directive: {
-        kind: 'import'
-      },
-      location: createTestLocation(1, 1)
-    };
+    const location = context.createLocation(1, 1);
+    const node = context.createDirectiveNode('import', {}, location);
 
-    await expect(handler.handle(node, state, createTestContext())).rejects.toThrow('Import source is required');
+    await expect(handler.handle(node, context.state, context.createHandlerContext()))
+      .rejects.toThrow('Import source is required');
   });
 
   it('should throw on file not found', async () => {
-    const node = {
-      type: 'Directive' as const,
-      directive: {
-        kind: 'import',
-        source: '/nonexistent.meld'
-      },
-      location: createTestLocation(1, 1)
-    };
+    const location = context.createLocation(1, 1);
+    const node = context.createDirectiveNode('import', {
+      source: '$PROJECTPATH/nonexistent.meld'
+    }, location);
 
-    await expect(handler.handle(node, state, createTestContext())).rejects.toThrow('File not found');
+    await expect(handler.handle(node, context.state, context.createHandlerContext()))
+      .rejects.toThrow('ENOENT: no such file or directory');
   });
 
   it('should handle relative paths', async () => {
-    vi.mocked(path.isAbsolute).mockReturnValue(false);
-    vi.mocked(path.resolve).mockImplementation((base, rel) => {
-      if (base === '/test' && rel === 'other.meld') {
-        return '/test/other.meld';
-      }
-      return `${base}/${rel}`;
+    // Create a nested directory structure
+    await context.writeFile('project/nested/current.meld', '');
+    await context.writeFile('project/nested/local.meld', '@text local = "local value"');
+    
+    // Set current file to the nested directory
+    context.state.setCurrentFilePath(context.fs.getPath('project/nested/current.meld'));
+
+    const location = context.createLocation(1, 1);
+    const node = context.createDirectiveNode('import', {
+      source: '$PROJECTPATH/nested/local.meld'
+    }, location);
+
+    await handler.handle(node, context.state, context.createHandlerContext());
+    expect(context.state.getText('local')).toBe('local value');
+  });
+
+  it('should handle home directory imports', async () => {
+    // Create a file in the home directory
+    await context.writeFile('home/user/config.meld', '@text homeConfig = "home value"');
+
+    const location = context.createLocation(1, 1);
+    const node = context.createDirectiveNode('import', {
+      source: '$HOMEPATH/user/config.meld'
+    }, location);
+
+    await handler.handle(node, context.state, context.createHandlerContext());
+    expect(context.state.getText('homeConfig')).toBe('home value');
+  });
+
+  it('should handle imports with variables', async () => {
+    // Set up a path variable
+    context.state.setPathVar('configPath', context.fs.getPath('project/other.meld'));
+
+    const location = context.createLocation(1, 1);
+    const node = context.createDirectiveNode('import', {
+      source: '${configPath}'
+    }, location);
+
+    await handler.handle(node, context.state, context.createHandlerContext());
+    expect(context.state.getDataVar('config')).toEqual({ test: true });
+  });
+
+  it('should preserve error locations', async () => {
+    const location = context.createLocation(5, 3);
+    const node = context.createDirectiveNode('import', {
+      source: '$PROJECTPATH/nonexistent.meld'
+    }, location);
+
+    try {
+      await handler.handle(node, context.state, context.createHandlerContext());
+      fail('Should have thrown an error');
+    } catch (error) {
+      expect(error).toBeDefined();
+      expect(error.location).toBeDefined();
+      expect(error.location.line).toBe(5);
+      expect(error.location.column).toBe(3);
+    }
+  });
+
+  describe('advanced path handling', () => {
+    it('should handle path variables in nested imports', async () => {
+      // Set up nested import structure
+      await context.writeFile('project/config/paths.meld', '@path configDir = "$PROJECTPATH/config"');
+      await context.writeFile('project/config/settings.meld', '@text setting = "${configDir}/value"');
+      
+      // First import paths.meld to set up path variable
+      const location1 = context.createLocation(1, 1);
+      const node1 = context.createDirectiveNode('import', {
+        source: '$PROJECTPATH/config/paths.meld'
+      }, location1);
+      
+      await handler.handle(node1, context.state, context.createHandlerContext());
+      
+      // Then import settings.meld which uses the path variable
+      const location2 = context.createLocation(2, 1);
+      const node2 = context.createDirectiveNode('import', {
+        source: '$PROJECTPATH/config/settings.meld'
+      }, location2);
+      
+      await handler.handle(node2, context.state, context.createHandlerContext());
+      
+      expect(context.state.getText('setting')).toBe(context.fs.getPath('project/config/value'));
     });
 
-    const node = {
-      type: 'Directive' as const,
-      directive: {
-        kind: 'import',
-        source: 'other.meld'
-      },
-      location: createTestLocation(1, 1)
-    };
+    it('should detect circular imports', async () => {
+      // Create files that import each other
+      await context.writeFile('project/a.meld', '@import "$PROJECTPATH/b.meld"');
+      await context.writeFile('project/b.meld', '@import "$PROJECTPATH/a.meld"');
+      
+      const location = context.createLocation(1, 1);
+      const node = context.createDirectiveNode('import', {
+        source: '$PROJECTPATH/a.meld'
+      }, location);
+      
+      await expect(handler.handle(node, context.state, context.createHandlerContext()))
+        .rejects.toThrow('Circular import detected');
+    });
 
-    await handler.handle(node, state, createTestContext());
-    expect(state.getDataVar('config')).toEqual({ test: true });
+    it('should validate import paths', async () => {
+      const location = context.createLocation(1, 1);
+      const node = context.createDirectiveNode('import', {
+        source: '../outside/file.meld'
+      }, location);
+      
+      await expect(handler.handle(node, context.state, context.createHandlerContext()))
+        .rejects.toThrow('Path must start with $HOMEPATH/$~ or $PROJECTPATH/$.');
+    });
   });
 }); 

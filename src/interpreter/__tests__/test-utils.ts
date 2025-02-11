@@ -2,47 +2,42 @@ import type { DirectiveNode, Location, MeldNode, DirectiveKind } from 'meld-spec
 import { InterpreterState } from '../state/state';
 import { HandlerContext } from '../directives/types';
 import { ErrorFactory } from '../errors/factory';
+import { TestFileSystem } from '../../test/fs-utils';
 
 /**
  * Test context for setting up and managing test state
  */
 export class TestContext {
-  state: InterpreterState;
-  parentState?: InterpreterState;
-  baseLocation?: Location;
-  mode: 'toplevel' | 'rightside' = 'toplevel';
+  public state: InterpreterState;
+  public fs: TestFileSystem;
 
-  constructor(config?: {
-    parentState?: InterpreterState;
-    baseLocation?: Location;
-    mode?: 'toplevel' | 'rightside';
-  }) {
-    this.parentState = config?.parentState;
-    this.baseLocation = config?.baseLocation;
-    this.mode = config?.mode ?? 'toplevel';
-    this.state = new InterpreterState(this.parentState);
+  constructor() {
+    this.state = new InterpreterState();
+    this.fs = new TestFileSystem();
   }
 
   /**
-   * Create a handler context for testing
+   * Initialize the test context
    */
-  createHandlerContext(): HandlerContext {
+  async initialize(): Promise<void> {
+    await this.fs.initialize();
+  }
+
+  /**
+   * Clean up the test context
+   */
+  async cleanup(): Promise<void> {
+    await this.fs.cleanup();
+  }
+
+  /**
+   * Create a location object for testing
+   */
+  createLocation(line: number, column: number): Location {
     return {
-      mode: this.mode,
-      parentState: this.parentState,
-      baseLocation: this.baseLocation
+      start: { line, column },
+      end: { line, column }
     };
-  }
-
-  /**
-   * Create a nested test context
-   */
-  createNestedContext(baseLocation: Location): TestContext {
-    return new TestContext({
-      parentState: this.state,
-      baseLocation,
-      mode: 'rightside'
-    });
   }
 
   /**
@@ -60,53 +55,52 @@ export class TestContext {
   }
 
   /**
-   * Create a text node for testing
+   * Create a handler context for testing
    */
-  createTextNode(content: string, location?: Location): MeldNode {
+  createHandlerContext(options: Partial<HandlerContext> = {}): HandlerContext {
     return {
-      type: 'Text',
-      content,
-      location
+      mode: 'toplevel',
+      workspaceRoot: this.fs.getProjectPath(),
+      ...options
     };
   }
 
   /**
-   * Create a location for testing
+   * Create a nested context for testing right-side mode
    */
-  createLocation(line: number, column: number, endLine?: number, endColumn?: number): Location {
-    return {
-      start: { line, column },
-      end: endLine && endColumn ? { line: endLine, column: endColumn } : { line, column }
-    };
+  createNestedContext(baseLocation: Location): TestContext {
+    const nestedContext = new TestContext();
+    nestedContext.state = this.state;
+    nestedContext.fs = this.fs;
+    return nestedContext;
   }
 
   /**
-   * Adjust a location based on the current context
+   * Write a test file
    */
-  adjustLocation(location: Location): Location {
-    if (this.mode === 'rightside' && this.baseLocation) {
-      return {
-        start: ErrorFactory.adjustLocation(location.start, this.baseLocation.start),
-        end: ErrorFactory.adjustLocation(location.end, this.baseLocation.start)
-      };
-    }
-    return location;
+  async writeFile(filePath: string, content: string): Promise<void> {
+    await this.fs.writeFile(filePath, content);
   }
 
   /**
-   * Set up a mock file system for testing
+   * Read a test file
    */
-  setupMockFileSystem(files: Record<string, string>): void {
-    // To be implemented with actual mock fs
-    this.state.setCurrentFilePath('/test/mock.meld');
+  async readFile(filePath: string): Promise<string> {
+    return this.fs.readFile(filePath);
   }
 
   /**
-   * Clean up after tests
+   * Check if a test file exists
    */
-  cleanup(): void {
-    // Clean up any resources
-    this.state.setImmutable();
+  async exists(filePath: string): Promise<boolean> {
+    return this.fs.exists(filePath);
+  }
+
+  /**
+   * Get the absolute path in the test filesystem
+   */
+  getPath(filePath: string): string {
+    return this.fs.getPath(filePath);
   }
 }
 

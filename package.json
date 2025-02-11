@@ -41,15 +41,17 @@
   "homepage": "https://github.com/adamavenir/meld#readme",
   "dependencies": {
     "llmxml": "^1.1.2",
+    "marked": "^4.0.12",
     "meld-ast": "^0.4.2",
     "meld-spec": "^0.3.10",
+    "minimatch": "^3.0.4",
     "winston": "^3.17.0",
-    "yargs": "^17.7.2",
-    "marked": "^4.0.12",
-    "minimatch": "^3.0.4"
+    "yargs": "^17.7.2"
   },
   "devDependencies": {
+    "@types/fs-extra": "^11.0.4",
     "eslint": "^9.18.0",
+    "fs-extra": "^11.3.0",
     "rimraf": "^6.0.1",
     "typescript": "^5.7.3",
     "vitest": "^2.1.8"

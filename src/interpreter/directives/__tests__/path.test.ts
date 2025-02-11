@@ -1,71 +1,71 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { pathDirectiveHandler } from '../path';
 import type { DirectiveNode } from 'meld-spec';
-import * as path from 'path';
 import { TestContext } from '../../__tests__/test-utils';
 import { MeldError } from '../../errors/errors';
 
 describe('PathDirectiveHandler', () => {
   let context: TestContext;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     context = new TestContext();
-    context.state.setCurrentFilePath('/project/root/test.meld');
-
-    vi.mock('path', async () => {
-      const actualPath = await vi.importActual<typeof import('path')>('path');
-      return {
-        ...actualPath,
-        resolve: vi.fn((...args) => args.join('/')),
-        join: vi.fn((...args) => args.join('/')),
-        dirname: vi.fn((p) => p.split('/').slice(0, -1).join('/')),
-        normalize: vi.fn((p) => p),
-        isAbsolute: vi.fn(),
-      };
-    });
+    await context.initialize();
+    context.state.setCurrentFilePath(context.fs.getPath('test.meld'));
   });
 
-  afterEach(() => {
-    vi.clearAllMocks();
+  afterEach(async () => {
+    await context.cleanup();
   });
 
-  describe('basic path handling', () => {
-    it('should handle absolute paths', () => {
+  describe('special variable handling', () => {
+    it('handles path directive with $HOMEPATH', async () => {
       const location = context.createLocation(1, 1);
       const node = context.createDirectiveNode('path', {
-        name: 'test',
+        name: 'testPath',
+        path: '$HOMEPATH/test/file.txt'
+      }, location);
+
+      await pathDirectiveHandler.handle(node, context.state, context.createHandlerContext());
+
+      const expectedPath = context.fs.getPath('home/test/file.txt');
+      expect(context.state.getPathVar('testPath')).toBe(expectedPath);
+    });
+
+    it('handles path directive with $PROJECTPATH', async () => {
+      const location = context.createLocation(1, 1);
+      const node = context.createDirectiveNode('path', {
+        name: 'testPath',
+        path: '$PROJECTPATH/test/file.txt'
+      }, location);
+
+      await pathDirectiveHandler.handle(node, context.state, context.createHandlerContext());
+
+      const expectedPath = context.fs.getPath('project/test/file.txt');
+      expect(context.state.getPathVar('testPath')).toBe(expectedPath);
+    });
+
+    it('handles path directive with aliases', async () => {
+      const location = context.createLocation(1, 1);
+      const node = context.createDirectiveNode('path', {
+        name: 'testPath',
+        path: '$~/test/file.txt'
+      }, location);
+
+      await pathDirectiveHandler.handle(node, context.state, context.createHandlerContext());
+
+      const expectedPath = context.fs.getPath('home/test/file.txt');
+      expect(context.state.getPathVar('testPath')).toBe(expectedPath);
+    });
+
+    it('rejects invalid special variable paths', async () => {
+      const location = context.createLocation(1, 1);
+      const node = context.createDirectiveNode('path', {
+        name: 'testPath',
         path: '/absolute/path'
       }, location);
 
-      pathDirectiveHandler.handle(node, context.state, context.createHandlerContext());
-
-      expect(context.state.getPathVar('test')).toBe('/absolute/path');
-    });
-
-    it('should handle relative paths', () => {
-      const location = context.createLocation(1, 1);
-      const node = context.createDirectiveNode('path', {
-        name: 'test',
-        path: './relative/path'
-      }, location);
-
-      pathDirectiveHandler.handle(node, context.state, context.createHandlerContext());
-
-      const expectedPath = '/project/root/relative/path';
-      expect(context.state.getPathVar('test')).toBe(expectedPath);
-    });
-
-    it('should handle parent directory paths', () => {
-      const location = context.createLocation(1, 1);
-      const node = context.createDirectiveNode('path', {
-        name: 'test',
-        path: '../parent/path'
-      }, location);
-
-      pathDirectiveHandler.handle(node, context.state, context.createHandlerContext());
-
-      const expectedPath = '/project/parent/path';
-      expect(context.state.getPathVar('test')).toBe(expectedPath);
+      await expect(pathDirectiveHandler.handle(node, context.state, context.createHandlerContext()))
+        .rejects.toThrow('Path must start with $HOMEPATH/$~ or $PROJECTPATH/$.');
     });
   });
 
@@ -73,7 +73,7 @@ describe('PathDirectiveHandler', () => {
     it('should throw error for missing name', () => {
       const location = context.createLocation(5, 3);
       const node = context.createDirectiveNode('path', {
-        path: '/some/path'
+        path: '$HOMEPATH/test.txt'
       }, location);
 
       expect(() => 
@@ -102,7 +102,7 @@ describe('PathDirectiveHandler', () => {
       }, pathLocation);
 
       try {
-        pathDirectiveHandler.handle(node, nestedContext.state, nestedContext.createHandlerContext());
+        pathDirectiveHandler.handle(node, nestedContext.state, nestedContext.createHandlerContext({ mode: 'rightside' }));
         fail('Should have thrown an error');
       } catch (error) {
         expect(error).toBeInstanceOf(MeldError);
@@ -116,39 +116,122 @@ describe('PathDirectiveHandler', () => {
   });
 
   describe('path resolution', () => {
-    it('should resolve paths relative to current file', () => {
-      context.state.setCurrentFilePath('/other/location/file.meld');
+    it('should resolve paths relative to current file', async () => {
+      // Create a test file structure
+      await context.writeFile('other/location/file.meld', '');
+      context.state.setCurrentFilePath(context.fs.getPath('other/location/file.meld'));
 
       const location = context.createLocation(1, 1);
       const node = context.createDirectiveNode('path', {
         name: 'test',
-        path: './relative/path'
+        path: '$PROJECTPATH/relative/path'
       }, location);
 
-      pathDirectiveHandler.handle(node, context.state, context.createHandlerContext());
+      await pathDirectiveHandler.handle(node, context.state, context.createHandlerContext());
 
-      const expectedPath = '/other/location/relative/path';
+      const expectedPath = context.fs.getPath('project/relative/path');
       expect(context.state.getPathVar('test')).toBe(expectedPath);
     });
 
-    it('should handle path variables in values', () => {
+    it('should handle path variables in values', async () => {
       const location1 = context.createLocation(1, 1);
       const location2 = context.createLocation(2, 1);
 
       const node1 = context.createDirectiveNode('path', {
         name: 'base',
-        path: '/base/path'
+        path: '$PROJECTPATH/base/path'
       }, location1);
 
       const node2 = context.createDirectiveNode('path', {
         name: 'test',
-        path: '{base}/subdir'
+        path: '${base}/subdir'
       }, location2);
 
-      pathDirectiveHandler.handle(node1, context.state, context.createHandlerContext());
-      pathDirectiveHandler.handle(node2, context.state, context.createHandlerContext());
+      await pathDirectiveHandler.handle(node1, context.state, context.createHandlerContext());
+      await pathDirectiveHandler.handle(node2, context.state, context.createHandlerContext());
 
-      expect(context.state.getPathVar('test')).toBe('/base/path/subdir');
+      const expectedPath = context.fs.getPath('project/base/path/subdir');
+      expect(context.state.getPathVar('test')).toBe(expectedPath);
+    });
+  });
+
+  describe('path normalization', () => {
+    it('should normalize paths with . and ..', async () => {
+      const location = context.createLocation(1, 1);
+      const node = context.createDirectiveNode('path', {
+        name: 'test',
+        path: '$PROJECTPATH/dir/./subdir/../file.txt'
+      }, location);
+
+      await pathDirectiveHandler.handle(node, context.state, context.createHandlerContext());
+
+      const expectedPath = context.fs.getPath('project/dir/file.txt');
+      expect(context.state.getPathVar('test')).toBe(expectedPath);
+    });
+
+    it('should reject paths trying to escape project root', async () => {
+      const location = context.createLocation(1, 1);
+      const node = context.createDirectiveNode('path', {
+        name: 'test',
+        path: '$PROJECTPATH/../../outside.txt'
+      }, location);
+
+      await expect(pathDirectiveHandler.handle(node, context.state, context.createHandlerContext()))
+        .rejects.toThrow('Relative navigation (..) is not allowed in paths');
+    });
+
+    it('should handle multiple variable substitutions', async () => {
+      // Set up initial path variables
+      const setupLocation = context.createLocation(1, 1);
+      const setupNode = context.createDirectiveNode('path', {
+        name: 'base',
+        path: '$PROJECTPATH/base'
+      }, setupLocation);
+      await pathDirectiveHandler.handle(setupNode, context.state, context.createHandlerContext());
+
+      // Test multiple substitutions
+      const location = context.createLocation(2, 1);
+      const node = context.createDirectiveNode('path', {
+        name: 'test',
+        path: '${base}/${subdir}/file.txt'
+      }, location);
+
+      context.state.setPathVar('subdir', 'nested');
+      await pathDirectiveHandler.handle(node, context.state, context.createHandlerContext());
+
+      const expectedPath = context.fs.getPath('project/base/nested/file.txt');
+      expect(context.state.getPathVar('test')).toBe(expectedPath);
+    });
+  });
+
+  describe('directory structure validation', () => {
+    it('should handle deep nested directories', async () => {
+      // Create a deep directory structure
+      await context.writeFile('project/a/b/c/d/file.txt', '');
+
+      const location = context.createLocation(1, 1);
+      const node = context.createDirectiveNode('path', {
+        name: 'test',
+        path: '$PROJECTPATH/a/b/c/d/file.txt'
+      }, location);
+
+      await pathDirectiveHandler.handle(node, context.state, context.createHandlerContext());
+
+      const expectedPath = context.fs.getPath('project/a/b/c/d/file.txt');
+      expect(context.state.getPathVar('test')).toBe(expectedPath);
+    });
+
+    it('should handle paths with special characters', async () => {
+      const location = context.createLocation(1, 1);
+      const node = context.createDirectiveNode('path', {
+        name: 'test',
+        path: '$PROJECTPATH/test space/file-name_1.txt'
+      }, location);
+
+      await pathDirectiveHandler.handle(node, context.state, context.createHandlerContext());
+
+      const expectedPath = context.fs.getPath('project/test space/file-name_1.txt');
+      expect(context.state.getPathVar('test')).toBe(expectedPath);
     });
   });
 }); 

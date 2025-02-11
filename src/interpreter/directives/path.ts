@@ -1,10 +1,10 @@
-import type { DirectiveNode } from 'meld-spec';
+import { DirectiveNode } from 'meld-spec';
 import { DirectiveHandler, HandlerContext } from './types';
 import { InterpreterState } from '../state/state';
 import { ErrorFactory } from '../errors/factory';
 import { throwWithContext } from '../utils/location-helpers';
 import { directiveLogger } from '../../utils/logger';
-import { resolve, dirname } from 'path';
+import { pathService } from '../../services/path-service';
 
 export class PathDirectiveHandler implements DirectiveHandler {
   public static readonly directiveKind = 'path';
@@ -17,51 +17,63 @@ export class PathDirectiveHandler implements DirectiveHandler {
     const data = node.directive;
     directiveLogger.debug('Processing path directive', {
       name: data.name,
-      path: data.path,
+      value: data.value,
       mode: context.mode,
       location: node.location
     });
 
     // Validate name parameter
     if (!data.name || typeof data.name !== 'string') {
-      directiveLogger.error('Path directive missing name', {
+      directiveLogger.error('Path name is required', {
         location: node.location,
         mode: context.mode
       });
-      throwWithContext(
+      await throwWithContext(
         ErrorFactory.createPathError,
-        'Path directive requires a name parameter',
+        'Path name is required',
         node.location,
         context
       );
     }
 
-    // Validate path parameter
-    if (!data.path || typeof data.path !== 'string') {
-      directiveLogger.error('Path directive missing path', {
+    // Validate value parameter
+    if (!data.value || typeof data.value !== 'string') {
+      directiveLogger.error('Path value is required', {
         location: node.location,
         mode: context.mode
       });
-      throwWithContext(
+      await throwWithContext(
         ErrorFactory.createPathError,
-        'Path directive requires a path parameter',
+        'Path value is required',
         node.location,
         context
       );
     }
 
-    // Resolve path relative to current file or workspace root
-    const basePath = state.getCurrentFilePath() || context.workspaceRoot || process.cwd();
-    const resolvedPath = resolve(dirname(basePath), data.path);
+    try {
+      // Set current path for relative path resolution
+      const currentPath = state.getCurrentFilePath() || context.workspaceRoot || process.cwd();
+      pathService.setCurrentPath(currentPath);
 
-    // Store path in state
-    state.setPathVar(data.name, resolvedPath);
+      // Resolve the path
+      const resolvedPath = await pathService.resolvePath(data.value);
 
-    directiveLogger.info('Path set successfully', {
-      name: data.name,
-      path: resolvedPath,
-      mode: context.mode
-    });
+      // Store the resolved path
+      state.setPathVar(data.name, resolvedPath);
+
+      directiveLogger.info('Path directive processed', {
+        name: data.name,
+        value: data.value,
+        resolved: resolvedPath
+      });
+    } catch (error) {
+      directiveLogger.error('Path directive failed', {
+        name: data.name,
+        value: data.value,
+        error: error instanceof Error ? error.message : String(error)
+      });
+      throw error;
+    }
   }
 }
 

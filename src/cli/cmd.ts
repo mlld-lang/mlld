@@ -91,7 +91,7 @@ export async function run(args: string[]): Promise<void> {
   }
 }
 
-export const cli = run;
+export const cmd = run;
 
 // Run if called directly
 if (require.main === module) {

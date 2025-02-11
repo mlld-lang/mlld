@@ -1,81 +1,102 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { cli } from '../cli';
-import * as path from 'path';
-import * as fs from 'fs/promises';
-import { existsSync } from 'fs';
-import { resolve } from 'path';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { runMeld } from '../cmd';
+import { TestContext } from '../../interpreter/__tests__/test-utils';
 
-// Consolidated mock setup
-vi.mock('path', () => ({
-  resolve: vi.fn((p: string) => p),
-  dirname: vi.fn((p: string) => p.split('/').slice(0, -1).join('/')),
-  basename: vi.fn((p: string) => p.split('/').pop() || ''),
-  extname: vi.fn((p: string) => '.meld'),
-  join: vi.fn((...parts: string[]) => parts.join('/'))
-}));
+describe('CLI', () => {
+  let context: TestContext;
 
-vi.mock('fs', () => ({
-  existsSync: vi.fn((path: string) => path === 'test.meld'),
-  promises: {
-    readFile: vi.fn().mockImplementation((path: string) => {
-      if (path === 'test.meld') {
-        return Promise.resolve('@text test = "value"');
-      }
-      throw new Error('File not found');
-    }),
-    writeFile: vi.fn().mockResolvedValue(undefined)
-  }
-}));
+  beforeEach(async () => {
+    context = new TestContext();
+    await context.initialize();
 
-describe('cli', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
+    // Set up test files
+    await context.writeFile('project/test.meld', '@text greeting = "Hello"');
   });
 
-  afterEach(() => {
-    vi.clearAllMocks();
+  afterEach(async () => {
+    await context.cleanup();
   });
 
-  it('should process input file with default options', async () => {
-    const args = ['node', 'meld', 'test.meld'];
-    await cli(args);
-    expect(fs.writeFile).toHaveBeenCalledWith('test.llm', expect.any(String));
-  });
+  describe('runMeld', () => {
+    it('should process meld file to llm format', async () => {
+      const inputPath = context.fs.getPath('project/test.meld');
+      const outputPath = context.fs.getPath('project/test.llm');
 
-  it('should respect custom output path', async () => {
-    const args = ['node', 'meld', 'test.meld', '--output', 'custom.llm'];
-    await cli(args);
-    expect(fs.writeFile).toHaveBeenCalledWith('custom.llm', expect.any(String));
-  });
+      await runMeld(inputPath, {
+        format: 'llm',
+        output: outputPath
+      });
 
-  it('should handle different formats', async () => {
-    const args = ['node', 'meld', 'test.meld', '--format', 'md'];
-    await cli(args);
-    expect(fs.writeFile).toHaveBeenCalledWith('test.md', expect.any(String));
-  });
+      const output = await context.readFile('project/test.llm');
+      expect(output).toContain('<text name="greeting">Hello</text>');
+    });
 
-  it('should write to stdout when --stdout is used', async () => {
-    const consoleSpy = vi.spyOn(console, 'log');
-    const args = ['node', 'meld', 'test.meld', '--stdout'];
-    await cli(args);
-    expect(consoleSpy).toHaveBeenCalled();
-    expect(fs.writeFile).not.toHaveBeenCalled();
-  });
+    it('should allow custom output path', async () => {
+      const inputPath = context.fs.getPath('project/test.meld');
+      const outputPath = context.fs.getPath('project/custom.llm');
 
-  it('should validate file extensions', async () => {
-    const args = ['node', 'meld', 'invalid.txt'];
-    await expect(cli(args)).rejects.toThrow(/Invalid file extension/);
-  });
+      await runMeld(inputPath, {
+        format: 'llm',
+        output: outputPath
+      });
 
-  it('should handle parse errors', async () => {
-    const mockInput = 'nonexistent.meld';
-    const args = ['node', 'meld', mockInput];
-    await expect(cli(args)).rejects.toThrow('File not found');
-  });
+      const output = await context.readFile('project/custom.llm');
+      expect(output).toContain('<text name="greeting">Hello</text>');
+    });
 
-  it('should normalize format aliases', async () => {
-    const args = ['node', 'meld', 'test.meld', '--format', 'markdown'];
-    await cli(args);
-    expect(fs.writeFile).toHaveBeenCalledWith('test.md', expect.any(String));
+    it('should process meld file to markdown format', async () => {
+      const inputPath = context.fs.getPath('project/test.meld');
+      const outputPath = context.fs.getPath('project/test.md');
+
+      await runMeld(inputPath, {
+        format: 'md',
+        output: outputPath
+      });
+
+      const output = await context.readFile('project/test.md');
+      expect(output).toContain('Hello');
+    });
+
+    it('should output to stdout when no output file specified', async () => {
+      const inputPath = context.fs.getPath('project/test.meld');
+      const consoleLog = vi.spyOn(console, 'log');
+
+      await runMeld(inputPath, {
+        format: 'md'
+      });
+
+      expect(consoleLog).toHaveBeenCalledWith(expect.stringContaining('Hello'));
+      consoleLog.mockRestore();
+    });
+
+    it('should handle missing input file', async () => {
+      const inputPath = context.fs.getPath('project/nonexistent.meld');
+      const outputPath = context.fs.getPath('project/test.md');
+
+      await expect(runMeld(inputPath, {
+        format: 'md',
+        output: outputPath
+      })).rejects.toThrow('ENOENT: no such file or directory');
+    });
+
+    it('should handle invalid format', async () => {
+      const inputPath = context.fs.getPath('project/test.meld');
+      const outputPath = context.fs.getPath('project/test.md');
+
+      await expect(runMeld(inputPath, {
+        format: 'invalid' as any,
+        output: outputPath
+      })).rejects.toThrow('Invalid format: invalid');
+    });
+
+    it('should handle write errors', async () => {
+      const inputPath = context.fs.getPath('project/test.meld');
+      const outputPath = '/invalid/path/test.md'; // Invalid path that can't be written to
+
+      await expect(runMeld(inputPath, {
+        format: 'md',
+        output: outputPath
+      })).rejects.toThrow('ENOENT: no such file or directory');
+    });
   });
 }); 

@@ -5,8 +5,9 @@ import { ErrorFactory } from '../errors/factory';
 import { throwWithContext, maybeAdjustLocation } from '../utils/location-helpers';
 import { directiveLogger } from '../../utils/logger';
 import { readFile } from 'fs/promises';
-import { dirname, resolve } from 'path';
+import { dirname } from 'path';
 import { extractSection, MeldLLMXMLError } from '../../converter/llmxml-utils';
+import { pathService } from '../../services/path-service';
 
 export class EmbedDirectiveHandler implements DirectiveHandler {
   public static readonly directiveKind = 'embed';
@@ -50,9 +51,12 @@ export class EmbedDirectiveHandler implements DirectiveHandler {
       );
     }
 
-    // Resolve the embed path
+    // Set current path for relative path resolution
     const currentPath = state.getCurrentFilePath() || context.workspaceRoot || process.cwd();
-    const embedPath = resolve(dirname(currentPath), data.source);
+    pathService.setCurrentPath(currentPath);
+
+    // Resolve the embed path using PathService
+    const embedPath = await pathService.resolvePath(data.source);
 
     // Check for circular references before any file operations
     if (this.embeddedPaths.has(embedPath)) {
@@ -101,7 +105,7 @@ export class EmbedDirectiveHandler implements DirectiveHandler {
                 message = `Section "${data.section}" not found in ${data.source}${error.details?.bestMatch ? `. Did you mean "${error.details.bestMatch}"?` : ''}`;
                 break;
               case 'PARSE_ERROR':
-                message = `Failed to parse markdown in ${data.source}: ${error.message}`;
+                message = 'Failed to parse markdown';
                 break;
               case 'INVALID_LEVEL':
                 message = `Invalid heading level in section "${data.section}" in ${data.source}`;
@@ -123,8 +127,8 @@ export class EmbedDirectiveHandler implements DirectiveHandler {
         }
       }
 
-      // Store the content in state
-      state.setTextVar(`embed:${data.source}`, content);
+      // Store the content in state using resolved path
+      state.setTextVar(`embed:${embedPath}`, content);
 
       // Create a text node with the content
       const contentNode: MeldNode = {
