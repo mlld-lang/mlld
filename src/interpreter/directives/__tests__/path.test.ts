@@ -4,54 +4,60 @@ import type { DirectiveNode } from 'meld-spec';
 import { TestContext } from '../../__tests__/test-utils';
 import { MeldError, MeldPathError } from '../../errors/errors';
 import path from 'path';
-
-// Mock path module
-vi.mock('path', async () => {
-  const actual = await vi.importActual<typeof import('path')>('path');
-  return {
-    ...actual,
-    default: actual,
-  };
-});
+import { pathService } from '../../../services/path-service';
+import { pathTestUtils } from '../../../../tests/__mocks__/path';
 
 describe('PathDirectiveHandler', () => {
   let context: TestContext;
 
   beforeEach(async () => {
+    // Reset path mock between tests
+    const mock = vi.mocked(path);
+    pathTestUtils.resetMocks(mock);
+
     context = new TestContext();
     await context.initialize();
     context.state.setCurrentFilePath(context.fs.getPath('test.meld'));
+    
+    // Configure path service for testing
+    pathService.enableTestMode(
+      context.fs.getPath('home'),
+      context.fs.getPath('project')
+    );
   });
 
   afterEach(async () => {
     await context.cleanup();
+    pathService.disableTestMode();
   });
 
   describe('special variable handling', () => {
-    it('handles path directive with $HOMEPATH', async () => {
-      const location = context.createLocation(1, 1);
-      const node = context.createDirectiveNode('path', {
-        name: 'testPath',
-        path: '$HOMEPATH/test/file.txt'
-      }, location);
+    it('should handle $HOMEPATH variables', async () => {
+      const node: DirectiveNode = {
+        kind: 'path',
+        directive: {
+          name: 'testPath',
+          value: '$HOMEPATH/test/file.txt'
+        },
+        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } }
+      };
 
       await pathDirectiveHandler.handle(node, context.state, context.createHandlerContext());
-
-      const expectedPath = context.fs.getPath('home/test/file.txt');
-      expect(context.state.getPathVar('testPath')).toBe(expectedPath);
+      expect(context.state.getPathVar('testPath')).toBe(context.fs.getPath('home/test/file.txt'));
     });
 
-    it('handles path directive with $PROJECTPATH', async () => {
-      const location = context.createLocation(1, 1);
-      const node = context.createDirectiveNode('path', {
-        name: 'testPath',
-        path: '$PROJECTPATH/test/file.txt'
-      }, location);
+    it('should handle $PROJECTPATH variables', async () => {
+      const node: DirectiveNode = {
+        kind: 'path',
+        directive: {
+          name: 'testPath',
+          value: '$PROJECTPATH/test/file.txt'
+        },
+        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } }
+      };
 
       await pathDirectiveHandler.handle(node, context.state, context.createHandlerContext());
-
-      const expectedPath = context.fs.getPath('project/test/file.txt');
-      expect(context.state.getPathVar('testPath')).toBe(expectedPath);
+      expect(context.state.getPathVar('testPath')).toBe(context.fs.getPath('project/test/file.txt'));
     });
 
     it('handles path directive with aliases', async () => {
@@ -80,26 +86,44 @@ describe('PathDirectiveHandler', () => {
   });
 
   describe('error handling', () => {
-    it('should throw error for missing name', async () => {
-      const location = context.createLocation(5, 3);
-      const node = context.createDirectiveNode('path', {
-        path: '$HOMEPATH/test.txt'
-      }, location);
+    it('should throw on missing name', async () => {
+      const node: DirectiveNode = {
+        kind: 'path',
+        directive: {
+          value: '$HOMEPATH/test/file.txt'
+        },
+        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } }
+      };
 
-      await expect(
-        pathDirectiveHandler.handle(node, context.state, context.createHandlerContext())
-      ).rejects.toThrow('Path name is required');
+      await expect(pathDirectiveHandler.handle(node, context.state, context.createHandlerContext()))
+        .rejects.toThrow(MeldPathError);
     });
 
-    it('should throw error for missing value', async () => {
-      const location = context.createLocation(5, 3);
-      const node = context.createDirectiveNode('path', {
-        name: 'test'
-      }, location);
+    it('should throw on missing value', async () => {
+      const node: DirectiveNode = {
+        kind: 'path',
+        directive: {
+          name: 'testPath'
+        },
+        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } }
+      };
 
-      await expect(
-        pathDirectiveHandler.handle(node, context.state, context.createHandlerContext())
-      ).rejects.toThrow('Path value is required');
+      await expect(pathDirectiveHandler.handle(node, context.state, context.createHandlerContext()))
+        .rejects.toThrow(MeldPathError);
+    });
+
+    it('should throw on invalid path format', async () => {
+      const node: DirectiveNode = {
+        kind: 'path',
+        directive: {
+          name: 'testPath',
+          value: '/absolute/path'
+        },
+        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } }
+      };
+
+      await expect(pathDirectiveHandler.handle(node, context.state, context.createHandlerContext()))
+        .rejects.toThrow('Path must start with $HOMEPATH/$~ or $PROJECTPATH/$.');
     });
 
     it('should preserve error locations in right-side mode', async () => {

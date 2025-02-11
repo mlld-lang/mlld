@@ -72,45 +72,15 @@ vi.mock('fs', () => ({
 }));
 
 // Mock path module
-vi.mock('path', () => {
-  return {
-    default: {
-      isAbsolute: vi.fn((path: string) => path.startsWith('/')),
-      normalize: vi.fn((path: string) => {
-        const normalized = path.replace(/\/\.\//g, '/').replace(/\/[^/]+\/\.\./g, '');
-        return normalized.startsWith('/') ? normalized : `/${normalized}`;
-      }),
-      resolve: vi.fn((...paths: string[]) => {
-        const joined = paths.join('/').replace(/\/\.\//g, '/').replace(/\/[^/]+\/\.\./g, '');
-        return joined.startsWith('/') ? joined : `/${joined}`;
-      }),
-      join: vi.fn((...paths: string[]) => {
-        const joined = paths.join('/').replace(/\/\.\//g, '/').replace(/\/[^/]+\/\.\./g, '');
-        return joined.startsWith('/') ? joined : `/${joined}`;
-      }),
-      dirname: vi.fn((path: string) => {
-        const dir = path.split('/').slice(0, -1).join('/');
-        return dir || '/';
-      })
-    },
-    isAbsolute: vi.fn((path: string) => path.startsWith('/')),
-    normalize: vi.fn((path: string) => {
-      const normalized = path.replace(/\/\.\//g, '/').replace(/\/[^/]+\/\.\./g, '');
-      return normalized.startsWith('/') ? normalized : `/${normalized}`;
-    }),
-    resolve: vi.fn((...paths: string[]) => {
-      const joined = paths.join('/').replace(/\/\.\//g, '/').replace(/\/[^/]+\/\.\./g, '');
-      return joined.startsWith('/') ? joined : `/${joined}`;
-    }),
-    join: vi.fn((...paths: string[]) => {
-      const joined = paths.join('/').replace(/\/\.\//g, '/').replace(/\/[^/]+\/\.\./g, '');
-      return joined.startsWith('/') ? joined : `/${joined}`;
-    }),
-    dirname: vi.fn((path: string) => {
-      const dir = path.split('/').slice(0, -1).join('/');
-      return dir || '/';
-    })
-  };
+vi.mock('path', async () => {
+  // Import the path mock factory
+  const { createPathMock } = await import('./path');
+  
+  // Create a single mock instance that will be used for both named and default exports
+  const mockExports = await createPathMock();
+  
+  // Return the mock exports directly - they already include __esModule and default
+  return mockExports;
 });
 
 // Mock InterpreterState with enhanced tracking

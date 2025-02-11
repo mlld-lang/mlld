@@ -4,62 +4,37 @@ import type { DirectiveNode } from 'meld-spec';
 import { TestContext } from '../../__tests__/test-utils';
 import { MeldError } from '../../errors/errors';
 import { MeldLLMXMLError } from '../../../converter/llmxml-utils';
-import path from 'path';
+import * as pathModule from 'path';
+import { pathTestUtils } from '../../../../tests/__mocks__/path';
 
 // Mock path module
-vi.mock('path', async (importOriginal) => {
-  const actual = await importOriginal();
-  return {
-    ...actual
-  };
+vi.mock('path', async () => {
+  const { createPathMock } = await import('../../../../tests/__mocks__/path');
+  return createPathMock();
 });
 
 // Mock llmxml-utils for section extraction
-vi.mock('../../../converter/llmxml-utils', async () => {
-  const actual = await vi.importActual<typeof import('../../../converter/llmxml-utils')>('../../../converter/llmxml-utils');
-  return {
-    ...actual,
-    MeldLLMXMLError: actual.MeldLLMXMLError,
-    extractSection: vi.fn().mockImplementation(async (content: string, section: string, options: any) => {
-      // Default implementation for successful cases
-      if (section === 'Section 1') {
-        return '## Section 1\n\nContent 1';
-      }
-      if (section === 'Section 2') {
-        return '## Section 2\n\nContent 2\n\n### Subsection 2.1\nNested content';
-      }
-      if (section === 'Section Two') {
-        return '## Section 1\n\nContent 1';  // Fuzzy match returns Section 1
-      }
-      if (section === 'Nonexistent Section') {
-        throw new actual.MeldLLMXMLError('Section not found', 'SECTION_NOT_FOUND', { title: section });
-      }
-      if (section === 'Section One') {
-        throw new actual.MeldLLMXMLError('Section not found', 'SECTION_NOT_FOUND', { title: section, bestMatch: 'Section 1' });
-      }
-      if (section === 'Incomplete code block') {
-        throw new actual.MeldLLMXMLError('Failed to parse markdown', 'PARSE_ERROR', { details: 'Unclosed code block' });
-      }
-      if (section === 'Subsection' && content.includes('### Subsection\n## Section')) {
-        throw new actual.MeldLLMXMLError('Invalid heading level', 'INVALID_LEVEL', { section });
-      }
-      return content;
-    })
-  };
-});
+vi.mock('../../../converter/llmxml-utils', () => ({
+  extractSection: vi.fn(),
+  MeldLLMXMLError,
+}));
 
 describe('EmbedDirectiveHandler', () => {
   let context: TestContext;
   let embedDirectiveHandler: EmbedDirectiveHandler;
 
   beforeEach(async () => {
+    // Reset path mock between tests
+    const mock = vi.mocked(pathModule);
+    pathTestUtils.resetMocks(mock);
+
     context = new TestContext();
     await context.initialize();
     embedDirectiveHandler = new EmbedDirectiveHandler();
 
-    // Set up test files
-    await context.writeFile('project/file.txt', 'Test content');
-    await context.writeFile('project/doc.md', `
+    // Set up test files with platform-agnostic paths
+    await context.writeFile(pathModule.join('project', 'file.txt'), 'Test content');
+    await context.writeFile(pathModule.join('project', 'doc.md'), `
 # Title
 
 ## Section 1
@@ -75,6 +50,7 @@ Nested content
 
   afterEach(async () => {
     await context.cleanup();
+    vi.resetAllMocks();
   });
 
   describe('basic file embedding', () => {
@@ -87,7 +63,7 @@ Nested content
 
       await embedDirectiveHandler.handle(node, context.state, context.createHandlerContext());
 
-      const resolvedPath = context.fs.getPath('project/file.txt');
+      const resolvedPath = context.fs.getPath(pathModule.join('project', 'file.txt'));
       expect(context.state.getTextVar(`embed:${resolvedPath}`)).toBe('Test content');
     });
 
@@ -123,7 +99,7 @@ Nested content
 
       await embedDirectiveHandler.handle(node, context.state, context.createHandlerContext());
 
-      const resolvedPath = context.fs.getPath('project/doc.md');
+      const resolvedPath = context.fs.getPath(pathModule.join('project', 'doc.md'));
       const content = context.state.getTextVar(`embed:${resolvedPath}`);
       expect(content).toContain('Content 1');
       expect(content).not.toContain('Content 2');
@@ -140,7 +116,7 @@ Nested content
 
       await embedDirectiveHandler.handle(node, context.state, context.createHandlerContext());
 
-      const resolvedPath = context.fs.getPath('project/doc.md');
+      const resolvedPath = context.fs.getPath(pathModule.join('project', 'doc.md'));
       const content = context.state.getTextVar(`embed:${resolvedPath}`);
       expect(content).toContain('Content 1');
       expect(content).not.toContain('Content 2');
@@ -156,7 +132,7 @@ Nested content
 
       await embedDirectiveHandler.handle(node, context.state, context.createHandlerContext());
 
-      const resolvedPath = context.fs.getPath('project/doc.md');
+      const resolvedPath = context.fs.getPath(pathModule.join('project', 'doc.md'));
       const content = context.state.getTextVar(`embed:${resolvedPath}`);
       expect(content).toContain('Content 2');
       expect(content).toContain('Subsection 2.1');
@@ -207,10 +183,10 @@ Nested content
 
   describe('path resolution', () => {
     it('should resolve paths relative to current file', async () => {
-      await context.writeFile('project/nested/dir/source.txt', 'Nested content');
-      await context.writeFile('project/nested/dir/current.meld', '');
+      await context.writeFile(pathModule.join('project', 'nested', 'dir', 'source.txt'), 'Nested content');
+      await context.writeFile(pathModule.join('project', 'nested', 'dir', 'current.meld'), '');
       
-      const currentPath = context.fs.getPath('project/nested/dir/current.meld');
+      const currentPath = context.fs.getPath(pathModule.join('project', 'nested', 'dir', 'current.meld'));
       context.state.setCurrentFilePath(currentPath);
 
       const location = context.createLocation(1, 1);
@@ -220,7 +196,7 @@ Nested content
 
       await embedDirectiveHandler.handle(node, context.state, context.createHandlerContext());
 
-      const resolvedPath = context.fs.getPath('project/nested/dir/source.txt');
+      const resolvedPath = context.fs.getPath(pathModule.join('project', 'nested', 'dir', 'source.txt'));
       expect(context.state.getTextVar(`embed:${resolvedPath}`)).toBe('Nested content');
     });
 
@@ -236,6 +212,48 @@ Nested content
 
       const resolvedPath = context.fs.getPath('home/user/data.txt');
       expect(context.state.getTextVar(`embed:${resolvedPath}`)).toBe('Home content');
+    });
+  });
+
+  describe('circular reference detection', () => {
+    it('should detect and throw error for circular references', async () => {
+      const filePath = '$PROJECTPATH/file.txt';
+      const location = context.createLocation(1, 1);
+      const node = context.createDirectiveNode('embed', {
+        source: filePath
+      }, location);
+
+      // First embed should succeed
+      await embedDirectiveHandler.handle(node, context.state, context.createHandlerContext());
+
+      // Second embed of the same file should throw
+      await expect(
+        embedDirectiveHandler.handle(node, context.state, context.createHandlerContext())
+      ).rejects.toThrow('Circular reference detected');
+
+      // Verify the error message includes the file path
+      await expect(
+        embedDirectiveHandler.handle(node, context.state, context.createHandlerContext())
+      ).rejects.toThrow(filePath);
+    });
+
+    it('should clear embedded paths when requested', async () => {
+      const filePath = '$PROJECTPATH/file.txt';
+      const location = context.createLocation(1, 1);
+      const node = context.createDirectiveNode('embed', {
+        source: filePath
+      }, location);
+
+      // First embed should succeed
+      await embedDirectiveHandler.handle(node, context.state, context.createHandlerContext());
+
+      // Clear the embedded paths
+      embedDirectiveHandler.clearEmbeddedPaths();
+
+      // Second embed should now succeed
+      await expect(
+        embedDirectiveHandler.handle(node, context.state, context.createHandlerContext())
+      ).resolves.not.toThrow();
     });
   });
 }); 

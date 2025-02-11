@@ -60,21 +60,6 @@ export class ImportDirectiveHandler implements DirectiveHandler {
       resolvedSource = resolvedSource.replace(match[0], varValue);
     }
 
-    // Validate path format
-    if (!resolvedSource.startsWith('$HOMEPATH/') && !resolvedSource.startsWith('$~/') && !resolvedSource.startsWith('$PROJECTPATH/')) {
-      directiveLogger.error('Invalid import path format', {
-        location: node.location,
-        mode: context.mode,
-        path: resolvedSource
-      });
-      await throwWithContext(
-        ErrorFactory.createImportError,
-        'Path must start with $HOMEPATH/$~ or $PROJECTPATH/$.',
-        node.location,
-        context
-      );
-    }
-
     try {
       // Set current path for relative path resolution
       const currentPath = state.getCurrentFilePath() || context.workspaceRoot || process.cwd();
@@ -83,12 +68,27 @@ export class ImportDirectiveHandler implements DirectiveHandler {
       // Resolve the import path
       const importPath = await pathService.resolvePath(resolvedSource);
 
-      // Check for circular imports before attempting to read the file
-      if (state.hasImport(importPath)) {
-        directiveLogger.error('Circular import detected', {
-          source: resolvedSource,
-          path: importPath
+      // Validate path format after variable substitution and resolution
+      if (!path.isAbsolute(importPath) && 
+          !resolvedSource.startsWith('$HOMEPATH/') && 
+          !resolvedSource.startsWith('$~/') && 
+          !resolvedSource.startsWith('$PROJECTPATH/')) {
+        directiveLogger.error('Invalid import path format', {
+          location: node.location,
+          mode: context.mode,
+          path: resolvedSource
         });
+        await throwWithContext(
+          ErrorFactory.createImportError,
+          'Path must be absolute or start with $HOMEPATH/$~ or $PROJECTPATH/.',
+          node.location,
+          context
+        );
+      }
+
+      // Check for circular imports
+      if (state.hasImport(importPath)) {
+        directiveLogger.error('Circular import detected', { path: importPath });
         await throwWithContext(
           ErrorFactory.createImportError,
           'Circular import detected',
@@ -98,7 +98,7 @@ export class ImportDirectiveHandler implements DirectiveHandler {
         return;
       }
 
-      // Add the import to state before reading the file to detect circular imports
+      // Add import to state before reading file to detect circular imports
       state.addImport(importPath);
 
       try {
@@ -135,15 +135,68 @@ export class ImportDirectiveHandler implements DirectiveHandler {
           // Parse Meld directives
           const lines = content.split('\n');
           for (const line of lines) {
-            const match = line.match(/^@(text|data)\s+([a-zA-Z0-9_]+)\s*=\s*(.+)$/);
+            const match = line.match(/^@(text|data|path)\s+([a-zA-Z0-9_]+)\s*=\s*(.+)$/);
             if (match) {
               const [, type, name, value] = match;
               try {
-                const parsedValue = JSON.parse(value);
+                let parsedValue;
+                if (type === 'path') {
+                  // For path variables, don't parse as JSON, just trim quotes if present
+                  parsedValue = value.trim().replace(/^["']|["']$/g, '');
+                  // Perform variable substitution on path values
+                  const varRegex = /\${([^}]+)}/g;
+                  let pathMatch;
+                  while ((pathMatch = varRegex.exec(parsedValue)) !== null) {
+                    const varName = pathMatch[1];
+                    const varValue = state.getPathVar(varName);
+                    if (varValue) {
+                      parsedValue = parsedValue.replace(pathMatch[0], varValue);
+                    }
+                  }
+                  // Resolve the path if it's relative or contains variables
+                  if (!path.isAbsolute(parsedValue) && 
+                      !parsedValue.startsWith('$HOMEPATH/') && 
+                      !parsedValue.startsWith('$~/') && 
+                      !parsedValue.startsWith('$PROJECTPATH/')) {
+                    const currentPath = path.dirname(importPath);
+                    parsedValue = path.resolve(currentPath, parsedValue);
+                  }
+                  // Resolve any remaining path variables
+                  if (parsedValue.startsWith('$PROJECTPATH/') || 
+                      parsedValue.startsWith('$HOMEPATH/') || 
+                      parsedValue.startsWith('$~/')) {
+                    try {
+                      const resolvedPath = await pathService.resolvePath(parsedValue);
+                      parsedValue = resolvedPath;
+                    } catch (error) {
+                      directiveLogger.error('Failed to resolve path variable', {
+                        path: parsedValue,
+                        error: error instanceof Error ? error.message : String(error)
+                      });
+                    }
+                  }
+                } else {
+                  parsedValue = JSON.parse(value);
+                  // If this is a text value, perform path variable substitution
+                  if (type === 'text' && typeof parsedValue === 'string') {
+                    const varRegex = /\${([^}]+)}/g;
+                    let textMatch;
+                    while ((textMatch = varRegex.exec(parsedValue)) !== null) {
+                      const varName = textMatch[1];
+                      const varValue = state.getPathVar(varName);
+                      if (varValue) {
+                        parsedValue = parsedValue.replace(textMatch[0], varValue);
+                      }
+                    }
+                  }
+                }
+
                 if (type === 'text') {
                   state.setTextVar(name, String(parsedValue));
-                } else {
+                } else if (type === 'data') {
                   state.setDataVar(name, parsedValue);
+                } else if (type === 'path') {
+                  state.setPathVar(name, String(parsedValue));
                 }
               } catch (error) {
                 directiveLogger.error('Failed to parse directive value', {
@@ -172,12 +225,25 @@ export class ImportDirectiveHandler implements DirectiveHandler {
         source: resolvedSource,
         error: error instanceof Error ? error.message : String(error)
       });
-      await throwWithContext(
-        ErrorFactory.createImportError,
-        `Failed to import file: ${error instanceof Error ? error.message : String(error)}`,
-        node.location,
-        context
-      );
+      
+      // Don't prefix validation errors
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('Path must be absolute') || 
+          errorMessage.includes('Path must start with')) {
+        await throwWithContext(
+          ErrorFactory.createImportError,
+          errorMessage,
+          node.location,
+          context
+        );
+      } else {
+        await throwWithContext(
+          ErrorFactory.createImportError,
+          `Failed to import file: ${errorMessage}`,
+          node.location,
+          context
+        );
+      }
     }
   }
 }

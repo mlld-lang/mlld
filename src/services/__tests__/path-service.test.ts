@@ -1,77 +1,97 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { pathService } from '../path-service';
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { PathService } from '../path-service';
 import { homedir } from 'os';
-import { normalize } from 'path';
 
-// Mock os.homedir
+// Mock the os module
 vi.mock('os', () => ({
   homedir: vi.fn(() => '/home/user')
 }));
 
-// Mock process.cwd
-const mockCwd = vi.spyOn(process, 'cwd');
-mockCwd.mockReturnValue('/project/root');
+// Mock the path module
+vi.mock('path', async () => {
+  const actual = await vi.importActual('path');
+  return {
+    ...actual,
+    normalize: vi.fn((p: string) => p),
+    join: vi.fn((...paths: string[]) => paths.join('/')),
+    dirname: vi.fn((p: string) => p.split('/').slice(0, -1).join('/')),
+    isAbsolute: vi.fn((p: string) => p.startsWith('/')),
+    sep: '/',
+  };
+});
 
 describe('PathService', () => {
+  let pathService: PathService;
+
   beforeEach(() => {
+    // Reset all mocks
     vi.clearAllMocks();
-    pathService.disableTestMode();
+    
+    // Create a new instance for each test
+    pathService = new PathService();
+    
+    // Set default project path
+    pathService.setDefaultProjectPath('/project/root');
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   describe('path resolution', () => {
-    it('resolves $HOMEPATH paths', () => {
-      const resolved = pathService.resolvePath('$HOMEPATH/test/file.txt');
-      expect(resolved).toBe(normalize('/home/user/test/file.txt'));
+    it('resolves $HOMEPATH paths', async () => {
+      const resolved = await pathService.resolvePath('$HOMEPATH/test/file.txt');
+      expect(resolved).toBe('/home/user/test/file.txt');
     });
 
-    it('resolves $~ paths', () => {
-      const resolved = pathService.resolvePath('$~/test/file.txt');
-      expect(resolved).toBe(normalize('/home/user/test/file.txt'));
+    it('resolves $~ paths', async () => {
+      const resolved = await pathService.resolvePath('$~/test/file.txt');
+      expect(resolved).toBe('/home/user/test/file.txt');
     });
 
-    it('resolves $PROJECTPATH paths', () => {
-      const resolved = pathService.resolvePath('$PROJECTPATH/test/file.txt');
-      expect(resolved).toBe(normalize('/project/root/test/file.txt'));
+    it('resolves $PROJECTPATH paths', async () => {
+      const resolved = await pathService.resolvePath('$PROJECTPATH/test/file.txt');
+      expect(resolved).toBe('/project/root/test/file.txt');
     });
 
-    it('resolves $. paths', () => {
-      const resolved = pathService.resolvePath('$./test/file.txt');
-      expect(resolved).toBe(normalize('/project/root/test/file.txt'));
+    it('resolves $. paths', async () => {
+      const resolved = await pathService.resolvePath('$./test/file.txt');
+      expect(resolved).toBe('/project/root/test/file.txt');
     });
 
-    it('rejects paths without special variables', () => {
-      expect(() => pathService.resolvePath('/absolute/path'))
-        .toThrow('Path must start with $HOMEPATH/$~ or $PROJECTPATH/$.');
+    it('rejects paths without special variables', async () => {
+      await expect(pathService.resolvePath('/absolute/path'))
+        .rejects.toThrow('Path must start with $HOMEPATH/$~ or $PROJECTPATH/$.');
     });
 
-    it('rejects paths with relative navigation', () => {
-      expect(() => pathService.resolvePath('$HOMEPATH/../test/file.txt'))
-        .toThrow('Path must not contain relative navigation (..)');
+    it('rejects paths with relative navigation', async () => {
+      await expect(pathService.resolvePath('$HOMEPATH/../test/file.txt'))
+        .rejects.toThrow('Relative navigation (..) is not allowed in paths');
     });
   });
 
   describe('test mode', () => {
-    it('allows overriding home path in test mode', () => {
-      pathService.enableTestMode('/test/home');
-      const resolved = pathService.resolvePath('$HOMEPATH/test/file.txt');
-      expect(resolved).toBe(normalize('/test/home/test/file.txt'));
+    it('allows overriding home path in test mode', async () => {
+      pathService.enableTestMode('/test/home', '/test/project');
+      const resolved = await pathService.resolvePath('$HOMEPATH/test/file.txt');
+      expect(resolved).toBe('/test/home/test/file.txt');
     });
 
-    it('allows overriding project path in test mode', () => {
-      pathService.enableTestMode(undefined, '/test/project');
-      const resolved = pathService.resolvePath('$PROJECTPATH/test/file.txt');
-      expect(resolved).toBe(normalize('/test/project/test/file.txt'));
+    it('allows overriding project path in test mode', async () => {
+      pathService.enableTestMode('/test/home', '/test/project');
+      const resolved = await pathService.resolvePath('$PROJECTPATH/test/file.txt');
+      expect(resolved).toBe('/test/project/test/file.txt');
     });
 
-    it('restores real paths when test mode is disabled', () => {
+    it('restores real paths when test mode is disabled', async () => {
       pathService.enableTestMode('/test/home', '/test/project');
       pathService.disableTestMode();
 
-      const homeResolved = pathService.resolvePath('$HOMEPATH/test/file.txt');
-      expect(homeResolved).toBe(normalize('/home/user/test/file.txt'));
+      const homeResolved = await pathService.resolvePath('$HOMEPATH/test/file.txt');
+      expect(homeResolved).toBe('/home/user/test/file.txt');
 
-      const projectResolved = pathService.resolvePath('$PROJECTPATH/test/file.txt');
-      expect(projectResolved).toBe(normalize('/project/root/test/file.txt'));
+      const projectResolved = await pathService.resolvePath('$PROJECTPATH/test/file.txt');
+      expect(projectResolved).toBe('/project/root/test/file.txt');
     });
   });
 
@@ -91,7 +111,7 @@ describe('PathService', () => {
     });
 
     it('returns real paths for undefined test paths', () => {
-      pathService.enableTestMode();
+      pathService.enableTestMode(undefined, undefined);
       expect(pathService.getHomePath()).toBe('/home/user');
       expect(pathService.getProjectPath()).toBe('/project/root');
     });

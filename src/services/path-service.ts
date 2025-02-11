@@ -1,5 +1,5 @@
 import { homedir } from 'os';
-import { join, isAbsolute, normalize, relative, sep, dirname } from 'path';
+import * as pathModule from 'path';
 import { interpreterLogger } from '../utils/logger';
 
 /**
@@ -13,6 +13,7 @@ export class PathService {
   private testProjectPath: string | null;
   private currentPath: string | null;
   private pathVariables: Map<string, string>;
+  private defaultProjectPath: string;
 
   constructor() {
     this.testMode = false;
@@ -20,6 +21,7 @@ export class PathService {
     this.testProjectPath = null;
     this.currentPath = null;
     this.pathVariables = new Map();
+    this.defaultProjectPath = process.cwd();
   }
 
   /**
@@ -64,10 +66,17 @@ export class PathService {
   }
 
   /**
+   * Set the default project path (used when not in test mode)
+   */
+  setDefaultProjectPath(path: string): void {
+    this.defaultProjectPath = path;
+  }
+
+  /**
    * Get the project root path
    */
   getProjectPath(): string {
-    return this.testMode && this.testProjectPath ? this.testProjectPath : process.cwd();
+    return this.testMode && this.testProjectPath ? this.testProjectPath : this.defaultProjectPath;
   }
 
   /**
@@ -112,9 +121,9 @@ export class PathService {
           const homePath = this.getHomePath();
           const projectPath = this.getProjectPath();
           if (value.startsWith(homePath)) {
-            return `$HOMEPATH/${relative(homePath, value)}`;
+            return `$HOMEPATH/${pathModule.relative(homePath, value)}`;
           } else if (value.startsWith(projectPath)) {
-            return `$PROJECTPATH/${relative(projectPath, value)}`;
+            return `$PROJECTPATH/${pathModule.relative(projectPath, value)}`;
           }
         }
         
@@ -133,40 +142,45 @@ export class PathService {
   /**
    * Resolve a path, handling special variables and relative paths
    */
-  async resolvePath(path: string): Promise<string> {
-    interpreterLogger.debug('Resolving path', { path });
-
-    // Replace special variables
-    path = this.replaceSpecialVariables(path);
+  async resolvePath(inputPath: string): Promise<string> {
+    // Handle undefined or empty paths
+    if (!inputPath) {
+      throw new Error('Path cannot be empty');
+    }
 
     // Validate path format
-    if (!path.startsWith('$HOMEPATH/') && !path.startsWith('$~/') && !path.startsWith('$PROJECTPATH/') && !path.startsWith('$./')) {
+    if (!inputPath.startsWith('$HOMEPATH/') && !inputPath.startsWith('$~/') && !inputPath.startsWith('$PROJECTPATH/') && !inputPath.startsWith('$./')) {
       throw new Error('Path must start with $HOMEPATH/$~ or $PROJECTPATH/$.');
     }
 
+    // Check for path traversal attempts before replacing special variables
+    if (inputPath.includes('../') || inputPath.includes('/..')) {
+      throw new Error('Relative navigation (..) is not allowed in paths');
+    }
+
     // Replace special variables with actual paths
-    path = path.replace(/^\$HOMEPATH\/|\$~\//g, `${this.getHomePath()}/`);
-    path = path.replace(/^\$PROJECTPATH\/|\$\.\//g, `${this.getProjectPath()}/`);
+    inputPath = inputPath.replace(/^\$HOMEPATH\/|\$~\//g, `${this.getHomePath()}/`);
+    inputPath = inputPath.replace(/^\$PROJECTPATH\/|\$\.\//g, `${this.getProjectPath()}/`);
 
     // Handle relative paths
-    if (!isAbsolute(path) && this.currentPath) {
-      path = join(dirname(this.currentPath), path);
+    if (!pathModule.isAbsolute(inputPath) && this.currentPath) {
+      inputPath = pathModule.join(pathModule.dirname(this.currentPath), inputPath);
     }
 
     // Normalize the path
-    path = normalize(path);
+    inputPath = pathModule.normalize(inputPath);
 
     // Check for path traversal attempts by comparing with root paths
     const homePath = this.getHomePath();
     const projectPath = this.getProjectPath();
-    const isUnderHome = path.startsWith(homePath + sep) || path === homePath;
-    const isUnderProject = path.startsWith(projectPath + sep) || path === projectPath;
+    const isUnderHome = inputPath.startsWith(homePath + pathModule.sep) || inputPath === homePath;
+    const isUnderProject = inputPath.startsWith(projectPath + pathModule.sep) || inputPath === projectPath;
 
     if (!isUnderHome && !isUnderProject) {
       throw new Error('Relative navigation (..) is not allowed in paths');
     }
 
-    return path;
+    return inputPath;
   }
 
   /**
@@ -187,10 +201,10 @@ export class PathService {
     }));
 
     // Join the resolved paths
-    let joinedPath = join(...resolvedPaths);
+    let joinedPath = pathModule.join(...resolvedPaths);
 
     // Normalize the final path
-    joinedPath = normalize(joinedPath);
+    joinedPath = pathModule.normalize(joinedPath);
 
     return joinedPath;
   }

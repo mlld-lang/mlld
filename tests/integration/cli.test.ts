@@ -1,58 +1,29 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { cli } from '../../src/cli/cli';
 import * as fs from 'fs';
-import * as path from 'path';
+import path from 'path';
+import { pathTestUtils } from '../__mocks__/path';
 
 describe('CLI Integration Tests', () => {
   beforeEach(() => {
-    // Mock path module
-    vi.mock('path', () => {
-      const actual = {
-        normalize: vi.fn().mockImplementation((p: string) => p),
-        resolve: vi.fn().mockImplementation((p: string) => p),
-        join: vi.fn().mockImplementation((...parts: string[]) => parts.join('/')),
-        dirname: vi.fn().mockImplementation((p: string) => p.split('/').slice(0, -1).join('/')),
-        basename: vi.fn().mockImplementation((p: string) => p.split('/').pop() || ''),
-        extname: vi.fn().mockImplementation((p: string) => '.meld'),
-        isAbsolute: vi.fn().mockReturnValue(false)
-      };
-      return {
-        ...actual,
-        default: actual
-      };
-    });
+    // Reset path mock between tests
+    const mock = vi.mocked(path);
+    pathTestUtils.resetMocks(mock);
 
     // Mock fs module
-    vi.mock('fs', () => {
-      const mockContent = `@text test = "value"`;
-      const existsSync = vi.fn().mockImplementation((path: string) => true);
-      const readFileSync = vi.fn().mockImplementation(() => mockContent);
-      const writeFileSync = vi.fn();
-      
-      return {
-        existsSync,
-        readFileSync,
-        writeFileSync,
-        promises: {
-          readFile: vi.fn().mockResolvedValue(mockContent),
-          writeFile: vi.fn().mockResolvedValue(undefined)
-        },
-        default: {
-          existsSync,
-          readFileSync,
-          writeFileSync,
-          promises: {
-            readFile: vi.fn().mockResolvedValue(mockContent),
-            writeFile: vi.fn().mockResolvedValue(undefined)
-          }
-        }
-      };
-    });
+    vi.mock('fs', () => ({
+      existsSync: vi.fn().mockImplementation(() => true),
+      readFileSync: vi.fn().mockImplementation(() => 'test content'),
+      writeFileSync: vi.fn(),
+      promises: {
+        readFile: vi.fn().mockResolvedValue('test content'),
+        writeFile: vi.fn().mockResolvedValue(undefined)
+      }
+    }));
   });
 
   afterEach(() => {
-    vi.restoreAllMocks();
-    vi.resetModules();
+    vi.resetAllMocks();
   });
 
   describe('Format Conversion', () => {
@@ -101,13 +72,13 @@ describe('CLI Integration Tests', () => {
 
     it('should reject unsupported file extensions', async () => {
       const args = ['node', 'meld', 'test.invalid', '--stdout'];
-      await expect(cli(args)).rejects.toThrow(/Invalid file extension/);
+      await expect(cli(args)).rejects.toThrow('Invalid file extension');
     });
 
     it('should handle missing input files', async () => {
       vi.mocked(fs.existsSync).mockReturnValue(false);
       const args = ['node', 'meld', 'nonexistent.meld', '--stdout'];
-      await expect(cli(args)).rejects.toThrow(/File not found/);
+      await expect(cli(args)).rejects.toThrow('ENOENT: no such file or directory');
     });
   });
 

@@ -1,8 +1,8 @@
 import fs from 'fs-extra';
-import path from 'path';
+import { resolve, join, dirname } from 'path';
 import { pathService } from '../services/path-service';
 
-const TEST_ROOT = path.resolve(process.cwd(), 'test', '_tmp');
+const TEST_ROOT = resolve(process.cwd(), 'test', '_tmp');
 
 /**
  * Test filesystem utilities for working with temporary directories
@@ -15,8 +15,8 @@ export class TestFileSystem {
 
   constructor() {
     this.testRoot = TEST_ROOT;
-    this.testHome = path.join(this.testRoot, 'home');
-    this.testProject = path.join(this.testRoot, 'project');
+    this.testHome = join(this.testRoot, 'home');
+    this.testProject = join(this.testRoot, 'project');
   }
 
   /**
@@ -47,8 +47,8 @@ export class TestFileSystem {
    * @param content File content
    */
   async writeFile(filePath: string, content: string): Promise<void> {
-    const fullPath = path.join(this.testRoot, filePath);
-    await fs.ensureDir(path.dirname(fullPath));
+    const fullPath = join(this.testRoot, filePath);
+    await fs.ensureDir(dirname(fullPath));
     await fs.writeFile(fullPath, content);
   }
 
@@ -58,7 +58,7 @@ export class TestFileSystem {
    * @returns File content
    */
   async readFile(filePath: string): Promise<string> {
-    const fullPath = path.join(this.testRoot, filePath);
+    const fullPath = join(this.testRoot, filePath);
     return fs.readFile(fullPath, 'utf8');
   }
 
@@ -68,7 +68,7 @@ export class TestFileSystem {
    * @returns Whether the file exists
    */
   async exists(filePath: string): Promise<boolean> {
-    const fullPath = path.join(this.testRoot, filePath);
+    const fullPath = join(this.testRoot, filePath);
     return fs.pathExists(fullPath);
   }
 
@@ -78,7 +78,7 @@ export class TestFileSystem {
    * @returns Absolute path
    */
   getPath(filePath: string): string {
-    return path.join(this.testRoot, filePath);
+    return join(this.testRoot, filePath);
   }
 
   /**
