@@ -2,10 +2,9 @@ import { DirectiveNode } from 'meld-spec';
 import { DirectiveHandler, HandlerContext } from './types';
 import { InterpreterState } from '../state/state';
 import { ErrorFactory } from '../errors/factory';
-import { throwWithContext } from '../utils/location-helpers';
 import { directiveLogger } from '../../utils/logger';
 import { pathService } from '../../services/path-service';
-import path from 'path';
+import { MeldPathError } from '../errors/errors';
 
 export class PathDirectiveHandler implements DirectiveHandler {
   public static readonly directiveKind = 'path';
@@ -25,146 +24,105 @@ export class PathDirectiveHandler implements DirectiveHandler {
       location: node.location
     });
 
-    // Validate name parameter
-    if (!data.name || typeof data.name !== 'string') {
-      directiveLogger.error('Path name is required', {
-        location: node.location,
-        mode: context.mode
-      });
-      await throwWithContext(
-        ErrorFactory.createPathError,
-        'Path name is required',
-        node.location,
-        context
-      );
-    }
-
-    // Validate value parameter
-    if (!pathValue || typeof pathValue !== 'string') {
-      directiveLogger.error('Path value is required', {
-        location: node.location,
-        mode: context.mode
-      });
-      await throwWithContext(
-        ErrorFactory.createPathError,
-        'Path value is required',
-        node.location,
-        context
-      );
-    }
-
-    // Handle path variable substitution
-    let resolvedPathValue = pathValue;
-    const varRegex = /\${([^}]+)}/g;
-    let match;
-    while ((match = varRegex.exec(resolvedPathValue)) !== null) {
-      const varName = match[1];
-      const varValue = state.getPathVar(varName);
-      if (!varValue) {
-        directiveLogger.error('Path variable not found', {
-          location: node.location,
-          mode: context.mode,
-          variable: varName
-        });
-        await throwWithContext(
-          ErrorFactory.createPathError,
-          `Path variable '${varName}' not found`,
-          node.location,
-          context
-        );
-      }
-      resolvedPathValue = resolvedPathValue.replace(match[0], varValue);
-    }
-
-    // If the resolved path doesn't start with a special variable, wrap it with the appropriate prefix
-    if (!resolvedPathValue.startsWith('$HOMEPATH/') && !resolvedPathValue.startsWith('$~/') && !resolvedPathValue.startsWith('$PROJECTPATH/')) {
-      // Check if this is a concatenated path from a variable
-      if (resolvedPathValue.startsWith('/')) {
-        // Extract the base path to determine which prefix to use
-        const basePath = resolvedPathValue.split('/').slice(0, -1).join('/');
-        if (basePath.includes('home')) {
-          resolvedPathValue = `$HOMEPATH/${resolvedPathValue.split('/').pop()}`;
-        } else if (basePath.includes('project')) {
-          resolvedPathValue = `$PROJECTPATH/${resolvedPathValue.split('/').pop()}`;
-        } else {
-          directiveLogger.error('Invalid path format', {
-            location: node.location,
-            mode: context.mode,
-            path: resolvedPathValue
-          });
-          await throwWithContext(
-            ErrorFactory.createPathError,
-            'Path must start with $HOMEPATH/$~ or $PROJECTPATH/$.',
-            node.location,
-            context
-          );
-        }
-      } else {
-        directiveLogger.error('Invalid path format', {
-          location: node.location,
-          mode: context.mode,
-          path: resolvedPathValue
-        });
-        await throwWithContext(
-          ErrorFactory.createPathError,
-          'Path must start with $HOMEPATH/$~ or $PROJECTPATH/$.',
-          node.location,
-          context
-        );
-      }
-    }
-
-    // Check for path traversal attempts
-    const normalizedPath = path.normalize(resolvedPathValue);
-    const pathParts = normalizedPath.split(/[/\\]/);
-    let depth = 0;
-    
-    for (const part of pathParts) {
-      if (part === '..') {
-        depth--;
-        if (depth < 0) {
-          directiveLogger.error('Path traversal not allowed', {
-            location: node.location,
-            mode: context.mode,
-            path: resolvedPathValue
-          });
-          await throwWithContext(
-            ErrorFactory.createPathError,
-            'Relative navigation (..) is not allowed in paths',
-            node.location,
-            context
-          );
-        }
-      } else if (part !== '.' && part !== '') {
-        depth++;
-      }
-    }
-
-    resolvedPathValue = normalizedPath;
-
     try {
+      // Validate name parameter
+      if (!data.name || typeof data.name !== 'string') {
+        const error = await ErrorFactory.createPathError(
+          'Path name is required',
+          context.mode === 'rightside' && context.baseLocation?.start
+            ? { line: context.baseLocation.start.line + (node.location?.start.line || 0), column: node.location?.start.column || 0 }
+            : node.location?.start
+        );
+        directiveLogger.error('Path directive failed', {
+          name: data.name,
+          value: pathValue,
+          error: error.message,
+          mode: context.mode
+        });
+        throw error;
+      }
+
+      // Validate value parameter
+      if (!pathValue || typeof pathValue !== 'string') {
+        const error = await ErrorFactory.createPathError(
+          'Path value is required',
+          context.mode === 'rightside' && context.baseLocation?.start
+            ? { line: context.baseLocation.start.line + (node.location?.start.line || 0), column: node.location?.start.column || 0 }
+            : node.location?.start
+        );
+        directiveLogger.error('Path directive failed', {
+          name: data.name,
+          value: pathValue,
+          error: error.message,
+          mode: context.mode
+        });
+        throw error;
+      }
+
       // Set current path for relative path resolution
       const currentPath = state.getCurrentFilePath() || context.workspaceRoot || process.cwd();
       pathService.setCurrentPath(currentPath);
 
+      // Copy over any path variables from the interpreter state
+      for (const [name, value] of state.getAllPathVars()) {
+        pathService.setPathVariable(name, value);
+      }
+
       // Resolve the path
-      const resolvedPath = await pathService.resolvePath(resolvedPathValue);
+      let resolvedPath: string;
+      try {
+        resolvedPath = await pathService.resolvePath(pathValue);
+      } catch (error) {
+        const wrappedError = await ErrorFactory.createPathError(
+          error instanceof Error ? error.message : String(error),
+          context.mode === 'rightside' && context.baseLocation?.start
+            ? { line: context.baseLocation.start.line + (node.location?.start.line || 0), column: node.location?.start.column || 0 }
+            : node.location?.start
+        );
+        directiveLogger.error('Path directive failed', {
+          name: data.name,
+          value: pathValue,
+          error: wrappedError.message,
+          mode: context.mode
+        });
+        throw wrappedError;
+      }
 
       // Store the resolved path
       state.setPathVar(data.name, resolvedPath);
 
       directiveLogger.info('Path directive processed', {
         name: data.name,
-        value: resolvedPathValue,
-        resolved: resolvedPath
+        value: pathValue,
+        resolved: resolvedPath,
+        mode: context.mode
       });
     } catch (error) {
+      // If it's already a MeldPathError, adjust its location for right-side mode
+      if (error instanceof MeldPathError) {
+        if (context.mode === 'rightside' && context.baseLocation?.start && node.location?.start) {
+          error.location = {
+            line: context.baseLocation.start.line + node.location.start.line,
+            column: node.location.start.column
+          };
+        }
+        throw error;
+      }
+
+      // Otherwise wrap it with location information
+      const wrappedError = await ErrorFactory.createPathError(
+        error instanceof Error ? error.message : String(error),
+        context.mode === 'rightside' && context.baseLocation?.start
+          ? { line: context.baseLocation.start.line + (node.location?.start.line || 0), column: node.location?.start.column || 0 }
+          : node.location?.start
+      );
       directiveLogger.error('Path directive failed', {
         name: data.name,
-        value: resolvedPathValue,
-        error: error instanceof Error ? error.message : String(error)
+        value: pathValue,
+        error: wrappedError.message,
+        mode: context.mode
       });
-      throw error;
+      throw wrappedError;
     }
   }
 }

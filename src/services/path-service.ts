@@ -85,50 +85,6 @@ export class PathService {
   }
 
   /**
-   * Resolve a path, handling special variables and relative paths
-   */
-  async resolvePath(path: string): Promise<string> {
-    interpreterLogger.debug('Resolving path', { path });
-
-    // Replace special variables
-    path = this.replaceSpecialVariables(path);
-
-    // Validate path format
-    if (!path.startsWith('$HOMEPATH/') && !path.startsWith('$~/') && !path.startsWith('$PROJECTPATH/')) {
-      throw new Error('Path must start with $HOMEPATH/$~ or $PROJECTPATH/$.');
-    }
-
-    // Replace special variables with actual paths
-    path = path.replace(/^\$HOMEPATH\/|\$~\//g, `${this.getHomePath()}/`);
-    path = path.replace(/^\$PROJECTPATH\//g, `${this.getProjectPath()}/`);
-
-    // Handle relative paths
-    if (!isAbsolute(path) && this.currentPath) {
-      path = join(dirname(this.currentPath), path);
-    }
-
-    // Normalize the path
-    path = normalize(path);
-
-    // Check for path traversal attempts
-    const pathParts = path.split(sep);
-    let depth = 0;
-    
-    for (const part of pathParts) {
-      if (part === '..') {
-        depth--;
-        if (depth < 0) {
-          throw new Error('Path traversal above root directory is not allowed');
-        }
-      } else if (part !== '.' && part !== '') {
-        depth++;
-      }
-    }
-
-    return path;
-  }
-
-  /**
    * Replace special variables in a path
    */
   private replaceSpecialVariables(path: string): string {
@@ -145,23 +101,72 @@ export class PathService {
         if (!value) {
           throw new Error(`Path variable '${varName}' not found`);
         }
-        // If the value contains a path variable, resolve it recursively
-        if (value.includes('${')) {
-          try {
-            return this.replaceSpecialVariables(value);
-          } catch (error) {
-            throw new Error(`Failed to resolve nested path variable '${varName}': ${error instanceof Error ? error.message : String(error)}`);
+        
+        // If the value contains variables, resolve them recursively
+        if (value.includes('${') || value.startsWith('$HOMEPATH/') || value.startsWith('$~/') || value.startsWith('$PROJECTPATH/')) {
+          return this.replaceSpecialVariables(value);
+        }
+        
+        // If the value is a full path, make it relative to the appropriate root
+        if (value.startsWith('/')) {
+          const homePath = this.getHomePath();
+          const projectPath = this.getProjectPath();
+          if (value.startsWith(homePath)) {
+            return `$HOMEPATH/${relative(homePath, value)}`;
+          } else if (value.startsWith(projectPath)) {
+            return `$PROJECTPATH/${relative(projectPath, value)}`;
           }
         }
+        
+        // Return the value as is if it's already a relative path
         return value;
       });
     }
 
     // Then normalize special variables
     currentPath = currentPath.replace(/\$HOMEPATH|\$~/g, '$HOMEPATH');
-    currentPath = currentPath.replace(/\$PROJECTPATH/g, '$PROJECTPATH');
+    currentPath = currentPath.replace(/\$PROJECTPATH|\$\./g, '$PROJECTPATH');
 
     return currentPath;
+  }
+
+  /**
+   * Resolve a path, handling special variables and relative paths
+   */
+  async resolvePath(path: string): Promise<string> {
+    interpreterLogger.debug('Resolving path', { path });
+
+    // Replace special variables
+    path = this.replaceSpecialVariables(path);
+
+    // Validate path format
+    if (!path.startsWith('$HOMEPATH/') && !path.startsWith('$~/') && !path.startsWith('$PROJECTPATH/') && !path.startsWith('$./')) {
+      throw new Error('Path must start with $HOMEPATH/$~ or $PROJECTPATH/$.');
+    }
+
+    // Replace special variables with actual paths
+    path = path.replace(/^\$HOMEPATH\/|\$~\//g, `${this.getHomePath()}/`);
+    path = path.replace(/^\$PROJECTPATH\/|\$\.\//g, `${this.getProjectPath()}/`);
+
+    // Handle relative paths
+    if (!isAbsolute(path) && this.currentPath) {
+      path = join(dirname(this.currentPath), path);
+    }
+
+    // Normalize the path
+    path = normalize(path);
+
+    // Check for path traversal attempts by comparing with root paths
+    const homePath = this.getHomePath();
+    const projectPath = this.getProjectPath();
+    const isUnderHome = path.startsWith(homePath + sep) || path === homePath;
+    const isUnderProject = path.startsWith(projectPath + sep) || path === projectPath;
+
+    if (!isUnderHome && !isUnderProject) {
+      throw new Error('Relative navigation (..) is not allowed in paths');
+    }
+
+    return path;
   }
 
   /**

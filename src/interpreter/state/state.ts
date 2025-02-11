@@ -85,6 +85,10 @@ export class InterpreterState {
     interpreterLogger.debug('Set path variable', { name, value });
   }
 
+  getAllPathVars(): Map<string, string> {
+    return new Map(this.pathVars);
+  }
+
   // Commands
   getCommand(name: string): { command: string; options?: Record<string, unknown> } | undefined {
     const command = this.commands.get(name) ?? this.parentState?.getCommand(name);

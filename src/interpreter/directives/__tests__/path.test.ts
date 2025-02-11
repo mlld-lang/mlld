@@ -2,9 +2,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { pathDirectiveHandler } from '../path';
 import type { DirectiveNode } from 'meld-spec';
 import { TestContext } from '../../__tests__/test-utils';
-import { MeldError } from '../../errors/errors';
+import { MeldError, MeldPathError } from '../../errors/errors';
 import path from 'path';
-import { MeldPathError } from '../../errors/types';
 
 // Mock path module
 vi.mock('path', async () => {
@@ -110,13 +109,16 @@ describe('PathDirectiveHandler', () => {
       }, location);
 
       try {
-        await pathDirectiveHandler.handle(node, context.state, context.createHandlerContext('rightside'));
+        await pathDirectiveHandler.handle(node, context.state, context.createHandlerContext({
+          mode: 'rightside',
+          baseLocation: context.createLocation(1, 1)
+        }));
         throw new Error('Should have thrown an error');
       } catch (error) {
         expect(error).toBeInstanceOf(MeldPathError);
         if (error instanceof MeldPathError) {
           expect(error.location).toBeDefined();
-          expect(error.location).toEqual({ line: 2, column: 4 });
+          expect(error.location).toEqual({ line: 3, column: 4 });
         }
       }
     });
