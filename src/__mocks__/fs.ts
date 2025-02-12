@@ -15,7 +15,13 @@ class FileSystemError extends Error {
 const mockFiles = new Map<string, string>();
 const mockErrors = new Map<string, FileSystemError>();
 
-const normalizePath = (path: string): string => {
+const normalizePath = (path: string | undefined): string => {
+  if (!path) {
+    throw new FileSystemError(
+      'The "path" argument must be of type string or an instance of Buffer or URL. Received undefined',
+      'ERR_INVALID_ARG_TYPE'
+    );
+  }
   // Simple path normalization without relying on path.normalize
   return path.replace(/\\/g, '/').replace(/\/\.\//g, '/').replace(/\/[^/]+\/\.\./g, '');
 };

@@ -1,18 +1,26 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { EmbedDirectiveHandler } from '../embed';
 import type { DirectiveNode } from 'meld-spec';
 import { TestContext } from '../../__tests__/test-utils';
 import { MeldError } from '../../errors/errors';
 import { MeldLLMXMLError } from '../../../converter/llmxml-utils';
-import * as pathModule from 'path';
+import { EmbedDirectiveHandler } from '../embed';
 
 // Mock path module
 vi.mock('path', async () => {
-  const { createPathMock } = await import('../../../../tests/__mocks__/path');
-  return createPathMock();
+  const actual = await vi.importActual<typeof import('path')>('path');
+  return {
+    ...actual,
+    join: vi.fn((...args) => args.join('/')),
+    normalize: vi.fn((p) => p.replace(/\\/g, '/').replace(/\/+/g, '/')),
+    dirname: vi.fn((p) => p.split('/').slice(0, -1).join('/') || '/'),
+    basename: vi.fn((p) => p.split('/').pop() || ''),
+    resolve: vi.fn((...args) => args.join('/')),
+    isAbsolute: vi.fn((p) => p.startsWith('/') || /^[A-Z]:/i.test(p)),
+  };
 });
 
-// Import pathTestUtils after mock setup
+// Import path module after mock setup
+import * as pathModule from 'path';
 import { pathTestUtils } from '../../../../tests/__mocks__/path';
 
 // Mock llmxml-utils for section extraction

@@ -5,15 +5,26 @@ import * as pathModule from 'path';
 
 // Mock path module
 vi.mock('path', async () => {
-  const { createPathMock } = await import('../__mocks__/path');
-  return createPathMock();
+  const actual = await vi.importActual<typeof import('path')>('path');
+  return {
+    ...actual,
+    resolve: vi.fn((p) => p),
+    join: vi.fn((...args) => args.join('/')),
+    normalize: vi.fn((p) => p.replace(/\\/g, '/').replace(/\/+/g, '/')),
+    dirname: vi.fn((p) => p.split('/').slice(0, -1).join('/') || '/'),
+    basename: vi.fn((p) => p.split('/').pop() || ''),
+    isAbsolute: vi.fn((p) => p.startsWith('/') || /^[A-Z]:/i.test(p)),
+  };
 });
 
-// Import pathTestUtils after mock setup
+// Import path utils after mock setup
 import { pathTestUtils } from '../__mocks__/path';
 
 describe('CLI Integration Tests', () => {
   beforeEach(() => {
+    // Set test environment
+    process.env.NODE_ENV = 'test';
+    
     // Reset path mock between tests
     const mock = vi.mocked(pathModule);
     pathTestUtils.resetMocks(mock);
@@ -28,9 +39,17 @@ describe('CLI Integration Tests', () => {
         writeFile: vi.fn().mockResolvedValue(undefined)
       }
     }));
+
+    // Mock fs/promises module
+    vi.mock('fs/promises', () => ({
+      readFile: vi.fn().mockResolvedValue('test content'),
+      writeFile: vi.fn().mockResolvedValue(undefined)
+    }));
   });
 
   afterEach(() => {
+    // Reset environment
+    delete process.env.NODE_ENV;
     vi.resetAllMocks();
   });
 

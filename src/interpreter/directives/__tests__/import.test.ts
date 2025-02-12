@@ -120,8 +120,8 @@ describe('ImportDirectiveHandler', () => {
 
     try {
       await handler.handle(node, context.state, context.createHandlerContext());
-      fail('Should have thrown an error');
-    } catch (error) {
+      expect(true).toBe(false); // This line should not be reached
+    } catch (error: any) {
       expect(error).toBeDefined();
       expect(error.location).toBeDefined();
       expect(error.location.line).toBe(5);
@@ -163,8 +163,17 @@ describe('ImportDirectiveHandler', () => {
       const node = context.createDirectiveNode('import', {
         source: '$PROJECTPATH/a.meld'
       }, location);
+
+      // First import should succeed
+      await handler.handle(node, context.state, context.createHandlerContext());
+
+      // Second import (from b.meld back to a.meld) should fail
+      const location2 = context.createLocation(1, 1);
+      const node2 = context.createDirectiveNode('import', {
+        source: '$PROJECTPATH/a.meld'
+      }, location2);
       
-      await expect(handler.handle(node, context.state, context.createHandlerContext()))
+      await expect(handler.handle(node2, context.state, context.createHandlerContext()))
         .rejects.toThrow('Circular import detected');
     });
 

@@ -9,6 +9,20 @@ interface CliOptions {
   format?: 'md' | 'llm';
 }
 
+// Helper to handle errors based on environment
+function handleError(error: unknown): never {
+  interpreterLogger.error('CLI execution failed', {
+    error: error instanceof Error ? error.message : String(error)
+  });
+  
+  // In test mode, throw the error instead of exiting
+  if (process.env.NODE_ENV === 'test') {
+    throw error;
+  }
+  
+  process.exit(1);
+}
+
 /**
  * Parse command line arguments
  */
@@ -84,10 +98,7 @@ export async function run(args: string[]): Promise<void> {
       interpreterLogger.info('Successfully wrote output to stdout');
     }
   } catch (error) {
-    interpreterLogger.error('CLI execution failed', {
-      error: error instanceof Error ? error.message : String(error)
-    });
-    process.exit(1);
+    handleError(error);
   }
 }
 
@@ -95,10 +106,5 @@ export const cmd = run;
 
 // Run if called directly
 if (require.main === module) {
-  run(process.argv).catch(error => {
-    interpreterLogger.error('CLI execution failed', {
-      error: error instanceof Error ? error.message : String(error)
-    });
-    process.exit(1);
-  });
+  run(process.argv).catch(handleError);
 } 

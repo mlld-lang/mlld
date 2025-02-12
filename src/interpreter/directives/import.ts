@@ -118,9 +118,7 @@ export class ImportDirectiveHandler implements DirectiveHandler {
       });
       if (state.hasImport(importPath)) {
         directiveLogger.error('Circular import detected', { path: importPath });
-        return Promise.reject(
-          ErrorFactory.createImportError('Circular import detected', node.location?.start)
-        );
+        throw await ErrorFactory.createImportError('Circular import detected', node.location?.start);
       }
 
       // Add import to state before reading file to detect circular imports
