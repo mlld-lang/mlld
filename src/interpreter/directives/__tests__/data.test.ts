@@ -1,12 +1,24 @@
 import { dataDirectiveHandler } from '../data';
 import { TestContext } from '../../__tests__/test-utils';
 import { MeldError } from '../../errors/errors';
+import { pathService } from '../../../services/path-service';
+
+// Mock path module
+vi.mock('path', async () => {
+  const { createPathMock } = await import('../../../../tests/__mocks__/path');
+  return createPathMock();
+});
 
 describe('DataDirectiveHandler', () => {
   let context: TestContext;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     context = new TestContext();
+    await context.initialize();
+  });
+
+  afterEach(async () => {
+    await context.cleanup();
   });
 
   describe('basic data handling', () => {
@@ -133,6 +145,62 @@ describe('DataDirectiveHandler', () => {
 
       expect(context.state.getDataVar('test')).toBe('parent');
       expect(nestedContext.state.getDataVar('test')).toBe('child');
+    });
+  });
+
+  describe('path handling', () => {
+    it('should handle path variables in data values', async () => {
+      // Set up a path variable
+      context.state.setPathVar('testPath', await pathService.resolvePath('$PROJECTPATH/test/file.txt'));
+
+      const location = context.createLocation(1, 1);
+      const node = context.createDirectiveNode('data', {
+        name: 'config',
+        value: {
+          path: '${testPath}',
+          other: 'value'
+        }
+      }, location);
+
+      dataDirectiveHandler.handle(node, context.state, context.createHandlerContext());
+
+      const config = context.state.getDataVar('config');
+      expect(config.path).toBe(await pathService.resolvePath('$PROJECTPATH/test/file.txt'));
+      expect(config.other).toBe('value');
+    });
+
+    it('should handle special path variables directly', async () => {
+      const location = context.createLocation(1, 1);
+      const node = context.createDirectiveNode('data', {
+        name: 'paths',
+        value: {
+          project: '$PROJECTPATH/file.txt',
+          home: '$HOMEPATH/config.txt'
+        }
+      }, location);
+
+      dataDirectiveHandler.handle(node, context.state, context.createHandlerContext());
+
+      const paths = context.state.getDataVar('paths');
+      expect(paths.project).toBe('$PROJECTPATH/file.txt');
+      expect(paths.home).toBe('$HOMEPATH/config.txt');
+    });
+
+    it('should handle path aliases in data values', async () => {
+      const location = context.createLocation(1, 1);
+      const node = context.createDirectiveNode('data', {
+        name: 'paths',
+        value: {
+          project: '$./file.txt',
+          home: '$~/config.txt'
+        }
+      }, location);
+
+      dataDirectiveHandler.handle(node, context.state, context.createHandlerContext());
+
+      const paths = context.state.getDataVar('paths');
+      expect(paths.project).toBe('$./file.txt');
+      expect(paths.home).toBe('$~/config.txt');
     });
   });
 }); 

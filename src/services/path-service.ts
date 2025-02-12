@@ -2,6 +2,11 @@ import { homedir } from 'os';
 import * as pathModule from 'path';
 import { interpreterLogger } from '../utils/logger';
 
+export interface PathServiceDependencies {
+  homedir: () => string;
+  pathModule: typeof pathModule;
+}
+
 /**
  * Service for resolving and validating paths in the Meld interpreter.
  * Handles special variables like $HOMEPATH and $PROJECTPATH.
@@ -14,14 +19,20 @@ export class PathService {
   private currentPath: string | null;
   private pathVariables: Map<string, string>;
   private defaultProjectPath: string;
+  private deps: PathServiceDependencies;
 
-  constructor() {
+  constructor(deps?: Partial<PathServiceDependencies>) {
     this.testMode = false;
     this.testHomePath = null;
     this.testProjectPath = null;
     this.currentPath = null;
     this.pathVariables = new Map();
     this.defaultProjectPath = process.cwd();
+    this.deps = {
+      homedir,
+      pathModule,
+      ...deps
+    };
   }
 
   /**
@@ -62,7 +73,7 @@ export class PathService {
    * Get the home directory path
    */
   getHomePath(): string {
-    return this.testMode && this.testHomePath ? this.testHomePath : homedir();
+    return this.testMode && this.testHomePath ? this.testHomePath : this.deps.homedir();
   }
 
   /**
@@ -121,9 +132,9 @@ export class PathService {
           const homePath = this.getHomePath();
           const projectPath = this.getProjectPath();
           if (value.startsWith(homePath)) {
-            return `$HOMEPATH/${pathModule.relative(homePath, value)}`;
+            return `$HOMEPATH/${this.deps.pathModule.relative(homePath, value)}`;
           } else if (value.startsWith(projectPath)) {
-            return `$PROJECTPATH/${pathModule.relative(projectPath, value)}`;
+            return `$PROJECTPATH/${this.deps.pathModule.relative(projectPath, value)}`;
           }
         }
         
@@ -163,18 +174,18 @@ export class PathService {
     inputPath = inputPath.replace(/^\$PROJECTPATH\/|\$\.\//g, `${this.getProjectPath()}/`);
 
     // Handle relative paths
-    if (!pathModule.isAbsolute(inputPath) && this.currentPath) {
-      inputPath = pathModule.join(pathModule.dirname(this.currentPath), inputPath);
+    if (!this.deps.pathModule.isAbsolute(inputPath) && this.currentPath) {
+      inputPath = this.deps.pathModule.join(this.deps.pathModule.dirname(this.currentPath), inputPath);
     }
 
     // Normalize the path
-    inputPath = pathModule.normalize(inputPath);
+    inputPath = this.deps.pathModule.normalize(inputPath);
 
     // Check for path traversal attempts by comparing with root paths
     const homePath = this.getHomePath();
     const projectPath = this.getProjectPath();
-    const isUnderHome = inputPath.startsWith(homePath + pathModule.sep) || inputPath === homePath;
-    const isUnderProject = inputPath.startsWith(projectPath + pathModule.sep) || inputPath === projectPath;
+    const isUnderHome = inputPath.startsWith(homePath + this.deps.pathModule.sep) || inputPath === homePath;
+    const isUnderProject = inputPath.startsWith(projectPath + this.deps.pathModule.sep) || inputPath === projectPath;
 
     if (!isUnderHome && !isUnderProject) {
       throw new Error('Relative navigation (..) is not allowed in paths');
@@ -201,14 +212,14 @@ export class PathService {
     }));
 
     // Join the resolved paths
-    let joinedPath = pathModule.join(...resolvedPaths);
+    let joinedPath = this.deps.pathModule.join(...resolvedPaths);
 
     // Normalize the final path
-    joinedPath = pathModule.normalize(joinedPath);
+    joinedPath = this.deps.pathModule.normalize(joinedPath);
 
     return joinedPath;
   }
 }
 
-// Export a singleton instance
+// Export both the class and a singleton instance
 export const pathService = new PathService(); 

@@ -1,34 +1,37 @@
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { PathService } from '../path-service';
-import { homedir } from 'os';
-
-// Mock the os module
-vi.mock('os', () => ({
-  homedir: vi.fn(() => '/home/user')
-}));
-
-// Mock the path module
-vi.mock('path', async () => {
-  const actual = await vi.importActual('path');
-  return {
-    ...actual,
-    normalize: vi.fn((p: string) => p),
-    join: vi.fn((...paths: string[]) => paths.join('/')),
-    dirname: vi.fn((p: string) => p.split('/').slice(0, -1).join('/')),
-    isAbsolute: vi.fn((p: string) => p.startsWith('/')),
-    sep: '/',
-  };
-});
+import { PathService, PathServiceDependencies } from '../path-service';
+import * as pathModule from 'path';
 
 describe('PathService', () => {
   let pathService: PathService;
+  let deps: PathServiceDependencies;
 
   beforeEach(() => {
     // Reset all mocks
     vi.clearAllMocks();
     
-    // Create a new instance for each test
-    pathService = new PathService();
+    // Set up mocked dependencies
+    deps = {
+      homedir: vi.fn(() => '/home/user'),
+      pathModule: {
+        ...pathModule,
+        normalize: vi.fn((p: string) => p),
+        join: vi.fn((...paths: string[]) => paths.join('/')),
+        dirname: vi.fn((p: string) => p.split('/').slice(0, -1).join('/')),
+        isAbsolute: vi.fn((p: string) => p.startsWith('/')),
+        sep: '/',
+        relative: vi.fn((from: string, to: string) => {
+          // Simple implementation for test purposes
+          if (to.startsWith(from)) {
+            return to.slice(from.length + 1);
+          }
+          return to;
+        })
+      }
+    };
+    
+    // Create a new instance with mocked dependencies
+    pathService = new PathService(deps);
     
     // Set default project path
     pathService.setDefaultProjectPath('/project/root');

@@ -1,19 +1,23 @@
 import { vi, beforeEach } from 'vitest';
-import * as pathModule from 'path';
-import { addMockFile, clearMocks, FileSystemError } from '../__mocks__/fs';
+import { addMockFile, clearMocks } from '../__mocks__/fs';
+import { TestFileSystem } from '../test/fs-utils';
 
 // Mock path module first
 vi.mock('path', async () => {
   const { createPathMock } = await import('../../tests/__mocks__/path');
+  const TEST_ROOT = '/Users/adam/dev/meld/test/_tmp';
+  const TEST_HOME = `${TEST_ROOT}/home`;
+  const TEST_PROJECT = `${TEST_ROOT}/project`;
   return createPathMock({
-    testRoot: '/Users/adam/dev/meld/test/_tmp',
-    testHome: '/Users/adam/dev/meld/test/_tmp/home',
-    testProject: '/Users/adam/dev/meld/test/_tmp/project'
+    testRoot: TEST_ROOT,
+    testHome: TEST_HOME,
+    testProject: TEST_PROJECT
   });
 });
 
 // Import path utils after mock setup
 import { pathTestUtils } from '../../tests/__mocks__/path';
+import * as pathModule from 'path';
 
 // Basic markdown fixture
 const basicMd = `# Basic Document
@@ -131,28 +135,20 @@ const complexXml = `<?xml version="1.0" encoding="UTF-8"?>
   </Section>
 </Document>`;
 
-beforeEach(() => {
-  // Reset path mock between tests
-  const mock = vi.mocked(pathModule);
-  pathTestUtils.resetMocks(mock);
-
-  // Clear any existing mocks
-  clearMocks();
+beforeEach(async () => {
+  // Initialize test filesystem first
+  const fs = new TestFileSystem();
+  await fs.initialize();
   
-  // Add mock directories
-  addMockFile('/Users/adam/dev/meld/test/_tmp', '');
-  addMockFile('/Users/adam/dev/meld/test/_tmp/home', '');
-  addMockFile('/Users/adam/dev/meld/test/_tmp/project', '');
-  
-  // Add markdown fixtures
-  addMockFile(pathModule.join(process.cwd(), 'src/__fixtures__/markdown/basic.md'), basicMd);
-  addMockFile(pathModule.join(process.cwd(), 'src/__fixtures__/markdown/complex.md'), complexMd);
-  addMockFile(pathModule.join(process.cwd(), 'src/__fixtures__/markdown/edge-cases.md'), edgeCasesMd);
+  // Add markdown fixtures using the initialized filesystem
+  await fs.writeFile('$PROJECTPATH/src/__fixtures__/markdown/basic.md', basicMd);
+  await fs.writeFile('$PROJECTPATH/src/__fixtures__/markdown/complex.md', complexMd);
+  await fs.writeFile('$PROJECTPATH/src/__fixtures__/markdown/edge-cases.md', edgeCasesMd);
 
   // Add XML fixtures
-  addMockFile(pathModule.join(process.cwd(), 'src/__fixtures__/xml/expected/basic.xml'), basicXml);
-  addMockFile(pathModule.join(process.cwd(), 'src/__fixtures__/xml/expected/complex.xml'), complexXml);
+  await fs.writeFile('$PROJECTPATH/src/__fixtures__/xml/expected/basic.xml', basicXml);
+  await fs.writeFile('$PROJECTPATH/src/__fixtures__/xml/expected/complex.xml', complexXml);
 
   // Add real-world fixtures
-  addMockFile(pathModule.join(process.cwd(), 'src/__fixtures__/real-world/architecture.md'), basicMd);
+  await fs.writeFile('$PROJECTPATH/src/__fixtures__/real-world/architecture.md', basicMd);
 }); 

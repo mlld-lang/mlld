@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { ImportDirectiveHandler } from '../import';
 import { TestContext } from '../../__tests__/test-utils';
 import * as pathModule from 'path';
+import { pathService } from '../../../services/path-service';
 
 // Mock path module
 vi.mock('path', async () => {
@@ -19,12 +20,12 @@ describe('ImportDirectiveHandler', () => {
     handler = new ImportDirectiveHandler();
 
     // Set up test files
-    await context.writeFile('project/mock.meld', '@text greeting = "Hello"');
-    await context.writeFile('project/other.meld', '@data config = { "test": true }');
-    await context.writeFile('project/nested/test.meld', '@text nested = "value"');
+    await context.writeFile('$PROJECTPATH/mock.meld', '@text greeting = "Hello"');
+    await context.writeFile('$PROJECTPATH/other.meld', '@data config = { "test": true }');
+    await context.writeFile('$PROJECTPATH/nested/test.meld', '@text nested = "value"');
 
     // Set current file path
-    context.state.setCurrentFilePath(context.fs.getPath('project/mock.meld'));
+    context.state.setCurrentFilePath(await pathService.resolvePath('$PROJECTPATH/mock.meld'));
   });
 
   afterEach(async () => {
@@ -71,11 +72,11 @@ describe('ImportDirectiveHandler', () => {
 
   it('should handle relative paths', async () => {
     // Create a nested directory structure
-    await context.writeFile('project/nested/current.meld', '');
-    await context.writeFile('project/nested/local.meld', '@text local = "local value"');
+    await context.writeFile('$PROJECTPATH/nested/current.meld', '');
+    await context.writeFile('$PROJECTPATH/nested/local.meld', '@text local = "local value"');
     
     // Set current file to the nested directory
-    context.state.setCurrentFilePath(context.fs.getPath('project/nested/current.meld'));
+    context.state.setCurrentFilePath(await pathService.resolvePath('$PROJECTPATH/nested/current.meld'));
 
     const location = context.createLocation(1, 1);
     const node = context.createDirectiveNode('import', {
@@ -88,7 +89,7 @@ describe('ImportDirectiveHandler', () => {
 
   it('should handle home directory imports', async () => {
     // Create a file in the home directory
-    await context.writeFile('home/user/config.meld', '@text homeConfig = "home value"');
+    await context.writeFile('$HOMEPATH/user/config.meld', '@text homeConfig = "home value"');
 
     const location = context.createLocation(1, 1);
     const node = context.createDirectiveNode('import', {
@@ -101,7 +102,7 @@ describe('ImportDirectiveHandler', () => {
 
   it('should handle imports with variables', async () => {
     // Set up a path variable
-    context.state.setPathVar('configPath', context.fs.getPath('project/other.meld'));
+    context.state.setPathVar('configPath', await pathService.resolvePath('$PROJECTPATH/other.meld'));
 
     const location = context.createLocation(1, 1);
     const node = context.createDirectiveNode('import', {
@@ -132,8 +133,8 @@ describe('ImportDirectiveHandler', () => {
   describe('advanced path handling', () => {
     it('should handle path variables in nested imports', async () => {
       // Set up nested import structure
-      await context.writeFile('project/config/paths.meld', '@path configDir = "$PROJECTPATH/config"');
-      await context.writeFile('project/config/settings.meld', '@text setting = "${configDir}/value"');
+      await context.writeFile('$PROJECTPATH/config/paths.meld', '@path configDir = "$PROJECTPATH/config"');
+      await context.writeFile('$PROJECTPATH/config/settings.meld', '@text setting = "${configDir}/value"');
       
       // First import paths.meld to set up path variable
       const location1 = context.createLocation(1, 1);
@@ -151,13 +152,14 @@ describe('ImportDirectiveHandler', () => {
       
       await handler.handle(node2, context.state, context.createHandlerContext());
       
-      expect(context.state.getText('setting')).toBe(context.fs.getPath('project/config/value'));
+      const expectedPath = await pathService.resolvePath('$PROJECTPATH/config/value');
+      expect(context.state.getText('setting')).toBe(expectedPath);
     });
 
     it('should detect circular imports', async () => {
       // Create files that import each other
-      await context.writeFile('project/a.meld', '@import "$PROJECTPATH/b.meld"');
-      await context.writeFile('project/b.meld', '@import "$PROJECTPATH/a.meld"');
+      await context.writeFile('$PROJECTPATH/a.meld', '@import "$PROJECTPATH/b.meld"');
+      await context.writeFile('$PROJECTPATH/b.meld', '@import "$PROJECTPATH/a.meld"');
       
       const location = context.createLocation(1, 1);
       const node = context.createDirectiveNode('import', {
@@ -185,6 +187,28 @@ describe('ImportDirectiveHandler', () => {
       
       await expect(handler.handle(node, context.state, context.createHandlerContext()))
         .rejects.toThrow('Path must start with $HOMEPATH/$~ or $PROJECTPATH/$.');
+    });
+
+    it('should handle path aliases', async () => {
+      await context.writeFile('$PROJECTPATH/alias-test.meld', '@text aliasTest = "alias content"');
+      
+      const location = context.createLocation(1, 1);
+      const node = context.createDirectiveNode('import', {
+        source: '$./alias-test.meld'  // Using $. alias
+      }, location);
+
+      await handler.handle(node, context.state, context.createHandlerContext());
+      expect(context.state.getText('aliasTest')).toBe('alias content');
+    });
+
+    it('should reject path traversal attempts', async () => {
+      const location = context.createLocation(1, 1);
+      const node = context.createDirectiveNode('import', {
+        source: '$PROJECTPATH/../outside.meld'
+      }, location);
+
+      await expect(handler.handle(node, context.state, context.createHandlerContext()))
+        .rejects.toThrow('Relative navigation (..) is not allowed in paths');
     });
   });
 }); 

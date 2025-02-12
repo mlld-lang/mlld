@@ -10,10 +10,10 @@ export class FileSystemError extends Error {
   }
 }
 
-const mockFiles = new Map<string, string>();
-const mockErrors = new Map<string, FileSystemError>();
+export const mockFiles = new Map<string, string>();
+export const mockErrors = new Map<string, FileSystemError>();
 
-const normalizePath = (path: string | undefined): string => {
+export const normalizePath = (path: string | undefined): string => {
   if (!path) {
     throw new FileSystemError(
       'The "path" argument must be of type string or an instance of Buffer or URL. Received undefined',
@@ -38,7 +38,7 @@ export const clearMocks = (): void => {
   mockErrors.clear();
 };
 
-const handleError = (path: string): void => {
+export const handleError = (path: string): void => {
   const normalizedPath = normalizePath(path);
   const error = mockErrors.get(normalizedPath);
   if (error) {

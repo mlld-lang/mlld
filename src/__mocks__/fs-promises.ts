@@ -1,42 +1,5 @@
 import { vi } from 'vitest';
-import { FileSystemError } from './fs';
-import * as pathModule from 'path';
-
-const mockFiles = new Map<string, string>();
-const mockErrors = new Map<string, FileSystemError>();
-
-const normalizePath = (path: string | undefined): string => {
-  if (!path) {
-    throw new FileSystemError(
-      'The "path" argument must be of type string or an instance of Buffer or URL. Received undefined',
-      'ERR_INVALID_ARG_TYPE'
-    );
-  }
-  return pathModule.normalize(path);
-};
-
-export const addMockFile = (path: string, content: string): void => {
-  const normalizedPath = normalizePath(path);
-  mockFiles.set(normalizedPath, content);
-};
-
-export const addMockError = (path: string, error: FileSystemError): void => {
-  const normalizedPath = normalizePath(path);
-  mockErrors.set(normalizedPath, error);
-};
-
-export const clearMocks = (): void => {
-  mockFiles.clear();
-  mockErrors.clear();
-};
-
-const handleError = (path: string): void => {
-  const normalizedPath = normalizePath(path);
-  const error = mockErrors.get(normalizedPath);
-  if (error) {
-    throw error;
-  }
-};
+import { FileSystemError, mockFiles, handleError, normalizePath } from './fs';
 
 export const readFile = vi.fn(async (path: string, encoding?: string): Promise<string> => {
   handleError(path);
@@ -56,7 +19,10 @@ export const writeFile = vi.fn(async (path: string, content: string): Promise<vo
 
 export const mkdir = vi.fn(async (path: string): Promise<void> => {
   handleError(path);
-  // No need to do anything since we don't track directories
+  const normalizedPath = normalizePath(path);
+  if (!mockFiles.has(normalizedPath)) {
+    mockFiles.set(normalizedPath, '');
+  }
 });
 
 export const access = vi.fn(async (path: string): Promise<void> => {
