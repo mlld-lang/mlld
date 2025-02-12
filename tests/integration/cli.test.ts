@@ -1,13 +1,21 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { cmd } from '../../src/cli/cmd';
 import * as fs from 'fs';
-import path from 'path';
+import * as pathModule from 'path';
+
+// Mock path module
+vi.mock('path', async () => {
+  const { createPathMock } = await import('../__mocks__/path');
+  return createPathMock();
+});
+
+// Import pathTestUtils after mock setup
 import { pathTestUtils } from '../__mocks__/path';
 
 describe('CLI Integration Tests', () => {
   beforeEach(() => {
     // Reset path mock between tests
-    const mock = vi.mocked(path);
+    const mock = vi.mocked(pathModule);
     pathTestUtils.resetMocks(mock);
 
     // Mock fs module
@@ -29,34 +37,34 @@ describe('CLI Integration Tests', () => {
   describe('Format Conversion', () => {
     it('should output llm format by default', async () => {
       const args = ['node', 'meld', 'test.meld', '--stdout'];
-      await expect(cli(args)).resolves.not.toThrow();
+      await expect(cmd(args)).resolves.not.toThrow();
     });
 
     it('should handle format aliases correctly', async () => {
       const args = ['node', 'meld', 'test.meld', '--format', 'md', '--stdout'];
-      await expect(cli(args)).resolves.not.toThrow();
+      await expect(cmd(args)).resolves.not.toThrow();
     });
 
     it('should preserve markdown with md format', async () => {
       const args = ['node', 'meld', 'test.meld', '--format', 'md', '--stdout'];
-      await expect(cli(args)).resolves.not.toThrow();
+      await expect(cmd(args)).resolves.not.toThrow();
     });
   });
 
   describe('Command Line Options', () => {
     it('should respect --stdout option', async () => {
       const args = ['node', 'meld', 'test.meld', '--stdout'];
-      await expect(cli(args)).resolves.not.toThrow();
+      await expect(cmd(args)).resolves.not.toThrow();
     });
 
     it('should use default output path when not specified', async () => {
       const args = ['node', 'meld', 'test.meld'];
-      await expect(cli(args)).resolves.not.toThrow();
+      await expect(cmd(args)).resolves.not.toThrow();
     });
 
     it('should handle multiple format options correctly', async () => {
       const args = ['node', 'meld', 'test.meld', '--format', 'md,llm', '--stdout'];
-      await expect(cli(args)).resolves.not.toThrow();
+      await expect(cmd(args)).resolves.not.toThrow();
     });
   });
 
@@ -66,26 +74,26 @@ describe('CLI Integration Tests', () => {
       for (const ext of extensions) {
         const inputFile = `test${ext}`;
         const args = ['node', 'meld', inputFile, '--stdout'];
-        await expect(cli(args)).resolves.not.toThrow();
+        await expect(cmd(args)).resolves.not.toThrow();
       }
     });
 
     it('should reject unsupported file extensions', async () => {
       const args = ['node', 'meld', 'test.invalid', '--stdout'];
-      await expect(cli(args)).rejects.toThrow('Invalid file extension');
+      await expect(cmd(args)).rejects.toThrow('Invalid file extension');
     });
 
     it('should handle missing input files', async () => {
       vi.mocked(fs.existsSync).mockReturnValue(false);
       const args = ['node', 'meld', 'nonexistent.meld', '--stdout'];
-      await expect(cli(args)).rejects.toThrow('ENOENT: no such file or directory');
+      await expect(cmd(args)).rejects.toThrow('ENOENT: no such file or directory');
     });
   });
 
   describe('Complex Content', () => {
     it('should handle meld directives with format conversion', async () => {
       const args = ['node', 'meld', 'test.meld', '--format', 'llm', '--stdout'];
-      await expect(cli(args)).resolves.not.toThrow();
+      await expect(cmd(args)).resolves.not.toThrow();
     });
   });
 }); 

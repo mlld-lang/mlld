@@ -5,13 +5,15 @@ import { TestContext } from '../../__tests__/test-utils';
 import { MeldError } from '../../errors/errors';
 import { MeldLLMXMLError } from '../../../converter/llmxml-utils';
 import * as pathModule from 'path';
-import { pathTestUtils } from '../../../../tests/__mocks__/path';
 
 // Mock path module
 vi.mock('path', async () => {
   const { createPathMock } = await import('../../../../tests/__mocks__/path');
   return createPathMock();
 });
+
+// Import pathTestUtils after mock setup
+import { pathTestUtils } from '../../../../tests/__mocks__/path';
 
 // Mock llmxml-utils for section extraction
 vi.mock('../../../converter/llmxml-utils', () => ({
