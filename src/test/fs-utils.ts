@@ -1,6 +1,7 @@
 import fs from 'fs-extra';
-import { resolve, join, dirname } from 'path';
 import { pathService } from '../services/path-service';
+import * as pathModule from 'path';
+const { resolve, join, dirname } = pathModule;
 
 const TEST_ROOT = resolve(process.cwd(), 'test', '_tmp');
 

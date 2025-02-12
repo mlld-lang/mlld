@@ -1,11 +1,9 @@
 import { vi } from 'vitest';
-import type { PathLike } from 'fs';
+import * as pathModule from 'path';
 
-// Custom error class for file system errors
-class FileSystemError extends Error {
-  code: string;
-  
-  constructor(message: string, code: string) {
+export class FileSystemError extends Error {
+  code?: string;
+  constructor(message: string, code?: string) {
     super(message);
     this.name = 'FileSystemError';
     this.code = code;
@@ -22,77 +20,94 @@ const normalizePath = (path: string | undefined): string => {
       'ERR_INVALID_ARG_TYPE'
     );
   }
-  // Simple path normalization without relying on path.normalize
-  return path.replace(/\\/g, '/').replace(/\/\.\//g, '/').replace(/\/[^/]+\/\.\./g, '');
+  return pathModule.normalize(path);
 };
 
-const addMockFile = (path: string, content: string) => {
+export const addMockFile = (path: string, content: string): void => {
   const normalizedPath = normalizePath(path);
   mockFiles.set(normalizedPath, content);
-  mockErrors.delete(normalizedPath);
 };
 
-const addMockError = (path: string, error: FileSystemError) => {
+export const addMockError = (path: string, error: FileSystemError): void => {
   const normalizedPath = normalizePath(path);
   mockErrors.set(normalizedPath, error);
-  mockFiles.delete(normalizedPath);
 };
 
-const clearMocks = () => {
+export const clearMocks = (): void => {
   mockFiles.clear();
   mockErrors.clear();
 };
 
-const handleError = (path: string): never => {
+const handleError = (path: string): void => {
   const normalizedPath = normalizePath(path);
-  if (mockErrors.has(normalizedPath)) {
-    throw mockErrors.get(normalizedPath)!;
+  const error = mockErrors.get(normalizedPath);
+  if (error) {
+    throw error;
   }
-  throw new FileSystemError(
-    `ENOENT: no such file or directory, open '${path}'`,
-    'ENOENT'
-  );
 };
 
-const readFile = (path: string): string => {
-  const normalizedPath = normalizePath(path);
-  if (!mockFiles.has(normalizedPath)) {
+const mockFs = {
+  existsSync: vi.fn((path: string): boolean => {
     handleError(path);
-  }
-  return mockFiles.get(normalizedPath)!;
+    const normalizedPath = normalizePath(path);
+    return mockFiles.has(normalizedPath);
+  }),
+
+  readFileSync: vi.fn((path: string, encoding?: string | { encoding?: string }): string => {
+    handleError(path);
+    const normalizedPath = normalizePath(path);
+    const content = mockFiles.get(normalizedPath);
+    if (!content) {
+      throw new FileSystemError(`ENOENT: no such file or directory, open '${path}'`, 'ENOENT');
+    }
+    return content;
+  }),
+
+  writeFileSync: vi.fn((path: string, content: string): void => {
+    handleError(path);
+    const normalizedPath = normalizePath(path);
+    mockFiles.set(normalizedPath, content);
+  }),
+
+  promises: {
+    readFile: vi.fn(async (path: string, encoding?: string | { encoding?: string }): Promise<string> => {
+      handleError(path);
+      const normalizedPath = normalizePath(path);
+      const content = mockFiles.get(normalizedPath);
+      if (!content) {
+        throw new FileSystemError(`ENOENT: no such file or directory, open '${path}'`, 'ENOENT');
+      }
+      return content;
+    }),
+
+    writeFile: vi.fn(async (path: string, content: string): Promise<void> => {
+      handleError(path);
+      const normalizedPath = normalizePath(path);
+      mockFiles.set(normalizedPath, content);
+    }),
+  },
+
+  // fs-extra methods
+  emptyDir: vi.fn(async (path: string): Promise<void> => {
+    handleError(path);
+    const normalizedPath = normalizePath(path);
+    for (const [key] of mockFiles) {
+      if (key.startsWith(normalizedPath)) {
+        mockFiles.delete(key);
+      }
+    }
+  }),
+
+  ensureDir: vi.fn(async (path: string): Promise<void> => {
+    handleError(path);
+    // No need to do anything since we don't track directories
+  }),
+
+  remove: vi.fn(async (path: string): Promise<void> => {
+    handleError(path);
+    const normalizedPath = normalizePath(path);
+    mockFiles.delete(normalizedPath);
+  }),
 };
 
-const readFileSync = vi.fn((path: PathLike, encoding?: string | { encoding?: string }) => {
-  return readFile(path.toString());
-});
-
-const promises = {
-  readFile: vi.fn(async (path: PathLike, encoding?: string | { encoding?: string }) => {
-    return readFile(path.toString());
-  })
-};
-
-const existsSync = vi.fn((path: PathLike) => {
-  const normalizedPath = normalizePath(path.toString());
-  return mockFiles.has(normalizedPath);
-});
-
-export {
-  addMockFile,
-  addMockError,
-  clearMocks,
-  readFileSync,
-  existsSync,
-  promises,
-  FileSystemError
-};
-
-// Default export for compatibility
-export default {
-  readFileSync,
-  existsSync,
-  promises,
-  addMockFile,
-  addMockError,
-  clearMocks,
-}; 
+export default mockFs; 
