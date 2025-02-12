@@ -10,6 +10,9 @@ import { TestFileSystem } from '../../test/fs-utils';
 export class TestContext {
   public state: InterpreterState;
   public fs: TestFileSystem;
+  public mode: 'toplevel' | 'rightside' = 'toplevel';
+  public parentState?: InterpreterState;
+  public baseLocation?: Location;
 
   constructor() {
     this.state = new InterpreterState();
@@ -41,6 +44,17 @@ export class TestContext {
   }
 
   /**
+   * Create a text node for testing
+   */
+  createTextNode(content: string, location?: Location): MeldNode {
+    return {
+      type: 'Text',
+      content,
+      location
+    };
+  }
+
+  /**
    * Create a directive node for testing
    */
   createDirectiveNode(kind: DirectiveKind, data: Record<string, any>, location?: Location): DirectiveNode {
@@ -59,8 +73,10 @@ export class TestContext {
    */
   createHandlerContext(options: Partial<HandlerContext> = {}): HandlerContext {
     return {
-      mode: 'toplevel',
+      mode: this.mode,
       workspaceRoot: this.fs.getProjectPath(),
+      baseLocation: this.baseLocation,
+      parentState: this.parentState,
       ...options
     };
   }
@@ -70,9 +86,33 @@ export class TestContext {
    */
   createNestedContext(baseLocation: Location): TestContext {
     const nestedContext = new TestContext();
-    nestedContext.state = this.state;
+    nestedContext.mode = 'rightside';
+    nestedContext.state = new InterpreterState();
+    nestedContext.state.parentState = this.state;
     nestedContext.fs = this.fs;
+    nestedContext.baseLocation = baseLocation;
+    nestedContext.parentState = this.state;
     return nestedContext;
+  }
+
+  /**
+   * Adjust a location based on the base location
+   */
+  adjustLocation(location: Location): Location {
+    if (!this.baseLocation || this.mode !== 'rightside') {
+      return location;
+    }
+
+    return {
+      start: {
+        line: this.baseLocation.start.line + location.start.line - 1,
+        column: location.start.column
+      },
+      end: {
+        line: this.baseLocation.end.line + location.end.line - 1,
+        column: location.end.column
+      }
+    };
   }
 
   /**

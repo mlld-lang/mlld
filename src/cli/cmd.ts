@@ -7,6 +7,7 @@ interface CliOptions {
   input: string;
   output?: string;
   format?: 'md' | 'llm';
+  stdout?: boolean;
 }
 
 // Helper to handle errors based on environment
@@ -47,7 +48,9 @@ function parseArgs(args: string[]): CliOptions {
           throw new Error('Format must be either "md" or "llm"');
         }
         options.format = format;
-      } else {
+      } else if (arg === '--stdout') {
+        options.stdout = true;
+      } else if (!arg.startsWith('-')) {
         options.input = arg;
       }
     }
@@ -75,7 +78,9 @@ export async function run(args: string[]): Promise<void> {
   try {
     const options = parseArgs(args);
     const inputFile = resolve(options.input);
-    const outputFile = options.output ? resolve(options.output) : undefined;
+
+    // Only resolve output file if not using stdout
+    const outputFile = !options.stdout && options.output ? resolve(options.output) : undefined;
 
     interpreterLogger.debug('Resolved file paths', {
       inputFile,
@@ -102,7 +107,7 @@ export async function run(args: string[]): Promise<void> {
   }
 }
 
-export const cmd = run;
+export { run as cmd };
 
 // Run if called directly
 if (require.main === module) {

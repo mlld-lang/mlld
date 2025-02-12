@@ -1,4 +1,5 @@
 import { vi } from 'vitest';
+import type { PlatformPath } from 'path';
 
 /**
  * Path mock configuration options
@@ -10,6 +11,38 @@ export interface PathMockOptions {
   sep?: string;
   /** Custom path delimiter */
   delimiter?: string;
+  /** Test root directory */
+  testRoot?: string;
+  /** Test home directory */
+  testHome?: string;
+  /** Test project directory */
+  testProject?: string;
+}
+
+let testRoot = '/Users/adam/dev/meld/test/_tmp';
+let testHome = '/Users/adam/dev/meld/test/_tmp/home';
+let testProject = '/Users/adam/dev/meld/test/_tmp/project';
+
+type PathSeparator = '/' | '\\';
+
+interface PathMock {
+  [key: string]: any;
+  sep: PathSeparator;
+  delimiter: string;
+  normalize: (path: string) => string;
+  join: (...paths: string[]) => string;
+  resolve: (...paths: string[]) => string;
+  dirname: (path: string) => string;
+  basename: (path: string) => string;
+  extname: (path: string) => string;
+  isAbsolute: (path: string) => boolean;
+  relative: (from: string, to: string) => string;
+  parse: (path: string) => { root: string; dir: string; base: string; ext: string; name: string };
+  format: (pathObject: { root?: string; dir?: string; base?: string; ext?: string; name?: string }) => string;
+  toNamespacedPath: (path: string) => string;
+  matchesGlob: (path: string, pattern: string) => boolean;
+  posix: PathMock;
+  win32: PathMock;
 }
 
 /**
@@ -19,18 +52,17 @@ export interface PathMockOptions {
  * @param options Configuration options for the path mock
  * @returns A mock implementation of the path module
  */
-export async function createPathMock(options: PathMockOptions = {}) {
+export async function createPathMock(options: PathMockOptions = {}): Promise<PathMock> {
   // Get the original path module to preserve core functionality
   const actualPath = await vi.importActual<typeof import('path')>('path');
   
   const platform = options.platform || process.platform;
   const isWindows = platform === 'win32';
 
-  // Create the default mock with basic properties
-  const defaultMock = {
-    sep: options.sep || (isWindows ? '\\' : '/'),
-    delimiter: options.delimiter || (isWindows ? ';' : ':'),
-  };
+  // Set test directories
+  testRoot = options.testRoot || '/Users/adam/dev/meld/test/_tmp';
+  testHome = options.testHome || '/Users/adam/dev/meld/test/_tmp/home';
+  testProject = options.testProject || '/Users/adam/dev/meld/test/_tmp/project';
 
   // Core path functions that are mostly platform-independent
   const coreFunctions = {
@@ -38,15 +70,24 @@ export async function createPathMock(options: PathMockOptions = {}) {
       if (typeof p !== 'string') {
         return '';  // Return empty string for non-string input
       }
+
+      // Resolve special variables
+      if (p.startsWith('$HOMEPATH/')) {
+        p = p.replace('$HOMEPATH/', testHome + '/');
+      } else if (p.startsWith('$~/')) {
+        p = p.replace('$~/', testHome + '/');
+      } else if (p.startsWith('$PROJECTPATH/')) {
+        p = p.replace('$PROJECTPATH/', testProject + '/');
+      } else if (p.startsWith('$./')) {
+        p = p.replace('$./', testProject + '/');
+      }
+
       // Handle absolute paths
       if (p.startsWith('/')) {
         const normalized = p.replace(/\\/g, '/').replace(/\/+/g, '/');
         return isWindows ? normalized.replace(/\//g, '\\') : normalized;
       }
-      // Handle special variables
-      if (p.startsWith('$HOMEPATH/') || p.startsWith('$~/') || p.startsWith('$PROJECTPATH/') || p.startsWith('$./')) {
-        return p;
-      }
+
       // Handle other paths
       const normalized = p.replace(/\\/g, '/').replace(/\/+/g, '/');
       return isWindows ? normalized.replace(/\//g, '\\') : normalized;
@@ -57,21 +98,39 @@ export async function createPathMock(options: PathMockOptions = {}) {
       // Filter out falsy values and empty strings
       const validPaths = paths.filter(p => p && typeof p === 'string');
       
-      // If any path starts with a special variable, return it with the rest appended
-      for (const p of validPaths) {
-        if (p.startsWith('$HOMEPATH/') || p.startsWith('$~/') || p.startsWith('$PROJECTPATH/') || p.startsWith('$./')) {
-          const rest = validPaths.slice(validPaths.indexOf(p) + 1);
-          return p + (rest.length ? separator + rest.join(separator) : '');
+      // If any path starts with a special variable, resolve it first
+      const resolvedPaths = validPaths.map(p => {
+        if (p.startsWith('$HOMEPATH/')) {
+          return p.replace('$HOMEPATH/', testHome + '/');
+        } else if (p.startsWith('$~/')) {
+          return p.replace('$~/', testHome + '/');
+        } else if (p.startsWith('$PROJECTPATH/')) {
+          return p.replace('$PROJECTPATH/', testProject + '/');
+        } else if (p.startsWith('$./')) {
+          return p.replace('$./', testProject + '/');
         }
-      }
+        return p;
+      });
       
-      // Otherwise join normally
-      return validPaths.join(separator);
+      // Join paths
+      return resolvedPaths.join(separator);
     },
     
     resolve: function(this: any, ...paths: string[]) {
       const separator = this.sep;
-      return paths.filter(p => p).join(separator);
+      const resolvedPaths = paths.filter(p => p).map(p => {
+        if (p.startsWith('$HOMEPATH/')) {
+          return p.replace('$HOMEPATH/', testHome + '/');
+        } else if (p.startsWith('$~/')) {
+          return p.replace('$~/', testHome + '/');
+        } else if (p.startsWith('$PROJECTPATH/')) {
+          return p.replace('$PROJECTPATH/', testProject + '/');
+        } else if (p.startsWith('$./')) {
+          return p.replace('$./', testProject + '/');
+        }
+        return p;
+      });
+      return resolvedPaths.join(separator);
     },
     
     dirname: function(this: any, p: string) {
@@ -139,7 +198,28 @@ export async function createPathMock(options: PathMockOptions = {}) {
       const base = pathObject.base || '';
       return dir ? `${dir}${separator}${base}` : base;
     },
+
+    toNamespacedPath: function(this: any, p: string) {
+      return p;
+    },
+
+    matchesGlob: function(this: any, p: string, pattern: string) {
+      return true;
+    }
   };
+
+  // Create the default mock with basic properties
+  const defaultMock: PathMock = {
+    sep: (options.sep || (isWindows ? '\\' : '/')) as PathSeparator,
+    delimiter: options.delimiter || (isWindows ? ';' : ':'),
+    ...coreFunctions,
+    join: function(...paths: string[]) {
+      return paths.join(defaultMock.sep);
+    },
+    resolve: function(...paths: string[]) {
+      return paths.join(defaultMock.sep);
+    }
+  } as PathMock;
 
   // Bind core functions to defaultMock and wrap in vi.fn()
   Object.entries(coreFunctions).forEach(([key, fn]) => {
@@ -148,39 +228,35 @@ export async function createPathMock(options: PathMockOptions = {}) {
   });
 
   // Create posix mock with bound functions
-  const posixMock = {
+  const posixMock: PathMock = {
     ...actualPath.posix,
-    sep: '/',
+    sep: '/' as PathSeparator,
     delimiter: ':',
-  };
+    ...coreFunctions
+  } as PathMock;
   Object.entries(coreFunctions).forEach(([key, fn]) => {
     const boundFn = fn.bind(posixMock);
     posixMock[key] = vi.fn(boundFn);
   });
 
   // Create win32 mock with bound functions
-  const win32Mock = {
+  const win32Mock: PathMock = {
     ...actualPath.win32,
-    sep: '\\',
+    sep: '\\' as PathSeparator,
     delimiter: ';',
-  };
+    ...coreFunctions
+  } as PathMock;
   Object.entries(coreFunctions).forEach(([key, fn]) => {
     const boundFn = fn.bind(win32Mock);
     win32Mock[key] = vi.fn(boundFn);
   });
 
   // Add platform-specific mocks to default mock
-  Object.assign(defaultMock, {
-    posix: posixMock,
-    win32: win32Mock,
-  });
+  defaultMock.posix = posixMock;
+  defaultMock.win32 = win32Mock;
 
-  // Return the mock with proper ESM/CJS compatibility
-  return {
-    __esModule: true,
-    default: defaultMock,
-    ...defaultMock,
-  };
+  // Return both named exports and default export
+  return defaultMock;
 }
 
 /**
@@ -206,9 +282,7 @@ export const pathTestUtils = {
    * Resets all mock function call histories
    */
   resetMocks: (mock: any) => {
-    Object.values(mock)
-      .filter(value => typeof value === 'function' && 'mockReset' in value)
-      .forEach(fn => (fn as any).mockReset());
+    Object.assign(mock, createPathMock());
   },
 };
 

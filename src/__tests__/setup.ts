@@ -1,6 +1,19 @@
 import { vi, beforeEach } from 'vitest';
-import { join } from 'path';
+import * as pathModule from 'path';
 import { addMockFile, clearMocks, FileSystemError } from '../__mocks__/fs';
+
+// Mock path module first
+vi.mock('path', async () => {
+  const { createPathMock } = await import('../../tests/__mocks__/path');
+  return createPathMock({
+    testRoot: '/Users/adam/dev/meld/test/_tmp',
+    testHome: '/Users/adam/dev/meld/test/_tmp/home',
+    testProject: '/Users/adam/dev/meld/test/_tmp/project'
+  });
+});
+
+// Import path utils after mock setup
+import { pathTestUtils } from '../../tests/__mocks__/path';
 
 // Basic markdown fixture
 const basicMd = `# Basic Document
@@ -119,27 +132,27 @@ const complexXml = `<?xml version="1.0" encoding="UTF-8"?>
 </Document>`;
 
 beforeEach(() => {
+  // Reset path mock between tests
+  const mock = vi.mocked(pathModule);
+  pathTestUtils.resetMocks(mock);
+
   // Clear any existing mocks
   clearMocks();
   
+  // Add mock directories
+  addMockFile('/Users/adam/dev/meld/test/_tmp', '');
+  addMockFile('/Users/adam/dev/meld/test/_tmp/home', '');
+  addMockFile('/Users/adam/dev/meld/test/_tmp/project', '');
+  
   // Add markdown fixtures
-  addMockFile('src/__fixtures__/markdown/basic.md', basicMd);
-  addMockFile('src/__fixtures__/markdown/complex.md', complexMd);
-  addMockFile('src/__fixtures__/markdown/edge-cases.md', edgeCasesMd);
+  addMockFile(pathModule.join(process.cwd(), 'src/__fixtures__/markdown/basic.md'), basicMd);
+  addMockFile(pathModule.join(process.cwd(), 'src/__fixtures__/markdown/complex.md'), complexMd);
+  addMockFile(pathModule.join(process.cwd(), 'src/__fixtures__/markdown/edge-cases.md'), edgeCasesMd);
 
   // Add XML fixtures
-  addMockFile(join(process.cwd(), 'src/__fixtures__/xml/expected/basic.xml'), basicXml);
-  addMockFile(join(process.cwd(), 'src/__fixtures__/xml/expected/complex.xml'), complexXml);
+  addMockFile(pathModule.join(process.cwd(), 'src/__fixtures__/xml/expected/basic.xml'), basicXml);
+  addMockFile(pathModule.join(process.cwd(), 'src/__fixtures__/xml/expected/complex.xml'), complexXml);
 
   // Add real-world fixtures
-  addMockFile(join(process.cwd(), 'src/__fixtures__/real-world/architecture.md'), basicMd);
-
-  // Mock path module
-  vi.mock('path', () => ({
-    join: vi.fn((...paths: string[]) => paths.join('/')),
-    resolve: vi.fn((...paths: string[]) => paths.join('/')),
-    dirname: vi.fn((p: string) => p.split('/').slice(0, -1).join('/')),
-    normalize: vi.fn((p: string) => p.replace(/\\/g, '/').replace(/\/\.\//g, '/').replace(/\/[^/]+\/\.\./g, '')),
-    isAbsolute: vi.fn((p: string) => p.startsWith('/'))
-  }));
+  addMockFile(pathModule.join(process.cwd(), 'src/__fixtures__/real-world/architecture.md'), basicMd);
 }); 

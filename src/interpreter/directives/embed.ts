@@ -8,6 +8,9 @@ import { readFile } from 'fs/promises';
 import { dirname } from 'path';
 import { extractSection, MeldLLMXMLError } from '../../converter/llmxml-utils';
 import { pathService } from '../../services/path-service';
+import { MeldError } from '../errors/errors';
+import { parseMeld } from '../parser.js';
+import { interpret } from '../interpreter';
 
 export class EmbedDirectiveHandler implements DirectiveHandler {
   public static readonly directiveKind = 'embed';
@@ -64,9 +67,11 @@ export class EmbedDirectiveHandler implements DirectiveHandler {
         source: data.source,
         path: embedPath
       });
-      throw await ErrorFactory.createEmbedError(
+      await throwWithContext(
+        ErrorFactory.createEmbedError,
         `Circular reference detected: ${data.source}`,
-        node.location?.start
+        node.location,
+        context
       );
     }
 
@@ -124,6 +129,39 @@ export class EmbedDirectiveHandler implements DirectiveHandler {
             );
           }
           throw error;
+        }
+      }
+
+      // If this is a .meld file, parse and interpret it
+      if (embedPath.endsWith('.meld')) {
+        try {
+          const parsed = await parseMeld(content);
+          await interpret(parsed, state, {
+            ...context,
+            mode: 'toplevel', // Reset mode for embedded content
+            baseLocation: undefined // Reset base location
+          });
+          
+          // Early return since interpret will handle adding nodes
+          return;
+        } catch (error) {
+          if (error instanceof MeldError) {
+            throw error; // Re-throw Meld errors as is
+          }
+          if (error instanceof Error) {
+            await throwWithContext(
+              ErrorFactory.createEmbedError,
+              `Failed to interpret embedded Meld file: ${error.message}`,
+              node.location,
+              context
+            );
+          }
+          await throwWithContext(
+            ErrorFactory.createEmbedError,
+            'Failed to interpret embedded Meld file',
+            node.location,
+            context
+          );
         }
       }
 

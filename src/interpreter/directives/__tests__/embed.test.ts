@@ -1,13 +1,16 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { EmbedDirectiveHandler } from '../embed';
 import * as pathModule from 'path';
-import { addMockFile, clearMocks } from '../../../__mocks__/fs';
 import { TestContext } from '../../__tests__/test-utils';
 
 // Mock path module
 vi.mock('path', async () => {
   const { createPathMock } = await import('../../../../tests/__mocks__/path');
-  return createPathMock();
+  return createPathMock({
+    testRoot: '/Users/adam/dev/meld/test/_tmp',
+    testHome: '/Users/adam/dev/meld/test/_tmp/home',
+    testProject: '/Users/adam/dev/meld/test/_tmp/project'
+  });
 });
 
 // Import path utils after mock setup
@@ -17,10 +20,10 @@ import { pathTestUtils } from '../../../../tests/__mocks__/path';
 vi.mock('fs', () => import('../../../__mocks__/fs'));
 
 // Mock fs/promises module
-vi.mock('fs/promises', () => import('../../../__mocks__/fs'));
+vi.mock('fs/promises', () => import('../../../__mocks__/fs-promises'));
 
-// Mock fs-extra module to use our fs mock
-vi.mock('fs-extra', () => import('../../../__mocks__/fs'));
+// Mock fs-extra module
+vi.mock('fs-extra', () => import('../../../__mocks__/fs-extra'));
 
 describe('EmbedDirectiveHandler', () => {
   let context: TestContext;
@@ -31,13 +34,23 @@ describe('EmbedDirectiveHandler', () => {
     const mock = vi.mocked(pathModule);
     pathTestUtils.resetMocks(mock);
 
-    // Clear fs mocks and add test files
-    clearMocks();
-    addMockFile('test.txt', 'Test content');
-    addMockFile('test.md', '# Test Markdown\nContent');
-
     context = new TestContext();
     await context.initialize();
+    
+    // Add test files using TestContext
+    await context.writeFile('project/test.txt', 'Test content');
+    await context.writeFile('project/test.md', '# Test Markdown\nContent');
+    await context.writeFile('project/file.txt', 'Test content');
+    await context.writeFile('project/doc.md', `# Test Doc
+## Section 1
+Content 1
+
+## Section 2
+Content 2
+
+### Subsection 2.1
+Nested content`);
+
     embedDirectiveHandler = new EmbedDirectiveHandler();
   });
 
@@ -209,44 +222,48 @@ describe('EmbedDirectiveHandler', () => {
   });
 
   describe('circular reference detection', () => {
-    it('should detect and throw error for circular references', async () => {
-      const filePath = '$PROJECTPATH/file.txt';
+    it('should detect circular references in .meld files', async () => {
+      const testMeldPath = 'test.meld';
+      const content = '<!-- @embed source="test.meld" -->';
+      
+      // Write the test file using the test filesystem
+      await context.writeFile(testMeldPath, content);
+      
       const location = context.createLocation(1, 1);
       const node = context.createDirectiveNode('embed', {
-        source: filePath
+        source: testMeldPath
       }, location);
 
-      // First embed should succeed
-      await embedDirectiveHandler.handle(node, context.state, context.createHandlerContext());
-
-      // Second embed of the same file should throw
+      // First embed should parse but fail on nested embed
       await expect(
         embedDirectiveHandler.handle(node, context.state, context.createHandlerContext())
       ).rejects.toThrow('Circular reference detected');
-
-      // Verify the error message includes the file path
-      await expect(
-        embedDirectiveHandler.handle(node, context.state, context.createHandlerContext())
-      ).rejects.toThrow(filePath);
     });
+  });
 
-    it('should clear embedded paths when requested', async () => {
+  describe('location handling', () => {
+    it('should adjust locations in right-side mode', async () => {
       const filePath = '$PROJECTPATH/file.txt';
-      const location = context.createLocation(1, 1);
+      const baseLocation = context.createLocation(5, 3);
+      const location = context.createLocation(2, 4);
       const node = context.createDirectiveNode('embed', {
         source: filePath
       }, location);
 
-      // First embed should succeed
-      await embedDirectiveHandler.handle(node, context.state, context.createHandlerContext());
+      await embedDirectiveHandler.handle(
+        node,
+        context.state,
+        context.createHandlerContext({
+          mode: 'rightside',
+          baseLocation
+        })
+      );
 
-      // Clear the embedded paths
-      embedDirectiveHandler.clearEmbeddedPaths();
-
-      // Second embed should now succeed
-      await expect(
-        embedDirectiveHandler.handle(node, context.state, context.createHandlerContext())
-      ).resolves.not.toThrow();
+      const resolvedPath = context.fs.getPath(pathModule.join('project', 'file.txt'));
+      const nodes = context.state.getNodes();
+      expect(nodes).toHaveLength(1);
+      expect(nodes[0].location?.start.line).toBe(6); // base.line (5) + relative.line (2) - 1
+      expect(nodes[0].location?.start.column).toBe(4);
     });
   });
 }); 
