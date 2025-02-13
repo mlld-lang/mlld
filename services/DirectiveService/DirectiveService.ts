@@ -1,6 +1,6 @@
 import type { DirectiveNode, TextDirective, DataDirective, ImportDirective, EmbedDirective } from 'meld-spec';
 import { directiveLogger as logger } from '../../core/utils/logger';
-import { IDirectiveService } from './IDirectiveService';
+import { IDirectiveService, IDirectiveHandler, DirectiveContext } from './IDirectiveService';
 import { IValidationService } from '../ValidationService/IValidationService';
 import { IStateService } from '../StateService/IStateService';
 import { IPathService } from '../PathService/IPathService';
@@ -9,6 +9,12 @@ import { IParserService } from '../ParserService/IParserService';
 import { IInterpreterService } from '../InterpreterService/IInterpreterService';
 import { MeldDirectiveError } from '../../core/errors/MeldDirectiveError';
 import { ICircularityService } from '../CircularityService/ICircularityService';
+import { IResolutionService } from '../ResolutionService/IResolutionService';
+import { DirectiveError, DirectiveErrorCode } from './errors/DirectiveError';
+
+// Import handlers
+import { TextDirectiveHandler } from './handlers/definition/TextDirectiveHandler';
+import { RunDirectiveHandler } from './handlers/execution/RunDirectiveHandler';
 
 export class MeldLLMXMLError extends Error {
   constructor(
@@ -22,6 +28,9 @@ export class MeldLLMXMLError extends Error {
   }
 }
 
+/**
+ * Service responsible for handling directives
+ */
 export class DirectiveService implements IDirectiveService {
   private validationService?: IValidationService;
   private stateService?: IStateService;
@@ -30,10 +39,10 @@ export class DirectiveService implements IDirectiveService {
   private parserService?: IParserService;
   private interpreterService?: IInterpreterService;
   private circularityService?: ICircularityService;
+  private resolutionService?: IResolutionService;
   private initialized = false;
 
-  // Map to store directive handlers
-  private handlers = new Map<string, (node: DirectiveNode) => Promise<void>>();
+  private handlers: Map<string, IDirectiveHandler> = new Map();
 
   initialize(
     validationService: IValidationService,
@@ -42,7 +51,8 @@ export class DirectiveService implements IDirectiveService {
     fileSystemService: IFileSystemService,
     parserService: IParserService,
     interpreterService: IInterpreterService,
-    circularityService: ICircularityService
+    circularityService: ICircularityService,
+    resolutionService: IResolutionService
   ): void {
     this.validationService = validationService;
     this.stateService = stateService;
@@ -51,6 +61,7 @@ export class DirectiveService implements IDirectiveService {
     this.parserService = parserService;
     this.interpreterService = interpreterService;
     this.circularityService = circularityService;
+    this.resolutionService = resolutionService;
     this.initialized = true;
 
     // Register default handlers
@@ -59,6 +70,116 @@ export class DirectiveService implements IDirectiveService {
     logger.debug('DirectiveService initialized', {
       handlers: Array.from(this.handlers.keys())
     });
+  }
+
+  /**
+   * Register the default set of directive handlers
+   */
+  private registerDefaultHandlers(): void {
+    // Definition handlers
+    this.registerHandler(
+      new TextDirectiveHandler(
+        this.validationService!,
+        this.stateService!,
+        this.resolutionService!
+      )
+    );
+
+    // Execution handlers
+    this.registerHandler(
+      new RunDirectiveHandler(
+        this.validationService!,
+        this.resolutionService!,
+        this.stateService!
+      )
+    );
+
+    // TODO: Register other handlers as they are implemented
+  }
+
+  /**
+   * Handle a directive node
+   */
+  async handleDirective(
+    node: DirectiveNode,
+    context: DirectiveContext
+  ): Promise<void> {
+    // 1. Validate directive
+    await this.validateDirective(node);
+
+    // 2. Get appropriate handler
+    const handler = this.handlers.get(node.directive.kind);
+    if (!handler) {
+      throw new DirectiveError(
+        `No handler found for directive: ${node.directive.kind}`,
+        node.directive.kind,
+        DirectiveErrorCode.HANDLER_NOT_FOUND,
+        { node, context }
+      );
+    }
+
+    try {
+      // 3. Execute handler
+      await handler.execute(node, context);
+    } catch (error) {
+      // Wrap handler errors
+      throw new DirectiveError(
+        error.message,
+        node.directive.kind,
+        DirectiveErrorCode.EXECUTION_FAILED,
+        {
+          node,
+          context,
+          cause: error
+        }
+      );
+    }
+  }
+
+  /**
+   * Register a new directive handler
+   */
+  registerHandler(handler: IDirectiveHandler): void {
+    this.handlers.set(handler.kind, handler);
+  }
+
+  /**
+   * Check if a handler exists for a directive kind
+   */
+  hasHandler(kind: string): boolean {
+    return this.handlers.has(kind);
+  }
+
+  /**
+   * Validate a directive node
+   */
+  async validateDirective(node: DirectiveNode): Promise<void> {
+    try {
+      await this.validationService!.validate(node);
+    } catch (error) {
+      throw new DirectiveError(
+        error.message,
+        node.directive.kind,
+        DirectiveErrorCode.VALIDATION_FAILED,
+        {
+          node,
+          cause: error
+        }
+      );
+    }
+  }
+
+  /**
+   * Create a child context for nested directives
+   */
+  createChildContext(
+    parentContext: DirectiveContext,
+    filePath: string
+  ): DirectiveContext {
+    return {
+      currentFilePath: filePath,
+      parentState: parentContext.parentState
+    };
   }
 
   async processDirective(node: DirectiveNode): Promise<void> {
@@ -83,7 +204,7 @@ export class DirectiveService implements IDirectiveService {
     }
 
     try {
-      await handler(node);
+      await handler.execute(node, { currentFilePath: node.location?.filePath, parentState: this.stateService });
       logger.debug('Directive processed successfully', {
         kind: node.directive.kind,
         location: node.location
@@ -112,21 +233,12 @@ export class DirectiveService implements IDirectiveService {
     return Array.from(this.handlers.keys());
   }
 
-  private registerDefaultHandlers(): void {
-    // We'll implement these handlers next
-    this.handlers.set('text', this.handleTextDirective.bind(this));
-    this.handlers.set('data', this.handleDataDirective.bind(this));
-    this.handlers.set('import', this.handleImportDirective.bind(this));
-    this.handlers.set('embed', this.handleEmbedDirective.bind(this));
-  }
-
   private ensureInitialized(): void {
     if (!this.initialized) {
       throw new Error('DirectiveService must be initialized before use');
     }
   }
 
-  // Handler implementations will be added next
   private async handleTextDirective(node: DirectiveNode): Promise<void> {
     const directive = node.directive as TextDirective;
     

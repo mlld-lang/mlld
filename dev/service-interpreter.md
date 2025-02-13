@@ -1,31 +1,31 @@
 # InterpreterService
 
-Below is a proposed design for the InterpreterService that works with meld-spec's AST nodes and types. This service orchestrates the interpretation of Meld documents while ensuring compatibility with the core Meld libraries and maintaining a clean, SOLID architecture.
+Below is a proposed design for the InterpreterService that works with raw AST nodes from meld-ast. This service orchestrates the interpretation of Meld documents while ensuring compatibility with the core Meld libraries and maintaining a clean, SOLID architecture.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 I. OVERVIEW & POSITION IN THE ARCHITECTURE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 1) The InterpreterService is responsible for orchestrating the high-level "interpretation" phase of Meld documents.  
-2) It processes an AST (from meld-spec), identifies directive nodes, routes them to DirectiveService, and ensures the final state is merged into StateService.  
-3) It does NOT handle I/O directly (FileSystemService does that), does NOT expand paths (PathService does that), and does NOT do final output formatting (OutputService does that).
+2) It receives raw AST nodes from meld-ast (which only handles basic parsing), routes these unprocessed nodes to DirectiveService, and ensures the final state is merged into StateService.  
+3) It does NOT handle I/O directly (FileSystemService does that), does NOT expand paths (PathService does that), and does NOT do variable resolution (ResolutionService does that).
 
 Here's how it fits into the flow:
 
 ┌──────────────────────────────────┐  
-│ meld-spec (generates AST)        │  
+│ meld-ast (basic AST parsing)     │  
 └─────────────┬───────────────────┘  
-              │ MeldNode[]  
+              │ Raw MeldNode[]  
               ▼  
 ┌─────────────────────────────────────────────────────┐  
 │          InterpreterService (focus of this doc)     │  
-│  • Iterates AST nodes                               │  
-│  • For each directive, calls DirectiveService       │  
-│  • Merges changes into StateService                 │  
+│  • Iterates raw AST nodes                          │  
+│  • Routes each directive to DirectiveService        │  
+│  • No resolution/interpolation at this stage        │  
 └─────────────┬───────────────────────────────────────┘  
-              ▼ updated variables, embedded content  
+              ▼ raw nodes, unresolved content  
 ┌─────────────────────────────────────────────────────┐  
-│        Next steps: (OutputService / final usage)    │  
+│        Next steps: (DirectiveService handles)       │  
 └─────────────────────────────────────────────────────┘  
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

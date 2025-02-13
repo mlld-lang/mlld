@@ -22,11 +22,17 @@ Below is a services-based architecture that leverages core Meld libraries (meld-
      - ValidationContext - For validation state
      - ValidationResult - For validation outcomes
 
-2. meld-ast (Parsing)
-   • Provides parse() function for converting text to AST
-   • Returns MeldNode[] using meld-spec types
-   • Handles code fences, directives, and text nodes
-   • Used only in ParserService for AST generation
+2. meld-ast (Basic Parsing)
+   • Provides parse() function for ONLY:
+     - Converting raw text into basic AST nodes
+     - Identifying directives, text blocks, and code fences
+     - Tracking source locations for error reporting
+   • Does NOT handle:
+     - Variable interpolation (${var}, #{data}, $path)
+     - Command resolution ($command(args))
+     - Any kind of value resolution
+   • Used only in ParserService for initial AST generation
+   • Produces raw AST nodes that need further processing
 
 3. llmxml (XML Conversion)
    • Handles bidirectional conversion between Markdown and LLM-XML (llm-friendly pseudo-xml)
@@ -78,10 +84,11 @@ A typical Meld usage scenario:
                     │
                     ▼
    ┌─────────────────────────────────────┐
-   │ ParserService: Parse text into AST │
+   │ ParserService: Uses meld-ast to    │
+   │ parse text into basic AST nodes    │
    └─────────────────────────────────────┘
-                    │ AST (MeldNode[])
-                    ▼
+                    │ Raw AST (MeldNode[])
+                    ▼                    
    ┌────────────────────────────────────────────────────┐
    │ InterpreterService: For each node, route to       │
    │   the DirectiveService & supporting services      │
@@ -92,18 +99,20 @@ A typical Meld usage scenario:
    │ DirectiveService: Routes to:       │
    ├─────────────────────────────────────┤
    │ Definition Handlers:               │──┐
-   │ • @text, @data, @path, @define    │  │
+   │ • Store raw values from AST       │  │
+   │ • No resolution/interpolation     │  │
    ├─────────────────────────────────────┤  │
    │ Execution Handlers:                │  │
-   │ • @run, @embed, @import           │  │
+   │ • Use ResolutionService           │  │
    └─────────────────────────────────────┘  │
                     │                       │
                     ▼                       ▼
    ┌─────────────────────────────────┐    ┌─────────────────────────────┐
    │ ResolutionService:             │    │ StateService:               │
-   │ • Variable resolution          │◄───│ • Raw variable storage      │
-   │ • Command resolution          │    │ • No resolution logic       │
-   │ • Path resolution             │    │ • State hierarchy          │
+   │ • ALL variable resolution      │◄───│ • Raw variable storage      │
+   │ • ALL command resolution       │    │ • No resolution logic       │
+   │ • ALL path resolution          │    │ • State hierarchy          │
+   │ • Handles interpolation        │    │ • Stores raw AST values    │
    └─────────────────────────────────┘    └─────────────────────────────┘
                     │
                     ▼

@@ -1,50 +1,94 @@
 # DirectiveService
 
-Below is a comprehensive design for the DirectiveService that aligns with the new services-based architecture. The service is organized into definition directives (@text, @data, @path, @define) and execution directives (@run, @embed, @import), with all variable resolution handled by the ResolutionService.
+Below is a comprehensive design for the DirectiveService, which processes raw AST nodes from meld-ast and routes them to appropriate handlers. This service does NOT perform any variable resolution itself - that is handled exclusively by the ResolutionService.
 
-─────────────────────────────────────────────────────────────────────────
-1. OVERVIEW
-─────────────────────────────────────────────────────────────────────────
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+I. OVERVIEW & POSITION IN THE ARCHITECTURE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-DirectiveService is responsible for:
-• Receiving AST nodes from the InterpreterService
-• Routing to appropriate handlers based on directive kind
-• Coordinating between ValidationService and ResolutionService
-• Storing raw values in StateService
-• Managing directive dependencies
+The DirectiveService is responsible for:
+1) Receiving raw AST nodes from meld-ast (via InterpreterService)
+2) Routing each node to the appropriate handler based on directive type
+3) Storing raw values without premature resolution
+4) Coordinating with ResolutionService when values need to be resolved
+5) Managing directive dependencies and execution order
 
-The service ensures:
-• Definition directives store raw values
-• Execution directives use ResolutionService
-• Proper validation before execution
-• Clean separation of concerns
+It does NOT:
+• Perform any variable resolution (ResolutionService does that)
+• Parse the AST (meld-ast does that)
+• Handle I/O (FileSystemService does that)
+• Manage state directly (StateService does that)
 
-ASCII diagram of the new flow:
+Here's how it fits into the flow:
 
-┌───────────────┐
-│ DirectiveNode │      ...from InterpreterService
-└───────┬───────┘
-        │
-        ▼
-┌─────────────────────┐
-│  DirectiveService   │
-├─────────────────────┤
-│ Definition Handlers │──┐
-│ • @text            │  │    ┌─────────────┐
-│ • @data            │  ├───▶│ StateService│
-│ • @path            │  │    └─────────────┘
-│ • @define          │  │    ┌─────────────┐
-├─────────────────────┤  ├───▶│ Resolution  │
-│ Execution Handlers  │  │    │  Service    │
-│ • @run             │  │    └─────────────┘
-│ • @embed           │  │    ┌─────────────┐
-│ • @import          │──┘    │ Validation  │
-└─────────────────────┘      │  Service    │
-                            └─────────────┘
+┌──────────────────────┐
+│ meld-ast            │
+│ (basic AST parsing) │
+└──────────┬───────────┘
+           │ Raw AST nodes
+           │ (no resolution)
+           ▼
+┌──────────────────────┐
+│ DirectiveService     │
+├──────────────────────┤
+│ • Routes to handlers │
+│ • Stores raw values │
+│ • Manages order     │
+└──────────┬───────────┘
+           │ When resolution
+           │ is needed
+           ▼
+┌──────────────────────┐
+│ ResolutionService    │
+│ (handles ALL         │
+│  resolution)         │
+└──────────────────────┘
 
-─────────────────────────────────────────────────────────────────────────
-2. FILE / FOLDER STRUCTURE
-─────────────────────────────────────────────────────────────────────────
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+II. DIRECTIVE HANDLERS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+DirectiveService uses two types of handlers:
+
+1. Definition Handlers
+   • Store raw values from AST without resolution
+   • Example: @define stores raw text with unresolved ${vars}
+   • Resolution happens later when values are needed
+
+2. Execution Handlers
+   • Use ResolutionService to resolve values when needed
+   • Example: @run resolves command args before execution
+   • Handle errors if resolution fails
+
+Example flow:
+
+```typescript
+// 1. Raw AST from meld-ast
+const node = {
+  type: 'Directive',
+  directive: {
+    kind: 'define',
+    name: 'greeting',
+    value: 'Hello ${name}!' // Raw, unresolved
+  }
+};
+
+// 2. Definition handler stores raw value
+await defineHandler.handle(node);
+// Stored in state: { greeting: 'Hello ${name}!' }
+
+// 3. Later, when value is needed
+const context = ResolutionContextFactory.forTextDirective();
+const resolved = await resolutionService.resolveInContext(
+  state.get('greeting'),
+  context
+);
+// Result: "Hello World!" (if name = "World")
+```
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+III. FILE / FOLDER STRUCTURE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 services/DirectiveService/
  ├─ DirectiveService.ts       # Main service implementation
@@ -72,9 +116,9 @@ services/DirectiveService/
      ├─ DirectiveError.ts
      └─ DirectiveError.test.ts
 
-─────────────────────────────────────────────────────────────────────────
-3. CORE INTERFACES
-─────────────────────────────────────────────────────────────────────────
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+IV. CORE INTERFACES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 IDirectiveService.ts:
 ```typescript
@@ -111,9 +155,9 @@ export interface IDirectiveHandler {
 }
 ```
 
-─────────────────────────────────────────────────────────────────────────
-4. DEFINITION HANDLERS
-─────────────────────────────────────────────────────────────────────────
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+V. DEFINITION HANDLERS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Example of a definition handler (TextHandler.ts):
 ```typescript
@@ -129,25 +173,26 @@ export class TextDirectiveHandler implements IDirectiveHandler {
     node: DirectiveNode,
     context: DirectiveContext
   ): Promise<void> {
-    // 1. Validate directive
+    // 1. Validate directive structure
     await this.validationService.validate(node);
 
-    // 2. Store raw value (no resolution)
+    // 2. Store raw value from AST - NO resolution
     const { name, value } = node.directive;
+    // value might contain ${var}, #{data}, etc. - store as is
     await this.stateService.setTextVar(name, value);
   }
 }
 ```
 
 Key points for definition handlers:
-• Store raw values without resolution
-• Validate directive structure
-• Update state directly
-• No dependency resolution
+• Store raw AST values without ANY resolution
+• Variables in values (${var}, #{data}, etc.) are stored unresolved
+• Validate only directive structure
+• No dependency resolution at storage time
 
-─────────────────────────────────────────────────────────────────────────
-5. EXECUTION HANDLERS
-─────────────────────────────────────────────────────────────────────────
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+VI. EXECUTION HANDLERS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Example of an execution handler (RunHandler.ts):
 ```typescript
@@ -164,78 +209,80 @@ export class RunDirectiveHandler implements IDirectiveHandler {
     node: DirectiveNode,
     context: DirectiveContext
   ): Promise<void> {
-    // 1. Validate directive
+    // 1. Validate directive structure
     await this.validationService.validate(node);
 
-    // 2. Create resolution context using factory
+    // 2. Get raw values from AST
+    const { command, args } = node.directive;
+    // command might be "$cmd(${var})" - raw from AST
+    // args might contain "${var}" - raw from AST
+
+    // 3. Create resolution context
     const resolutionContext = ResolutionContextFactory.forRunDirective();
 
-    // 3. Resolve command and arguments
-    const { command, args } = node.directive;
+    // 4. Use ResolutionService for ALL resolution
     const resolvedCommand = await this.resolutionService.resolveCommand(
-      command,
-      args,
+      command,  // Raw command with variables
+      args,     // Raw args with variables
       resolutionContext
     );
 
-    // 4. Execute command
-    // ... command execution logic
+    // 5. Store result if needed
+    if (node.directive.output) {
+      await this.stateService.setTextVar(
+        node.directive.output,
+        resolvedCommand
+      );
+    }
   }
 }
 ```
 
 Key points for execution handlers:
-• Use ResolutionService for all variable resolution
-• Pass appropriate resolution context
-• Handle resolution errors
-• Execute resolved values
+• Get raw values from AST nodes
+• Use ResolutionService for ALL variable resolution
+• Never attempt resolution themselves
+• Handle resolution errors appropriately
 
-─────────────────────────────────────────────────────────────────────────
-6. DIRECTIVE DEPENDENCIES
-─────────────────────────────────────────────────────────────────────────
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+VII. DIRECTIVE DEPENDENCIES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Dependencies between directives are handled by ResolutionService:
+Example complete flow showing raw storage and resolution:
 
-1. @define → @run
-• DefineHandler stores raw command definition
-• RunHandler uses ResolutionService to resolve command
-• ResolutionService detects command reference cycles
-
-2. @text/@data → variable interpolation
-• TextHandler/DataHandler store raw values
-• ResolutionService handles ${var} and #{data} resolution
-• ResolutionService detects variable reference cycles
-
-3. @path → path contexts
-• PathHandler stores raw path
-• ResolutionService handles $path resolution
-• Note: File import cycles are handled by CircularityService
-
-Example flow:
+1. Store command definition (raw from AST):
 ```typescript
-// 1. Store command definition
-@define greet(name) = @run [echo "Hello ${name}"]
+// AST node from meld-ast for:
+// @define greet(name) = @run [echo "Hello ${name}"]
 
 // DefineHandler stores raw definition in StateService
 state.setCommand('greet', {
   params: ['name'],
-  body: 'echo "Hello ${name}"'
+  body: 'echo "Hello ${name}"'  // Stored raw, unresolved
 });
-
-// 2. Use command
-@text greeting = @run [$greet(${user})]
-
-// RunHandler uses ResolutionService
-const resolved = await resolutionService.resolveCommand(
-  'greet',
-  ['${user}'],
-  context
-);
 ```
 
-─────────────────────────────────────────────────────────────────────────
-7. ERROR HANDLING
-─────────────────────────────────────────────────────────────────────────
+2. Use command (resolution):
+```typescript
+// AST node from meld-ast for:
+// @run [$greet(${user})]
+
+// RunHandler uses ResolutionService for everything
+const resolved = await resolutionService.resolveCommand(
+  '$greet(${user})',  // Raw command reference
+  [],                 // No direct args
+  context
+);
+// ResolutionService handles:
+// 1. Resolving ${user} to actual value
+// 2. Looking up greet command
+// 3. Substituting parameters
+// 4. Resolving final command
+```
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+VIII. ERROR HANDLING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 DirectiveError.ts:
 ```typescript
@@ -269,9 +316,9 @@ Error handling strategy:
 3. Execution errors - from handlers
 4. All wrapped in DirectiveError
 
-─────────────────────────────────────────────────────────────────────────
-8. TESTING APPROACH
-─────────────────────────────────────────────────────────────────────────
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+IX. TESTING APPROACH
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Key test areas:
 
@@ -335,9 +382,9 @@ describe('RunDirectiveHandler', () => {
 });
 ```
 
-─────────────────────────────────────────────────────────────────────────
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 CONCLUSION
-─────────────────────────────────────────────────────────────────────────
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 The DirectiveService provides:
 1. Clean separation between definition and execution

@@ -1,0 +1,70 @@
+import { MeldNode } from 'meld-spec';
+
+/**
+ * Context for variable resolution, specifying what types of variables and operations are allowed
+ */
+export interface ResolutionContext {
+  /** Current file being processed, for error reporting */
+  currentFilePath?: string;
+  /** Whether path variables ($path) are allowed */
+  allowPathVars: boolean;
+  /** Whether command references ($command(args)) are allowed */
+  allowCommands: boolean;
+  /** Whether data field access (#{data.field}) is allowed */
+  allowDataFields: boolean;
+  /** Whether nested variable interpolation is allowed */
+  allowNested?: boolean;
+}
+
+/**
+ * Error codes for resolution failures
+ */
+export enum ResolutionErrorCode {
+  CIRCULAR_REFERENCE = 'CIRCULAR_REFERENCE',
+  INVALID_CONTEXT = 'INVALID_CONTEXT',
+  UNDEFINED_VARIABLE = 'UNDEFINED_VARIABLE',
+  INVALID_COMMAND = 'INVALID_COMMAND',
+  INVALID_PATH = 'INVALID_PATH',
+  SYNTAX_ERROR = 'SYNTAX_ERROR',
+  FIELD_ACCESS_ERROR = 'FIELD_ACCESS_ERROR'
+}
+
+/**
+ * Service responsible for resolving variables, commands, and paths in different contexts
+ */
+export interface IResolutionService {
+  /**
+   * Resolve text variables (${var}) in a string
+   */
+  resolveText(text: string, context: ResolutionContext): Promise<string>;
+
+  /**
+   * Resolve data variables and fields (#{data.field}) to their values
+   */
+  resolveData(ref: string, context: ResolutionContext): Promise<any>;
+
+  /**
+   * Resolve path variables ($path) to absolute paths
+   */
+  resolvePath(path: string, context: ResolutionContext): Promise<string>;
+
+  /**
+   * Resolve command references ($command(args)) to their results
+   */
+  resolveCommand(cmd: string, args: string[], context: ResolutionContext): Promise<string>;
+
+  /**
+   * Resolve any value based on the provided context rules
+   */
+  resolveInContext(value: string, context: ResolutionContext): Promise<string>;
+
+  /**
+   * Validate that resolution is allowed in the given context
+   */
+  validateResolution(value: string, context: ResolutionContext): Promise<void>;
+
+  /**
+   * Check for circular variable references
+   */
+  detectCircularReferences(value: string): Promise<void>;
+} 
