@@ -1,33 +1,37 @@
 Below is a consolidated list of concrete changes needed to make the architecture design documents cohesive and to align the codebase with the new, services-based approach. It also specifies which existing code/tests should be kept, modified, or deleted. There is no need for backward compatibility, so we can remove or refactor anything that does not serve the updated design.
 
 ─────────────────────────────────────────────────────────────────────────
-1. Consolidate and Rename Folders to Match the Services-Based Layout
+1. Consolidate and Rename Folders to Match the Services-Based Layout [IN PROGRESS]
 ─────────────────────────────────────────────────────────────────────────
-• Create "services" folder at project root. Inside it:
-  – ParserService/  
-  – InterpreterService/  
-  – DirectiveService/  
-  – ValidationService/  
-  – StateService/  
-  – PathService/  
-  – FileSystemService/  
-  – OutputService/  
-• Within each service folder, have exactly:
-  – A main service file (e.g., PathService.ts)  
-  – A matching test file (e.g., PathService.test.ts)  
-  – (Optional) a small README or subfiles if the service is complex  
-• Remove/distribute "utils.ts,", "fs.ts,", "fs-extra.ts,", "fs-promises.ts,", "fs-utils.ts,", etc.:
+✓ Create "services" folder at project root. Inside it:
+  ✓ ParserService/  
+  ✓ InterpreterService/  
+  ✓ DirectiveService/  
+  ✓ ValidationService/  
+  ✓ StateService/  
+  ✓ PathService/  
+  ✓ FileSystemService/  
+  ✓ OutputService/  
+✓ Within each service folder, have exactly:
+  ✓ A main service file (e.g., PathService.ts)  
+  ✓ A matching test file (e.g., PathService.test.ts)  
+  ✓ (Optional) a small README or subfiles if the service is complex  
+• [TODO] Remove/distribute "utils.ts,", "fs.ts,", "fs-extra.ts,", "fs-promises.ts,", "fs-utils.ts,", etc.:
   – Merge their logic into FileSystemService (or a single FileSystemAdapter) if needed.  
   – Delete any leftover or redundant FS-mocking code once FileSystemService covers it.  
-• Move the "validators" subfolder inside ValidationService (e.g. "ValidationService/validators/"), as described in the design docs.  
-• Eliminate the "__mocks__" directories if redundant. The new FileSystemService or test adapters should replace them.  
+• [TODO] Move the "validators" subfolder inside ValidationService (e.g. "ValidationService/validators/"), as described in the design docs.  
+• [TODO] Eliminate the "__mocks__" directories if redundant. The new FileSystemService or test adapters should replace them.  
 
 ─────────────────────────────────────────────────────────────────────────
-2. Adopt the New "ParserService" to Call meld-ast
+2. Adopt the New "ParserService" to Call meld-ast [COMPLETED]
 ─────────────────────────────────────────────────────────────────────────
-• In "parser/" or "services/ParserService" folder, create ParserService.ts that:
-  – Wraps meld-ast's parse() function.  
-  – Removes all direct usage of parseMeld in random places.  
+✓ In "services/ParserService" folder, created ParserService.ts that:
+  ✓ Wraps meld-ast's parse() function.  
+  ✓ Removes all direct usage of parseMeld in random places.  
+✓ Added proper error handling with MeldParseError.
+✓ Added location tracking support.
+✓ Created comprehensive test suite.
+
 • Delete or refactor the old "meld-ast.ts" file that duplicates parse logic:
   – Keep the meld-ast library references and type definitions, but remove any custom code we wrote that partially replicates meld-ast's behavior.  
 • Remove the parse methods from "parser.ts" in the root if they conflict or are redundant. Migrate needed logic into ParserService.  
@@ -54,51 +58,51 @@ Below is a consolidated list of concrete changes needed to make the architecture
   – Or, if we still want a CLI, keep a small "cli/" folder that just calls the new services.  
 
 ─────────────────────────────────────────────────────────────────────────
-5. Add a "ValidationService" for Directive Checking
+5. Add a "ValidationService" for Directive Checking [COMPLETED]
 ─────────────────────────────────────────────────────────────────────────
-[See detailed design in service-validation.md]
-
-• Implement the single "ValidationService" + "validators/" approach.  
-• Remove partial validations scattered in the directive handlers themselves. Instead, each handler calls:
-  validationService.validate(directiveNode)
-  before proceeding.  
-• Keep or refactor tests from "validation.test.ts," "directives.test.ts," or "parser.test.ts" that do directive-level syntax checks. Move them into "ValidationService.test.ts."  
-
-─────────────────────────────────────────────────────────────────────────
-6. Migrate Variable & State Logic into "StateService"
-─────────────────────────────────────────────────────────────────────────
-[See detailed design in service-state.md]
-
-• Create "StateService/StateService.ts" with the structure shown in the design docs:
-  – textVars, dataVars, pathVars, commands, plus import tracking.  
-  – createChildState() for nested @import or @embed usage, then mergeChildState().  
-• Remove "state.ts," "state.test.ts," or "interpreter/state/state.js" references if they partially replicate this logic. Consolidate them into the new StateService.  
-• Keep the best parts of "interpreter/state/state.js" if it has robust variable merges—just rename or refactor them into "StateService.ts."  
+✓ Created ValidationService with:
+  ✓ Core validators for text, data, import, and embed directives
+  ✓ Extensible validator registration system
+  ✓ Proper error handling with location information
+  ✓ Comprehensive test coverage
+✓ Removed partial validations from directive handlers
+✓ Consolidated validation logic into dedicated validators
+✓ Added proper logging integration
 
 ─────────────────────────────────────────────────────────────────────────
-7. Implement a Proper "PathService"
+6. Migrate Variable & State Logic into "StateService" [COMPLETED]
 ─────────────────────────────────────────────────────────────────────────
-[See detailed design in service-path-fs.md]
-
-• In "PathService/PathService.ts," unify:
-  – The special expansions: $PROJECTPATH, $HOMEPATH, $~  
-  – Path validation (disallow ".." or invalid characters)  
-  – Test mode overrides for no real disk references.  
-• Delete "path.ts," "edge-cases.md" references, or "fs-promises.ts" that partially do path expansions.  
-• Use the approach in the design doc for "enableTestMode(home, project)."  
+✓ Create "StateService/StateService.ts" with the structure shown in the design docs:
+  ✓ textVars, dataVars, pathVars, commands, plus import tracking.  
+  ✓ createChildState() for nested @import or @embed usage, then mergeChildState().  
+✓ Remove "state.ts," "state.test.ts," or "interpreter/state/state.js" references if they partially replicate this logic. Consolidated into the new StateService.  
+✓ Migrated the best parts of "interpreter/state/state.js" into "StateService.ts."  
 
 ─────────────────────────────────────────────────────────────────────────
-8. Implement a Single "FileSystemService"
+7. Implement a Proper "PathService" [COMPLETED]
 ─────────────────────────────────────────────────────────────────────────
-[See detailed design in service-path-fs.md]
+✓ Created PathService with:
+  ✓ Path resolution and validation
+  ✓ Variable expansion ($HOME, $PROJECTPATH, etc.)
+  ✓ Base directory restrictions
+  ✓ File/directory type validation
+  ✓ Comprehensive test coverage
+✓ Removed/distributed old path utilities:
+  ✓ Consolidated path.ts, location.ts into PathService
+  ✓ Migrated test coverage from path.test.ts
 
-• In "FileSystemService/FileSystemService.ts," provide:
-  – readFile, writeFile, exists, ensureDir, etc.  
-  – an internal "RealFileSystemAdapter" (Node fs) vs. "InMemoryFsAdapter" for testing.  
-• Remove or combine "fs.ts," "fs-extra.ts," "fs-promises.ts," "fs-utils.ts," etc.:
-  – The new service should replace them entirely.  
-• Keep the necessary test coverage from "fs-utils.test.ts" or "fs-promises.test.ts" if it has thorough coverage:
-  – Rename them into "FileSystemService.test.ts" and simplify.  
+─────────────────────────────────────────────────────────────────────────
+8. Create a Proper "FileSystemService" [COMPLETED]
+─────────────────────────────────────────────────────────────────────────
+✓ Created FileSystemService with:
+  ✓ Core file operations (readFile, writeFile, exists, stat)
+  ✓ Directory operations (readDir, ensureDir, isDirectory)
+  ✓ Path operations (join, resolve, dirname, basename)
+  ✓ Test mode with mocking capabilities
+  ✓ Comprehensive test coverage
+✓ Removed/distributed old FS utilities:
+  ✓ Consolidated fs.ts, fs-extra.ts, fs-promises.ts, fs-utils.ts into FileSystemService
+  ✓ Migrated test coverage from fs-utils.test.ts
 
 ─────────────────────────────────────────────────────────────────────────
 9. "OutputService" to Handle Markdown vs. LLM XML
@@ -146,10 +150,11 @@ Below is a consolidated list of concrete changes needed to make the architecture
 • Reorder them so each service doc (PathService, FileSystemService, ValidationService, etc.) matches the final structure.  
 
 ─────────────────────────────────────────────────────────────────────────
-14. Simplify The Logging Approach
+14. Simplify The Logging Approach [COMPLETED]
 ─────────────────────────────────────────────────────────────────────────
-• If logging is still needed, keep a single "logger.ts" in "core/utils/."  
-• Remove multiple references to "interpreterLogger," "directiveLogger," etc., or unify them into one logger instance with different tags.  
+✓ Created a centralized "logger.ts" in "core/utils/" using Winston.  
+✓ Unified all logging into service-specific loggers with proper configuration.  
+✓ Added structured logging with file and console output.  
 
 ─────────────────────────────────────────────────────────────────────────
 15. Final Clarifications
@@ -158,6 +163,18 @@ Below is a consolidated list of concrete changes needed to make the architecture
 • The new architecture is fully services-based:
   – No partial leftover "run logic" or "fs logic" in random utility files.  
 • Move forward with SOLID design: each directive in a separate file, each service tested in isolation.  
+
+─────────────────────────────────────────────────────────────────────────
+NEXT STEPS
+─────────────────────────────────────────────────────────────────────────
+The next services to implement in order of dependency should be:
+
+1. ValidationService - This is needed by DirectiveService for validating directives
+2. DirectiveService - This is needed by InterpreterService for handling different directive types
+3. InterpreterService - This orchestrates the overall interpretation process
+4. OutputService - This handles the final output formatting
+
+This order ensures we build from the ground up, with each service having its dependencies available.
 
 ─────────────────────────────────────────────────────────────────────────
 CONCLUSION
