@@ -23,34 +23,146 @@ The service is designed to be enhanced without impacting the rest of the codebas
 II. CODEBASE STRUCTURE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-We place this new service in:
+Following the services-based architecture:
 
 services/
  ├─ CircularityService/
- │   ├─ CircularityService.ts
- │   ├─ CircularityService.test.ts         (unit tests)
- │   └─ ...
- └─ ...
+ │   ├─ CircularityService.ts       # Main service implementation
+ │   ├─ CircularityService.test.ts  # Tests next to implementation
+ │   ├─ ICircularityService.ts      # Service interface
+ │   └─ errors/
+ │       ├─ ImportError.ts          # Import-specific errors
+ │       └─ ImportError.test.ts
 
-Inside CircularityService.ts, we define a small, well-typed class.  
+Inside ICircularityService.ts:
 
-An ASCII illustration:
+```typescript
+/**
+ * Service for tracking and detecting circular imports in Meld files.
+ */
+export interface ICircularityService {
+  /**
+   * Called at the start of an import operation.
+   * @throws {MeldImportError} If a circular import is detected
+   */
+  beginImport(filePath: string): void;
 
- ┌─────────────────────────────────────────────────────────┐
- │   ImportDirectiveHandler (or other code wanting import)│
- │      calls: .beginImport("FileA.meld")                 │
- │                 ▼                                      │
- │    +----------------------------------------+          │
- │    | CircularityService                     |          │
- │    |  - importStack: string[]              |          │
- │    |                                        |          │
- │    |  beginImport(filePath) → throws        |          │
- │    |  endImport(filePath)                   |          │
- │    |  isInStack(filePath) → boolean         |          │
- │    +----------------------------------------+          │
- │                 ▲                                      │
- │   If it throws, "ImportDirectiveHandler" knows cycle.  │
- └─────────────────────────────────────────────────────────┘
+  /**
+   * Called after import is finished (success or failure).
+   * Removes filePath from the import stack.
+   */
+  endImport(filePath: string): void;
+
+  /**
+   * Check if a file is currently in the import stack.
+   */
+  isInStack(filePath: string): boolean;
+
+  /**
+   * Get the current import stack.
+   */
+  getImportStack(): string[];
+
+  /**
+   * Clear the import stack.
+   */
+  reset(): void;
+}
+```
+
+Inside CircularityService.ts:
+
+```typescript
+import { ICircularityService } from './ICircularityService';
+import { MeldImportError } from './errors/ImportError';
+import { importLogger as logger } from '../../core/utils/logger';
+
+export class CircularityService implements ICircularityService {
+  private importStack: string[] = [];
+
+  beginImport(filePath: string): void {
+    logger.debug('Beginning import', { 
+      filePath,
+      currentStack: this.importStack 
+    });
+
+    if (this.isInStack(filePath)) {
+      const importChain = [...this.importStack, filePath];
+      logger.error('Circular import detected', {
+        filePath,
+        importChain
+      });
+
+      throw new MeldImportError(
+        `Circular import detected for file: ${filePath}`,
+        'circular_import',
+        { importChain }
+      );
+    }
+
+    this.importStack.push(filePath);
+  }
+
+  endImport(filePath: string): void {
+    const idx = this.importStack.lastIndexOf(filePath);
+    if (idx !== -1) {
+      this.importStack.splice(idx, 1);
+      logger.debug('Ended import', { 
+        filePath,
+        remainingStack: this.importStack 
+      });
+    } else {
+      logger.warn('Attempted to end import for file not in stack', {
+        filePath,
+        currentStack: this.importStack
+      });
+    }
+  }
+
+  isInStack(filePath: string): boolean {
+    return this.importStack.includes(filePath);
+  }
+
+  getImportStack(): string[] {
+    return [...this.importStack];
+  }
+
+  reset(): void {
+    logger.debug('Resetting import stack', {
+      previousStack: this.importStack
+    });
+    this.importStack = [];
+  }
+}
+```
+
+Inside ImportError.ts:
+
+```typescript
+export interface ImportErrorDetails {
+  importChain?: string[];
+  filePath?: string;
+  cause?: Error;
+}
+
+export class MeldImportError extends Error {
+  constructor(
+    message: string,
+    public readonly code: string,
+    public readonly details?: ImportErrorDetails
+  ) {
+    const importChainStr = details?.importChain 
+      ? ` (chain: ${details.importChain.join(' → ')})`
+      : '';
+    super(`Import error (${code}): ${message}${importChainStr}`);
+    
+    this.name = 'MeldImportError';
+    
+    // Ensure proper prototype chain for instanceof checks
+    Object.setPrototypeOf(this, MeldImportError.prototype);
+  }
+}
+```
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 III. CIRCULARITYSERVICE: PROPOSED API

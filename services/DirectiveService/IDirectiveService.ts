@@ -23,6 +23,7 @@ export interface IDirectiveService {
 
   /**
    * Process a directive node, validating and executing it
+   * Values in the directive will already be interpolated by meld-ast
    * @throws {MeldDirectiveError} If directive processing fails
    */
   processDirective(node: DirectiveNode): Promise<void>;

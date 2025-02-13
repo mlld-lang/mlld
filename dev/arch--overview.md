@@ -87,11 +87,24 @@ A typical Meld usage scenario:
    │   the DirectiveService & supporting services      │
    └────────────────────────────────────────────────────┘
                     │
-                    ▼ updates
-   ┌─────────────────────────────────────────────────────┐
-   │ StateService: Holds all variable/data state,       │
-   │   merges changes from directives, etc.             │
-   └─────────────────────────────────────────────────────┘
+                    ▼
+   ┌─────────────────────────────────────┐
+   │ DirectiveService: Routes to:       │
+   ├─────────────────────────────────────┤
+   │ Definition Handlers:               │──┐
+   │ • @text, @data, @path, @define    │  │
+   ├─────────────────────────────────────┤  │
+   │ Execution Handlers:                │  │
+   │ • @run, @embed, @import           │  │
+   └─────────────────────────────────────┘  │
+                    │                       │
+                    ▼                       ▼
+   ┌─────────────────────────────────┐    ┌─────────────────────────────┐
+   │ ResolutionService:             │    │ StateService:               │
+   │ • Variable resolution          │◄───│ • Raw variable storage      │
+   │ • Command resolution          │    │ • No resolution logic       │
+   │ • Path resolution             │    │ • State hierarchy          │
+   └─────────────────────────────────┘    └─────────────────────────────┘
                     │
                     ▼
    ┌─────────────────────────────────────────────────────┐
@@ -224,65 +237,99 @@ Below is a breakdown of key services, their responsibilities, and how they inter
 [See detailed design in service-state.md]
 
 • Responsibility:  
-  - Store and retrieve Meld variables: text, path, data, define, etc.  
-  - Merge child states for nested imports  
-  - Enforce immutability if needed, or track changes  
+  - Store raw variable values without processing
+  - Maintain variable type information
+  - Support variable deletion and updates
+  - Manage state hierarchy for imports/embeds
+  - Track imported files
 
 • Example:  
-  "TextDirectiveHandler" -> stateService.setTextVar(name, value)  
-  "DataDirectiveHandler" -> stateService.setDataVar(name, object)  
+  "TextDirectiveHandler" -> stateService.setTextVar(name, rawValue)  
+  "DataDirectiveHandler" -> stateService.setDataVar(name, rawObject)  
 
 ─────────────────────────────────────────────────────────────────────────
-  5. ValidationService
+  5. ResolutionService
 ─────────────────────────────────────────────────────────────────────────
-[See detailed design in service-validation.md]
+[See detailed design in service-resolution.md]
 
-• Responsibility:  
-  - Validate directive arguments match Meld grammar constraints  
-    (E.g. "@text identifier = "string" must have 'identifier' and a string)  
-  - Provide standardized error messages  
-  - Possibly integrate advanced logic (fuzzy thresholds, etc.)  
+• Core Responsibility:  
+  - Resolve text variables (${var})
+  - Resolve data variables and fields (#{data.field})
+  - Resolve path variables ($path)
+  - Resolve command references ($command(args))
+  - Enforce context-specific resolution rules
+  - Detect variable reference cycles
 
-• Example:  
-  "TextDirectiveHandler" calls validationService.validateTextDirective(directive),  
-  throwing MeldError if directive is malformed.  
+• Key Components:
+  1. Dedicated Resolvers:
+     - TextResolver: Handles ${var}, prevents nested interpolation
+     - DataResolver: Handles #{data.field}, validates field access
+     - PathResolver: Enforces $HOMEPATH/$PROJECTPATH rules
+     - CommandResolver: Validates parameter types, no data vars in commands
+
+  2. Resolution Contexts:
+     - Path Context: Must start with $HOMEPATH/$PROJECTPATH
+     - Command Context: Only text/path vars, no data vars
+     - Text Context: All variable types, no nesting
+     - Data Context: Allows field access, no commands
+
+  3. Context Factory:
+     - Pre-defined contexts per directive type
+     - Enforces grammar rules
+     - Prevents invalid variable usage
+
+  4. Cycle Detection:
+     - Tracks variable resolution stack
+     - Detects circular references
+     - Separate from file import cycles (CircularityService)
+
+• Example Usage:
+```typescript
+// 1. Get appropriate context
+const context = ResolutionContextFactory.forRunDirective();
+
+// 2. Resolve with context validation
+const resolved = await resolutionService.resolveInContext(
+  value,
+  context
+);
+
+// 3. Handle specific resolution types
+const cmdResult = await resolutionService.resolveCommand(
+  cmd,
+  args,
+  context
+);
+```
 
 ─────────────────────────────────────────────────────────────────────────
-  6. InterpolationService
-─────────────────────────────────────────────────────────────────────────
-[See detailed design in service-interpolation.md]
-
-• Responsibility:  
-  - Expand or replace "${var}", "#{data.field}", path variables, etc.  
-  - Provide a clean API for directive logic to get fully-resolved strings  
-  - Possibly handle multi-step expansions (nested expansions)  
-
-• Example:  
-  "PathDirectiveHandler" -> interpolationService.resolveAll("$PROJECTPATH/${subdir}/file")  
-  -> final path string  
-
-─────────────────────────────────────────────────────────────────────────
-  7. DirectiveService
+  6. DirectiveService
 ─────────────────────────────────────────────────────────────────────────
 [See detailed design in service-directive.md]
 
 • Responsibility:  
-  - Own a registry of all directive handlers  
-  - Route inbound "DirectiveNode" to the correct handler (Text, Data, Import, etc.)  
-  - Each handler is purely business logic for that directive  
+  - Route directives to appropriate handlers
+  - Coordinate between ValidationService and ResolutionService
+  - Store raw values via StateService
+  - Manage directive dependencies via ResolutionService
 
-• Example Flow:
-   A. The Interpreter sees a DirectiveNode with kind="text"  
-   B. Calls directiveService.handleDirective(node, stateContext)  
-   C. directiveService looks up "TextDirectiveHandler," calls .execute(node, stateContext)  
-   D. That handler uses ValidationService + PathService + StateService, etc.  
+• Organization:
+  Definition Handlers:
+  - Store raw values in StateService
+  - No resolution logic
+  - Validate directive structure
 
-Still each directive is easy to test in isolation:  
-   const handler = new TextDirectiveHandler(...services)  
-   handler.execute(directiveNode, newState)  
+  Execution Handlers:
+  - Use ResolutionService for all variable resolution
+  - Pass appropriate resolution context
+  - Handle resolution errors
+
+• Example:  
+  "@text var = value" -> TextHandler stores raw value
+  "@run [$cmd(${arg})]" -> RunHandler uses ResolutionService
 
 ─────────────────────────────────────────────────────────────────────────
-  8. ParserService
+  7. ParserService
 ─────────────────────────────────────────────────────────────────────────
 • Responsibility:  
   - Parse Meld content → AST (MeldNode[]) using meld-ast
@@ -290,7 +337,7 @@ Still each directive is easy to test in isolation:
   - Provide error location details  
 
 ─────────────────────────────────────────────────────────────────────────
-  9. InterpreterService
+  8. InterpreterService
 ─────────────────────────────────────────────────────────────────────────
 [See detailed design in service-interpreter.md]
 
@@ -303,7 +350,7 @@ Still each directive is easy to test in isolation:
   - Provide top-level interpretMeld() function  
 
 ─────────────────────────────────────────────────────────────────────────
-  10. OutputService
+  9. OutputService
 ─────────────────────────────────────────────────────────────────────────
 [See detailed design in service-output.md]
 
@@ -323,12 +370,21 @@ Still each directive is easy to test in isolation:
   (2) For each node   +---------v----------+  (2a) If directive:
                      |  InterpreterService | -----> +---------------------+
                      +---------+----------+         | DirectiveService    |
-                               |                    |   (registry of      |
-                               |                    |   directiveHandlers)|
+                               |                    |   Definition vs.    |
+                               |                    |   Execution Handlers|
                      (2b) Node type?                +-------+------------+
                                |                            |
-                    +----------v-------------+ (calls out)   |
-                    |        StateService    | <------------+
+                    +----------v-------------+             |
+                    |     StateService      | <-----------+
+                    |   (Raw Value Store)   |      |
+                    +------------------------+      |
+                               |                   |
+                               v                   v
+                    +------------------------+ +-----------------+
+                    | ResolutionService     | |  Validation    |
+                    | • Context Factory     | |   Service      |
+                    | • Type Resolvers      | +-----------------+
+                    | • Cycle Detection     |
                     +------------------------+
                                |
                                v

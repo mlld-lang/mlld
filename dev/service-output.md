@@ -41,70 +41,272 @@ III. CODE STRUCTURE
 
 services/
  ├─ OutputService/
- │   ├─ OutputService.ts
- │   ├─ OutputService.test.ts
- │   └─ formats/
- │       ├─ MarkdownOutput.ts     # Simple MD conversion
- │       └─ LLMOutput.ts         # Wraps llmxml
+ │   ├─ OutputService.ts         # Main service implementation
+ │   ├─ OutputService.test.ts    # Tests next to implementation
+ │   ├─ IOutputService.ts        # Service interface
+ │   ├─ formats/
+ │   │   ├─ MarkdownOutput.ts    # Markdown format converter
+ │   │   ├─ MarkdownOutput.test.ts
+ │   │   ├─ LLMOutput.ts        # LLM XML format converter
+ │   │   └─ LLMOutput.test.ts
+ │   └─ errors/
+ │       ├─ OutputError.ts       # Output-specific errors
+ │       └─ OutputError.test.ts
 
-Example implementation:
+Inside IOutputService.ts:
 
---------------------------------------------------------------------------------
-// services/OutputService/OutputService.ts
-import { MeldNode } from 'meld-spec';
-import { convertToXml } from 'llmxml';
-import { InterpreterState } from '../StateService/InterpreterState';
-import { MarkdownOutput } from './formats/MarkdownOutput';
-import { LLMOutput } from './formats/LLMOutput';
+```typescript
+import type { MeldNode } from 'meld-spec';
+import type { IStateService } from '../StateService/IStateService';
 
-export type OutputFormat = 'md' | 'llm';
+export type OutputFormat = 'markdown' | 'llm';
 
-export class OutputService {
-  constructor(
-    private markdownOutput = new MarkdownOutput(),
-    private llmOutput = new LLMOutput()
-  ) {}
+export interface OutputOptions {
+  /**
+   * Whether to include state variables in the output
+   * @default false
+   */
+  includeState?: boolean;
 
-  public convert(nodes: MeldNode[], state: InterpreterState, format: OutputFormat): string {
-    switch (format) {
-      case 'md':
-        return this.markdownOutput.convert(nodes, state);
-      case 'llm':
-        return this.llmOutput.convert(nodes, state);
-      default:
-        throw new Error(`Unsupported format: ${format}`);
-    }
-  }
+  /**
+   * Whether to preserve original formatting (whitespace, newlines)
+   * @default true
+   */
+  preserveFormatting?: boolean;
+
+  /**
+   * Custom format-specific options
+   */
+  formatOptions?: Record<string, unknown>;
 }
 
-// services/OutputService/formats/LLMOutput.ts
-import { convertToXml } from 'llmxml';
+export interface IOutputService {
+  /**
+   * Convert Meld nodes and state to the specified output format
+   * @throws {MeldOutputError} If conversion fails
+   */
+  convert(
+    nodes: MeldNode[],
+    state: IStateService,
+    format: OutputFormat,
+    options?: OutputOptions
+  ): Promise<string>;
 
-export class LLMOutput {
-  public convert(nodes: MeldNode[], state: InterpreterState): string {
-    // Use llmxml's conversion, possibly with some pre/post processing
-    return convertToXml(nodes, {
-      // Any llmxml options we need
+  /**
+   * Register a custom format converter
+   */
+  registerFormat(
+    format: string,
+    converter: (nodes: MeldNode[], state: IStateService, options?: OutputOptions) => Promise<string>
+  ): void;
+
+  /**
+   * Check if a format is supported
+   */
+  supportsFormat(format: string): boolean;
+
+  /**
+   * Get a list of all supported formats
+   */
+  getSupportedFormats(): string[];
+}
+```
+
+Inside OutputService.ts:
+
+```typescript
+export class OutputService implements IOutputService {
+  private formatters = new Map<string, (
+    nodes: MeldNode[],
+    state: IStateService,
+    options?: OutputOptions
+  ) => Promise<string>>();
+
+  constructor() {
+    // Register default formatters
+    this.registerFormat('markdown', this.convertToMarkdown.bind(this));
+    this.registerFormat('llm', this.convertToLLMXML.bind(this));
+
+    logger.debug('OutputService initialized with default formatters', {
+      formats: Array.from(this.formatters.keys())
     });
   }
-}
 
-// services/OutputService/formats/MarkdownOutput.ts
-export class MarkdownOutput {
-  public convert(nodes: MeldNode[], state: InterpreterState): string {
-    // Simple conversion to Markdown
-    // Most nodes can remain as-is
-    const lines: string[] = [];
-    for (const node of nodes) {
-      if (node.type === 'Text') {
-        lines.push(node.content);
-      }
-      // Handle other node types...
+  async convert(
+    nodes: MeldNode[],
+    state: IStateService,
+    format: OutputFormat,
+    options?: OutputOptions
+  ): Promise<string> {
+    const opts = { 
+      includeState: false,
+      preserveFormatting: true,
+      formatOptions: {},
+      ...options 
+    };
+    
+    logger.debug('Converting output', {
+      format,
+      nodeCount: nodes.length,
+      options: opts
+    });
+
+    const formatter = this.formatters.get(format);
+    if (!formatter) {
+      throw new MeldOutputError(`Unsupported format: ${format}`, format);
     }
-    return lines.join('\n');
+
+    try {
+      const result = await formatter(nodes, state, opts);
+      
+      logger.debug('Successfully converted output', {
+        format,
+        resultLength: result.length
+      });
+
+      return result;
+    } catch (error) {
+      logger.error('Failed to convert output', {
+        format,
+        error
+      });
+
+      if (error instanceof MeldOutputError) {
+        throw error;
+      }
+
+      throw new MeldOutputError(
+        'Failed to convert output',
+        format,
+        error instanceof Error ? error : undefined
+      );
+    }
+  }
+
+  registerFormat(
+    format: string,
+    converter: (nodes: MeldNode[], state: IStateService, options?: OutputOptions) => Promise<string>
+  ): void {
+    if (!format || typeof format !== 'string') {
+      throw new Error('Format must be a non-empty string');
+    }
+    if (typeof converter !== 'function') {
+      throw new Error('Converter must be a function');
+    }
+
+    this.formatters.set(format, converter);
+    logger.debug('Registered format converter', { format });
+  }
+
+  supportsFormat(format: string): boolean {
+    return this.formatters.has(format);
+  }
+
+  getSupportedFormats(): string[] {
+    return Array.from(this.formatters.keys());
+  }
+
+  private async convertToMarkdown(
+    nodes: MeldNode[],
+    state: IStateService,
+    options: Required<OutputOptions>
+  ): Promise<string> {
+    try {
+      let output = '';
+
+      // Add state variables if requested
+      if (options.includeState) {
+        output += this.formatStateVariables(state);
+        if (nodes.length > 0) {
+          output += '\n\n';
+        }
+      }
+
+      // Process nodes
+      for (const node of nodes) {
+        output += await this.nodeToMarkdown(node, options);
+      }
+
+      // Clean up extra newlines if not preserving formatting
+      if (!options.preserveFormatting) {
+        output = output.replace(/\n{3,}/g, '\n\n').trim();
+      }
+
+      return output;
+    } catch (error) {
+      throw new MeldOutputError(
+        'Failed to convert to markdown',
+        'markdown',
+        error instanceof Error ? error : undefined
+      );
+    }
+  }
+
+  private async convertToLLMXML(
+    nodes: MeldNode[],
+    state: IStateService,
+    options: Required<OutputOptions>
+  ): Promise<string> {
+    try {
+      let output = '<meld>';
+
+      // Add state variables if requested
+      if (options.includeState) {
+        output += '\n  <state>';
+        output += await this.stateToXML(state);
+        output += '\n  </state>';
+      }
+
+      // Process nodes
+      if (nodes.length > 0) {
+        output += '\n  <content>';
+        for (const node of nodes) {
+          output += await this.nodeToXML(node, options);
+        }
+        output += '\n  </content>';
+      }
+
+      output += '\n</meld>';
+
+      // Clean up extra newlines if not preserving formatting
+      if (!options.preserveFormatting) {
+        output = output.replace(/\n{3,}/g, '\n\n').trim();
+      }
+
+      return output;
+    } catch (error) {
+      throw new MeldOutputError(
+        'Failed to convert to LLM XML',
+        'llm',
+        error instanceof Error ? error : undefined
+      );
+    }
+  }
+
+  // Helper methods for state formatting
+  private formatStateVariables(state: IStateService): string {
+    // ... implementation ...
+  }
+
+  private async nodeToMarkdown(
+    node: MeldNode,
+    options: Required<OutputOptions>
+  ): Promise<string> {
+    // ... implementation ...
+  }
+
+  private async nodeToXML(
+    node: MeldNode,
+    options: Required<OutputOptions>
+  ): Promise<string> {
+    // ... implementation ...
+  }
+
+  private async stateToXML(state: IStateService): Promise<string> {
+    // ... implementation ...
   }
 }
---------------------------------------------------------------------------------
+```
 
 ────────────────────────────────────────────────────────────────────────
 IV. TESTING STRATEGY

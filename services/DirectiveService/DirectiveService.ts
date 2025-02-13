@@ -136,6 +136,7 @@ export class DirectiveService implements IDirectiveService {
     });
 
     try {
+      // Value is already interpolated by meld-ast
       await this.stateService!.setTextVar(directive.name, directive.value);
       
       logger.debug('Text directive processed successfully', {
@@ -165,10 +166,11 @@ export class DirectiveService implements IDirectiveService {
     });
 
     try {
-      // Parse the value if it's a string
-      const value = typeof directive.value === 'string' 
-        ? JSON.parse(directive.value)
-        : directive.value;
+      // Value is already interpolated by meld-ast
+      let value = directive.value;
+      if (typeof value === 'string') {
+        value = JSON.parse(value);
+      }
 
       await this.stateService!.setDataVar(directive.name, value);
       
@@ -201,25 +203,25 @@ export class DirectiveService implements IDirectiveService {
     });
 
     try {
-      // Resolve the import path
-      const resolvedPath = await this.pathService!.resolvePath(directive.path);
+      // Path is already interpolated by meld-ast
+      const fullPath = await this.pathService!.resolvePath(directive.path);
       
       // Check for circular imports
-      this.circularityService!.beginImport(resolvedPath);
+      this.circularityService!.beginImport(fullPath);
 
       try {
         // Check if file exists
-        if (!await this.fileSystemService!.exists(resolvedPath)) {
-          throw new Error(`Import file not found: ${resolvedPath}`);
+        if (!await this.fileSystemService!.exists(fullPath)) {
+          throw new Error(`Import file not found: ${fullPath}`);
         }
 
         // Create a child state for the import
         const childState = await this.stateService!.createChildState();
 
         // Read the file content
-        const content = await this.fileSystemService!.readFile(resolvedPath);
+        const content = await this.fileSystemService!.readFile(fullPath);
 
-        // If a section is specified, extract it
+        // If a section is specified, extract it (section name is already interpolated)
         let processedContent = content;
         if (directive.section) {
           processedContent = await this.extractSection(
@@ -233,18 +235,18 @@ export class DirectiveService implements IDirectiveService {
         const parsedNodes = await this.parserService!.parse(processedContent);
         await this.interpreterService!.interpret(parsedNodes, {
           initialState: childState,
-          filePath: resolvedPath,
+          filePath: fullPath,
           mergeState: true
         });
 
         logger.debug('Import content processed', {
-          path: resolvedPath,
+          path: fullPath,
           section: directive.section,
           location: node.location
         });
       } finally {
         // Always end import tracking, even if there was an error
-        this.circularityService!.endImport(resolvedPath);
+        this.circularityService!.endImport(fullPath);
       }
     } catch (error) {
       logger.error('Failed to process import directive', {
@@ -387,25 +389,25 @@ export class DirectiveService implements IDirectiveService {
     });
 
     try {
-      // Resolve the embed path
-      const resolvedPath = await this.pathService!.resolvePath(directive.path);
+      // Path is already interpolated by meld-ast
+      const fullPath = await this.pathService!.resolvePath(directive.path);
       
       // Check for circular imports (embeds can also cause cycles)
-      this.circularityService!.beginImport(resolvedPath);
+      this.circularityService!.beginImport(fullPath);
 
       try {
         // Check if file exists
-        if (!await this.fileSystemService!.exists(resolvedPath)) {
-          throw new Error(`Embed file not found: ${resolvedPath}`);
+        if (!await this.fileSystemService!.exists(fullPath)) {
+          throw new Error(`Embed file not found: ${fullPath}`);
         }
 
         // Create a child state for the embed
         const childState = await this.stateService!.createChildState();
 
         // Read the file content
-        const content = await this.fileSystemService!.readFile(resolvedPath);
+        const content = await this.fileSystemService!.readFile(fullPath);
 
-        // If a section is specified, extract it
+        // If a section is specified, extract it (section name is already interpolated)
         let processedContent = content;
         if (directive.section) {
           processedContent = await this.extractSection(
@@ -420,7 +422,7 @@ export class DirectiveService implements IDirectiveService {
           processedContent = await this.formatContent(
             processedContent,
             directive.format,
-            resolvedPath
+            fullPath
           );
         }
 
@@ -428,19 +430,19 @@ export class DirectiveService implements IDirectiveService {
         const parsedNodes = await this.parserService!.parse(processedContent);
         await this.interpreterService!.interpret(parsedNodes, {
           initialState: childState,
-          filePath: resolvedPath,
+          filePath: fullPath,
           mergeState: true
         });
 
         logger.debug('Embed content processed', {
-          path: resolvedPath,
+          path: fullPath,
           section: directive.section,
           format: directive.format,
           location: node.location
         });
       } finally {
         // Always end import tracking, even if there was an error
-        this.circularityService!.endImport(resolvedPath);
+        this.circularityService!.endImport(fullPath);
       }
     } catch (error) {
       logger.error('Failed to process embed directive', {

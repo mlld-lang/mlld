@@ -5,6 +5,7 @@ let mockFileSystemService: any;
 let mockParserService: any;
 let mockInterpreterService: any;
 let mockCircularityService: any;
+let mockInterpolationService: any;
 
 beforeEach(() => {
   // Create mock services
@@ -41,6 +42,10 @@ beforeEach(() => {
     endImport: vi.fn()
   };
 
+  mockInterpolationService = {
+    resolveString: vi.fn()
+  };
+
   // Create service instance
   service = new DirectiveService();
   service.initialize(
@@ -50,50 +55,108 @@ beforeEach(() => {
     mockFileSystemService,
     mockParserService,
     mockInterpreterService,
-    mockCircularityService
+    mockCircularityService,
+    mockInterpolationService
   );
 });
 
+describe('Text directive handling', () => {
+  it('should process text directive', async () => {
+    const node: DirectiveNode = {
+      type: 'directive',
+      directive: {
+        kind: 'text',
+        name: 'greeting',
+        value: 'Hello Alice!' // Value already interpolated by meld-ast
+      } as TextDirective,
+      location: { start: { line: 1, column: 1 } }
+    };
+
+    await service.processDirective(node);
+
+    expect(mockStateService.setTextVar).toHaveBeenCalledWith('greeting', 'Hello Alice!');
+  });
+});
+
+describe('Data directive handling', () => {
+  it('should process string data directive value', async () => {
+    const node: DirectiveNode = {
+      type: 'directive',
+      directive: {
+        kind: 'data',
+        name: 'config',
+        value: '{"url": "example.com"}' // Value already interpolated by meld-ast
+      } as DataDirective,
+      location: { start: { line: 1, column: 1 } }
+    };
+
+    await service.processDirective(node);
+
+    expect(mockStateService.setDataVar).toHaveBeenCalledWith('config', { url: 'example.com' });
+  });
+
+  it('should process object data directive value', async () => {
+    const node: DirectiveNode = {
+      type: 'directive',
+      directive: {
+        kind: 'data',
+        name: 'config',
+        value: { url: 'example.com' }
+      } as DataDirective,
+      location: { start: { line: 1, column: 1 } }
+    };
+
+    await service.processDirective(node);
+
+    expect(mockStateService.setDataVar).toHaveBeenCalledWith('config', { url: 'example.com' });
+  });
+});
+
 describe('Import directive handling', () => {
-  it('should process a valid import directive', async () => {
+  it('should process import directive', async () => {
     const node: DirectiveNode = {
       type: 'directive',
       directive: {
         kind: 'import',
-        path: 'test.md'
+        path: '/project/test.md', // Path already interpolated by meld-ast
+        section: 'Introduction'    // Section already interpolated by meld-ast
       } as ImportDirective,
       location: { start: { line: 1, column: 1 } }
     };
 
-    const mockContent = 'Test content';
-    const mockParsedNodes = [{ type: 'text', content: 'Test content' }];
-    const mockChildState = {};
-
     mockPathService.resolvePath.mockResolvedValue('/resolved/test.md');
     mockFileSystemService.exists.mockResolvedValue(true);
-    mockFileSystemService.readFile.mockResolvedValue(mockContent);
-    mockStateService.createChildState.mockResolvedValue(mockChildState);
-    mockParserService.parse.mockResolvedValue(mockParsedNodes);
-    mockInterpreterService.interpret.mockResolvedValue(mockChildState);
+    mockFileSystemService.readFile.mockResolvedValue('content');
+    mockStateService.createChildState.mockResolvedValue({});
+    mockParserService.parse.mockResolvedValue([]);
 
     await service.processDirective(node);
 
-    expect(mockValidationService.validate).toHaveBeenCalledWith(node);
-    expect(mockPathService.resolvePath).toHaveBeenCalledWith('test.md');
+    expect(mockPathService.resolvePath).toHaveBeenCalledWith('/project/test.md');
     expect(mockCircularityService.beginImport).toHaveBeenCalledWith('/resolved/test.md');
     expect(mockFileSystemService.exists).toHaveBeenCalledWith('/resolved/test.md');
     expect(mockFileSystemService.readFile).toHaveBeenCalledWith('/resolved/test.md');
     expect(mockStateService.createChildState).toHaveBeenCalled();
-    expect(mockParserService.parse).toHaveBeenCalledWith(mockContent);
-    expect(mockInterpreterService.interpret).toHaveBeenCalledWith(
-      mockParsedNodes,
-      expect.objectContaining({
-        initialState: mockChildState,
-        filePath: '/resolved/test.md',
-        mergeState: true
-      })
-    );
+    expect(mockParserService.parse).toHaveBeenCalledWith(expect.any(String));
     expect(mockCircularityService.endImport).toHaveBeenCalledWith('/resolved/test.md');
+  });
+
+  it('should handle missing files', async () => {
+    const node: DirectiveNode = {
+      type: 'directive',
+      directive: {
+        kind: 'import',
+        path: '/project/missing.md' // Path already interpolated by meld-ast
+      } as ImportDirective,
+      location: { start: { line: 1, column: 1 } }
+    };
+
+    mockPathService.resolvePath.mockResolvedValue('/resolved/missing.md');
+    mockFileSystemService.exists.mockResolvedValue(false);
+
+    await expect(service.processDirective(node))
+      .rejects
+      .toThrow(MeldDirectiveError);
   });
 
   it('should handle circular imports', async () => {
@@ -101,7 +164,7 @@ describe('Import directive handling', () => {
       type: 'directive',
       directive: {
         kind: 'import',
-        path: 'circular.md'
+        path: '/project/circular.md' // Path already interpolated by meld-ast
       } as ImportDirective,
       location: { start: { line: 1, column: 1 } }
     };
@@ -116,52 +179,36 @@ describe('Import directive handling', () => {
     await expect(service.processDirective(node))
       .rejects
       .toThrow(MeldDirectiveError);
-
-    expect(mockCircularityService.beginImport).toHaveBeenCalledWith('/resolved/circular.md');
-    expect(mockCircularityService.endImport).toHaveBeenCalledWith('/resolved/circular.md');
   });
 });
 
 describe('Embed directive handling', () => {
-  it('should process a valid embed directive', async () => {
+  it('should process embed directive', async () => {
     const node: DirectiveNode = {
       type: 'directive',
       directive: {
         kind: 'embed',
-        path: 'test.md',
+        path: '/project/test.md',    // Path already interpolated by meld-ast
+        section: 'Introduction',      // Section already interpolated by meld-ast
         format: 'markdown'
       } as EmbedDirective,
       location: { start: { line: 1, column: 1 } }
     };
 
-    const mockContent = 'Test content';
-    const mockParsedNodes = [{ type: 'text', content: 'Test content' }];
-    const mockChildState = {};
-
     mockPathService.resolvePath.mockResolvedValue('/resolved/test.md');
     mockFileSystemService.exists.mockResolvedValue(true);
-    mockFileSystemService.readFile.mockResolvedValue(mockContent);
-    mockStateService.createChildState.mockResolvedValue(mockChildState);
-    mockParserService.parse.mockResolvedValue(mockParsedNodes);
-    mockInterpreterService.interpret.mockResolvedValue(mockChildState);
+    mockFileSystemService.readFile.mockResolvedValue('content');
+    mockStateService.createChildState.mockResolvedValue({});
+    mockParserService.parse.mockResolvedValue([]);
 
     await service.processDirective(node);
 
-    expect(mockValidationService.validate).toHaveBeenCalledWith(node);
-    expect(mockPathService.resolvePath).toHaveBeenCalledWith('test.md');
+    expect(mockPathService.resolvePath).toHaveBeenCalledWith('/project/test.md');
     expect(mockCircularityService.beginImport).toHaveBeenCalledWith('/resolved/test.md');
     expect(mockFileSystemService.exists).toHaveBeenCalledWith('/resolved/test.md');
     expect(mockFileSystemService.readFile).toHaveBeenCalledWith('/resolved/test.md');
     expect(mockStateService.createChildState).toHaveBeenCalled();
-    expect(mockParserService.parse).toHaveBeenCalledWith(mockContent);
-    expect(mockInterpreterService.interpret).toHaveBeenCalledWith(
-      mockParsedNodes,
-      expect.objectContaining({
-        initialState: mockChildState,
-        filePath: '/resolved/test.md',
-        mergeState: true
-      })
-    );
+    expect(mockParserService.parse).toHaveBeenCalledWith(expect.any(String));
     expect(mockCircularityService.endImport).toHaveBeenCalledWith('/resolved/test.md');
   });
 

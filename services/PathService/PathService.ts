@@ -9,22 +9,14 @@ const DEFAULT_OPTIONS: Required<PathOptions> = {
   allowOutsideBaseDir: false,
   mustExist: true,
   mustBeDirectory: false,
-  mustBeFile: false,
-  expandVariables: true
+  mustBeFile: false
 };
 
 export class PathService implements IPathService {
   private fileSystem!: IFileSystemService;
-  private pathVariables = new Map<string, string>();
   
   initialize(fileSystem: IFileSystemService): void {
     this.fileSystem = fileSystem;
-    
-    // Initialize default variables
-    this.setPathVariable('HOME', process.env.HOME || '');
-    this.setPathVariable('PROJECTPATH', process.cwd());
-    this.setPathVariable('~', process.env.HOME || '');
-    this.setPathVariable('.', process.cwd());
   }
   
   async resolvePath(inputPath: string, options?: PathOptions): Promise<string> {
@@ -41,11 +33,9 @@ export class PathService implements IPathService {
         throw new PathValidationError('Path contains null bytes', inputPath, PathErrorCode.NULL_BYTE);
       }
       
-      // Expand variables if needed
-      let resolvedPath = opts.expandVariables ? this.expandPathVariables(inputPath) : inputPath;
-      
-      // Resolve relative to base directory
-      resolvedPath = path.resolve(opts.baseDir, resolvedPath);
+      // Path variables are already interpolated by meld-ast
+      // Just resolve relative to base directory
+      const resolvedPath = path.resolve(opts.baseDir, inputPath);
       
       // Check if path is outside base directory
       if (!opts.allowOutsideBaseDir) {
@@ -119,46 +109,5 @@ export class PathService implements IPathService {
     } catch (error) {
       return false;
     }
-  }
-  
-  expandPathVariables(path: string): string {
-    let result = path;
-    
-    // Replace all variables
-    for (const [name, value] of this.pathVariables.entries()) {
-      const pattern = new RegExp(`\\$${name}|\\$\{${name}\}`, 'g');
-      result = result.replace(pattern, value);
-    }
-    
-    logger.debug('Expanded path variables', { original: path, expanded: result });
-    return result;
-  }
-  
-  setPathVariable(name: string, value: string): void {
-    if (!name || !value) {
-      throw new PathValidationError(
-        'Variable name and value cannot be empty',
-        name,
-        PathErrorCode.INVALID_VARIABLE
-      );
-    }
-    
-    this.pathVariables.set(name, value);
-    logger.debug('Set path variable', { name, value });
-  }
-  
-  getPathVariable(name: string): string | undefined {
-    return this.pathVariables.get(name);
-  }
-  
-  clearPathVariables(): void {
-    this.pathVariables.clear();
-    logger.debug('Cleared all path variables');
-    
-    // Reinitialize default variables
-    this.setPathVariable('HOME', process.env.HOME || '');
-    this.setPathVariable('PROJECTPATH', process.cwd());
-    this.setPathVariable('~', process.env.HOME || '');
-    this.setPathVariable('.', process.cwd());
   }
 } 

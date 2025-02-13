@@ -36,17 +36,28 @@ I. OVERVIEW & GOALS
 II. FOLDER STRUCTURE & FILE LAYOUT
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Following the previously recommended architecture:
+Following the services-based architecture:
 
 services/
  ├─ PathService/
- │   ├─ PathService.ts
- │   ├─ PathService.interfaces.ts     # optional for strongly typed interfaces
- │   └─ PathService.test.ts           # unit tests for all path logic
+ │   ├─ PathService.ts           # Main service implementation
+ │   ├─ PathService.test.ts      # Tests next to implementation
+ │   ├─ IPathService.ts          # Service interface
+ │   └─ errors/
+ │       ├─ PathError.ts         # Path-specific errors
+ │       └─ PathError.test.ts    # Error tests
  └─ FileSystemService/
-     ├─ FileSystemService.ts
-     ├─ FileSystemService.interfaces.ts  # optional
-     └─ FileSystemService.test.ts        # unit tests for file read/write etc
+     ├─ FileSystemService.ts     # Main service implementation
+     ├─ FileSystemService.test.ts # Tests next to implementation
+     ├─ IFileSystemService.ts    # Service interface
+     ├─ adapters/               # Filesystem adapters
+     │   ├─ RealFSAdapter.ts    # Production filesystem
+     │   ├─ MemFSAdapter.ts     # In-memory filesystem for tests
+     │   ├─ RealFSAdapter.test.ts
+     │   └─ MemFSAdapter.test.ts
+     └─ errors/
+         ├─ FSError.ts          # Filesystem-specific errors
+         └─ FSError.test.ts     # Error tests
 
 Tests may live under tests/unit/PathService.test.ts if you prefer a single "unit" folder. The layout above just clarifies each service's tests are placed alongside it.
 
@@ -66,15 +77,29 @@ A. RESPONSIBILITY & SCOPE
 import { PathVariable } from 'meld-spec';
 
 export interface IPathService {
-  enableTestMode(homePathOverride: string, projectPathOverride: string): void;
+  // Core path resolution
+  resolvePath(path: string, options?: PathOptions): Promise<string>;
+  resolvePaths(paths: string[], options?: PathOptions): Promise<string[]>;
+  isValidPath(path: string, options?: PathOptions): Promise<boolean>;
+
+  // Path operations
+  join(...paths: string[]): string;
+  resolve(...paths: string[]): string;
+  dirname(path: string): string;
+  basename(path: string): string;
+
+  // Test mode
+  enableTestMode(): void;
   disableTestMode(): void;
+  isTestMode(): boolean;
+}
 
-  setHomePath(actualHome: string): void;
-  setProjectPath(actualProject: string): void;
-
-  resolvePath(meldPath: string): Promise<string>;   // e.g. $PROJECTPATH/sub/file.txt -> /real/abs/path
-  joinPaths(...parts: string[]): Promise<string>;
-  isAbsolute(testPath: string): boolean;
+export interface PathOptions {
+  baseDir?: string;              // Base directory for relative paths
+  allowOutsideBaseDir?: boolean; // Allow paths outside base directory
+  mustExist?: boolean;           // Path must exist
+  mustBeDirectory?: boolean;     // Path must be a directory
+  mustBeFile?: boolean;          // Path must be a file
 }
 --------------------------------------------------------------------------------
 
@@ -190,12 +215,32 @@ B. INTERFACE
 
 --------------------------------------------------------------------------------
 export interface IFileSystemService {
-  readFile(filePath: string): Promise<string>;
-  writeFile(filePath: string, content: string): Promise<void>;
-  exists(filePath: string): Promise<boolean>;
-  ensureDir(dirPath: string): Promise<void>;
-
-  // Basic file operations only - no section extraction or fuzzy matching
+  // File operations
+  readFile(path: string): Promise<string>;
+  writeFile(path: string, content: string): Promise<void>;
+  exists(path: string): Promise<boolean>;
+  stat(path: string): Promise<Stats>;
+  
+  // Directory operations
+  readDir(path: string): Promise<string[]>;
+  ensureDir(path: string): Promise<void>;
+  isDirectory(path: string): Promise<boolean>;
+  
+  // Path operations
+  join(...paths: string[]): string;
+  resolve(...paths: string[]): string;
+  dirname(path: string): string;
+  basename(path: string): string;
+  
+  // Test mode
+  enableTestMode(): void;
+  disableTestMode(): void;
+  isTestMode(): boolean;
+  
+  // Mock file system (for testing)
+  mockFile(path: string, content: string): void;
+  mockDir(path: string): void;
+  clearMocks(): void;
 }
 --------------------------------------------------------------------------------
 
@@ -211,66 +256,78 @@ If readFile fails => service wraps raw error => MeldFileSystemError.
 
 D. IMPLEMENTATION DETAILS
 
-1) We can unify everything behind an "adapter" pattern:  
-   • RealFileSystemAdapter: uses Node's fs/promises.  
-   • MemfsFileSystemAdapter: uses memfs Volume or a Map.  
-   • FileSystemService constructor picks the adapter based on ENV or runtime config.
+1) We use an adapter pattern with two implementations:  
+   • RealFSAdapter: uses Node's fs-extra for production
+   • MemFSAdapter: uses in-memory Map for testing
 
-2) Example partial snippet (FileSystemService.ts):
+2) Example implementation (FileSystemService.ts):
 
 --------------------------------------------------------------------------------
-import { IFileSystemService } from './FileSystemService.interfaces';
-import { MeldFileSystemError } from '../../core/errors/MeldError';
+import { IFileSystemService } from './IFileSystemService';
+import { FSError } from './errors/FSError';
+import { IFSAdapter } from './adapters/IFSAdapter';
+import { RealFSAdapter } from './adapters/RealFSAdapter';
+import { MemFSAdapter } from './adapters/MemFSAdapter';
 
 export class FileSystemService implements IFileSystemService {
-  constructor(private adapter: IFileSystemAdapter) {}
+  private adapter: IFSAdapter;
+  private testMode = false;
 
-  async readFile(filePath: string): Promise<string> {
+  constructor() {
+    this.adapter = new RealFSAdapter();
+  }
+
+  enableTestMode(): void {
+    this.testMode = true;
+    this.adapter = new MemFSAdapter();
+  }
+
+  disableTestMode(): void {
+    this.testMode = false;
+    this.adapter = new RealFSAdapter();
+  }
+
+  isTestMode(): boolean {
+    return this.testMode;
+  }
+
+  async readFile(path: string): Promise<string> {
     try {
-      return await this.adapter.readFile(filePath);
-    } catch (rawError: any) {
-      throw new MeldFileSystemError(`Failed to read file: ${filePath}`, rawError);
+      return await this.adapter.readFile(path);
+    } catch (error) {
+      throw new FSError('Failed to read file', {
+        path,
+        code: 'READ_ERROR',
+        cause: error
+      });
     }
   }
 
-  async writeFile(filePath: string, content: string): Promise<void> {
-    try {
-      await this.adapter.writeFile(filePath, content);
-    } catch (rawError: any) {
-      throw new MeldFileSystemError(`Failed to write file: ${filePath}`, rawError);
+  // ... implement other interface methods ...
+
+  mockFile(path: string, content: string): void {
+    if (!this.testMode) {
+      throw new Error('Cannot mock files outside of test mode');
+    }
+    if (this.adapter instanceof MemFSAdapter) {
+      this.adapter.mockFile(path, content);
     }
   }
 
-  async exists(filePath: string): Promise<boolean> {
-    return this.adapter.exists(filePath);
-  }
-
-  async ensureDir(dirPath: string): Promise<void> {
-    try {
-      await this.adapter.ensureDir(dirPath);
-    } catch (rawError: any) {
-      throw new MeldFileSystemError(`Failed to ensure directory: ${dirPath}`, rawError);
+  mockDir(path: string): void {
+    if (!this.testMode) {
+      throw new Error('Cannot mock directories outside of test mode');
+    }
+    if (this.adapter instanceof MemFSAdapter) {
+      this.adapter.mockDir(path);
     }
   }
-}
---------------------------------------------------------------------------------
 
-3) **FileSystemAdapter** (One real, one for tests) might look like:
-
---------------------------------------------------------------------------------
-export interface IFileSystemAdapter {
-  readFile(path: string): Promise<string>;
-  writeFile(path: string, content: string): Promise<void>;
-  exists(path: string): Promise<boolean>;
-  ensureDir(path: string): Promise<void>;
-}
-
-export class RealFsAdapter implements IFileSystemAdapter {
-  // uses fs/promises behind the scenes...
-}
-
-export class InMemoryFsAdapter implements IFileSystemAdapter {
-  // uses memfs or whatever approach
+  clearMocks(): void {
+    if (this.adapter instanceof MemFSAdapter) {
+      this.adapter.clear();
+    }
+  }
 }
 --------------------------------------------------------------------------------
 

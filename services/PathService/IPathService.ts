@@ -29,12 +29,6 @@ export interface PathOptions {
    * @default false
    */
   mustBeFile?: boolean;
-  
-  /**
-   * Whether to expand variables in the path (e.g. $HOME, $PROJECTPATH)
-   * @default true
-   */
-  expandVariables?: boolean;
 }
 
 export interface IPathService {
@@ -45,6 +39,7 @@ export interface IPathService {
   
   /**
    * Resolve and validate a path according to the given options
+   * Path variables will already be interpolated by meld-ast
    * @throws {PathValidationError} If the path is invalid or doesn't meet the requirements
    */
   resolvePath(path: string, options?: PathOptions): Promise<string>;
@@ -60,25 +55,4 @@ export interface IPathService {
    * Returns true if valid, false otherwise
    */
   isValidPath(path: string, options?: PathOptions): Promise<boolean>;
-  
-  /**
-   * Expand variables in a path (e.g. $HOME, $PROJECTPATH)
-   * Returns the path with variables expanded
-   */
-  expandPathVariables(path: string): string;
-  
-  /**
-   * Set a path variable that can be expanded
-   */
-  setPathVariable(name: string, value: string): void;
-  
-  /**
-   * Get the value of a path variable
-   */
-  getPathVariable(name: string): string | undefined;
-  
-  /**
-   * Clear all path variables
-   */
-  clearPathVariables(): void;
 } 

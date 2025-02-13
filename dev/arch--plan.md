@@ -12,6 +12,7 @@ Below is a consolidated list of concrete changes needed to make the architecture
   ✓ PathService/  
   ✓ FileSystemService/  
   ✓ OutputService/  
+  • ResolutionService/  
 ✓ Within each service folder, have exactly:
   ✓ A main service file (e.g., PathService.ts)  
   ✓ A matching test file (e.g., PathService.test.ts)  
@@ -73,13 +74,64 @@ Below is a consolidated list of concrete changes needed to make the architecture
 6. Migrate Variable & State Logic into "StateService" [COMPLETED]
 ─────────────────────────────────────────────────────────────────────────
 ✓ Create "StateService/StateService.ts" with the structure shown in the design docs:
-  ✓ textVars, dataVars, pathVars, commands, plus import tracking.  
-  ✓ createChildState() for nested @import or @embed usage, then mergeChildState().  
-✓ Remove "state.ts," "state.test.ts," or "interpreter/state/state.js" references if they partially replicate this logic. Consolidated into the new StateService.  
-✓ Migrated the best parts of "interpreter/state/state.js" into "StateService.ts."  
+  ✓ Raw variable storage (textVars, dataVars, pathVars, commands)
+  ✓ No resolution logic (moved to ResolutionService)
+  ✓ createChildState() for nested @import or @embed usage
+  ✓ State hierarchy management
+✓ Remove "state.ts," "state.test.ts," or "interpreter/state/state.js" references
+✓ Migrated the best parts of "interpreter/state/state.js" into "StateService.ts"
 
 ─────────────────────────────────────────────────────────────────────────
-7. Implement a Proper "PathService" [COMPLETED]
+7. Create "ResolutionService" for Variable Resolution [TODO]
+─────────────────────────────────────────────────────────────────────────
+• Create ResolutionService with:
+  - Variable resolution (${var}, #{data}, $path)
+  - Command resolution ($command(args))
+  - Path resolution in various contexts
+  - Resolution context management
+  - Explicit cycle detection for variables
+  - Context validation rules
+• Add dedicated resolvers:
+  - TextResolver (with nested interpolation detection)
+  - DataResolver (with field access validation)
+  - PathResolver (enforcing $HOMEPATH/$PROJECTPATH)
+  - CommandResolver (validating parameter types)
+• Add ResolutionContextFactory:
+  - Pre-defined contexts for each directive type
+  - Enforces grammar rules per context
+  - Prevents invalid variable usage
+• Implement clear separation between:
+  - Variable reference cycles (in ResolutionService)
+  - File import cycles (in CircularityService)
+• Add comprehensive test coverage:
+  - Variable resolution in each context
+  - Cycle detection
+  - Edge cases (nested interpolation, invalid contexts)
+  - Command parameter validation
+• Update dependent services to use ResolutionService
+
+─────────────────────────────────────────────────────────────────────────
+8. Update DirectiveService for New Architecture [TODO]
+─────────────────────────────────────────────────────────────────────────
+• Reorganize DirectiveService into:
+  - Definition handlers (@text, @data, @path, @define)
+  - Execution handlers (@run, @embed, @import)
+• Update handlers to:
+  - Store raw values in StateService
+  - Use ResolutionService for all resolution
+  - Use ResolutionContextFactory for correct contexts
+  - Handle resolution errors properly
+• Add proper error handling:
+  - Validation errors from ValidationService
+  - Resolution errors from ResolutionService
+  - Execution errors from handlers
+• Update tests to verify:
+  - Correct context usage
+  - Error handling
+  - Integration with ResolutionService
+
+─────────────────────────────────────────────────────────────────────────
+9. Implement a Proper "PathService" [COMPLETED]
 ─────────────────────────────────────────────────────────────────────────
 ✓ Created PathService with:
   ✓ Path resolution and validation
@@ -92,7 +144,7 @@ Below is a consolidated list of concrete changes needed to make the architecture
   ✓ Migrated test coverage from path.test.ts
 
 ─────────────────────────────────────────────────────────────────────────
-8. Create a Proper "FileSystemService" [COMPLETED]
+10. Create a Proper "FileSystemService" [COMPLETED]
 ─────────────────────────────────────────────────────────────────────────
 ✓ Created FileSystemService with:
   ✓ Core file operations (readFile, writeFile, exists, stat)
@@ -105,7 +157,7 @@ Below is a consolidated list of concrete changes needed to make the architecture
   ✓ Migrated test coverage from fs-utils.test.ts
 
 ─────────────────────────────────────────────────────────────────────────
-9. "OutputService" to Handle Markdown vs. LLM XML
+11. "OutputService" to Handle Markdown vs. LLM XML
 ─────────────────────────────────────────────────────────────────────────
 [See detailed design in service-output.md]
 
@@ -117,7 +169,7 @@ Below is a consolidated list of concrete changes needed to make the architecture
 • Remove "CONVERTER.md" or unify it into a short doc in "OutputService/README.md" if desired.  
 
 ─────────────────────────────────────────────────────────────────────────
-10. Remove Or Rework "runMeld," "meld.ts," "cli.test.ts," Etc.
+12. Remove Or Rework "runMeld," "meld.ts," "cli.test.ts," Etc.
 ─────────────────────────────────────────────────────────────────────────
 • The old "runMeld" function in "meld.ts" or "cli.md" lumps together parse, interpret, and formatting in a single step. Under the new design:
   – We can keep a top-level "sdk/index.ts" that offers a unify function runMeld() if we want a single call. But internally, it calls:
@@ -128,7 +180,7 @@ Below is a consolidated list of concrete changes needed to make the architecture
 • "cli.test.ts," "cmd.ts," or "CLI.md" can be removed if we do not need a CLI. If we do keep a CLI, it should just be a thin wrapper calling the new services.  
 
 ─────────────────────────────────────────────────────────────────────────
-11. Clean Up Tests: Keep the Good Coverage, Delete Redundancies
+13. Clean Up Tests: Keep the Good Coverage, Delete Redundancies
 ─────────────────────────────────────────────────────────────────────────
 • Organize tests into "tests/unit/ServiceName.test.ts" and "tests/integration/...".  
 • Keep coverage from "embed.test.ts," "import.test.ts," "data.test.ts," etc. if they reflect real directive logic. Move them into "DirectiveService/handlers/tests/" or "integration."  
@@ -136,28 +188,28 @@ Below is a consolidated list of concrete changes needed to make the architecture
 • Maintain "Integration" tests that spin up the entire pipeline (ParserService → InterpreterService → OutputService).  
 
 ─────────────────────────────────────────────────────────────────────────
-12. Merge or Delete Partial or Duplicate Implementation Files
+14. Merge or Delete Partial or Duplicate Implementation Files
 ─────────────────────────────────────────────────────────────────────────
 • "location-helpers.ts," "location.ts," or "error-locations.test.ts" can be merged if we only need a single place to handle location adjustments.  
 • "meld-spec.d.ts" and "meld-ast.d.ts" can remain if they supply needed extra definitions but remove any partial duplication of official meld-ast or meld-spec.  
 • The "grammar" docs remain as reference, but integrate them into the new doc folder or remove references to old partial grammar code.  
 
 ─────────────────────────────────────────────────────────────────────────
-13. Update The "DESIGN DOCS TO BE REVIEWED AND IMPROVED"
+15. Update The "DESIGN DOCS TO BE REVIEWED AND IMPROVED"
 ─────────────────────────────────────────────────────────────────────────
 • Rewrite them to use consistent references to the new directory layout (services/ParserService, etc.).  
 • Remove repeated or contradictory sections that mention old code we are deleting.  
 • Reorder them so each service doc (PathService, FileSystemService, ValidationService, etc.) matches the final structure.  
 
 ─────────────────────────────────────────────────────────────────────────
-14. Simplify The Logging Approach [COMPLETED]
+16. Simplify The Logging Approach [COMPLETED]
 ─────────────────────────────────────────────────────────────────────────
 ✓ Created a centralized "logger.ts" in "core/utils/" using Winston.  
 ✓ Unified all logging into service-specific loggers with proper configuration.  
 ✓ Added structured logging with file and console output.  
 
 ─────────────────────────────────────────────────────────────────────────
-15. Final Clarifications
+17. Final Clarifications
 ─────────────────────────────────────────────────────────────────────────
 • No backward compatibility means we are free to remove everything not used in the final approach.  
 • The new architecture is fully services-based:
@@ -169,14 +221,22 @@ NEXT STEPS
 ─────────────────────────────────────────────────────────────────────────
 The next services to implement in order of dependency should be:
 
-1. ValidationService - This is needed by DirectiveService for validating directives
-2. DirectiveService - This is needed by InterpreterService for handling different directive types
-3. InterpreterService - This orchestrates the overall interpretation process
-4. OutputService - This handles the final output formatting
+1. ResolutionService - This is needed by DirectiveService for all variable resolution
+   • Start with core resolvers (Text, Data, Path, Command)
+   • Add ResolutionContextFactory
+   • Implement cycle detection
+   • Add context validation
+2. Updated StateService - This needs to be modified to focus on raw storage
+3. Updated DirectiveService - This needs to be reorganized to use ResolutionService
+   • Use ResolutionContextFactory
+   • Update error handling
+4. ValidationService - This is needed by DirectiveService for validating directives
+5. InterpreterService - This orchestrates the overall interpretation process
+6. OutputService - This handles the final output formatting
 
 This order ensures we build from the ground up, with each service having its dependencies available.
 
 ─────────────────────────────────────────────────────────────────────────
 CONCLUSION
 ─────────────────────────────────────────────────────────────────────────
-By applying these 15 sets of changes, we will create a cohesive, maintainable codebase that strictly follows the services-based design described in the updated architecture documents. This yields a simpler code layout, targeted tests, and a clear separation of concerns for Parsing, Interpreting, Validating, Managing State, Handling Directives, Resolving Paths, Reading Files, and Outputting results.
+By applying these 17 sets of changes, we will create a cohesive, maintainable codebase that strictly follows the services-based design described in the updated architecture documents. This yields a simpler code layout, targeted tests, and a clear separation of concerns for Parsing, Interpreting, Validating, Managing State, Handling Directives, Resolving Paths, Reading Files, and Outputting results.

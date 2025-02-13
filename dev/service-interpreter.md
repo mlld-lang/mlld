@@ -32,62 +32,211 @@ Here's how it fits into the flow:
 II. FILE & CLASS STRUCTURE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-A recommended place for the InterpreterService:
+Following the services-based architecture:
 
-services/  
-  ├─ InterpreterService/  
-  │   ├─ InterpreterService.ts  
-  │   ├─ InterpreterService.test.ts  
-  │   └─ (any sub-files if we want private helpers)  
+services/
+ ├─ InterpreterService/
+ │   ├─ InterpreterService.ts       # Main service implementation
+ │   ├─ InterpreterService.test.ts  # Tests next to implementation
+ │   ├─ IInterpreterService.ts      # Service interface
+ │   ├─ InterpreterOptions.ts       # Options for interpretation
+ │   └─ errors/
+ │       ├─ InterpreterError.ts     # Interpreter-specific errors
+ │       └─ InterpreterError.test.ts
+
+Inside IInterpreterService.ts:
+
+```typescript
+import type { MeldNode } from 'meld-spec';
+import type { IStateService } from '../StateService/IStateService';
+import type { IDirectiveService } from '../DirectiveService/IDirectiveService';
+
+export interface InterpreterOptions {
+  /**
+   * Initial state to use for interpretation
+   * If not provided, a new state will be created
+   */
+  initialState?: IStateService;
+
+  /**
+   * Current file path for error reporting
+   */
+  filePath?: string;
+
+  /**
+   * Whether to merge the final state back to the parent
+   * @default true
+   */
+  mergeState?: boolean;
+}
+
+export interface IInterpreterService {
+  /**
+   * Initialize the InterpreterService with required dependencies
+   */
+  initialize(
+    directiveService: IDirectiveService,
+    stateService: IStateService
+  ): void;
+
+  /**
+   * Interpret a sequence of Meld nodes
+   * @returns The final state after interpretation
+   * @throws {MeldInterpreterError} If interpretation fails
+   */
+  interpret(
+    nodes: MeldNode[],
+    options?: InterpreterOptions
+  ): Promise<IStateService>;
+
+  /**
+   * Interpret a single Meld node
+   * @returns The state after interpretation
+   * @throws {MeldInterpreterError} If interpretation fails
+   */
+  interpretNode(
+    node: MeldNode,
+    state: IStateService
+  ): Promise<IStateService>;
+
+  /**
+   * Create a new interpreter context with a child state
+   * Useful for nested interpretation (import/embed)
+   */
+  createChildContext(
+    parentState: IStateService,
+    filePath?: string
+  ): Promise<IStateService>;
+}
+```
 
 Inside InterpreterService.ts:
 
---------------------------------------------------------------------------------
-import { MeldNode, DirectiveNode, TextNode } from 'meld-spec';
-import { IDirectiveService } from '../DirectiveService/DirectiveService';
-import { IStateService } from '../StateService/StateService';
-import { MeldInterpretError } from '../../core/errors/MeldError';
-
-export interface IInterpreterService {
-  interpret(nodes: MeldNode[]): Promise<void>;  
-}
-
+```typescript
 export class InterpreterService implements IInterpreterService {
-  constructor(
-    private readonly directiveService: IDirectiveService,
-    private readonly stateService: IStateService
-  ) {}
+  private directiveService?: IDirectiveService;
+  private stateService?: IStateService;
+  private initialized = false;
 
-  public async interpret(nodes: MeldNode[]): Promise<void> {
-    for (const node of nodes) {
-      await this.handleNode(node);
+  initialize(
+    directiveService: IDirectiveService,
+    stateService: IStateService
+  ): void {
+    this.directiveService = directiveService;
+    this.stateService = stateService;
+    this.initialized = true;
+
+    logger.debug('InterpreterService initialized');
+  }
+
+  async interpret(
+    nodes: MeldNode[],
+    options?: InterpreterOptions
+  ): Promise<IStateService> {
+    this.ensureInitialized();
+
+    const opts = { mergeState: true, ...options };
+    let currentState = opts.initialState ?? this.stateService!.createChildState();
+
+    if (opts.filePath) {
+      currentState.setCurrentFilePath(opts.filePath);
+    }
+
+    logger.debug('Starting interpretation', {
+      nodeCount: nodes.length,
+      filePath: opts.filePath
+    });
+
+    try {
+      for (const node of nodes) {
+        currentState = await this.interpretNode(node, currentState);
+      }
+
+      // If mergeState is true and we have a parent state, merge back
+      if (opts.mergeState && opts.initialState) {
+        await opts.initialState.mergeChildState(currentState);
+      }
+
+      logger.debug('Interpretation completed successfully', {
+        nodeCount: nodes.length,
+        filePath: opts.filePath
+      });
+
+      return currentState;
+    } catch (error) {
+      logger.error('Interpretation failed', {
+        nodeCount: nodes.length,
+        filePath: opts.filePath,
+        error
+      });
+      throw error;
     }
   }
 
-  private async handleNode(node: MeldNode): Promise<void> {
-    switch (node.type) {
-      case 'Text':
-        this.handleTextNode(node);
-        break;
-      case 'Directive':
-        await this.handleDirectiveNode(node);
-        break;
-      default:
-        throw new MeldInterpretError(`Unknown node type: ${node.type}`);
+  async interpretNode(
+    node: MeldNode,
+    state: IStateService
+  ): Promise<IStateService> {
+    logger.debug('Interpreting node', {
+      type: node.type,
+      location: node.location
+    });
+
+    try {
+      switch (node.type) {
+        case 'text':
+          // Add text node to state
+          state.addNode(node);
+          break;
+
+        case 'directive':
+          // Process directive using DirectiveService
+          await this.directiveService!.processDirective(node);
+          break;
+
+        default:
+          throw new MeldInterpreterError(
+            `Unknown node type: ${node.type}`,
+            node.type,
+            node.location?.start
+          );
+      }
+
+      return state;
+    } catch (error) {
+      // Wrap non-MeldInterpreterErrors
+      if (!(error instanceof MeldInterpreterError)) {
+        throw new MeldInterpreterError(
+          error.message,
+          node.type,
+          node.location?.start
+        );
+      }
+      throw error;
     }
   }
 
-  private handleTextNode(node: TextNode) {
-    // Store or track literal text lines
-    this.stateService.addTextNode(node);
+  async createChildContext(
+    parentState: IStateService,
+    filePath?: string
+  ): Promise<IStateService> {
+    const childState = parentState.createChildState();
+    
+    if (filePath) {
+      childState.setCurrentFilePath(filePath);
+    }
+
+    logger.debug('Created child interpreter context', { filePath });
+    return childState;
   }
 
-  private async handleDirectiveNode(node: DirectiveNode) {
-    // Defer to the directive service
-    await this.directiveService.execute(node, this.stateService);
+  private ensureInitialized(): void {
+    if (!this.initialized) {
+      throw new Error('InterpreterService must be initialized before use');
+    }
   }
 }
---------------------------------------------------------------------------------
+```
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 III. DEPENDENCIES & ISOLATION STRATEGY
