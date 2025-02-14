@@ -81,14 +81,19 @@ export class InterpreterService implements IInterpreterService {
 
     try {
       switch (node.type) {
-        case 'text':
+        case 'Text':
           // Add text node to state
           state.addNode(node);
           break;
 
-        case 'directive':
+        case 'Directive':
           // Process directive using DirectiveService
           await this.directiveService!.processDirective(node);
+          break;
+
+        case 'CodeFence':
+          // Add code fence node to state as-is
+          state.addNode(node);
           break;
 
         default:

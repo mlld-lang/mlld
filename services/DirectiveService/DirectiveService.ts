@@ -15,6 +15,7 @@ import { DirectiveError, DirectiveErrorCode } from './errors/DirectiveError';
 // Import handlers
 import { TextDirectiveHandler } from './handlers/definition/TextDirectiveHandler';
 import { RunDirectiveHandler } from './handlers/execution/RunDirectiveHandler';
+import { EmbedDirectiveHandler } from './handlers/execution/EmbedDirectiveHandler';
 
 export class MeldLLMXMLError extends Error {
   constructor(
@@ -94,6 +95,14 @@ export class DirectiveService implements IDirectiveService {
       )
     );
 
+    this.registerHandler(
+      new EmbedDirectiveHandler(
+        this.validationService!,
+        this.resolutionService!,
+        this.stateService!
+      )
+    );
+
     // TODO: Register other handlers as they are implemented
   }
 
@@ -104,10 +113,20 @@ export class DirectiveService implements IDirectiveService {
     node: DirectiveNode,
     context: DirectiveContext
   ): Promise<void> {
-    // 1. Validate directive
+    // 1. Validate directive type is capitalized
+    if (node.type !== 'Directive') {
+      throw new DirectiveError(
+        'Invalid node type - must be "Directive"',
+        node.directive.kind,
+        DirectiveErrorCode.INVALID_NODE_TYPE,
+        { node, context }
+      );
+    }
+
+    // 2. Validate directive
     await this.validateDirective(node);
 
-    // 2. Get appropriate handler
+    // 3. Get appropriate handler
     const handler = this.handlers.get(node.directive.kind);
     if (!handler) {
       throw new DirectiveError(
@@ -119,7 +138,7 @@ export class DirectiveService implements IDirectiveService {
     }
 
     try {
-      // 3. Execute handler
+      // 4. Execute handler
       await handler.execute(node, context);
     } catch (error) {
       // Wrap handler errors
@@ -495,7 +514,6 @@ export class DirectiveService implements IDirectiveService {
     logger.debug('Processing embed directive', {
       path: directive.path,
       section: directive.section,
-      format: directive.format,
       fuzzy: directive.fuzzy,
       location: node.location
     });
@@ -529,15 +547,6 @@ export class DirectiveService implements IDirectiveService {
           );
         }
 
-        // Format the content if a format is specified
-        if (directive.format) {
-          processedContent = await this.formatContent(
-            processedContent,
-            directive.format,
-            fullPath
-          );
-        }
-
         // Parse and interpret the content
         const parsedNodes = await this.parserService!.parse(processedContent);
         await this.interpreterService!.interpret(parsedNodes, {
@@ -549,7 +558,6 @@ export class DirectiveService implements IDirectiveService {
         logger.debug('Embed content processed', {
           path: fullPath,
           section: directive.section,
-          format: directive.format,
           location: node.location
         });
       } finally {
@@ -560,7 +568,6 @@ export class DirectiveService implements IDirectiveService {
       logger.error('Failed to process embed directive', {
         path: directive.path,
         section: directive.section,
-        format: directive.format,
         location: node.location,
         error
       });
@@ -568,79 +575,6 @@ export class DirectiveService implements IDirectiveService {
         `Failed to embed content: ${error.message}`,
         'embed',
         node.location?.start
-      );
-    }
-  }
-
-  private async formatContent(
-    content: string,
-    format: string,
-    filePath: string
-  ): Promise<string> {
-    try {
-      // Determine format based on file extension if not specified
-      if (!format) {
-        const ext = filePath.split('.').pop()?.toLowerCase();
-        switch (ext) {
-          case 'md':
-          case 'markdown':
-            format = 'markdown';
-            break;
-          case 'js':
-          case 'jsx':
-            format = 'javascript';
-            break;
-          case 'ts':
-          case 'tsx':
-            format = 'typescript';
-            break;
-          case 'py':
-            format = 'python';
-            break;
-          case 'json':
-            format = 'json';
-            break;
-          case 'yml':
-          case 'yaml':
-            format = 'yaml';
-            break;
-          default:
-            format = 'text';
-        }
-      }
-
-      // Format the content based on the format type
-      switch (format.toLowerCase()) {
-        case 'markdown':
-          // For markdown, we keep it as is since it's already in markdown format
-          return content;
-
-        case 'code':
-        case 'javascript':
-        case 'typescript':
-        case 'python':
-        case 'json':
-        case 'yaml':
-          // For code formats, wrap in code block with language
-          return '```' + format + '\n' + content + '\n```';
-
-        case 'quote':
-          // For quotes, add > to each line
-          return content
-            .split('\n')
-            .map(line => '> ' + line)
-            .join('\n');
-
-        case 'text':
-        default:
-          // For plain text or unknown formats, return as is
-          return content;
-      }
-    } catch (error) {
-      throw new MeldLLMXMLError(
-        `Failed to format content: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        'FORMAT_ERROR',
-        error
       );
     }
   }
