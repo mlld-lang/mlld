@@ -61,7 +61,7 @@ export class ResolutionContextFactory {
 
   /**
    * Create context for @data directives
-   * Allows all variable types except commands
+   * Allows all variable types for flexible data definition
    */
   static forDataDirective(filePath?: string): ResolutionContext {
     return {
@@ -70,9 +70,30 @@ export class ResolutionContextFactory {
         text: true,
         data: true,
         path: true,
-        command: false
+        command: true
       },
       allowNested: true
+    };
+  }
+
+  /**
+   * Create context for @import directives
+   * Only allows path variables for security
+   */
+  static forImportDirective(filePath?: string): ResolutionContext {
+    return {
+      currentFilePath: filePath,
+      allowedVariableTypes: {
+        text: false,
+        data: false,
+        path: true,
+        command: false
+      },
+      allowNested: false,
+      pathValidation: {
+        requireAbsolute: true,
+        allowedRoots: ['HOMEPATH', 'PROJECTPATH']
+      }
     };
   }
 

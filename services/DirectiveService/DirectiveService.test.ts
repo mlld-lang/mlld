@@ -116,6 +116,7 @@ const createResolutionService = (): IResolutionService => ({
   resolveData: vi.fn() as unknown as (ref: string, context: ResolutionContext) => Promise<any>,
   resolvePath: vi.fn() as unknown as (path: string, context: ResolutionContext) => Promise<string>,
   resolveCommand: vi.fn() as unknown as (cmd: string, args: string[], context: ResolutionContext) => Promise<string>,
+  resolveContent: vi.fn() as unknown as (path: string) => Promise<string>,
   resolveInContext: vi.fn() as unknown as (value: string, context: ResolutionContext) => Promise<string>,
   validateResolution: vi.fn() as unknown as (value: string, context: ResolutionContext) => Promise<void>,
   detectCircularReferences: vi.fn() as unknown as (value: string) => Promise<void>

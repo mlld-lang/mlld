@@ -6,6 +6,7 @@ import { DataResolver } from './resolvers/DataResolver';
 import { PathResolver } from './resolvers/PathResolver';
 import { CommandResolver } from './resolvers/CommandResolver';
 import { resolutionLogger as logger } from '../../core/utils/logger';
+import { IFileSystemService } from '../FileSystemService/IFileSystemService';
 
 /**
  * Service responsible for resolving variables, commands, and paths in different contexts
@@ -16,7 +17,10 @@ export class ResolutionService implements IResolutionService {
   private pathResolver: PathResolver;
   private commandResolver: CommandResolver;
 
-  constructor(private stateService: IStateService) {
+  constructor(
+    private stateService: IStateService,
+    private fileSystemService: IFileSystemService
+  ) {
     this.textResolver = new TextResolver(stateService);
     this.dataResolver = new DataResolver(stateService);
     this.pathResolver = new PathResolver(stateService);
@@ -50,6 +54,20 @@ export class ResolutionService implements IResolutionService {
    */
   async resolveCommand(cmd: string, args: string[], context: ResolutionContext): Promise<string> {
     return this.commandResolver.resolve(cmd, args, context);
+  }
+
+  /**
+   * Resolve content from a file path
+   */
+  async resolveContent(path: string): Promise<string> {
+    if (!await this.fileSystemService.exists(path)) {
+      throw new ResolutionError(
+        `File not found: ${path}`,
+        ResolutionErrorCode.INVALID_PATH,
+        { value: path }
+      );
+    }
+    return this.fileSystemService.readFile(path);
   }
 
   /**

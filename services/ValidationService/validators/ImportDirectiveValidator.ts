@@ -1,28 +1,40 @@
-import type { DirectiveNode, ImportDirective } from 'meld-spec';
+import { DirectiveNode, ImportDirective } from 'meld-spec';
 import { MeldDirectiveError } from '../../../core/errors/MeldDirectiveError';
 
+/**
+ * Validates @import directives
+ */
 export function validateImportDirective(node: DirectiveNode): void {
   const directive = node.directive as ImportDirective;
   
-  // Check required fields from meld-spec
+  // Validate path
   if (!directive.path || typeof directive.path !== 'string') {
     throw new MeldDirectiveError(
-      'Import directive requires a "path" property (string)',
+      'Import directive requires a path parameter',
       'import',
       node.location?.start
     );
   }
   
-  // Path cannot be empty
+  // Validate path format
+  if (directive.path.includes('..')) {
+    throw new MeldDirectiveError(
+      'Import path cannot contain parent directory references (..)',
+      'import',
+      node.location?.start
+    );
+  }
+  
+  // Validate path is not empty
   if (directive.path.trim() === '') {
     throw new MeldDirectiveError(
-      'Import directive path cannot be empty',
+      'Import path cannot be empty',
       'import',
       node.location?.start
     );
   }
   
-  // Optional fields validation
+  // Check required fields from meld-spec
   if (directive.section !== undefined && typeof directive.section !== 'string') {
     throw new MeldDirectiveError(
       'Import directive "section" property must be a string if provided',

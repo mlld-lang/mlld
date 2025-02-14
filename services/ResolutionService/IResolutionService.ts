@@ -64,6 +64,11 @@ export interface IResolutionService {
   resolveCommand(cmd: string, args: string[], context: ResolutionContext): Promise<string>;
 
   /**
+   * Resolve content from a file path
+   */
+  resolveContent(path: string): Promise<string>;
+
+  /**
    * Resolve any value based on the provided context rules
    */
   resolveInContext(value: string, context: ResolutionContext): Promise<string>;

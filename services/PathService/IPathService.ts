@@ -45,6 +45,12 @@ export interface PathOptions {
  */
 export interface IPathService {
   /**
+   * Initialize the path service with a file system service.
+   * Must be called before using any other methods.
+   */
+  initialize(fileSystem: IFileSystemService): void;
+
+  /**
    * Enable test mode for path operations.
    * In test mode, certain validations may be relaxed or mocked.
    */
@@ -59,6 +65,16 @@ export interface IPathService {
    * Check if test mode is enabled.
    */
   isTestMode(): boolean;
+
+  /**
+   * Resolve a path to its absolute form.
+   * This includes resolving '..' and '.' segments.
+   * 
+   * @param filePath The path to resolve
+   * @param baseDir Optional base directory to resolve relative paths against
+   * @returns The resolved absolute path
+   */
+  resolvePath(filePath: string, baseDir?: string): string;
 
   /**
    * Validate a path according to the specified options.

@@ -14,8 +14,10 @@ import { DirectiveError, DirectiveErrorCode } from './errors/DirectiveError';
 
 // Import handlers
 import { TextDirectiveHandler } from './handlers/definition/TextDirectiveHandler';
+import { DataDirectiveHandler } from './handlers/definition/DataDirectiveHandler';
 import { RunDirectiveHandler } from './handlers/execution/RunDirectiveHandler';
 import { EmbedDirectiveHandler } from './handlers/execution/EmbedDirectiveHandler';
+import { ImportDirectiveHandler } from './handlers/execution/ImportDirectiveHandler';
 
 export class MeldLLMXMLError extends Error {
   constructor(
@@ -86,6 +88,14 @@ export class DirectiveService implements IDirectiveService {
       )
     );
 
+    this.registerHandler(
+      new DataDirectiveHandler(
+        this.validationService!,
+        this.stateService!,
+        this.resolutionService!
+      )
+    );
+
     // Execution handlers
     this.registerHandler(
       new RunDirectiveHandler(
@@ -103,7 +113,17 @@ export class DirectiveService implements IDirectiveService {
       )
     );
 
-    // TODO: Register other handlers as they are implemented
+    this.registerHandler(
+      new ImportDirectiveHandler(
+        this.validationService!,
+        this.stateService!,
+        this.resolutionService!,
+        this.fileSystemService!,
+        this.parserService!,
+        this.interpreterService!,
+        this.circularityService!
+      )
+    );
   }
 
   /**
