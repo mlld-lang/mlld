@@ -127,8 +127,8 @@ export class PathService implements IPathService {
   /**
    * Normalize a path by resolving '..' and '.' segments
    */
-  normalizePath(path: string): string {
-    return path.normalize(path);
+  normalizePath(pathStr: string): string {
+    return path.normalize(pathStr);
   }
 
   /**

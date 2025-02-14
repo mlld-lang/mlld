@@ -9,7 +9,7 @@ export class ParserService implements IParserService {
   async parse(content: string): Promise<MeldNode[]> {
     try {
       if (!content) {
-        throw new MeldParseError('Empty content provided');
+        throw new MeldParseError('Empty content provided', { line: 1, column: 1 });
       }
       
       logger.debug('Parsing Meld content', { contentLength: content.length });
@@ -25,18 +25,24 @@ export class ParserService implements IParserService {
       
       // Convert meld-ast ParseError to our MeldParseError
       if (this.isParseError(error)) {
-        const position: Position = {
-          line: error.location.start.line,
-          column: error.location.start.column
+        const location: Location = {
+          start: {
+            line: error.location.start.line,
+            column: error.location.start.column
+          },
+          end: {
+            line: error.location.end.line,
+            column: error.location.end.column
+          }
         };
-        throw new MeldParseError(error.message, position);
+        throw new MeldParseError(error.message, location);
       }
       
       // Wrap unknown errors in MeldParseError
-      if (error instanceof Error) {
-        throw new MeldParseError(error.message);
-      }
-      throw new MeldParseError('Unknown parsing error');
+      throw new MeldParseError(
+        error instanceof Error ? error.message : 'Unknown error',
+        { line: 1, column: 1 }
+      );
     }
   }
 
@@ -69,10 +75,10 @@ export class ParserService implements IParserService {
       return nodes;
     } catch (error) {
       // Create new error with location instead of modifying existing
-      if (error instanceof MeldParseError && error.location && filePath) {
+      if (error instanceof MeldParseError) {
         const location: Location = {
-          start: error.location.start,
-          end: error.location.end,
+          start: error.location?.start ?? { line: 1, column: 1 },
+          end: error.location?.end ?? { line: 1, column: 1 },
           filePath
         };
         throw new MeldParseError(error.message, location);
@@ -82,8 +88,15 @@ export class ParserService implements IParserService {
   }
 
   private isParseError(error: unknown): error is ParseError {
-    return error instanceof Error && 
-           'location' in error && 
-           typeof (error as any).location?.start?.line === 'number';
+    return (
+      typeof error === 'object' &&
+      error !== null &&
+      'message' in error &&
+      'location' in error &&
+      typeof error.location === 'object' &&
+      error.location !== null &&
+      'start' in error.location &&
+      'end' in error.location
+    );
   }
 } 
