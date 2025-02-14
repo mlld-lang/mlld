@@ -1,8 +1,8 @@
 import { vi, beforeEach } from 'vitest';
 import type { DirectiveNode, MeldNode } from 'meld-spec';
-import { InterpreterState } from '../../src/interpreter/state/state';
-import { ErrorFactory } from '../../src/interpreter/errors/factory';
-import { HandlerContext } from '../../src/interpreter/directives/types';
+import { InterpreterState } from '../../_old/src/interpreter/state/state';
+import { ErrorFactory } from '../../_old/src/interpreter/errors/factory';
+import { HandlerContext } from '../../_old/src/interpreter/directives/types';
 import { embedDirectiveHandler, importDirectiveHandler } from './directive-handlers';
 
 // Mock file system state

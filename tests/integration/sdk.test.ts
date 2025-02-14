@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { runMeld } from '../../src/sdk';
+import { runMeld } from '../../_old/src/sdk';
 import { existsSync } from 'fs';
 import { resolve, join, dirname, extname, basename } from 'path';
 import { readFile, writeFile } from 'fs/promises';

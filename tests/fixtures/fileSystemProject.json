@@ -1,0 +1,18 @@
+{
+  "dirs": [
+    "project/empty-dir",
+    "project/nested/deep/dir",
+    "project/list-dir",
+    "project/stats-dir"
+  ],
+  "files": {
+    "project/test.txt": "Hello, World!",
+    "project/exists.txt": "I exist",
+    "project/stats.txt": "File for testing stats",
+    "project/list-dir/file1.txt": "Content 1",
+    "project/list-dir/file2.txt": "Content 2",
+    "project/nested/deep/dir/file.txt": "Deeply nested file",
+    "project/stats-dir/regular.txt": "Regular file",
+    "project/normalize/./path/../file.txt": "Normalized path test"
+  }
+} 

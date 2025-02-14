@@ -1,7 +1,7 @@
 import type { DirectiveNode } from 'meld-spec';
-import { InterpreterState } from '../../src/interpreter/state/state';
-import { ErrorFactory } from '../../src/interpreter/errors/factory';
-import { DirectiveHandler, HandlerContext } from '../../src/interpreter/directives/types';
+import { InterpreterState } from '../../_old/src/interpreter/state/state';
+import { ErrorFactory } from '../../_old/src/interpreter/errors/factory';
+import { DirectiveHandler, HandlerContext } from '../../_old/src/interpreter/directives/types';
 import { vi } from 'vitest';
 import type { MeldNode } from 'meld-spec';
 

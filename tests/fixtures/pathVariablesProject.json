@@ -1,0 +1,11 @@
+{
+  "dirs": [
+    "home/user",
+    "home/user/project/src"
+  ],
+  "files": {
+    "home/user/file.txt": "content",
+    "home/user/project/src/file.txt": "content",
+    "home/user/project/src/nested.txt": "nested content"
+  }
+} 

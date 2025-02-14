@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { cmd } from '../../src/cli/cmd';
+import { cmd } from '../../_old/src/cli/cmd';
 import * as pathModule from 'path';
-import { TestContext } from '../../src/interpreter/__tests__/test-utils';
+import { TestContext } from '../../_old/src/interpreter/__tests__/test-utils';
 
 // Mock path module
 vi.mock('path', async () => {
-  const { createPathMock } = await import('../../tests/__mocks__/path');
+  const { createPathMock } = await import('../__mocks__/path');
   return createPathMock({
     testRoot: '/Users/adam/dev/meld/test/_tmp',
     testHome: '/Users/adam/dev/meld/test/_tmp/home',
@@ -14,16 +14,16 @@ vi.mock('path', async () => {
 });
 
 // Import path utils after mock setup
-import { pathTestUtils } from '../../tests/__mocks__/path';
+import { pathTestUtils } from '../__mocks__/path';
 
 // Mock fs module
-vi.mock('fs', () => import('../../src/__mocks__/fs'));
+vi.mock('fs', () => import('../../_old/src/__mocks__/fs'));
 
 // Mock fs/promises module
-vi.mock('fs/promises', () => import('../../src/__mocks__/fs-promises'));
+vi.mock('fs/promises', () => import('../../_old/src/__mocks__/fs-promises'));
 
 // Mock fs-extra module
-vi.mock('fs-extra', () => import('../../src/__mocks__/fs-extra'));
+vi.mock('fs-extra', () => import('../../_old/src/__mocks__/fs-extra'));
 
 describe('CLI Integration Tests', () => {
   let context: TestContext;
