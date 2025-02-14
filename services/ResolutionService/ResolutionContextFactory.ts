@@ -11,9 +11,12 @@ export class ResolutionContextFactory {
   static forTextDirective(filePath?: string): ResolutionContext {
     return {
       currentFilePath: filePath,
-      allowPathVars: true,
-      allowCommands: true,
-      allowDataFields: true,
+      allowedVariableTypes: {
+        text: true,
+        data: true,
+        path: true,
+        command: true
+      },
       allowNested: true
     };
   }
@@ -25,24 +28,34 @@ export class ResolutionContextFactory {
   static forRunDirective(filePath?: string): ResolutionContext {
     return {
       currentFilePath: filePath,
-      allowPathVars: true,
-      allowCommands: true,
-      allowDataFields: false,
+      allowedVariableTypes: {
+        text: true,
+        data: false,
+        path: true,
+        command: true
+      },
       allowNested: false
     };
   }
 
   /**
    * Create context for @path directives
-   * Only allows path variables, no commands or data fields
+   * Only allows path variables, requires absolute paths
    */
   static forPathDirective(filePath?: string): ResolutionContext {
     return {
       currentFilePath: filePath,
-      allowPathVars: true,
-      allowCommands: false,
-      allowDataFields: false,
-      allowNested: false
+      allowedVariableTypes: {
+        text: false,
+        data: false,
+        path: true,
+        command: false
+      },
+      allowNested: false,
+      pathValidation: {
+        requireAbsolute: true,
+        allowedRoots: ['HOMEPATH', 'PROJECTPATH']
+      }
     };
   }
 
@@ -53,9 +66,12 @@ export class ResolutionContextFactory {
   static forDataDirective(filePath?: string): ResolutionContext {
     return {
       currentFilePath: filePath,
-      allowPathVars: true,
-      allowCommands: false,
-      allowDataFields: true,
+      allowedVariableTypes: {
+        text: true,
+        data: true,
+        path: true,
+        command: false
+      },
       allowNested: true
     };
   }
@@ -67,10 +83,34 @@ export class ResolutionContextFactory {
   static forCommandParameters(filePath?: string): ResolutionContext {
     return {
       currentFilePath: filePath,
-      allowPathVars: false,
-      allowCommands: false,
-      allowDataFields: false,
+      allowedVariableTypes: {
+        text: true,
+        data: false,
+        path: false,
+        command: false
+      },
       allowNested: false
+    };
+  }
+
+  /**
+   * Create context for path resolution
+   * Only allows path variables and requires absolute paths
+   */
+  static forPathResolution(filePath?: string): ResolutionContext {
+    return {
+      currentFilePath: filePath,
+      allowedVariableTypes: {
+        text: false,
+        data: false,
+        path: true,
+        command: false
+      },
+      allowNested: false,
+      pathValidation: {
+        requireAbsolute: true,
+        allowedRoots: ['HOMEPATH', 'PROJECTPATH']
+      }
     };
   }
 } 

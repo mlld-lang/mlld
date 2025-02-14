@@ -18,7 +18,7 @@ export class PathResolver {
     }
 
     // Validate path variables are allowed
-    if (!context.allowPathVars) {
+    if (!context.allowedVariableTypes.path) {
       throw new ResolutionError(
         'Path variables are not allowed in this context',
         ResolutionErrorCode.INVALID_CONTEXT,
@@ -55,13 +55,30 @@ export class PathResolver {
       result = result.split(match).join(value);
     }
 
-    // Validate path starts with $HOMEPATH or $PROJECTPATH
-    if (!result.startsWith('/')) {
-      throw new ResolutionError(
-        'Path must be absolute (start with $HOMEPATH/$~ or $PROJECTPATH/$.)',
-        ResolutionErrorCode.INVALID_PATH,
-        { value: path, context }
-      );
+    // Validate path meets requirements if specified
+    if (context.pathValidation) {
+      if (context.pathValidation.requireAbsolute && !result.startsWith('/')) {
+        throw new ResolutionError(
+          'Path must be absolute',
+          ResolutionErrorCode.INVALID_PATH,
+          { value: path, context }
+        );
+      }
+
+      if (context.pathValidation.allowedRoots?.length) {
+        const hasAllowedRoot = context.pathValidation.allowedRoots.some(root => {
+          const resolvedRoot = this.stateService.getPathVar(root);
+          return resolvedRoot && result.startsWith(resolvedRoot);
+        });
+
+        if (!hasAllowedRoot) {
+          throw new ResolutionError(
+            `Path must start with one of: ${context.pathValidation.allowedRoots.join(', ')}`,
+            ResolutionErrorCode.INVALID_PATH,
+            { value: path, context }
+          );
+        }
+      }
     }
 
     return result;
@@ -76,15 +93,7 @@ export class PathResolver {
     let match;
 
     while ((match = varPattern.exec(text)) !== null) {
-      const varName = match[1];
-      // Convert aliases to their full names
-      if (varName === '~') {
-        refs.push('HOMEPATH');
-      } else if (varName === '.') {
-        refs.push('PROJECTPATH');
-      } else {
-        refs.push(varName);
-      }
+      refs.push(match[1]); // Add the variable name
     }
 
     return refs;

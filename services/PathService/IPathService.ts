@@ -1,58 +1,105 @@
 import type { IFileSystemService } from '../FileSystemService/IFileSystemService';
 
+/**
+ * Options for path validation and operations
+ */
 export interface PathOptions {
   /**
-   * The base directory to resolve relative paths from
+   * Base directory to resolve relative paths against.
+   * If provided, paths will be validated to ensure they are within this directory
+   * unless allowOutsideBaseDir is true.
    */
   baseDir?: string;
-  
+
   /**
-   * Whether to allow paths outside the base directory
+   * Whether to allow paths that resolve outside the base directory.
+   * Only applicable if baseDir is provided.
    * @default false
    */
   allowOutsideBaseDir?: boolean;
-  
+
   /**
-   * Whether to require the path to exist
+   * Whether the path must exist on disk.
    * @default true
    */
   mustExist?: boolean;
-  
+
   /**
-   * Whether the path must be a directory
-   * @default false
-   */
-  mustBeDirectory?: boolean;
-  
-  /**
-   * Whether the path must be a file
+   * Whether the path must be a file (not a directory).
+   * Only checked if mustExist is true.
    * @default false
    */
   mustBeFile?: boolean;
+
+  /**
+   * Whether the path must be a directory (not a file).
+   * Only checked if mustExist is true.
+   * @default false
+   */
+  mustBeDirectory?: boolean;
 }
 
+/**
+ * Service for validating and normalizing paths.
+ * Does not handle path variable resolution - that is handled by ResolutionService.
+ */
 export interface IPathService {
   /**
-   * Initialize the PathService with required dependencies
+   * Enable test mode for path operations.
+   * In test mode, certain validations may be relaxed or mocked.
    */
-  initialize(fileSystem: IFileSystemService): void;
-  
+  enableTestMode(): void;
+
   /**
-   * Resolve and validate a path according to the given options
-   * Path variables will already be interpolated by meld-ast
-   * @throws {PathValidationError} If the path is invalid or doesn't meet the requirements
+   * Disable test mode for path operations.
    */
-  resolvePath(path: string, options?: PathOptions): Promise<string>;
-  
+  disableTestMode(): void;
+
   /**
-   * Resolve multiple paths according to the given options
-   * @throws {PathValidationError} If any path is invalid or doesn't meet the requirements
+   * Check if test mode is enabled.
    */
-  resolvePaths(paths: string[], options?: PathOptions): Promise<string[]>;
-  
+  isTestMode(): boolean;
+
   /**
-   * Check if a path is valid according to the given options
-   * Returns true if valid, false otherwise
+   * Validate a path according to the specified options.
+   * The path should already have any variables resolved by ResolutionService.
+   * 
+   * @param filePath The path to validate
+   * @param options Options for validation
+   * @throws PathValidationError if validation fails
    */
-  isValidPath(path: string, options?: PathOptions): Promise<boolean>;
+  validatePath(filePath: string, options?: PathOptions): Promise<void>;
+
+  /**
+   * Normalize a path by resolving '..' and '.' segments.
+   * Does not resolve variables or make the path absolute.
+   * 
+   * @param filePath The path to normalize
+   * @returns The normalized path
+   */
+  normalizePath(filePath: string): string;
+
+  /**
+   * Join multiple path segments together.
+   * 
+   * @param paths The path segments to join
+   * @returns The joined path
+   */
+  join(...paths: string[]): string;
+
+  /**
+   * Get the directory name of a path.
+   * 
+   * @param filePath The path to get the directory from
+   * @returns The directory name
+   */
+  dirname(filePath: string): string;
+
+  /**
+   * Get the base name of a path.
+   * 
+   * @param filePath The path to get the base name from
+   * @returns The base name
+   */
+  basename(filePath: string): string;
 } 

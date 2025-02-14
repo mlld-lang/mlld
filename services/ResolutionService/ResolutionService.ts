@@ -5,6 +5,7 @@ import { TextResolver } from './resolvers/TextResolver';
 import { DataResolver } from './resolvers/DataResolver';
 import { PathResolver } from './resolvers/PathResolver';
 import { CommandResolver } from './resolvers/CommandResolver';
+import { resolutionLogger as logger } from '../../core/utils/logger';
 
 /**
  * Service responsible for resolving variables, commands, and paths in different contexts
@@ -40,6 +41,7 @@ export class ResolutionService implements IResolutionService {
    * Resolve path variables
    */
   async resolvePath(path: string, context: ResolutionContext): Promise<string> {
+    logger.debug('Resolving path', { path, context });
     return this.pathResolver.resolve(path, context);
   }
 
@@ -63,26 +65,26 @@ export class ResolutionService implements IResolutionService {
     // 3. Resolve based on content type
     let result = value;
 
-    // Handle command references first
-    if (context.allowCommands) {
+    // Handle command references first if allowed
+    if (context.allowedVariableTypes.command) {
       const cmdRef = this.commandResolver.parseCommandReference(result);
       if (cmdRef) {
         result = await this.resolveCommand(cmdRef.cmd, cmdRef.args, context);
       }
     }
 
-    // Handle path variables
-    if (context.allowPathVars && result.includes('$')) {
+    // Handle path variables if allowed
+    if (context.allowedVariableTypes.path && result.includes('$')) {
       result = await this.resolvePath(result, context);
     }
 
-    // Handle data variables
-    if (context.allowDataFields && result.includes('#{')) {
+    // Handle data variables if allowed
+    if (context.allowedVariableTypes.data && result.includes('#{')) {
       result = await this.resolveData(result, context);
     }
 
-    // Handle text variables
-    if (result.includes('${')) {
+    // Handle text variables if allowed
+    if (context.allowedVariableTypes.text && result.includes('${')) {
       result = await this.resolveText(result, context);
     }
 
@@ -94,7 +96,7 @@ export class ResolutionService implements IResolutionService {
    */
   async validateResolution(value: string, context: ResolutionContext): Promise<void> {
     // Check for path variables
-    if (!context.allowPathVars && value.includes('$')) {
+    if (!context.allowedVariableTypes.path && value.includes('$')) {
       const pathRefs = this.pathResolver.extractReferences(value);
       if (pathRefs.length > 0) {
         throw new ResolutionError(
@@ -106,7 +108,7 @@ export class ResolutionService implements IResolutionService {
     }
 
     // Check for command references
-    if (!context.allowCommands && /\$[A-Za-z_][A-Za-z0-9_]*\(/.test(value)) {
+    if (!context.allowedVariableTypes.command && /\$[A-Za-z_][A-Za-z0-9_]*\(/.test(value)) {
       throw new ResolutionError(
         'Command references are not allowed in this context',
         ResolutionErrorCode.INVALID_CONTEXT,
@@ -115,9 +117,18 @@ export class ResolutionService implements IResolutionService {
     }
 
     // Check for data field access
-    if (!context.allowDataFields && /#{[^}]+\.[^}]+}/.test(value)) {
+    if (!context.allowedVariableTypes.data && /#{[^}]+\.[^}]+}/.test(value)) {
       throw new ResolutionError(
         'Data field access is not allowed in this context',
+        ResolutionErrorCode.INVALID_CONTEXT,
+        { value, context }
+      );
+    }
+
+    // Check for text variables
+    if (!context.allowedVariableTypes.text && value.includes('${')) {
+      throw new ResolutionError(
+        'Text variables are not allowed in this context',
         ResolutionErrorCode.INVALID_CONTEXT,
         { value, context }
       );

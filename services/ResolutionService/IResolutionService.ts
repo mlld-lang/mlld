@@ -6,14 +6,23 @@ import { MeldNode } from 'meld-spec';
 export interface ResolutionContext {
   /** Current file being processed, for error reporting */
   currentFilePath?: string;
-  /** Whether path variables ($path) are allowed */
-  allowPathVars: boolean;
-  /** Whether command references ($command(args)) are allowed */
-  allowCommands: boolean;
-  /** Whether data field access (#{data.field}) is allowed */
-  allowDataFields: boolean;
+  
+  /** What types of variables are allowed in this context */
+  allowedVariableTypes: {
+    text: boolean;    // ${var}
+    data: boolean;    // #{data}
+    path: boolean;    // $path
+    command: boolean; // $command
+  };
+  
   /** Whether nested variable interpolation is allowed */
   allowNested?: boolean;
+  
+  /** Path validation rules when resolving paths */
+  pathValidation?: {
+    requireAbsolute: boolean;
+    allowedRoots: string[]; // e.g. [$HOMEPATH, $PROJECTPATH]
+  };
 }
 
 /**
@@ -44,7 +53,8 @@ export interface IResolutionService {
   resolveData(ref: string, context: ResolutionContext): Promise<any>;
 
   /**
-   * Resolve path variables ($path) to absolute paths
+   * Resolve path variables ($path) to absolute paths.
+   * This includes $HOMEPATH/$~ and $PROJECTPATH/$. resolution.
    */
   resolvePath(path: string, context: ResolutionContext): Promise<string>;
 
