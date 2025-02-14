@@ -40,3 +40,5 @@ pids
 /*.md
 _meld/*.md
 !/_/*.meld.md
+
+dev/*
