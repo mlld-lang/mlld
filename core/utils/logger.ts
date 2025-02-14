@@ -62,30 +62,22 @@ export interface Logger {
 }
 
 // Create a service-specific logger factory
-export function createServiceLogger(serviceName: keyof typeof loggingConfig.services): Logger {
+export function createServiceLogger(serviceName: keyof typeof loggingConfig.services): winston.Logger {
   const serviceConfig = loggingConfig.services[serviceName];
-
-  return {
-    error(message: string, context?: Record<string, unknown>): void {
-      logger.error(message, { service: serviceName, ...context });
-    },
-    warn(message: string, context?: Record<string, unknown>): void {
-      logger.warn(message, { service: serviceName, ...context });
-    },
-    info(message: string, context?: Record<string, unknown>): void {
-      logger.info(message, { service: serviceName, ...context });
-    },
-    debug(message: string, context?: Record<string, unknown>): void {
-      if (serviceConfig.level === 'debug' || serviceConfig.level === 'trace') {
-        logger.debug(message, { service: serviceName, ...context });
-      }
-    },
-    trace(message: string, context?: Record<string, unknown>): void {
-      if (serviceConfig.level === 'trace') {
-        logger.log('trace', message, { service: serviceName, ...context });
-      }
-    }
-  };
+  
+  return winston.createLogger({
+    level: serviceConfig.level,
+    format: winston.format.combine(
+      winston.format.timestamp(),
+      winston.format.json()
+    ),
+    defaultMeta: { service: serviceName },
+    transports: [
+      new winston.transports.Console({
+        level: process.env.NODE_ENV === 'test' ? 'error' : 'info'
+      })
+    ]
+  });
 }
 
 // Ensure logs directory exists
@@ -118,6 +110,29 @@ export const directiveLogger = createServiceLogger('directive');
 export const circularityLogger = createServiceLogger('circularity');
 export const resolutionLogger = createServiceLogger('resolution');
 export const importLogger = createServiceLogger('import');
+export const cliLogger = createServiceLogger('cli');
 
 // Export default logger for general use
-export default logger; 
+export default logger;
+
+// Add file transport in production
+if (process.env.NODE_ENV === 'production') {
+  const fileTransport = new winston.transports.File({
+    filename: 'logs/error.log',
+    level: 'error'
+  });
+
+  // Add to all loggers
+  [
+    cliLogger,
+    directiveLogger,
+    interpreterLogger,
+    parserLogger,
+    outputLogger,
+    filesystemLogger,
+    pathLogger,
+    stateLogger
+  ].forEach(logger => {
+    logger.add(fileTransport);
+  });
+} 

@@ -79,6 +79,11 @@ export interface IResolutionService {
   validateResolution(value: string, context: ResolutionContext): Promise<void>;
 
   /**
+   * Extract a section from content by its heading
+   */
+  extractSection(content: string, section: string): Promise<string>;
+
+  /**
    * Check for circular variable references
    */
   detectCircularReferences(value: string): Promise<void>;

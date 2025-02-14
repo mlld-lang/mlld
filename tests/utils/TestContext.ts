@@ -1,5 +1,3 @@
-import { parse as meldAstParse } from 'meld-ast';
-import { convertToXml } from 'llmxml';
 import { MemfsTestFileSystem } from './MemfsTestFileSystem';
 import { ProjectBuilder } from './ProjectBuilder';
 import { TestSnapshot } from './TestSnapshot';
@@ -9,18 +7,20 @@ import { ParserService } from '../../services/ParserService/ParserService';
 import type { IParserService } from '../../services/ParserService/IParserService';
 import * as fs from 'fs-extra';
 import * as path from 'path';
+import { LLMXML } from 'llmxml';
 
 interface SnapshotDiff {
   added: string[];
   removed: string[];
   modified: string[];
+  modifiedContents: Map<string, string>;
 }
 
 interface TestFixtures {
   load(fixtureName: string): Promise<void>;
 }
 
-interface TestSnapshot {
+interface TestSnapshotInterface {
   takeSnapshot(): Promise<Map<string, string>>;
   compare(before: Map<string, string>, after: Map<string, string>): SnapshotDiff;
 }
@@ -39,6 +39,7 @@ export class TestContext {
 
   constructor(fixturesDir: string = 'tests/fixtures') {
     this.fs = new MemfsTestFileSystem();
+    this.fs.initialize();
     this.builder = new ProjectBuilder(this.fs);
     this.fixturesDir = fixturesDir;
 
@@ -53,55 +54,7 @@ export class TestContext {
     };
 
     // Initialize snapshot
-    this.snapshot = {
-      takeSnapshot: async (): Promise<Map<string, string>> => {
-        const snapshot = new Map<string, string>();
-        const files = await this.fs.getAllFiles();
-        
-        console.log('Taking snapshot, files:', files);
-        
-        for (const filePath of files) {
-          const content = await this.fs.readFile(filePath);
-          // Convert absolute path to relative path by removing the workspace prefix
-          const relativePath = filePath.replace(/^.*?\/project\//, 'project/');
-          snapshot.set(relativePath, content);
-        }
-        
-        console.log('Snapshot contents:', Object.fromEntries(snapshot));
-        return snapshot;
-      },
-
-      compare: (before: Map<string, string>, after: Map<string, string>): SnapshotDiff => {
-        console.log('Comparing snapshots:');
-        console.log('Before:', Object.fromEntries(before));
-        console.log('After:', Object.fromEntries(after));
-        
-        const diff: SnapshotDiff = {
-          added: [],
-          removed: [],
-          modified: []
-        };
-
-        // Find added and modified files
-        for (const [path, content] of after) {
-          if (!before.has(path)) {
-            diff.added.push(path);
-          } else if (before.get(path) !== content) {
-            diff.modified.push(path);
-          }
-        }
-
-        // Find removed files
-        for (const path of before.keys()) {
-          if (!after.has(path)) {
-            diff.removed.push(path);
-          }
-        }
-
-        console.log('Diff:', diff);
-        return diff;
-      }
-    };
+    this.snapshot = new TestSnapshot(this.fs);
 
     this.factory = testFactories;
     this.parserService = new ParserService();
@@ -125,8 +78,7 @@ export class TestContext {
    * Write a file to the test filesystem
    */
   async writeFile(relativePath: string, content: string): Promise<void> {
-    const fullPath = this.fs.getPath(relativePath);
-    this.fs.writeFile(fullPath, content);
+    await this.fs.writeFile(relativePath, content);
   }
 
   /**
@@ -143,8 +95,9 @@ export class TestContext {
   /**
    * Convert content to XML using llmxml
    */
-  convertToXml(content: string) {
-    return convertToXml(content);
+  async convertToXml(content: string) {
+    const llmxml = new LLMXML();
+    return llmxml.toXML(content);
   }
 
   /**

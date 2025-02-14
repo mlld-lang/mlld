@@ -31,7 +31,8 @@ describe('ImportDirectiveHandler', () => {
     } as unknown as IStateService;
 
     resolutionService = {
-      resolvePath: vi.fn()
+      resolvePath: vi.fn(),
+      resolveContent: vi.fn()
     } as unknown as IResolutionService;
 
     fileSystemService = {
@@ -54,12 +55,9 @@ describe('ImportDirectiveHandler', () => {
 
     handler = new ImportDirectiveHandler(
       validationService,
-      stateService,
       resolutionService,
-      fileSystemService,
-      parserService,
-      interpreterService,
-      circularityService
+      stateService,
+      interpreterService
     );
   });
 

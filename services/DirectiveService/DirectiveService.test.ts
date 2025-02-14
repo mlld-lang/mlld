@@ -18,7 +18,7 @@ import type { IParserService } from '../ParserService/IParserService';
 import type { IInterpreterService } from '../InterpreterService/IInterpreterService';
 import type { ICircularityService } from '../CircularityService/ICircularityService';
 import type { IResolutionService } from '../ResolutionService/IResolutionService';
-import type { DirectiveNode, MeldNode } from '../../tests/__mocks__/meld-spec';
+import type { DirectiveNode, MeldNode } from '../../tests/mocks/meld-spec';
 import type { PathOptions } from '../PathService/IPathService';
 import type { InterpreterOptions } from '../InterpreterService/IInterpreterService';
 import type { ResolutionContext } from '../ResolutionService/IResolutionService';
@@ -38,16 +38,43 @@ const createStateService = (): IStateService => ({
   getTextVar: vi.fn(),
   setDataVar: vi.fn(),
   getDataVar: vi.fn(),
-  appendContent: vi.fn(),
   addNode: vi.fn(),
   createChildState: vi.fn(),
-  mergeStates: vi.fn()
+  getNodes: vi.fn(),
+  getAllTextVars: vi.fn().mockReturnValue(new Map()),
+  getLocalTextVars: vi.fn().mockReturnValue(new Map()),
+  getAllDataVars: vi.fn().mockReturnValue(new Map()),
+  getLocalDataVars: vi.fn().mockReturnValue(new Map()),
+  getPathVar: vi.fn(),
+  setPathVar: vi.fn(),
+  getAllPathVars: vi.fn().mockReturnValue(new Map()),
+  getCommand: vi.fn(),
+  setCommand: vi.fn(),
+  addImport: vi.fn(),
+  removeImport: vi.fn(),
+  hasImport: vi.fn(),
+  getImports: vi.fn().mockReturnValue(new Set()),
+  getCurrentFilePath: vi.fn(),
+  setCurrentFilePath: vi.fn(),
+  hasLocalChanges: vi.fn(),
+  getLocalChanges: vi.fn().mockReturnValue([]),
+  setImmutable: vi.fn(),
+  isImmutable: false,
+  mergeChildState: vi.fn(),
+  clone: vi.fn()
 });
 
 const createPathService = (): IPathService => ({
   validatePath: vi.fn(),
   normalizePath: vi.fn(),
-  resolvePath: vi.fn()
+  resolvePath: vi.fn(),
+  initialize: vi.fn(),
+  enableTestMode: vi.fn(),
+  disableTestMode: vi.fn(),
+  isTestMode: vi.fn(),
+  join: vi.fn(),
+  dirname: vi.fn(),
+  basename: vi.fn()
 });
 
 const createFileSystemService = (): IFileSystemService => ({
@@ -55,29 +82,59 @@ const createFileSystemService = (): IFileSystemService => ({
   writeFile: vi.fn(),
   exists: vi.fn(),
   isDirectory: vi.fn(),
-  isFile: vi.fn()
+  isFile: vi.fn(),
+  stat: vi.fn(),
+  readDir: vi.fn(),
+  ensureDir: vi.fn(),
+  join: vi.fn(),
+  dirname: vi.fn(),
+  basename: vi.fn(),
+  normalize: vi.fn(),
+  resolve: vi.fn(),
+  enableTestMode: vi.fn(),
+  disableTestMode: vi.fn(),
+  isTestMode: vi.fn(),
+  mockFile: vi.fn(),
+  mockDir: vi.fn(),
+  clearMocks: vi.fn()
 });
 
-const createParserService = (): IParserService => ({
-  parse: vi.fn() as unknown as (content: string) => MeldNode[],
-  parseWithLocations: vi.fn() as unknown as (content: string) => MeldNode[]
-});
+const createParserService = (): IParserService => {
+  const parse = vi.fn();
+  parse.mockResolvedValue([]);
+  const parseWithLocations = vi.fn();
+  parseWithLocations.mockResolvedValue([]);
+  return {
+    parse,
+    parseWithLocations
+  } as unknown as IParserService;
+};
 
 const createInterpreterService = (): IInterpreterService => ({
   interpret: vi.fn(),
-  interpretFile: vi.fn()
+  initialize: vi.fn(),
+  interpretNode: vi.fn(),
+  createChildContext: vi.fn()
 });
 
 const createCircularityService = (): ICircularityService => ({
-  checkImport: vi.fn(),
-  clearImports: vi.fn()
+  beginImport: vi.fn(),
+  endImport: vi.fn(),
+  isInStack: vi.fn(),
+  getImportStack: vi.fn(),
+  reset: vi.fn()
 });
 
 const createResolutionService = (): IResolutionService => ({
   resolveInContext: vi.fn(),
   resolvePath: vi.fn(),
   extractSection: vi.fn(),
-  resolveValue: vi.fn()
+  resolveContent: vi.fn(),
+  resolveText: vi.fn(),
+  resolveData: vi.fn(),
+  resolveCommand: vi.fn(),
+  validateResolution: vi.fn(),
+  detectCircularReferences: vi.fn()
 });
 
 const createMockParserService = (): IParserService => ({
@@ -103,13 +160,14 @@ describe('DirectiveService', () => {
     stateService = createStateService();
     pathService = createPathService();
     fileSystemService = createFileSystemService();
-    parserService = createMockParserService();
+    parserService = createParserService();
     interpreterService = createInterpreterService();
     circularityService = createCircularityService();
     resolutionService = createResolutionService();
 
     // Create mock for parse function
     parseMock = vi.fn();
+    parseMock.mockResolvedValue([]);
     parserService.parse = parseMock;
 
     service = new DirectiveService();
@@ -147,9 +205,7 @@ describe('DirectiveService', () => {
   describe('Text directive handling', () => {
     it('should process a valid text directive', async () => {
       const node = createTextDirective('greeting', 'Hello', createLocation(1, 1));
-
       await service.processDirective(node);
-
       expect(validationService.validate).toHaveBeenCalledWith(node);
       expect(stateService.setTextVar).toHaveBeenCalledWith('greeting', 'Hello');
     });

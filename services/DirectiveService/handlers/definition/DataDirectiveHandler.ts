@@ -1,4 +1,4 @@
-import { DirectiveNode, DataDirective } from 'meld-spec';
+import { DirectiveNode, DirectiveData } from '../../../../node_modules/meld-spec/dist/types';
 // TODO: Use meld-ast nodes and types instead of meld-spec directly
 // TODO: Import MeldDirectiveError from core/errors for proper error hierarchy
 
@@ -7,6 +7,8 @@ import { IValidationService } from '../../../ValidationService/IValidationServic
 import { IStateService } from '../../../StateService/IStateService';
 import { IResolutionService } from '../../../ResolutionService/IResolutionService';
 import { ResolutionContextFactory } from '../../../ResolutionService/ResolutionContextFactory';
+import { DirectiveError, DirectiveErrorCode } from '../../errors/DirectiveError';
+import { directiveLogger as logger } from '../../../../core/utils/logger';
 
 /**
  * Handler for @data directives
@@ -17,47 +19,47 @@ export class DataDirectiveHandler implements IDirectiveHandler {
 
   constructor(
     private validationService: IValidationService,
-    private stateService: IStateService,
-    private resolutionService: IResolutionService
+    private stateService: IStateService
   ) {}
 
   async execute(node: DirectiveNode, context: DirectiveContext): Promise<void> {
-    // TODO: Per service-directive.md, definition handlers should store raw values without ANY resolution
-    // Current implementation is resolving values which violates the architecture
+    // Extract directive early so we can use it in error handling
+    const directive = node.directive as DirectiveData & { kind: 'data'; name: string; value: any };
 
-    // TODO: Per UX.md, @data directive should support both JSON string values and object literals
-    // Current implementation doesn't properly distinguish between these cases
+    try {
+      // 1. Validate directive structure
+      await this.validationService.validate(node);
 
-    // TODO: Per UX.md, error handling should be silent in build output but warn on command line
-    // Current implementation throws errors directly
+      // 2. Extract name and value
+      const { name, value } = directive;
 
-    // 1. Validate directive structure
-    await this.validationService.validate(node);
+      // 3. Store raw value based on type
+      if (typeof value === 'string') {
+        try {
+          // If it's a string that parses as JSON, store the parsed value
+          const parsedValue = JSON.parse(value);
+          await this.stateService.setDataVar(name, parsedValue);
+        } catch {
+          // If it doesn't parse as JSON, store as a string
+          await this.stateService.setDataVar(name, value);
+        }
+      } else {
+        // For object literals, store as-is
+        await this.stateService.setDataVar(name, value);
+      }
 
-    // 2. Extract name and value
-    const directive = node.directive as DataDirective;
-    const { name, value } = directive;
-
-    // TODO: This resolution step should not be in a definition handler
-    // Definition handlers should store raw values only
-    // 3. Create resolution context
-    const resolutionContext = ResolutionContextFactory.forDataDirective(
-      context.currentFilePath
-    );
-
-    // TODO: Remove resolution from definition handler
-    // 4. Resolve value if needed
-    const resolvedValue = await this.resolutionService.resolveInContext(
-      JSON.stringify(value),
-      resolutionContext
-    );
-
-    // TODO: Per UX.md, handle non-string values with proper coercion rules
-    // 5. Parse resolved value
-    const parsedValue = JSON.parse(resolvedValue);
-
-    // TODO: Store raw value instead of resolved/parsed value
-    // 6. Store in state
-    await this.stateService.setDataVar(name, parsedValue);
+      logger.debug('Stored data variable', { name, valueType: typeof value });
+    } catch (error) {
+      // Log error but don't throw in build mode
+      if (process.env.NODE_ENV === 'production') {
+        logger.warn('Failed to process data directive', {
+          name: directive.name,
+          error: error instanceof Error ? error.message : String(error),
+          filePath: context.currentFilePath
+        });
+      } else {
+        throw error;
+      }
+    }
   }
 } 

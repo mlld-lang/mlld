@@ -1,21 +1,11 @@
+import { config } from 'winston';
+
 export const loggingConfig = {
   // Log levels in order of increasing verbosity
-  levels: {
-    error: 0,
-    warn: 1,
-    info: 2,
-    debug: 3,
-    trace: 4
-  },
+  levels: config.npm.levels,
 
   // Color scheme for different log levels
-  colors: {
-    error: 'red',
-    warn: 'yellow',
-    info: 'green',
-    debug: 'blue',
-    trace: 'gray'
-  },
+  colors: config.npm.colors,
 
   // File configuration
   files: {
@@ -40,7 +30,7 @@ export const loggingConfig = {
   // Service-specific settings
   services: {
     state: {
-      level: 'debug',
+      level: 'info',
       includeMetadata: true
     },
     parser: {
@@ -48,7 +38,7 @@ export const loggingConfig = {
       includeMetadata: true
     },
     interpreter: {
-      level: 'debug',
+      level: 'info',
       includeMetadata: true
     },
     filesystem: {
@@ -56,32 +46,35 @@ export const loggingConfig = {
       includeMetadata: true
     },
     validation: {
-      level: 'debug',
+      level: 'info',
       includeMetadata: true
     },
     output: {
-      level: 'debug',
+      level: 'info',
       includeMetadata: true
     },
     path: {
-      level: 'debug',
+      level: 'info',
       includeMetadata: true
     },
     directive: {
-      level: 'debug',
+      level: 'info',
       includeMetadata: true
     },
     circularity: {
-      level: 'debug',
+      level: 'info',
       includeMetadata: true
     },
     resolution: {
-      level: 'debug',
+      level: 'info',
       includeMetadata: true
     },
     import: {
-      level: 'debug',
+      level: 'info',
       includeMetadata: true
+    },
+    cli: {
+      level: 'info'
     }
   }
-}; 
+} as const; 

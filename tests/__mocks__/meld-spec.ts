@@ -1,125 +1,72 @@
-// Type definitions for Meld AST
-export type DirectiveKindString = 'run' | 'import' | 'embed' | 'define' | 'text' | 'path' | 'data' | 'api' | 'call';
+// Mock implementation of meld-spec core types
+export interface Position {
+  line: number;   // 1-based
+  column: number; // 1-based
+}
 
 export interface Location {
-  start: { line: number; column: number };
-  end: { line: number; column: number };
+  start: Position;
+  end: Position;
+  filePath?: string;
 }
 
-export interface DirectiveNode {
-  type: 'Directive';
-  kind: DirectiveKindString;
-  properties: Record<string, any>;
-  location: Location;
+export interface MeldNode {
+  type: string;
+  content?: string;
+  directive?: {
+    kind: string;
+    name?: string;
+    value?: string;
+    [key: string]: any;
+  };
+  location?: Location;
 }
 
-export interface TextNode {
-  type: 'Text';
-  content: string;
-  location: Location;
+export interface TextVariable {
+  type: 'text';
+  name: string;
+  value: string;
 }
 
-export type MeldNode = DirectiveNode | TextNode;
+export interface DataVariable {
+  type: 'data';
+  name: string;
+  value: any;
+}
 
-export interface DirectiveKind {
-  name: DirectiveKindString;
-  properties: {
-    [key: string]: {
-      type: 'string' | 'number' | 'boolean' | 'object' | 'array';
-      required?: boolean;
-      description?: string;
-    };
+export interface PathVariable {
+  type: 'path';
+  name: string;
+  value: string;
+}
+
+export interface CommandDefinition {
+  name: string;
+  parameters?: string[];
+  body: string;
+  metadata?: {
+    risk?: string;
+    about?: string;
+    meta?: any;
   };
 }
 
-export const DIRECTIVE_KINDS: Record<DirectiveKindString, DirectiveKind> = {
-  text: {
-    name: 'text',
-    properties: {
-      name: { type: 'string', required: true },
-      value: { type: 'string', required: true }
-    }
-  },
-  data: {
-    name: 'data',
-    properties: {
-      name: { type: 'string', required: true },
-      value: { type: 'object', required: true }
-    }
-  },
-  define: {
-    name: 'define',
-    properties: {
-      name: { type: 'string', required: true },
-      body: { type: 'string', required: true }
-    }
-  },
-  run: {
-    name: 'run',
-    properties: {
-      command: { type: 'string', required: true }
-    }
-  },
-  import: {
-    name: 'import',
-    properties: {
-      from: { type: 'string', required: true },
-      variables: { type: 'object', required: false }
-    }
-  },
-  embed: {
-    name: 'embed',
-    properties: {
-      path: { type: 'string', required: true },
-      section: { type: 'string', required: false },
-      items: { type: 'array', required: false },
-      headerLevel: { type: 'number', required: false },
-      underHeader: { type: 'string', required: false }
-    }
-  },
-  path: {
-    name: 'path',
-    properties: {
-      name: { type: 'string', required: true },
-      value: { type: 'string', required: true }
-    }
-  },
-  api: {
-    name: 'api',
-    properties: {
-      name: { type: 'string', required: true },
-      endpoint: { type: 'string', required: true }
-    }
-  },
-  call: {
-    name: 'call',
-    properties: {
-      name: { type: 'string', required: true },
-      args: { type: 'object', required: false }
-    }
-  }
-};
+export interface ValidationError {
+  message: string;
+  code: string;
+  location?: Location;
+}
 
-export function parse(content: string): MeldNode[] {
-  if (content === 'invalid') {
-    throw new Error('Failed to parse Meld content: Parse error');
-  }
-  if (content.startsWith('>>')) {
-    return [{
-      type: 'Text',
-      content: content.substring(2).trim(),
-      location: {
-        start: { line: 1, column: 1 },
-        end: { line: 1, column: content.length }
-      }
-    }];
-  }
-  return [{
-    type: 'Text',
-    content,
-    location: {
-      start: { line: 1, column: 1 },
-      end: { line: 1, column: content.length }
-    }
-  }];
+export interface ValidationContext {
+  filePath?: string;
+  baseDir?: string;
+}
+
+export interface ValidationResult {
+  isValid: boolean;
+  errors: ValidationError[];
+}
+
+export interface Parser {
+  parse(content: string): MeldNode[];
 } 

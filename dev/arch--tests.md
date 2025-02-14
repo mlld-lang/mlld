@@ -6,48 +6,12 @@ Below is a focused design for the Meld testing architecture that leverages core 
 I. DIRECTORY STRUCTURE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-tests/
- ├─ unit/
- │   ├─ PathService.test.ts
- │   ├─ FileSystemService.test.ts
- │   ├─ StateService.test.ts
- │   ├─ DirectiveService/
- │   │   ├─ TextDirectiveHandler.test.ts
- │   │   ├─ DataDirectiveHandler.test.ts
- │   │   ├─ ImportDirectiveHandler.test.ts
- │   │   └─ ...
- │   └─ ...
- ├─ integration/
- │   ├─ interpreter/
- │   │   ├─ interpretSimple.test.ts
- │   │   ├─ interpretEmbed.test.ts
- │   │   ├─ interpretImport.test.ts
- │   │   └─ ...
- │   ├─ sdk/
- │   │   ├─ runMeldBasics.test.ts
- │   │   ├─ runMeldComplex.test.ts
- │   │   └─ ...
- │   └─ ...
- ├─ fixtures/
- │   ├─ basicProject.json
- │   ├─ complexEmbed.json
- │   └─ ...
- └─ utils/
-     ├─ index.ts                 # Re-exports below classes for convenience
-     ├─ TestContext.ts           # Main test context API
-     ├─ MemfsTestFileSystem.ts   # In-memory FS with memfs
-     ├─ ProjectBuilder.ts        # Creates files & dirs from a simple object
-     ├─ TestSnapshot.ts          # Snapshot & diff utilities
-     ├─ PathUtils.ts             # Minimal path helper if needed
-     ├─ FixtureManager.ts        # Load & store JSON-based project fixtures
-     ├─ matchers.ts              # (Optional) Custom Vitest matchers
-     └─ ...
-
-With this arrangement:
-• /unit focuses on direct, isolated service tests
-• /integration focuses on multi-step flows
-• /fixtures holds static JSON (or YAML) descriptions of file structures
-• /utils houses all the reusable test utilities
+- Tests should be organized next to the code they test.
+- System-wide integration tests go in `tests/integration`
+- Tests should generally be named `*.test.ts`
+- Integration tests for services should be named `*.integration.test.ts` and in these cases, the unit test should be named `*.unit.test.ts`
+- Test fixtures go in `tests/fixtures`
+- Mocks go in `tests/mocks` 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 II. CORE UTILITIES & THEIR RESPONSIBILITIES

@@ -11,6 +11,8 @@ export class MemfsTestFileSystem {
 
   constructor() {
     this.vol = new Volume();
+    // Initialize root directory
+    this.vol.mkdirSync('.', { recursive: true });
   }
 
   /**
@@ -28,52 +30,113 @@ export class MemfsTestFileSystem {
   }
 
   /**
+   * Get the absolute path for a path in the test filesystem.
+   * For external use (e.g. test assertions), paths have a leading slash.
+   * For internal use with memfs, paths do not have a leading slash.
+   */
+  getPath(filePath: string | undefined, forMemfs: boolean = false): string {
+    // Handle undefined/empty paths
+    if (!filePath) {
+      return forMemfs ? '.' : '/';
+    }
+
+    // Normalize the path to use forward slashes and remove any '..' segments
+    const normalized = path.normalize(filePath).replace(/\\/g, '/');
+    
+    // Remove any existing leading slashes
+    const withoutLeadingSlash = normalized.replace(/^\/+/, '');
+
+    // Handle root directory specially
+    if (!withoutLeadingSlash) {
+      return forMemfs ? '.' : '/';
+    }
+
+    // For memfs internal use, return without leading slash
+    if (forMemfs) {
+      return withoutLeadingSlash;
+    }
+
+    // For external use, ensure exactly one leading slash
+    return `/${withoutLeadingSlash}`;
+  }
+
+  /**
+   * Internal helper to get path formatted for memfs operations
+   */
+  private getMemfsPath(filePath: string): string {
+    return this.getPath(filePath, true);
+  }
+
+  /**
    * Write a file, creating parent directories if needed
    */
   async writeFile(filePath: string, content: string): Promise<void> {
+    const memfsPath = this.getMemfsPath(filePath);
+    
+    // Check if target exists and is a directory
+    if (this.vol.existsSync(memfsPath)) {
+      const stats = this.vol.statSync(memfsPath);
+      if (stats.isDirectory()) {
+        throw new Error(`EISDIR: Cannot write to directory: ${filePath}`);
+      }
+    }
+    
     // Ensure parent directory exists
-    const dirPath = path.dirname(filePath);
+    const dirPath = path.dirname(memfsPath);
     if (dirPath !== '.') {
       await this.ensureDir(dirPath);
     }
-    this.vol.writeFileSync(filePath, content, 'utf-8');
+    this.vol.writeFileSync(memfsPath, content, 'utf-8');
   }
 
   /**
    * Read a file's contents
    */
   async readFile(filePath: string): Promise<string> {
-    return this.vol.readFileSync(filePath, 'utf-8') as string;
+    const memfsPath = this.getMemfsPath(filePath);
+    const stats = this.vol.statSync(memfsPath);
+    if (stats.isDirectory()) {
+      throw new Error(`EISDIR: Cannot read directory as file: ${filePath}`);
+    }
+    return this.vol.readFileSync(memfsPath, 'utf-8') as string;
   }
 
   /**
    * Check if a file exists
    */
   async exists(filePath: string): Promise<boolean> {
-    return this.vol.existsSync(filePath);
+    return this.vol.existsSync(this.getMemfsPath(filePath));
   }
 
   /**
    * Get stats for a file or directory
    */
   async stat(filePath: string): Promise<Stats> {
-    return this.vol.statSync(filePath) as Stats;
+    return this.vol.statSync(this.getMemfsPath(filePath)) as Stats;
   }
 
   /**
    * List contents of a directory
    */
   async readDir(dirPath: string): Promise<string[]> {
-    return this.vol.readdirSync(dirPath) as string[];
+    return this.vol.readdirSync(this.getMemfsPath(dirPath)) as string[];
   }
 
   /**
    * Create a directory and its parents if needed
    */
   async ensureDir(dirPath: string): Promise<void> {
-    if (!this.vol.existsSync(dirPath)) {
-      this.vol.mkdirSync(dirPath, { recursive: true });
+    const memfsPath = this.getMemfsPath(dirPath);
+    if (!this.vol.existsSync(memfsPath)) {
+      this.vol.mkdirSync(memfsPath, { recursive: true });
     }
+  }
+
+  /**
+   * Create a directory
+   */
+  async mkdir(dirPath: string): Promise<void> {
+    this.vol.mkdirSync(this.getMemfsPath(dirPath), { recursive: true });
   }
 
   /**
@@ -126,11 +189,11 @@ export class MemfsTestFileSystem {
   // Get all files in the filesystem
   async getAllFiles(dir: string = '/'): Promise<string[]> {
     const result: string[] = [];
-    const entries = this.vol.readdirSync(dir);
+    const entries = this.vol.readdirSync(this.getMemfsPath(dir));
 
     for (const entry of entries) {
       const fullPath = path.join(dir, entry);
-      const stats = this.vol.statSync(fullPath);
+      const stats = this.vol.statSync(this.getMemfsPath(fullPath));
 
       if (stats.isDirectory()) {
         const subFiles = await this.getAllFiles(fullPath);

@@ -1,66 +1,59 @@
-export interface Location {
-  start: { line: number; column: number };
-  end: { line: number; column: number };
+// Mock implementation of meld-ast
+export class ParseError extends Error {
+  constructor(message: string, public location?: { line: number; column: number }) {
+    super(message);
+    this.name = 'ParseError';
+  }
 }
 
-export interface DirectiveNode {
-  type: 'Directive';
-  directive: {
+export interface MeldNode {
+  type: string;
+  content?: string;
+  directive?: {
     kind: string;
+    name?: string;
+    value?: string;
     [key: string]: any;
   };
-  location: Location;
+  location?: {
+    start: { line: number; column: number };
+    end: { line: number; column: number };
+    filePath?: string;
+  };
 }
 
-export interface TextNode {
-  type: 'Text';
-  content: string;
-  location: Location;
-}
+export function parse(content: string): MeldNode[] {
+  // Simple mock implementation that returns basic nodes
+  const lines = content.split('\n');
+  const nodes: MeldNode[] = [];
 
-export type Node = DirectiveNode | TextNode;
-
-export function parse(content: string): Node[] {
-  // Simple mock implementation that returns a basic AST
-  if (content.startsWith('@text')) {
-    const [_, name, value] = content.match(/@text\s+(\w+)\s*=\s*"([^"]*)"/) || [];
-    return [{
-      type: 'Directive',
-      directive: {
-        kind: 'text',
-        name,
-        value
-      },
-      location: {
-        start: { line: 1, column: 1 },
-        end: { line: 1, column: content.length }
-      }
-    }];
-  }
-
-  if (content.startsWith('@data')) {
-    const [_, name, value] = content.match(/@data\s+(\w+)\s*=\s*({[^}]*})/) || [];
-    return [{
-      type: 'Directive',
-      directive: {
-        kind: 'data',
-        name,
-        value: JSON.parse(value)
-      },
-      location: {
-        start: { line: 1, column: 1 },
-        end: { line: 1, column: content.length }
-      }
-    }];
-  }
-
-  // Default case - return text node
-  return [{
-    type: 'Text',
-    content: content,
-    location: {
-      start: { line: 1, column: 1 },
-      end: { line: 1, column: content.length }
+  lines.forEach((line, index) => {
+    if (line.startsWith('@')) {
+      // Mock directive parsing
+      const [directive, ...rest] = line.slice(1).split(' ');
+      nodes.push({
+        type: 'Directive',
+        directive: {
+          kind: directive,
+          value: rest.join(' '),
+        },
+        location: {
+          start: { line: index + 1, column: 1 },
+          end: { line: index + 1, column: line.length },
+        },
+      });
+    } else if (line.trim()) {
+      // Mock text node parsing
+      nodes.push({
+        type: 'Text',
+        content: line,
+        location: {
+          start: { line: index + 1, column: 1 },
+          end: { line: index + 1, column: line.length },
+        },
+      });
     }
-  }];
+  });
+
+  return nodes;
 } 

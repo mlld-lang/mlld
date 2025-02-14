@@ -5,7 +5,7 @@ import { TestContext } from '../../tests/utils';
 
 // Mock path module
 vi.mock('path', async () => {
-  const { createPathMock } = await import('../__mocks__/path');
+  const { createPathMock } = await import('../mocks/path');
   return createPathMock({
     testRoot: '/project',
     testHome: '/project/home',
@@ -14,7 +14,7 @@ vi.mock('path', async () => {
 });
 
 // Import path utils after mock setup
-import { pathTestUtils } from '../__mocks__/path';
+import { pathTestUtils } from '../mocks/path';
 
 // Mock fs module
 vi.mock('fs', () => ({

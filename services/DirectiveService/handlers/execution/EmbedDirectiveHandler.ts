@@ -21,7 +21,18 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
     await this.validationService.validate(node);
     
     // 2. Resolve the path and any variables
-    const resolvedPath = await this.resolutionService.resolvePath(directive.path);
+    const resolvedPath = await this.resolutionService.resolvePath(directive.path, {
+      allowedVariableTypes: {
+        text: true,
+        data: true,
+        path: true,
+        command: false
+      },
+      pathValidation: {
+        requireAbsolute: true,
+        allowedRoots: ['$PROJECTPATH', '$HOMEPATH']
+      }
+    });
     
     // 3. Get the content
     let content = await this.resolutionService.resolveContent(resolvedPath);

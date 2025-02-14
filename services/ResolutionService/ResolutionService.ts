@@ -221,4 +221,44 @@ export class ResolutionService implements IResolutionService {
 
     checkReferences(value);
   }
+
+  /**
+   * Extract a section from content by its heading
+   */
+  async extractSection(content: string, section: string): Promise<string> {
+    // Split content into lines
+    const lines = content.split('\n');
+    
+    // Find the section heading
+    const sectionStart = lines.findIndex(line => {
+      // Remove heading markers and trim
+      const heading = line.replace(/^#+\s*/, '').trim();
+      return heading === section;
+    });
+
+    if (sectionStart === -1) {
+      throw new ResolutionError(
+        `Section not found: ${section}`,
+        ResolutionErrorCode.INVALID_PATH,
+        { value: section }
+      );
+    }
+
+    // Find the next heading of same or higher level
+    const currentLine = lines[sectionStart];
+    const headingLevel = (currentLine.match(/^#+/) || [''])[0].length;
+    
+    let sectionEnd = lines.length;
+    for (let i = sectionStart + 1; i < lines.length; i++) {
+      const line = lines[i];
+      const match = line.match(/^#+/);
+      if (match && match[0].length <= headingLevel) {
+        sectionEnd = i;
+        break;
+      }
+    }
+
+    // Extract the section content
+    return lines.slice(sectionStart, sectionEnd).join('\n');
+  }
 } 
