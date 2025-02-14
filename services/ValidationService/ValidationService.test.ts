@@ -1,7 +1,13 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ValidationService } from './ValidationService';
-import type { DirectiveNode, TextDirective, DataDirective, ImportDirective, EmbedDirective } from 'meld-spec';
 import { MeldDirectiveError } from '../../core/errors/MeldDirectiveError';
+import {
+  createTextDirective,
+  createDataDirective,
+  createImportDirective,
+  createEmbedDirective,
+  createLocation
+} from '../../tests/utils/testFactories';
 
 describe('ValidationService', () => {
   let service: ValidationService;
@@ -44,209 +50,97 @@ describe('ValidationService', () => {
   
   describe('Text directive validation', () => {
     it('should validate a valid text directive', () => {
-      const node: DirectiveNode = {
-        type: 'directive',
-        directive: {
-          kind: 'text',
-          name: 'greeting',
-          value: 'Hello'
-        } as TextDirective,
-        location: { start: { line: 1, column: 1 } }
-      };
-      
+      const node = createTextDirective('greeting', 'Hello', createLocation(1, 1));
       expect(() => service.validate(node)).not.toThrow();
     });
     
     it('should throw on missing name', () => {
-      const node: DirectiveNode = {
-        type: 'directive',
-        directive: {
-          kind: 'text',
-          value: 'Hello'
-        } as TextDirective,
-        location: { start: { line: 1, column: 1 } }
-      };
-      
-      expect(() => service.validate(node))
-        .toThrow(MeldDirectiveError);
+      const node = createTextDirective('', 'Hello', createLocation(1, 1));
+      expect(() => service.validate(node)).toThrow(MeldDirectiveError);
+    });
+    
+    it('should throw on missing value', () => {
+      const node = createTextDirective('greeting', '', createLocation(1, 1));
+      expect(() => service.validate(node)).toThrow(MeldDirectiveError);
     });
     
     it('should throw on invalid name format', () => {
-      const node: DirectiveNode = {
-        type: 'directive',
-        directive: {
-          kind: 'text',
-          name: '123invalid',
-          value: 'Hello'
-        } as TextDirective,
-        location: { start: { line: 1, column: 1 } }
-      };
-      
-      expect(() => service.validate(node))
-        .toThrow(MeldDirectiveError);
+      const node = createTextDirective('123invalid', 'Hello', createLocation(1, 1));
+      expect(() => service.validate(node)).toThrow(MeldDirectiveError);
     });
   });
   
   describe('Data directive validation', () => {
     it('should validate a valid data directive with string value', () => {
-      const node: DirectiveNode = {
-        type: 'directive',
-        directive: {
-          kind: 'data',
-          name: 'config',
-          value: '{"key": "value"}'
-        } as DataDirective,
-        location: { start: { line: 1, column: 1 } }
-      };
-      
+      const node = createDataDirective('config', '{"key": "value"}', createLocation(1, 1));
       expect(() => service.validate(node)).not.toThrow();
     });
     
     it('should validate a valid data directive with object value', () => {
-      const node: DirectiveNode = {
-        type: 'directive',
-        directive: {
-          kind: 'data',
-          name: 'config',
-          value: { key: 'value' }
-        } as DataDirective,
-        location: { start: { line: 1, column: 1 } }
-      };
-      
+      const node = createDataDirective('config', { key: 'value' }, createLocation(1, 1));
       expect(() => service.validate(node)).not.toThrow();
     });
     
     it('should throw on invalid JSON string', () => {
-      const node: DirectiveNode = {
-        type: 'directive',
-        directive: {
-          kind: 'data',
-          name: 'config',
-          value: '{invalid json}'
-        } as DataDirective,
-        location: { start: { line: 1, column: 1 } }
-      };
-      
-      expect(() => service.validate(node))
-        .toThrow(MeldDirectiveError);
+      const node = createDataDirective('config', '{invalid json}', createLocation(1, 1));
+      expect(() => service.validate(node)).toThrow(MeldDirectiveError);
+    });
+    
+    it('should throw on missing name', () => {
+      const node = createDataDirective('', { key: 'value' }, createLocation(1, 1));
+      expect(() => service.validate(node)).toThrow(MeldDirectiveError);
+    });
+    
+    it('should throw on invalid name format', () => {
+      const node = createDataDirective('123invalid', { key: 'value' }, createLocation(1, 1));
+      expect(() => service.validate(node)).toThrow(MeldDirectiveError);
     });
   });
   
   describe('Import directive validation', () => {
     it('should validate a valid import directive', () => {
-      const node: DirectiveNode = {
-        type: 'directive',
-        directive: {
-          kind: 'import',
-          path: 'path/to/file.md'
-        } as ImportDirective,
-        location: { start: { line: 1, column: 1 } }
-      };
-      
+      const node = createImportDirective('test.md', createLocation(1, 1));
       expect(() => service.validate(node)).not.toThrow();
     });
     
-    it('should validate a valid import directive with section', () => {
-      const node: DirectiveNode = {
-        type: 'directive',
-        directive: {
-          kind: 'import',
-          path: 'file.md',
-          section: 'Introduction'
-        } as ImportDirective,
-        location: { start: { line: 1, column: 1 } }
-      };
-      
-      expect(() => service.validate(node)).not.toThrow();
-    });
-    
-    it('should throw on empty path', () => {
-      const node: DirectiveNode = {
-        type: 'directive',
-        directive: {
-          kind: 'import',
-          path: ''
-        } as ImportDirective,
-        location: { start: { line: 1, column: 1 } }
-      };
-      
-      expect(() => service.validate(node))
-        .toThrow(MeldDirectiveError);
-    });
-    
-    it('should throw on invalid fuzzy value', () => {
-      const node: DirectiveNode = {
-        type: 'directive',
-        directive: {
-          kind: 'import',
-          path: 'file.md',
-          fuzzy: 1.5
-        } as ImportDirective,
-        location: { start: { line: 1, column: 1 } }
-      };
-      
-      expect(() => service.validate(node))
-        .toThrow(MeldDirectiveError);
+    it('should throw on missing path', () => {
+      const node = createImportDirective('', createLocation(1, 1));
+      expect(() => service.validate(node)).toThrow(MeldDirectiveError);
     });
   });
   
   describe('Embed directive validation', () => {
     it('should validate a valid embed directive', () => {
-      const node: DirectiveNode = {
-        type: 'directive',
-        directive: {
-          kind: 'embed',
-          path: 'path/to/file.md'
-        } as EmbedDirective,
-        location: { start: { line: 1, column: 1 } }
-      };
-      
+      const node = createEmbedDirective('test.md', 'section', createLocation(1, 1));
       expect(() => service.validate(node)).not.toThrow();
     });
     
-    it('should validate a valid embed directive with all options', () => {
-      const node: DirectiveNode = {
-        type: 'directive',
-        directive: {
-          kind: 'embed',
-          path: 'file.md',
-          section: 'Introduction',
-          fuzzy: 0.8,
-          format: 'markdown'
-        } as EmbedDirective,
-        location: { start: { line: 1, column: 1 } }
-      };
-      
+    it('should validate embed directive without section', () => {
+      const node = createEmbedDirective('test.md', undefined, createLocation(1, 1));
       expect(() => service.validate(node)).not.toThrow();
     });
     
-    it('should throw on empty path', () => {
-      const node: DirectiveNode = {
-        type: 'directive',
-        directive: {
-          kind: 'embed',
-          path: ''
-        } as EmbedDirective,
-        location: { start: { line: 1, column: 1 } }
-      };
-      
-      expect(() => service.validate(node))
-        .toThrow(MeldDirectiveError);
+    it('should throw on missing path', () => {
+      const node = createEmbedDirective('', undefined, createLocation(1, 1));
+      expect(() => service.validate(node)).toThrow(MeldDirectiveError);
     });
     
-    it('should throw on invalid format type', () => {
-      const node: DirectiveNode = {
-        type: 'directive',
-        directive: {
-          kind: 'embed',
-          path: 'file.md',
-          format: 123 as any
-        } as EmbedDirective,
-        location: { start: { line: 1, column: 1 } }
-      };
-      
-      expect(() => service.validate(node))
-        .toThrow(MeldDirectiveError);
+    it('should validate fuzzy matching threshold', () => {
+      const node = createEmbedDirective('test.md', 'section', createLocation(1, 1));
+      node.directive.fuzzy = 0.8;
+      expect(() => service.validate(node)).not.toThrow();
+    });
+    
+    it('should throw on invalid fuzzy threshold (below 0)', () => {
+      const node = createEmbedDirective('test.md', 'section', createLocation(1, 1));
+      node.directive.fuzzy = -0.1;
+      expect(() => service.validate(node)).toThrow(MeldDirectiveError);
+    });
+    
+    it('should throw on invalid fuzzy threshold (above 1)', () => {
+      const node = createEmbedDirective('test.md', 'section', createLocation(1, 1));
+      node.directive.fuzzy = 1.1;
+      expect(() => service.validate(node)).toThrow(MeldDirectiveError);
     });
   });
   

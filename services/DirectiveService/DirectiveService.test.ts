@@ -2,6 +2,13 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { DirectiveService } from './DirectiveService';
 import type { DirectiveNode, TextDirective, DataDirective, ImportDirective, EmbedDirective } from 'meld-spec';
 import { MeldDirectiveError } from '../../core/errors/MeldDirectiveError';
+import { 
+  createTextDirective,
+  createDataDirective,
+  createImportDirective,
+  createEmbedDirective,
+  createLocation
+} from '../../tests/utils/testFactories';
 
 describe('DirectiveService', () => {
   let service: DirectiveService;
@@ -11,38 +18,29 @@ describe('DirectiveService', () => {
   let mockFileSystemService: any;
   let mockParserService: any;
   let mockInterpreterService: any;
+  let mockCircularityService: any;
+  let mockInterpolationService: any;
 
   beforeEach(() => {
-    // Create mock services
-    mockValidationService = {
-      validate: vi.fn()
-    };
-
+    mockValidationService = { validate: vi.fn() };
     mockStateService = {
       setTextVar: vi.fn(),
       setDataVar: vi.fn(),
       createChildState: vi.fn(),
       mergeChildState: vi.fn()
     };
-
-    mockPathService = {
-      resolvePath: vi.fn()
+    mockPathService = { resolvePath: vi.fn() };
+    mockFileSystemService = { exists: vi.fn(), readFile: vi.fn() };
+    mockParserService = { parse: vi.fn() };
+    mockInterpreterService = { interpret: vi.fn() };
+    mockCircularityService = {
+      beginImport: vi.fn(),
+      endImport: vi.fn()
+    };
+    mockInterpolationService = {
+      resolveString: vi.fn()
     };
 
-    mockFileSystemService = {
-      exists: vi.fn(),
-      readFile: vi.fn()
-    };
-
-    mockParserService = {
-      parse: vi.fn()
-    };
-
-    mockInterpreterService = {
-      interpret: vi.fn()
-    };
-
-    // Create service instance
     service = new DirectiveService();
     service.initialize(
       mockValidationService,
@@ -50,7 +48,9 @@ describe('DirectiveService', () => {
       mockPathService,
       mockFileSystemService,
       mockParserService,
-      mockInterpreterService
+      mockInterpreterService,
+      mockCircularityService,
+      mockInterpolationService
     );
   });
 
@@ -75,15 +75,7 @@ describe('DirectiveService', () => {
 
   describe('Text directive handling', () => {
     it('should process a valid text directive', async () => {
-      const node: DirectiveNode = {
-        type: 'directive',
-        directive: {
-          kind: 'text',
-          name: 'greeting',
-          value: 'Hello'
-        } as TextDirective,
-        location: { start: { line: 1, column: 1 } }
-      };
+      const node = createTextDirective('greeting', 'Hello', createLocation(1, 1));
 
       await service.processDirective(node);
 
@@ -92,14 +84,7 @@ describe('DirectiveService', () => {
     });
 
     it('should handle validation errors', async () => {
-      const node: DirectiveNode = {
-        type: 'directive',
-        directive: {
-          kind: 'text',
-          name: 'greeting',
-          value: 'Hello'
-        } as TextDirective
-      };
+      const node = createTextDirective('greeting', 'Hello', createLocation(1, 1));
 
       mockValidationService.validate.mockImplementation(() => {
         throw new MeldDirectiveError('Invalid text directive', 'text');
@@ -111,15 +96,7 @@ describe('DirectiveService', () => {
 
   describe('Data directive handling', () => {
     it('should process a valid data directive with string value', async () => {
-      const node: DirectiveNode = {
-        type: 'directive',
-        directive: {
-          kind: 'data',
-          name: 'config',
-          value: '{"key": "value"}'
-        } as DataDirective,
-        location: { start: { line: 1, column: 1 } }
-      };
+      const node = createDataDirective('config', '{"key": "value"}', createLocation(1, 1));
 
       await service.processDirective(node);
 
@@ -128,15 +105,7 @@ describe('DirectiveService', () => {
     });
 
     it('should process a valid data directive with object value', async () => {
-      const node: DirectiveNode = {
-        type: 'directive',
-        directive: {
-          kind: 'data',
-          name: 'config',
-          value: { key: 'value' }
-        } as DataDirective,
-        location: { start: { line: 1, column: 1 } }
-      };
+      const node = createDataDirective('config', { key: 'value' }, createLocation(1, 1));
 
       await service.processDirective(node);
 
@@ -147,17 +116,9 @@ describe('DirectiveService', () => {
 
   describe('Import directive handling', () => {
     it('should process a valid import directive', async () => {
-      const node: DirectiveNode = {
-        type: 'directive',
-        directive: {
-          kind: 'import',
-          path: 'test.md'
-        } as ImportDirective,
-        location: { start: { line: 1, column: 1 } }
-      };
-
+      const node = createImportDirective('test.md', createLocation(1, 1));
       const mockContent = 'Test content';
-      const mockParsedNodes = [{ type: 'text', content: 'Test content' }];
+      const mockParsedNodes = [{ type: 'Text', content: 'Test content' }];
       const mockChildState = {};
 
       mockPathService.resolvePath.mockResolvedValue('/resolved/test.md');
@@ -186,14 +147,7 @@ describe('DirectiveService', () => {
     });
 
     it('should handle missing import files', async () => {
-      const node: DirectiveNode = {
-        type: 'directive',
-        directive: {
-          kind: 'import',
-          path: 'missing.md'
-        } as ImportDirective,
-        location: { start: { line: 1, column: 1 } }
-      };
+      const node = createImportDirective('missing.md', createLocation(1, 1));
 
       mockPathService.resolvePath.mockResolvedValue('/resolved/missing.md');
       mockFileSystemService.exists.mockResolvedValue(false);
@@ -204,18 +158,9 @@ describe('DirectiveService', () => {
 
   describe('Embed directive handling', () => {
     it('should process a valid embed directive', async () => {
-      const node: DirectiveNode = {
-        type: 'directive',
-        directive: {
-          kind: 'embed',
-          path: 'test.md',
-          format: 'markdown'
-        } as EmbedDirective,
-        location: { start: { line: 1, column: 1 } }
-      };
-
+      const node = createEmbedDirective('test.md', undefined, createLocation(1, 1));
       const mockContent = 'Test content';
-      const mockParsedNodes = [{ type: 'text', content: 'Test content' }];
+      const mockParsedNodes = [{ type: 'Text', content: 'Test content' }];
       const mockChildState = {};
 
       mockPathService.resolvePath.mockResolvedValue('/resolved/test.md');
@@ -244,14 +189,7 @@ describe('DirectiveService', () => {
     });
 
     it('should handle missing embed files', async () => {
-      const node: DirectiveNode = {
-        type: 'directive',
-        directive: {
-          kind: 'embed',
-          path: 'missing.md'
-        } as EmbedDirective,
-        location: { start: { line: 1, column: 1 } }
-      };
+      const node = createEmbedDirective('missing.md', undefined, createLocation(1, 1));
 
       mockPathService.resolvePath.mockResolvedValue('/resolved/missing.md');
       mockFileSystemService.exists.mockResolvedValue(false);
@@ -262,23 +200,9 @@ describe('DirectiveService', () => {
 
   describe('Multiple directives processing', () => {
     it('should process multiple directives in sequence', async () => {
-      const nodes: DirectiveNode[] = [
-        {
-          type: 'directive',
-          directive: {
-            kind: 'text',
-            name: 'greeting',
-            value: 'Hello'
-          } as TextDirective
-        },
-        {
-          type: 'directive',
-          directive: {
-            kind: 'data',
-            name: 'config',
-            value: { key: 'value' }
-          } as DataDirective
-        }
+      const nodes = [
+        createTextDirective('greeting', 'Hello', createLocation(1, 1)),
+        createDataDirective('config', { key: 'value' }, createLocation(2, 1))
       ];
 
       await service.processDirectives(nodes);
@@ -289,21 +213,9 @@ describe('DirectiveService', () => {
     });
 
     it('should stop processing on first error', async () => {
-      const nodes: DirectiveNode[] = [
-        {
-          type: 'directive',
-          directive: {
-            kind: 'text',
-            name: 'greeting',
-            value: 'Hello'
-          } as TextDirective
-        },
-        {
-          type: 'directive',
-          directive: {
-            kind: 'unknown'
-          } as any
-        }
+      const nodes = [
+        createTextDirective('greeting', 'Hello', createLocation(1, 1)),
+        createDirectiveNode('unknown' as any, {}, createLocation(2, 1))
       ];
 
       await expect(service.processDirectives(nodes)).rejects.toThrow(MeldDirectiveError);
@@ -352,13 +264,13 @@ Content in section one
 Content in section two`;
 
       const node: DirectiveNode = {
-        type: 'directive',
+        type: 'Directive',
         directive: {
           kind: 'embed',
           path: 'test.md',
           section: 'Section One'
         } as EmbedDirective,
-        location: { start: { line: 1, column: 1 } }
+        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } }
       };
 
       mockPathService.resolvePath.mockResolvedValue('/test.md');
@@ -382,14 +294,14 @@ Content in guide
 Other content`;
 
       const node: DirectiveNode = {
-        type: 'directive',
+        type: 'Directive',
         directive: {
           kind: 'embed',
           path: 'test.md',
           section: 'Getting Started',
           fuzzy: 0.7
         } as EmbedDirective,
-        location: { start: { line: 1, column: 1 } }
+        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } }
       };
 
       mockPathService.resolvePath.mockResolvedValue('/test.md');
@@ -415,13 +327,13 @@ Nested content
 Other content`;
 
       const node: DirectiveNode = {
-        type: 'directive',
+        type: 'Directive',
         directive: {
           kind: 'embed',
           path: 'test.md',
           section: 'Section One'
         } as EmbedDirective,
-        location: { start: { line: 1, column: 1 } }
+        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } }
       };
 
       mockPathService.resolvePath.mockResolvedValue('/test.md');
@@ -444,13 +356,13 @@ Other content`;
 Content`;
 
       const node: DirectiveNode = {
-        type: 'directive',
+        type: 'Directive',
         directive: {
           kind: 'embed',
           path: 'test.md',
           section: 'Nonexistent Section'
         } as EmbedDirective,
-        location: { start: { line: 1, column: 1 } }
+        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } }
       };
 
       mockPathService.resolvePath.mockResolvedValue('/test.md');
@@ -506,13 +418,13 @@ Content`;
     it('should format code blocks with language', async () => {
       const content = 'const x = 1;';
       const node: DirectiveNode = {
-        type: 'directive',
+        type: 'Directive',
         directive: {
           kind: 'embed',
           path: 'test.ts',
           format: 'typescript'
         } as EmbedDirective,
-        location: { start: { line: 1, column: 1 } }
+        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } }
       };
 
       mockPathService.resolvePath.mockResolvedValue('/test.ts');
@@ -529,13 +441,13 @@ Content`;
     it('should format quotes with > prefix', async () => {
       const content = 'Line 1\nLine 2';
       const node: DirectiveNode = {
-        type: 'directive',
+        type: 'Directive',
         directive: {
           kind: 'embed',
           path: 'quote.txt',
           format: 'quote'
         } as EmbedDirective,
-        location: { start: { line: 1, column: 1 } }
+        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } }
       };
 
       mockPathService.resolvePath.mockResolvedValue('/quote.txt');
@@ -552,12 +464,12 @@ Content`;
     it('should auto-detect format from file extension', async () => {
       const content = 'const x = 1;';
       const node: DirectiveNode = {
-        type: 'directive',
+        type: 'Directive',
         directive: {
           kind: 'embed',
           path: 'test.ts'
         } as EmbedDirective,
-        location: { start: { line: 1, column: 1 } }
+        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } }
       };
 
       mockPathService.resolvePath.mockResolvedValue('/test.ts');
@@ -574,13 +486,13 @@ Content`;
     it('should preserve markdown content as-is', async () => {
       const content = '# Title\n## Section';
       const node: DirectiveNode = {
-        type: 'directive',
+        type: 'Directive',
         directive: {
           kind: 'embed',
           path: 'test.md',
           format: 'markdown'
         } as EmbedDirective,
-        location: { start: { line: 1, column: 1 } }
+        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } }
       };
 
       mockPathService.resolvePath.mockResolvedValue('/test.md');
@@ -597,13 +509,13 @@ Content`;
     it('should handle unknown formats as plain text', async () => {
       const content = 'Some content';
       const node: DirectiveNode = {
-        type: 'directive',
+        type: 'Directive',
         directive: {
           kind: 'embed',
           path: 'test.xyz',
           format: 'unknown'
         } as EmbedDirective,
-        location: { start: { line: 1, column: 1 } }
+        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } }
       };
 
       mockPathService.resolvePath.mockResolvedValue('/test.xyz');
