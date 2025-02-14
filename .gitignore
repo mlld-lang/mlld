@@ -37,10 +37,6 @@ pids
 .env.test.local
 .env.production.local 
 
-ARCH-PLAN.md
-TODO.md
-STRUCTURE.md
-SCRATCH.md
-OVERVIEW.md
-_meld/arch.md
-_meld/plan.md
+/*.md
+_meld/*.md
+!/_/*.meld.md
