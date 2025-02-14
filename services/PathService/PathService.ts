@@ -1,20 +1,21 @@
 import { IPathService, PathOptions } from './IPathService';
 import { IFileSystemService } from '../FileSystemService/IFileSystemService';
 import { PathValidationError, PathErrorCode } from './errors/PathValidationError';
+import type { Location } from '../../core/types';
 import * as path from 'path';
 
 /**
  * Service for validating and normalizing paths
  */
 export class PathService implements IPathService {
-  private fileSystem!: IFileSystemService;
+  private fs!: IFileSystemService;
   private testMode: boolean = false;
 
   /**
    * Initialize the path service with a file system service
    */
   initialize(fileSystem: IFileSystemService): void {
-    this.fileSystem = fileSystem;
+    this.fs = fileSystem;
   }
 
   /**
@@ -57,83 +58,77 @@ export class PathService implements IPathService {
   /**
    * Validate a path according to the specified options
    */
-  async validatePath(filePath: string, options: PathOptions = {}): Promise<void> {
-    if (!filePath) {
-      throw new PathValidationError(
-        'Path cannot be empty',
-        PathErrorCode.INVALID_PATH,
-        { filePath, options }
-      );
+  async validatePath(path: string, options: PathOptions = {}): Promise<string> {
+    // Basic validation
+    if (!path) {
+      throw new PathValidationError('Path cannot be empty', PathErrorCode.INVALID_PATH, options.location);
     }
 
-    if (filePath.includes('\0')) {
-      throw new PathValidationError(
-        'Path cannot contain null bytes',
-        PathErrorCode.NULL_BYTE,
-        { filePath, options }
-      );
+    if (path.includes('\0')) {
+      throw new PathValidationError('Path cannot contain null bytes', PathErrorCode.NULL_BYTE, options.location);
     }
 
     // Skip validation in test mode unless explicitly required
     if (this.testMode && !options.mustExist) {
-      return;
+      return path;
     }
 
-    // Ensure path is absolute
-    const absolutePath = this.resolvePath(filePath);
+    // Normalize path
+    const normalizedPath = this.normalizePath(path);
 
-    // Check if path is within base directory if specified
+    // Check if path is within base directory
     if (options.baseDir && !options.allowOutsideBaseDir) {
-      const baseDir = this.resolvePath(options.baseDir);
-      const relative = path.relative(baseDir, absolutePath);
-      if (relative.startsWith('..') || path.isAbsolute(relative)) {
+      const normalizedBase = this.normalizePath(options.baseDir);
+      if (!normalizedPath.startsWith(normalizedBase)) {
         throw new PathValidationError(
           `Path must be within base directory: ${options.baseDir}`,
           PathErrorCode.OUTSIDE_BASE_DIR,
-          { filePath, options }
+          options.location
         );
       }
     }
 
     // Check existence if required
-    if (options.mustExist !== false) {
-      const exists = await this.fileSystem.exists(absolutePath);
+    if (options.mustExist) {
+      const exists = await this.fs.exists(normalizedPath);
       if (!exists) {
         throw new PathValidationError(
-          `Path does not exist: ${filePath}`,
+          `Path does not exist: ${normalizedPath}`,
           PathErrorCode.PATH_NOT_FOUND,
-          { filePath, options }
+          options.location
         );
       }
+    }
 
-      // Check file type if specified
-      if (options.mustBeFile || options.mustBeDirectory) {
-        const stats = await this.fileSystem.stat(absolutePath);
-
-        if (options.mustBeFile && !stats.isFile()) {
-          throw new PathValidationError(
-            `Path must be a file: ${filePath}`,
-            PathErrorCode.NOT_A_FILE,
-            { filePath, options }
-          );
-        }
-
-        if (options.mustBeDirectory && !stats.isDirectory()) {
-          throw new PathValidationError(
-            `Path must be a directory: ${filePath}`,
-            PathErrorCode.NOT_A_DIRECTORY,
-            { filePath, options }
-          );
-        }
+    // Check file type if required
+    if (options.mustBeFile || options.mustBeDirectory) {
+      const isDir = await this.fs.isDirectory(normalizedPath);
+      
+      if (options.mustBeFile && isDir) {
+        throw new PathValidationError(
+          `Path must be a file: ${normalizedPath}`,
+          PathErrorCode.NOT_A_FILE,
+          options.location
+        );
+      }
+      
+      if (options.mustBeDirectory && !isDir) {
+        throw new PathValidationError(
+          `Path must be a directory: ${normalizedPath}`,
+          PathErrorCode.NOT_A_DIRECTORY,
+          options.location
+        );
       }
     }
+
+    return normalizedPath;
   }
 
   /**
    * Normalize a path by resolving '..' and '.' segments
    */
-  normalizePath(filePath: string): string {
-    return path.normalize(filePath);
+  normalizePath(path: string): string {
+    return path.normalize(path);
   }
 
   /**
@@ -146,14 +141,14 @@ export class PathService implements IPathService {
   /**
    * Get the directory name of a path
    */
-  dirname(filePath: string): string {
-    return path.dirname(filePath);
+  dirname(pathStr: string): string {
+    return path.dirname(pathStr);
   }
 
   /**
    * Get the base name of a path
    */
-  basename(filePath: string): string {
-    return path.basename(filePath);
+  basename(pathStr: string): string {
+    return path.basename(pathStr);
   }
 } 

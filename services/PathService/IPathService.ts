@@ -1,4 +1,5 @@
-import type { IFileSystemService } from '../FileSystemService/IFileSystemService';
+import { IFileSystemService } from '../FileSystemService/IFileSystemService';
+import type { Location } from '../../core/types';
 
 /**
  * Options for path validation and operations
@@ -37,6 +38,8 @@ export interface PathOptions {
    * @default false
    */
   mustBeDirectory?: boolean;
+
+  location?: Location;
 }
 
 /**
@@ -84,7 +87,7 @@ export interface IPathService {
    * @param options Options for validation
    * @throws PathValidationError if validation fails
    */
-  validatePath(filePath: string, options?: PathOptions): Promise<void>;
+  validatePath(filePath: string, options?: PathOptions): Promise<string>;
 
   /**
    * Normalize a path by resolving '..' and '.' segments.

@@ -5,7 +5,8 @@ import { ProjectBuilder } from './ProjectBuilder';
 import { TestSnapshot } from './TestSnapshot';
 import { FixtureManager } from './FixtureManager';
 import * as testFactories from './testFactories';
-import { ParserService, IParserService } from '../services/ParserService';
+import { ParserService } from '../../services/ParserService/ParserService';
+import type { IParserService } from '../../services/ParserService/IParserService';
 
 /**
  * Main test context that provides access to all test utilities

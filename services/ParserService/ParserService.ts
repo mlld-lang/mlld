@@ -6,7 +6,7 @@ import { MeldParseError } from '../../core/errors/MeldParseError';
 import type { Location, Position } from '../../core/types';
 
 export class ParserService implements IParserService {
-  parse(content: string): MeldNode[] {
+  async parse(content: string): Promise<MeldNode[]> {
     try {
       if (!content) {
         throw new MeldParseError('Empty content provided');
@@ -14,8 +14,8 @@ export class ParserService implements IParserService {
       
       logger.debug('Parsing Meld content', { contentLength: content.length });
       const nodes = parse(content);
-      logger.debug('Successfully parsed content', { nodeCount: nodes.length });
-      return nodes;
+      logger.debug('Successfully parsed content', { nodeCount: nodes?.length ?? 0 });
+      return nodes ?? [];
     } catch (error) {
       logger.error('Failed to parse content', { error });
       
@@ -32,13 +32,15 @@ export class ParserService implements IParserService {
         throw new MeldParseError(error.message, position);
       }
       
-      throw new MeldParseError(
-        error instanceof Error ? error.message : 'Unknown parsing error'
-      );
+      // Wrap unknown errors in MeldParseError
+      if (error instanceof Error) {
+        throw new MeldParseError(error.message);
+      }
+      throw new MeldParseError('Unknown parsing error');
     }
   }
 
-  parseWithLocations(content: string, filePath?: string): MeldNode[] {
+  async parseWithLocations(content: string, filePath?: string): Promise<MeldNode[]> {
     try {
       logger.debug('Parsing Meld content with locations', { 
         contentLength: content.length,
@@ -46,21 +48,24 @@ export class ParserService implements IParserService {
       });
 
       // Parse using base method first
-      const nodes = this.parse(content);
+      const nodes = await this.parse(content);
       
       // Only add filePath to existing locations by creating new location objects
       if (filePath) {
-        return nodes.map(node => ({
-          ...node,
-          location: node.location ? {
-            start: node.location.start,
-            end: node.location.end,
-            filePath
-          } : undefined
-        }));
+        return nodes.map(node => {
+          if (!node?.location) return node;
+          return {
+            ...node,
+            location: {
+              start: node.location.start,
+              end: node.location.end,
+              filePath
+            }
+          };
+        });
       }
 
-      logger.debug('Successfully added locations', { nodeCount: nodes.length });
+      logger.debug('Successfully added locations', { nodeCount: nodes?.length ?? 0 });
       return nodes;
     } catch (error) {
       // Create new error with location instead of modifying existing

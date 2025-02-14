@@ -1,4 +1,5 @@
 import { PathOptions } from '../IPathService';
+import type { Location } from '../../../core/types';
 
 /**
  * Error codes for path validation failures
@@ -16,16 +17,21 @@ export enum PathErrorCode {
  * Error thrown when path validation fails
  */
 export class PathValidationError extends Error {
-  constructor(
-    message: string,
-    public readonly code: PathErrorCode,
-    public readonly details?: {
-      filePath?: string;
-      options?: PathOptions;
-      cause?: Error;
-    }
-  ) {
-    super(`Path validation error (${code}): ${message}`);
+  public readonly code: PathErrorCode;
+  public readonly location?: Location;
+
+  constructor(message: string, code: PathErrorCode, location?: Location) {
+    const locationStr = location ? 
+      ` at line ${location.start.line}, column ${location.start.column}` +
+      (location.filePath ? ` in ${location.filePath}` : '')
+      : '';
+    
+    super(`Path validation error: ${message}${locationStr}`);
     this.name = 'PathValidationError';
+    this.code = code;
+    this.location = location;
+
+    // Ensure proper prototype chain for instanceof checks
+    Object.setPrototypeOf(this, PathValidationError.prototype);
   }
 } 
