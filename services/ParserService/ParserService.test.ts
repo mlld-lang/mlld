@@ -11,7 +11,8 @@ describe('ParserService', () => {
 
   beforeEach(() => {
     parser = new ParserService();
-    parseSpy = vi.spyOn(parser, 'parse');
+    // @ts-ignore - access private method for testing
+    parseSpy = vi.spyOn(parser, 'parseContent');
   });
 
   describe('parse', () => {

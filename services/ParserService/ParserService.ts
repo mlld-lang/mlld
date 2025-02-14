@@ -6,6 +6,10 @@ import { MeldParseError } from '../../core/errors/MeldParseError';
 import type { Location, Position } from '../../core/types';
 
 export class ParserService implements IParserService {
+  private async parseContent(content: string): Promise<MeldNode[]> {
+    return parse(content);
+  }
+
   async parse(content: string): Promise<MeldNode[]> {
     try {
       if (!content) {
@@ -13,7 +17,7 @@ export class ParserService implements IParserService {
       }
       
       logger.debug('Parsing Meld content', { contentLength: content.length });
-      const nodes = parse(content);
+      const nodes = await this.parseContent(content);
       logger.debug('Successfully parsed content', { nodeCount: nodes?.length ?? 0 });
       return nodes ?? [];
     } catch (error) {
@@ -25,24 +29,23 @@ export class ParserService implements IParserService {
       
       // Convert meld-ast ParseError to our MeldParseError
       if (this.isParseError(error)) {
-        const location: Location = {
-          start: {
-            line: error.location.start.line,
-            column: error.location.start.column
-          },
-          end: {
-            line: error.location.end.line,
-            column: error.location.end.column
-          }
+        const position: Position = {
+          line: error.location.start.line,
+          column: error.location.start.column
         };
-        throw new MeldParseError(error.message, location);
+        const meldError = new MeldParseError(error.message, position);
+        // Ensure proper prototype chain for instanceof checks
+        Object.setPrototypeOf(meldError, MeldParseError.prototype);
+        throw meldError;
       }
       
       // Wrap unknown errors in MeldParseError
-      throw new MeldParseError(
-        error instanceof Error ? error.message : 'Unknown error',
-        { line: 1, column: 1 }
-      );
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      const position: Position = { line: 1, column: 1 };
+      const meldError = new MeldParseError(message, position);
+      // Ensure proper prototype chain for instanceof checks
+      Object.setPrototypeOf(meldError, MeldParseError.prototype);
+      throw meldError;
     }
   }
 
