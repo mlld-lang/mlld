@@ -46,12 +46,30 @@ According to meld-spec, we store:
   - No field resolution (handled by ResolutionService)
 
 • PathVariable:  
-  - Raw path strings from @path directive
-  - No path resolution (handled by ResolutionService)
+  - Raw path strings from @path directive (e.g., "$PROJECTPATH/docs/${folder}")
+  - Includes special variables ($HOMEPATH/$~, $PROJECTPATH/$.)
+  - Includes text variables (${var})
+  - NO resolution of any variables (handled by ResolutionService)
+  - NO path validation (handled by PathService)
+  - NO path normalization (handled by PathService)
 
 • CommandDefinition:  
   - Raw command definitions from @define directive
   - No parameter resolution (handled by ResolutionService)
+
+Example of path variable storage:
+```typescript
+// When processing @path directive:
+// @path docs = [$PROJECTPATH/documentation/${section}]
+
+// StateService stores the raw value exactly as is:
+state.setPathVar('docs', '$PROJECTPATH/documentation/${section}');
+
+// Later, when the path needs to be used:
+const rawPath = state.getPathVar('docs');  // "$PROJECTPATH/documentation/${section}"
+// ResolutionService handles resolving all variables
+// PathService handles validation & normalization
+```
 
 ────────────────────────────────────────────────────────────────────────────
 3) STATE SERVICE RESPONSIBILITIES
@@ -182,145 +200,3 @@ class ResolutionService {
   }
 }
 ```
-
-From DirectiveService:
-
-```typescript
-class TextDirectiveHandler {
-  constructor(
-    private state: IStateService,
-    private resolution: IResolutionService
-  ) {}
-
-  async execute(node: DirectiveNode): Promise<void> {
-    const { name, value } = node.directive;
-    // Store raw value in state
-    this.state.setTextVar(name, value);
-  }
-}
-```
-
-────────────────────────────────────────────────────────────────────────────
-6) TESTING STRATEGY
-────────────────────────────────────────────────────────────────────────────
-
-Focus on testing:
-
-1. Pure Storage Operations
-• Setting and getting variables
-• Variable existence checks
-• Variable deletion
-• Getting all variables of each type
-
-2. State Hierarchy
-• Child state creation
-• Parent-child variable lookup
-• State merging
-• Proper isolation between states
-
-3. Import Tracking
-• Adding imports
-• Import existence checks
-• Import inheritance in hierarchy
-
-4. Type Safety
-• Proper typing of stored values
-• Type preservation during operations
-• No accidental type conversion
-
-Example test:
-
-```typescript
-describe('StateService', () => {
-  let state: StateService;
-  
-  beforeEach(() => {
-    state = new StateService();
-  });
-
-  describe('variable storage', () => {
-    it('should store and retrieve text variables', () => {
-      state.setTextVar('greeting', 'Hello ${name}');
-      expect(state.getTextVar('greeting')).toBe('Hello ${name}');
-      // Note: No resolution of ${name} - that's ResolutionService's job
-    });
-  });
-
-  describe('state hierarchy', () => {
-    it('should inherit variables from parent', () => {
-      state.setTextVar('parent', 'value');
-      const child = state.createChildState();
-      expect(child.getTextVar('parent')).toBe('value');
-    });
-
-    it('should isolate child changes', () => {
-      const child = state.createChildState();
-      child.setTextVar('child', 'value');
-      expect(state.hasTextVar('child')).toBe(false);
-    });
-  });
-});
-```
-
-────────────────────────────────────────────────────────────────────────────
-7) INTEGRATION WITH RESOLUTIONSERVICE
-────────────────────────────────────────────────────────────────────────────
-
-StateService provides raw storage that ResolutionService uses to:
-
-1. Variable Resolution
-• Gets raw values from StateService
-• Handles all interpolation
-• Manages resolution contexts
-• Handles circular references
-
-2. Command Resolution
-• Gets command definitions from StateService
-• Resolves command parameters
-• Handles command execution context
-
-3. Path Resolution
-• Gets path variables from StateService
-• Handles path normalization
-• Manages path security
-
-Example integration:
-
-```typescript
-class ResolutionService {
-  constructor(private state: IStateService) {}
-
-  async resolveValue(value: string, context: ResolutionContext): Promise<string> {
-    // 1. Get all referenced variables from state
-    const vars = this.extractVarRefs(value);
-    const resolved = new Map<string, string>();
-    
-    for (const varName of vars) {
-      if (this.state.hasTextVar(varName)) {
-        const rawValue = this.state.getTextVar(varName);
-        resolved.set(varName, await this.resolveValue(rawValue, context));
-      }
-    }
-    
-    // 2. Perform resolution using raw values
-    return this.interpolate(value, resolved, context);
-  }
-}
-```
-
-────────────────────────────────────────────────────────────────────────────
-CONCLUSION
-────────────────────────────────────────────────────────────────────────────
-
-The StateService provides:
-1. Pure variable storage and state management
-2. Clear separation from resolution logic
-3. Type-safe variable operations
-4. Proper state hierarchy support
-5. Simple and testable storage operations
-
-This focused design allows:
-• ResolutionService to handle all resolution logic
-• DirectiveService to store raw values
-• Clean separation of concerns
-• Easy testing and maintenance

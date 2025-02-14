@@ -311,56 +311,173 @@ describe('Interpreter - @embed directive (integration)', () => {
 --------------------------------------------------------------------------------
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-IV. BEST PRACTICES & PATTERNS
+IV. PATH HANDLING TESTS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-1. Always Use Core Libraries
+1) Testing Path Resolution Flow
 ─────────────────────────────────────────────────────────────────────────
-• Use meld-ast for all parsing in tests
-• Use llmxml for XML/section extraction
-• Never implement custom parsing logic
+The path resolution flow involves multiple services working together:
+1. meld-ast parses raw paths with variables
+2. ResolutionService resolves ALL variables (including path variables)
+3. PathService validates & normalizes resolved paths
+4. FileSystemService handles actual I/O
 
-2. Consistent File System Mocking
-─────────────────────────────────────────────────────────────────────────
-• Always use MemfsTestFileSystem via TestContext
-• Never manipulate real files in tests
-• Use ProjectBuilder for file setup
+Example test for this flow:
+```typescript
+describe('Path Resolution Flow', () => {
+  let context: TestContext;
+  let resolutionService: ResolutionService;
+  let pathService: PathService;
 
-3. Clear Separation of Unit vs Integration
-─────────────────────────────────────────────────────────────────────────
-• Unit tests focus on single service/component
-• Integration tests verify full pipeline
-• Use appropriate mocking level for each
+  beforeEach(() => {
+    context = new TestContext();
+    context.initialize();
+    
+    // Setup test project structure
+    context.builder.create({
+      files: {
+        'project/docs/example.md': 'content',
+        'project/config.meld': '@path docs = $PROJECTPATH/docs'
+      }
+    });
 
-4. Named Fixtures For Reusability
-─────────────────────────────────────────────────────────────────────────
-• Store common test scenarios in fixtures/
-• Use JSON format for clarity
-• Example:
+    resolutionService = new ResolutionService(/* deps */);
+    pathService = new PathService(/* deps */);
+  });
 
-  {
-    "dirs": ["project", "home"],
-    "files": {
-      "project/fileA.meld": "@text a = 'A'",
-      "home/config/foo.meld": "..."
-    }
-  }
-
-5. Snapshot Testing For Complex Flows
-─────────────────────────────────────────────────────────────────────────
-• Use TestSnapshot to capture FS state
-• Compare before/after states
-• Example:
-
---------------------------------------------------------------------------------
-it('creates an output file', async () => {
-  const before = context.snapshot.takeSnapshot();
-  await runMeld('project/source.meld');
-  const after = context.snapshot.takeSnapshot();
-  const diff = context.snapshot.compare(before, after);
-  expect(diff.added).toContain('project/output.md');
+  it('resolves and validates path with variables', async () => {
+    // 1. Parse raw path with meld-ast
+    const ast = context.parseMeld('@import $PROJECTPATH/${docs}/example.md');
+    
+    // 2. Resolve variables with ResolutionService
+    const resolvedPath = await resolutionService.resolvePath(
+      ast.directives[0].source,
+      ResolutionContextFactory.forPathDirective()
+    );
+    
+    // 3. Validate & normalize with PathService
+    const validatedPath = await pathService.validatePath(resolvedPath);
+    const normalizedPath = await pathService.normalizePath(validatedPath);
+    
+    // 4. Verify final path
+    expect(normalizedPath).toBe('/absolute/path/to/project/docs/example.md');
+  });
 });
---------------------------------------------------------------------------------
+```
+
+2) Testing PathService in Isolation
+─────────────────────────────────────────────────────────────────────────
+PathService tests should focus on:
+• Path validation (security rules)
+• Path normalization across platforms
+• Test mode overrides
+
+Example:
+```typescript
+describe('PathService', () => {
+  let pathService: PathService;
+
+  beforeEach(() => {
+    pathService = new PathService(/* deps */);
+  });
+
+  describe('validatePath', () => {
+    it('accepts valid absolute paths', async () => {
+      const path = '/absolute/path/to/file.md';
+      await expect(pathService.validatePath(path)).resolves.toBe(path);
+    });
+
+    it('rejects paths with suspicious patterns', async () => {
+      const paths = [
+        '/path/with/../escape',
+        'relative/path',
+        '/path/with/suspicious/../../escape'
+      ];
+      
+      for (const path of paths) {
+        await expect(pathService.validatePath(path)).rejects.toThrow();
+      }
+    });
+  });
+
+  describe('normalizePath', () => {
+    it('normalizes paths consistently across platforms', async () => {
+      const paths = {
+        'C:\\Windows\\Path': '/c/Windows/Path',
+        '/unix/style/path': '/unix/style/path',
+        'mixed/style\\path': '/mixed/style/path'
+      };
+      
+      for (const [input, expected] of Object.entries(paths)) {
+        const result = await pathService.normalizePath(input);
+        expect(result).toBe(expected);
+      }
+    });
+  });
+});
+```
+
+3) Testing ResolutionService Path Handling
+─────────────────────────────────────────────────────────────────────────
+ResolutionService tests should focus on:
+• Resolution of path variables
+• Resolution of special variables ($HOMEPATH/$~, $PROJECTPATH/$)
+• Resolution of nested variables in paths
+
+Example:
+```typescript
+describe('ResolutionService Path Handling', () => {
+  let resolutionService: ResolutionService;
+
+  beforeEach(() => {
+    resolutionService = new ResolutionService(/* deps */);
+  });
+
+  it('resolves path variables with special variables', async () => {
+    const context = ResolutionContextFactory.forPathDirective({
+      projectPath: '/project',
+      homePath: '/home/user'
+    });
+
+    const cases = [
+      {
+        input: '$PROJECTPATH/docs/file.md',
+        expected: '/project/docs/file.md'
+      },
+      {
+        input: '$HOMEPATH/meld/config.md',
+        expected: '/home/user/meld/config.md'
+      },
+      {
+        input: '$~/meld/config.md',
+        expected: '/home/user/meld/config.md'
+      }
+    ];
+
+    for (const { input, expected } of cases) {
+      const result = await resolutionService.resolvePath(input, context);
+      expect(result).toBe(expected);
+    }
+  });
+
+  it('resolves nested variables in paths', async () => {
+    const context = ResolutionContextFactory.forPathDirective({
+      variables: {
+        'docs': '$PROJECTPATH/documentation',
+        'config': '${docs}/config'
+      },
+      projectPath: '/project'
+    });
+
+    const result = await resolutionService.resolvePath(
+      '${config}/settings.md',
+      context
+    );
+    
+    expect(result).toBe('/project/documentation/config/settings.md');
+  });
+});
+```
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 V. CONCLUSION

@@ -1,16 +1,17 @@
 # PathService and FileSystemService 
 
-Below is a focused design for the PathService and FileSystemService that aligns with meld-spec's path variable types and the Meld grammar. These services handle path resolution and file I/O while ensuring compatibility with the core Meld libraries.
+Below is a focused design for the PathService and FileSystemService that aligns with meld-spec's path handling requirements. These services handle path validation, normalization and file I/O while working in conjunction with the ResolutionService.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 I. OVERVIEW & GOALS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 1. Provide a single, well-defined PathService that:
-   • Resolves path variables using meld-spec's PathVariable type
+   • Works with ALREADY RESOLVED paths from ResolutionService
+   • Validates paths meet security requirements
    • Normalizes paths (POSIX, Windows) without custom parsing
    • Supports "test mode" overrides for in-memory tests
-   • Exposes minimal, intuitive methods (e.g., resolvePath)
+   • Exposes minimal, intuitive methods (e.g., validatePath, normalizePath)
 
 2. Provide a single, well-defined FileSystemService that:
    • Abstracts reading, writing, existence checks, and directory creation
@@ -22,7 +23,8 @@ I. OVERVIEW & GOALS
 
 4. Ensure they are designed to be used by directive handlers (e.g., ImportDirectiveHandler, EmbedDirectiveHandler) without leaking internal complexities
 
-5. Focus purely on path resolution and file I/O:
+5. Focus purely on path validation and file I/O:
+   • Variable resolution is handled by ResolutionService
    • Section extraction is handled by llmxml
    • Fuzzy matching is handled by llmxml
    • Circular reference detection is handled by CircularityService
@@ -67,27 +69,23 @@ III. PATHSERVICE DESIGN
 
 A. RESPONSIBILITY & SCOPE
 
-• Expand path variables using meld-spec's PathVariable type
+• Validate resolved paths meet security requirements
 • Normalize paths across Windows/POSIX boundaries
 • Provide test overrides for in-memory testing
 • Throw typed errors (e.g., MeldPathError) for invalid usage
 • Expose a minimal public interface:
 
 --------------------------------------------------------------------------------
-import { PathVariable } from 'meld-spec';
-
 export interface IPathService {
-  // Core path resolution
-  resolvePath(path: string, options?: PathOptions): Promise<string>;
-  resolvePaths(paths: string[], options?: PathOptions): Promise<string[]>;
-  isValidPath(path: string, options?: PathOptions): Promise<boolean>;
-
-  // Path operations
-  join(...paths: string[]): string;
-  resolve(...paths: string[]): string;
-  dirname(path: string): string;
-  basename(path: string): string;
-
+  // Core path validation
+  validatePath(resolvedPath: string, options?: PathOptions): Promise<void>;
+  normalizePath(resolvedPath: string): string;
+  
+  // Platform-specific operations
+  join(...resolvedPaths: string[]): string;
+  dirname(resolvedPath: string): string;
+  basename(resolvedPath: string): string;
+  
   // Test mode
   enableTestMode(): void;
   disableTestMode(): void;
@@ -105,15 +103,13 @@ export interface PathOptions {
 
 B. INTERNAL WORKFLOW ILLUSTRATION (ASCII)
 
-When a directive calls PathService.resolvePath("$PROJECTPATH/foo/bar.meld"):
+When a directive calls PathService after ResolutionService has resolved variables:
 
-     (1) Input: "$PROJECTPATH/foo/bar.meld"
-         └─ Possibly in test mode => override $PROJECTPATH to "/memfs/proj"
-     (2) Expand special variables
-         => "/memfs/proj/foo/bar.meld"  (or real "/usr/myproject/foo/bar.meld" in prod)
-     (3) Validate no ".." or invalid segments => throw MeldPathError if so
-     (4) Normalize => final "/memfs/proj/foo/bar.meld"
-     (5) Return as string
+     (1) Input: "/usr/myproject/foo/bar.meld" (already resolved by ResolutionService)
+         └─ Possibly in test mode => validate against test filesystem
+     (2) Validate security requirements (no "..", within allowed roots)
+     (3) Normalize for platform => final "/usr/myproject/foo/bar.meld"
+     (4) Return normalized path or throw validation error
 
 C. SAMPLE CODE SKETCH (PathService.ts)
 Below is a rough partial example for clarity:
@@ -123,57 +119,47 @@ import { MeldPathError } from '../../core/errors/MeldError';
 
 export class PathService implements IPathService {
   private testMode: boolean = false;
-  private homePath: string = '/home/user';
-  private projectPath: string = '/my/project';
+  private fileSystem: IFileSystemService;
 
-  enableTestMode(homeOverride: string, projectOverride: string): void {
-    this.testMode = true;
-    this.homePath = homeOverride;
-    this.projectPath = projectOverride;
+  constructor(fileSystem: IFileSystemService) {
+    this.fileSystem = fileSystem;
   }
+
+  enableTestMode(): void {
+    this.testMode = true;
+  }
+
   disableTestMode(): void {
     this.testMode = false;
-    // We might revert to some default or environment-based path
-  }
-  setHomePath(actualHome: string): void {
-    this.homePath = actualHome;
-  }
-  setProjectPath(actualProject: string): void {
-    this.projectPath = actualProject;
   }
 
-  public async resolvePath(meldPath: string): Promise<string> {
-    if (!meldPath) {
-      throw new MeldPathError(`Cannot resolve empty path.`);
-    }
-    // 1) Expand special prefixes
-    let expanded = this.expandSpecialPrefix(meldPath);
-
-    // 2) Disallow ".." if we consider them security hazards
-    if (expanded.includes('..')) {
-      throw new MeldPathError(`Relative navigation '..' is not allowed: ${meldPath}`);
+  async validatePath(resolvedPath: string, options?: PathOptions): Promise<void> {
+    if (!resolvedPath) {
+      throw new MeldPathError('Cannot validate empty path');
     }
 
-    // 3) E.g., check isAbsolute, do path.normalize, etc. (We might import 'path' or handle ourselves)
-    // return final string
-    return expanded;
+    // Validate security requirements
+    if (resolvedPath.includes('..')) {
+      throw new MeldPathError('Path contains forbidden navigation');
+    }
+
+    // Check existence if required
+    if (options?.mustExist) {
+      const exists = await this.fileSystem.exists(resolvedPath);
+      if (!exists) {
+        throw new MeldPathError(`Path does not exist: ${resolvedPath}`);
+      }
+    }
+
+    // Additional validation based on options...
   }
 
-  private expandSpecialPrefix(meldPath: string): string {
-    // e.g. replace $PROJECTPATH => this.projectPath, $HOMEPATH => this.homePath, etc.
-    // Then path.join or path.normalize
-    // Return final expanded
+  normalizePath(resolvedPath: string): string {
+    // Platform-specific normalization
+    return path.normalize(resolvedPath);
   }
 
-  public async joinPaths(...parts: string[]): Promise<string> {
-    // Join multiple Meld-style paths:
-    // each part might be $PROJECTPATH/stuff, or an absolute sub path
-    // running expands them all, then does path.join
-  }
-
-  public isAbsolute(testPath: string): boolean {
-    // ...
-  }
+  // ... implement other interface methods
 }
 --------------------------------------------------------------------------------
 
@@ -183,8 +169,10 @@ Example: In an ImportDirectiveHandler:
 
 --------------------------------------------------------------------------------
 // inside ImportDirectiveHandler
-const resolvedPath = await pathService.resolvePath(directive.source);
-const fileExists = await fileSystemService.exists(resolvedPath);
+const resolvedPath = await resolutionService.resolvePath(directive.source);
+await pathService.validatePath(resolvedPath);
+const normalizedPath = pathService.normalizePath(resolvedPath);
+const fileExists = await fileSystemService.exists(normalizedPath);
 if (!fileExists) {
   throw new MeldImportError(`File does not exist: ${directive.source}`);
 }
@@ -193,11 +181,12 @@ if (!fileExists) {
 E. TESTING STRATEGY
 
 1. **Unit Tests** (PathService.test.ts):
-   - Thoroughly check expansions: "$PROJECTPATH/file", "$HOMEPATH/abc", etc.  
-   - Test testMode toggling: in test mode, $PROJECTPATH => /memfs/proj.  
-   - Validate ".." disclaimers or other edge cases.  
-2. **No real disk**: We do not rely on actual OS home directories.  
-3. **Integration Tests**: The PathService is indirectly tested in directive tests, but most direct coverage remains in the PathService.test.ts.
+   - Test path validation rules
+   - Test normalization across platforms
+   - Test testMode toggling
+   - Validate security constraints
+2. **No real disk**: We do not rely on actual OS paths
+3. **Integration Tests**: The PathService is indirectly tested in directive tests
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 IV. FILESYSTEMSERVICE DESIGN

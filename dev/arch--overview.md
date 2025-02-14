@@ -204,13 +204,19 @@ Below is a breakdown of key services, their responsibilities, and how they inter
 [See detailed design in service-path-fs.md]
 
 • Responsibility:  
-  - Expand special path variables ($PROJECTPATH, $HOMEPATH, etc.)  
-  - Normalize path on each platform (POSIX/Win32)  
-  - Provide test-mode overrides for easy mocking  
+  - Work with ALREADY RESOLVED paths from ResolutionService
+  - Validate paths meet security requirements
+  - Normalize paths across platforms (POSIX/Win32)
+  - Provide test-mode overrides for easy mocking
 
 • Example Usage in a directive:  
-  "PathDirectiveHandler" calls PathService.resolve("$PROJECTPATH/foo.txt")  
-  -> returns /my/project/foo.txt  
+  ```typescript
+  // ResolutionService handles variable resolution first
+  const resolvedPath = await resolutionService.resolvePath("$PROJECTPATH/foo.txt");
+  // PathService validates and normalizes the resolved path
+  await pathService.validatePath(resolvedPath);
+  const normalizedPath = pathService.normalizePath(resolvedPath);
+  ```
 
 ─────────────────────────────────────────────────────────────────────────
   2. FileSystemService
@@ -223,8 +229,10 @@ Below is a breakdown of key services, their responsibilities, and how they inter
   - Handle error codes, e.g. ENOENT -> MeldError  
 
 • Example:  
-  "ImportDirectiveHandler" needs to read a .meld file from disk:  
-     fileSystemService.readFile(resolvedPath)  
+  ```typescript
+  // After path resolution and validation:
+  const content = await fileSystemService.readFile(normalizedPath);
+  ```
 
 ─────────────────────────────────────────────────────────────────────────
   3. CircularityService
@@ -262,10 +270,12 @@ Below is a breakdown of key services, their responsibilities, and how they inter
 [See detailed design in service-resolution.md]
 
 • Core Responsibility:  
-  - Resolve text variables (${var})
-  - Resolve data variables and fields (#{data.field})
-  - Resolve path variables ($path)
-  - Resolve command references ($command(args))
+  - SOLE resolver for ALL variable types:
+    • Text variables (${var})
+    • Data variables and fields (#{data.field})
+    • Path variables ($path)
+    • Special path variables ($HOMEPATH/$~, $PROJECTPATH/$.)
+    • Command references ($command(args))
   - Enforce context-specific resolution rules
   - Detect variable reference cycles
 
@@ -273,11 +283,18 @@ Below is a breakdown of key services, their responsibilities, and how they inter
   1. Dedicated Resolvers:
      - TextResolver: Handles ${var}, prevents nested interpolation
      - DataResolver: Handles #{data.field}, validates field access
-     - PathResolver: Enforces $HOMEPATH/$PROJECTPATH rules
+     - PathResolver: Handles ALL path variable resolution
+       • Special variables ($HOMEPATH/$~, $PROJECTPATH/$.)
+       • Custom path variables from @path directives
+       • Text variables within paths (${var})
      - CommandResolver: Validates parameter types, no data vars in commands
 
   2. Resolution Contexts:
-     - Path Context: Must start with $HOMEPATH/$PROJECTPATH
+     - Path Context: 
+       • Allows path variables ($path)
+       • Allows text variables (${var})
+       • Disallows data variables
+       • Disallows commands
      - Command Context: Only text/path vars, no data vars
      - Text Context: All variable types, no nesting
      - Data Context: Allows field access, no commands
@@ -295,20 +312,21 @@ Below is a breakdown of key services, their responsibilities, and how they inter
 • Example Usage:
 ```typescript
 // 1. Get appropriate context
-const context = ResolutionContextFactory.forRunDirective();
+const context = ResolutionContextFactory.forPathDirective();
 
-// 2. Resolve with context validation
-const resolved = await resolutionService.resolveInContext(
-  value,
+// 2. Resolve path with variables
+const resolvedPath = await resolutionService.resolvePath(
+  "$PROJECTPATH/docs/${folder}/file.md",
   context
 );
+// Result: "/usr/project/docs/examples/file.md"
 
-// 3. Handle specific resolution types
-const cmdResult = await resolutionService.resolveCommand(
-  cmd,
-  args,
-  context
-);
+// 3. PathService then validates & normalizes
+await pathService.validatePath(resolvedPath);
+const normalizedPath = pathService.normalizePath(resolvedPath);
+
+// 4. FileSystem handles I/O
+const content = await fileSystemService.readFile(normalizedPath);
 ```
 
 ─────────────────────────────────────────────────────────────────────────

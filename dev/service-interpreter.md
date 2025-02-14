@@ -8,7 +8,11 @@ I. OVERVIEW & POSITION IN THE ARCHITECTURE
 
 1) The InterpreterService is responsible for orchestrating the high-level "interpretation" phase of Meld documents.  
 2) It receives raw AST nodes from meld-ast (which only handles basic parsing), routes these unprocessed nodes to DirectiveService, and ensures the final state is merged into StateService.  
-3) It does NOT handle I/O directly (FileSystemService does that), does NOT expand paths (PathService does that), and does NOT do variable resolution (ResolutionService does that).
+3) It does NOT:
+   • Handle I/O directly (FileSystemService does that)
+   • Validate paths (PathService does that)
+   • Resolve variables (ResolutionService does that)
+   • Store state (StateService does that)
 
 Here's how it fits into the flow:
 
@@ -25,8 +29,33 @@ Here's how it fits into the flow:
 └─────────────┬───────────────────────────────────────┘  
               ▼ raw nodes, unresolved content  
 ┌─────────────────────────────────────────────────────┐  
-│        Next steps: (DirectiveService handles)       │  
+│        DirectiveService                             │  
+│  • Definition handlers store raw values             │  
+│  • Execution handlers use:                          │  
+│    - ResolutionService for ALL variable resolution  │  
+│    - PathService for validation & normalization     │  
+│    - FileSystemService for I/O                      │  
 └─────────────────────────────────────────────────────┘  
+
+Example flow for path handling:
+```typescript
+// 1. meld-ast provides raw AST node:
+const node = {
+  type: 'Directive',
+  directive: {
+    kind: 'import',
+    source: '$PROJECTPATH/docs/${folder}/file.md'  // Raw path with variables
+  }
+};
+
+// 2. InterpreterService routes to DirectiveService
+await this.directiveService.processDirective(node);
+
+// 3. DirectiveService routes to ImportDirectiveHandler which:
+// - Uses ResolutionService to resolve ALL variables
+// - Uses PathService to validate & normalize resolved path
+// - Uses FileSystemService for actual I/O
+```
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 II. FILE & CLASS STRUCTURE

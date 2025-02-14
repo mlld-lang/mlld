@@ -72,7 +72,7 @@ describe('OutputService', () => {
   describe('Markdown Output', () => {
     it('should convert text nodes to markdown', async () => {
       const nodes: MeldNode[] = [{
-        type: 'text',
+        type: 'Text',
         content: 'Hello world\n'
       }];
 
@@ -82,11 +82,11 @@ describe('OutputService', () => {
 
     it('should convert directive nodes to markdown comments', async () => {
       const nodes: MeldNode[] = [{
-        type: 'directive',
-        directive: {
-          kind: 'test',
-          value: 'example'
-        }
+        type: 'Directive',
+        kind: 'text',
+        name: 'test',
+        value: 'example',
+        location: { line: 1, column: 1 }
       }];
 
       const output = await service.convert(nodes, state, 'markdown');
@@ -99,7 +99,7 @@ describe('OutputService', () => {
       state.setDataVar('count', 42);
 
       const nodes: MeldNode[] = [{
-        type: 'text',
+        type: 'Text',
         content: 'Content'
       }];
 
@@ -116,7 +116,7 @@ describe('OutputService', () => {
 
     it('should respect preserveFormatting option', async () => {
       const nodes: MeldNode[] = [{
-        type: 'text',
+        type: 'Text',
         content: '\n  Hello  \n  World  \n'
       }];
 
@@ -135,7 +135,7 @@ describe('OutputService', () => {
   describe('LLM XML Output', () => {
     it('should convert text nodes to XML', async () => {
       const nodes: MeldNode[] = [{
-        type: 'text',
+        type: 'Text',
         content: 'Hello world'
       }];
 
@@ -145,11 +145,11 @@ describe('OutputService', () => {
 
     it('should convert directive nodes to XML', async () => {
       const nodes: MeldNode[] = [{
-        type: 'directive',
-        directive: {
-          kind: 'test',
-          value: 'example'
-        }
+        type: 'Directive',
+        kind: 'text',
+        name: 'test',
+        value: 'example',
+        location: { line: 1, column: 1 }
       }];
 
       const output = await service.convert(nodes, state, 'llm');
@@ -159,7 +159,7 @@ describe('OutputService', () => {
 
     it('should properly escape XML special characters', async () => {
       const nodes: MeldNode[] = [{
-        type: 'text',
+        type: 'Text',
         content: '< > & " \''
       }];
 
@@ -172,7 +172,7 @@ describe('OutputService', () => {
       state.setDataVar('count', 42);
 
       const nodes: MeldNode[] = [{
-        type: 'text',
+        type: 'Text',
         content: 'Content'
       }];
 

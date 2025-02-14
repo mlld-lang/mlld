@@ -15,7 +15,7 @@ describe('ParserService', () => {
       const result = parser.parse(content);
       expect(result).toHaveLength(1);
       expect(result[0]).toMatchObject({
-        type: 'text',
+        type: 'Text',
         content: 'Hello world'
       });
     });
@@ -25,7 +25,7 @@ describe('ParserService', () => {
       const result = parser.parse(content);
       expect(result).toHaveLength(1);
       expect(result[0]).toMatchObject({
-        type: 'directive',
+        type: 'Directive',
         kind: 'data'
       });
     });
@@ -38,8 +38,8 @@ describe('ParserService', () => {
       `;
       const result = parser.parse(content);
       expect(result.length).toBeGreaterThan(1);
-      expect(result.some(node => node.type === 'text')).toBe(true);
-      expect(result.some(node => node.type === 'directive')).toBe(true);
+      expect(result.some(node => node.type === 'Text')).toBe(true);
+      expect(result.some(node => node.type === 'Directive')).toBe(true);
     });
 
     it('should throw MeldParseError for invalid content', () => {

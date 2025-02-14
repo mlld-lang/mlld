@@ -208,10 +208,12 @@ export class OutputService implements IOutputService {
           ? node.content
           : node.content.trim();
 
-      case 'Directive':
+      case 'Directive': {
         // Format directive as a comment in markdown
-        const directiveStr = `@${node.directive.kind} ${JSON.stringify(node.directive)}`;
+        const { kind, ...props } = node;
+        const directiveStr = `@${kind} ${JSON.stringify(props)}`;
         return `<!-- ${directiveStr} -->\n`;
+      }
 
       case 'CodeFence':
         return `\`\`\`${node.language || ''}\n${node.content}\n\`\`\`\n`;
@@ -237,13 +239,13 @@ export class OutputService implements IOutputService {
           : node.content.trim();
         return `\n${indent}<text>${this.escapeXML(content)}</text>`;
 
-      case 'Directive':
-        let output = `\n${indent}<directive kind="${node.directive.kind}">`;
+      case 'Directive': {
+        const { kind, ...props } = node;
+        let output = `\n${indent}<directive kind="${kind}">`;
         
         // Add directive properties
-        for (const [key, value] of Object.entries(node.directive)) {
-          if (key === 'kind') continue;
-          if (key === 'format') continue; // Skip format property as it's handled by OutputService
+        for (const [key, value] of Object.entries(props)) {
+          if (key === 'type' || key === 'location') continue;
           output += `\n${indent}  <${key}>${
             this.escapeXML(JSON.stringify(value))
           }</${key}>`;
@@ -251,6 +253,7 @@ export class OutputService implements IOutputService {
         
         output += `\n${indent}</directive>`;
         return output;
+      }
 
       case 'CodeFence':
         return `\n${indent}<code-fence${node.language ? ` language="${this.escapeXML(node.language)}"` : ''}>${

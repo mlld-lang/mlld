@@ -44,29 +44,27 @@ describe('InterpreterService', () => {
 
   describe('Node interpretation', () => {
     it('should handle text nodes', async () => {
-      const node: MeldNode = {
-        type: 'text',
+      const textNode: MeldNode = {
+        type: 'Text',
         content: 'Hello world',
-        location: { start: { line: 1, column: 1 } }
+        location: { line: 1, column: 1 }
       };
 
-      await service.interpretNode(node, mockStateService);
-      expect(mockStateService.addNode).toHaveBeenCalledWith(node);
+      await service.interpretNode(textNode, mockStateService);
+      expect(mockStateService.addNode).toHaveBeenCalledWith(textNode);
     });
 
     it('should handle directive nodes', async () => {
-      const node: MeldNode = {
-        type: 'directive',
-        directive: {
-          kind: 'text',
-          name: 'greeting',
-          value: 'Hello'
-        },
-        location: { start: { line: 1, column: 1 } }
+      const directiveNode: MeldNode = {
+        type: 'Directive',
+        kind: 'text',
+        name: 'test',
+        value: '"value"',
+        location: { line: 1, column: 1 }
       };
 
-      await service.interpretNode(node, mockStateService);
-      expect(mockDirectiveService.processDirective).toHaveBeenCalledWith(node);
+      await service.interpretNode(directiveNode, mockStateService);
+      expect(mockDirectiveService.processDirective).toHaveBeenCalledWith(directiveNode);
     });
 
     it('should throw on unknown node types', async () => {
@@ -84,18 +82,15 @@ describe('InterpreterService', () => {
     it('should process multiple nodes in sequence', async () => {
       const nodes: MeldNode[] = [
         {
-          type: 'text',
+          type: 'Text',
           content: 'Hello',
-          location: { start: { line: 1, column: 1 } }
+          location: { line: 1, column: 1 }
         },
         {
-          type: 'directive',
-          directive: {
-            kind: 'text',
-            name: 'greeting',
-            value: 'Hello'
-          },
-          location: { start: { line: 2, column: 1 } }
+          type: 'Directive',
+          kind: 'text',
+          name: 'greeting',
+          value: 'Hello'
         }
       ];
 
@@ -113,7 +108,7 @@ describe('InterpreterService', () => {
       };
 
       const nodes: MeldNode[] = [{
-        type: 'text',
+        type: 'Text',
         content: 'Hello'
       }];
 
@@ -125,7 +120,7 @@ describe('InterpreterService', () => {
 
     it('should set file path when provided', async () => {
       const nodes: MeldNode[] = [{
-        type: 'text',
+        type: 'Text',
         content: 'Hello'
       }];
 
@@ -142,7 +137,7 @@ describe('InterpreterService', () => {
       };
 
       const nodes: MeldNode[] = [{
-        type: 'text',
+        type: 'Text',
         content: 'Hello'
       }];
 
@@ -162,7 +157,7 @@ describe('InterpreterService', () => {
       };
 
       const nodes: MeldNode[] = [{
-        type: 'text',
+        type: 'Text',
         content: 'Hello'
       }];
 
@@ -198,13 +193,10 @@ describe('InterpreterService', () => {
   describe('Error handling', () => {
     it('should wrap non-interpreter errors', async () => {
       const node: MeldNode = {
-        type: 'directive',
-        directive: {
-          kind: 'text',
-          name: 'greeting',
-          value: 'Hello'
-        },
-        location: { start: { line: 1, column: 1 } }
+        type: 'Directive',
+        kind: 'text',
+        name: 'greeting',
+        value: 'Hello'
       };
 
       mockDirectiveService.processDirective.mockRejectedValue(new Error('Test error'));
@@ -218,13 +210,10 @@ describe('InterpreterService', () => {
 
     it('should preserve interpreter errors', async () => {
       const node: MeldNode = {
-        type: 'directive',
-        directive: {
-          kind: 'text',
-          name: 'greeting',
-          value: 'Hello'
-        },
-        location: { start: { line: 1, column: 1 } }
+        type: 'Directive',
+        kind: 'text',
+        name: 'greeting',
+        value: 'Hello'
       };
 
       const originalError = new MeldInterpreterError('Test error', 'directive', node.location?.start);

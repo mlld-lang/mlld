@@ -86,7 +86,53 @@ Key points for definition handlers:
 5. EXECUTION HANDLERS
 ─────────────────────────────────────────────────────────────────────────
 
-Example of an execution handler (RunHandler.ts):
+Example of an execution handler with path handling (ImportHandler.ts):
+```typescript
+export class ImportDirectiveHandler implements IDirectiveHandler {
+  readonly kind = 'import';
+
+  constructor(
+    private validationService: IValidationService,
+    private resolutionService: IResolutionService,
+    private pathService: IPathService,
+    private fileSystemService: IFileSystemService,
+    private stateService: IStateService
+  ) {}
+
+  async execute(
+    node: DirectiveNode,
+    context: DirectiveContext
+  ): Promise<void> {
+    // 1. Validate directive structure
+    await this.validationService.validate(node);
+
+    // 2. Get raw path from AST
+    const { source } = node.directive;
+    // source might be "$PROJECTPATH/docs/${folder}/file.md" - raw from AST
+
+    // 3. Create resolution context for paths
+    const resolutionContext = ResolutionContextFactory.forPathDirective();
+
+    // 4. Use ResolutionService to resolve ALL variables in path
+    const resolvedPath = await this.resolutionService.resolvePath(
+      source,  // Raw path with variables
+      resolutionContext
+    );
+    // resolvedPath is now "/usr/project/docs/examples/file.md"
+
+    // 5. Use PathService to validate & normalize resolved path
+    await this.pathService.validatePath(resolvedPath);
+    const normalizedPath = this.pathService.normalizePath(resolvedPath);
+
+    // 6. Use FileSystemService for I/O
+    const content = await this.fileSystemService.readFile(normalizedPath);
+
+    // 7. Process content...
+  }
+}
+```
+
+Example of an execution handler with command resolution (RunHandler.ts):
 ```typescript
 export class RunDirectiveHandler implements IDirectiveHandler {
   readonly kind = 'run';
@@ -106,8 +152,6 @@ export class RunDirectiveHandler implements IDirectiveHandler {
 
     // 2. Get raw values from AST
     const { command, args } = node.directive;
-    // command might be "$cmd(${var})" - raw from AST
-    // args might contain "${var}" - raw from AST
 
     // 3. Create resolution context
     const resolutionContext = ResolutionContextFactory.forRunDirective();
@@ -133,8 +177,80 @@ export class RunDirectiveHandler implements IDirectiveHandler {
 Key points for execution handlers:
 • Get raw values from AST nodes
 • Use ResolutionService for ALL variable resolution
+• Use PathService only for validation & normalization of resolved paths
+• Use FileSystemService for actual I/O operations
 • Never attempt resolution themselves
 • Handle resolution errors appropriately
+
+─────────────────────────────────────────────────────────────────────────
+6. PATH HANDLING FLOW
+─────────────────────────────────────────────────────────────────────────
+
+Complete flow for path handling:
+
+1. Store path definition (raw from AST):
+```typescript
+// AST node from meld-ast for:
+// @path docs = [$PROJECTPATH/documentation/${section}]
+
+// PathHandler stores raw definition in StateService
+state.setPathVar('docs', '$PROJECTPATH/documentation/${section}');
+// Stored raw, unresolved
+```
+
+2. Use path (resolution):
+```typescript
+// AST node from meld-ast for:
+// @import [$docs/intro.md]
+
+// ImportHandler uses ResolutionService for variable resolution
+const resolvedPath = await resolutionService.resolvePath(
+  '$docs/intro.md',  // Raw path reference
+  ResolutionContextFactory.forPathDirective()
+);
+// ResolutionService handles:
+// 1. Resolving $docs to its raw value
+// 2. Resolving ${section} in the raw value
+// 3. Resolving $PROJECTPATH
+// Result: "/usr/project/documentation/getting-started/intro.md"
+
+// Then use PathService for validation & normalization
+await pathService.validatePath(resolvedPath);
+const normalizedPath = pathService.normalizePath(resolvedPath);
+
+// Finally use FileSystemService for I/O
+const content = await fileSystemService.readFile(normalizedPath);
+```
+
+ASCII diagram of path handling flow:
+
+┌───────────────┐
+│   meld-ast    │
+└───────┬───────┘
+        │ Raw AST with path
+        ▼
+┌───────────────────┐
+│  DirectiveHandler │
+└───────┬───────────┘
+        │ Raw path with variables
+        ▼
+┌─────────────────────┐
+│ ResolutionService   │
+│ • Resolves ALL vars │
+└─────────┬───────────┘
+          │ Fully resolved path
+          ▼
+┌─────────────────────┐
+│    PathService      │
+│ • Validates path    │
+│ • Normalizes path   │
+└─────────┬───────────┘
+          │ Normalized path
+          ▼
+┌─────────────────────┐
+│  FileSystemService  │
+│ • Handles I/O       │
+└─────────────────────┘
 
 ─────────────────────────────────────────────────────────────────────────
 6. DIRECTIVE DEPENDENCIES

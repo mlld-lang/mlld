@@ -5,11 +5,11 @@ import type { IFileSystemService } from '../FileSystemService/IFileSystemService
 import { PathValidationError, PathErrorCode } from '../../core/errors/PathValidationError';
 
 const DEFAULT_OPTIONS: Required<PathOptions> = {
-  baseDir: process.cwd(),
+  baseDir: 'project',
   allowOutsideBaseDir: false,
   mustExist: true,
-  mustBeDirectory: false,
-  mustBeFile: false
+  mustBeFile: false,
+  mustBeDirectory: false
 };
 
 export class PathService implements IPathService {
@@ -31,6 +31,7 @@ export class PathService implements IPathService {
     // Set default path variables
     this.pathVariables.set('HOME', 'home');
     this.pathVariables.set('PROJECTPATH', 'project');
+    this.pathVariables.set('HOMEPATH', 'home');
   }
   
   setPathVariable(name: string, value: string): void {
@@ -94,10 +95,52 @@ export class PathService implements IPathService {
       // Expand path variables
       const expandedPath = this.expandPathVariables(inputPath);
       
+      // Handle absolute paths
+      if (path.isAbsolute(expandedPath)) {
+        if (!opts.allowOutsideBaseDir) {
+          throw new PathValidationError(
+            'Absolute paths are not allowed',
+            inputPath,
+            PathErrorCode.OUTSIDE_BASE_DIR
+          );
+        }
+        return expandedPath;
+      }
+      
       // Resolve relative to base directory
       const resolvedPath = path.resolve(opts.baseDir, expandedPath);
       
-      // Check if path is outside base directory
+      // First check existence and type if required
+      if (opts.mustExist) {
+        const exists = await this.fileSystem.exists(resolvedPath);
+        if (!exists) {
+          throw new PathValidationError(
+            'Path does not exist',
+            inputPath,
+            PathErrorCode.PATH_NOT_FOUND
+          );
+        }
+        
+        const isDir = await this.fileSystem.isDirectory(resolvedPath);
+        
+        if (opts.mustBeFile && isDir) {
+          throw new PathValidationError(
+            'Path must be a file but is a directory',
+            inputPath,
+            PathErrorCode.NOT_A_FILE
+          );
+        }
+        
+        if (opts.mustBeDirectory && !isDir) {
+          throw new PathValidationError(
+            'Path must be a directory but is a file',
+            inputPath,
+            PathErrorCode.NOT_A_DIRECTORY
+          );
+        }
+      }
+      
+      // Then check if path is outside base directory
       if (!opts.allowOutsideBaseDir) {
         const relative = path.relative(opts.baseDir, resolvedPath);
         if (relative.startsWith('..') || path.isAbsolute(relative)) {
@@ -109,42 +152,9 @@ export class PathService implements IPathService {
         }
       }
       
-      // Existence and type checks
-      if (opts.mustExist) {
-        const exists = await this.fileSystem.exists(resolvedPath);
-        if (!exists) {
-          throw new PathValidationError(
-            'Path does not exist',
-            inputPath,
-            PathErrorCode.PATH_NOT_FOUND
-          );
-        }
-        
-        if (opts.mustBeFile) {
-          const isDir = await this.fileSystem.isDirectory(resolvedPath);
-          if (isDir) {
-            throw new PathValidationError(
-              'Path must be a file but is a directory',
-              inputPath,
-              PathErrorCode.NOT_A_FILE
-            );
-          }
-        }
-        
-        if (opts.mustBeDirectory) {
-          const isDir = await this.fileSystem.isDirectory(resolvedPath);
-          if (!isDir) {
-            throw new PathValidationError(
-              'Path must be a directory but is a file',
-              inputPath,
-              PathErrorCode.NOT_A_DIRECTORY
-            );
-          }
-        }
-      }
-      
-      logger.debug('Successfully resolved path', { inputPath, resolvedPath });
+      // Always return absolute path
       return resolvedPath;
+      
     } catch (error) {
       if (error instanceof PathValidationError) {
         throw error;

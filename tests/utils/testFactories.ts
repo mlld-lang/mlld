@@ -22,8 +22,10 @@ export function createDirectiveNode(
 ): DirectiveNode {
   return {
     type: 'Directive',
-    kind,
-    properties,
+    directive: {
+      kind,
+      ...properties
+    },
     location
   };
 }
