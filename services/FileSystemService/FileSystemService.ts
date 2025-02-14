@@ -1,22 +1,25 @@
 import * as fs from 'fs-extra';
 import * as path from 'path';
-import { fsLogger as logger } from '../../core/utils/logger';
+import { fsLogger as logger } from '../../core/utils/simpleLogger';
 import { IFileSystemService } from './IFileSystemService';
+import { MemfsTestFileSystem } from '../../tests/utils/MemfsTestFileSystem';
+import { MeldError } from '../../core/errors/MeldError';
 
 export class FileSystemService implements IFileSystemService {
   private testMode = false;
-  private mockFiles = new Map<string, string>();
-  private mockDirs = new Set<string>();
+  private testFs: MemfsTestFileSystem | null = null;
+
+  constructor(testFs?: MemfsTestFileSystem) {
+    if (testFs) {
+      this.enableTestMode(testFs);
+    }
+  }
 
   // File operations
   async readFile(filePath: string): Promise<string> {
     try {
-      if (this.testMode) {
-        const content = this.mockFiles.get(this.normalize(filePath));
-        if (content === undefined) {
-          throw new Error(`File not found: ${filePath}`);
-        }
-        return content;
+      if (this.testMode && this.testFs) {
+        return await this.testFs.readFile(this.normalize(filePath));
       }
       
       logger.debug('Reading file', { filePath });
@@ -25,31 +28,32 @@ export class FileSystemService implements IFileSystemService {
       return content;
     } catch (error) {
       logger.error('Failed to read file', { filePath, error });
-      throw error;
+      throw new MeldError(`Failed to read file: ${filePath}`, { cause: error });
     }
   }
 
   async writeFile(filePath: string, content: string): Promise<void> {
     try {
-      if (this.testMode) {
-        this.mockFiles.set(this.normalize(filePath), content);
+      if (this.testMode && this.testFs) {
+        await this.testFs.writeFile(this.normalize(filePath), content);
         return;
       }
 
       logger.debug('Writing file', { filePath, contentLength: content.length });
+      // Ensure parent directory exists
+      await this.ensureDir(path.dirname(filePath));
       await fs.writeFile(filePath, content, 'utf-8');
       logger.debug('Successfully wrote file', { filePath });
     } catch (error) {
       logger.error('Failed to write file', { filePath, error });
-      throw error;
+      throw new MeldError(`Failed to write file: ${filePath}`, { cause: error });
     }
   }
 
   async exists(filePath: string): Promise<boolean> {
     try {
-      if (this.testMode) {
-        const normalizedPath = this.normalize(filePath);
-        return this.mockFiles.has(normalizedPath) || this.mockDirs.has(normalizedPath);
+      if (this.testMode && this.testFs) {
+        return await this.testFs.exists(this.normalize(filePath));
       }
 
       logger.debug('Checking if path exists', { filePath });
@@ -58,14 +62,14 @@ export class FileSystemService implements IFileSystemService {
       return exists;
     } catch (error) {
       logger.error('Failed to check path existence', { filePath, error });
-      throw error;
+      throw new MeldError(`Failed to check if path exists: ${filePath}`, { cause: error });
     }
   }
 
   async stat(filePath: string): Promise<fs.Stats> {
     try {
-      if (this.testMode) {
-        throw new Error('stat() not implemented in test mode');
+      if (this.testMode && this.testFs) {
+        return await this.testFs.stat(this.normalize(filePath));
       }
 
       logger.debug('Getting file stats', { filePath });
@@ -74,24 +78,15 @@ export class FileSystemService implements IFileSystemService {
       return stats;
     } catch (error) {
       logger.error('Failed to get file stats', { filePath, error });
-      throw error;
+      throw new MeldError(`Failed to get file stats: ${filePath}`, { cause: error });
     }
   }
 
   // Directory operations
   async readDir(dirPath: string): Promise<string[]> {
     try {
-      if (this.testMode) {
-        const normalizedDirPath = this.normalize(dirPath);
-        if (!this.mockDirs.has(normalizedDirPath)) {
-          throw new Error(`Directory not found: ${dirPath}`);
-        }
-        
-        const files = Array.from(this.mockFiles.keys())
-          .filter(filePath => path.dirname(filePath) === normalizedDirPath)
-          .map(filePath => path.basename(filePath));
-          
-        return files;
+      if (this.testMode && this.testFs) {
+        return await this.testFs.readDir(this.normalize(dirPath));
       }
 
       logger.debug('Reading directory', { dirPath });
@@ -100,14 +95,14 @@ export class FileSystemService implements IFileSystemService {
       return files;
     } catch (error) {
       logger.error('Failed to read directory', { dirPath, error });
-      throw error;
+      throw new MeldError(`Failed to read directory: ${dirPath}`, { cause: error });
     }
   }
 
   async ensureDir(dirPath: string): Promise<void> {
     try {
-      if (this.testMode) {
-        this.mockDirs.add(this.normalize(dirPath));
+      if (this.testMode && this.testFs) {
+        await this.testFs.ensureDir(this.normalize(dirPath));
         return;
       }
 
@@ -116,15 +111,14 @@ export class FileSystemService implements IFileSystemService {
       logger.debug('Successfully ensured directory exists', { dirPath });
     } catch (error) {
       logger.error('Failed to ensure directory exists', { dirPath, error });
-      throw error;
+      throw new MeldError(`Failed to ensure directory exists: ${dirPath}`, { cause: error });
     }
   }
 
   async isDirectory(filePath: string): Promise<boolean> {
     try {
-      if (this.testMode) {
-        const normalizedPath = this.normalize(filePath);
-        return this.mockDirs.has(normalizedPath);
+      if (this.testMode && this.testFs) {
+        return await this.testFs.isDirectory(this.normalize(filePath));
       }
 
       logger.debug('Checking if path is directory', { filePath });
@@ -133,8 +127,31 @@ export class FileSystemService implements IFileSystemService {
       logger.debug('Path directory check complete', { filePath, isDirectory: isDir });
       return isDir;
     } catch (error) {
+      if (error.code === 'ENOENT') {
+        return false;
+      }
       logger.error('Failed to check if path is directory', { filePath, error });
-      throw error;
+      throw new MeldError(`Failed to check if path is directory: ${filePath}`, { cause: error });
+    }
+  }
+
+  async isFile(filePath: string): Promise<boolean> {
+    try {
+      if (this.testMode && this.testFs) {
+        return await this.testFs.isFile(this.normalize(filePath));
+      }
+
+      logger.debug('Checking if path is file', { filePath });
+      const stats = await fs.stat(filePath);
+      const isFile = stats.isFile();
+      logger.debug('Path file check complete', { filePath, isFile });
+      return isFile;
+    } catch (error) {
+      if (error.code === 'ENOENT') {
+        return false;
+      }
+      logger.error('Failed to check if path is file', { filePath, error });
+      throw new MeldError(`Failed to check if path is file: ${filePath}`, { cause: error });
     }
   }
 
@@ -155,48 +172,22 @@ export class FileSystemService implements IFileSystemService {
     return path.basename(filePath);
   }
 
+  normalize(filePath: string): string {
+    return path.normalize(filePath);
+  }
+
   // Test mode
-  enableTestMode(): void {
+  enableTestMode(testFs: MemfsTestFileSystem): void {
     this.testMode = true;
-    this.clearMocks();
+    this.testFs = testFs;
   }
 
   disableTestMode(): void {
     this.testMode = false;
-    this.clearMocks();
+    this.testFs = null;
   }
 
   isTestMode(): boolean {
     return this.testMode;
-  }
-
-  // Mock file system (for testing)
-  mockFile(filePath: string, content: string): void {
-    if (!this.testMode) {
-      throw new Error('Cannot mock files outside of test mode');
-    }
-    this.mockFiles.set(this.normalize(filePath), content);
-    
-    // Ensure parent directory exists
-    const dirPath = path.dirname(filePath);
-    if (dirPath !== '.') {
-      this.mockDirs.add(this.normalize(dirPath));
-    }
-  }
-
-  mockDir(dirPath: string): void {
-    if (!this.testMode) {
-      throw new Error('Cannot mock directories outside of test mode');
-    }
-    this.mockDirs.add(this.normalize(dirPath));
-  }
-
-  clearMocks(): void {
-    this.mockFiles.clear();
-    this.mockDirs.clear();
-  }
-
-  private normalize(filePath: string): string {
-    return path.normalize(filePath);
   }
 } 

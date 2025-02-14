@@ -34,61 +34,28 @@ const createValidationService = (): IValidationService => ({
 });
 
 const createStateService = (): IStateService => ({
-  addNode: vi.fn() as unknown as (node: MeldNode) => void,
-  getNodes: vi.fn().mockReturnValue([]) as unknown as () => MeldNode[],
-  getCurrentFilePath: vi.fn() as unknown as () => string,
-  setCurrentFilePath: vi.fn() as unknown as (path: string) => void,
-  getTextVar: vi.fn() as unknown as (name: string) => string | undefined,
-  setTextVar: vi.fn() as unknown as (name: string, value: string) => void,
-  getAllTextVars: vi.fn().mockReturnValue(new Map()) as unknown as () => Map<string, string>,
-  getLocalTextVars: vi.fn().mockReturnValue(new Map()) as unknown as () => Map<string, string>,
-  getDataVar: vi.fn() as unknown as (name: string) => any,
-  setDataVar: vi.fn() as unknown as (name: string, value: any) => void,
-  getAllDataVars: vi.fn().mockReturnValue(new Map()) as unknown as () => Map<string, any>,
-  getLocalDataVars: vi.fn().mockReturnValue(new Map()) as unknown as () => Map<string, any>,
-  getPathVar: vi.fn() as unknown as (name: string) => string | undefined,
-  setPathVar: vi.fn() as unknown as (name: string, value: string) => void,
-  getAllPathVars: vi.fn().mockReturnValue(new Map()) as unknown as () => Map<string, string>,
-  getCommand: vi.fn() as unknown as (name: string) => { command: string; options?: Record<string, unknown> } | undefined,
-  setCommand: vi.fn() as unknown as (name: string, command: string | { command: string; options?: Record<string, unknown> }) => void,
-  addImport: vi.fn() as unknown as (path: string) => void,
-  removeImport: vi.fn() as unknown as (path: string) => void,
-  hasImport: vi.fn() as unknown as (path: string) => boolean,
-  getImports: vi.fn().mockReturnValue(new Set()) as unknown as () => Set<string>,
-  hasLocalChanges: vi.fn().mockReturnValue(false) as unknown as () => boolean,
-  getLocalChanges: vi.fn().mockReturnValue([]) as unknown as () => string[],
-  setImmutable: vi.fn() as unknown as () => void,
-  isImmutable: false,
-  createChildState: vi.fn() as unknown as () => IStateService,
-  mergeChildState: vi.fn() as unknown as (childState: IStateService) => void,
-  clone: vi.fn() as unknown as () => IStateService
+  setTextVar: vi.fn(),
+  getTextVar: vi.fn(),
+  setDataVar: vi.fn(),
+  getDataVar: vi.fn(),
+  appendContent: vi.fn(),
+  addNode: vi.fn(),
+  createChildState: vi.fn(),
+  mergeStates: vi.fn()
 });
 
 const createPathService = (): IPathService => ({
-  initialize: vi.fn() as unknown as (fileSystem: IFileSystemService) => void,
-  resolvePath: vi.fn() as unknown as (path: string, options?: PathOptions) => Promise<string>,
-  resolvePaths: vi.fn() as unknown as (paths: string[], options?: PathOptions) => Promise<string[]>,
-  isValidPath: vi.fn() as unknown as (path: string, options?: PathOptions) => Promise<boolean>
+  validatePath: vi.fn(),
+  normalizePath: vi.fn(),
+  resolvePath: vi.fn()
 });
 
 const createFileSystemService = (): IFileSystemService => ({
-  readFile: vi.fn() as unknown as (path: string) => Promise<string>,
-  writeFile: vi.fn() as unknown as (path: string, content: string) => Promise<void>,
-  exists: vi.fn() as unknown as (path: string) => Promise<boolean>,
-  stat: vi.fn() as unknown as (path: string) => Promise<any>,
-  readDir: vi.fn() as unknown as (path: string) => Promise<string[]>,
-  ensureDir: vi.fn() as unknown as (path: string) => Promise<void>,
-  isDirectory: vi.fn() as unknown as (path: string) => Promise<boolean>,
-  join: vi.fn() as unknown as (...paths: string[]) => string,
-  resolve: vi.fn() as unknown as (...paths: string[]) => string,
-  dirname: vi.fn() as unknown as (path: string) => string,
-  basename: vi.fn() as unknown as (path: string) => string,
-  enableTestMode: vi.fn() as unknown as () => void,
-  disableTestMode: vi.fn() as unknown as () => void,
-  isTestMode: vi.fn() as unknown as () => boolean,
-  mockFile: vi.fn() as unknown as (path: string, content: string) => void,
-  mockDir: vi.fn() as unknown as (path: string) => void,
-  clearMocks: vi.fn() as unknown as () => void
+  readFile: vi.fn(),
+  writeFile: vi.fn(),
+  exists: vi.fn(),
+  isDirectory: vi.fn(),
+  isFile: vi.fn()
 });
 
 const createParserService = (): IParserService => ({
@@ -97,51 +64,25 @@ const createParserService = (): IParserService => ({
 });
 
 const createInterpreterService = (): IInterpreterService => ({
-  initialize: vi.fn() as unknown as (directiveService: IDirectiveService, stateService: IStateService) => void,
-  interpret: vi.fn() as unknown as (nodes: MeldNode[], options?: InterpreterOptions) => Promise<IStateService>,
-  interpretNode: vi.fn() as unknown as (node: MeldNode, state: IStateService) => Promise<IStateService>,
-  createChildContext: vi.fn() as unknown as (parentState: IStateService, filePath?: string) => Promise<IStateService>
+  interpret: vi.fn(),
+  interpretFile: vi.fn()
 });
 
 const createCircularityService = (): ICircularityService => ({
-  beginImport: vi.fn() as unknown as (filePath: string) => void,
-  endImport: vi.fn() as unknown as (filePath: string) => void,
-  isInStack: vi.fn() as unknown as (filePath: string) => boolean,
-  getImportStack: vi.fn().mockReturnValue([]) as unknown as () => string[],
-  reset: vi.fn() as unknown as () => void
+  checkImport: vi.fn(),
+  clearImports: vi.fn()
 });
 
 const createResolutionService = (): IResolutionService => ({
-  resolveText: vi.fn() as unknown as (text: string, context: ResolutionContext) => Promise<string>,
-  resolveData: vi.fn() as unknown as (ref: string, context: ResolutionContext) => Promise<any>,
-  resolvePath: vi.fn() as unknown as (path: string, context: ResolutionContext) => Promise<string>,
-  resolveCommand: vi.fn() as unknown as (cmd: string, args: string[], context: ResolutionContext) => Promise<string>,
-  resolveContent: vi.fn() as unknown as (path: string) => Promise<string>,
-  resolveInContext: vi.fn() as unknown as (value: string, context: ResolutionContext) => Promise<string>,
-  validateResolution: vi.fn() as unknown as (value: string, context: ResolutionContext) => Promise<void>,
-  detectCircularReferences: vi.fn() as unknown as (value: string) => Promise<void>
+  resolveInContext: vi.fn(),
+  resolvePath: vi.fn(),
+  extractSection: vi.fn(),
+  resolveValue: vi.fn()
 });
 
 const createMockParserService = (): IParserService => ({
-  parse: vi.fn().mockImplementation((content: string) => {
-    // Basic mock implementation
-    return [{
-      type: 'Text',
-      content: content
-    }];
-  }),
-  
-  parseWithLocations: vi.fn().mockImplementation((content: string, filePath?: string) => {
-    const nodes = this.parse(content);
-    return nodes.map(node => ({
-      ...node,
-      location: {
-        line: 1,
-        column: 1,
-        filePath
-      }
-    }));
-  })
+  parse: vi.fn(),
+  parseWithLocations: vi.fn()
 });
 
 describe('DirectiveService', () => {

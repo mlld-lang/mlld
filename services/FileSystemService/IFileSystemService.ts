@@ -1,4 +1,5 @@
 import type { Stats } from 'fs';
+import { MemfsTestFileSystem } from '../../tests/utils/MemfsTestFileSystem';
 
 export interface IFileSystemService {
   // File operations
@@ -6,6 +7,7 @@ export interface IFileSystemService {
   writeFile(path: string, content: string): Promise<void>;
   exists(path: string): Promise<boolean>;
   stat(path: string): Promise<Stats>;
+  isFile(path: string): Promise<boolean>;
   
   // Directory operations
   readDir(path: string): Promise<string[]>;
@@ -17,9 +19,10 @@ export interface IFileSystemService {
   resolve(...paths: string[]): string;
   dirname(path: string): string;
   basename(path: string): string;
+  normalize(path: string): string;
   
   // Test mode
-  enableTestMode(): void;
+  enableTestMode(testFs: MemfsTestFileSystem): void;
   disableTestMode(): void;
   isTestMode(): boolean;
   

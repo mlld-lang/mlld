@@ -6,6 +6,7 @@ import type { IFileSystemService } from '../FileSystemService/IFileSystemService
 import type { IParserService } from '../ParserService/IParserService';
 import type { IInterpreterService } from '../InterpreterService/IInterpreterService';
 import type { ICircularityService } from '../CircularityService/ICircularityService';
+import type { IResolutionService } from '../ResolutionService/IResolutionService';
 
 /**
  * Context for directive execution
@@ -47,7 +48,8 @@ export interface IDirectiveService {
     fileSystemService: IFileSystemService,
     parserService: IParserService,
     interpreterService: IInterpreterService,
-    circularityService: ICircularityService
+    circularityService: ICircularityService,
+    resolutionService: IResolutionService
   ): void;
 
   /**
