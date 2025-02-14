@@ -3,7 +3,7 @@ import type {
   DirectiveNode, 
   TextNode, 
   CodeFenceNode,
-  DirectiveKind,
+  DirectiveKindString,
   Location
 } from 'meld-spec';
 
@@ -16,16 +16,14 @@ const DEFAULT_LOCATION: Location = {
  * Create a properly typed DirectiveNode for testing
  */
 export function createDirectiveNode(
-  kind: DirectiveKind,
-  data: Record<string, any> = {},
+  kind: DirectiveKindString,
+  properties: Record<string, any> = {},
   location: Location = DEFAULT_LOCATION
 ): DirectiveNode {
   return {
     type: 'Directive',
-    directive: {
-      kind,
-      ...data
-    },
+    kind,
+    properties,
     location
   };
 }
@@ -124,9 +122,19 @@ export function createRunDirective(
 export function createEmbedDirective(
   path: string,
   section?: string,
-  location: Location = DEFAULT_LOCATION
+  location: Location = DEFAULT_LOCATION,
+  options: {
+    headingLevel?: number;
+    underHeader?: string;
+    fuzzy?: number;
+    format?: string;
+  } = {}
 ): DirectiveNode {
-  return createDirectiveNode('embed', { path, section }, location);
+  return createDirectiveNode('embed', { 
+    path, 
+    section,
+    ...options
+  }, location);
 }
 
 /**

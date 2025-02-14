@@ -4,27 +4,29 @@ import { IValidationService } from '../../../../ValidationService/IValidationSer
 import { IResolutionService } from '../../../../ResolutionService/IResolutionService';
 import { IStateService } from '../../../../StateService/IStateService';
 import { DirectiveError } from '../../../errors/DirectiveError';
+import { describe, it, expect, beforeEach, vi, Vi } from 'vitest';
 
 describe('EmbedDirectiveHandler', () => {
   let handler: EmbedDirectiveHandler;
-  let mockValidationService: jest.Mocked<IValidationService>;
-  let mockResolutionService: jest.Mocked<IResolutionService>;
-  let mockStateService: jest.Mocked<IStateService>;
+  let mockValidationService: Vi.Mocked<IValidationService>;
+  let mockResolutionService: Vi.Mocked<IResolutionService>;
+  let mockStateService: Vi.Mocked<IStateService>;
 
-  beforeEach(() => {
-    mockValidationService = {
-      validate: jest.fn()
-    } as any;
+  beforeEach((): void => {
+    // Create mock services with proper typing
+    mockValidationService = vi.mocked({
+      validate: vi.fn()
+    } as IValidationService);
 
-    mockResolutionService = {
-      resolvePath: jest.fn(),
-      resolveContent: jest.fn(),
-      extractSection: jest.fn()
-    } as any;
+    mockResolutionService = vi.mocked({
+      resolvePath: vi.fn(),
+      resolveContent: vi.fn(),
+      extractSection: vi.fn()
+    } as IResolutionService);
 
-    mockStateService = {
-      appendContent: jest.fn()
-    } as any;
+    mockStateService = vi.mocked({
+      appendContent: vi.fn()
+    } as IStateService);
 
     handler = new EmbedDirectiveHandler(
       mockValidationService,
@@ -33,7 +35,7 @@ describe('EmbedDirectiveHandler', () => {
     );
   });
 
-  it('should handle basic embed without modifiers', async () => {
+  it('should handle basic embed without modifiers', async (): Promise<void> => {
     const node: DirectiveNode = {
       type: 'Directive',
       directive: {
@@ -50,7 +52,7 @@ describe('EmbedDirectiveHandler', () => {
     expect(mockStateService.appendContent).toHaveBeenCalledWith('Test content');
   });
 
-  it('should handle embed with heading level', async () => {
+  it('should handle embed with heading level', async (): Promise<void> => {
     const node: DirectiveNode = {
       type: 'Directive',
       directive: {
@@ -68,7 +70,7 @@ describe('EmbedDirectiveHandler', () => {
     expect(mockStateService.appendContent).toHaveBeenCalledWith('## Test content');
   });
 
-  it('should handle embed with under header', async () => {
+  it('should handle embed with under header', async (): Promise<void> => {
     const node: DirectiveNode = {
       type: 'Directive',
       directive: {
@@ -86,7 +88,7 @@ describe('EmbedDirectiveHandler', () => {
     expect(mockStateService.appendContent).toHaveBeenCalledWith('Important Notes\n\nTest content');
   });
 
-  it('should handle embed with both section and heading level', async () => {
+  it('should handle embed with both section and heading level', async (): Promise<void> => {
     const node: DirectiveNode = {
       type: 'Directive',
       directive: {
@@ -107,7 +109,7 @@ describe('EmbedDirectiveHandler', () => {
     expect(mockStateService.appendContent).toHaveBeenCalledWith('### Section content');
   });
 
-  it('should throw error for invalid heading level', async () => {
+  it('should throw error for invalid heading level', async (): Promise<void> => {
     const node: DirectiveNode = {
       type: 'Directive',
       directive: {
@@ -123,14 +125,15 @@ describe('EmbedDirectiveHandler', () => {
     await expect(handler.execute(node)).rejects.toThrow(DirectiveError);
   });
 
-  it('should not include format property in processing', async () => {
+  it('should not include format property in processing', async (): Promise<void> => {
+    // Using Partial<EmbedDirective> to indicate intentionally incomplete type
     const node: DirectiveNode = {
       type: 'Directive',
       directive: {
         kind: 'embed',
         path: '$PROJECTPATH/doc.md',
-        format: 'markdown'  // Should be ignored
-      } as any  // Using any to test legacy format property
+        format: 'markdown'  // Testing legacy property
+      } as Partial<EmbedDirective>
     };
 
     mockResolutionService.resolvePath.mockResolvedValue('/resolved/doc.md');
@@ -138,7 +141,6 @@ describe('EmbedDirectiveHandler', () => {
 
     await handler.execute(node);
 
-    // Verify content is processed without format consideration
     expect(mockStateService.appendContent).toHaveBeenCalledWith('Test content');
   });
 }); 

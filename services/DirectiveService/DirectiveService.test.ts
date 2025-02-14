@@ -1,56 +1,163 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi, Mock } from 'vitest';
 import { DirectiveService } from './DirectiveService';
-import type { DirectiveNode, TextDirective, DataDirective, ImportDirective, EmbedDirective } from 'meld-spec';
-import { MeldDirectiveError } from '../../core/errors/MeldDirectiveError';
-import { 
+import {
   createTextDirective,
   createDataDirective,
   createImportDirective,
   createEmbedDirective,
-  createLocation
+  createLocation,
+  createDirectiveNode
 } from '../../tests/utils/testFactories';
+import { MeldDirectiveError } from '../../core/errors/MeldDirectiveError';
+import { MeldImportError } from '../../core/errors/MeldImportError';
+import type { IValidationService } from '../ValidationService/IValidationService';
+import type { IStateService } from '../StateService/IStateService';
+import type { IPathService } from '../PathService/IPathService';
+import type { IFileSystemService } from '../FileSystemService/IFileSystemService';
+import type { IParserService } from '../ParserService/IParserService';
+import type { IInterpreterService } from '../InterpreterService/IInterpreterService';
+import type { ICircularityService } from '../CircularityService/ICircularityService';
+import type { IResolutionService } from '../ResolutionService/IResolutionService';
+import type { DirectiveNode, MeldNode } from '../../tests/__mocks__/meld-spec';
+import type { PathOptions } from '../PathService/IPathService';
+import type { InterpreterOptions } from '../InterpreterService/IInterpreterService';
+import type { ResolutionContext } from '../ResolutionService/IResolutionService';
+import type { IDirectiveService } from '../DirectiveService/IDirectiveService';
+
+// Create mock implementations
+const createValidationService = (): IValidationService => ({
+  validate: vi.fn() as unknown as (node: DirectiveNode) => void,
+  registerValidator: vi.fn() as unknown as (kind: string, validator: (node: DirectiveNode) => void) => void,
+  removeValidator: vi.fn() as unknown as (kind: string) => void,
+  hasValidator: vi.fn() as unknown as (kind: string) => boolean,
+  getRegisteredDirectiveKinds: vi.fn().mockReturnValue([]) as unknown as () => string[]
+});
+
+const createStateService = (): IStateService => ({
+  addNode: vi.fn() as unknown as (node: MeldNode) => void,
+  getNodes: vi.fn().mockReturnValue([]) as unknown as () => MeldNode[],
+  getCurrentFilePath: vi.fn() as unknown as () => string,
+  setCurrentFilePath: vi.fn() as unknown as (path: string) => void,
+  getTextVar: vi.fn() as unknown as (name: string) => string | undefined,
+  setTextVar: vi.fn() as unknown as (name: string, value: string) => void,
+  getAllTextVars: vi.fn().mockReturnValue(new Map()) as unknown as () => Map<string, string>,
+  getLocalTextVars: vi.fn().mockReturnValue(new Map()) as unknown as () => Map<string, string>,
+  getDataVar: vi.fn() as unknown as (name: string) => any,
+  setDataVar: vi.fn() as unknown as (name: string, value: any) => void,
+  getAllDataVars: vi.fn().mockReturnValue(new Map()) as unknown as () => Map<string, any>,
+  getLocalDataVars: vi.fn().mockReturnValue(new Map()) as unknown as () => Map<string, any>,
+  getPathVar: vi.fn() as unknown as (name: string) => string | undefined,
+  setPathVar: vi.fn() as unknown as (name: string, value: string) => void,
+  getAllPathVars: vi.fn().mockReturnValue(new Map()) as unknown as () => Map<string, string>,
+  getCommand: vi.fn() as unknown as (name: string) => { command: string; options?: Record<string, unknown> } | undefined,
+  setCommand: vi.fn() as unknown as (name: string, command: string | { command: string; options?: Record<string, unknown> }) => void,
+  addImport: vi.fn() as unknown as (path: string) => void,
+  removeImport: vi.fn() as unknown as (path: string) => void,
+  hasImport: vi.fn() as unknown as (path: string) => boolean,
+  getImports: vi.fn().mockReturnValue(new Set()) as unknown as () => Set<string>,
+  hasLocalChanges: vi.fn().mockReturnValue(false) as unknown as () => boolean,
+  getLocalChanges: vi.fn().mockReturnValue([]) as unknown as () => string[],
+  setImmutable: vi.fn() as unknown as () => void,
+  isImmutable: false,
+  createChildState: vi.fn() as unknown as () => IStateService,
+  mergeChildState: vi.fn() as unknown as (childState: IStateService) => void,
+  clone: vi.fn() as unknown as () => IStateService
+});
+
+const createPathService = (): IPathService => ({
+  initialize: vi.fn() as unknown as (fileSystem: IFileSystemService) => void,
+  resolvePath: vi.fn() as unknown as (path: string, options?: PathOptions) => Promise<string>,
+  resolvePaths: vi.fn() as unknown as (paths: string[], options?: PathOptions) => Promise<string[]>,
+  isValidPath: vi.fn() as unknown as (path: string, options?: PathOptions) => Promise<boolean>
+});
+
+const createFileSystemService = (): IFileSystemService => ({
+  readFile: vi.fn() as unknown as (path: string) => Promise<string>,
+  writeFile: vi.fn() as unknown as (path: string, content: string) => Promise<void>,
+  exists: vi.fn() as unknown as (path: string) => Promise<boolean>,
+  stat: vi.fn() as unknown as (path: string) => Promise<any>,
+  readDir: vi.fn() as unknown as (path: string) => Promise<string[]>,
+  ensureDir: vi.fn() as unknown as (path: string) => Promise<void>,
+  isDirectory: vi.fn() as unknown as (path: string) => Promise<boolean>,
+  join: vi.fn() as unknown as (...paths: string[]) => string,
+  resolve: vi.fn() as unknown as (...paths: string[]) => string,
+  dirname: vi.fn() as unknown as (path: string) => string,
+  basename: vi.fn() as unknown as (path: string) => string,
+  enableTestMode: vi.fn() as unknown as () => void,
+  disableTestMode: vi.fn() as unknown as () => void,
+  isTestMode: vi.fn() as unknown as () => boolean,
+  mockFile: vi.fn() as unknown as (path: string, content: string) => void,
+  mockDir: vi.fn() as unknown as (path: string) => void,
+  clearMocks: vi.fn() as unknown as () => void
+});
+
+const createParserService = (): IParserService => ({
+  parse: vi.fn() as unknown as (content: string) => MeldNode[],
+  parseWithLocations: vi.fn() as unknown as (content: string) => MeldNode[]
+});
+
+const createInterpreterService = (): IInterpreterService => ({
+  initialize: vi.fn() as unknown as (directiveService: IDirectiveService, stateService: IStateService) => void,
+  interpret: vi.fn() as unknown as (nodes: MeldNode[], options?: InterpreterOptions) => Promise<IStateService>,
+  interpretNode: vi.fn() as unknown as (node: MeldNode, state: IStateService) => Promise<IStateService>,
+  createChildContext: vi.fn() as unknown as (parentState: IStateService, filePath?: string) => Promise<IStateService>
+});
+
+const createCircularityService = (): ICircularityService => ({
+  beginImport: vi.fn() as unknown as (filePath: string) => void,
+  endImport: vi.fn() as unknown as (filePath: string) => void,
+  isInStack: vi.fn() as unknown as (filePath: string) => boolean,
+  getImportStack: vi.fn().mockReturnValue([]) as unknown as () => string[],
+  reset: vi.fn() as unknown as () => void
+});
+
+const createResolutionService = (): IResolutionService => ({
+  resolveText: vi.fn() as unknown as (text: string, context: ResolutionContext) => Promise<string>,
+  resolveData: vi.fn() as unknown as (ref: string, context: ResolutionContext) => Promise<any>,
+  resolvePath: vi.fn() as unknown as (path: string, context: ResolutionContext) => Promise<string>,
+  resolveCommand: vi.fn() as unknown as (cmd: string, args: string[], context: ResolutionContext) => Promise<string>,
+  resolveInContext: vi.fn() as unknown as (value: string, context: ResolutionContext) => Promise<string>,
+  validateResolution: vi.fn() as unknown as (value: string, context: ResolutionContext) => Promise<void>,
+  detectCircularReferences: vi.fn() as unknown as (value: string) => Promise<void>
+});
 
 describe('DirectiveService', () => {
   let service: DirectiveService;
-  let mockValidationService: any;
-  let mockStateService: any;
-  let mockPathService: any;
-  let mockFileSystemService: any;
-  let mockParserService: any;
-  let mockInterpreterService: any;
-  let mockCircularityService: any;
-  let mockInterpolationService: any;
+  let validationService: IValidationService;
+  let stateService: IStateService;
+  let pathService: IPathService;
+  let fileSystemService: IFileSystemService;
+  let parserService: IParserService;
+  let interpreterService: IInterpreterService;
+  let circularityService: ICircularityService;
+  let resolutionService: IResolutionService;
+  let parseMock: Mock;
 
   beforeEach(() => {
-    mockValidationService = { validate: vi.fn() };
-    mockStateService = {
-      setTextVar: vi.fn(),
-      setDataVar: vi.fn(),
-      createChildState: vi.fn(),
-      mergeChildState: vi.fn()
-    };
-    mockPathService = { resolvePath: vi.fn() };
-    mockFileSystemService = { exists: vi.fn(), readFile: vi.fn() };
-    mockParserService = { parse: vi.fn() };
-    mockInterpreterService = { interpret: vi.fn() };
-    mockCircularityService = {
-      beginImport: vi.fn(),
-      endImport: vi.fn()
-    };
-    mockInterpolationService = {
-      resolveString: vi.fn()
-    };
+    // Create fresh instances of mocks
+    validationService = createValidationService();
+    stateService = createStateService();
+    pathService = createPathService();
+    fileSystemService = createFileSystemService();
+    parserService = createParserService();
+    interpreterService = createInterpreterService();
+    circularityService = createCircularityService();
+    resolutionService = createResolutionService();
+
+    // Create mock for parse function
+    parseMock = vi.fn();
+    parserService.parse = parseMock;
 
     service = new DirectiveService();
     service.initialize(
-      mockValidationService,
-      mockStateService,
-      mockPathService,
-      mockFileSystemService,
-      mockParserService,
-      mockInterpreterService,
-      mockCircularityService,
-      mockInterpolationService
+      validationService,
+      stateService,
+      pathService,
+      fileSystemService,
+      parserService,
+      interpreterService,
+      circularityService,
+      resolutionService
     );
   });
 
@@ -79,14 +186,14 @@ describe('DirectiveService', () => {
 
       await service.processDirective(node);
 
-      expect(mockValidationService.validate).toHaveBeenCalledWith(node);
-      expect(mockStateService.setTextVar).toHaveBeenCalledWith('greeting', 'Hello');
+      expect(validationService.validate).toHaveBeenCalledWith(node);
+      expect(stateService.setTextVar).toHaveBeenCalledWith('greeting', 'Hello');
     });
 
     it('should handle validation errors', async () => {
       const node = createTextDirective('greeting', 'Hello', createLocation(1, 1));
 
-      mockValidationService.validate.mockImplementation(() => {
+      vi.mocked(validationService.validate).mockImplementationOnce(() => {
         throw new MeldDirectiveError('Invalid text directive', 'text');
       });
 
@@ -100,8 +207,8 @@ describe('DirectiveService', () => {
 
       await service.processDirective(node);
 
-      expect(mockValidationService.validate).toHaveBeenCalledWith(node);
-      expect(mockStateService.setDataVar).toHaveBeenCalledWith('config', { key: 'value' });
+      expect(validationService.validate).toHaveBeenCalledWith(node);
+      expect(stateService.setDataVar).toHaveBeenCalledWith('config', { key: 'value' });
     });
 
     it('should process a valid data directive with object value', async () => {
@@ -109,8 +216,8 @@ describe('DirectiveService', () => {
 
       await service.processDirective(node);
 
-      expect(mockValidationService.validate).toHaveBeenCalledWith(node);
-      expect(mockStateService.setDataVar).toHaveBeenCalledWith('config', { key: 'value' });
+      expect(validationService.validate).toHaveBeenCalledWith(node);
+      expect(stateService.setDataVar).toHaveBeenCalledWith('config', { key: 'value' });
     });
   });
 
@@ -118,25 +225,25 @@ describe('DirectiveService', () => {
     it('should process a valid import directive', async () => {
       const node = createImportDirective('test.md', createLocation(1, 1));
       const mockContent = 'Test content';
-      const mockParsedNodes = [{ type: 'Text', content: 'Test content' }];
-      const mockChildState = {};
+      const mockParsedNodes = [{ type: 'Text', content: 'Test content' }] as MeldNode[];
+      const mockChildState = {} as IStateService;
 
-      mockPathService.resolvePath.mockResolvedValue('/resolved/test.md');
-      mockFileSystemService.exists.mockResolvedValue(true);
-      mockFileSystemService.readFile.mockResolvedValue(mockContent);
-      mockStateService.createChildState.mockResolvedValue(mockChildState);
-      mockParserService.parse.mockResolvedValue(mockParsedNodes);
-      mockInterpreterService.interpret.mockResolvedValue(mockChildState);
+      vi.mocked(pathService.resolvePath).mockResolvedValueOnce('/resolved/test.md');
+      vi.mocked(fileSystemService.exists).mockResolvedValueOnce(true);
+      vi.mocked(fileSystemService.readFile).mockResolvedValueOnce(mockContent);
+      vi.mocked(stateService.createChildState).mockReturnValueOnce(mockChildState);
+      parseMock.mockReturnValueOnce(mockParsedNodes);
+      vi.mocked(interpreterService.interpret).mockResolvedValueOnce(mockChildState);
 
       await service.processDirective(node);
 
-      expect(mockValidationService.validate).toHaveBeenCalledWith(node);
-      expect(mockPathService.resolvePath).toHaveBeenCalledWith('test.md');
-      expect(mockFileSystemService.exists).toHaveBeenCalledWith('/resolved/test.md');
-      expect(mockFileSystemService.readFile).toHaveBeenCalledWith('/resolved/test.md', 'utf8');
-      expect(mockStateService.createChildState).toHaveBeenCalled();
-      expect(mockParserService.parse).toHaveBeenCalledWith(mockContent);
-      expect(mockInterpreterService.interpret).toHaveBeenCalledWith(
+      expect(validationService.validate).toHaveBeenCalledWith(node);
+      expect(pathService.resolvePath).toHaveBeenCalledWith('test.md');
+      expect(fileSystemService.exists).toHaveBeenCalledWith('/resolved/test.md');
+      expect(fileSystemService.readFile).toHaveBeenCalledWith('/resolved/test.md', 'utf8');
+      expect(stateService.createChildState).toHaveBeenCalled();
+      expect(parseMock).toHaveBeenCalledWith(mockContent);
+      expect(interpreterService.interpret).toHaveBeenCalledWith(
         mockParsedNodes,
         expect.objectContaining({
           initialState: mockChildState,
@@ -149,8 +256,8 @@ describe('DirectiveService', () => {
     it('should handle missing import files', async () => {
       const node = createImportDirective('missing.md', createLocation(1, 1));
 
-      mockPathService.resolvePath.mockResolvedValue('/resolved/missing.md');
-      mockFileSystemService.exists.mockResolvedValue(false);
+      vi.mocked(pathService.resolvePath).mockResolvedValueOnce('/resolved/missing.md');
+      vi.mocked(fileSystemService.exists).mockResolvedValueOnce(false);
 
       await expect(service.processDirective(node)).rejects.toThrow(MeldDirectiveError);
     });
@@ -160,25 +267,25 @@ describe('DirectiveService', () => {
     it('should process a valid embed directive', async () => {
       const node = createEmbedDirective('test.md', undefined, createLocation(1, 1));
       const mockContent = 'Test content';
-      const mockParsedNodes = [{ type: 'Text', content: 'Test content' }];
-      const mockChildState = {};
+      const mockParsedNodes = [{ type: 'Text', content: 'Test content' }] as MeldNode[];
+      const mockChildState = {} as IStateService;
 
-      mockPathService.resolvePath.mockResolvedValue('/resolved/test.md');
-      mockFileSystemService.exists.mockResolvedValue(true);
-      mockFileSystemService.readFile.mockResolvedValue(mockContent);
-      mockStateService.createChildState.mockResolvedValue(mockChildState);
-      mockParserService.parse.mockResolvedValue(mockParsedNodes);
-      mockInterpreterService.interpret.mockResolvedValue(mockChildState);
+      vi.mocked(pathService.resolvePath).mockResolvedValueOnce('/resolved/test.md');
+      vi.mocked(fileSystemService.exists).mockResolvedValueOnce(true);
+      vi.mocked(fileSystemService.readFile).mockResolvedValueOnce(mockContent);
+      vi.mocked(stateService.createChildState).mockReturnValueOnce(mockChildState);
+      vi.mocked(parserService.parse).mockReturnValueOnce(mockParsedNodes);
+      vi.mocked(interpreterService.interpret).mockResolvedValueOnce(mockChildState);
 
       await service.processDirective(node);
 
-      expect(mockValidationService.validate).toHaveBeenCalledWith(node);
-      expect(mockPathService.resolvePath).toHaveBeenCalledWith('test.md');
-      expect(mockFileSystemService.exists).toHaveBeenCalledWith('/resolved/test.md');
-      expect(mockFileSystemService.readFile).toHaveBeenCalledWith('/resolved/test.md', 'utf8');
-      expect(mockStateService.createChildState).toHaveBeenCalled();
-      expect(mockParserService.parse).toHaveBeenCalledWith(mockContent);
-      expect(mockInterpreterService.interpret).toHaveBeenCalledWith(
+      expect(validationService.validate).toHaveBeenCalledWith(node);
+      expect(pathService.resolvePath).toHaveBeenCalledWith('test.md');
+      expect(fileSystemService.exists).toHaveBeenCalledWith('/resolved/test.md');
+      expect(fileSystemService.readFile).toHaveBeenCalledWith('/resolved/test.md', 'utf8');
+      expect(stateService.createChildState).toHaveBeenCalled();
+      expect(parserService.parse).toHaveBeenCalledWith(mockContent);
+      expect(interpreterService.interpret).toHaveBeenCalledWith(
         mockParsedNodes,
         expect.objectContaining({
           initialState: mockChildState,
@@ -191,10 +298,171 @@ describe('DirectiveService', () => {
     it('should handle missing embed files', async () => {
       const node = createEmbedDirective('missing.md', undefined, createLocation(1, 1));
 
-      mockPathService.resolvePath.mockResolvedValue('/resolved/missing.md');
-      mockFileSystemService.exists.mockResolvedValue(false);
+      vi.mocked(pathService.resolvePath).mockResolvedValueOnce('/resolved/missing.md');
+      vi.mocked(fileSystemService.exists).mockResolvedValueOnce(false);
 
       await expect(service.processDirective(node)).rejects.toThrow(MeldDirectiveError);
+    });
+
+    it('should throw with helpful message for non-existent sections', async () => {
+      const content = `# Title
+## Section One
+Content`;
+
+      const node = createEmbedDirective(
+        'test.md',
+        'Nonexistent Section',
+        createLocation(1, 1)
+      );
+
+      vi.mocked(pathService.resolvePath).mockResolvedValue('/test.md');
+      vi.mocked(fileSystemService.exists).mockResolvedValue(true);
+      vi.mocked(fileSystemService.readFile).mockResolvedValue(content);
+
+      await expect(service.processDirective(node))
+        .rejects
+        .toThrow(MeldDirectiveError);
+
+      // The error should contain the closest match suggestion
+      await expect(service.processDirective(node))
+        .rejects
+        .toMatchObject({
+          message: expect.stringContaining('Section One')
+        });
+    });
+
+    it('should adjust heading levels when using "as ###" syntax', async () => {
+      const content = `# Title
+## Section One
+Content in section one
+### Subsection
+Nested content
+## Section Two
+Other content`;
+
+      const node = createEmbedDirective(
+        'test.md',
+        'Section One',
+        createLocation(1, 1),
+        { headingLevel: 3 }
+      );
+
+      vi.mocked(pathService.resolvePath).mockResolvedValue('/test.md');
+      vi.mocked(fileSystemService.exists).mockResolvedValue(true);
+      vi.mocked(fileSystemService.readFile).mockResolvedValue(content);
+      vi.mocked(parserService.parse).mockReturnValue([]);
+
+      await service.processDirective(node);
+
+      const parsedContent = parserService.parse.mock.calls[0][0];
+      expect(parsedContent).toContain('### Section One');
+      expect(parsedContent).toContain('#### Subsection');
+      expect(parsedContent).not.toContain('## Section One');
+      expect(parsedContent).not.toContain('### Subsection');
+    });
+
+    it('should embed under specified header text', async () => {
+      const content = `# Title
+## Section One
+Content in section one
+### Subsection
+Nested content
+## Section Two
+Other content`;
+
+      const node = createEmbedDirective(
+        'test.md',
+        'Section One',
+        createLocation(1, 1),
+        { underHeader: 'My Header' }
+      );
+
+      vi.mocked(pathService.resolvePath).mockResolvedValue('/test.md');
+      vi.mocked(fileSystemService.exists).mockResolvedValue(true);
+      vi.mocked(fileSystemService.readFile).mockResolvedValue(content);
+      vi.mocked(parserService.parse).mockReturnValue([]);
+
+      await service.processDirective(node);
+
+      const parsedContent = parserService.parse.mock.calls[0][0];
+      expect(parsedContent).toContain('## My Header');
+      expect(parsedContent).toContain('### Section One');
+      expect(parsedContent).toContain('#### Subsection');
+    });
+
+    it('should handle both "as ###" and "under header_text" together', async () => {
+      const content = `# Title
+## Section One
+Content in section one
+### Subsection
+Nested content
+## Section Two
+Other content`;
+
+      const node = createEmbedDirective(
+        'test.md',
+        'Section One',
+        createLocation(1, 1),
+        { 
+          headingLevel: 4,
+          underHeader: 'My Header'
+        }
+      );
+
+      vi.mocked(pathService.resolvePath).mockResolvedValue('/test.md');
+      vi.mocked(fileSystemService.exists).mockResolvedValue(true);
+      vi.mocked(fileSystemService.readFile).mockResolvedValue(content);
+      vi.mocked(parserService.parse).mockReturnValue([]);
+
+      await service.processDirective(node);
+
+      const parsedContent = parserService.parse.mock.calls[0][0];
+      expect(parsedContent).toContain('## My Header');
+      expect(parsedContent).toContain('#### Section One');
+      expect(parsedContent).toContain('##### Subsection');
+    });
+
+    it('should throw error for missing file', async () => {
+      const node = createEmbedDirective(
+        'missing.md',
+        undefined,
+        createLocation(1, 1)
+      );
+
+      vi.mocked(pathService.resolvePath).mockResolvedValue('/missing.md');
+      vi.mocked(fileSystemService.exists).mockResolvedValue(false);
+
+      await expect(service.processDirective(node)).rejects.toThrow(
+        'File not found: /missing.md'
+      );
+    });
+
+    it('should throw error for missing section', async () => {
+      const content = `# Title
+## Section One
+Content`;
+
+      const node = createEmbedDirective(
+        'test.md',
+        'Missing Section',
+        createLocation(1, 1)
+      );
+
+      vi.mocked(pathService.resolvePath).mockResolvedValue('/test.md');
+      vi.mocked(fileSystemService.exists).mockResolvedValue(true);
+      vi.mocked(fileSystemService.readFile).mockResolvedValue(content);
+
+      await expect(service.processDirective(node)).rejects.toThrow(
+        'Section not found: Missing Section'
+      );
+    });
+
+    it('should throw error for unknown directive kind', async () => {
+      await expect(
+        service.processDirective(
+          createDirectiveNode('unknown', { foo: 'bar' }, createLocation(1, 1))
+        )
+      ).rejects.toThrow('Unknown directive kind: unknown');
     });
   });
 
@@ -207,55 +475,23 @@ describe('DirectiveService', () => {
 
       await service.processDirectives(nodes);
 
-      expect(mockValidationService.validate).toHaveBeenCalledTimes(2);
-      expect(mockStateService.setTextVar).toHaveBeenCalledWith('greeting', 'Hello');
-      expect(mockStateService.setDataVar).toHaveBeenCalledWith('config', { key: 'value' });
+      expect(validationService.validate).toHaveBeenCalledTimes(2);
+      expect(stateService.setTextVar).toHaveBeenCalledWith('greeting', 'Hello');
+      expect(stateService.setDataVar).toHaveBeenCalledWith('config', { key: 'value' });
     });
 
     it('should stop processing on first error', async () => {
       const nodes = [
         createTextDirective('greeting', 'Hello', createLocation(1, 1)),
-        createDirectiveNode('unknown' as any, {}, createLocation(2, 1))
+        createDirectiveNode('unknown', {}, createLocation(2, 1))
       ];
 
       await expect(service.processDirectives(nodes)).rejects.toThrow(MeldDirectiveError);
-      expect(mockStateService.setTextVar).toHaveBeenCalledTimes(1);
+      expect(stateService.setTextVar).toHaveBeenCalledTimes(1);
     });
   });
 
   describe('Section extraction', () => {
-    let service: DirectiveService;
-    let mockValidationService: any;
-    let mockStateService: any;
-    let mockPathService: any;
-    let mockFileSystemService: any;
-    let mockParserService: any;
-    let mockInterpreterService: any;
-
-    beforeEach(() => {
-      mockValidationService = { validate: vi.fn() };
-      mockStateService = {
-        setTextVar: vi.fn(),
-        setDataVar: vi.fn(),
-        createChildState: vi.fn(),
-        mergeChildState: vi.fn()
-      };
-      mockPathService = { resolvePath: vi.fn() };
-      mockFileSystemService = { exists: vi.fn(), readFile: vi.fn() };
-      mockParserService = { parse: vi.fn() };
-      mockInterpreterService = { interpret: vi.fn() };
-
-      service = new DirectiveService();
-      service.initialize(
-        mockValidationService,
-        mockStateService,
-        mockPathService,
-        mockFileSystemService,
-        mockParserService,
-        mockInterpreterService
-      );
-    });
-
     it('should extract exact section matches', async () => {
       const content = `# Title
 ## Section One
@@ -263,27 +499,22 @@ Content in section one
 ## Section Two
 Content in section two`;
 
-      const node: DirectiveNode = {
-        type: 'Directive',
-        directive: {
-          kind: 'embed',
-          path: 'test.md',
-          section: 'Section One'
-        } as EmbedDirective,
-        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } }
-      };
+      const node = createEmbedDirective(
+        'test.md',
+        'Section One',
+        createLocation(1, 1)
+      );
 
-      mockPathService.resolvePath.mockResolvedValue('/test.md');
-      mockFileSystemService.exists.mockResolvedValue(true);
-      mockFileSystemService.readFile.mockResolvedValue(content);
-      mockParserService.parse.mockResolvedValue([]);
+      vi.mocked(pathService.resolvePath).mockResolvedValueOnce('/test.md');
+      vi.mocked(fileSystemService.exists).mockResolvedValueOnce(true);
+      vi.mocked(fileSystemService.readFile).mockResolvedValueOnce(content);
+      parseMock.mockReturnValueOnce([]);
 
       await service.processDirective(node);
 
-      const parsedContent = mockParserService.parse.mock.calls[0][0];
-      expect(parsedContent).toContain('## Section One');
-      expect(parsedContent).toContain('Content in section one');
-      expect(parsedContent).not.toContain('Section Two');
+      expect(parseMock).toHaveBeenCalledWith(expect.stringContaining('## Section One'));
+      expect(parseMock).toHaveBeenCalledWith(expect.stringContaining('Content in section one'));
+      expect(parseMock).not.toHaveBeenCalledWith(expect.stringContaining('Section Two'));
     });
 
     it('should extract sections with fuzzy matching', async () => {
@@ -293,25 +524,21 @@ Content in guide
 ## Other Section
 Other content`;
 
-      const node: DirectiveNode = {
-        type: 'Directive',
-        directive: {
-          kind: 'embed',
-          path: 'test.md',
-          section: 'Getting Started',
-          fuzzy: 0.7
-        } as EmbedDirective,
-        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } }
-      };
+      const node = createEmbedDirective(
+        'test.md',
+        'Getting Started',
+        createLocation(1, 1),
+        { fuzzy: 0.7 }
+      );
 
-      mockPathService.resolvePath.mockResolvedValue('/test.md');
-      mockFileSystemService.exists.mockResolvedValue(true);
-      mockFileSystemService.readFile.mockResolvedValue(content);
-      mockParserService.parse.mockResolvedValue([]);
+      vi.mocked(pathService.resolvePath).mockResolvedValue('/test.md');
+      vi.mocked(fileSystemService.exists).mockResolvedValue(true);
+      vi.mocked(fileSystemService.readFile).mockResolvedValue(content);
+      vi.mocked(parserService.parse).mockReturnValue([]);
 
       await service.processDirective(node);
 
-      const parsedContent = mockParserService.parse.mock.calls[0][0];
+      const parsedContent = parserService.parse.mock.calls[0][0];
       expect(parsedContent).toContain('## Getting Started Guide');
       expect(parsedContent).toContain('Content in guide');
       expect(parsedContent).not.toContain('Other Section');
@@ -326,206 +553,157 @@ Nested content
 ## Section Two
 Other content`;
 
-      const node: DirectiveNode = {
-        type: 'Directive',
-        directive: {
-          kind: 'embed',
-          path: 'test.md',
-          section: 'Section One'
-        } as EmbedDirective,
-        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } }
-      };
+      const node = createEmbedDirective(
+        'test.md',
+        'Section One',
+        createLocation(1, 1)
+      );
 
-      mockPathService.resolvePath.mockResolvedValue('/test.md');
-      mockFileSystemService.exists.mockResolvedValue(true);
-      mockFileSystemService.readFile.mockResolvedValue(content);
-      mockParserService.parse.mockResolvedValue([]);
+      vi.mocked(pathService.resolvePath).mockResolvedValue('/test.md');
+      vi.mocked(fileSystemService.exists).mockResolvedValue(true);
+      vi.mocked(fileSystemService.readFile).mockResolvedValue(content);
+      vi.mocked(parserService.parse).mockReturnValue([]);
 
       await service.processDirective(node);
 
-      const parsedContent = mockParserService.parse.mock.calls[0][0];
+      const parsedContent = parserService.parse.mock.calls[0][0];
       expect(parsedContent).toContain('## Section One');
       expect(parsedContent).toContain('### Subsection');
       expect(parsedContent).toContain('Nested content');
       expect(parsedContent).not.toContain('Section Two');
     });
-
-    it('should throw with helpful message for non-existent sections', async () => {
-      const content = `# Title
-## Section One
-Content`;
-
-      const node: DirectiveNode = {
-        type: 'Directive',
-        directive: {
-          kind: 'embed',
-          path: 'test.md',
-          section: 'Nonexistent Section'
-        } as EmbedDirective,
-        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } }
-      };
-
-      mockPathService.resolvePath.mockResolvedValue('/test.md');
-      mockFileSystemService.exists.mockResolvedValue(true);
-      mockFileSystemService.readFile.mockResolvedValue(content);
-
-      await expect(service.processDirective(node))
-        .rejects
-        .toThrow(MeldDirectiveError);
-
-      // The error should contain the closest match suggestion
-      await expect(service.processDirective(node))
-        .rejects
-        .toMatchObject({
-          message: expect.stringContaining('Section One')
-        });
-    });
   });
 
   describe('Content formatting', () => {
-    let service: DirectiveService;
-    let mockValidationService: any;
-    let mockStateService: any;
-    let mockPathService: any;
-    let mockFileSystemService: any;
-    let mockParserService: any;
-    let mockInterpreterService: any;
-
     beforeEach(() => {
-      mockValidationService = { validate: vi.fn() };
-      mockStateService = {
+      validationService = { validate: vi.fn() };
+      stateService = {
         setTextVar: vi.fn(),
         setDataVar: vi.fn(),
         createChildState: vi.fn(),
         mergeChildState: vi.fn()
       };
-      mockPathService = { resolvePath: vi.fn() };
-      mockFileSystemService = { exists: vi.fn(), readFile: vi.fn() };
-      mockParserService = { parse: vi.fn() };
-      mockInterpreterService = { interpret: vi.fn() };
+      pathService = { resolvePath: vi.fn() };
+      fileSystemService = { exists: vi.fn(), readFile: vi.fn() };
+      parserService = { parse: vi.fn() };
+      interpreterService = { interpret: vi.fn() };
+      circularityService = {
+        beginImport: vi.fn(),
+        endImport: vi.fn()
+      };
+      resolutionService = {
+        resolveInContext: vi.fn()
+      };
 
       service = new DirectiveService();
       service.initialize(
-        mockValidationService,
-        mockStateService,
-        mockPathService,
-        mockFileSystemService,
-        mockParserService,
-        mockInterpreterService
+        validationService,
+        stateService,
+        pathService,
+        fileSystemService,
+        parserService,
+        interpreterService,
+        circularityService,
+        resolutionService
       );
     });
 
     it('should format code blocks with language', async () => {
       const content = 'const x = 1;';
-      const node: DirectiveNode = {
-        type: 'Directive',
-        directive: {
-          kind: 'embed',
-          path: 'test.ts',
-          format: 'typescript'
-        } as EmbedDirective,
-        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } }
-      };
+      const node = createEmbedDirective(
+        'test.ts',
+        undefined,
+        createLocation(1, 1),
+        { format: 'typescript' }
+      );
 
-      mockPathService.resolvePath.mockResolvedValue('/test.ts');
-      mockFileSystemService.exists.mockResolvedValue(true);
-      mockFileSystemService.readFile.mockResolvedValue(content);
-      mockParserService.parse.mockResolvedValue([]);
+      vi.mocked(pathService.resolvePath).mockResolvedValue('/test.ts');
+      vi.mocked(fileSystemService.exists).mockResolvedValue(true);
+      vi.mocked(fileSystemService.readFile).mockResolvedValue(content);
+      vi.mocked(parserService.parse).mockReturnValue([]);
 
       await service.processDirective(node);
 
-      const parsedContent = mockParserService.parse.mock.calls[0][0];
+      const parsedContent = parserService.parse.mock.calls[0][0];
       expect(parsedContent).toBe('```typescript\nconst x = 1;\n```');
     });
 
     it('should format quotes with > prefix', async () => {
       const content = 'Line 1\nLine 2';
-      const node: DirectiveNode = {
-        type: 'Directive',
-        directive: {
-          kind: 'embed',
-          path: 'quote.txt',
-          format: 'quote'
-        } as EmbedDirective,
-        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } }
-      };
+      const node = createEmbedDirective(
+        'quote.txt',
+        undefined,
+        createLocation(1, 1),
+        { format: 'quote' }
+      );
 
-      mockPathService.resolvePath.mockResolvedValue('/quote.txt');
-      mockFileSystemService.exists.mockResolvedValue(true);
-      mockFileSystemService.readFile.mockResolvedValue(content);
-      mockParserService.parse.mockResolvedValue([]);
+      vi.mocked(pathService.resolvePath).mockResolvedValue('/quote.txt');
+      vi.mocked(fileSystemService.exists).mockResolvedValue(true);
+      vi.mocked(fileSystemService.readFile).mockResolvedValue(content);
+      vi.mocked(parserService.parse).mockReturnValue([]);
 
       await service.processDirective(node);
 
-      const parsedContent = mockParserService.parse.mock.calls[0][0];
+      const parsedContent = parserService.parse.mock.calls[0][0];
       expect(parsedContent).toBe('> Line 1\n> Line 2');
     });
 
     it('should auto-detect format from file extension', async () => {
       const content = 'const x = 1;';
-      const node: DirectiveNode = {
-        type: 'Directive',
-        directive: {
-          kind: 'embed',
-          path: 'test.ts'
-        } as EmbedDirective,
-        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } }
-      };
+      const node = createEmbedDirective(
+        'test.ts',
+        undefined,
+        createLocation(1, 1)
+      );
 
-      mockPathService.resolvePath.mockResolvedValue('/test.ts');
-      mockFileSystemService.exists.mockResolvedValue(true);
-      mockFileSystemService.readFile.mockResolvedValue(content);
-      mockParserService.parse.mockResolvedValue([]);
+      vi.mocked(pathService.resolvePath).mockResolvedValue('/test.ts');
+      vi.mocked(fileSystemService.exists).mockResolvedValue(true);
+      vi.mocked(fileSystemService.readFile).mockResolvedValue(content);
+      vi.mocked(parserService.parse).mockReturnValue([]);
 
       await service.processDirective(node);
 
-      const parsedContent = mockParserService.parse.mock.calls[0][0];
+      const parsedContent = parserService.parse.mock.calls[0][0];
       expect(parsedContent).toBe('```typescript\nconst x = 1;\n```');
     });
 
     it('should preserve markdown content as-is', async () => {
       const content = '# Title\n## Section';
-      const node: DirectiveNode = {
-        type: 'Directive',
-        directive: {
-          kind: 'embed',
-          path: 'test.md',
-          format: 'markdown'
-        } as EmbedDirective,
-        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } }
-      };
+      const node = createEmbedDirective(
+        'test.md',
+        undefined,
+        createLocation(1, 1),
+        { format: 'markdown' }
+      );
 
-      mockPathService.resolvePath.mockResolvedValue('/test.md');
-      mockFileSystemService.exists.mockResolvedValue(true);
-      mockFileSystemService.readFile.mockResolvedValue(content);
-      mockParserService.parse.mockResolvedValue([]);
+      vi.mocked(pathService.resolvePath).mockResolvedValue('/test.md');
+      vi.mocked(fileSystemService.exists).mockResolvedValue(true);
+      vi.mocked(fileSystemService.readFile).mockResolvedValue(content);
+      vi.mocked(parserService.parse).mockReturnValue([]);
 
       await service.processDirective(node);
 
-      const parsedContent = mockParserService.parse.mock.calls[0][0];
+      const parsedContent = parserService.parse.mock.calls[0][0];
       expect(parsedContent).toBe(content);
     });
 
     it('should handle unknown formats as plain text', async () => {
       const content = 'Some content';
-      const node: DirectiveNode = {
-        type: 'Directive',
-        directive: {
-          kind: 'embed',
-          path: 'test.xyz',
-          format: 'unknown'
-        } as EmbedDirective,
-        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } }
-      };
+      const node = createEmbedDirective(
+        'test.xyz',
+        undefined,
+        createLocation(1, 1),
+        { format: 'unknown' }
+      );
 
-      mockPathService.resolvePath.mockResolvedValue('/test.xyz');
-      mockFileSystemService.exists.mockResolvedValue(true);
-      mockFileSystemService.readFile.mockResolvedValue(content);
-      mockParserService.parse.mockResolvedValue([]);
+      vi.mocked(pathService.resolvePath).mockResolvedValue('/test.xyz');
+      vi.mocked(fileSystemService.exists).mockResolvedValue(true);
+      vi.mocked(fileSystemService.readFile).mockResolvedValue(content);
+      vi.mocked(parserService.parse).mockReturnValue([]);
 
       await service.processDirective(node);
 
-      const parsedContent = mockParserService.parse.mock.calls[0][0];
+      const parsedContent = parserService.parse.mock.calls[0][0];
       expect(parsedContent).toBe(content);
     });
   });

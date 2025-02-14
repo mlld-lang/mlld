@@ -28,15 +28,23 @@ export class TestContext {
    * Initialize the test context
    */
   async initialize(): Promise<void> {
-    this.fs.initialize();
+    await this.fs.initialize();
   }
 
   /**
    * Clean up resources
    */
   async cleanup(): Promise<void> {
-    this.fs.cleanup();
+    await this.fs.cleanup();
     this.fixtures.clearCache();
+  }
+
+  /**
+   * Write a file to the test filesystem
+   */
+  async writeFile(relativePath: string, content: string): Promise<void> {
+    const fullPath = this.fs.getPath(relativePath);
+    this.fs.writeFile(fullPath, content);
   }
 
   /**

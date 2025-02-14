@@ -54,6 +54,34 @@ export const loggingConfig = {
     filesystem: {
       level: 'info',
       includeMetadata: true
+    },
+    validation: {
+      level: 'debug',
+      includeMetadata: true
+    },
+    output: {
+      level: 'debug',
+      includeMetadata: true
+    },
+    path: {
+      level: 'debug',
+      includeMetadata: true
+    },
+    directive: {
+      level: 'debug',
+      includeMetadata: true
+    },
+    circularity: {
+      level: 'debug',
+      includeMetadata: true
+    },
+    resolution: {
+      level: 'debug',
+      includeMetadata: true
+    },
+    import: {
+      level: 'debug',
+      includeMetadata: true
     }
   }
 }; 

@@ -2,27 +2,28 @@
   "name": "meld",
   "version": "0.1.0",
   "description": "Official interpreter for the Meld language",
-  "main": "dist/cjs/index.js",
-  "module": "dist/esm/index.js",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
   "exports": {
     ".": {
-      "require": "./dist/cjs/index.js",
-      "import": "./dist/esm/index.js"
+      "require": "./dist/index.js",
+      "import": "./dist/index.mjs",
+      "types": "./dist/index.d.ts"
     }
   },
   "bin": {
-    "meld": "./dist/cjs/bin/meld.js"
+    "meld": "./dist/cli.js"
   },
   "scripts": {
-    "build": "npm run build:cjs && npm run build:esm",
-    "build:cjs": "tsc -p tsconfig.cjs.json",
-    "build:esm": "tsc -p tsconfig.esm.json",
-    "test": "npm run build && vitest --run",
-    "test:watch": "npm run build && vitest watch",
-    "test:coverage": "npm run build && vitest run --coverage",
-    "lint": "eslint src/**/*.ts",
-    "fixmytests": "meld FIXMYTESTS.meld.md --overwrite ; oneshot FIXMYTESTS.md --model o1-preview -o FIXMYTESTS-PLAN.md",
-    "fixmytests:sonnet": "meld FIXMYTESTS.meld.md --overwrite ; oneshot FIXMYTESTS.md --model sonnet -o FIXMYTESTS-SONNET.md"
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint . --ext .ts",
+    "clean": "rimraf dist",
+    "prepublishOnly": "npm run clean && npm run build"
   },
   "repository": {
     "type": "git",
@@ -52,7 +53,9 @@
     "@types/fs-extra": "^11.0.4",
     "eslint": "^9.18.0",
     "fs-extra": "^11.3.0",
+    "memfs": "^4.7.0",
     "rimraf": "^6.0.1",
+    "tsup": "^8.0.2",
     "typescript": "^5.7.3",
     "vitest": "^2.1.8"
   }

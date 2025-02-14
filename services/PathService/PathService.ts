@@ -14,9 +14,67 @@ const DEFAULT_OPTIONS: Required<PathOptions> = {
 
 export class PathService implements IPathService {
   private fileSystem!: IFileSystemService;
+  private pathVariables: Map<string, string> = new Map();
+  
+  constructor(fileSystem?: IFileSystemService) {
+    if (fileSystem) {
+      this.initialize(fileSystem);
+    }
+    this.initializeDefaultVariables();
+  }
   
   initialize(fileSystem: IFileSystemService): void {
     this.fileSystem = fileSystem;
+  }
+
+  private initializeDefaultVariables(): void {
+    // Set default path variables
+    this.pathVariables.set('HOME', 'home');
+    this.pathVariables.set('PROJECTPATH', 'project');
+  }
+  
+  setPathVariable(name: string, value: string): void {
+    if (!name) {
+      throw new PathValidationError('Variable name cannot be empty', name, PathErrorCode.INVALID_PATH);
+    }
+    if (!value) {
+      throw new PathValidationError('Variable value cannot be empty', value, PathErrorCode.INVALID_PATH);
+    }
+    this.pathVariables.set(name, value);
+  }
+
+  getPathVariable(name: string): string | undefined {
+    return this.pathVariables.get(name);
+  }
+
+  clearPathVariables(): void {
+    this.pathVariables.clear();
+    this.initializeDefaultVariables();
+  }
+
+  expandPathVariables(inputPath: string): string {
+    let result = inputPath;
+    for (const [name, value] of this.pathVariables.entries()) {
+      const regex1 = new RegExp(`\\$${name}\\b`, 'g');
+      const regex2 = new RegExp(`\\$\{${name}\}`, 'g');
+      result = result.replace(regex1, value).replace(regex2, value);
+    }
+    return result;
+  }
+
+  async validatePath(inputPath: string): Promise<void> {
+    await this.resolvePath(inputPath, {
+      mustExist: true,
+      allowOutsideBaseDir: false
+    });
+  }
+
+  async readFileContent(inputPath: string): Promise<string> {
+    const resolvedPath = await this.resolvePath(inputPath, {
+      mustExist: true,
+      mustBeFile: true
+    });
+    return this.fileSystem.readFile(resolvedPath);
   }
   
   async resolvePath(inputPath: string, options?: PathOptions): Promise<string> {
@@ -33,9 +91,11 @@ export class PathService implements IPathService {
         throw new PathValidationError('Path contains null bytes', inputPath, PathErrorCode.NULL_BYTE);
       }
       
-      // Path variables are already interpolated by meld-ast
-      // Just resolve relative to base directory
-      const resolvedPath = path.resolve(opts.baseDir, inputPath);
+      // Expand path variables
+      const expandedPath = this.expandPathVariables(inputPath);
+      
+      // Resolve relative to base directory
+      const resolvedPath = path.resolve(opts.baseDir, expandedPath);
       
       // Check if path is outside base directory
       if (!opts.allowOutsideBaseDir) {

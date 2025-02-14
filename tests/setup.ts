@@ -1,26 +1,21 @@
-import { vi } from 'vitest';
-import { createPathMock } from './__mocks__/path';
+import { beforeEach, afterEach, vi } from 'vitest';
+import { TestContext } from './utils';
 
-// Configure path mock first to ensure it's available for all tests
-vi.mock('path', () => {
-  // Create a mock instance with the current platform
-  const mock = createPathMock();
-  
-  // Return both named exports and default export
-  return {
-    __esModule: true,
-    default: mock.default,
-    ...mock,
-  };
+// Reset all mocks before each test
+beforeEach(() => {
+  vi.resetAllMocks();
 });
 
-// Initialize test environment
-beforeAll(() => {
-  // Reset modules before all tests
-  vi.resetModules();
+// Clean up after each test
+afterEach(async () => {
+  vi.restoreAllMocks();
 });
 
-// Clean up after tests
-afterAll(() => {
-  vi.resetModules();
-}); 
+// Make test utilities available globally
+declare global {
+  // eslint-disable-next-line no-var
+  var testContext: TestContext;
+}
+
+// Initialize test context
+globalThis.testContext = new TestContext(); 

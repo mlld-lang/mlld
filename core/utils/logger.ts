@@ -111,6 +111,13 @@ export const stateLogger = createServiceLogger('state');
 export const parserLogger = createServiceLogger('parser');
 export const interpreterLogger = createServiceLogger('interpreter');
 export const filesystemLogger = createServiceLogger('filesystem');
+export const validationLogger = createServiceLogger('validation');
+export const outputLogger = createServiceLogger('output');
+export const pathLogger = createServiceLogger('path');
+export const directiveLogger = createServiceLogger('directive');
+export const circularityLogger = createServiceLogger('circularity');
+export const resolutionLogger = createServiceLogger('resolution');
+export const importLogger = createServiceLogger('import');
 
 // Export default logger for general use
 export default logger; 

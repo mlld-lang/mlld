@@ -7,9 +7,11 @@ import * as path from 'path';
  */
 export class MemfsTestFileSystem {
   private vol: Volume;
+  private projectRoot: string;
 
   constructor() {
     this.vol = new Volume();
+    this.projectRoot = '/project';
   }
 
   /**
@@ -17,6 +19,7 @@ export class MemfsTestFileSystem {
    */
   initialize(): void {
     this.vol.reset();
+    this.mkdir(this.projectRoot);
   }
 
   /**
@@ -110,5 +113,12 @@ export class MemfsTestFileSystem {
     if (!this.exists(dirPath)) {
       this.mkdir(dirPath);
     }
+  }
+
+  /**
+   * Get absolute path relative to project root
+   */
+  getPath(relativePath: string): string {
+    return path.join(this.projectRoot, relativePath);
   }
 } 
