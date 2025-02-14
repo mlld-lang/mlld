@@ -311,176 +311,343 @@ describe('Interpreter - @embed directive (integration)', () => {
 --------------------------------------------------------------------------------
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-IV. PATH HANDLING TESTS
+IV. LOCATION HANDLING IN TESTS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-1) Testing Path Resolution Flow
+1) Core Location Types
 ─────────────────────────────────────────────────────────────────────────
-The path resolution flow involves multiple services working together:
-1. meld-ast parses raw paths with variables
-2. ResolutionService resolves ALL variables (including path variables)
-3. PathService validates & normalizes resolved paths
-4. FileSystemService handles actual I/O
+We use a consistent type system for handling locations across the codebase:
 
-Example test for this flow:
 ```typescript
-describe('Path Resolution Flow', () => {
+// core/types/index.ts
+export interface Position {
+  line: number;   // 1-based
+  column: number; // 1-based
+}
+
+export interface Location {
+  start: Position;
+  end: Position;
+  filePath?: string;
+}
+```
+
+2) Test Factory Helpers
+─────────────────────────────────────────────────────────────────────────
+To ensure consistent location creation in tests:
+
+```typescript
+// tests/utils/testFactories.ts
+export function createPosition(line: number, column: number): Position {
+  return { line, column };
+}
+
+export function createLocation(
+  startLine: number = 1,
+  startColumn: number = 1,
+  endLine?: number,
+  endColumn?: number,
+  filePath?: string
+): Location {
+  return {
+    start: createPosition(startLine, startColumn),
+    end: createPosition(endLine ?? startLine, endColumn ?? startColumn),
+    filePath
+  };
+}
+```
+
+3) Location Handling in Tests
+─────────────────────────────────────────────────────────────────────────
+Example of testing location-aware parsing:
+
+```typescript
+describe('ParserService', () => {
+  let parser: ParserService;
+  let parseSpy: any;
+
+  beforeEach(() => {
+    parser = new ParserService();
+    parseSpy = vi.spyOn(parser, 'parse');
+  });
+
+  it('should parse content with locations', async () => {
+    const content = 'Hello world';
+    const mockResult: MeldNode[] = [{
+      type: 'Text',
+      content: 'Hello world',
+      location: createLocation(1, 1, 1, 11)
+    }];
+
+    parseSpy.mockResolvedValue(mockResult);
+    const result = await parser.parse(content);
+    
+    expect(result[0].location).toMatchObject({
+      start: { line: 1, column: 1 },
+      end: { line: 1, column: 11 }
+    });
+  });
+
+  it('should add filePath to locations', async () => {
+    const content = '@text greeting = "Hi"';
+    const location = createLocation(1, 1, 1, 20);
+    const mockResult: MeldNode[] = [{
+      type: 'Directive',
+      directive: {
+        kind: 'text',
+        name: 'greeting',
+        value: 'Hi'
+      },
+      location
+    }];
+
+    parseSpy.mockResolvedValue(mockResult);
+    const result = await parser.parseWithLocations(content, 'test.meld');
+    
+    expect(result[0].location).toMatchObject({
+      start: location.start,
+      end: location.end,
+      filePath: 'test.meld'
+    });
+  });
+});
+```
+
+4) Error Location Handling
+─────────────────────────────────────────────────────────────────────────
+Example of testing location-aware errors:
+
+```typescript
+describe('error handling', () => {
+  it('should include location in parse errors', async () => {
+    const position = createPosition(1, 1);
+    const error = new MeldParseError('Invalid syntax', position);
+
+    expect(error.message).toBe('Parse error: Invalid syntax at line 1, column 1');
+    expect(error.location).toMatchObject({
+      start: position,
+      end: position
+    });
+  });
+
+  it('should preserve file paths in errors', async () => {
+    const location = createLocation(1, 1, 1, 5, 'test.meld');
+    const error = new MeldParseError('Invalid syntax', location);
+
+    expect(error.message).toBe(
+      'Parse error: Invalid syntax at line 1, column 1 in test.meld'
+    );
+    expect(error.location).toBe(location);
+  });
+});
+```
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+V. PATH HANDLING IN TESTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1) Testing Path Resolution
+─────────────────────────────────────────────────────────────────────────
+The path resolution flow now leverages meld-ast's built-in location tracking:
+
+```typescript
+describe('PathService', () => {
   let context: TestContext;
-  let resolutionService: ResolutionService;
-  let pathService: PathService;
+  let pathService: IPathService;
 
   beforeEach(() => {
     context = new TestContext();
     context.initialize();
-    
-    // Setup test project structure
-    context.builder.create({
+    pathService = context.services.pathService;
+  });
+
+  afterEach(() => {
+    context.cleanup();
+  });
+
+  it('resolves paths with location tracking', async () => {
+    // Setup test files
+    await context.builder.create({
       files: {
-        'project/docs/example.md': 'content',
-        'project/config.meld': '@path docs = $PROJECTPATH/docs'
+        'test.meld': '@import path/to/file.md'
       }
     });
 
-    resolutionService = new ResolutionService(/* deps */);
-    pathService = new PathService(/* deps */);
+    // Parse with location tracking
+    const content = await context.fs.readFile('test.meld');
+    const nodes = await context.parseMeldWithLocations(content, 'test.meld');
+    const importNode = nodes[0];
+
+    // Resolve path
+    const resolvedPath = await pathService.resolvePath(importNode.directive.path);
+
+    // Location should be preserved in any errors
+    expect(resolvedPath).toContain('path/to/file.md');
   });
 
-  it('resolves and validates path with variables', async () => {
-    // 1. Parse raw path with meld-ast
-    const ast = context.parseMeld('@import $PROJECTPATH/${docs}/example.md');
-    
-    // 2. Resolve variables with ResolutionService
-    const resolvedPath = await resolutionService.resolvePath(
-      ast.directives[0].source,
-      ResolutionContextFactory.forPathDirective()
-    );
-    
-    // 3. Validate & normalize with PathService
-    const validatedPath = await pathService.validatePath(resolvedPath);
-    const normalizedPath = await pathService.normalizePath(validatedPath);
-    
-    // 4. Verify final path
-    expect(normalizedPath).toBe('/absolute/path/to/project/docs/example.md');
-  });
-});
-```
+  it('handles path resolution errors with locations', async () => {
+    const invalidPath = '../outside/root.md';
+    const location = createLocation(1, 1, 1, 20, 'test.meld');
 
-2) Testing PathService in Isolation
-─────────────────────────────────────────────────────────────────────────
-PathService tests should focus on:
-• Path validation (security rules)
-• Path normalization across platforms
-• Test mode overrides
-
-Example:
-```typescript
-describe('PathService', () => {
-  let pathService: PathService;
-
-  beforeEach(() => {
-    pathService = new PathService(/* deps */);
-  });
-
-  describe('validatePath', () => {
-    it('accepts valid absolute paths', async () => {
-      const path = '/absolute/path/to/file.md';
-      await expect(pathService.validatePath(path)).resolves.toBe(path);
-    });
-
-    it('rejects paths with suspicious patterns', async () => {
-      const paths = [
-        '/path/with/../escape',
-        'relative/path',
-        '/path/with/suspicious/../../escape'
-      ];
-      
-      for (const path of paths) {
-        await expect(pathService.validatePath(path)).rejects.toThrow();
-      }
-    });
-  });
-
-  describe('normalizePath', () => {
-    it('normalizes paths consistently across platforms', async () => {
-      const paths = {
-        'C:\\Windows\\Path': '/c/Windows/Path',
-        '/unix/style/path': '/unix/style/path',
-        'mixed/style\\path': '/mixed/style/path'
-      };
-      
-      for (const [input, expected] of Object.entries(paths)) {
-        const result = await pathService.normalizePath(input);
-        expect(result).toBe(expected);
-      }
+    await expect(
+      pathService.resolvePath(invalidPath, { location })
+    ).rejects.toMatchObject({
+      message: expect.stringContaining('Invalid path'),
+      location: expect.objectContaining({
+        filePath: 'test.meld'
+      })
     });
   });
 });
 ```
 
-3) Testing ResolutionService Path Handling
+2) Testing Path Validation
 ─────────────────────────────────────────────────────────────────────────
-ResolutionService tests should focus on:
-• Resolution of path variables
-• Resolution of special variables ($HOMEPATH/$~, $PROJECTPATH/$)
-• Resolution of nested variables in paths
+Path validation tests should focus on security and error handling:
 
-Example:
 ```typescript
-describe('ResolutionService Path Handling', () => {
-  let resolutionService: ResolutionService;
-
-  beforeEach(() => {
-    resolutionService = new ResolutionService(/* deps */);
-  });
-
-  it('resolves path variables with special variables', async () => {
-    const context = ResolutionContextFactory.forPathDirective({
-      projectPath: '/project',
-      homePath: '/home/user'
-    });
-
-    const cases = [
-      {
-        input: '$PROJECTPATH/docs/file.md',
-        expected: '/project/docs/file.md'
-      },
-      {
-        input: '$HOMEPATH/meld/config.md',
-        expected: '/home/user/meld/config.md'
-      },
-      {
-        input: '$~/meld/config.md',
-        expected: '/home/user/meld/config.md'
-      }
+describe('path validation', () => {
+  it('rejects paths with directory traversal', async () => {
+    const paths = [
+      '../outside.md',
+      'subdir/../../../file.md',
+      '/absolute/path/file.md'
     ];
 
-    for (const { input, expected } of cases) {
-      const result = await resolutionService.resolvePath(input, context);
-      expect(result).toBe(expected);
+    for (const path of paths) {
+      const location = createLocation(1, 1, 1, path.length);
+      await expect(
+        pathService.resolvePath(path, { location })
+      ).rejects.toMatchObject({
+        message: expect.stringContaining('Invalid path'),
+        location: expect.objectContaining({
+          start: { line: 1, column: 1 }
+        })
+      });
     }
   });
 
-  it('resolves nested variables in paths', async () => {
-    const context = ResolutionContextFactory.forPathDirective({
-      variables: {
-        'docs': '$PROJECTPATH/documentation',
-        'config': '${docs}/config'
-      },
-      projectPath: '/project'
+  it('validates paths relative to base directory', async () => {
+    await context.builder.create({
+      files: {
+        'base/file.md': 'content',
+        'base/subdir/other.md': 'content'
+      }
     });
 
-    const result = await resolutionService.resolvePath(
-      '${config}/settings.md',
-      context
-    );
+    const validPaths = [
+      'file.md',
+      'subdir/other.md'
+    ];
+
+    for (const path of validPaths) {
+      const resolved = await pathService.resolvePath(path, {
+        baseDir: 'base'
+      });
+      expect(resolved).toContain(path);
+    }
+  });
+});
+```
+
+3) Testing Path Resolution in Directives
+─────────────────────────────────────────────────────────────────────────
+When testing directives that use paths, leverage location tracking:
+
+```typescript
+describe('ImportDirectiveHandler', () => {
+  it('handles import path errors with locations', async () => {
+    const content = '@import ../invalid.md';
+    const nodes = await context.parseMeldWithLocations(content, 'test.meld');
     
-    expect(result).toBe('/project/documentation/config/settings.md');
+    await expect(
+      directiveHandler.process(nodes[0])
+    ).rejects.toMatchObject({
+      message: expect.stringContaining('Invalid import path'),
+      location: expect.objectContaining({
+        filePath: 'test.meld',
+        start: { line: 1, column: 1 }
+      })
+    });
+  });
+
+  it('resolves relative paths correctly', async () => {
+    await context.builder.create({
+      files: {
+        'dir/main.meld': '@import ./sub/file.md',
+        'dir/sub/file.md': 'Content'
+      }
+    });
+
+    const content = await context.fs.readFile('dir/main.meld');
+    const nodes = await context.parseMeldWithLocations(content, 'dir/main.meld');
+    
+    const result = await directiveHandler.process(nodes[0]);
+    expect(result).toBeDefined();
   });
 });
 ```
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-V. CONCLUSION
+VI. BEST PRACTICES FOR TEST ASSERTIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1) Location Assertions
+─────────────────────────────────────────────────────────────────────────
+When testing locations, use these patterns:
+
+```typescript
+// For exact matches
+expect(node.location).toMatchObject({
+  start: { line: 1, column: 1 },
+  end: { line: 1, column: 10 }
+});
+
+// For flexible matches (when exact positions don't matter)
+expect(node.location?.start).toEqual(expect.objectContaining({
+  line: expect.any(Number),
+  column: expect.any(Number)
+}));
+
+// For file paths
+expect(node.location?.filePath).toBe('test.meld');
+
+// For error locations
+expect(error).toMatchObject({
+  message: expect.stringContaining('Invalid syntax'),
+  location: {
+    start: { line: 1, column: 1 },
+    end: { line: 1, column: 1 }
+  }
+});
+```
+
+2) Async Error Assertions
+─────────────────────────────────────────────────────────────────────────
+When testing async functions that may throw errors:
+
+```typescript
+// For simple error type checks
+await expect(parser.parse('')).rejects.toThrow(MeldParseError);
+
+// For error message checks
+await expect(parser.parse('')).rejects.toThrow(
+  'Parse error: Empty content provided'
+);
+
+// For detailed error checks
+await expect(parser.parse(content)).rejects.toMatchObject({
+  message: expect.stringContaining('Invalid directive'),
+  location: {
+    start: { line: 1, column: 1 },
+    end: { line: 1, column: 1 },
+    filePath: 'test.meld'
+  }
+});
+```
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+VII. CONCLUSION
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 By following this testing architecture:

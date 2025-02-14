@@ -5,6 +5,7 @@ import { ProjectBuilder } from './ProjectBuilder';
 import { TestSnapshot } from './TestSnapshot';
 import { FixtureManager } from './FixtureManager';
 import * as testFactories from './testFactories';
+import { ParserService, IParserService } from '../services/ParserService';
 
 /**
  * Main test context that provides access to all test utilities
@@ -15,6 +16,7 @@ export class TestContext {
   public snapshot: TestSnapshot;
   public fixtures: FixtureManager;
   public factory: typeof testFactories;
+  private parserService: IParserService;
 
   constructor(private fixturesDir: string = 'tests/fixtures') {
     this.fs = new MemfsTestFileSystem();
@@ -22,6 +24,7 @@ export class TestContext {
     this.snapshot = new TestSnapshot(this.fs);
     this.fixtures = new FixtureManager(this.builder, this.fixturesDir);
     this.factory = testFactories;
+    this.parserService = new ParserService();
   }
 
   /**
@@ -51,7 +54,11 @@ export class TestContext {
    * Parse meld content using meld-ast
    */
   parseMeld(content: string) {
-    return meldAstParse(content);
+    return this.parserService.parse(content);
+  }
+
+  parseMeldWithLocations(content: string, filePath?: string) {
+    return this.parserService.parseWithLocations(content, filePath);
   }
 
   /**

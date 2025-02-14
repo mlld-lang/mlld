@@ -3,14 +3,40 @@ import type {
   DirectiveNode, 
   TextNode, 
   CodeFenceNode,
-  DirectiveKindString,
-  Location
+  DirectiveKindString
 } from 'meld-spec';
+import type { Location, Position } from '../../core/types';
 
+const DEFAULT_POSITION: Position = { line: 1, column: 1 };
 const DEFAULT_LOCATION: Location = {
-  start: { line: 1, column: 1 },
-  end: { line: 1, column: 1 }
+  start: DEFAULT_POSITION,
+  end: DEFAULT_POSITION,
+  filePath: undefined
 };
+
+/**
+ * Create a position object for testing
+ */
+export function createPosition(line: number, column: number): Position {
+  return { line, column };
+}
+
+/**
+ * Create a location object for testing
+ */
+export function createLocation(
+  startLine: number = 1,
+  startColumn: number = 1,
+  endLine?: number,
+  endColumn?: number,
+  filePath?: string
+): Location {
+  return {
+    start: createPosition(startLine, startColumn),
+    end: createPosition(endLine ?? startLine, endColumn ?? startColumn),
+    filePath
+  };
+}
 
 /**
  * Create a properly typed DirectiveNode for testing
@@ -61,29 +87,24 @@ export function createCodeFenceNode(
 }
 
 /**
- * Create a location object for testing
- */
-export function createLocation(
-  startLine: number = 1,
-  startColumn: number = 1,
-  endLine?: number,
-  endColumn?: number
-): Location {
-  return {
-    start: { line: startLine, column: startColumn },
-    end: { line: endLine ?? startLine, column: endColumn ?? startColumn }
-  };
-}
-
-/**
  * Create a text directive node for testing
  */
 export function createTextDirective(
   name: string,
   value: string,
-  location: Location = DEFAULT_LOCATION
+  location?: Location
 ): DirectiveNode {
-  return createDirectiveNode('text', { name, value }, location);
+  if (!location) return createDirectiveNode('text', { name, value });
+
+  return {
+    type: 'Directive',
+    directive: {
+      kind: 'text',
+      name,
+      value
+    },
+    location
+  };
 }
 
 /**
@@ -92,9 +113,22 @@ export function createTextDirective(
 export function createDataDirective(
   name: string,
   value: any,
-  location: Location = DEFAULT_LOCATION
+  location?: Location
 ): DirectiveNode {
-  return createDirectiveNode('data', { name, value }, location);
+  if (!location) return createDirectiveNode('data', { 
+    name, 
+    value: typeof value === 'string' ? value : JSON.stringify(value) 
+  });
+
+  return {
+    type: 'Directive',
+    directive: {
+      kind: 'data',
+      name,
+      value: typeof value === 'string' ? value : JSON.stringify(value)
+    },
+    location
+  };
 }
 
 /**
@@ -124,19 +158,26 @@ export function createRunDirective(
 export function createEmbedDirective(
   path: string,
   section?: string,
-  location: Location = DEFAULT_LOCATION,
-  options: {
+  location?: Location,
+  options?: {
     headingLevel?: number;
     underHeader?: string;
     fuzzy?: number;
     format?: string;
-  } = {}
+  }
 ): DirectiveNode {
-  return createDirectiveNode('embed', { 
-    path, 
-    section,
-    ...options
-  }, location);
+  if (!location) return createDirectiveNode('embed', { path, section, ...options });
+
+  return {
+    type: 'Directive',
+    directive: {
+      kind: 'embed',
+      path,
+      section,
+      ...options
+    },
+    location
+  };
 }
 
 /**
@@ -144,9 +185,18 @@ export function createEmbedDirective(
  */
 export function createImportDirective(
   path: string,
-  location: Location = DEFAULT_LOCATION
+  location?: Location
 ): DirectiveNode {
-  return createDirectiveNode('import', { path }, location);
+  if (!location) return createDirectiveNode('import', { path });
+
+  return {
+    type: 'Directive',
+    directive: {
+      kind: 'import',
+      path
+    },
+    location
+  };
 }
 
 /**

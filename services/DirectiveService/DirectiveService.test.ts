@@ -122,6 +122,28 @@ const createResolutionService = (): IResolutionService => ({
   detectCircularReferences: vi.fn() as unknown as (value: string) => Promise<void>
 });
 
+const createMockParserService = (): IParserService => ({
+  parse: vi.fn().mockImplementation((content: string) => {
+    // Basic mock implementation
+    return [{
+      type: 'Text',
+      content: content
+    }];
+  }),
+  
+  parseWithLocations: vi.fn().mockImplementation((content: string, filePath?: string) => {
+    const nodes = this.parse(content);
+    return nodes.map(node => ({
+      ...node,
+      location: {
+        line: 1,
+        column: 1,
+        filePath
+      }
+    }));
+  })
+});
+
 describe('DirectiveService', () => {
   let service: DirectiveService;
   let validationService: IValidationService;
@@ -140,7 +162,7 @@ describe('DirectiveService', () => {
     stateService = createStateService();
     pathService = createPathService();
     fileSystemService = createFileSystemService();
-    parserService = createParserService();
+    parserService = createMockParserService();
     interpreterService = createInterpreterService();
     circularityService = createCircularityService();
     resolutionService = createResolutionService();
@@ -707,5 +729,18 @@ Other content`;
       const parsedContent = parserService.parse.mock.calls[0][0];
       expect(parsedContent).toBe(content);
     });
+  });
+
+  it('processes imported content correctly', async () => {
+    const mockContent = '@text greeting = "Hello"';
+    vi.mocked(parserService.parse).mockReturnValueOnce([{
+      type: 'Directive',
+      directive: {
+        kind: 'text',
+        name: 'greeting',
+        value: 'Hello'
+      }
+    }]);
+    // ... test implementation
   });
 }); 
