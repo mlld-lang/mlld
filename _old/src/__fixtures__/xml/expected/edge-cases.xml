@@ -1,0 +1,89 @@
+<EdgeCases title="Edge Cases">
+  <EmptySection title="Empty Section" hlevel="2"></EmptySection>
+  <MalformedCodeBlock title="Malformed Code Block" hlevel="2">
+```typescript
+function broken() {
+  // Missing closing brace
+  if (true) {
+    console.log('test');
+```
+  </MalformedCodeBlock>
+  <InvalidTable title="Invalid Table" hlevel="2">
+| Header 1 | Header 2
+|----------|----------
+| Missing | Pipes
+  </InvalidTable>
+  <MixedHeaders title="Mixed Headers" hlevel="2"></MixedHeaders>
+</EdgeCases>
+
+<TopLevel title="Top Level">
+  <SkippedLevel title="Skipped Level" hlevel="3">
+    <VeryDeep title="Very Deep" hlevel="5"></VeryDeep>
+  </SkippedLevel>
+  <BackToTwo title="Back to Two" hlevel="2"></BackToTwo>
+  <UnicodeCharacters title="Unicode Characters" hlevel="2">
+    < title="你好，世界" hlevel="3">
+Content in multiple languages:
+こんにちは and Café
+    </>
+    <EmojiTitle title="🎉 Emoji Title 🚀" hlevel="3">
+Testing emoji in headers.
+    </EmojiTitle>
+  </UnicodeCharacters>
+  <DuplicateSections title="Duplicate Sections" hlevel="2">
+    <Duplicate hlevel="3">
+First instance.
+    </Duplicate>
+    <Duplicate hlevel="3">
+Second instance.
+    </Duplicate>
+  </DuplicateSections>
+  <IncompleteCodeFence title="Incomplete Code Fence" hlevel="2">
+```typescript
+let x = 1;
+
+## False Section in Code Block
+
+This looks like a section but is inside a code block.
+
+## Escaped \# Characters
+
+This tests \# escaped characters.
+
+## HTML in Markdown
+
+<h1>Raw HTML header</h1>
+
+<div class="test">
+  <p>Some HTML content</p>
+</div>
+
+## Invalid Characters in Headers
+
+### Invalid UTF-8: �
+
+Testing invalid UTF-8 sequences.
+
+## Deeply Nested Lists
+
+1. Level 1
+   * Level 2
+     * Level 3
+       * Level 4
+         * Level 5
+           * Level 6
+
+## Empty Code Blocks
+
+```
+```
+
+## Multiple Adjacent Headers
+
+# Header 1
+## Header 2
+### Header 3
+#### Header 4 
+```
+  </IncompleteCodeFence>
+</TopLevel>
