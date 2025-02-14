@@ -1,14 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { TestContext } from '../../../tests/utils';
-import { InterpreterService } from '../InterpreterService';
-import { DirectiveService } from '../../DirectiveService/DirectiveService';
-import { ValidationService } from '../../ValidationService/ValidationService';
-import { StateService } from '../../StateService/StateService';
-import { PathService } from '../../PathService/PathService';
-import { FileSystemService } from '../../FileSystemService/FileSystemService';
-import { ParserService } from '../../ParserService/ParserService';
-import { CircularityService } from '../../CircularityService/CircularityService';
-import { MeldInterpreterError } from '../../../core/errors/MeldInterpreterError';
+import { TestContext } from '../../tests/utils';
+import { InterpreterService } from './InterpreterService';
+import { DirectiveService } from '../DirectiveService/DirectiveService';
+import { ValidationService } from '../ValidationService/ValidationService';
+import { StateService } from '../StateService/StateService';
+import { PathService } from '../PathService/PathService';
+import { FileSystemService } from '../FileSystemService/FileSystemService';
+import { ParserService } from '../ParserService/ParserService';
+import { CircularityService } from '../CircularityService/CircularityService';
+import { MeldInterpreterError } from '../../core/errors/MeldInterpreterError';
 
 describe('InterpreterService Integration', () => {
   let context: TestContext;

@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, vi, Vi } from 'vitest';
-import { InterpreterService } from '../InterpreterService';
-import { DirectiveService } from '../../DirectiveService/DirectiveService';
-import { StateService } from '../../StateService/StateService';
-import { MeldInterpreterError } from '../../../core/errors/MeldInterpreterError';
+import { InterpreterService } from './InterpreterService';
+import { DirectiveService } from '../DirectiveService/DirectiveService';
+import { StateService } from '../StateService/StateService';
+import { MeldInterpreterError } from '../../core/errors/MeldInterpreterError';
 import { MeldNode, MeldDirective, MeldText } from '../../../core/types';
 
 // Mock dependencies
