@@ -6,6 +6,15 @@ import type {
   DirectiveKindString
 } from 'meld-spec';
 import type { Location, Position } from '../../core/types';
+import type { IValidationService } from '../../services/ValidationService/IValidationService';
+import type { IResolutionService } from '../../services/ResolutionService/IResolutionService';
+import type { IStateService } from '../../services/StateService/IStateService';
+import type { ICircularityService } from '../../services/CircularityService/ICircularityService';
+import type { IFileSystemService } from '../../services/FileSystemService/IFileSystemService';
+import type { IParserService } from '../../services/ParserService/IParserService';
+import type { IInterpreterService } from '../../services/InterpreterService/IInterpreterService';
+import type { IPathService } from '../../services/PathService/IPathService';
+import { vi, type Mock } from 'vitest';
 
 const DEFAULT_POSITION: Position = { line: 1, column: 1 };
 const DEFAULT_LOCATION: Location = {
@@ -216,4 +225,211 @@ export function createDefineDirective(
     },
     parameters
   }, location);
+}
+
+// Mock service creation functions
+export function createMockValidationService(): IValidationService {
+  const mockService = {
+    validate: vi.fn(),
+    registerValidator: vi.fn(),
+    removeValidator: vi.fn(),
+    hasValidator: vi.fn(),
+    getRegisteredDirectiveKinds: vi.fn(),
+    getAllValidators: vi.fn()
+  };
+
+  // Set default implementations
+  mockService.validate.mockImplementation(async () => {});
+  mockService.registerValidator.mockImplementation(() => {});
+  mockService.removeValidator.mockImplementation(() => {});
+  mockService.hasValidator.mockImplementation(() => false);
+  mockService.getRegisteredDirectiveKinds.mockImplementation(() => []);
+  mockService.getAllValidators.mockImplementation(() => []);
+
+  return mockService as unknown as IValidationService;
+}
+
+export function createMockStateService(): IStateService {
+  const mockService = {
+    setTextVar: vi.fn(),
+    getTextVar: vi.fn(),
+    setDataVar: vi.fn(),
+    getDataVar: vi.fn(),
+    setPathVar: vi.fn(),
+    getPathVar: vi.fn(),
+    setCommand: vi.fn(),
+    getCommand: vi.fn(),
+    appendContent: vi.fn(),
+    getContent: vi.fn(),
+    createChildState: vi.fn(),
+    getParentState: vi.fn(),
+    isImmutable: vi.fn(),
+    makeImmutable: vi.fn(),
+    clone: vi.fn(),
+    mergeStates: vi.fn()
+  };
+
+  // Set default implementations
+  mockService.setTextVar.mockImplementation(() => {});
+  mockService.getTextVar.mockImplementation(() => '');
+  mockService.setDataVar.mockImplementation(() => {});
+  mockService.getDataVar.mockImplementation(() => null);
+  mockService.setPathVar.mockImplementation(() => {});
+  mockService.getPathVar.mockImplementation(() => '');
+  mockService.setCommand.mockImplementation(() => {});
+  mockService.getCommand.mockImplementation(() => '');
+  mockService.appendContent.mockImplementation(() => {});
+  mockService.getContent.mockImplementation(() => '');
+  mockService.createChildState.mockImplementation(() => null);
+  mockService.getParentState.mockImplementation(() => undefined);
+  mockService.isImmutable.mockImplementation(() => false);
+  mockService.makeImmutable.mockImplementation(() => {});
+  mockService.clone.mockImplementation(() => null);
+  mockService.mergeStates.mockImplementation(() => {});
+
+  return mockService as unknown as IStateService;
+}
+
+export function createMockResolutionService(): IResolutionService {
+  const mockService = {
+    resolveInContext: vi.fn(),
+    resolveContent: vi.fn(),
+    resolvePath: vi.fn(),
+    resolveCommand: vi.fn(),
+    extractSection: vi.fn()
+  };
+
+  // Set default implementations
+  mockService.resolveInContext.mockImplementation(async () => '');
+  mockService.resolveContent.mockImplementation(async () => '');
+  mockService.resolvePath.mockImplementation(async () => '');
+  mockService.resolveCommand.mockImplementation(async () => '');
+  mockService.extractSection.mockImplementation(async () => '');
+
+  return mockService as unknown as IResolutionService;
+}
+
+export function createMockFileSystemService(): IFileSystemService {
+  const mockService = {
+    readFile: vi.fn(),
+    writeFile: vi.fn(),
+    exists: vi.fn(),
+    stat: vi.fn(),
+    isFile: vi.fn(),
+    readDir: vi.fn(),
+    ensureDir: vi.fn(),
+    isDirectory: vi.fn(),
+    join: vi.fn(),
+    resolve: vi.fn(),
+    dirname: vi.fn(),
+    basename: vi.fn(),
+    normalize: vi.fn(),
+    executeCommand: vi.fn(),
+    getCwd: vi.fn(),
+    enableTestMode: vi.fn(),
+    disableTestMode: vi.fn(),
+    isTestMode: vi.fn(),
+    mockFile: vi.fn(),
+    mockDir: vi.fn(),
+    clearMocks: vi.fn()
+  };
+
+  // Set default implementations
+  mockService.readFile.mockImplementation(async () => '');
+  mockService.writeFile.mockImplementation(async () => {});
+  mockService.exists.mockImplementation(async () => true);
+  mockService.stat.mockImplementation(async () => ({}));
+  mockService.isFile.mockImplementation(async () => true);
+  mockService.readDir.mockImplementation(async () => []);
+  mockService.ensureDir.mockImplementation(async () => {});
+  mockService.isDirectory.mockImplementation(async () => false);
+  mockService.join.mockImplementation((...paths) => paths.join('/'));
+  mockService.resolve.mockImplementation((path) => path);
+  mockService.dirname.mockImplementation((path) => path.split('/').slice(0, -1).join('/'));
+  mockService.basename.mockImplementation((path) => path.split('/').pop() || '');
+  mockService.normalize.mockImplementation((path) => path);
+  mockService.executeCommand.mockImplementation(async () => ({ stdout: '', stderr: '' }));
+  mockService.getCwd.mockImplementation(() => '/project');
+  mockService.enableTestMode.mockImplementation(() => {});
+  mockService.disableTestMode.mockImplementation(() => {});
+  mockService.isTestMode.mockImplementation(() => true);
+  mockService.mockFile.mockImplementation(() => {});
+  mockService.mockDir.mockImplementation(() => {});
+  mockService.clearMocks.mockImplementation(() => {});
+
+  // Bind all functions to the mock service
+  Object.keys(mockService).forEach(key => {
+    const fn = mockService[key];
+    mockService[key] = fn.bind(mockService);
+  });
+
+  return mockService as unknown as IFileSystemService;
+}
+
+export function createMockCircularityService(): ICircularityService {
+  const mockService = {
+    beginImport: vi.fn(),
+    endImport: vi.fn(),
+    isImporting: vi.fn(),
+    getImportChain: vi.fn()
+  };
+
+  // Set default implementations
+  mockService.beginImport.mockImplementation(async () => {});
+  mockService.endImport.mockImplementation(async () => {});
+  mockService.isImporting.mockImplementation(() => false);
+  mockService.getImportChain.mockImplementation(() => []);
+
+  return mockService as unknown as ICircularityService;
+}
+
+export function createMockParserService(): IParserService {
+  const mockService = {
+    parse: vi.fn(),
+    parseWithLocations: vi.fn()
+  };
+
+  // Set default implementations
+  mockService.parse.mockImplementation(async () => []);
+  mockService.parseWithLocations.mockImplementation(async () => []);
+
+  return mockService as unknown as IParserService;
+}
+
+export function createMockInterpreterService(): IInterpreterService {
+  const mockService = {
+    interpret: vi.fn(),
+    interpretWithContext: vi.fn()
+  };
+
+  // Set default implementations
+  mockService.interpret.mockImplementation(async () => {});
+  mockService.interpretWithContext.mockImplementation(async () => {});
+
+  return mockService as unknown as IInterpreterService;
+}
+
+export function createMockPathService(): IPathService {
+  const mockService = {
+    resolvePath: vi.fn(),
+    normalizePath: vi.fn(),
+    isAbsolute: vi.fn(),
+    join: vi.fn(),
+    dirname: vi.fn(),
+    basename: vi.fn(),
+    extname: vi.fn(),
+    relative: vi.fn()
+  };
+
+  // Set default implementations
+  mockService.resolvePath.mockImplementation(() => '');
+  mockService.normalizePath.mockImplementation(() => '');
+  mockService.isAbsolute.mockImplementation(() => false);
+  mockService.join.mockImplementation(() => '');
+  mockService.dirname.mockImplementation(() => '');
+  mockService.basename.mockImplementation(() => '');
+  mockService.extname.mockImplementation(() => '');
+  mockService.relative.mockImplementation(() => '');
+
+  return mockService as unknown as IPathService;
 } 

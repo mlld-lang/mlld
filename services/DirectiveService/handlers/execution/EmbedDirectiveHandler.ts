@@ -8,7 +8,7 @@ import { IFileSystemService } from '../../../FileSystemService/IFileSystemServic
 import { IParserService } from '../../../ParserService/IParserService';
 import { IInterpreterService } from '../../../InterpreterService/IInterpreterService';
 import { DirectiveError, DirectiveErrorCode } from '../../errors/DirectiveError';
-import { directiveLogger as logger } from '@core/utils/logger';
+import { embedLogger as logger } from '@core/utils/logger';
 
 export class EmbedDirectiveHandler implements IDirectiveHandler {
   readonly kind = 'embed';
@@ -66,53 +66,69 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
         }
 
         // 5. Read the file content
-        const content = await this.fileSystemService.readFile(resolvedPath);
+        const rawContent = await this.fileSystemService.readFile(resolvedPath);
 
         // 6. Process the content based on directive options
-        let processedContent = content;
+        let processedContent = rawContent;
 
-        // 6a. If section is specified, extract it
+        // 6a. If section is specified, extract it first
         if (directive.section) {
           processedContent = await this.resolutionService.extractSection(
-            content,
+            processedContent,
             directive.section
           );
         }
 
-        // 6b. If it's a .meld file, parse and interpret it
-        if (resolvedPath.endsWith('.meld')) {
+        // 6b. If it's a .meld file and contains directives, parse and interpret it
+        if (resolvedPath.endsWith('.meld') && processedContent.includes('@')) {
           // Create a child state for the embed
           const childState = await this.stateService.createChildState();
 
-          // Parse and interpret the content
-          const parsedNodes = await this.parserService.parse(processedContent);
-          await this.interpreterService.interpret(parsedNodes, {
-            initialState: childState,
-            filePath: resolvedPath,
-            mergeState: true
-          });
+          try {
+            // Parse and interpret the content
+            const parsedNodes = await this.parserService.parse(processedContent);
+            await this.interpreterService.interpret(parsedNodes, {
+              initialState: childState,
+              filePath: resolvedPath,
+              mergeState: true
+            });
 
-          // Early return since interpret will handle adding nodes
-          return;
+            // Early return since interpret will handle adding nodes
+            return;
+          } catch (error) {
+            throw new DirectiveError(
+              `Failed to parse .meld file: ${error.message}`,
+              this.kind,
+              DirectiveErrorCode.PARSE_ERROR,
+              { cause: error }
+            );
+          }
         }
 
-        // 6c. Apply heading level if specified
-        if (directive.headingLevel) {
-          processedContent = this.applyHeadingLevel(processedContent, directive.headingLevel);
-        }
-
-        // 6d. Apply under header if specified
-        if (directive.underHeader) {
-          processedContent = this.wrapUnderHeader(processedContent, directive.underHeader);
-        }
-
-        // 6e. Handle named embeds
+        // 7. Handle named embeds or process content
         if (directive.names && directive.names.length > 0) {
+          // Set each named variable with the raw content
           for (const name of directive.names) {
-            await this.stateService.setTextVar(name, processedContent);
+            await this.stateService.setTextVar(name, rawContent);
           }
         } else {
-          // 7. Store the result in state
+          // If no names specified, process and append the content
+
+          // 7b. Resolve any variables in the content
+          processedContent = await this.resolutionService.resolveContent(processedContent);
+
+          // 7c. If heading level is specified, validate and apply it
+          if (directive.headingLevel !== undefined) {
+            if (directive.headingLevel < 1 || directive.headingLevel > 6) {
+              throw new DirectiveError(
+                `Invalid heading level: ${directive.headingLevel}. Must be between 1 and 6.`,
+                this.kind,
+                DirectiveErrorCode.VALIDATION_FAILED
+              );
+            }
+          }
+
+          // 7d. Append the processed content
           await this.stateService.appendContent(processedContent);
         }
 

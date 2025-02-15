@@ -12,7 +12,7 @@ import { ICircularityService } from '../CircularityService/ICircularityService';
 import { IResolutionService } from '../ResolutionService/IResolutionService';
 import { DirectiveError, DirectiveErrorCode } from './errors/DirectiveError';
 
-// Import handlers
+// Import all handlers
 import { TextDirectiveHandler } from './handlers/definition/TextDirectiveHandler';
 import { DataDirectiveHandler } from './handlers/definition/DataDirectiveHandler';
 import { PathDirectiveHandler } from './handlers/definition/PathDirectiveHandler';
@@ -77,16 +77,7 @@ export class DirectiveService implements IDirectiveService {
   }
 
   /**
-   * Update the interpreter service reference
-   * This is needed to handle circular dependencies in initialization
-   */
-  updateInterpreterService(interpreterService: IInterpreterService): void {
-    this.interpreterService = interpreterService;
-    logger.debug('Updated interpreter service reference');
-  }
-
-  /**
-   * Register the default set of directive handlers
+   * Register all default directive handlers
    */
   private registerDefaultHandlers(): void {
     // Definition handlers
@@ -119,7 +110,8 @@ export class DirectiveService implements IDirectiveService {
       new RunDirectiveHandler(
         this.validationService!,
         this.resolutionService!,
-        this.stateService!
+        this.stateService!,
+        this.fileSystemService!
       )
     );
 
@@ -138,8 +130,8 @@ export class DirectiveService implements IDirectiveService {
     this.registerHandler(
       new ImportDirectiveHandler(
         this.validationService!,
-        this.stateService!,
         this.resolutionService!,
+        this.stateService!,
         this.fileSystemService!,
         this.parserService!,
         this.interpreterService!,
@@ -149,48 +141,63 @@ export class DirectiveService implements IDirectiveService {
   }
 
   /**
-   * Handle a directive node
+   * Register a new directive handler
    */
-  async handleDirective(
-    node: DirectiveNode,
-    context: DirectiveContext
-  ): Promise<void> {
-    // 1. Validate directive type is capitalized
-    if (node.type !== 'Directive') {
-      throw new DirectiveError(
-        'Invalid node type - must be "Directive"',
-        node.directive.kind,
-        DirectiveErrorCode.INVALID_NODE_TYPE,
-        { node, context }
-      );
+  registerHandler(handler: IDirectiveHandler): void {
+    if (!this.initialized) {
+      throw new Error('DirectiveService must be initialized before registering handlers');
     }
 
-    // 2. Validate directive
-    await this.validateDirective(node);
+    if (!handler.kind) {
+      throw new Error('Handler must have a kind property');
+    }
 
-    // 3. Get appropriate handler
+    this.handlers.set(handler.kind, handler);
+    logger.debug(`Registered handler for directive: ${handler.kind}`);
+  }
+
+  /**
+   * Process a directive node
+   */
+  async processDirective(node: DirectiveNode, parentContext?: DirectiveContext): Promise<void> {
+    this.ensureInitialized();
+
     const handler = this.handlers.get(node.directive.kind);
     if (!handler) {
       throw new DirectiveError(
         `No handler found for directive: ${node.directive.kind}`,
         node.directive.kind,
         DirectiveErrorCode.HANDLER_NOT_FOUND,
-        { node, context }
+        { node }
       );
     }
 
     try {
-      // 4. Execute handler
+      // Create context for directive execution
+      const context: DirectiveContext = this.createContext(node, parentContext);
+
+      // Validate the directive
+      await this.validateDirective(node);
+
+      // Execute handler
       await handler.execute(node, context);
+
+      logger.debug(`Successfully processed ${node.directive.kind} directive`, {
+        location: node.location
+      });
     } catch (error) {
-      // Wrap handler errors
+      // If it's already a DirectiveError, rethrow
+      if (error instanceof DirectiveError) {
+        throw error;
+      }
+
+      // Otherwise wrap in DirectiveError
       throw new DirectiveError(
         error.message,
         node.directive.kind,
         DirectiveErrorCode.EXECUTION_FAILED,
         {
           node,
-          context,
           cause: error
         }
       );
@@ -198,10 +205,33 @@ export class DirectiveService implements IDirectiveService {
   }
 
   /**
-   * Register a new directive handler
+   * Process multiple directives in sequence
    */
-  registerHandler(handler: IDirectiveHandler): void {
-    this.handlers.set(handler.kind, handler);
+  async processDirectives(nodes: DirectiveNode[], parentContext?: DirectiveContext): Promise<void> {
+    for (const node of nodes) {
+      await this.processDirective(node, parentContext);
+    }
+  }
+
+  /**
+   * Create execution context for a directive
+   */
+  private createContext(node: DirectiveNode, parentContext?: DirectiveContext): DirectiveContext {
+    return {
+      currentFilePath: node.location?.filePath || '',
+      workingDirectory: this.fileSystemService!.getCwd(),
+      parentState: parentContext?.parentState,
+      parentContext
+    };
+  }
+
+  /**
+   * Update the interpreter service reference
+   * This is needed to handle circular dependencies in initialization
+   */
+  updateInterpreterService(interpreterService: IInterpreterService): void {
+    this.interpreterService = interpreterService;
+    logger.debug('Updated interpreter service reference');
   }
 
   /**
@@ -243,55 +273,11 @@ export class DirectiveService implements IDirectiveService {
     };
   }
 
-  async processDirective(node: DirectiveNode): Promise<void> {
-    this.ensureInitialized();
-
-    logger.debug('Processing directive', {
-      kind: node.directive.kind,
-      location: node.location
-    });
-
-    // Validate the directive
-    this.validationService!.validate(node);
-
-    // Get and execute the handler
-    const handler = this.handlers.get(node.directive.kind);
-    if (!handler) {
-      throw new MeldDirectiveError(
-        `No handler registered for directive kind: ${node.directive.kind}`,
-        node.directive.kind,
-        node.location?.start
-      );
-    }
-
-    try {
-      await handler.execute(node, { currentFilePath: node.location?.filePath, parentState: this.stateService });
-      logger.debug('Directive processed successfully', {
-        kind: node.directive.kind,
-        location: node.location
-      });
-    } catch (error) {
-      logger.error('Directive processing failed', {
-        kind: node.directive.kind,
-        location: node.location,
-        error
-      });
-      throw error;
-    }
-  }
-
-  async processDirectives(nodes: DirectiveNode[]): Promise<void> {
-    for (const node of nodes) {
-      await this.processDirective(node);
-    }
-  }
-
   supportsDirective(kind: string): boolean {
     return this.handlers.has(kind);
   }
 
   getSupportedDirectives(): string[] {
-    this.ensureInitialized();
     return Array.from(this.handlers.keys());
   }
 

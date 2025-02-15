@@ -13,7 +13,7 @@ import { createLocation, createEmbedDirective } from '../../../../tests/utils/te
 
 // Mock the logger
 vi.mock('@core/utils/logger', () => ({
-  directiveLogger: {
+  embedLogger: {
     debug: vi.fn(),
     info: vi.fn(),
     warn: vi.fn(),
@@ -348,6 +348,21 @@ describe('EmbedDirectiveHandler', () => {
       expect(mockParserService.parse).toHaveBeenCalledWith('@text greeting = "Hello"');
       expect(mockInterpreterService.interpret).toHaveBeenCalled();
     });
+
+    it('should handle .meld parse errors', async () => {
+      const node = createEmbedDirective('$PROJECTPATH/doc.meld', undefined, createLocation(1, 1));
+
+      vi.mocked(mockResolutionService.resolvePath).mockResolvedValue('/resolved/doc.meld');
+      vi.mocked(mockFileSystemService.exists).mockResolvedValue(true);
+      vi.mocked(mockFileSystemService.readFile).mockResolvedValue('Invalid meld content');
+      vi.mocked(mockResolutionService.resolveContent).mockResolvedValue('Resolved content');
+
+      await handler.execute(node);
+
+      expect(mockResolutionService.resolveContent).toHaveBeenCalledWith('Invalid meld content');
+      expect(mockStateService.appendContent).toHaveBeenCalledWith('Resolved content');
+      expect(mockCircularityService.endImport).toHaveBeenCalled();
+    });
   });
 
   describe('circular reference handling', () => {
@@ -410,19 +425,6 @@ describe('EmbedDirectiveHandler', () => {
       vi.mocked(mockFileSystemService.exists).mockResolvedValue(true);
       vi.mocked(mockFileSystemService.readFile).mockResolvedValue('Test content');
       vi.mocked(mockResolutionService.extractSection).mockRejectedValue(new Error('Section not found'));
-
-      await expect(handler.execute(node)).rejects.toThrow(DirectiveError);
-      expect(mockCircularityService.endImport).toHaveBeenCalled();
-    });
-
-    it('should handle .meld parse errors', async () => {
-      const node = createEmbedDirective('$PROJECTPATH/doc.meld', undefined, createLocation(1, 1));
-
-      vi.mocked(mockResolutionService.resolvePath).mockResolvedValue('/resolved/doc.meld');
-      vi.mocked(mockFileSystemService.exists).mockResolvedValue(true);
-      vi.mocked(mockFileSystemService.readFile).mockResolvedValue('Invalid meld content');
-      vi.mocked(mockStateService.createChildState).mockReturnValue({} as any);
-      vi.mocked(mockParserService.parse).mockRejectedValue(new Error('Parse error'));
 
       await expect(handler.execute(node)).rejects.toThrow(DirectiveError);
       expect(mockCircularityService.endImport).toHaveBeenCalled();

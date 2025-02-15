@@ -1,6 +1,11 @@
 import type { Stats } from 'fs';
 import { MemfsTestFileSystem } from '../../tests/utils/MemfsTestFileSystem';
 
+export interface CommandResult {
+  stdout: string;
+  stderr: string;
+}
+
 export interface IFileSystemService {
   // File operations
   readFile(path: string): Promise<string>;
@@ -20,6 +25,10 @@ export interface IFileSystemService {
   dirname(path: string): string;
   basename(path: string): string;
   normalize(path: string): string;
+  
+  // Command execution
+  executeCommand(command: string, options?: { cwd?: string }): Promise<CommandResult>;
+  getCwd(): string;
   
   // Test mode
   enableTestMode(testFs: MemfsTestFileSystem): void;
