@@ -9,6 +9,7 @@ import {
   createEmbedDirective,
   createLocation
 } from '../../tests/utils/testFactories';
+import { MeldDirectiveError } from '../../errors/MeldDirectiveError';
 
 describe('ValidationService', () => {
   let service: ValidationService;
@@ -57,7 +58,7 @@ describe('ValidationService', () => {
     
     it('should throw on missing name', async () => {
       const node = createTextDirective('', 'Hello', createLocation(1, 1));
-      await expect(service.validate(node)).rejects.toThrow(DirectiveError);
+      await expect(service.validate(node)).rejects.toThrow(MeldDirectiveError);
       await expect(service.validate(node)).rejects.toMatchObject({
         code: DirectiveErrorCode.VALIDATION_FAILED
       });
@@ -65,7 +66,7 @@ describe('ValidationService', () => {
     
     it('should throw on missing value', async () => {
       const node = createTextDirective('greeting', '', createLocation(1, 1));
-      await expect(service.validate(node)).rejects.toThrow(DirectiveError);
+      await expect(service.validate(node)).rejects.toThrow(MeldDirectiveError);
       await expect(service.validate(node)).rejects.toMatchObject({
         code: DirectiveErrorCode.VALIDATION_FAILED
       });
@@ -73,7 +74,7 @@ describe('ValidationService', () => {
     
     it('should throw on invalid name format', async () => {
       const node = createTextDirective('123invalid', 'Hello', createLocation(1, 1));
-      await expect(service.validate(node)).rejects.toThrow(DirectiveError);
+      await expect(service.validate(node)).rejects.toThrow(MeldDirectiveError);
       await expect(service.validate(node)).rejects.toMatchObject({
         code: DirectiveErrorCode.VALIDATION_FAILED
       });
@@ -93,7 +94,7 @@ describe('ValidationService', () => {
     
     it('should throw on invalid JSON string', async () => {
       const node = createDataDirective('config', '{invalid json}', createLocation(1, 1));
-      await expect(service.validate(node)).rejects.toThrow(DirectiveError);
+      await expect(service.validate(node)).rejects.toThrow(MeldDirectiveError);
       await expect(service.validate(node)).rejects.toMatchObject({
         code: DirectiveErrorCode.VALIDATION_FAILED
       });
@@ -101,7 +102,7 @@ describe('ValidationService', () => {
     
     it('should throw on missing name', async () => {
       const node = createDataDirective('', { key: 'value' }, createLocation(1, 1));
-      await expect(service.validate(node)).rejects.toThrow(DirectiveError);
+      await expect(service.validate(node)).rejects.toThrow(MeldDirectiveError);
       await expect(service.validate(node)).rejects.toMatchObject({
         code: DirectiveErrorCode.VALIDATION_FAILED
       });
@@ -109,7 +110,7 @@ describe('ValidationService', () => {
     
     it('should throw on invalid name format', async () => {
       const node = createDataDirective('123invalid', { key: 'value' }, createLocation(1, 1));
-      await expect(service.validate(node)).rejects.toThrow(DirectiveError);
+      await expect(service.validate(node)).rejects.toThrow(MeldDirectiveError);
       await expect(service.validate(node)).rejects.toMatchObject({
         code: DirectiveErrorCode.VALIDATION_FAILED
       });
@@ -124,7 +125,7 @@ describe('ValidationService', () => {
     
     it('should throw on missing path', async () => {
       const node = createImportDirective('', createLocation(1, 1));
-      await expect(service.validate(node)).rejects.toThrow(DirectiveError);
+      await expect(service.validate(node)).rejects.toThrow(MeldDirectiveError);
       await expect(service.validate(node)).rejects.toMatchObject({
         code: DirectiveErrorCode.VALIDATION_FAILED
       });
@@ -144,7 +145,7 @@ describe('ValidationService', () => {
     
     it('should throw on missing path', async () => {
       const node = createEmbedDirective('', undefined, createLocation(1, 1));
-      await expect(service.validate(node)).rejects.toThrow(DirectiveError);
+      await expect(service.validate(node)).rejects.toThrow(MeldDirectiveError);
       await expect(service.validate(node)).rejects.toMatchObject({
         code: DirectiveErrorCode.VALIDATION_FAILED
       });
@@ -159,7 +160,7 @@ describe('ValidationService', () => {
     it('should throw on invalid fuzzy threshold (below 0)', async () => {
       const node = createEmbedDirective('test.md', 'section', createLocation(1, 1));
       node.directive.fuzzy = -0.1;
-      await expect(service.validate(node)).rejects.toThrow(DirectiveError);
+      await expect(service.validate(node)).rejects.toThrow(MeldDirectiveError);
       await expect(service.validate(node)).rejects.toMatchObject({
         code: DirectiveErrorCode.VALIDATION_FAILED
       });
@@ -168,7 +169,7 @@ describe('ValidationService', () => {
     it('should throw on invalid fuzzy threshold (above 1)', async () => {
       const node = createEmbedDirective('test.md', 'section', createLocation(1, 1));
       node.directive.fuzzy = 1.1;
-      await expect(service.validate(node)).rejects.toThrow(DirectiveError);
+      await expect(service.validate(node)).rejects.toThrow(MeldDirectiveError);
       await expect(service.validate(node)).rejects.toMatchObject({
         code: DirectiveErrorCode.VALIDATION_FAILED
       });
@@ -185,7 +186,7 @@ describe('ValidationService', () => {
         location: createLocation(1, 1)
       };
       
-      await expect(service.validate(node)).rejects.toThrow(DirectiveError);
+      await expect(service.validate(node)).rejects.toThrow(MeldDirectiveError);
       await expect(service.validate(node)).rejects.toMatchObject({
         code: DirectiveErrorCode.HANDLER_NOT_FOUND
       });

@@ -67,16 +67,17 @@ describe('ParserService', () => {
     });
 
     it('should parse directive content', async () => {
-      const content = '@text identifier="greeting" value="Hello"';
+      const content = '@text greeting = "Hello"';
       const mockResult = [{
         type: 'Directive',
         directive: {
           kind: 'text',
-          value: 'identifier="greeting" value="Hello"'
+          identifier: 'greeting',
+          value: '"Hello"'
         },
         location: {
           start: { line: 1, column: 1 },
-          end: { line: 1, column: 41 }
+          end: { line: 1, column: 24 }
         }
       }];
 
@@ -85,7 +86,7 @@ describe('ParserService', () => {
     });
 
     it('should parse mixed content', async () => {
-      const content = 'Hello world\n@text identifier="greeting" value="Hi"\nMore text';
+      const content = 'Hello world\n@text greeting = "Hi"\nMore text';
       const mockResult = [
         {
           type: 'Text',
@@ -99,11 +100,12 @@ describe('ParserService', () => {
           type: 'Directive',
           directive: {
             kind: 'text',
-            value: 'identifier="greeting" value="Hi"'
+            identifier: 'greeting',
+            value: '"Hi"'
           },
           location: {
             start: { line: 2, column: 1 },
-            end: { line: 2, column: 38 }
+            end: { line: 2, column: 21 }
           }
         },
         {
@@ -150,7 +152,8 @@ describe('ParserService', () => {
         type: 'Directive',
         directive: {
           kind: 'text',
-          value: 'greeting = "unclosed string'
+          identifier: 'greeting',
+          value: '"unclosed string'
         },
         location: {
           start: { line: 1, column: 1 },
@@ -162,7 +165,7 @@ describe('ParserService', () => {
 
   describe('parseWithLocations', () => {
     it('should include file path in locations', async () => {
-      const content = 'Hello\n@text identifier="greeting" value="Hi"';
+      const content = 'Hello\n@text greeting = "Hi"';
       const mockResult = [
         {
           type: 'Text',
@@ -176,11 +179,12 @@ describe('ParserService', () => {
           type: 'Directive',
           directive: {
             kind: 'text',
-            value: 'identifier="greeting" value="Hi"'
+            identifier: 'greeting',
+            value: '"Hi"'
           },
           location: {
             start: { line: 2, column: 1 },
-            end: { line: 2, column: 38 }
+            end: { line: 2, column: 21 }
           }
         }
       ];
@@ -200,10 +204,10 @@ describe('ParserService', () => {
     });
 
     it('should preserve original locations when adding filePath', async () => {
-      const content = '@text identifier="greeting" value="Hi"';
+      const content = '@text greeting = "Hi"';
       const location = {
         start: { line: 1, column: 1 },
-        end: { line: 1, column: 38 }
+        end: { line: 1, column: 21 }
       };
       const filePath = 'test.meld';
 

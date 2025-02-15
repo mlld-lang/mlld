@@ -11,7 +11,7 @@ export interface MeldNode {
   content?: string;
   directive?: {
     kind: string;
-    name?: string;
+    identifier?: string;
     value?: string;
     [key: string]: any;
   };
@@ -31,17 +31,54 @@ export function parse(content: string): MeldNode[] {
     if (line.startsWith('@')) {
       // Mock directive parsing
       const [directive, ...rest] = line.slice(1).split(' ');
-      nodes.push({
-        type: 'Directive',
-        directive: {
-          kind: directive,
-          value: rest.join(' '),
-        },
-        location: {
-          start: { line: index + 1, column: 1 },
-          end: { line: index + 1, column: line.length },
-        },
-      });
+      const value = rest.join(' ');
+      
+      // For text, data, and path directives, we expect format: identifier = value
+      if (['text', 'data', 'path'].includes(directive)) {
+        // Parse identifier = value format
+        const match = value.match(/^(\w+)\s*=\s*(.+)$/);
+        if (match) {
+          const [_, identifier, directiveValue] = match;
+          nodes.push({
+            type: 'Directive',
+            directive: {
+              kind: directive,
+              identifier,
+              value: directiveValue.trim()
+            },
+            location: {
+              start: { line: index + 1, column: 1 },
+              end: { line: index + 1, column: line.length },
+            },
+          });
+        } else {
+          // Invalid format, but still create a node to match parser behavior
+          nodes.push({
+            type: 'Directive',
+            directive: {
+              kind: directive,
+              value
+            },
+            location: {
+              start: { line: index + 1, column: 1 },
+              end: { line: index + 1, column: line.length },
+            },
+          });
+        }
+      } else {
+        // For other directives (import, embed, etc.), pass through as is
+        nodes.push({
+          type: 'Directive',
+          directive: {
+            kind: directive,
+            value
+          },
+          location: {
+            start: { line: index + 1, column: 1 },
+            end: { line: index + 1, column: line.length },
+          },
+        });
+      }
     } else if (line.trim()) {
       // Mock text node parsing
       nodes.push({

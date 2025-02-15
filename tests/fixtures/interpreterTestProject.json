@@ -5,13 +5,13 @@
     "project/shared"
   ],
   "files": {
-    "project/src/main.meld": "@text identifier=\"root\" value=\"'Root'\"\n@import [../nested/child.meld]",
-    "project/nested/child.meld": "@text identifier=\"child\" value=\"'Child'\"\n@data nums = [1, 2, 3]\n@import [../shared/common.meld]",
-    "project/shared/common.meld": "@text identifier=\"common\" value=\"'Shared'\"\n@data shared = { \"type\": \"common\" }",
-    "project/src/complex.meld": "@text identifier=\"base\" value=\"'Base'\"\n@embed [../nested/section.meld # Main Section]",
-    "project/nested/section.meld": "# Main Section\nThis is the main section\n@text identifier=\"inSection\" value=\"'Inside'\"\n\n# Other Section\nThis should be skipped\n@text identifier=\"skipped\" value=\"'Skip me'\"",
-    "project/src/variables.meld": "@text identifier=\"greeting\" value=\"'Hello ${name}!'\"\n@data user = { \"name\": \"World\" }",
-    "project/nested/circular1.meld": "@text identifier=\"one\" value=\"'First'\"\n@import [circular2.meld]",
-    "project/nested/circular2.meld": "@text identifier=\"two\" value=\"'Second'\"\n@import [circular1.meld]"
+    "project/src/main.meld": "@text root = \"Root\"\n@import [../nested/child.meld]",
+    "project/nested/child.meld": "@text child = \"Child\"\n@data nums = [1, 2, 3]\n@import [../shared/common.meld]",
+    "project/shared/common.meld": "@text common = \"Shared\"\n@data shared = { \"type\": \"common\" }",
+    "project/src/complex.meld": "@text base = \"Base\"\n@embed [../nested/section.meld # Main Section]",
+    "project/nested/section.meld": "# Main Section\nThis is the main section\n@text inSection = \"Inside\"\n\n# Other Section\nThis should be skipped\n@text skipped = \"Skip me\"",
+    "project/src/variables.meld": "@text greeting = \"Hello ${name}!\"\n@data user = { \"name\": \"World\" }",
+    "project/nested/circular1.meld": "@text one = \"First\"\n@import [circular2.meld]",
+    "project/nested/circular2.meld": "@text two = \"Second\"\n@import [circular1.meld]"
   }
 } 

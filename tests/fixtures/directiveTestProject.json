@@ -4,10 +4,10 @@
     "project/includes"
   ],
   "files": {
-    "project/src/main.meld": "@text identifier=\"greeting\" value=\"Hello\"\n@data identifier=\"config\" value={ \"key\": \"value\" }",
+    "project/src/main.meld": "@text greeting = \"Hello\"\n@data config = { \"key\": \"value\" }",
     "project/includes/section.meld": "# Section One\nContent here\n\n# Section Two\nMore content",
-    "project/includes/import.meld": "@text identifier=\"imported\" value=\"I was imported\"\n@data identifier=\"nums\" value=[1, 2, 3]",
-    "project/includes/nested.meld": "@import [section.meld]\n@text identifier=\"nested\" value=\"I am nested\"",
-    "project/includes/complex.meld": "# Main Section\n@text identifier=\"section1\" value=\"First\"\n\n# Sub Section\n@text identifier=\"section2\" value=\"Second\""
+    "project/includes/import.meld": "@text imported = \"I was imported\"\n@data nums = [1, 2, 3]",
+    "project/includes/nested.meld": "@import [section.meld]\n@text nested = \"I am nested\"",
+    "project/includes/complex.meld": "# Main Section\n@text section1 = \"First\"\n\n# Sub Section\n@text section2 = \"Second\""
   }
 } 

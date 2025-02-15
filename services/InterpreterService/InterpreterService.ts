@@ -32,6 +32,13 @@ export class InterpreterService implements IInterpreterService {
   ): Promise<IStateService> {
     this.ensureInitialized();
 
+    if (!nodes) {
+      throw new MeldInterpreterError(
+        'No nodes provided for interpretation',
+        'interpretation'
+      );
+    }
+
     const opts = { ...DEFAULT_OPTIONS, ...options };
     let currentState = opts.initialState ?? this.stateService!.createChildState();
 
