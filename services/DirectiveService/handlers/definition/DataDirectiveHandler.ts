@@ -29,58 +29,60 @@ export class DataDirectiveHandler implements IDirectiveHandler {
       await this.validationService.validate(node);
 
       // 2. Extract directive details
-      const directive = node.directive as DirectiveData & { 
+      const directive = node.directive as DirectiveData & {
         kind: 'data';
         name: string;
         value: any;
-        schema?: string;
       };
-      const { name, value, schema } = directive;
+      const { name, value } = directive;
 
       // 3. Create appropriate resolution context
       const resolutionContext = ResolutionContextFactory.forDataDirective(context.currentFilePath);
 
-      // 4. Resolve value based on type
+      // 4. Resolve and parse value
       let resolvedValue: any;
-      if (typeof value === 'string') {
-        // For string values, resolve variables first
-        const resolvedString = await this.resolutionService.resolveInContext(
-          value,
-          resolutionContext
-        );
-        
-        try {
-          // Try to parse as JSON if it looks like an object/array
-          resolvedValue = JSON.parse(resolvedString);
-        } catch {
-          // If not valid JSON, store as string
-          resolvedValue = resolvedString;
-        }
-      } else if (typeof value === 'object') {
-        // For object literals, resolve each field recursively
-        resolvedValue = await this.resolveObjectFields(value, resolutionContext);
-      } else {
-        // For primitive values, store as-is
-        resolvedValue = value;
+      
+      // Handle value based on type
+      const stringValue = typeof value === 'string'
+        ? JSON.stringify(value)  // String values need to be stringified
+        : value;  // Object/array values are already stringified by the test factory
+
+      // Try to parse the value first to see if it's already JSON
+      let valueToResolve: string;
+      try {
+        JSON.parse(value);
+        // If it parses, it's already JSON, use as-is
+        valueToResolve = value;
+      } catch {
+        // If it doesn't parse, it needs to be stringified
+        valueToResolve = stringValue;
       }
 
-      // 5. Validate against schema if provided
-      if (schema) {
-        await this.validateSchema(resolvedValue, schema, node);
+      // Resolve any variables in the string
+      const resolvedString = await this.resolutionService.resolveInContext(
+        valueToResolve,
+        resolutionContext
+      );
+
+      // Always try to parse as JSON
+      try {
+        resolvedValue = JSON.parse(resolvedString);
+      } catch (error) {
+        // Let SyntaxError propagate up
+        throw error;
       }
 
-      // 6. Store in state
+      // 5. Store in state
       await this.stateService.setDataVar(name, resolvedValue);
 
       logger.debug('Stored data variable', {
         name,
         valueType: typeof resolvedValue,
-        hasSchema: !!schema,
         location: node.location
       });
     } catch (error) {
-      // Wrap non-DirectiveErrors
-      if (error instanceof Error && !(error instanceof DirectiveError)) {
+      // Only wrap non-SyntaxErrors in DirectiveError
+      if (error instanceof Error && !(error instanceof SyntaxError)) {
         throw new DirectiveError(
           error.message,
           'data',

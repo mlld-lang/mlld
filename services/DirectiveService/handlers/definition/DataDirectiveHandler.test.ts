@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { DataDirectiveHandler } from '../DataDirectiveHandler';
-import { createDataDirective, createLocation } from '../../../../../tests/utils/testFactories';
-import type { IValidationService } from '../../../../ValidationService/IValidationService';
-import type { IStateService } from '../../../../StateService/IStateService';
-import type { IResolutionService } from '../../../../ResolutionService/IResolutionService';
-import type { DirectiveNode } from 'meld-spec';
-import type { ResolutionContext } from '../../../../ResolutionService/IResolutionService';
+import { DataDirectiveHandler } from './DataDirectiveHandler';
+import { createDataDirective, createLocation } from '../../../../tests/utils/testFactories';
+import type { IValidationService } from '../../../ValidationService/IValidationService';
+import type { IStateService } from '../../../StateService/IStateService';
+import type { IResolutionService } from '../../../ResolutionService/IResolutionService';
+import type { DirectiveNode } from '../../../../node_modules/meld-spec/dist/types';
+import type { ResolutionContext } from '../../../ResolutionService/IResolutionService';
 
 describe('DataDirectiveHandler', () => {
   let handler: DataDirectiveHandler;
