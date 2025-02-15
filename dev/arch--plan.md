@@ -107,131 +107,38 @@ Below is a consolidated list of concrete changes needed to make the architecture
 • [TODO] Complete integration tests with DirectiveService
 
 ─────────────────────────────────────────────────────────────────────────
-8. Update DirectiveService for New Architecture [40% COMPLETE]
+8. Update DirectiveService for New Architecture [90% COMPLETE]
 ─────────────────────────────────────────────────────────────────────────
 ✓ Basic service structure and interfaces
 ✓ Handler registration system
-• [TODO] Complete directive handlers:
-  - Definition handlers (@text, @data, @path, @define)
-  - Execution handlers (@run, @embed, @import)
-• [TODO] Update handlers to:
-  - Store raw values in StateService
-  - Use ResolutionService for all resolution
-  - Use ResolutionContextFactory for correct contexts
-  - Handle resolution errors properly
-• [TODO] Add proper error handling:
-  - Validation errors from ValidationService
-  - Resolution errors from ResolutionService
-  - Execution errors from handlers
-• [TODO] Update tests to verify:
-  - Correct context usage
-  - Error handling
-  - Integration with ResolutionService
+✓ Complete directive handlers:
+  ✓ Definition handlers:
+    ✓ @text
+    ✓ @data
+    ✓ @path
+    ✓ @define
+  ✓ Execution handlers:
+    ✓ @run
+    ✓ @embed
+    ✓ @import
+✓ Update handlers to:
+  ✓ Store raw values in StateService
+  ✓ Use ResolutionService for all resolution
+  ✓ Use ResolutionContextFactory for correct contexts
+  ✓ Handle resolution errors properly
+✓ Add proper error handling:
+  ✓ Validation errors from ValidationService
+  ✓ Resolution errors from ResolutionService
+  ✓ Execution errors from handlers
+✓ Update tests to verify:
+  ✓ Correct context usage
+  ✓ Error handling
+  ✓ Integration with ResolutionService
 
-DETAILED IMPLEMENTATION PLAN:
-1. Definition Handlers (Phase 1)
-   a) TextDirectiveHandler
-      • Implement core handler with ResolutionService integration
-      • Add proper context validation
-      • Add comprehensive tests
-      • Integrate with StateService for storage
-   
-   b) DataDirectiveHandler
-      • Implement JSON parsing and validation
-      • Add field access validation
-      • Add schema support (if specified)
-      • Add comprehensive tests
-   
-   c) PathDirectiveHandler
-      • Implement with PathService integration
-      • Add path validation and normalization
-      • Add comprehensive tests
-   
-   d) DefineDirectiveHandler
-      • Implement command definition storage
-      • Add parameter validation
-      • Add metadata support (.risk, .about, etc.)
-      • Add comprehensive tests
-
-2. Execution Handlers (Phase 2)
-   a) RunDirectiveHandler
-      • Implement command resolution
-      • Add parameter interpolation
-      • Add execution context management
-      • Add comprehensive tests
-   
-   b) EmbedDirectiveHandler
-      • Implement content embedding
-      • Add section extraction
-      • Add header level adjustment
-      • Add comprehensive tests
-   
-   c) ImportDirectiveHandler
-      • Implement file importing
-      • Add circularity detection
-      • Add state inheritance
-      • Add comprehensive tests
-
-3. Integration & Error Handling (Phase 3)
-   a) Resolution Integration
-      • Integrate ResolutionContextFactory
-      • Add context validation
-      • Add cycle detection
-      • Add comprehensive tests
-   
-   b) Error System
-      • Implement DirectiveError hierarchy
-      • Add location tracking
-      • Add error recovery options
-      • Add comprehensive tests
-   
-   c) State Management
-      • Implement state inheritance
-      • Add state merging
-      • Add cleanup handling
-      • Add comprehensive tests
-
-4. Testing Infrastructure (Phase 4)
-   a) Unit Tests
-      • Add handler-specific test suites
-      • Add error case coverage
-      • Add edge case coverage
-   
-   b) Integration Tests
-      • Add cross-handler tests
-      • Add service integration tests
-      • Add full pipeline tests
-   
-   c) Performance Tests
-      • Add benchmarks
-      • Add memory usage tests
-      • Add load tests
-
-5. Documentation & Examples (Phase 5)
-   a) Handler Documentation
-      • Add detailed API docs
-      • Add usage examples
-      • Add error handling guides
-   
-   b) Integration Guides
-      • Add service integration docs
-      • Add extension guides
-      • Add troubleshooting guides
-
-IMPLEMENTATION ORDER:
-1. Start with TextDirectiveHandler as it's the simplest
-2. Move to DataDirectiveHandler as it builds on similar patterns
-3. Implement PathDirectiveHandler using existing PathService
-4. Add DefineDirectiveHandler to support command definitions
-5. Implement RunDirectiveHandler to execute commands
-6. Add EmbedDirectiveHandler for content inclusion
-7. Finally add ImportDirectiveHandler as it's most complex
-
-This order ensures we:
-• Build from simple to complex
-• Validate core patterns early
-• Have dependencies ready when needed
-• Can test thoroughly at each step
+REMAINING TASKS:
+• Final integration testing with all services working together
+• Edge case testing with complex scenarios
+• Performance optimization if needed
 
 ─────────────────────────────────────────────────────────────────────────
 9. Implement InterpreterService for Node Iteration [80% COMPLETE]
