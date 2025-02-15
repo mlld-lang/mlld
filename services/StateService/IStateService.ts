@@ -25,6 +25,7 @@ export interface IStateService {
   // Nodes
   getNodes(): MeldNode[];
   addNode(node: MeldNode): void;
+  appendContent(content: string): void;
 
   // Imports
   addImport(path: string): void;

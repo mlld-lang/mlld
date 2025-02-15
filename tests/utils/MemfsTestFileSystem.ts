@@ -1,6 +1,7 @@
 import { Volume } from 'memfs';
 import * as path from 'path';
 import type { Stats } from 'fs';
+import { filesystemLogger as logger } from '../../core/utils/logger';
 
 /**
  * In-memory filesystem for testing using memfs.
@@ -8,127 +9,366 @@ import type { Stats } from 'fs';
  */
 export class MemfsTestFileSystem {
   private vol: Volume;
+  private root: string = '/';
 
   constructor() {
-    this.vol = new Volume();
-    // Initialize root directory
-    this.vol.mkdirSync('.', { recursive: true });
+    logger.debug('Initializing MemfsTestFileSystem');
+    try {
+      this.vol = new Volume();
+      // Initialize root directory
+      this.vol.mkdirSync(this.root, { recursive: true });
+      logger.debug('Root directory initialized');
+    } catch (error) {
+      logger.error('Error initializing MemfsTestFileSystem', { error });
+      throw new Error(`Error initializing MemfsTestFileSystem: ${error.message}`);
+    }
   }
 
   /**
    * Initialize or reset the filesystem
    */
   initialize(): void {
-    this.vol.reset();
+    logger.debug('Resetting filesystem');
+    try {
+      this.vol.reset();
+      // Re-initialize root after reset
+      this.vol.mkdirSync(this.root, { recursive: true });
+      logger.debug('Filesystem reset complete, root directory re-initialized');
+    } catch (error) {
+      logger.error('Error initializing filesystem', { error });
+      throw new Error(`Error initializing filesystem: ${error.message}`);
+    }
   }
 
   /**
    * Clean up any resources
    */
   cleanup(): void {
-    this.vol.reset();
+    logger.debug('Cleaning up filesystem');
+    try {
+      this.vol.reset();
+      logger.debug('Cleanup complete');
+    } catch (error) {
+      logger.error('Error cleaning up filesystem', { error });
+      throw new Error(`Error cleaning up filesystem: ${error.message}`);
+    }
   }
 
   /**
-   * Get the absolute path for a path in the test filesystem.
-   * For external use (e.g. test assertions), paths have a leading slash.
-   * For internal use with memfs, paths do not have a leading slash.
+   * Get a normalized path, optionally formatted for memfs
    */
-  getPath(filePath: string | undefined, forMemfs: boolean = false): string {
-    // Handle undefined/empty paths
-    if (!filePath) {
-      return forMemfs ? '.' : '/';
+  getPath(filePath: string | undefined | null, forMemfs: boolean = false): string {
+    logger.debug('Resolving path', { filePath, forMemfs, root: this.root });
+
+    // Handle undefined/null paths - treat as root
+    if (filePath === undefined || filePath === null || filePath.trim() === '') {
+      const result = forMemfs ? '.' : this.root;
+      logger.debug('Empty/undefined path resolved to root', { result });
+      return result;
     }
 
     // Normalize the path to use forward slashes and remove any '..' segments
-    const normalized = path.normalize(filePath).replace(/\\/g, '/');
+    const normalized = path.normalize(filePath)
+      .replace(/\\/g, '/') // Convert Windows backslashes to forward slashes
+      .replace(/\/+/g, '/') // Remove duplicate slashes
+      .replace(/^\.\//, '') // Remove leading ./
+      .replace(/\/$/, ''); // Remove trailing slash
+    logger.debug('Normalized path', { normalized });
     
-    // Remove any existing leading slashes
-    const withoutLeadingSlash = normalized.replace(/^\/+/, '');
-
-    // Handle root directory specially
-    if (!withoutLeadingSlash) {
-      return forMemfs ? '.' : '/';
+    // Handle root path specially
+    if (normalized === '/' || normalized === '' || normalized === '.') {
+      const result = forMemfs ? '.' : this.root;
+      logger.debug('Root path detected', { result });
+      return result;
+    }
+    
+    // If path is already absolute, just normalize it
+    if (path.isAbsolute(normalized)) {
+      const result = forMemfs ? normalized.slice(1) : normalized;
+      logger.debug('Resolved absolute path', { result });
+      return result;
     }
 
-    // For memfs internal use, return without leading slash
-    if (forMemfs) {
-      return withoutLeadingSlash;
-    }
-
-    // For external use, ensure exactly one leading slash
-    return `/${withoutLeadingSlash}`;
+    // For relative paths, join with root and ensure proper format
+    const withRoot = path.join(this.root, normalized)
+      .replace(/\\/g, '/');
+    const result = forMemfs ? withRoot.slice(1) : withRoot;
+    logger.debug('Resolved relative path', { result, withRoot, normalized });
+    return result;
   }
 
   /**
    * Internal helper to get path formatted for memfs operations
    */
-  private getMemfsPath(filePath: string): string {
-    return this.getPath(filePath, true);
+  private getMemfsPath(filePath: string | undefined | null): string {
+    logger.debug('Getting memfs path', { filePath });
+
+    // Handle undefined/null/empty paths
+    if (filePath === undefined || filePath === null || filePath.trim() === '') {
+      logger.debug('Empty/undefined path resolved to root', { input: filePath });
+      return '.';
+    }
+
+    // Get the normalized path
+    const result = this.getPath(filePath, true);
+
+    // Handle root path specially
+    if (result === '/' || result === '.') {
+      logger.debug('Root path resolved to "."', { input: filePath });
+      return '.';
+    }
+
+    // Normalize path to handle special cases
+    let normalizedPath = result
+      .replace(/\/+/g, '/') // Remove duplicate slashes
+      .replace(/^\.\//, '') // Remove leading ./
+      .replace(/\/$/, ''); // Remove trailing slash
+    
+    // If normalized path is empty after processing, return root
+    if (!normalizedPath || normalizedPath === '') {
+      logger.debug('Normalized path is empty, returning root', { input: filePath });
+      return '.';
+    }
+
+    logger.debug('Path resolution complete', { 
+      input: filePath, 
+      normalizedPath,
+      isDirectory: this.isMemfsDirectory(normalizedPath)
+    });
+
+    return normalizedPath;
+  }
+
+  /**
+   * Ensure a directory exists, creating it and its parents if needed
+   */
+  private async ensureDir(dirPath: string): Promise<void> {
+    logger.debug('Ensuring directory exists', { dirPath });
+    const memfsPath = this.getMemfsPath(dirPath);
+    
+    try {
+      // Check if path exists
+      if (this.vol.existsSync(memfsPath)) {
+        const stats = this.vol.statSync(memfsPath);
+        if (stats.isDirectory()) {
+          logger.debug('Directory already exists', { dirPath: memfsPath });
+          return;
+        }
+        logger.error('Path exists but is not a directory', { dirPath: memfsPath });
+        throw new Error(`ENOTDIR: Path exists but is not a directory: ${dirPath}`);
+      }
+
+      // Create directory and parents
+      logger.debug('Creating directory', { dirPath: memfsPath });
+      this.vol.mkdirSync(memfsPath, { recursive: true });
+      logger.debug('Directory created successfully', { dirPath: memfsPath });
+    } catch (error) {
+      if (error.message.startsWith('ENOTDIR:')) {
+        throw error;
+      }
+      logger.error('Error creating directory', { dirPath: memfsPath, error });
+      throw new Error(`Error creating directory '${dirPath}': ${error.message}`);
+    }
   }
 
   /**
    * Write a file, creating parent directories if needed
    */
-  async writeFile(filePath: string, content: string): Promise<void> {
+  async writeFile(filePath: string | undefined | null, content: string): Promise<void> {
+    logger.debug('Writing file', { filePath });
+
+    // Handle undefined/null paths
+    if (filePath === undefined || filePath === null) {
+      logger.error('Cannot write file: path is undefined/null');
+      throw new Error('EINVAL: Invalid file path: path is undefined or null');
+    }
+
+    // Handle empty paths
+    if (filePath.trim() === '') {
+      logger.error('Cannot write file: path is empty');
+      throw new Error('EINVAL: Invalid file path: path is empty');
+    }
+
     const memfsPath = this.getMemfsPath(filePath);
+    logger.debug('Resolved memfs path for write', { memfsPath });
     
-    // Check if target exists and is a directory
-    if (this.vol.existsSync(memfsPath)) {
-      const stats = this.vol.statSync(memfsPath);
-      if (stats.isDirectory()) {
-        throw new Error(`EISDIR: Cannot write to directory: ${filePath}`);
+    try {
+      // Check if target exists and is a directory
+      if (this.vol.existsSync(memfsPath)) {
+        logger.debug('Path exists, checking if directory', { memfsPath });
+        const stats = this.vol.statSync(memfsPath);
+        if (stats.isDirectory()) {
+          logger.error('Cannot write to directory', { filePath, memfsPath });
+          throw new Error(`EISDIR: Cannot write to directory: ${filePath}`);
+        }
       }
-    }
-    
-    // Ensure parent directory exists
-    const dirPath = path.dirname(memfsPath);
-    if (dirPath !== '.') {
+      
+      // Ensure parent directory exists
+      const dirPath = path.dirname(memfsPath);
+      logger.debug('Ensuring parent directory exists', { dirPath });
       await this.ensureDir(dirPath);
+
+      // Write the file
+      logger.debug('Writing file content', { memfsPath, contentLength: content.length });
+      this.vol.writeFileSync(memfsPath, content, 'utf-8');
+      logger.debug('File written successfully', { filePath, memfsPath });
+    } catch (error) {
+      if (error.message.startsWith('EISDIR:') || 
+          error.message.startsWith('ENOTDIR:') ||
+          error.message.startsWith('EINVAL:')) {
+        throw error;
+      }
+      logger.error('Error writing file', { filePath, memfsPath, error });
+      throw new Error(`Error writing file '${filePath}': ${error.message}`);
     }
-    this.vol.writeFileSync(memfsPath, content, 'utf-8');
   }
 
   /**
    * Read a file's contents
    */
-  async readFile(filePath: string): Promise<string> {
-    const memfsPath = this.getMemfsPath(filePath);
-    const stats = this.vol.statSync(memfsPath);
-    if (stats.isDirectory()) {
-      throw new Error(`EISDIR: Cannot read directory as file: ${filePath}`);
+  async readFile(filePath: string | undefined | null): Promise<string> {
+    logger.debug('Reading file', { filePath });
+
+    // Handle undefined/null paths
+    if (filePath === undefined || filePath === null) {
+      logger.error('Cannot read file: path is undefined/null');
+      throw new Error('EINVAL: Invalid file path: path is undefined or null');
     }
-    return this.vol.readFileSync(memfsPath, 'utf-8') as string;
+
+    // Handle empty paths
+    if (filePath.trim() === '') {
+      logger.error('Cannot read file: path is empty');
+      throw new Error('EINVAL: Invalid file path: path is empty');
+    }
+
+    const memfsPath = this.getMemfsPath(filePath);
+    logger.debug('Resolved memfs path for read', { memfsPath });
+
+    try {
+      // First check if path exists
+      if (!this.vol.existsSync(memfsPath)) {
+        logger.error('File not found', { filePath, memfsPath });
+        throw new Error(`ENOENT: no such file or directory: ${filePath}`);
+      }
+
+      // Get stats and check if directory
+      const stats = this.vol.statSync(memfsPath);
+      if (stats.isDirectory()) {
+        logger.error('Cannot read directory as file', { filePath, memfsPath });
+        throw new Error(`EISDIR: Cannot read directory as file: ${filePath}`);
+      }
+
+      // Finally read the file
+      const content = this.vol.readFileSync(memfsPath, 'utf-8');
+      
+      // Handle undefined/null content
+      if (content === undefined || content === null) {
+        logger.error('File read returned undefined/null content', { filePath, memfsPath });
+        throw new Error(`Error reading file '${filePath}': No content`);
+      }
+
+      // Validate content is a string
+      if (typeof content !== 'string') {
+        logger.error('File read returned non-string content', { filePath, memfsPath, contentType: typeof content });
+        throw new Error(`Error reading file '${filePath}': Invalid content type`);
+      }
+
+      logger.debug('File read successfully', { filePath, memfsPath, contentLength: content.length });
+      return content;
+    } catch (error) {
+      // If error is already formatted (from our checks above), just rethrow
+      if (error.message.startsWith('EISDIR:') || 
+          error.message.startsWith('ENOENT:') ||
+          error.message.startsWith('EINVAL:')) {
+        throw error;
+      }
+      // Otherwise wrap in a more descriptive error
+      logger.error('Error reading file', { filePath, memfsPath, error });
+      throw new Error(`Error reading file '${filePath}': ${error.message}`);
+    }
   }
 
   /**
    * Check if a file exists
    */
   async exists(filePath: string): Promise<boolean> {
-    return this.vol.existsSync(this.getMemfsPath(filePath));
+    logger.debug('Checking if file exists', { filePath });
+    const memfsPath = this.getMemfsPath(filePath);
+    try {
+      const exists = this.vol.existsSync(memfsPath);
+      logger.debug('File existence check result', { filePath, memfsPath, exists });
+      return exists;
+    } catch (error) {
+      logger.error('Error checking file existence', { filePath, memfsPath, error });
+      return false;
+    }
   }
 
   /**
    * Get stats for a file or directory
    */
   async stat(filePath: string): Promise<Stats> {
-    return this.vol.statSync(this.getMemfsPath(filePath)) as Stats;
+    logger.debug('Getting stats', { filePath });
+    const memfsPath = this.getMemfsPath(filePath);
+    try {
+      const stats = this.vol.statSync(memfsPath) as Stats;
+      logger.debug('Got stats', { 
+        filePath, 
+        memfsPath, 
+        isDirectory: stats.isDirectory(),
+        isFile: stats.isFile(),
+        size: stats.size
+      });
+      return stats;
+    } catch (error) {
+      logger.error('Error getting stats', { filePath, memfsPath, error });
+      throw new Error(`Error getting stats for '${filePath}': ${error.message}`);
+    }
   }
 
   /**
-   * List contents of a directory
+   * Read directory contents
    */
   async readDir(dirPath: string): Promise<string[]> {
-    return this.vol.readdirSync(this.getMemfsPath(dirPath)) as string[];
-  }
-
-  /**
-   * Create a directory and its parents if needed
-   */
-  async ensureDir(dirPath: string): Promise<void> {
+    logger.debug('Reading directory', { dirPath });
     const memfsPath = this.getMemfsPath(dirPath);
-    if (!this.vol.existsSync(memfsPath)) {
-      this.vol.mkdirSync(memfsPath, { recursive: true });
+    logger.debug('Resolved memfs path for readdir', { memfsPath });
+
+    try {
+      // First check if path exists
+      if (!this.vol.existsSync(memfsPath)) {
+        logger.error('Directory not found', { dirPath, memfsPath });
+        throw new Error(`ENOENT: no such directory: ${dirPath}`);
+      }
+
+      // Then check if it's a directory
+      const stats = this.vol.statSync(memfsPath);
+      if (!stats.isDirectory()) {
+        logger.error('Path is not a directory', { dirPath, memfsPath });
+        throw new Error(`ENOTDIR: not a directory: ${dirPath}`);
+      }
+
+      // Read directory entries
+      const entries = this.vol.readdirSync(memfsPath);
+      
+      // Ensure we have a valid array and convert entries to strings
+      if (!Array.isArray(entries)) {
+        logger.debug('Directory read did not return array, returning empty array', { dirPath, memfsPath });
+        return [];
+      }
+
+      // Convert any Dirent objects or other types to strings
+      const stringEntries = entries.map(entry => entry.toString());
+
+      logger.debug('Directory read successful', { dirPath, memfsPath, entryCount: stringEntries.length });
+      return stringEntries;
+    } catch (error) {
+      if (error.message.startsWith('ENOENT:') || 
+          error.message.startsWith('ENOTDIR:')) {
+        throw error;
+      }
+      logger.error('Error reading directory', { dirPath, memfsPath, error });
+      throw new Error(`Error reading directory '${dirPath}': ${error.message}`);
     }
   }
 
@@ -136,21 +376,53 @@ export class MemfsTestFileSystem {
    * Create a directory
    */
   async mkdir(dirPath: string): Promise<void> {
-    this.vol.mkdirSync(this.getMemfsPath(dirPath), { recursive: true });
+    logger.debug('Creating directory', { dirPath });
+    const memfsPath = this.getMemfsPath(dirPath);
+    logger.debug('Resolved memfs path for mkdir', { memfsPath });
+
+    try {
+      // Check if path exists
+      if (this.vol.existsSync(memfsPath)) {
+        const stats = this.vol.statSync(memfsPath);
+        if (stats.isDirectory()) {
+          logger.debug('Directory already exists', { dirPath, memfsPath });
+          return;
+        }
+        logger.error('Path exists but is not a directory', { dirPath, memfsPath });
+        throw new Error(`ENOTDIR: path exists but is not a directory: ${dirPath}`);
+      }
+
+      // Create directory with recursive option
+      this.vol.mkdirSync(memfsPath, { recursive: true });
+      logger.debug('Directory created successfully', { dirPath, memfsPath });
+    } catch (error) {
+      // If error is already formatted (from our checks above), just rethrow
+      if (error.message.startsWith('ENOTDIR:')) {
+        throw error;
+      }
+      // Otherwise wrap in a more descriptive error
+      logger.error('Error creating directory', { dirPath, memfsPath, error });
+      throw new Error(`Error creating directory '${dirPath}': ${error.message}`);
+    }
   }
 
   /**
    * Check if path is a directory
    */
   async isDirectory(filePath: string): Promise<boolean> {
+    logger.debug('Checking if path is directory', { filePath });
+    const memfsPath = this.getMemfsPath(filePath);
     try {
-      const stats = await this.stat(filePath);
-      return stats.isDirectory();
-    } catch (error) {
-      if (error.code === 'ENOENT') {
+      if (!this.vol.existsSync(memfsPath)) {
         return false;
       }
-      throw error;
+      const stats = this.vol.statSync(memfsPath);
+      const isDir = stats.isDirectory();
+      logger.debug('Directory check result', { filePath, memfsPath, isDir });
+      return isDir;
+    } catch (error) {
+      logger.error('Error checking if path is directory', { filePath, memfsPath, error });
+      return false;
     }
   }
 
@@ -158,51 +430,135 @@ export class MemfsTestFileSystem {
    * Check if path is a file
    */
   async isFile(filePath: string): Promise<boolean> {
+    logger.debug('Checking if path is file', { filePath });
+    const memfsPath = this.getMemfsPath(filePath);
     try {
-      const stats = await this.stat(filePath);
-      return stats.isFile();
-    } catch (error) {
-      if (error.code === 'ENOENT') {
+      if (!this.vol.existsSync(memfsPath)) {
         return false;
       }
-      throw error;
+      const stats = this.vol.statSync(memfsPath);
+      const isFile = stats.isFile();
+      logger.debug('File check result', { filePath, memfsPath, isFile });
+      return isFile;
+    } catch (error) {
+      logger.error('Error checking if path is file', { filePath, memfsPath, error });
+      return false;
     }
   }
 
-  // Helper to load a project structure from our fixture format
+  /**
+   * Helper to load a project structure from our fixture format
+   */
   async loadFixture(fixture: { files?: Record<string, string>; dirs?: string[] }): Promise<void> {
-    // First create all directories
-    if (fixture.dirs) {
-      for (const dir of fixture.dirs) {
-        await this.ensureDir(dir);
-      }
-    }
+    logger.debug('Loading fixture', { 
+      dirCount: fixture.dirs?.length || 0,
+      fileCount: Object.keys(fixture.files || {}).length 
+    });
 
-    // Then create all files
-    if (fixture.files) {
-      for (const [filePath, content] of Object.entries(fixture.files)) {
-        await this.writeFile(filePath, content);
+    try {
+      // First create all directories
+      if (fixture.dirs) {
+        for (const dir of fixture.dirs) {
+          logger.debug('Creating fixture directory', { dir });
+          await this.ensureDir(dir);
+        }
       }
+
+      // Then create all files
+      if (fixture.files) {
+        for (const [filePath, content] of Object.entries(fixture.files)) {
+          logger.debug('Creating fixture file', { filePath, contentLength: content.length });
+          await this.writeFile(filePath, content);
+        }
+      }
+
+      logger.debug('Fixture loading complete');
+    } catch (error) {
+      logger.error('Error loading fixture', { error });
+      throw new Error(`Error loading fixture: ${error.message}`);
     }
   }
 
-  // Get all files in the filesystem
+  /**
+   * Get all files in the filesystem
+   */
   async getAllFiles(dir: string = '/'): Promise<string[]> {
+    logger.debug('Getting all files', { startDir: dir });
     const result: string[] = [];
-    const entries = this.vol.readdirSync(this.getMemfsPath(dir));
+    const memfsPath = this.getMemfsPath(dir);
 
-    for (const entry of entries) {
-      const fullPath = path.join(dir, entry);
-      const stats = this.vol.statSync(this.getMemfsPath(fullPath));
-
-      if (stats.isDirectory()) {
-        const subFiles = await this.getAllFiles(fullPath);
-        result.push(...subFiles);
-      } else {
-        result.push(fullPath);
+    try {
+      // First check if path exists
+      if (!this.vol.existsSync(memfsPath)) {
+        logger.error('Directory not found', { dir, memfsPath });
+        throw new Error(`ENOENT: no such directory: ${dir}`);
       }
-    }
 
-    return result;
+      // Then check if it's a directory
+      const stats = this.vol.statSync(memfsPath);
+      if (!stats.isDirectory()) {
+        logger.error('Path is not a directory', { dir, memfsPath });
+        throw new Error(`ENOTDIR: not a directory: ${dir}`);
+      }
+
+      // Read directory contents with explicit options to get string[]
+      const entries = this.vol.readdirSync(memfsPath, { withFileTypes: false });
+      if (!Array.isArray(entries)) {
+        logger.error('Directory read did not return array', { dir, memfsPath });
+        throw new Error(`Error reading directory '${dir}': Invalid result type`);
+      }
+
+      logger.debug('Reading directory entries', { dir, memfsPath, entryCount: entries.length });
+
+      for (const entry of entries) {
+        const fullPath = path.join(dir, entry);
+        const stats = await this.stat(fullPath);
+
+        if (stats.isDirectory()) {
+          logger.debug('Found directory, recursing', { dir: fullPath });
+          const subFiles = await this.getAllFiles(fullPath);
+          result.push(...subFiles);
+        } else {
+          logger.debug('Found file', { file: fullPath });
+          result.push(fullPath);
+        }
+      }
+
+      logger.debug('File listing complete', { startDir: dir, totalFiles: result.length });
+      return result;
+    } catch (error) {
+      // If error is already formatted (from our checks above), just rethrow
+      if (error.message.startsWith('ENOTDIR:') || error.message.startsWith('ENOENT:')) {
+        throw error;
+      }
+      // Otherwise wrap in a more descriptive error
+      logger.error('Error getting all files', { dir, memfsPath, error });
+      throw new Error(`Error getting all files from '${dir}': ${error.message}`);
+    }
+  }
+
+  /**
+   * Internal helper to check if a path is a directory
+   */
+  private isMemfsDirectory(memfsPath: string): boolean {
+    logger.debug('Checking if path is directory', { memfsPath });
+    
+    try {
+      // First check if path exists
+      if (!this.vol.existsSync(memfsPath)) {
+        logger.debug('Path does not exist', { memfsPath });
+        return false;
+      }
+
+      // Get stats and check if directory
+      const stats = this.vol.statSync(memfsPath);
+      const isDir = stats.isDirectory();
+      logger.debug('Directory check complete', { memfsPath, isDirectory: isDir });
+      return isDir;
+    } catch (error) {
+      // Log error but don't throw since this is an internal helper
+      logger.error('Error checking if path is directory', { memfsPath, error });
+      return false;
+    }
   }
 } 

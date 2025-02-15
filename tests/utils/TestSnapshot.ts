@@ -80,7 +80,7 @@ export class TestSnapshot {
    * Take a snapshot of a directory and its contents recursively
    */
   private snapshotDirectory(dir: string, snapshot: Map<string, string>): void {
-    const entries = this.fs.readdir(dir);
+    const entries = this.fs.readDir(dir);
 
     for (const entry of entries) {
       const fullPath = dir === '/' ? `/${entry}` : `${dir}/${entry}`;

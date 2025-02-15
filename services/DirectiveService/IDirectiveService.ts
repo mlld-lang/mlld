@@ -53,6 +53,12 @@ export interface IDirectiveService {
   ): void;
 
   /**
+   * Update the interpreter service reference
+   * This is needed to handle circular dependencies in initialization
+   */
+  updateInterpreterService(interpreterService: IInterpreterService): void;
+
+  /**
    * Handle a directive node
    */
   handleDirective(

@@ -8,6 +8,7 @@ import type { IParserService } from '../../services/ParserService/IParserService
 import * as fs from 'fs-extra';
 import * as path from 'path';
 import { LLMXML } from 'llmxml';
+import { filesystemLogger as logger } from '../../core/utils/logger';
 
 interface SnapshotDiff {
   added: string[];
@@ -78,7 +79,26 @@ export class TestContext {
    * Write a file to the test filesystem
    */
   async writeFile(relativePath: string, content: string): Promise<void> {
-    await this.fs.writeFile(relativePath, content);
+    logger.debug('Writing file in test context', { relativePath });
+    
+    // Normalize the path to use forward slashes
+    const normalizedPath = relativePath.replace(/\\/g, '/');
+    
+    // Ensure the path is absolute
+    const absolutePath = normalizedPath.startsWith('/') ? normalizedPath : `/${normalizedPath}`;
+    
+    // Get the directory path
+    const dirPath = path.dirname(absolutePath);
+    
+    // Ensure parent directory exists
+    if (dirPath !== '/') {
+      logger.debug('Creating parent directory', { dirPath });
+      await this.fs.mkdir(dirPath);
+    }
+    
+    // Write the file
+    logger.debug('Writing file', { absolutePath });
+    await this.fs.writeFile(absolutePath, content);
   }
 
   /**

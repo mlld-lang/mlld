@@ -76,6 +76,15 @@ export class DirectiveService implements IDirectiveService {
   }
 
   /**
+   * Update the interpreter service reference
+   * This is needed to handle circular dependencies in initialization
+   */
+  updateInterpreterService(interpreterService: IInterpreterService): void {
+    this.interpreterService = interpreterService;
+    logger.debug('Updated interpreter service reference');
+  }
+
+  /**
    * Register the default set of directive handlers
    */
   private registerDefaultHandlers(): void {

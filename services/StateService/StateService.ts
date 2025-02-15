@@ -114,6 +114,20 @@ export class StateService implements IStateService {
     });
   }
 
+  appendContent(content: string): void {
+    this.checkMutable();
+    this.nodes.push({
+      type: 'Text',
+      content,
+      location: {
+        start: { line: 0, column: 0 },
+        end: { line: 0, column: 0 }
+      }
+    });
+    this.localChanges.add(`node:${this.nodes.length}`);
+    logger.debug('Appended content', { contentLength: content.length });
+  }
+
   addImport(path: string): void {
     this.checkMutable();
     this.imports.add(path);
