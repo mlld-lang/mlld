@@ -15,7 +15,7 @@ export function validateFuzzyThreshold(node: DirectiveNode): void {
   }
 
   // Must be a number
-  if (typeof fuzzy !== 'number') {
+  if (typeof fuzzy !== 'number' || isNaN(fuzzy) || fuzzy === null || fuzzy === true || fuzzy === false) {
     throw new MeldDirectiveError(
       'Fuzzy matching threshold must be a number',
       node.directive.kind,

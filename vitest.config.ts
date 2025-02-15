@@ -13,7 +13,7 @@ export default defineConfig({
       'core/**/*.test.ts',
       'cli/**/*.test.ts',
       'sdk/**/*.test.ts',
-      'tests/utils/__tests__/*.test.ts'
+      'tests/utils/tests/*.test.ts'
     ],
     exclude: [
       'node_modules',

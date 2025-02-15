@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { CircularityService } from '../CircularityService';
-import { MeldImportError } from '../../../core/errors/MeldImportError';
+import { CircularityService } from './CircularityService';
+import { MeldImportError } from '../../core/errors/MeldImportError';
 
 describe('CircularityService', () => {
   let service: CircularityService;

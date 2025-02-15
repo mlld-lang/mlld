@@ -87,7 +87,7 @@ describe('TestSnapshot', () => {
       
       // Compare
       const diff = snapshot.compare(before, after);
-      expect(diff.added).toContain('/project/new.txt');
+      expect(diff.added).toContain('new.txt');
       expect(diff.removed).toHaveLength(0);
       expect(diff.modified).toHaveLength(0);
     });
@@ -103,7 +103,7 @@ describe('TestSnapshot', () => {
       
       // Compare
       const diff = snapshot.compare(before, after);
-      expect(diff.removed).toContain('/project/remove.txt');
+      expect(diff.removed).toContain('remove.txt');
       expect(diff.added).toHaveLength(0);
       expect(diff.modified).toHaveLength(0);
     });
@@ -119,10 +119,10 @@ describe('TestSnapshot', () => {
       
       // Compare
       const diff = snapshot.compare(before, after);
-      expect(diff.modified).toContain('/project/modify.txt');
+      expect(diff.modified).toContain('modify.txt');
       expect(diff.added).toHaveLength(0);
       expect(diff.removed).toHaveLength(0);
-      expect(diff.modifiedContents.get('/project/modify.txt')).toBe('modified');
+      expect(diff.modifiedContents.get('modify.txt')).toBe('modified');
     });
 
     it('detects multiple changes', async () => {
@@ -140,11 +140,11 @@ describe('TestSnapshot', () => {
       
       // Compare
       const diff = snapshot.compare(before, after);
-      expect(diff.added).toContain('/project/new.txt');
-      expect(diff.removed).toContain('/project/remove.txt');
-      expect(diff.modified).toContain('/project/modify.txt');
+      expect(diff.added).toContain('new.txt');
+      expect(diff.removed).toContain('remove.txt');
+      expect(diff.modified).toContain('modify.txt');
       expect(diff.added.length + diff.removed.length + diff.modified.length).toBe(3);
-      expect(diff.modifiedContents.get('/project/modify.txt')).toBe('modified');
+      expect(diff.modifiedContents.get('modify.txt')).toBe('modified');
     });
   });
 

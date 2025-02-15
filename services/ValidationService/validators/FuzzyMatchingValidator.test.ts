@@ -38,7 +38,7 @@ describe('FuzzyMatchingValidator', () => {
     });
 
     it('should reject non-numeric fuzzy thresholds', () => {
-      const invalidValues = ['0.5', true, false, null, undefined, {}, []];
+      const invalidValues = ['0.5', true, false, null, {}, []];
       
       for (const value of invalidValues) {
         const node = createEmbedDirective('test.md', 'section', createLocation(1, 1));

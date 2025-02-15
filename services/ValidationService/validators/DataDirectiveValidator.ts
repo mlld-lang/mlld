@@ -34,6 +34,19 @@ export function validateDataDirective(node: DirectiveNode): void {
     );
   }
   
+  // If value is a string, try to parse it as JSON
+  if (typeof directive.value === 'string') {
+    try {
+      JSON.parse(directive.value);
+    } catch (error) {
+      throw new MeldDirectiveError(
+        'Invalid JSON string in data directive',
+        'data',
+        node.location?.start
+      );
+    }
+  }
+  
   // Validate value is JSON-serializable
   try {
     JSON.stringify(directive.value);

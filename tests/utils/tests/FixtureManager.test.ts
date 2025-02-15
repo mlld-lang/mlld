@@ -1,31 +1,20 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { FixtureManager } from '../FixtureManager';
-import { ProjectBuilder } from '../ProjectBuilder';
-import { MemfsTestFileSystem } from '../MemfsTestFileSystem';
-import fs from 'fs';
+import { FixtureManager, FileSystem } from '../FixtureManager';
 import path from 'path';
 
-// Create mock functions
-const mockFs = vi.hoisted(() => ({
-  existsSync: vi.fn(),
-  readFileSync: vi.fn()
-}));
-
-// Mock fs module
-vi.mock('fs', () => mockFs);
-
 describe('FixtureManager', () => {
-  let memfs: MemfsTestFileSystem;
-  let builder: ProjectBuilder;
   let manager: FixtureManager;
-  const fixturesDir = 'tests/fixtures';
+  let mockFs: FileSystem;
 
   beforeEach(() => {
-    vi.resetAllMocks();
-    // Set default mock behavior
-    mockFs.existsSync.mockReturnValue(true);
-    mockFs.readFileSync.mockReturnValue('{}');
-    manager = new FixtureManager('/project/fixtures');
+    // Create mock file system
+    mockFs = {
+      existsSync: vi.fn().mockReturnValue(true),
+      readFileSync: vi.fn().mockReturnValue('{}')
+    };
+    
+    // Create a new manager for each test with mock file system
+    manager = new FixtureManager('/project/fixtures', mockFs);
   });
 
   describe('fixture loading', () => {
@@ -36,12 +25,12 @@ describe('FixtureManager', () => {
         }
       };
 
-      mockFs.existsSync.mockReturnValue(true);
-      mockFs.readFileSync.mockReturnValue(JSON.stringify(basicFixture));
+      mockFs.readFileSync.mockReturnValueOnce(JSON.stringify(basicFixture));
 
       const result = await manager.load('basic');
       expect(result).toEqual(basicFixture);
       expect(mockFs.existsSync).toHaveBeenCalledWith('/project/fixtures/basic.json');
+      expect(mockFs.readFileSync).toHaveBeenCalledWith('/project/fixtures/basic.json', 'utf-8');
     });
 
     it('loads a complex fixture', async () => {
@@ -52,34 +41,34 @@ describe('FixtureManager', () => {
         }
       };
 
-      mockFs.existsSync.mockReturnValue(true);
-      mockFs.readFileSync.mockReturnValue(JSON.stringify(complexFixture));
+      mockFs.readFileSync.mockReturnValueOnce(JSON.stringify(complexFixture));
 
       const result = await manager.load('complex');
       expect(result).toEqual(complexFixture);
       expect(mockFs.existsSync).toHaveBeenCalledWith('/project/fixtures/complex.json');
+      expect(mockFs.readFileSync).toHaveBeenCalledWith('/project/fixtures/complex.json', 'utf-8');
     });
   });
 
   describe('error handling', () => {
     it('throws when fixture does not exist', async () => {
-      mockFs.existsSync.mockReturnValue(false);
+      mockFs.existsSync.mockReturnValueOnce(false);
 
       await expect(manager.load('nonexistent'))
         .rejects.toThrow('Fixture not found: nonexistent');
     });
 
     it('throws on invalid JSON', async () => {
-      mockFs.existsSync.mockReturnValue(true);
-      mockFs.readFileSync.mockReturnValue('invalid json');
+      mockFs.existsSync.mockReturnValueOnce(true);
+      mockFs.readFileSync.mockReturnValueOnce('invalid json');
 
       await expect(manager.load('invalid'))
         .rejects.toThrow(/Invalid JSON in fixture invalid/);
     });
 
     it('throws on invalid fixture structure', async () => {
-      mockFs.existsSync.mockReturnValue(true);
-      mockFs.readFileSync.mockReturnValue(JSON.stringify({
+      mockFs.existsSync.mockReturnValueOnce(true);
+      mockFs.readFileSync.mockReturnValueOnce(JSON.stringify({
         invalid: 'structure'
       }));
 
@@ -96,7 +85,6 @@ describe('FixtureManager', () => {
         }
       };
 
-      mockFs.existsSync.mockReturnValue(true);
       mockFs.readFileSync.mockReturnValue(JSON.stringify(fixture));
 
       await manager.load('cached');
@@ -112,7 +100,6 @@ describe('FixtureManager', () => {
         }
       };
 
-      mockFs.existsSync.mockReturnValue(true);
       mockFs.readFileSync.mockReturnValue(JSON.stringify(fixture));
 
       await manager.load('cached');
@@ -125,19 +112,19 @@ describe('FixtureManager', () => {
 
   describe('fixture directory handling', () => {
     it('uses custom fixtures directory', async () => {
-      const customManager = new FixtureManager('/custom/fixtures');
       const fixture = {
         files: {
           'test.txt': 'content'
         }
       };
 
-      mockFs.existsSync.mockReturnValue(true);
-      mockFs.readFileSync.mockReturnValue(JSON.stringify(fixture));
+      mockFs.readFileSync.mockReturnValueOnce(JSON.stringify(fixture));
 
+      const customManager = new FixtureManager('/custom/fixtures', mockFs);
       await customManager.load('test');
 
       expect(mockFs.existsSync).toHaveBeenCalledWith('/custom/fixtures/test.json');
+      expect(mockFs.readFileSync).toHaveBeenCalledWith('/custom/fixtures/test.json', 'utf-8');
     });
 
     it('handles relative paths in fixtures directory', async () => {
@@ -147,13 +134,14 @@ describe('FixtureManager', () => {
         }
       };
 
-      mockFs.existsSync.mockReturnValue(true);
-      mockFs.readFileSync.mockReturnValue(JSON.stringify(fixture));
+      mockFs.readFileSync.mockReturnValueOnce(JSON.stringify(fixture));
 
-      const relativeManager = new FixtureManager('fixtures');
+      const relativeManager = new FixtureManager('fixtures', mockFs);
       await relativeManager.load('test');
 
-      expect(mockFs.existsSync).toHaveBeenCalledWith(path.join(process.cwd(), 'fixtures', 'test.json'));
+      const expectedPath = path.join(process.cwd(), 'fixtures', 'test.json');
+      expect(mockFs.existsSync).toHaveBeenCalledWith(expectedPath);
+      expect(mockFs.readFileSync).toHaveBeenCalledWith(expectedPath, 'utf-8');
     });
   });
 }); 

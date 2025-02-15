@@ -202,27 +202,24 @@ export class OutputService implements IOutputService {
     node: MeldNode,
     options: Required<OutputOptions>
   ): Promise<string> {
-    switch (node.type) {
-      case 'Text':
-        return options.preserveFormatting
-          ? node.content
-          : node.content.trim();
-
-      case 'Directive': {
-        // Format directive as a comment in markdown
-        const { kind, ...props } = node;
-        const directiveStr = `@${kind} ${JSON.stringify(props)}`;
-        return `<!-- ${directiveStr} -->\n`;
+    try {
+      switch (node.type) {
+        case 'Text':
+          return node.content;
+        case 'CodeFence':
+          return `\`\`\`${node.language || ''}\n${node.content}\n\`\`\`\n`;
+        case 'Directive':
+          // Format directive as a markdown comment
+          return `<!-- @${node.directive.kind} ${JSON.stringify(node.directive)} -->\n`;
+        default:
+          throw new MeldOutputError(`Unknown node type: ${(node as any).type}`, 'markdown');
       }
-
-      case 'CodeFence':
-        return `\`\`\`${node.language || ''}\n${node.content}\n\`\`\`\n`;
-
-      default:
-        throw new MeldOutputError(
-          `Unknown node type: ${node.type}`,
-          'markdown'
-        );
+    } catch (error) {
+      throw new MeldOutputError(
+        'Failed to convert node to markdown',
+        'markdown',
+        error instanceof Error ? error : undefined
+      );
     }
   }
 
@@ -230,70 +227,53 @@ export class OutputService implements IOutputService {
     node: MeldNode,
     options: Required<OutputOptions>
   ): Promise<string> {
-    const indent = '    ';
-    
-    switch (node.type) {
-      case 'Text':
-        const content = options.preserveFormatting
-          ? node.content
-          : node.content.trim();
-        return `\n${indent}<text>${this.escapeXML(content)}</text>`;
-
-      case 'Directive': {
-        const { kind, ...props } = node;
-        let output = `\n${indent}<directive kind="${kind}">`;
-        
-        // Add directive properties
-        for (const [key, value] of Object.entries(props)) {
-          if (key === 'type' || key === 'location') continue;
-          output += `\n${indent}  <${key}>${
-            this.escapeXML(JSON.stringify(value))
-          }</${key}>`;
-        }
-        
-        output += `\n${indent}</directive>`;
-        return output;
+    try {
+      switch (node.type) {
+        case 'Text':
+          return `\n    <text>${this.escapeXML(node.content)}</text>`;
+        case 'CodeFence':
+          return `\n    <code language="${this.escapeXML(node.language || '')}">${this.escapeXML(node.content)}</code>`;
+        case 'Directive':
+          return `\n    <directive kind="${this.escapeXML(node.directive.kind)}">${
+            typeof node.directive.value === 'string' 
+              ? `<value>${this.escapeXML(node.directive.value)}</value>`
+              : Object.entries(node.directive)
+                  .map(([key, val]) => `<${key}>${this.escapeXML(String(val))}</${key}>`)
+                  .join('')
+          }</directive>`;
+        default:
+          throw new MeldOutputError(`Unknown node type: ${(node as any).type}`, 'llm');
       }
-
-      case 'CodeFence':
-        return `\n${indent}<code-fence${node.language ? ` language="${this.escapeXML(node.language)}"` : ''}>${
-          this.escapeXML(node.content)
-        }</code-fence>`;
-
-      default:
-        throw new MeldOutputError(
-          `Unknown node type: ${node.type}`,
-          'llm'
-        );
+    } catch (error) {
+      throw new MeldOutputError(
+        'Failed to convert node to XML',
+        'llm',
+        error instanceof Error ? error : undefined
+      );
     }
   }
 
   private async stateToXML(state: IStateService): Promise<string> {
-    const indent = '    ';
     let output = '';
 
-    // Add text variables
+    // Format text variables
     const textVars = state.getAllTextVars();
     if (textVars.size > 0) {
-      output += `\n${indent}<text-vars>`;
+      output += '\n    <text-vars>';
       for (const [name, value] of textVars) {
-        output += `\n${indent}  <var name="${this.escapeXML(name)}">${
-          this.escapeXML(value)
-        }</var>`;
+        output += `\n      <var name="${this.escapeXML(name)}">${this.escapeXML(value)}</var>`;
       }
-      output += `\n${indent}</text-vars>`;
+      output += '\n    </text-vars>';
     }
 
-    // Add data variables
+    // Format data variables
     const dataVars = state.getAllDataVars();
     if (dataVars.size > 0) {
-      output += `\n${indent}<data-vars>`;
+      output += '\n    <data-vars>';
       for (const [name, value] of dataVars) {
-        output += `\n${indent}  <var name="${this.escapeXML(name)}">${
-          this.escapeXML(JSON.stringify(value))
-        }</var>`;
+        output += `\n      <var name="${this.escapeXML(name)}">${this.escapeXML(JSON.stringify(value))}</var>`;
       }
-      output += `\n${indent}</data-vars>`;
+      output += '\n    </data-vars>';
     }
 
     return output;

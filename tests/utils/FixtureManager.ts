@@ -6,15 +6,29 @@ export interface ProjectStructure {
   dirs?: string[];
 }
 
+export interface FileSystem {
+  existsSync: (path: string) => boolean;
+  readFileSync: (path: string, encoding: string) => string;
+}
+
 /**
  * Manages loading and caching of test fixtures
  */
 export class FixtureManager {
   private fixtureCache: Map<string, ProjectStructure> = new Map();
+  private fs: FileSystem;
+  private resolvedFixturesDir: string;
 
   constructor(
-    private fixturesDir: string = 'tests/fixtures'
-  ) {}
+    fixturesDir: string = 'tests/fixtures',
+    fileSystem: FileSystem = fs
+  ) {
+    this.fs = fileSystem;
+    // Resolve relative paths to absolute paths
+    this.resolvedFixturesDir = path.isAbsolute(fixturesDir) 
+      ? fixturesDir 
+      : path.join(process.cwd(), fixturesDir);
+  }
 
   /**
    * Load a fixture by name
@@ -34,14 +48,14 @@ export class FixtureManager {
     }
 
     // Load from file
-    const filePath = path.join(this.fixturesDir, `${fixtureName}.json`);
-    if (!fs.existsSync(filePath)) {
+    const filePath = path.join(this.resolvedFixturesDir, `${fixtureName}.json`);
+    if (!this.fs.existsSync(filePath)) {
       throw new Error(`Fixture not found: ${fixtureName}`);
     }
 
     let data: any;
     try {
-      const fileContent = fs.readFileSync(filePath, 'utf-8');
+      const fileContent = this.fs.readFileSync(filePath, 'utf-8');
       data = JSON.parse(fileContent);
     } catch (err) {
       if (err instanceof SyntaxError) {

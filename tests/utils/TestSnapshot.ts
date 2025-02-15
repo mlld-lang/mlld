@@ -51,20 +51,28 @@ export class TestSnapshot {
       modifiedContents: new Map()
     };
 
+    // Helper to normalize paths by removing /project prefix
+    const normalizePath = (p: string) => p.replace(/^\/project\//, '');
+
     // Find added and modified files
     for (const [path, content] of after) {
-      if (!before.has(path)) {
-        result.added.push(path);
-      } else if (before.get(path) !== content) {
-        result.modified.push(path);
-        result.modifiedContents.set(path, content);
+      const normalizedPath = normalizePath(path);
+      const beforePath = Array.from(before.keys()).find(p => normalizePath(p) === normalizedPath);
+
+      if (!beforePath) {
+        result.added.push(normalizedPath);
+      } else if (before.get(beforePath) !== content) {
+        result.modified.push(normalizedPath);
+        result.modifiedContents.set(normalizedPath, content);
       }
     }
 
     // Find removed files
     for (const path of before.keys()) {
-      if (!after.has(path)) {
-        result.removed.push(path);
+      const normalizedPath = normalizePath(path);
+      const afterPath = Array.from(after.keys()).find(p => normalizePath(p) === normalizedPath);
+      if (!afterPath) {
+        result.removed.push(normalizedPath);
       }
     }
 
