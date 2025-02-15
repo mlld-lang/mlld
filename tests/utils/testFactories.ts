@@ -185,15 +185,15 @@ export function createEmbedDirective(
  */
 export function createImportDirective(
   path: string,
-  location?: Location
+  location: Location,
+  from?: string
 ): DirectiveNode {
-  if (!location) return createDirectiveNode('import', { path });
-
   return {
     type: 'Directive',
     directive: {
       kind: 'import',
-      path
+      path,
+      from
     },
     location
   };
