@@ -5,12 +5,12 @@ export interface IValidationService {
    * Validate a directive node against its schema and constraints
    * @throws {MeldDirectiveError} If validation fails
    */
-  validate(node: DirectiveNode): void;
+  validate(node: DirectiveNode): Promise<void>;
   
   /**
    * Register a validator function for a specific directive kind
    */
-  registerValidator(kind: string, validator: (node: DirectiveNode) => void): void;
+  registerValidator(kind: string, validator: (node: DirectiveNode) => Promise<void>): void;
   
   /**
    * Remove a validator for a specific directive kind

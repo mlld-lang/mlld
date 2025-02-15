@@ -1,5 +1,5 @@
 import { DirectiveNode, EmbedDirective } from 'meld-spec';
-import { IDirectiveHandler } from '../../IDirectiveService';
+import { IDirectiveHandler, DirectiveContext } from '../../IDirectiveService';
 import { IValidationService } from '../../../ValidationService/IValidationService';
 import { IResolutionService } from '../../../ResolutionService/IResolutionService';
 import { IStateService } from '../../../StateService/IStateService';
@@ -8,10 +8,22 @@ import { IFileSystemService } from '../../../FileSystemService/IFileSystemServic
 import { IParserService } from '../../../ParserService/IParserService';
 import { IInterpreterService } from '../../../InterpreterService/IInterpreterService';
 import { DirectiveError, DirectiveErrorCode } from '../../errors/DirectiveError';
-import { embedLogger as logger } from '@core/utils/logger';
+import { embedLogger } from '../../../../core/utils/logger';
 
+export interface ILogger {
+  debug: (message: string, ...args: any[]) => void;
+  info: (message: string, ...args: any[]) => void;
+  warn: (message: string, ...args: any[]) => void;
+  error: (message: string, ...args: any[]) => void;
+}
+
+/**
+ * Handler for @embed directives
+ * Embeds content from other files into the current document
+ */
 export class EmbedDirectiveHandler implements IDirectiveHandler {
   readonly kind = 'embed';
+  private logger: ILogger;
 
   constructor(
     private validationService: IValidationService,
@@ -20,13 +32,16 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
     private circularityService: ICircularityService,
     private fileSystemService: IFileSystemService,
     private parserService: IParserService,
-    private interpreterService: IInterpreterService
-  ) {}
+    private interpreterService: IInterpreterService,
+    logger?: ILogger
+  ) {
+    this.logger = logger || embedLogger;
+  }
 
   async execute(node: DirectiveNode): Promise<void> {
     const directive = node.directive as EmbedDirective;
     
-    logger.debug('Processing embed directive', {
+    this.logger.debug('Processing embed directive', {
       path: directive.path,
       section: directive.section,
       fuzzy: directive.fuzzy,
@@ -132,7 +147,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
           await this.stateService.appendContent(processedContent);
         }
 
-        logger.debug('Embed content processed', {
+        this.logger.debug('Embed content processed', {
           path: resolvedPath,
           section: directive.section,
           names: directive.names,
@@ -143,7 +158,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
         this.circularityService.endImport(resolvedPath);
       }
     } catch (error) {
-      logger.error('Failed to process embed directive', {
+      this.logger.error('Failed to process embed directive', {
         path: directive.path,
         section: directive.section,
         location: node.location,

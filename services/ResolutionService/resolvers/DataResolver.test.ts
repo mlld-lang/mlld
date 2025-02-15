@@ -45,7 +45,7 @@ describe('DataResolver', () => {
         type: 'Directive',
         directive: {
           kind: 'data',
-          name: 'test',
+          identifier: 'test',
           value: 'value'
         }
       };
@@ -60,7 +60,7 @@ describe('DataResolver', () => {
         type: 'Directive',
         directive: {
           kind: 'data',
-          name: 'data',
+          identifier: 'data',
           fields: 'nested.field'
         }
       };
@@ -79,7 +79,7 @@ describe('DataResolver', () => {
         type: 'Directive',
         directive: {
           kind: 'data',
-          name: 'data'
+          identifier: 'data'
         }
       };
       const obj = { key: 'value' };
@@ -93,7 +93,7 @@ describe('DataResolver', () => {
         type: 'Directive',
         directive: {
           kind: 'data',
-          name: 'null'
+          identifier: 'null'
         }
       };
       vi.mocked(stateService.getDataVar).mockReturnValue(null);
@@ -109,7 +109,8 @@ describe('DataResolver', () => {
         type: 'Directive',
         directive: {
           kind: 'data',
-          name: 'test'
+          identifier: 'test',
+          value: 'value'
         }
       };
 
@@ -123,7 +124,8 @@ describe('DataResolver', () => {
         type: 'Directive',
         directive: {
           kind: 'data',
-          name: 'missing'
+          identifier: 'missing',
+          value: ''
         }
       };
       vi.mocked(stateService.getDataVar).mockReturnValue(undefined);
@@ -139,7 +141,7 @@ describe('DataResolver', () => {
         type: 'Directive',
         directive: {
           kind: 'data',
-          name: 'data',
+          identifier: 'data',
           fields: 'field'
         }
       };
@@ -155,7 +157,7 @@ describe('DataResolver', () => {
         type: 'Directive',
         directive: {
           kind: 'data',
-          name: 'data',
+          identifier: 'data',
           fields: 'field'
         }
       };
@@ -171,7 +173,7 @@ describe('DataResolver', () => {
         type: 'Directive',
         directive: {
           kind: 'data',
-          name: 'data',
+          identifier: 'data',
           fields: 'field'
         }
       };
@@ -187,7 +189,7 @@ describe('DataResolver', () => {
         type: 'Directive',
         directive: {
           kind: 'data',
-          name: 'data',
+          identifier: 'data',
           fields: 'missing'
         }
       };
@@ -203,7 +205,8 @@ describe('DataResolver', () => {
         type: 'Directive',
         directive: {
           kind: 'text',
-          name: 'test'
+          identifier: 'test',
+          value: ''
         }
       };
       
@@ -212,46 +215,49 @@ describe('DataResolver', () => {
         .toThrow('Invalid node type for data resolution');
     });
 
-    it('should throw on missing variable name', async () => {
+    it('should throw on missing variable identifier', async () => {
       const node: MeldNode = {
         type: 'Directive',
         directive: {
-          kind: 'data'
+          kind: 'data',
+          value: ''
         }
       };
       
       await expect(resolver.resolve(node, context))
         .rejects
-        .toThrow('Data variable name is required');
+        .toThrow('Data variable identifier is required');
     });
   });
 
   describe('extractReferences', () => {
-    it('should extract variable name from data directive', () => {
+    it('should extract variable identifier from data directive', async () => {
       const node: MeldNode = {
         type: 'Directive',
         directive: {
           kind: 'data',
-          name: 'test'
+          identifier: 'test',
+          value: ''
         }
       };
       const refs = resolver.extractReferences(node);
       expect(refs).toEqual(['test']);
     });
 
-    it('should return empty array for non-data directive', () => {
+    it('should return empty array for non-data directive', async () => {
       const node: MeldNode = {
         type: 'Directive',
         directive: {
           kind: 'text',
-          name: 'test'
+          identifier: 'test',
+          value: ''
         }
       };
       const refs = resolver.extractReferences(node);
       expect(refs).toEqual([]);
     });
 
-    it('should return empty array for text node', () => {
+    it('should return empty array for text node', async () => {
       const node: MeldNode = {
         type: 'Text',
         content: 'no references here'

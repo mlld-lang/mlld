@@ -252,7 +252,7 @@ export class ResolutionService implements IResolutionService {
         if (node.type !== 'Directive') continue;
 
         const directiveNode = node as DirectiveNode;
-        const ref = directiveNode.directive.name;
+        const ref = directiveNode.directive.identifier;
         if (!ref) continue;
 
         // Skip if this is a direct reference to the current variable

@@ -1,6 +1,18 @@
+// Mock the logger before any imports
+const mockLogger = {
+  debug: vi.fn(),
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn()
+};
+
+vi.mock('../../../../core/utils/logger', () => ({
+  embedLogger: mockLogger
+}));
+
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { DirectiveNode, DirectiveData } from '../../../../node_modules/meld-spec/dist/types';
-import { EmbedDirectiveHandler } from './EmbedDirectiveHandler';
+import { EmbedDirectiveHandler, type ILogger } from './EmbedDirectiveHandler';
 import type { IValidationService } from '../../../ValidationService/IValidationService';
 import type { IResolutionService } from '../../../ResolutionService/IResolutionService';
 import type { IStateService } from '../../../StateService/IStateService';
@@ -10,16 +22,6 @@ import type { IParserService } from '../../../ParserService/IParserService';
 import type { IInterpreterService } from '../../../InterpreterService/IInterpreterService';
 import { DirectiveError, DirectiveErrorCode } from '../../errors/DirectiveError';
 import { createLocation, createEmbedDirective } from '../../../../tests/utils/testFactories';
-
-// Mock the logger
-vi.mock('@core/utils/logger', () => ({
-  embedLogger: {
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn()
-  }
-}));
 
 interface EmbedDirective extends DirectiveData {
   kind: 'embed';
@@ -127,6 +129,13 @@ const createMockInterpreterService = (): IInterpreterService => ({
   createChildContext: vi.fn().mockResolvedValue({} as IStateService)
 });
 
+const createMockLogger = (): ILogger => ({
+  debug: vi.fn(),
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn()
+});
+
 describe('EmbedDirectiveHandler', () => {
   let handler: EmbedDirectiveHandler;
   let mockValidationService: IValidationService;
@@ -136,6 +145,7 @@ describe('EmbedDirectiveHandler', () => {
   let mockFileSystemService: IFileSystemService;
   let mockParserService: IParserService;
   let mockInterpreterService: IInterpreterService;
+  let mockLogger: ILogger;
 
   beforeEach(() => {
     // Create fresh instances of mocks
@@ -146,6 +156,7 @@ describe('EmbedDirectiveHandler', () => {
     mockFileSystemService = createMockFileSystemService();
     mockParserService = createMockParserService();
     mockInterpreterService = createMockInterpreterService();
+    mockLogger = createMockLogger();
 
     handler = new EmbedDirectiveHandler(
       mockValidationService,
@@ -154,7 +165,8 @@ describe('EmbedDirectiveHandler', () => {
       mockCircularityService,
       mockFileSystemService,
       mockParserService,
-      mockInterpreterService
+      mockInterpreterService,
+      mockLogger
     );
   });
 

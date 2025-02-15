@@ -44,7 +44,7 @@ describe('TextResolver', () => {
         type: 'Directive',
         directive: {
           kind: 'text',
-          name: 'test',
+          identifier: 'test',
           value: 'value'
         }
       };
@@ -59,7 +59,7 @@ describe('TextResolver', () => {
         type: 'Directive',
         directive: {
           kind: 'text',
-          name: 'test',
+          identifier: 'test',
           value: 'value',
           format: '(format)'
         }
@@ -75,7 +75,7 @@ describe('TextResolver', () => {
         type: 'Directive',
         directive: {
           kind: 'text',
-          name: 'ENV_TEST',
+          identifier: 'ENV_TEST',
           value: ''
         }
       };
@@ -94,7 +94,7 @@ describe('TextResolver', () => {
         type: 'Directive',
         directive: {
           kind: 'text',
-          name: 'test',
+          identifier: 'test',
           value: 'value'
         }
       };
@@ -109,7 +109,7 @@ describe('TextResolver', () => {
         type: 'Directive',
         directive: {
           kind: 'text',
-          name: 'missing',
+          identifier: 'missing',
           value: ''
         }
       };
@@ -125,7 +125,7 @@ describe('TextResolver', () => {
         type: 'Directive',
         directive: {
           kind: 'data',
-          name: 'test',
+          identifier: 'test',
           value: ''
         }
       };
@@ -156,7 +156,7 @@ describe('TextResolver', () => {
         type: 'Directive',
         directive: {
           kind: 'text',
-          name: 'test',
+          identifier: 'test',
           value: ''
         }
       };
@@ -169,7 +169,7 @@ describe('TextResolver', () => {
         type: 'Directive',
         directive: {
           kind: 'data',
-          name: 'test',
+          identifier: 'test',
           value: ''
         }
       };

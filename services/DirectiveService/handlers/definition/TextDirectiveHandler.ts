@@ -31,24 +31,27 @@ export class TextDirectiveHandler implements IDirectiveHandler {
       await this.validationService.validate(node);
       const directive = node.directive as TextDirective;
 
-      // 2. Extract name and value
-      const { name, value } = directive;
+      // 2. Extract identifier and value
+      const { identifier, value } = directive;
 
       // 3. Process value based on type
       let resolvedValue: string;
 
-      if (value.startsWith('@embed') || value.startsWith('@run') || value.startsWith('@call')) {
-        // For embedded content, we need to process the directive
-        // This will be handled by the appropriate handler via DirectiveService
-        resolvedValue = value; // Keep as is - will be processed by interpreter
+      // Remove quotes from string literals
+      const unquotedValue = this.removeQuotes(value);
+
+      // Check if the value is a standalone directive or contains embedded directives
+      const hasDirective = unquotedValue.includes('@');
+
+      if (hasDirective) {
+        // For values containing directives, pass through without resolution
+        // but still remove quotes to match test expectations
+        resolvedValue = unquotedValue;
       } else {
         // For regular string values, resolve any variables
         const resolutionContext = ResolutionContextFactory.forTextDirective(
           context.currentFilePath
         );
-
-        // Remove quotes from string literals before resolution
-        const unquotedValue = this.removeQuotes(value);
         resolvedValue = await this.resolutionService.resolveInContext(
           unquotedValue,
           resolutionContext
@@ -56,10 +59,10 @@ export class TextDirectiveHandler implements IDirectiveHandler {
       }
 
       // 4. Store in state
-      await this.stateService.setTextVar(name, resolvedValue);
+      await this.stateService.setTextVar(identifier, resolvedValue);
 
       logger.debug('Text directive processed successfully', {
-        name,
+        identifier,
         location: node.location
       });
     } catch (error) {

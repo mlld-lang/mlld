@@ -28,10 +28,10 @@ export class PathDirectiveHandler implements IDirectiveHandler {
       // 2. Extract directive details
       const directive = node.directive as DirectiveData & {
         kind: 'path';
-        name: string;
+        identifier: string;
         path: string;
       };
-      const { name, path } = directive;
+      const { identifier, path } = directive;
 
       // 3. Create appropriate resolution context
       const resolutionContext = ResolutionContextFactory.forPathDirective(context.currentFilePath);
@@ -51,10 +51,10 @@ export class PathDirectiveHandler implements IDirectiveHandler {
       });
 
       // 5. Store in state
-      await this.stateService.setPathVar(name, resolvedPath);
+      await this.stateService.setPathVar(identifier, resolvedPath);
 
       logger.debug('Stored path variable', {
-        name,
+        identifier,
         path: resolvedPath,
         location: node.location
       });

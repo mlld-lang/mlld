@@ -7,19 +7,19 @@ import { MeldDirectiveError } from '../../../core/errors/MeldDirectiveError';
 export function validateDataDirective(node: DirectiveNode): void {
   const directive = node.directive as DataDirective;
   
-  // Validate name
-  if (!directive.name || typeof directive.name !== 'string') {
+  // Validate identifier
+  if (!directive.identifier || typeof directive.identifier !== 'string') {
     throw new MeldDirectiveError(
-      'Data directive requires a name parameter',
+      'Data directive requires an "identifier" property (string)',
       'data',
       node.location?.start
     );
   }
   
-  // Validate name format
-  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(directive.name)) {
+  // Validate identifier format
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(directive.identifier)) {
     throw new MeldDirectiveError(
-      'Data name must be a valid identifier (letters, numbers, underscore, starting with letter/underscore)',
+      'Data identifier must be a valid identifier (letters, numbers, underscore, starting with letter/underscore)',
       'data',
       node.location?.start
     );

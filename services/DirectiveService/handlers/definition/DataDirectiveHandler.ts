@@ -31,10 +31,10 @@ export class DataDirectiveHandler implements IDirectiveHandler {
       // 2. Extract directive details
       const directive = node.directive as DirectiveData & {
         kind: 'data';
-        name: string;
+        identifier: string;
         value: any;
       };
-      const { name, value } = directive;
+      const { identifier, value } = directive;
 
       // 3. Create appropriate resolution context
       const resolutionContext = ResolutionContextFactory.forDataDirective(context.currentFilePath);
@@ -73,10 +73,10 @@ export class DataDirectiveHandler implements IDirectiveHandler {
       }
 
       // 5. Store in state
-      await this.stateService.setDataVar(name, resolvedValue);
+      await this.stateService.setDataVar(identifier, resolvedValue);
 
       logger.debug('Stored data variable', {
-        name,
+        identifier,
         valueType: typeof resolvedValue,
         location: node.location
       });

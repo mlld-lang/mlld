@@ -6,7 +6,7 @@
   ],
   "files": {
     "project/README.md": "# Test Project\n\nA basic test project for meld tests.",
-    "project/src/main.meld": "@text greeting = \"Hello World\"\n@data count = 42\n@path config = \"$HOMEPATH/.config/settings.json\"",
+    "project/src/main.meld": "@text identifier=\"greeting\" value=\"Hello World\"\n@data identifier=\"count\" value=42\n@path identifier=\"config\" value=\"$HOMEPATH/.config/settings.json\"",
     "project/src/other.meld": "# Section One\nThis is some content.\n\n# Section Two\nMore content here.",
     "project/tests/test.meld": "@import [../src/main.meld]\n@embed [../src/other.meld # Section One]",
     "home/.config/settings.json": "{\n  \"theme\": \"dark\",\n  \"debug\": true\n}"

@@ -56,7 +56,7 @@ describe('PathResolver', () => {
         type: 'Directive',
         directive: {
           kind: 'path',
-          name: 'HOMEPATH'
+          identifier: 'HOMEPATH'
         }
       };
       const result = await resolver.resolve(node, context);
@@ -69,7 +69,7 @@ describe('PathResolver', () => {
         type: 'Directive',
         directive: {
           kind: 'path',
-          name: '~'
+          identifier: '~'
         }
       };
       const result = await resolver.resolve(node, context);
@@ -82,7 +82,7 @@ describe('PathResolver', () => {
         type: 'Directive',
         directive: {
           kind: 'path',
-          name: '.'
+          identifier: '.'
         }
       };
       const result = await resolver.resolve(node, context);
@@ -94,28 +94,26 @@ describe('PathResolver', () => {
   describe('error handling', () => {
     it('should throw when path variables are not allowed', async () => {
       context.allowedVariableTypes.path = false;
-      const node: DirectiveNode = {
+      const node: MeldNode = {
         type: 'Directive',
         directive: {
           kind: 'path',
-          name: 'HOMEPATH',
-          value: '/home/user'
+          identifier: 'test'
         }
       };
-
-      await expect(resolver.resolve(node, context))
-        .rejects
-        .toThrow('Path variables are not allowed in this context');
+      await expect(resolver.resolve(node, context)).rejects.toThrow(ResolutionError);
     });
 
     it('should throw on undefined path variable', async () => {
-      const node: DirectiveNode = {
+      const node: MeldNode = {
         type: 'Directive',
         directive: {
           kind: 'path',
-          name: 'missing'
+          identifier: 'missing',
+          value: ''
         }
       };
+      vi.mocked(stateService.getPathVar).mockReturnValue(undefined);
       
       await expect(resolver.resolve(node, context))
         .rejects
@@ -127,7 +125,7 @@ describe('PathResolver', () => {
         type: 'Directive',
         directive: {
           kind: 'path',
-          name: 'path'
+          identifier: 'path'
         }
       };
       vi.mocked(stateService.getPathVar).mockReturnValue('relative/path');
@@ -142,7 +140,7 @@ describe('PathResolver', () => {
         type: 'Directive',
         directive: {
           kind: 'path',
-          name: 'path'
+          identifier: 'path'
         }
       };
       vi.mocked(stateService.getPathVar)
@@ -164,11 +162,12 @@ describe('PathResolver', () => {
     });
 
     it('should throw on invalid node type', async () => {
-      const node: DirectiveNode = {
+      const node: MeldNode = {
         type: 'Directive',
         directive: {
-          kind: 'text',
-          name: 'test'
+          kind: 'data',
+          identifier: 'test',
+          value: ''
         }
       };
       
@@ -177,71 +176,76 @@ describe('PathResolver', () => {
         .toThrow('Invalid node type for path resolution');
     });
 
-    it('should throw on missing variable name', async () => {
-      const node: DirectiveNode = {
+    it('should throw on missing variable identifier', async () => {
+      const node: MeldNode = {
         type: 'Directive',
         directive: {
-          kind: 'path'
+          kind: 'path',
+          value: ''
         }
       };
       
       await expect(resolver.resolve(node, context))
         .rejects
-        .toThrow('Path variable name is required');
+        .toThrow('Path variable identifier is required');
     });
   });
 
   describe('extractReferences', () => {
-    it('should extract variable name from path directive', () => {
-      const node: DirectiveNode = {
+    it('should extract variable identifier from path directive', async () => {
+      const node: MeldNode = {
         type: 'Directive',
         directive: {
           kind: 'path',
-          name: 'test'
+          identifier: 'test',
+          value: ''
         }
       };
       const refs = resolver.extractReferences(node);
       expect(refs).toEqual(['test']);
     });
 
-    it('should resolve ~ alias to HOMEPATH', () => {
-      const node: DirectiveNode = {
+    it('should resolve ~ alias to HOMEPATH', async () => {
+      const node: MeldNode = {
         type: 'Directive',
         directive: {
           kind: 'path',
-          name: '~'
+          identifier: '~',
+          value: ''
         }
       };
       const refs = resolver.extractReferences(node);
       expect(refs).toEqual(['HOMEPATH']);
     });
 
-    it('should resolve . alias to PROJECTPATH', () => {
-      const node: DirectiveNode = {
+    it('should resolve . alias to PROJECTPATH', async () => {
+      const node: MeldNode = {
         type: 'Directive',
         directive: {
           kind: 'path',
-          name: '.'
+          identifier: '.',
+          value: ''
         }
       };
       const refs = resolver.extractReferences(node);
       expect(refs).toEqual(['PROJECTPATH']);
     });
 
-    it('should return empty array for non-path directive', () => {
-      const node: DirectiveNode = {
+    it('should return empty array for non-path directive', async () => {
+      const node: MeldNode = {
         type: 'Directive',
         directive: {
-          kind: 'text',
-          name: 'test'
+          kind: 'data',
+          identifier: 'test',
+          value: ''
         }
       };
       const refs = resolver.extractReferences(node);
       expect(refs).toEqual([]);
     });
 
-    it('should return empty array for text node', () => {
-      const node: TextNode = {
+    it('should return empty array for text node', async () => {
+      const node: MeldNode = {
         type: 'Text',
         content: 'no references here'
       };

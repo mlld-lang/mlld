@@ -1,6 +1,21 @@
 import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from 'vitest';
 import { DirectiveService } from './DirectiveService';
 import { TestContext } from '../../tests/utils/TestContext';
+import type { ILogger } from './handlers/execution/EmbedDirectiveHandler';
+
+// Mock the logger
+const mockLogger: ILogger = {
+  debug: vi.fn(),
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn()
+};
+
+vi.mock('../../core/utils/logger', () => ({
+  directiveLogger: mockLogger,
+  embedLogger: mockLogger
+}));
+
 import {
   createTextDirective,
   createDataDirective,
@@ -31,22 +46,6 @@ import type { IInterpreterService, InterpreterOptions } from '../InterpreterServ
 import type { IPathService, PathOptions } from '../PathService/IPathService';
 import type { IDirectiveService } from './IDirectiveService';
 
-// Mock the logger
-vi.mock('@core/utils/logger', () => ({
-  directiveLogger: {
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn()
-  },
-  embedLogger: {
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn()
-  }
-}));
-
 describe('DirectiveService', () => {
   let testContext: TestContext;
   let mockValidationService: IValidationService;
@@ -74,8 +73,8 @@ describe('DirectiveService', () => {
     mockInterpreterService = testContext.factory.createMockInterpreterService();
     mockPathService = testContext.factory.createMockPathService();
 
-    // Create service instance
-    service = new DirectiveService();
+    // Create service instance with mock logger
+    service = new DirectiveService(mockLogger);
 
     // Initialize with mock services
     service.initialize(

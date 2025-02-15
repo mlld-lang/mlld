@@ -1,7 +1,7 @@
 import { IStateService } from '../../StateService/IStateService';
 import { ResolutionContext, ResolutionErrorCode } from '../IResolutionService';
 import { ResolutionError } from '../errors/ResolutionError';
-import { MeldNode } from 'meld-spec';
+import { MeldNode, TextNode, DirectiveNode } from 'meld-spec';
 
 /**
  * Handles resolution of text variables (${var})
@@ -15,37 +15,39 @@ export class TextResolver {
   async resolve(node: MeldNode, context: ResolutionContext): Promise<string> {
     // Early return if not a directive node
     if (node.type !== 'Directive') {
-      return node.type === 'Text' ? node.content : '';
+      return node.type === 'Text' ? (node as TextNode).content : '';
     }
+
+    const directiveNode = node as DirectiveNode;
 
     // Validate text variables are allowed
     if (!context.allowedVariableTypes.text) {
       throw new ResolutionError(
         'Text variables are not allowed in this context',
         ResolutionErrorCode.INVALID_CONTEXT,
-        { value: node.directive.value, context }
+        { value: directiveNode.directive.value, context }
       );
     }
 
     // Get the variable name and format if present
-    const { name, format } = this.parseDirective(node);
+    const { identifier, format } = this.parseDirective(directiveNode);
 
     // Get variable value
-    const value = this.stateService.getTextVar(name);
+    const value = this.stateService.getTextVar(identifier);
 
     if (value === undefined) {
       // Special handling for ENV variables
-      if (name.startsWith('ENV_')) {
+      if (identifier.startsWith('ENV_')) {
         throw new ResolutionError(
-          `Environment variable not set: ${name}`,
+          `Environment variable not set: ${identifier}`,
           ResolutionErrorCode.UNDEFINED_VARIABLE,
-          { value: name, context }
+          { value: identifier, context }
         );
       }
       throw new ResolutionError(
-        `Undefined text variable: ${name}`,
+        `Undefined text variable: ${identifier}`,
         ResolutionErrorCode.UNDEFINED_VARIABLE,
-        { value: name, context }
+        { value: identifier, context }
       );
     }
 
@@ -57,36 +59,40 @@ export class TextResolver {
    * Extract references from a node
    */
   extractReferences(node: MeldNode): string[] {
-    if (node.type !== 'Directive' || node.directive.kind !== 'text') {
+    if (node.type !== 'Directive') {
+      return [];
+    }
+    const directiveNode = node as DirectiveNode;
+    if (directiveNode.directive.kind !== 'text') {
       return [];
     }
 
-    return [node.directive.name];
+    return [directiveNode.directive.identifier];
   }
 
   /**
-   * Parse a directive node to extract name and format
+   * Parse a directive node to extract identifier and format
    */
-  private parseDirective(node: MeldNode): { name: string; format?: string } {
-    if (!node.directive || node.directive.kind !== 'text') {
+  private parseDirective(node: DirectiveNode): { identifier: string; format?: string } {
+    if (node.directive.kind !== 'text') {
       throw new ResolutionError(
         'Invalid node type for text resolution',
         ResolutionErrorCode.SYNTAX_ERROR,
-        { value: node }
+        { value: JSON.stringify(node) }
       );
     }
 
-    const name = node.directive.name;
-    if (!name) {
+    const identifier = node.directive.identifier;
+    if (!identifier) {
       throw new ResolutionError(
-        'Text variable name is required',
+        'Text variable identifier is required',
         ResolutionErrorCode.SYNTAX_ERROR,
-        { value: node }
+        { value: JSON.stringify(node) }
       );
     }
 
     return {
-      name,
+      identifier,
       format: node.directive.format
     };
   }

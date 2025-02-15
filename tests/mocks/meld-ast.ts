@@ -23,13 +23,13 @@ export type Node = DirectiveNode | TextNode;
 export function parse(content: string): Node[] {
   // Simple mock implementation that returns a basic AST
   if (content.startsWith('@text')) {
-    const [_, name, value] = content.match(/@text\s+(\w+)\s*=\s*"([^"]*)"/) || [];
+    const [_, identifier, value] = content.match(/@text\s+identifier\s*=\s*"([^"]*)"(?:\s+value\s*=\s*([^"]*))/) || [];
     return [{
       type: 'Directive',
       directive: {
         kind: 'text',
-        name,
-        value
+        identifier,
+        value: value.replace(/^['"`]|['"`]$/g, '') // Remove quotes from value
       },
       location: {
         start: { line: 1, column: 1 },
@@ -39,12 +39,12 @@ export function parse(content: string): Node[] {
   }
 
   if (content.startsWith('@data')) {
-    const [_, name, value] = content.match(/@data\s+(\w+)\s*=\s*({[^}]*})/) || [];
+    const [_, identifier, value] = content.match(/@data\s+(\w+)\s*=\s*({[^}]*})/) || [];
     return [{
       type: 'Directive',
       directive: {
         kind: 'data',
-        name,
+        identifier,
         value: JSON.parse(value)
       },
       location: {

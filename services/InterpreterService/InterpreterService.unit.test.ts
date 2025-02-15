@@ -18,9 +18,46 @@ describe('InterpreterService Unit', () => {
     // Clear all mocks
     vi.clearAllMocks();
 
-    // Create fresh instances using vi.mocked()
-    mockDirectiveService = vi.mocked(new DirectiveService());
-    mockStateService = vi.mocked(new StateService());
+    // Create mock instances
+    mockDirectiveService = {
+      initialize: vi.fn(),
+      processDirective: vi.fn(),
+      handleDirective: vi.fn(),
+      validateDirective: vi.fn(),
+      createChildContext: vi.fn(),
+      processDirectives: vi.fn(),
+      supportsDirective: vi.fn(),
+      getSupportedDirectives: vi.fn(),
+      updateInterpreterService: vi.fn(),
+      registerHandler: vi.fn(),
+      hasHandler: vi.fn()
+    } as unknown as Vi.Mocked<DirectiveService>;
+
+    mockStateService = {
+      createChildState: vi.fn().mockReturnValue({
+        setCurrentFilePath: vi.fn(),
+        getCurrentFilePath: vi.fn(),
+        addNode: vi.fn(),
+        mergeChildState: vi.fn(),
+        clone: vi.fn(),
+        getTextVar: vi.fn(),
+        getDataVar: vi.fn(),
+        getNodes: vi.fn(),
+        setImmutable: vi.fn(),
+        setTextVar: vi.fn()
+      }),
+      addNode: vi.fn(),
+      mergeStates: vi.fn(),
+      setCurrentFilePath: vi.fn(),
+      getCurrentFilePath: vi.fn(),
+      getTextVar: vi.fn(),
+      getDataVar: vi.fn(),
+      getNodes: vi.fn(),
+      setImmutable: vi.fn(),
+      setTextVar: vi.fn(),
+      clone: vi.fn(),
+      mergeChildState: vi.fn()
+    } as unknown as Vi.Mocked<StateService>;
 
     // Initialize service
     service = new InterpreterService();
@@ -36,7 +73,7 @@ describe('InterpreterService Unit', () => {
 
     it('throws if initialized without required services', async (): Promise<void> => {
       const uninitializedService = new InterpreterService();
-      await expect(() => uninitializedService.interpret([])).rejects.toThrow(/not initialized/i);
+      await expect(() => uninitializedService.interpret([])).rejects.toThrow('InterpreterService must be initialized before use');
     });
   });
 
@@ -55,10 +92,12 @@ describe('InterpreterService Unit', () => {
     it('delegates directive nodes to directive service', async (): Promise<void> => {
       const directiveNode: MeldDirective = {
         type: 'Directive',
-        kind: 'text',
-        name: 'test',
-        value: '"value"',
-        location: { line: 1, column: 1 }
+        directive: {
+          kind: 'text',
+          identifier: 'test',
+          value: 'value'
+        },
+        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 30 } }
       };
 
       mockDirectiveService.processDirective.mockResolvedValueOnce(undefined);
@@ -136,10 +175,12 @@ describe('InterpreterService Unit', () => {
 
       const directiveNode: MeldDirective = {
         type: 'Directive',
-        kind: 'text',
-        name: 'test',
-        value: '"value"',
-        location: { line: 1, column: 1 }
+        directive: {
+          kind: 'text',
+          identifier: 'test',
+          value: 'value'
+        },
+        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 30 } }
       };
 
       await expect(service.interpret([directiveNode])).rejects.toThrow(MeldInterpreterError);
@@ -151,10 +192,12 @@ describe('InterpreterService Unit', () => {
 
       const directiveNode: MeldDirective = {
         type: 'Directive',
-        kind: 'text',
-        name: 'test',
-        value: '"value"',
-        location: { line: 1, column: 1 }
+        directive: {
+          kind: 'text',
+          identifier: 'test',
+          value: 'value'
+        },
+        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 30 } }
       };
 
       await expect(service.interpret([directiveNode])).rejects.toThrow(error);
@@ -166,10 +209,12 @@ describe('InterpreterService Unit', () => {
 
       const directiveNode: MeldDirective = {
         type: 'Directive',
-        kind: 'text',
-        name: 'test',
-        value: '"value"',
-        location: { line: 42, column: 10 }
+        directive: {
+          kind: 'text',
+          identifier: 'test',
+          value: 'value'
+        },
+        location: { start: { line: 42, column: 10 }, end: { line: 42, column: 30 } }
       };
 
       try {
@@ -178,7 +223,7 @@ describe('InterpreterService Unit', () => {
       } catch (e: unknown) {
         expect(e).toBeInstanceOf(MeldInterpreterError);
         if (e instanceof MeldInterpreterError) {
-          expect(e.location).toEqual({ line: 42, column: 10 });
+          expect(e.location).toEqual({ start: { line: 42, column: 10 }, end: { line: 42, column: 30 } });
         }
       }
     });
@@ -205,10 +250,12 @@ describe('InterpreterService Unit', () => {
     it('passes options to directive service', async () => {
       const directiveNode: MeldDirective = {
         type: 'Directive',
-        kind: 'text',
-        name: 'test',
-        value: '"value"',
-        location: { line: 1, column: 1 }
+        directive: {
+          kind: 'text',
+          identifier: 'test',
+          value: 'value'
+        },
+        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 30 } }
       };
 
       const options = {

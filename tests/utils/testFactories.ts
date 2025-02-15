@@ -99,18 +99,23 @@ export function createCodeFenceNode(
  * Create a text directive node for testing
  */
 export function createTextDirective(
-  name: string,
+  identifier: string,
   value: string,
   location?: Location
 ): DirectiveNode {
-  if (!location) return createDirectiveNode('text', { name, value });
+  // Wrap value in quotes if it's not already quoted
+  const quotedValue = value.startsWith('"') || value.startsWith("'") || value.startsWith('`')
+    ? value
+    : `"${value}"`;
+
+  if (!location) return createDirectiveNode('text', { identifier, value: quotedValue });
 
   return {
     type: 'Directive',
     directive: {
       kind: 'text',
-      name,
-      value
+      identifier,
+      value: quotedValue
     },
     location
   };
@@ -120,12 +125,12 @@ export function createTextDirective(
  * Create a data directive node for testing
  */
 export function createDataDirective(
-  name: string,
+  identifier: string,
   value: any,
   location?: Location
 ): DirectiveNode {
   if (!location) return createDirectiveNode('data', { 
-    name, 
+    identifier, 
     value: typeof value === 'string' ? value : JSON.stringify(value) 
   });
 
@@ -133,7 +138,7 @@ export function createDataDirective(
     type: 'Directive',
     directive: {
       kind: 'data',
-      name,
+      identifier,
       value: typeof value === 'string' ? value : JSON.stringify(value)
     },
     location
@@ -144,21 +149,22 @@ export function createDataDirective(
  * Create a path directive node for testing
  */
 export function createPathDirective(
-  name: string,
+  identifier: string,
   path: string,
   location: Location = DEFAULT_LOCATION
 ): DirectiveNode {
-  return createDirectiveNode('path', { name, path }, location);
+  return createDirectiveNode('path', { identifier, path }, location);
 }
 
 /**
  * Create a run directive node for testing
  */
 export function createRunDirective(
+  identifier: string,
   command: string,
   location: Location = DEFAULT_LOCATION
 ): DirectiveNode {
-  return createDirectiveNode('run', { command }, location);
+  return createDirectiveNode('run', { identifier, command }, location);
 }
 
 /**
@@ -212,13 +218,13 @@ export function createImportDirective(
  * Create a define directive node for testing
  */
 export function createDefineDirective(
-  name: string,
+  identifier: string,
   command: string,
   parameters: string[] = [],
   location: Location = DEFAULT_LOCATION
 ): DirectiveNode {
   return createDirectiveNode('define', { 
-    name, 
+    identifier, 
     command: {
       kind: 'run',
       command

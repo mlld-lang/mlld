@@ -7,19 +7,19 @@ import { MeldDirectiveError } from '../../../core/errors/MeldDirectiveError';
 export function validateTextDirective(node: DirectiveNode): void {
   const directive = node.directive as TextDirective;
   
-  // Validate name
-  if (!directive.name || typeof directive.name !== 'string') {
+  // Validate identifier
+  if (!directive.identifier || typeof directive.identifier !== 'string') {
     throw new MeldDirectiveError(
-      'Text directive requires a "name" property (string)',
+      'Text directive requires an "identifier" property (string)',
       'text',
       node.location?.start
     );
   }
   
-  // Validate name format
-  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(directive.name)) {
+  // Validate identifier format
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(directive.identifier)) {
     throw new MeldDirectiveError(
-      'Text directive name must be a valid identifier (letters, numbers, underscore, starting with letter/underscore)',
+      'Text directive identifier must be a valid identifier (letters, numbers, underscore, starting with letter/underscore)',
       'text',
       node.location?.start
     );

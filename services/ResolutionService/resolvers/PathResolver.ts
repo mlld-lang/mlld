@@ -13,47 +13,38 @@ export class PathResolver {
    * Resolve path variables in a node
    */
   async resolve(node: MeldNode, context: ResolutionContext): Promise<string> {
-    // Return text node content unchanged
-    if (node.type === 'Text') {
-      return (node as TextNode).content;
+    // Early return if not a directive node
+    if (node.type !== 'Directive') {
+      return node.type === 'Text' ? (node as TextNode).content : '';
     }
 
-    // Validate node type
-    if (node.type !== 'Directive' || (node as DirectiveNode).directive.kind !== 'path') {
-      throw new ResolutionError(
-        'Invalid node type for path resolution',
-        ResolutionErrorCode.SYNTAX_ERROR,
-        { value: String(node) }
-      );
-    }
+    const directiveNode = node as DirectiveNode;
 
     // Validate path variables are allowed
     if (!context.allowedVariableTypes.path) {
       throw new ResolutionError(
         'Path variables are not allowed in this context',
         ResolutionErrorCode.INVALID_CONTEXT,
-        { value: (node as DirectiveNode).directive.value, context }
+        { value: directiveNode.directive.value, context }
       );
     }
 
-    // Get the path variable name and handle aliases
-    const { name } = this.parseDirective(node as DirectiveNode);
-
-    // Handle special aliases
-    const resolvedName = this.resolveAlias(name);
+    // Get the variable identifier and resolve any aliases
+    const { identifier } = this.parseDirective(directiveNode);
+    const resolvedIdentifier = this.resolveAlias(identifier);
 
     // Get variable value
-    const value = this.stateService.getPathVar(resolvedName);
+    const value = this.stateService.getPathVar(resolvedIdentifier);
 
     if (value === undefined) {
       throw new ResolutionError(
-        `Undefined path variable: ${name}`,
+        `Undefined path variable: ${identifier}`,
         ResolutionErrorCode.UNDEFINED_VARIABLE,
-        { value: name, context }
+        { value: identifier, context }
       );
     }
 
-    // Validate the resolved path
+    // Validate path against context requirements
     return this.validatePath(value, context);
   }
 
@@ -65,49 +56,45 @@ export class PathResolver {
       return [];
     }
 
-    const directiveNode = node as DirectiveNode;
-    const name = directiveNode.directive.name;
-    if (!name) return [];
-
-    // Return the resolved alias name if it's an alias
-    return [this.resolveAlias(name)];
+    const { identifier } = (node as DirectiveNode).directive;
+    return [this.resolveAlias(identifier)];
   }
 
   /**
-   * Parse a directive node to extract name
+   * Parse a directive node to extract identifier
    */
-  private parseDirective(node: DirectiveNode): { name: string } {
-    if (!node.directive || node.directive.kind !== 'path') {
+  private parseDirective(node: DirectiveNode): { identifier: string } {
+    if (node.directive.kind !== 'path') {
       throw new ResolutionError(
         'Invalid node type for path resolution',
         ResolutionErrorCode.SYNTAX_ERROR,
-        { value: String(node) }
+        { value: JSON.stringify(node) }
       );
     }
 
-    const name = node.directive.name;
-    if (!name) {
+    const identifier = node.directive.identifier;
+    if (!identifier) {
       throw new ResolutionError(
-        'Path variable name is required',
+        'Path variable identifier is required',
         ResolutionErrorCode.SYNTAX_ERROR,
-        { value: String(node) }
+        { value: JSON.stringify(node) }
       );
     }
 
-    return { name };
+    return { identifier };
   }
 
   /**
    * Resolve special path aliases
    */
-  private resolveAlias(name: string): string {
-    switch (name) {
+  private resolveAlias(identifier: string): string {
+    switch (identifier) {
       case '~':
         return 'HOMEPATH';
       case '.':
         return 'PROJECTPATH';
       default:
-        return name;
+        return identifier;
     }
   }
 

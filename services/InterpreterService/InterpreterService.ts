@@ -34,6 +34,7 @@ export class InterpreterService implements IInterpreterService {
 
     const opts = { ...DEFAULT_OPTIONS, ...options };
     let currentState = opts.initialState ?? this.stateService!.createChildState();
+    let stateSnapshot: IStateService | undefined;
 
     if (opts.filePath) {
       currentState.setCurrentFilePath(opts.filePath);
@@ -45,13 +46,39 @@ export class InterpreterService implements IInterpreterService {
     });
 
     try {
+      // Take a snapshot of initial state for rollback
+      stateSnapshot = currentState.clone();
+
       for (const node of nodes) {
-        currentState = await this.interpretNode(node, currentState);
+        try {
+          currentState = await this.interpretNode(node, currentState);
+          // Update snapshot after each successful node
+          stateSnapshot = currentState.clone();
+        } catch (error) {
+          // Roll back to last good state
+          if (stateSnapshot) {
+            currentState = stateSnapshot;
+          }
+          throw error;
+        }
       }
 
       // If mergeState is true and we have a parent state, merge back
       if (opts.mergeState && opts.initialState) {
-        await opts.initialState.mergeChildState(currentState);
+        try {
+          await opts.initialState.mergeChildState(currentState);
+        } catch (error) {
+          logger.error('Failed to merge child state', {
+            error,
+            filePath: opts.filePath
+          });
+          throw new MeldInterpreterError(
+            'Failed to merge child state',
+            'state_merge',
+            undefined,
+            { cause: error }
+          );
+        }
       }
 
       logger.debug('Interpretation completed successfully', {
@@ -66,6 +93,22 @@ export class InterpreterService implements IInterpreterService {
         filePath: opts.filePath,
         error
       });
+
+      // Enhance error with context if needed
+      if (!(error instanceof MeldInterpreterError)) {
+        throw new MeldInterpreterError(
+          error.message,
+          'interpretation',
+          undefined,
+          {
+            cause: error,
+            context: {
+              filePath: opts.filePath,
+              nodeCount: nodes.length
+            }
+          }
+        );
+      }
       throw error;
     }
   }
@@ -87,8 +130,20 @@ export class InterpreterService implements IInterpreterService {
           break;
 
         case 'Directive':
-          // Process directive using DirectiveService
-          await this.directiveService!.processDirective(node);
+          // Take state snapshot before directive processing
+          const stateSnapshot = state.clone();
+          try {
+            // Process directive using DirectiveService
+            await this.directiveService!.processDirective(node, {
+              state,
+              filePath: state.getCurrentFilePath()
+            });
+            state.addNode(node);
+          } catch (error) {
+            // Roll back state on directive error
+            state = stateSnapshot;
+            throw error;
+          }
           break;
 
         case 'CodeFence':
@@ -99,19 +154,33 @@ export class InterpreterService implements IInterpreterService {
         default:
           throw new MeldInterpreterError(
             `Unknown node type: ${node.type}`,
-            node.type,
-            node.location?.start
+            'unknown_node',
+            node.location?.start,
+            {
+              context: {
+                nodeType: node.type,
+                location: node.location
+              }
+            }
           );
       }
 
       return state;
     } catch (error) {
-      // Wrap non-MeldInterpreterErrors
+      // Enhance non-MeldInterpreterErrors with context
       if (!(error instanceof MeldInterpreterError)) {
         throw new MeldInterpreterError(
           error.message,
           node.type,
-          node.location?.start
+          node.location?.start,
+          {
+            cause: error,
+            context: {
+              nodeType: node.type,
+              location: node.location,
+              filePath: state.getCurrentFilePath()
+            }
+          }
         );
       }
       throw error;

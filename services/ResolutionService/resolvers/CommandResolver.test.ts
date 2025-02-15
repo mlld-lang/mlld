@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { CommandResolver } from './CommandResolver';
 import { IStateService } from '../../StateService/IStateService';
-import { ResolutionContext } from '../IResolutionService';
+import { ResolutionContext, ResolutionErrorCode } from '../IResolutionService';
 import { ResolutionError } from '../errors/ResolutionError';
 import { TestContext } from '../../../tests/utils/TestContext';
-import type { MeldNode, DirectiveNode, TextNode } from 'meld-spec';
+import { MeldNode, DirectiveNode, TextNode } from 'meld-spec';
 
 describe('CommandResolver', () => {
   let resolver: CommandResolver;
@@ -49,7 +49,7 @@ describe('CommandResolver', () => {
         type: 'Directive',
         directive: {
           kind: 'run',
-          name: 'simple',
+          identifier: 'simple',
           args: []
         }
       };
@@ -67,7 +67,7 @@ describe('CommandResolver', () => {
         type: 'Directive',
         directive: {
           kind: 'run',
-          name: 'echo',
+          identifier: 'echo',
           args: ['hello', 'world']
         }
       };
@@ -85,7 +85,7 @@ describe('CommandResolver', () => {
         type: 'Directive',
         directive: {
           kind: 'run',
-          name: 'echo',
+          identifier: 'echo',
           args: ['test']
         }
       };
@@ -102,14 +102,14 @@ describe('CommandResolver', () => {
   describe('error handling', () => {
     it('should throw when commands are not allowed', async () => {
       context.allowedVariableTypes.command = false;
-      const node: DirectiveNode = {
+      const node = {
         type: 'Directive',
         directive: {
           kind: 'run',
-          name: 'cmd',
-          args: []
+          identifier: 'test',
+          value: 'value'
         }
-      };
+      } as DirectiveNode;
 
       await expect(resolver.resolve(node, context))
         .rejects
@@ -117,16 +117,16 @@ describe('CommandResolver', () => {
     });
 
     it('should throw on undefined command', async () => {
-      const node: DirectiveNode = {
+      const node = {
         type: 'Directive',
         directive: {
           kind: 'run',
-          name: 'missing',
-          args: []
+          identifier: 'missing',
+          value: ''
         }
-      };
+      } as DirectiveNode;
       vi.mocked(stateService.getCommand).mockReturnValue(undefined);
-
+      
       await expect(resolver.resolve(node, context))
         .rejects
         .toThrow('Undefined command: missing');
@@ -137,7 +137,7 @@ describe('CommandResolver', () => {
         type: 'Directive',
         directive: {
           kind: 'run',
-          name: 'invalid',
+          identifier: 'invalid',
           args: []
         }
       };
@@ -155,7 +155,7 @@ describe('CommandResolver', () => {
         type: 'Directive',
         directive: {
           kind: 'run',
-          name: 'echo',
+          identifier: 'echo',
           args: ['one']
         }
       };
@@ -169,64 +169,67 @@ describe('CommandResolver', () => {
     });
 
     it('should throw on invalid node type', async () => {
-      const node: DirectiveNode = {
+      const node = {
         type: 'Directive',
         directive: {
           kind: 'text',
-          name: 'test'
+          identifier: 'test',
+          value: ''
         }
-      };
+      } as DirectiveNode;
       
       await expect(resolver.resolve(node, context))
         .rejects
         .toThrow('Invalid node type for command resolution');
     });
 
-    it('should throw on missing command name', async () => {
-      const node: DirectiveNode = {
+    it('should throw on missing command identifier', async () => {
+      const node = {
         type: 'Directive',
         directive: {
-          kind: 'run'
+          kind: 'run',
+          value: ''
         }
-      };
+      } as DirectiveNode;
       
       await expect(resolver.resolve(node, context))
         .rejects
-        .toThrow('Command name is required');
+        .toThrow('Command identifier is required');
     });
   });
 
   describe('extractReferences', () => {
-    it('should extract command name from command directive', () => {
-      const node: DirectiveNode = {
+    it('should extract command identifier from command directive', async () => {
+      const node = {
         type: 'Directive',
         directive: {
           kind: 'run',
-          name: 'test',
-          args: []
+          identifier: 'test',
+          value: ''
         }
-      };
+      } as DirectiveNode;
       const refs = resolver.extractReferences(node);
       expect(refs).toEqual(['test']);
     });
 
-    it('should return empty array for non-command directive', () => {
-      const node: DirectiveNode = {
+    it('should return empty array for non-command directive', async () => {
+      const node = {
         type: 'Directive',
         directive: {
           kind: 'text',
-          name: 'test'
+          identifier: 'test',
+          value: ''
         }
-      };
+      } as DirectiveNode;
       const refs = resolver.extractReferences(node);
       expect(refs).toEqual([]);
     });
 
-    it('should return empty array for text node', () => {
-      const node: TextNode = {
+    it('should return empty array for text node', async () => {
+      const node = {
         type: 'Text',
         content: 'no references here'
-      };
+      } as TextNode;
       const refs = resolver.extractReferences(node);
       expect(refs).toEqual([]);
     });

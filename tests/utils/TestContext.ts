@@ -4,10 +4,25 @@ import { TestSnapshot } from './TestSnapshot';
 import { FixtureManager } from './FixtureManager';
 import * as testFactories from './testFactories';
 import { ParserService } from '../../services/ParserService/ParserService';
+import { InterpreterService } from '../../services/InterpreterService/InterpreterService';
+import { DirectiveService } from '../../services/DirectiveService/DirectiveService';
+import { ValidationService } from '../../services/ValidationService/ValidationService';
+import { StateService } from '../../services/StateService/StateService';
+import { PathService } from '../../services/PathService/PathService';
+import { CircularityService } from '../../services/CircularityService/CircularityService';
+import { ResolutionService } from '../../services/ResolutionService/ResolutionService';
+import { FileSystemService } from '../../services/FileSystemService/FileSystemService';
 import type { IParserService } from '../../services/ParserService/IParserService';
+import type { IInterpreterService } from '../../services/InterpreterService/IInterpreterService';
+import type { IDirectiveService } from '../../services/DirectiveService/IDirectiveService';
+import type { IValidationService } from '../../services/ValidationService/IValidationService';
+import type { IStateService } from '../../services/StateService/IStateService';
+import type { IPathService } from '../../services/PathService/IPathService';
+import type { ICircularityService } from '../../services/CircularityService/ICircularityService';
+import type { IResolutionService } from '../../services/ResolutionService/IResolutionService';
+import type { IFileSystemService } from '../../services/FileSystemService/IFileSystemService';
 import * as fs from 'fs-extra';
 import * as path from 'path';
-import { LLMXML } from 'llmxml';
 import { filesystemLogger as logger } from '../../core/utils/logger';
 
 interface SnapshotDiff {
@@ -26,6 +41,18 @@ interface TestSnapshotInterface {
   compare(before: Map<string, string>, after: Map<string, string>): SnapshotDiff;
 }
 
+interface TestServices {
+  parser: IParserService;
+  interpreter: IInterpreterService;
+  directive: IDirectiveService;
+  validation: IValidationService;
+  state: IStateService;
+  path: IPathService;
+  circularity: ICircularityService;
+  resolution: IResolutionService;
+  filesystem: IFileSystemService;
+}
+
 /**
  * Main test context that provides access to all test utilities
  */
@@ -35,7 +62,7 @@ export class TestContext {
   public readonly fixtures: TestFixtures;
   public readonly snapshot: TestSnapshot;
   public factory: typeof testFactories;
-  private parserService: IParserService;
+  public readonly services: TestServices;
   private fixturesDir: string;
 
   constructor(fixturesDir: string = 'tests/fixtures') {
@@ -58,7 +85,49 @@ export class TestContext {
     this.snapshot = new TestSnapshot(this.fs);
 
     this.factory = testFactories;
-    this.parserService = new ParserService();
+
+    // Initialize all services
+    const validation = new ValidationService();
+    const state = new StateService();
+    const filesystem = new FileSystemService(this.fs);
+    const path = new PathService();
+    path.initialize(filesystem);
+    const parser = new ParserService();
+    const circularity = new CircularityService();
+    const interpreter = new InterpreterService();
+    const resolution = new ResolutionService(state, filesystem, parser);
+
+    // Initialize directive service
+    const directive = new DirectiveService();
+    directive.initialize(
+      validation,
+      state,
+      path,
+      filesystem,
+      parser,
+      interpreter,
+      circularity,
+      resolution
+    );
+
+    // Initialize interpreter service
+    interpreter.initialize(directive, state);
+
+    // Update directive service with interpreter reference
+    directive.updateInterpreterService(interpreter);
+
+    // Expose services
+    this.services = {
+      parser,
+      interpreter,
+      directive,
+      validation,
+      state,
+      path,
+      circularity,
+      resolution,
+      filesystem
+    };
   }
 
   /**
@@ -107,17 +176,18 @@ export class TestContext {
    * Parse meld content using meld-ast
    */
   parseMeld(content: string) {
-    return this.parserService.parse(content);
+    return this.services.parser.parse(content);
   }
 
   parseMeldWithLocations(content: string, filePath?: string) {
-    return this.parserService.parseWithLocations(content, filePath);
+    return this.services.parser.parseWithLocations(content, filePath);
   }
 
   /**
    * Convert content to XML using llmxml
    */
   async convertToXml(content: string) {
+    const { LLMXML } = await import('llmxml');
     const llmxml = new LLMXML();
     return llmxml.toXML(content);
   }

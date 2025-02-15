@@ -190,4 +190,38 @@ export class FileSystemService implements IFileSystemService {
   isTestMode(): boolean {
     return this.testMode;
   }
+
+  // Command execution
+  async executeCommand(command: string, options?: { cwd?: string }): Promise<CommandResult> {
+    if (this.testMode) {
+      return { stdout: '', stderr: '' };
+    }
+    throw new Error('executeCommand not implemented in production mode');
+  }
+
+  getCwd(): string {
+    if (this.testMode) {
+      return '/project';
+    }
+    return process.cwd();
+  }
+
+  // Mock file system (for testing)
+  mockFile(path: string, content: string): void {
+    if (this.testMode && this.testFs) {
+      this.testFs.writeFile(this.normalize(path), content);
+    }
+  }
+
+  mockDir(path: string): void {
+    if (this.testMode && this.testFs) {
+      this.testFs.mkdir(this.normalize(path));
+    }
+  }
+
+  clearMocks(): void {
+    if (this.testMode && this.testFs) {
+      this.testFs.initialize();
+    }
+  }
 } 

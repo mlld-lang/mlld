@@ -22,7 +22,7 @@ export interface TextNode {
 export type MeldNode = DirectiveNode | TextNode;
 
 export interface DirectiveKind {
-  name: DirectiveKindString;
+  identifier: DirectiveKindString;
   properties: {
     [key: string]: {
       type: 'string' | 'number' | 'boolean' | 'object' | 'array';
@@ -34,41 +34,42 @@ export interface DirectiveKind {
 
 export const DIRECTIVE_KINDS: Record<DirectiveKindString, DirectiveKind> = {
   text: {
-    name: 'text',
+    identifier: 'text',
     properties: {
-      name: { type: 'string', required: true },
+      identifier: { type: 'string', required: true },
       value: { type: 'string', required: true }
     }
   },
   data: {
-    name: 'data',
+    identifier: 'data',
     properties: {
-      name: { type: 'string', required: true },
+      identifier: { type: 'string', required: true },
       value: { type: 'object', required: true }
     }
   },
   define: {
-    name: 'define',
+    identifier: 'define',
     properties: {
-      name: { type: 'string', required: true },
+      identifier: { type: 'string', required: true },
       body: { type: 'string', required: true }
     }
   },
   run: {
-    name: 'run',
+    identifier: 'run',
     properties: {
+      identifier: { type: 'string', required: true },
       command: { type: 'string', required: true }
     }
   },
   import: {
-    name: 'import',
+    identifier: 'import',
     properties: {
       from: { type: 'string', required: true },
       variables: { type: 'object', required: false }
     }
   },
   embed: {
-    name: 'embed',
+    identifier: 'embed',
     properties: {
       path: { type: 'string', required: true },
       section: { type: 'string', required: false },
@@ -78,23 +79,23 @@ export const DIRECTIVE_KINDS: Record<DirectiveKindString, DirectiveKind> = {
     }
   },
   path: {
-    name: 'path',
+    identifier: 'path',
     properties: {
-      name: { type: 'string', required: true },
+      identifier: { type: 'string', required: true },
       value: { type: 'string', required: true }
     }
   },
   api: {
-    name: 'api',
+    identifier: 'api',
     properties: {
-      name: { type: 'string', required: true },
+      identifier: { type: 'string', required: true },
       endpoint: { type: 'string', required: true }
     }
   },
   call: {
-    name: 'call',
+    identifier: 'call',
     properties: {
-      name: { type: 'string', required: true },
+      identifier: { type: 'string', required: true },
       args: { type: 'object', required: false }
     }
   }

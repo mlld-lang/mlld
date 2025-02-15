@@ -1,10 +1,10 @@
 import { IStateService } from '../../StateService/IStateService';
 import { ResolutionContext, ResolutionErrorCode } from '../IResolutionService';
 import { ResolutionError } from '../errors/ResolutionError';
-import { MeldNode, DirectiveNode, TextNode } from 'meld-spec';
+import type { MeldNode, DirectiveNode, TextNode } from 'meld-spec';
 
 /**
- * Handles resolution of command references ($command(args))
+ * Handles resolution of command references ($run)
  */
 export class CommandResolver {
   constructor(private stateService: IStateService) {}
@@ -13,93 +13,62 @@ export class CommandResolver {
    * Resolve command references in a node
    */
   async resolve(node: MeldNode, context: ResolutionContext): Promise<string> {
-    // Return text node content unchanged
-    if (node.type === 'Text') {
-      return (node as TextNode).content;
+    // Early return if not a directive node
+    if (node.type !== 'Directive') {
+      return node.type === 'Text' ? (node as TextNode).content : '';
     }
 
-    // Validate node type
     const directiveNode = node as DirectiveNode;
-    if (node.type !== 'Directive' || directiveNode.directive.kind !== 'run') {
-      throw new ResolutionError(
-        'Invalid node type for command resolution',
-        ResolutionErrorCode.SYNTAX_ERROR,
-        { value: JSON.stringify(directiveNode) }
-      );
-    }
 
-    // Check if commands are allowed in this context
+    // Validate command variables are allowed
     if (!context.allowedVariableTypes.command) {
       throw new ResolutionError(
-        'Command references are not allowed in this context',
+        'Command variables are not allowed in this context',
         ResolutionErrorCode.INVALID_CONTEXT,
         { value: directiveNode.directive.value, context }
       );
     }
 
-    // Validate command name
-    if (!directiveNode.directive.name) {
+    // Validate command identifier
+    if (!directiveNode.directive.identifier) {
       throw new ResolutionError(
-        'Command name is required',
+        'Command identifier is required',
         ResolutionErrorCode.SYNTAX_ERROR,
-        { value: JSON.stringify(directiveNode) }
+        { value: JSON.stringify(node) }
       );
     }
 
-    // Get command definition
-    const cmdDef = this.stateService.getCommand(directiveNode.directive.name);
-    if (!cmdDef) {
+    // Get command value
+    const command = this.stateService.getCommand(directiveNode.directive.identifier);
+    if (!command) {
       throw new ResolutionError(
-        `Undefined command: ${directiveNode.directive.name}`,
+        `Undefined command: ${directiveNode.directive.identifier}`,
         ResolutionErrorCode.UNDEFINED_VARIABLE,
-        { value: directiveNode.directive.name, context }
+        { value: directiveNode.directive.identifier, context }
       );
     }
 
-    // Validate command format
-    if (!cmdDef.command.startsWith('@run [')) {
+    // Extract the actual command from the @run format
+    const match = command.command.match(/^@run\s*\[(.*)\]$/);
+    if (!match) {
       throw new ResolutionError(
         'Invalid command definition: must start with @run [',
-        ResolutionErrorCode.SYNTAX_ERROR,
-        { value: cmdDef.command, context }
+        ResolutionErrorCode.INVALID_COMMAND,
+        { value: command.command }
       );
     }
 
-    // Extract command template
-    const template = cmdDef.command.slice(6, -1);
-
-    // Count expected parameters
-    const paramMatches = template.match(/\${[^}]+}/g) || [];
-    const expectedParams = paramMatches.length;
-
-    // Validate parameter count
-    const actualParams = directiveNode.directive.args?.length || 0;
-    if (actualParams !== expectedParams) {
-      throw new ResolutionError(
-        `Command ${directiveNode.directive.name} expects ${expectedParams} parameters but got ${actualParams}`,
-        ResolutionErrorCode.SYNTAX_ERROR,
-        { value: directiveNode.directive.value, context }
-      );
-    }
-
-    // Replace parameters in template
-    let result = template;
-    paramMatches.forEach((param, index) => {
-      result = result.replace(param, directiveNode.directive.args[index]);
-    });
-
-    return result;
+    return match[1];
   }
 
   /**
    * Extract references from a node
    */
   extractReferences(node: MeldNode): string[] {
-    if (node.type !== 'Directive') return [];
-    const directiveNode = node as DirectiveNode;
-    if (directiveNode.directive.kind !== 'run' || !directiveNode.directive.name) {
+    if (node.type !== 'Directive' || (node as DirectiveNode).directive.kind !== 'run') {
       return [];
     }
-    return [directiveNode.directive.name];
+
+    return [(node as DirectiveNode).directive.identifier];
   }
 } 

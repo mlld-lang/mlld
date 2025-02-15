@@ -1,10 +1,10 @@
+import { MeldNode, DirectiveNode, TextNode } from 'meld-spec';
 import { IStateService } from '../../StateService/IStateService';
 import { ResolutionContext, ResolutionErrorCode } from '../IResolutionService';
 import { ResolutionError } from '../errors/ResolutionError';
-import { MeldNode } from 'meld-spec';
 
 /**
- * Handles resolution of data variables (#{data.field})
+ * Handles resolution of data variables ($data)
  */
 export class DataResolver {
   constructor(private stateService: IStateService) {}
@@ -15,121 +15,125 @@ export class DataResolver {
   async resolve(node: MeldNode, context: ResolutionContext): Promise<string> {
     // Early return if not a directive node
     if (node.type !== 'Directive') {
-      return node.type === 'Text' ? node.content : '';
+      return node.type === 'Text' ? (node as TextNode).content : '';
     }
+
+    const directiveNode = node as DirectiveNode;
 
     // Validate data variables are allowed
     if (!context.allowedVariableTypes.data) {
       throw new ResolutionError(
         'Data variables are not allowed in this context',
         ResolutionErrorCode.INVALID_CONTEXT,
-        { value: node.directive.value, context }
+        { value: directiveNode.directive.value, context }
       );
     }
 
-    // Get the variable name and field path if present
-    const { name, fields } = this.parseDirective(node);
+    // Get the variable identifier and field path
+    const { identifier, field } = this.parseDirective(directiveNode);
 
     // Get variable value
-    const value = this.stateService.getDataVar(name);
+    const value = this.stateService.getDataVar(identifier);
 
     if (value === undefined) {
       throw new ResolutionError(
-        `Undefined data variable: ${name}`,
+        `Undefined data variable: ${identifier}`,
         ResolutionErrorCode.UNDEFINED_VARIABLE,
-        { value: name, context }
+        { value: identifier, context }
       );
     }
 
-    // If no fields to access, convert value to string
-    if (!fields || fields.length === 0) {
-      return this.convertToString(value);
+    // Handle field access if present
+    if (field) {
+      return this.resolveField(value, field, identifier);
     }
 
-    // Validate field access is allowed
-    if (!context.allowDataFields) {
-      throw new ResolutionError(
-        'Field access is not allowed in this context',
-        ResolutionErrorCode.FIELD_ACCESS_ERROR,
-        { value: node.directive.value, context }
-      );
-    }
-
-    // Access fields
-    let current = value;
-    for (const field of fields) {
-      if (current === null || current === undefined) {
-        throw new ResolutionError(
-          `Cannot access field '${field}' of undefined or null`,
-          ResolutionErrorCode.FIELD_ACCESS_ERROR,
-          { value: node.directive.value, context }
-        );
-      }
-
-      if (typeof current !== 'object') {
-        throw new ResolutionError(
-          `Cannot access field '${field}' of non-object value`,
-          ResolutionErrorCode.FIELD_ACCESS_ERROR,
-          { value: node.directive.value, context }
-        );
-      }
-
-      if (!(field in current)) {
-        throw new ResolutionError(
-          `Field not found: ${field} in ${name}.${fields.join('.')}`,
-          ResolutionErrorCode.FIELD_ACCESS_ERROR,
-          { value: node.directive.value, context }
-        );
-      }
-
-      current = current[field];
-    }
-
-    return this.convertToString(current);
+    // Convert value to string
+    return this.stringifyValue(value);
   }
 
   /**
    * Extract references from a node
    */
   extractReferences(node: MeldNode): string[] {
-    if (node.type !== 'Directive' || node.directive.kind !== 'data') {
+    if (node.type !== 'Directive' || (node as DirectiveNode).directive.kind !== 'data') {
       return [];
     }
 
-    return [node.directive.name];
+    return [(node as DirectiveNode).directive.identifier];
   }
 
   /**
-   * Parse a directive node to extract name and fields
+   * Parse a directive node to extract identifier and optional field
    */
-  private parseDirective(node: MeldNode): { name: string; fields?: string[] } {
-    if (!node.directive || node.directive.kind !== 'data') {
+  private parseDirective(node: DirectiveNode): { identifier: string; field?: string } {
+    if (node.directive.kind !== 'data') {
       throw new ResolutionError(
         'Invalid node type for data resolution',
         ResolutionErrorCode.SYNTAX_ERROR,
-        { value: node }
+        { value: JSON.stringify(node) }
       );
     }
 
-    const name = node.directive.name;
-    if (!name) {
+    const identifier = node.directive.identifier;
+    if (!identifier) {
       throw new ResolutionError(
-        'Data variable name is required',
+        'Data variable identifier is required',
         ResolutionErrorCode.SYNTAX_ERROR,
-        { value: node }
+        { value: JSON.stringify(node) }
       );
     }
 
-    // Parse field path if present
-    const fields = node.directive.fields?.split('.') ?? [];
+    // Check for field access
+    const parts = identifier.split('.');
+    if (parts.length > 1) {
+      return {
+        identifier: parts[0],
+        field: parts.slice(1).join('.')
+      };
+    }
 
-    return { name, fields };
+    return { identifier };
   }
 
   /**
-   * Convert a value to string representation
+   * Resolve a field path in a data value
    */
-  private convertToString(value: any): string {
+  private resolveField(value: any, field: string, identifier: string): string {
+    if (value === null || value === undefined) {
+      throw new ResolutionError(
+        `Cannot access field '${field}' of undefined or null`,
+        ResolutionErrorCode.FIELD_ACCESS_ERROR,
+        { value: identifier }
+      );
+    }
+
+    if (typeof value !== 'object') {
+      throw new ResolutionError(
+        `Cannot access field '${field}' of non-object value`,
+        ResolutionErrorCode.FIELD_ACCESS_ERROR,
+        { value: identifier }
+      );
+    }
+
+    const fieldValue = field.split('.').reduce((obj, key) => {
+      if (obj === undefined || obj === null) {
+        throw new ResolutionError(
+          `Field not found: ${key} in ${identifier}.${field}`,
+          ResolutionErrorCode.FIELD_ACCESS_ERROR,
+          { value: identifier }
+        );
+      }
+      return obj[key];
+    }, value);
+
+    return this.stringifyValue(fieldValue);
+  }
+
+  /**
+   * Convert a value to string format
+   */
+  private stringifyValue(value: any): string {
     if (value === null || value === undefined) {
       return '';
     }

@@ -1,110 +1,142 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ParserService } from './ParserService';
 import { MeldParseError } from '../../core/errors/MeldParseError';
-import type { MeldNode } from 'meld-spec';
+import type { MeldNode, DirectiveNode, TextNode } from 'meld-spec';
 import type { Location, Position } from '../../core/types';
 import { createLocation, createPosition } from '../../tests/utils/testFactories';
 
+// Define a type that combines the meld-spec Location with our filePath
+type LocationWithFilePath = {
+  start: { line: number; column: number };
+  end: { line: number; column: number };
+  filePath?: string;
+};
+
+// Helper function to create test locations
+function createTestLocation(startLine: number, startColumn: number, endLine: number, endColumn: number, filePath?: string): Location {
+  return {
+    start: { line: startLine, column: startColumn },
+    end: { line: endLine, column: endColumn },
+    filePath
+  };
+}
+
+// Type guard for Location
+function isLocation(value: any): value is Location {
+  return (
+    value &&
+    typeof value === 'object' &&
+    'start' in value &&
+    'end' in value &&
+    'filePath' in value
+  );
+}
+
+// Type guard for checking if a location has a filePath
+function hasFilePath(location: any): location is Location {
+  return (
+    location &&
+    typeof location === 'object' &&
+    'start' in location &&
+    'end' in location &&
+    'filePath' in location
+  );
+}
+
 describe('ParserService', () => {
-  let parser: ParserService;
-  let parseSpy: any; // TODO: Fix type when vitest types are updated
+  let service: ParserService;
 
   beforeEach(() => {
-    parser = new ParserService();
-    // @ts-ignore - access private method for testing
-    parseSpy = vi.spyOn(parser, 'parseContent');
+    service = new ParserService();
   });
 
   describe('parse', () => {
-    it('should handle empty content', async () => {
-      await expect(parser.parse('')).rejects.toThrow(MeldParseError);
-      await expect(parser.parse('')).rejects.toThrow('Parse error: Empty content provided');
-    });
-
-    it('should parse simple text content', async () => {
+    it('should parse text content', async () => {
       const content = 'Hello world';
       const mockResult: MeldNode[] = [{
         type: 'Text',
         content: 'Hello world',
-        location: createLocation(1, 1, 1, 11)
-      }];
+        location: {
+          start: { line: 1, column: 1 },
+          end: { line: 1, column: 11 }
+        }
+      } as TextNode];
 
-      parseSpy.mockResolvedValue(mockResult);
-      const result = await parser.parse(content);
-      
-      expect(result).toHaveLength(1);
-      expect(result[0]).toMatchObject(mockResult[0]);
+      const result = await service.parse(content);
+      expect(result).toEqual(mockResult);
     });
 
     it('should parse directive content', async () => {
-      const content = '@text greeting = "Hello"';
+      const content = '@text identifier="greeting" value="Hello"';
       const mockResult: MeldNode[] = [{
         type: 'Directive',
         directive: {
           kind: 'text',
-          name: 'greeting',
+          identifier: 'greeting',
           value: 'Hello'
         },
-        location: createLocation(1, 1, 1, 24)
-      }];
+        location: {
+          start: { line: 1, column: 1 },
+          end: { line: 1, column: 24 }
+        }
+      } as DirectiveNode];
 
-      parseSpy.mockResolvedValue(mockResult);
-      const result = await parser.parse(content);
-      
-      expect(result).toHaveLength(1);
-      expect(result[0]).toMatchObject(mockResult[0]);
+      const result = await service.parse(content);
+      expect(result).toEqual(mockResult);
     });
 
-    it('should parse mixed content with correct locations', async () => {
-      const content = `
-        Hello world
-        @text greeting = "Hi"
-        More text
-      `.trim();
-      
+    it('should parse mixed content', async () => {
+      const content = 'Hello world\n@text identifier="greeting" value="Hi"\nMore text';
       const mockResult: MeldNode[] = [{
         type: 'Text',
         content: 'Hello world',
-        location: createLocation(1, 1, 1, 11)
-      }, {
+        location: {
+          start: { line: 1, column: 1 },
+          end: { line: 1, column: 11 }
+        }
+      } as TextNode, {
         type: 'Directive',
         directive: {
           kind: 'text',
-          name: 'greeting',
+          identifier: 'greeting',
           value: 'Hi'
         },
-        location: createLocation(2, 1, 2, 20)
-      }, {
+        location: {
+          start: { line: 2, column: 1 },
+          end: { line: 2, column: 20 }
+        }
+      } as DirectiveNode, {
         type: 'Text',
         content: 'More text',
-        location: createLocation(3, 1, 3, 9)
-      }];
+        location: {
+          start: { line: 3, column: 1 },
+          end: { line: 3, column: 9 }
+        }
+      } as TextNode];
 
-      parseSpy.mockResolvedValue(mockResult);
-      const result = await parser.parse(content);
-      
-      expect(result).toHaveLength(3);
-      expect(result).toMatchObject(mockResult);
+      const result = await service.parse(content);
+      expect(result).toEqual(mockResult);
+    });
+
+    it('should handle empty content', async () => {
+      await expect(service.parse('')).rejects.toThrow(MeldParseError);
+      await expect(service.parse('')).rejects.toThrow('Parse error: Empty content provided');
     });
 
     it('should throw MeldParseError with location for invalid directive', async () => {
       const content = '@invalid xyz';
       const position = createPosition(1, 1);
       
-      parseSpy.mockRejectedValue(new MeldParseError('Invalid directive', position));
-      
-      await expect(parser.parse(content)).rejects.toThrow(MeldParseError);
-      await expect(parser.parse(content)).rejects.toThrow('Parse error: Invalid directive at line 1, column 1');
+      await expect(service.parse(content)).rejects.toThrow(MeldParseError);
+      await expect(service.parse(content)).rejects.toThrow('Parse error: Invalid directive at line 1, column 1');
     });
 
     it('should throw MeldParseError for malformed directive', async () => {
       const content = '@text greeting = "unclosed string';
       const position = createPosition(1, 1);
       
-      parseSpy.mockRejectedValue(new MeldParseError('Unterminated string', position));
-      
-      await expect(parser.parse(content)).rejects.toThrow(MeldParseError);
-      await expect(parser.parse(content)).rejects.toMatchObject({
+      await expect(service.parse(content)).rejects.toThrow(MeldParseError);
+      await expect(service.parse(content)).rejects.toMatchObject({
         message: expect.stringContaining('Unterminated string'),
         location: {
           start: position,
@@ -115,63 +147,81 @@ describe('ParserService', () => {
   });
 
   describe('parseWithLocations', () => {
-    it('should add filePath to existing locations', async () => {
-      const content = 'Hello\n@text greeting = "Hi"';
+    it('should include file path in locations', async () => {
+      const content = 'Hello\n@text identifier="greeting" value="Hi"';
+      const filePath = 'test.meld';
       const mockResult: MeldNode[] = [{
         type: 'Text',
         content: 'Hello',
-        location: createLocation(1, 1, 1, 5)
-      }, {
+        location: {
+          start: { line: 1, column: 1 },
+          end: { line: 1, column: 5 }
+        }
+      } as TextNode, {
         type: 'Directive',
         directive: {
           kind: 'text',
-          name: 'greeting',
+          identifier: 'greeting',
           value: 'Hi'
         },
-        location: createLocation(2, 1, 2, 20)
-      }];
+        location: {
+          start: { line: 2, column: 1 },
+          end: { line: 2, column: 20 }
+        }
+      } as DirectiveNode];
 
-      parseSpy.mockResolvedValue(mockResult);
-      const result = await parser.parseWithLocations(content, 'test.meld');
+      const result = await service.parseWithLocations(content, filePath);
       
+      // Verify that filePath is added to locations
       expect(result).toHaveLength(2);
-      
-      // Both nodes should have locations with filePath
-      for (const node of result) {
+      result.forEach(node => {
         expect(node.location).toBeDefined();
-        expect(node.location?.filePath).toBe('test.meld');
-        // Original location info should be preserved
-        expect(node.location?.start).toEqual(expect.objectContaining({
-          line: expect.any(Number),
-          column: expect.any(Number)
-        }));
-        expect(node.location?.end).toEqual(expect.objectContaining({
-          line: expect.any(Number),
-          column: expect.any(Number)
-        }));
-      }
+        if (node.location) {
+          expect(node.location.start).toBeDefined();
+          expect(node.location.end).toBeDefined();
+          expect(node.location.start.line).toBeGreaterThan(0);
+          expect(node.location.start.column).toBeGreaterThan(0);
+          expect(node.location.end.line).toBeGreaterThan(0);
+          expect(node.location.end.column).toBeGreaterThan(0);
+          expect(hasFilePath(node.location)).toBe(true);
+          if (hasFilePath(node.location)) {
+            expect(node.location.filePath).toBe(filePath);
+          }
+        }
+      });
+
+      // Verify the rest of the node structure matches except for filePath
+      const resultWithoutFilePath = result.map(node => ({
+        ...node,
+        location: node.location ? {
+          start: node.location.start,
+          end: node.location.end
+        } : undefined
+      }));
+      expect(resultWithoutFilePath).toEqual(mockResult);
     });
 
     it('should preserve original locations when adding filePath', async () => {
-      const content = '@text greeting = "Hi"';
-      const location = createLocation(1, 1, 1, 20);
+      const content = '@text identifier="greeting" value="Hi"';
+      const location = createTestLocation(1, 1, 1, 20);
+      const filePath = 'test.meld';
+      location.filePath = filePath;
       const mockResult: MeldNode[] = [{
         type: 'Directive',
         directive: {
           kind: 'text',
-          name: 'greeting',
+          identifier: 'greeting',
           value: 'Hi'
         },
         location
-      }];
+      } as DirectiveNode];
 
-      parseSpy.mockResolvedValue(mockResult);
-      const result = await parser.parseWithLocations(content, 'test.meld');
+      const result = await service.parseWithLocations(content, filePath);
       
       expect(result[0].location).toMatchObject({
         start: location.start,
         end: location.end,
-        filePath: 'test.meld'
+        filePath
       });
     });
 
@@ -179,9 +229,7 @@ describe('ParserService', () => {
       const content = '@invalid xyz';
       const position = createPosition(1, 1);
       
-      parseSpy.mockRejectedValue(new MeldParseError('Invalid directive', position));
-      
-      await expect(parser.parseWithLocations(content, 'test.meld')).rejects.toMatchObject({
+      await expect(service.parseWithLocations(content, 'test.meld')).rejects.toMatchObject({
         message: expect.stringContaining('Invalid directive'),
         location: {
           start: position,
@@ -192,7 +240,7 @@ describe('ParserService', () => {
     });
 
     it('should handle empty content with filePath', async () => {
-      await expect(parser.parseWithLocations('', 'test.meld')).rejects.toMatchObject({
+      await expect(service.parseWithLocations('', 'test.meld')).rejects.toMatchObject({
         message: expect.stringContaining('Empty content provided'),
         location: expect.objectContaining({
           filePath: 'test.meld'
@@ -203,17 +251,15 @@ describe('ParserService', () => {
 
   describe('error handling', () => {
     it('should wrap unknown errors in MeldParseError', async () => {
-      parseSpy.mockRejectedValue(new Error('Unknown error'));
-      await expect(parser.parse('content')).rejects.toThrow(MeldParseError);
-      await expect(parser.parse('content')).rejects.toThrow('Parse error: Unknown error');
+      await expect(service.parse('content')).rejects.toThrow(MeldParseError);
+      await expect(service.parse('content')).rejects.toThrow('Parse error: Unknown error');
     });
 
     it('should preserve MeldParseError instances', async () => {
       const position = createPosition(1, 1);
       const originalError = new MeldParseError('Test error', position);
 
-      parseSpy.mockRejectedValue(originalError);
-      await expect(parser.parse('content')).rejects.toThrow(originalError);
+      await expect(service.parse('content')).rejects.toThrow(originalError);
     });
 
     it('should convert ParseError to MeldParseError with location', async () => {
@@ -225,8 +271,7 @@ describe('ParserService', () => {
         }
       };
 
-      parseSpy.mockRejectedValue(parseError);
-      await expect(parser.parse('content')).rejects.toMatchObject({
+      await expect(service.parse('content')).rejects.toMatchObject({
         message: expect.stringContaining('Parse failed'),
         location: {
           start: { line: 1, column: 1 },

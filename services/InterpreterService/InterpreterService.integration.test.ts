@@ -1,72 +1,96 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { TestContext } from '../../tests/utils';
-import { InterpreterService } from './InterpreterService';
-import { DirectiveService } from '../DirectiveService/DirectiveService';
-import { ValidationService } from '../ValidationService/ValidationService';
-import { StateService } from '../StateService/StateService';
-import { PathService } from '../PathService/PathService';
-import { FileSystemService } from '../FileSystemService/FileSystemService';
-import { ParserService } from '../ParserService/ParserService';
-import { CircularityService } from '../CircularityService/CircularityService';
 import { MeldInterpreterError } from '../../core/errors/MeldInterpreterError';
+import type { TextNode } from 'meld-spec';
 
 describe('InterpreterService Integration', () => {
   let context: TestContext;
-  let service: InterpreterService;
-  let stateService: StateService;
-  let directiveService: DirectiveService;
 
   beforeEach(async () => {
-    // Initialize test context
     context = new TestContext();
     await context.initialize();
     await context.fixtures.load('interpreterTestProject');
-
-    // Initialize all required services
-    const validationService = new ValidationService();
-    stateService = new StateService();
-    const pathService = new PathService(context.fs);
-    const fileSystemService = new FileSystemService(context.fs);
-    const parserService = new ParserService();
-    const circularityService = new CircularityService();
-
-    // Initialize directive service first
-    directiveService = new DirectiveService();
-    directiveService.initialize(
-      validationService,
-      stateService,
-      pathService,
-      fileSystemService,
-      parserService,
-      service, // This will be set after interpreter service is created
-      circularityService
-    );
-
-    // Initialize interpreter service
-    service = new InterpreterService();
-    service.initialize(directiveService, stateService);
-
-    // Update directive service with interpreter reference
-    directiveService.updateInterpreterService(service);
   });
 
   afterEach(async () => {
     await context.cleanup();
   });
 
+  it('interprets text nodes', async () => {
+    const content = 'Hello world';
+    const nodes = await context.services.parser.parse(content);
+    const result = await context.services.interpreter.interpret(nodes);
+    const resultNodes = result.getNodes();
+    expect(resultNodes).toHaveLength(1);
+    expect(resultNodes[0].type).toBe('Text');
+    expect((resultNodes[0] as TextNode).content).toBe('Hello world');
+  });
+
+  it('interprets directive nodes', async () => {
+    const content = '@text identifier="test" value="Hello"';
+    const nodes = await context.services.parser.parse(content);
+    const result = await context.services.interpreter.interpret(nodes);
+    const value = result.getTextVar('test');
+    expect(value).toBe('Hello');
+  });
+
+  it('handles nested interpretation', async () => {
+    const content = [
+      '@text identifier="greeting" value="Hello"',
+      '@text identifier="name" value="World"',
+      '@text identifier="message" value="${greeting} ${name}!"'
+    ].join('\n');
+    
+    const nodes = await context.services.parser.parse(content);
+    const result = await context.services.interpreter.interpret(nodes);
+    const value = result.getTextVar('message');
+    expect(value).toBe('Hello World!');
+  });
+
+  it('rolls back state on error', async () => {
+    const content = [
+      '@text identifier="test1" value="value1"',
+      '@text identifier="test2" value="${invalid}"'
+    ].join('\n');
+    
+    const nodes = await context.services.parser.parse(content);
+    
+    await expect(context.services.interpreter.interpret(nodes)).rejects.toThrow();
+    
+    const state = context.services.state.createChildState();
+    const value = state.getTextVar('test1');
+    expect(value).toBeUndefined();
+  });
+
+  it('merges child state back to parent', async () => {
+    const content = '@text identifier="child" value="value"';
+    const parentState = context.services.state.createChildState();
+    const nodes = await context.services.parser.parse(content);
+    await context.services.interpreter.interpret(nodes, { initialState: parentState, mergeState: true });
+    expect(parentState.getTextVar('child')).toBe('value');
+  });
+
+  it('maintains isolation with mergeState: false', async () => {
+    const content = '@text identifier="isolated" value="value"';
+    const parentState = context.services.state.createChildState();
+    const nodes = await context.services.parser.parse(content);
+    await context.services.interpreter.interpret(nodes, { initialState: parentState, mergeState: false });
+    expect(parentState.getTextVar('isolated')).toBeUndefined();
+  });
+
   describe('Basic interpretation', () => {
     it('interprets a simple document', async () => {
       const content = await context.fs.readFile('project/src/main.meld');
-      const nodes = context.parseMeld(content);
-      const state = await service.interpret(nodes);
+      const nodes = await context.services.parser.parse(content);
+      const state = await context.services.interpreter.interpret(nodes);
 
       expect(state.getTextVar('root')).toBe('Root');
     });
 
     it('maintains node order in state', async () => {
       const content = await context.fs.readFile('project/src/main.meld');
-      const nodes = context.parseMeld(content);
-      const state = await service.interpret(nodes);
+      const nodes = await context.services.parser.parse(content);
+      const state = await context.services.interpreter.interpret(nodes);
 
       const stateNodes = state.getNodes();
       expect(stateNodes[0].type).toBe('Directive'); // @text directive
@@ -77,10 +101,9 @@ describe('InterpreterService Integration', () => {
   describe('Nested imports', () => {
     it('processes nested imports with correct state inheritance', async () => {
       const content = await context.fs.readFile('project/src/main.meld');
-      const nodes = context.parseMeld(content);
-      const state = await service.interpret(nodes);
+      const nodes = await context.services.parser.parse(content);
+      const state = await context.services.interpreter.interpret(nodes);
 
-      // Variables from all levels should be available
       expect(state.getTextVar('root')).toBe('Root');     // from main.meld
       expect(state.getTextVar('child')).toBe('Child');   // from child.meld
       expect(state.getTextVar('common')).toBe('Shared'); // from common.meld
@@ -90,12 +113,11 @@ describe('InterpreterService Integration', () => {
 
     it('maintains correct file paths during interpretation', async () => {
       const content = await context.fs.readFile('project/src/main.meld');
-      const nodes = context.parseMeld(content);
-      const state = await service.interpret(nodes, {
+      const nodes = await context.services.parser.parse(content);
+      const state = await context.services.interpreter.interpret(nodes, {
         filePath: 'project/src/main.meld'
       });
 
-      // The final current path should be back to the root file
       expect(state.getCurrentFilePath()).toBe('project/src/main.meld');
     });
   });
@@ -103,8 +125,8 @@ describe('InterpreterService Integration', () => {
   describe('Section embedding', () => {
     it('embeds and interprets specific sections', async () => {
       const content = await context.fs.readFile('project/src/complex.meld');
-      const nodes = context.parseMeld(content);
-      const state = await service.interpret(nodes);
+      const nodes = await context.services.parser.parse(content);
+      const state = await context.services.interpreter.interpret(nodes);
 
       expect(state.getTextVar('base')).toBe('Base');
       expect(state.getTextVar('inSection')).toBe('Inside');
@@ -115,8 +137,8 @@ describe('InterpreterService Integration', () => {
   describe('Variable resolution', () => {
     it('resolves variables during interpretation', async () => {
       const content = await context.fs.readFile('project/src/variables.meld');
-      const nodes = context.parseMeld(content);
-      const state = await service.interpret(nodes);
+      const nodes = await context.services.parser.parse(content);
+      const state = await context.services.interpreter.interpret(nodes);
 
       expect(state.getTextVar('greeting')).toBe('Hello World!');
       expect(state.getDataVar('user')).toEqual({ name: 'World' });
@@ -126,77 +148,118 @@ describe('InterpreterService Integration', () => {
   describe('Error handling', () => {
     it('handles circular imports', async () => {
       const content = await context.fs.readFile('project/nested/circular1.meld');
-      const nodes = context.parseMeld(content);
-
-      await expect(service.interpret(nodes, {
+      const nodes = await context.services.parser.parse(content);
+      await expect(context.services.interpreter.interpret(nodes, {
         filePath: 'project/nested/circular1.meld'
       })).rejects.toThrow(/circular/i);
     });
 
     it('provides location information in errors', async () => {
-      const content = '@text invalid';  // Invalid directive
-      const nodes = context.parseMeld(content);
-
+      const content = '@text';
+      const nodes = await context.services.parser.parse(content);
       try {
-        await service.interpret(nodes);
-        fail('Should have thrown');
+        await context.services.interpreter.interpret(nodes);
+        expect.fail('Should have thrown error');
       } catch (error) {
         expect(error).toBeInstanceOf(MeldInterpreterError);
-        expect(error.location).toBeDefined();
+        if (error instanceof MeldInterpreterError) {
+          expect(error.location).toBeDefined();
+          expect(error.nodeType).toBe('Directive');
+        }
       }
     });
 
     it('maintains state consistency after errors', async () => {
-      const content = '@text valid = "OK"\n@text invalid\n@text after = "Never Set"';
-      const nodes = context.parseMeld(content);
-
+      const content = [
+        '@text identifier="valid" value="OK"',
+        '@text identifier="invalid" value="Bad"',
+        '@text identifier="after" value="Bad"'
+      ].join('\n');
+      const nodes = await context.services.parser.parse(content);
       try {
-        await service.interpret(nodes);
-        fail('Should have thrown');
+        await context.services.interpreter.interpret(nodes);
+        expect.fail('Should have thrown error');
       } catch (error) {
-        const state = stateService.getState();
-        expect(state.getTextVar('valid')).toBe('OK');
-        expect(state.getTextVar('after')).toBeUndefined();
+        if (error instanceof MeldInterpreterError) {
+          const state = context.services.state.createChildState();
+          expect(state.getTextVar('valid')).toBeUndefined();
+          expect(state.getTextVar('after')).toBeUndefined();
+        } else {
+          throw error;
+        }
+      }
+    });
+
+    it('includes error details in interpreter errors', async () => {
+      const content = '@text identifier="test"';
+      const nodes = await context.services.parser.parse(content);
+      try {
+        await context.services.interpreter.interpret(nodes, { filePath: 'test.meld' });
+        expect.fail('Should have thrown error');
+      } catch (error) {
+        expect(error).toBeInstanceOf(MeldInterpreterError);
+        if (error instanceof MeldInterpreterError) {
+          expect(error.nodeType).toBe('Directive');
+          expect(error.location).toBeDefined();
+        } else {
+          throw error;
+        }
       }
     });
   });
 
   describe('State management', () => {
     it('creates isolated states for different interpretations', async () => {
-      // First interpretation
-      const content1 = await context.fs.readFile('project/src/main.meld');
-      const nodes1 = context.parseMeld(content1);
-      const state1 = await service.interpret(nodes1);
-
-      // Second interpretation
-      const content2 = await context.fs.readFile('project/src/variables.meld');
-      const nodes2 = context.parseMeld(content2);
-      const state2 = await service.interpret(nodes2);
-
-      // States should be isolated
-      expect(state1.getTextVar('root')).toBe('Root');
-      expect(state1.getTextVar('greeting')).toBeUndefined();
-      expect(state2.getTextVar('greeting')).toBe('Hello World!');
-      expect(state2.getTextVar('root')).toBeUndefined();
+      const content = '@text identifier="test" value="value"';
+      const nodes = await context.services.parser.parse(content);
+      const result1 = await context.services.interpreter.interpret(nodes);
+      const result2 = await context.services.interpreter.interpret(nodes);
+      expect(result1).not.toBe(result2);
+      expect(result1.getTextVar('test')).toBe('value');
+      expect(result2.getTextVar('test')).toBe('value');
     });
 
     it('merges child states correctly', async () => {
-      const content = await context.fs.readFile('project/src/main.meld');
-      const nodes = context.parseMeld(content);
-      
-      // Create a parent state with some variables
-      const parentState = new StateService();
+      const content = '@text identifier="child" value="value"';
+      const parentState = context.services.state.createChildState();
+      const nodes = await context.services.parser.parse(content);
+      await context.services.interpreter.interpret(nodes, { initialState: parentState, mergeState: true });
+      expect(parentState.getTextVar('child')).toBe('value');
+    });
+
+    it('handles state rollback on merge errors', async () => {
+      const content = '@text identifier="test" value="value"';
+      const parentState = context.services.state.createChildState();
       parentState.setTextVar('parent', 'Parent');
+      const nodes = await context.services.parser.parse(content);
+      try {
+        await context.services.interpreter.interpret(nodes, { initialState: parentState, mergeState: true });
+        expect.fail('Should have thrown error');
+      } catch (error) {
+        if (error instanceof MeldInterpreterError) {
+          expect(error.nodeType).toBe('Directive');
+          expect(parentState.getTextVar('parent')).toBe('Parent');
+          expect(parentState.getTextVar('test')).toBeUndefined();
+        } else {
+          throw error;
+        }
+      }
+    });
 
-      const result = await service.interpret(nodes, {
-        initialState: parentState,
-        mergeState: true
-      });
-
-      // Should have both parent and child variables
-      expect(result.getTextVar('parent')).toBe('Parent');
-      expect(result.getTextVar('root')).toBe('Root');
-      expect(result.getTextVar('child')).toBe('Child');
+    it('maintains node order in merged states', async () => {
+      const content = [
+        '@text identifier="first" value="1"',
+        '@text identifier="second" value="2"',
+        '@text identifier="third" value="3"'
+      ].join('\n');
+      
+      const nodes = await context.services.parser.parse(content);
+      const result = await context.services.interpreter.interpret(nodes);
+      const stateNodes = result.getNodes();
+      expect(stateNodes[0].type).toBe('Directive');
+      expect((stateNodes[0] as any).directive.identifier).toBe('first');
+      expect(stateNodes[1].type).toBe('Directive');
+      expect((stateNodes[1] as any).directive.identifier).toBe('second');
     });
   });
 }); 

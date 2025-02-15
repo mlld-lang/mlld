@@ -10,21 +10,25 @@ import { validateImportDirective } from './validators/ImportDirectiveValidator';
 import { validateEmbedDirective } from './validators/EmbedDirectiveValidator';
 
 export class ValidationService implements IValidationService {
-  private validators = new Map<string, (node: DirectiveNode) => void>();
+  private validators = new Map<string, (node: DirectiveNode) => Promise<void>>();
   
   constructor() {
     // Register default validators
-    this.registerValidator('text', validateTextDirective);
-    this.registerValidator('data', validateDataDirective);
-    this.registerValidator('import', validateImportDirective);
-    this.registerValidator('embed', validateEmbedDirective);
+    this.registerValidator('text', async (node) => validateTextDirective(node));
+    this.registerValidator('data', async (node) => validateDataDirective(node));
+    this.registerValidator('import', async (node) => validateImportDirective(node));
+    this.registerValidator('embed', async (node) => validateEmbedDirective(node));
     
     logger.debug('ValidationService initialized with default validators', {
       validators: Array.from(this.validators.keys())
     });
   }
   
-  validate(node: DirectiveNode): void {
+  /**
+   * Validate a directive node against its schema and constraints
+   * @throws {MeldDirectiveError} If validation fails
+   */
+  async validate(node: DirectiveNode): Promise<void> {
     logger.debug('Validating directive', {
       kind: node.directive.kind,
       location: node.location
@@ -40,7 +44,7 @@ export class ValidationService implements IValidationService {
     }
     
     try {
-      validator(node);
+      await validator(node);
       logger.debug('Directive validation successful', {
         kind: node.directive.kind,
         location: node.location
@@ -55,7 +59,7 @@ export class ValidationService implements IValidationService {
     }
   }
   
-  registerValidator(kind: string, validator: (node: DirectiveNode) => void): void {
+  registerValidator(kind: string, validator: (node: DirectiveNode) => Promise<void>): void {
     if (!kind || typeof kind !== 'string') {
       throw new Error('Validator kind must be a non-empty string');
     }

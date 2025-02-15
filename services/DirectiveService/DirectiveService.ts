@@ -1,5 +1,5 @@
 import type { DirectiveNode, TextDirective, DataDirective, ImportDirective, EmbedDirective } from 'meld-spec';
-import { directiveLogger as logger } from '@core/utils/logger';
+import { directiveLogger, embedLogger } from '@core/utils/logger';
 import { IDirectiveService, IDirectiveHandler, DirectiveContext } from './IDirectiveService';
 import { IValidationService } from '../ValidationService/IValidationService';
 import { IStateService } from '../StateService/IStateService';
@@ -11,6 +11,7 @@ import { MeldDirectiveError } from '../../core/errors/MeldDirectiveError';
 import { ICircularityService } from '../CircularityService/ICircularityService';
 import { IResolutionService } from '../ResolutionService/IResolutionService';
 import { DirectiveError, DirectiveErrorCode } from './errors/DirectiveError';
+import type { ILogger } from './handlers/execution/EmbedDirectiveHandler';
 
 // Import all handlers
 import { TextDirectiveHandler } from './handlers/definition/TextDirectiveHandler';
@@ -45,8 +46,13 @@ export class DirectiveService implements IDirectiveService {
   private circularityService?: ICircularityService;
   private resolutionService?: IResolutionService;
   private initialized = false;
+  private logger: ILogger;
 
   private handlers: Map<string, IDirectiveHandler> = new Map();
+
+  constructor(logger?: ILogger) {
+    this.logger = logger || directiveLogger;
+  }
 
   initialize(
     validationService: IValidationService,
@@ -71,7 +77,7 @@ export class DirectiveService implements IDirectiveService {
     // Register default handlers
     this.registerDefaultHandlers();
 
-    logger.debug('DirectiveService initialized', {
+    this.logger.debug('DirectiveService initialized', {
       handlers: Array.from(this.handlers.keys())
     });
   }
@@ -123,7 +129,8 @@ export class DirectiveService implements IDirectiveService {
         this.circularityService!,
         this.fileSystemService!,
         this.parserService!,
-        this.interpreterService!
+        this.interpreterService!,
+        this.logger
       )
     );
 
@@ -153,7 +160,14 @@ export class DirectiveService implements IDirectiveService {
     }
 
     this.handlers.set(handler.kind, handler);
-    logger.debug(`Registered handler for directive: ${handler.kind}`);
+    this.logger.debug(`Registered handler for directive: ${handler.kind}`);
+  }
+
+  /**
+   * Handle a directive node
+   */
+  async handleDirective(node: DirectiveNode, parentContext?: DirectiveContext): Promise<void> {
+    return this.processDirective(node, parentContext);
   }
 
   /**
@@ -182,7 +196,7 @@ export class DirectiveService implements IDirectiveService {
       // Execute handler
       await handler.execute(node, context);
 
-      logger.debug(`Successfully processed ${node.directive.kind} directive`, {
+      this.logger.debug(`Successfully processed ${node.directive.kind} directive`, {
         location: node.location
       });
     } catch (error) {
@@ -227,11 +241,10 @@ export class DirectiveService implements IDirectiveService {
 
   /**
    * Update the interpreter service reference
-   * This is needed to handle circular dependencies in initialization
    */
   updateInterpreterService(interpreterService: IInterpreterService): void {
     this.interpreterService = interpreterService;
-    logger.debug('Updated interpreter service reference');
+    this.logger.debug('Updated interpreter service reference');
   }
 
   /**
@@ -290,22 +303,22 @@ export class DirectiveService implements IDirectiveService {
   private async handleTextDirective(node: DirectiveNode): Promise<void> {
     const directive = node.directive as TextDirective;
     
-    logger.debug('Processing text directive', {
-      name: directive.name,
+    this.logger.debug('Processing text directive', {
+      identifier: directive.identifier,
       location: node.location
     });
 
     try {
       // Value is already interpolated by meld-ast
-      await this.stateService!.setTextVar(directive.name, directive.value);
+      await this.stateService!.setTextVar(directive.identifier, directive.value);
       
-      logger.debug('Text directive processed successfully', {
-        name: directive.name,
+      this.logger.debug('Text directive processed successfully', {
+        identifier: directive.identifier,
         location: node.location
       });
     } catch (error) {
-      logger.error('Failed to process text directive', {
-        name: directive.name,
+      this.logger.error('Failed to process text directive', {
+        identifier: directive.identifier,
         location: node.location,
         error
       });
@@ -320,8 +333,8 @@ export class DirectiveService implements IDirectiveService {
   private async handleDataDirective(node: DirectiveNode): Promise<void> {
     const directive = node.directive as DataDirective;
     
-    logger.debug('Processing data directive', {
-      name: directive.name,
+    this.logger.debug('Processing data directive', {
+      identifier: directive.identifier,
       location: node.location
     });
 
@@ -332,15 +345,15 @@ export class DirectiveService implements IDirectiveService {
         value = JSON.parse(value);
       }
 
-      await this.stateService!.setDataVar(directive.name, value);
+      await this.stateService!.setDataVar(directive.identifier, value);
       
-      logger.debug('Data directive processed successfully', {
-        name: directive.name,
+      this.logger.debug('Data directive processed successfully', {
+        identifier: directive.identifier,
         location: node.location
       });
     } catch (error) {
-      logger.error('Failed to process data directive', {
-        name: directive.name,
+      this.logger.error('Failed to process data directive', {
+        identifier: directive.identifier,
         location: node.location,
         error
       });
@@ -355,7 +368,7 @@ export class DirectiveService implements IDirectiveService {
   private async handleImportDirective(node: DirectiveNode): Promise<void> {
     const directive = node.directive as ImportDirective;
     
-    logger.debug('Processing import directive', {
+    this.logger.debug('Processing import directive', {
       path: directive.path,
       section: directive.section,
       fuzzy: directive.fuzzy,
@@ -399,7 +412,7 @@ export class DirectiveService implements IDirectiveService {
           mergeState: true
         });
 
-        logger.debug('Import content processed', {
+        this.logger.debug('Import content processed', {
           path: fullPath,
           section: directive.section,
           location: node.location
@@ -409,7 +422,7 @@ export class DirectiveService implements IDirectiveService {
         this.circularityService!.endImport(fullPath);
       }
     } catch (error) {
-      logger.error('Failed to process import directive', {
+      this.logger.error('Failed to process import directive', {
         path: directive.path,
         section: directive.section,
         location: node.location,
@@ -540,7 +553,7 @@ export class DirectiveService implements IDirectiveService {
   private async handleEmbedDirective(node: DirectiveNode): Promise<void> {
     const directive = node.directive as EmbedDirective;
     
-    logger.debug('Processing embed directive', {
+    this.logger.debug('Processing embed directive', {
       path: directive.path,
       section: directive.section,
       fuzzy: directive.fuzzy,
@@ -584,7 +597,7 @@ export class DirectiveService implements IDirectiveService {
           mergeState: true
         });
 
-        logger.debug('Embed content processed', {
+        this.logger.debug('Embed content processed', {
           path: fullPath,
           section: directive.section,
           location: node.location
@@ -594,7 +607,7 @@ export class DirectiveService implements IDirectiveService {
         this.circularityService!.endImport(fullPath);
       }
     } catch (error) {
-      logger.error('Failed to process embed directive', {
+      this.logger.error('Failed to process embed directive', {
         path: directive.path,
         section: directive.section,
         location: node.location,

@@ -75,7 +75,7 @@ describe('ResolutionService', () => {
         type: 'Directive',
         directive: {
           kind: 'text',
-          name: 'greeting',
+          identifier: 'greeting',
           value: 'Hello'
         }
       };
@@ -153,7 +153,7 @@ describe('ResolutionService', () => {
           type: 'Directive',
           directive: {
             kind: 'text',
-            name: 'name',
+            identifier: 'name',
             value: 'World'
           }
         }
@@ -232,7 +232,7 @@ Content 2`;
         type: 'Directive',
         directive: {
           kind: 'text',
-          name: 'var',
+          identifier: 'var',
           value: 'value'
         }
       };
@@ -301,7 +301,7 @@ Content 2`;
         type: 'Directive',
         directive: {
           kind: 'text',
-          name: 'a',
+          identifier: 'a',
           value: '${b}'
         }
       };
@@ -309,7 +309,7 @@ Content 2`;
         type: 'Directive',
         directive: {
           kind: 'text',
-          name: 'b',
+          identifier: 'b',
           value: '${a}'
         }
       };
@@ -338,7 +338,7 @@ Content 2`;
         type: 'Directive',
         directive: {
           kind: 'text',
-          name: 'greeting',
+          identifier: 'greeting',
           value: 'Hello ${name}'
         }
       };

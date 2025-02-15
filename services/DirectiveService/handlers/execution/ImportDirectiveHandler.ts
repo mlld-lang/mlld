@@ -137,7 +137,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
    */
   private parseImportSyntax(directive: ImportDirective): { 
     source: string;
-    imports?: Array<{ name: string; alias?: string }>;
+    imports?: Array<{ identifier: string; alias?: string }>;
   } {
     // Handle shorthand syntax: @import [file.meld]
     if (!directive.from) {
@@ -152,18 +152,25 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
   }
 
   /**
-   * Parse the import list syntax for explicit imports
+   * Parse import list from string
    */
-  private parseImportList(importList: string): Array<{ name: string; alias?: string }> {
-    // Handle wildcard import
-    if (importList === '*') {
-      return [];
-    }
-
-    // Parse comma-separated list
-    return importList.split(',').map(item => {
-      const [name, alias] = item.trim().split(/\s+as\s+/);
-      return { name, alias };
+  private parseImportList(importList: string): Array<{ identifier: string; alias?: string }> {
+    // Remove brackets and split by comma
+    const items = importList.slice(1, -1).split(',').map(s => s.trim());
+    
+    return items.map(item => {
+      // Check if it's a simple identifier or has an alias
+      const match = item.match(/^(\w+)(?:\s+as\s+(\w+))?$/);
+      if (!match) {
+        throw new DirectiveError(
+          `Invalid import specifier: ${item}`,
+          'import',
+          DirectiveErrorCode.VALIDATION_FAILED
+        );
+      }
+      
+      const [_, identifier, alias] = match;
+      return { identifier, alias };
     });
   }
 
@@ -171,14 +178,14 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
    * Process import filters and aliases
    */
   private async processImportFilters(
-    imports: Array<{ name: string; alias?: string }>,
+    imports: Array<{ identifier: string; alias?: string }>,
     importState: IStateService
   ): Promise<void> {
-    for (const { name, alias } of imports) {
+    for (const { identifier, alias } of imports) {
       // Check if variable exists in imported state
-      if (!importState.hasVariable(name)) {
+      if (!importState.hasVariable(identifier)) {
         throw new DirectiveError(
-          `Imported variable not found: ${name}`,
+          `Imported variable not found: ${identifier}`,
           'import',
           DirectiveErrorCode.VARIABLE_NOT_FOUND
         );
@@ -186,10 +193,46 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
 
       // Handle aliasing
       if (alias) {
-        const value = importState.getVariable(name);
+        const value = importState.getVariable(identifier);
         importState.setVariable(alias, value);
-        importState.removeVariable(name);
+        importState.removeVariable(identifier);
       }
+    }
+  }
+
+  /**
+   * Import variables from source state
+   */
+  private async importVariables(
+    imports: Array<{ identifier: string; alias?: string }>,
+    sourceState: IStateService,
+    targetState: IStateService
+  ): Promise<void> {
+    for (const { identifier, alias } of imports) {
+      // Try to get variable from each type
+      const textValue = sourceState.getTextVar(identifier);
+      if (textValue !== undefined) {
+        await targetState.setTextVar(alias || identifier, textValue);
+        continue;
+      }
+
+      const dataValue = sourceState.getDataVar(identifier);
+      if (dataValue !== undefined) {
+        await targetState.setDataVar(alias || identifier, dataValue);
+        continue;
+      }
+
+      const pathValue = sourceState.getPathVar(identifier);
+      if (pathValue !== undefined) {
+        await targetState.setPathVar(alias || identifier, pathValue);
+        continue;
+      }
+
+      throw new DirectiveError(
+        `Variable not found in source: ${identifier}`,
+        'import',
+        DirectiveErrorCode.VALIDATION_FAILED
+      );
     }
   }
 } 
