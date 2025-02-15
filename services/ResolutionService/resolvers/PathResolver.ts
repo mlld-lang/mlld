@@ -14,7 +14,7 @@ export class PathResolver {
   async resolve(path: string, context: ResolutionContext): Promise<string> {
     // Early return if no path variables
     if (!path.includes('$')) {
-      return path;
+      return this.validatePath(path, context);
     }
 
     // Validate path variables are allowed
@@ -35,7 +35,7 @@ export class PathResolver {
     const matches = path.match(varPattern);
 
     if (!matches) {
-      return path;
+      return this.validatePath(path, context);
     }
 
     let result = path;
@@ -55,9 +55,37 @@ export class PathResolver {
       result = result.split(match).join(value);
     }
 
-    // Validate path meets requirements if specified
+    return this.validatePath(result, context);
+  }
+
+  /**
+   * Extract path variable references from a string
+   */
+  extractReferences(text: string): string[] {
+    const refs: string[] = [];
+    
+    // Handle special aliases first
+    const aliasPattern = /\$(~|\.)(?=\/|$)/g;
+    let match;
+    while ((match = aliasPattern.exec(text)) !== null) {
+      refs.push(match[1]);
+    }
+
+    // Handle regular path variables
+    const varPattern = /\$([A-Za-z_][A-Za-z0-9_]*)/g;
+    while ((match = varPattern.exec(text)) !== null) {
+      refs.push(match[1]);
+    }
+
+    return refs;
+  }
+
+  /**
+   * Validate a resolved path against context requirements
+   */
+  private validatePath(path: string, context: ResolutionContext): string {
     if (context.pathValidation) {
-      if (context.pathValidation.requireAbsolute && !result.startsWith('/')) {
+      if (context.pathValidation.requireAbsolute && !path.startsWith('/')) {
         throw new ResolutionError(
           'Path must be absolute',
           ResolutionErrorCode.INVALID_PATH,
@@ -68,7 +96,10 @@ export class PathResolver {
       if (context.pathValidation.allowedRoots?.length) {
         const hasAllowedRoot = context.pathValidation.allowedRoots.some(root => {
           const resolvedRoot = this.stateService.getPathVar(root);
-          return resolvedRoot && result.startsWith(resolvedRoot);
+          return resolvedRoot && (
+            path.startsWith(resolvedRoot + '/') || 
+            path === resolvedRoot
+          );
         });
 
         if (!hasAllowedRoot) {
@@ -81,21 +112,6 @@ export class PathResolver {
       }
     }
 
-    return result;
-  }
-
-  /**
-   * Extract path variable references from a string
-   */
-  extractReferences(text: string): string[] {
-    const refs: string[] = [];
-    const varPattern = /\$([A-Za-z_][A-Za-z0-9_]*)/g;
-    let match;
-
-    while ((match = varPattern.exec(text)) !== null) {
-      refs.push(match[1]); // Add the variable name
-    }
-
-    return refs;
+    return path;
   }
 } 
