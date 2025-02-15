@@ -82,7 +82,7 @@ Below is a consolidated list of concrete changes needed to make the architecture
 ✓ Migrated the best parts of "interpreter/state/state.js" into "StateService.ts"
 
 ─────────────────────────────────────────────────────────────────────────
-7. Create "ResolutionService" for Variable Resolution [TODO]
+7. Create "ResolutionService" for Variable Resolution [COMPLETE]
 ─────────────────────────────────────────────────────────────────────────
 • Create ResolutionService with:
   - Variable resolution (${var}, #{data}, $path)

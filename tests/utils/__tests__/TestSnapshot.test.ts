@@ -6,82 +6,84 @@ describe('TestSnapshot', () => {
   let fs: MemfsTestFileSystem;
   let snapshot: TestSnapshot;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     fs = new MemfsTestFileSystem();
     fs.initialize();
     snapshot = new TestSnapshot(fs);
+    // Ensure project directory exists
+    await fs.mkdir('/project');
   });
 
   describe('snapshot creation', () => {
-    it('creates empty snapshot for empty filesystem', () => {
-      const result = snapshot.takeSnapshot();
+    it('creates empty snapshot for empty filesystem', async () => {
+      const result = await snapshot.takeSnapshot();
       expect(result.size).toBe(0);
     });
 
-    it('captures single file state', () => {
-      fs.writeFile('/project/test.txt', 'content');
+    it('captures single file state', async () => {
+      await fs.writeFile('/project/test.txt', 'content');
       
-      const result = snapshot.takeSnapshot();
+      const result = await snapshot.takeSnapshot();
       expect(result.size).toBe(1);
       expect(result.get('/project/test.txt')).toBe('content');
     });
 
-    it('captures multiple files state', () => {
-      fs.writeFile('/project/file1.txt', 'content1');
-      fs.writeFile('/project/file2.txt', 'content2');
+    it('captures multiple files state', async () => {
+      await fs.writeFile('/project/file1.txt', 'content1');
+      await fs.writeFile('/project/file2.txt', 'content2');
       
-      const result = snapshot.takeSnapshot();
+      const result = await snapshot.takeSnapshot();
       expect(result.size).toBe(2);
       expect(result.get('/project/file1.txt')).toBe('content1');
       expect(result.get('/project/file2.txt')).toBe('content2');
     });
 
-    it('captures nested directory structure', () => {
-      fs.writeFile('/project/dir/nested/file.txt', 'content');
+    it('captures nested directory structure', async () => {
+      await fs.writeFile('/project/dir/nested/file.txt', 'content');
       
-      const result = snapshot.takeSnapshot();
+      const result = await snapshot.takeSnapshot();
       expect(result.size).toBe(1);
       expect(result.get('/project/dir/nested/file.txt')).toBe('content');
     });
   });
 
   describe('directory-specific snapshots', () => {
-    it('captures only files in specified directory', () => {
-      fs.writeFile('/project/dir1/file1.txt', 'content1');
-      fs.writeFile('/project/dir2/file2.txt', 'content2');
+    it('captures only files in specified directory', async () => {
+      await fs.writeFile('/project/dir1/file1.txt', 'content1');
+      await fs.writeFile('/project/dir2/file2.txt', 'content2');
       
-      const result = snapshot.takeSnapshot('/project/dir1');
+      const result = await snapshot.takeSnapshot('/project/dir1');
       expect(result.size).toBe(1);
       expect(result.get('/project/dir1/file1.txt')).toBe('content1');
       expect(result.has('/project/dir2/file2.txt')).toBe(false);
     });
 
-    it('includes nested files in directory snapshot', () => {
-      fs.writeFile('/project/dir/file1.txt', 'content1');
-      fs.writeFile('/project/dir/nested/file2.txt', 'content2');
+    it('includes nested files in directory snapshot', async () => {
+      await fs.writeFile('/project/dir/file1.txt', 'content1');
+      await fs.writeFile('/project/dir/nested/file2.txt', 'content2');
       
-      const result = snapshot.takeSnapshot('/project/dir');
+      const result = await snapshot.takeSnapshot('/project/dir');
       expect(result.size).toBe(2);
       expect(result.get('/project/dir/file1.txt')).toBe('content1');
       expect(result.get('/project/dir/nested/file2.txt')).toBe('content2');
     });
 
-    it('returns empty snapshot for non-existent directory', () => {
-      const result = snapshot.takeSnapshot('/project/nonexistent');
+    it('returns empty snapshot for non-existent directory', async () => {
+      const result = await snapshot.takeSnapshot('/project/nonexistent');
       expect(result.size).toBe(0);
     });
   });
 
   describe('snapshot comparison', () => {
-    it('detects added files', () => {
+    it('detects added files', async () => {
       // Take initial snapshot
-      const before = snapshot.takeSnapshot();
+      const before = await snapshot.takeSnapshot();
       
       // Add new file
-      fs.writeFile('/project/new.txt', 'content');
+      await fs.writeFile('/project/new.txt', 'content');
       
       // Take after snapshot
-      const after = snapshot.takeSnapshot();
+      const after = await snapshot.takeSnapshot();
       
       // Compare
       const diff = snapshot.compare(before, after);
@@ -90,14 +92,14 @@ describe('TestSnapshot', () => {
       expect(diff.modified).toHaveLength(0);
     });
 
-    it('detects removed files', () => {
+    it('detects removed files', async () => {
       // Create initial file
-      fs.writeFile('/project/remove.txt', 'content');
-      const before = snapshot.takeSnapshot();
+      await fs.writeFile('/project/remove.txt', 'content');
+      const before = await snapshot.takeSnapshot();
       
       // Remove file
-      fs.remove('/project/remove.txt');
-      const after = snapshot.takeSnapshot();
+      await fs.remove('/project/remove.txt');
+      const after = await snapshot.takeSnapshot();
       
       // Compare
       const diff = snapshot.compare(before, after);
@@ -106,34 +108,35 @@ describe('TestSnapshot', () => {
       expect(diff.modified).toHaveLength(0);
     });
 
-    it('detects modified files', () => {
+    it('detects modified files', async () => {
       // Create initial file
-      fs.writeFile('/project/modify.txt', 'original');
-      const before = snapshot.takeSnapshot();
+      await fs.writeFile('/project/modify.txt', 'original');
+      const before = await snapshot.takeSnapshot();
       
       // Modify file
-      fs.writeFile('/project/modify.txt', 'modified');
-      const after = snapshot.takeSnapshot();
+      await fs.writeFile('/project/modify.txt', 'modified');
+      const after = await snapshot.takeSnapshot();
       
       // Compare
       const diff = snapshot.compare(before, after);
       expect(diff.modified).toContain('/project/modify.txt');
       expect(diff.added).toHaveLength(0);
       expect(diff.removed).toHaveLength(0);
+      expect(diff.modifiedContents.get('/project/modify.txt')).toBe('modified');
     });
 
-    it('detects multiple changes', () => {
+    it('detects multiple changes', async () => {
       // Initial state
-      fs.writeFile('/project/keep.txt', 'keep');
-      fs.writeFile('/project/modify.txt', 'original');
-      fs.writeFile('/project/remove.txt', 'remove');
-      const before = snapshot.takeSnapshot();
+      await fs.writeFile('/project/keep.txt', 'keep');
+      await fs.writeFile('/project/modify.txt', 'original');
+      await fs.writeFile('/project/remove.txt', 'remove');
+      const before = await snapshot.takeSnapshot();
       
       // Make changes
-      fs.writeFile('/project/modify.txt', 'modified');
-      fs.writeFile('/project/new.txt', 'new');
-      fs.remove('/project/remove.txt');
-      const after = snapshot.takeSnapshot();
+      await fs.writeFile('/project/modify.txt', 'modified');
+      await fs.writeFile('/project/new.txt', 'new');
+      await fs.remove('/project/remove.txt');
+      const after = await snapshot.takeSnapshot();
       
       // Compare
       const diff = snapshot.compare(before, after);
@@ -141,6 +144,7 @@ describe('TestSnapshot', () => {
       expect(diff.removed).toContain('/project/remove.txt');
       expect(diff.modified).toContain('/project/modify.txt');
       expect(diff.added.length + diff.removed.length + diff.modified.length).toBe(3);
+      expect(diff.modifiedContents.get('/project/modify.txt')).toBe('modified');
     });
   });
 
@@ -156,8 +160,8 @@ describe('TestSnapshot', () => {
       expect(diff2.removed).toContain('file.txt');
     });
 
-    it('handles undefined directory path gracefully', () => {
-      const result = snapshot.takeSnapshot(undefined);
+    it('handles undefined directory path gracefully', async () => {
+      const result = await snapshot.takeSnapshot(undefined);
       expect(result).toBeDefined();
       expect(result instanceof Map).toBe(true);
     });

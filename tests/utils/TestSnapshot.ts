@@ -34,9 +34,9 @@ export class TestSnapshot {
   /**
    * Take a snapshot of the current filesystem state
    */
-  takeSnapshot(dir: string = '/'): Map<string, string> {
+  async takeSnapshot(dir: string = '/'): Promise<Map<string, string>> {
     const snapshot = new Map<string, string>();
-    this.snapshotDirectory(dir, snapshot);
+    await this.snapshotDirectory(dir, snapshot);
     return snapshot;
   }
 
@@ -79,17 +79,26 @@ export class TestSnapshot {
   /**
    * Take a snapshot of a directory and its contents recursively
    */
-  private snapshotDirectory(dir: string, snapshot: Map<string, string>): void {
-    const entries = this.fs.readDir(dir);
+  private async snapshotDirectory(dir: string, snapshot: Map<string, string>): Promise<void> {
+    try {
+      const entries = await this.fs.readDir(dir);
 
-    for (const entry of entries) {
-      const fullPath = dir === '/' ? `/${entry}` : `${dir}/${entry}`;
+      for (const entry of entries) {
+        const fullPath = dir === '/' ? `/${entry}` : `${dir}/${entry}`;
 
-      if (this.fs.isFile(fullPath)) {
-        snapshot.set(fullPath, this.fs.readFile(fullPath));
-      } else if (this.fs.isDirectory(fullPath)) {
-        this.snapshotDirectory(fullPath, snapshot);
+        if (await this.fs.isFile(fullPath)) {
+          const content = await this.fs.readFile(fullPath);
+          snapshot.set(fullPath, content);
+        } else if (await this.fs.isDirectory(fullPath)) {
+          await this.snapshotDirectory(fullPath, snapshot);
+        }
       }
+    } catch (error) {
+      if (error.message.includes('ENOENT: no such directory')) {
+        // Directory doesn't exist, return empty snapshot
+        return;
+      }
+      throw error;
     }
   }
 } 

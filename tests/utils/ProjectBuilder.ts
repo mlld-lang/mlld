@@ -40,14 +40,14 @@ export class ProjectBuilder {
     const homePath = struct.homePath || 'home';
 
     // Create standard directories
-    this.fs.mkdir(projectRoot);
-    this.fs.mkdir(homePath);
+    await this.fs.mkdir('/' + projectRoot);
+    await this.fs.mkdir('/' + homePath);
 
     // Create any additional directories
     for (const dir of struct.dirs || []) {
       const fullPath = this.resolvePath(dir, projectRoot);
-      if (!this.fs.exists(fullPath)) {
-        this.fs.mkdir(fullPath);
+      if (!(await this.fs.exists(fullPath))) {
+        await this.fs.mkdir(fullPath);
       }
     }
 
@@ -58,7 +58,14 @@ export class ProjectBuilder {
         $PROJECTPATH: projectRoot,
         $HOMEPATH: homePath
       });
-      this.fs.writeFile(fullPath, resolvedContent);
+      
+      // Ensure parent directory exists
+      const dirPath = path.dirname(fullPath);
+      if (!(await this.fs.exists(dirPath))) {
+        await this.fs.mkdir(dirPath);
+      }
+      
+      await this.fs.writeFile(fullPath, resolvedContent);
     }
   }
 
@@ -67,11 +74,11 @@ export class ProjectBuilder {
    */
   async createBasicProject(): Promise<void> {
     await this.create({
-      dirs: ['project/src', 'project/tests', 'home/.config'],
+      dirs: ['src', 'tests', '../home/.config'],
       files: {
-        'project/README.md': '# Test Project',
-        'project/src/main.meld': '@text greeting = "Hello World"',
-        'home/.config/settings.json': '{}'
+        'README.md': '# Test Project',
+        'src/main.meld': '@text greeting = "Hello World"',
+        '../home/.config/settings.json': '{}'
       }
     });
   }
@@ -85,7 +92,7 @@ export class ProjectBuilder {
       return filePath;
     }
     // Otherwise resolve relative to project root
-    return path.isAbsolute(filePath) ? filePath : path.join(projectRoot, filePath);
+    return path.isAbsolute(filePath) ? filePath : '/' + path.join(projectRoot, filePath);
   }
 
   /**

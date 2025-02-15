@@ -43,14 +43,19 @@ export class MemfsTestFileSystem {
   /**
    * Clean up any resources
    */
-  cleanup(): void {
+  async cleanup(): Promise<void> {
     logger.debug('Cleaning up filesystem');
     try {
+      // Reset the volume first to clear everything
       this.vol.reset();
-      logger.debug('Cleanup complete');
+      
+      // Re-initialize root
+      this.vol.mkdirSync(this.root, { recursive: true });
+      
+      logger.debug('Filesystem cleanup complete');
     } catch (error) {
-      logger.error('Error cleaning up filesystem', { error });
-      throw new Error(`Error cleaning up filesystem: ${error.message}`);
+      logger.error('Error during cleanup', { error });
+      throw new Error(`Error during cleanup: ${error.message}`);
     }
   }
 
@@ -89,8 +94,8 @@ export class MemfsTestFileSystem {
       return result;
     }
 
-    // For relative paths, join with root and ensure proper format
-    const withRoot = path.join(this.root, normalized)
+    // For relative paths, join with project root and ensure proper format
+    const withRoot = path.join('/project', normalized)
       .replace(/\\/g, '/');
     const result = forMemfs ? withRoot.slice(1) : withRoot;
     logger.debug('Resolved relative path', { result, withRoot, normalized });
@@ -206,7 +211,7 @@ export class MemfsTestFileSystem {
       // Ensure parent directory exists
       const dirPath = path.dirname(memfsPath);
       logger.debug('Ensuring parent directory exists', { dirPath });
-      await this.ensureDir(dirPath);
+      this.vol.mkdirSync(dirPath, { recursive: true });
 
       // Write the file
       logger.debug('Writing file content', { memfsPath, contentLength: content.length });
@@ -559,6 +564,37 @@ export class MemfsTestFileSystem {
       // Log error but don't throw since this is an internal helper
       logger.error('Error checking if path is directory', { memfsPath, error });
       return false;
+    }
+  }
+
+  /**
+   * Remove a file or directory
+   */
+  async remove(path: string): Promise<void> {
+    logger.debug('Removing path', { path });
+    const memfsPath = this.getMemfsPath(path);
+    
+    try {
+      // Check if path exists
+      if (!this.vol.existsSync(memfsPath)) {
+        logger.debug('Path does not exist, nothing to remove', { path, memfsPath });
+        return;
+      }
+
+      // Get stats to determine if file or directory
+      const stats = this.vol.statSync(memfsPath);
+      if (stats.isDirectory()) {
+        logger.debug('Removing directory', { path, memfsPath });
+        this.vol.rmdirSync(memfsPath, { recursive: true });
+      } else {
+        logger.debug('Removing file', { path, memfsPath });
+        this.vol.unlinkSync(memfsPath);
+      }
+      
+      logger.debug('Path removed successfully', { path, memfsPath });
+    } catch (error) {
+      logger.error('Error removing path', { path, memfsPath, error });
+      throw new Error(`Error removing path '${path}': ${error.message}`);
     }
   }
 } 

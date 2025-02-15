@@ -6,10 +6,12 @@ describe('ProjectBuilder', () => {
   let fs: MemfsTestFileSystem;
   let builder: ProjectBuilder;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     fs = new MemfsTestFileSystem();
-    fs.initialize();
+    await fs.initialize();
     builder = new ProjectBuilder(fs);
+    // Ensure project directory exists
+    await fs.mkdir('/project');
   });
 
   describe('project creation', () => {
@@ -17,8 +19,8 @@ describe('ProjectBuilder', () => {
       await builder.createBasicProject();
       
       // Verify project structure
-      expect(fs.exists('/project')).toBe(true);
-      expect(fs.isDirectory('/project')).toBe(true);
+      expect(await fs.exists('/project')).toBe(true);
+      expect(await fs.isDirectory('/project')).toBe(true);
     });
 
     it('creates project from structure object', async () => {
@@ -33,12 +35,12 @@ describe('ProjectBuilder', () => {
       await builder.create(structure);
 
       // Verify directories
-      expect(fs.isDirectory('/project/test')).toBe(true);
-      expect(fs.isDirectory('/project/test/nested')).toBe(true);
+      expect(await fs.isDirectory('/project/test')).toBe(true);
+      expect(await fs.isDirectory('/project/test/nested')).toBe(true);
 
       // Verify files
-      expect(fs.readFile('/project/test/file1.txt')).toBe('content1');
-      expect(fs.readFile('/project/test/nested/file2.txt')).toBe('content2');
+      expect(await fs.readFile('/project/test/file1.txt')).toBe('content1');
+      expect(await fs.readFile('/project/test/nested/file2.txt')).toBe('content2');
     });
 
     it('creates directories even without files', async () => {
@@ -49,8 +51,8 @@ describe('ProjectBuilder', () => {
 
       await builder.create(structure);
 
-      expect(fs.isDirectory('/project/empty1')).toBe(true);
-      expect(fs.isDirectory('/project/empty2/nested')).toBe(true);
+      expect(await fs.isDirectory('/project/empty1')).toBe(true);
+      expect(await fs.isDirectory('/project/empty2/nested')).toBe(true);
     });
 
     it('creates parent directories automatically for files', async () => {
@@ -62,10 +64,10 @@ describe('ProjectBuilder', () => {
 
       await builder.create(structure);
 
-      expect(fs.isDirectory('/project/auto')).toBe(true);
-      expect(fs.isDirectory('/project/auto/created')).toBe(true);
-      expect(fs.isDirectory('/project/auto/created/dir')).toBe(true);
-      expect(fs.readFile('/project/auto/created/dir/file.txt')).toBe('content');
+      expect(await fs.isDirectory('/project/auto')).toBe(true);
+      expect(await fs.isDirectory('/project/auto/created')).toBe(true);
+      expect(await fs.isDirectory('/project/auto/created/dir')).toBe(true);
+      expect(await fs.readFile('/project/auto/created/dir/file.txt')).toBe('content');
     });
   });
 
@@ -86,7 +88,7 @@ describe('ProjectBuilder', () => {
       };
 
       await expect(builder.create(structure)).resolves.not.toThrow();
-      expect(fs.readFile('/project/test.txt')).toBe('content');
+      expect(await fs.readFile('/project/test.txt')).toBe('content');
     });
   });
 
@@ -106,7 +108,7 @@ describe('ProjectBuilder', () => {
         }
       });
 
-      expect(fs.readFile('/project/test.txt')).toBe('updated');
+      expect(await fs.readFile('/project/test.txt')).toBe('updated');
     });
 
     it('preserves existing directories when creating new ones', async () => {
@@ -126,9 +128,9 @@ describe('ProjectBuilder', () => {
         }
       });
 
-      expect(fs.exists('/project/existing/old.txt')).toBe(true);
-      expect(fs.readFile('/project/existing/old.txt')).toBe('old content');
-      expect(fs.readFile('/project/new/new.txt')).toBe('new content');
+      expect(await fs.exists('/project/existing/old.txt')).toBe(true);
+      expect(await fs.readFile('/project/existing/old.txt')).toBe('old content');
+      expect(await fs.readFile('/project/new/new.txt')).toBe('new content');
     });
   });
 
@@ -143,8 +145,8 @@ describe('ProjectBuilder', () => {
 
       await builder.create(structure);
 
-      expect(fs.readFile('/project/test.txt')).toBe('content1');
-      expect(fs.readFile('/project/file.txt')).toBe('content2');
+      expect(await fs.readFile('/project/test.txt')).toBe('content1');
+      expect(await fs.readFile('/project/file.txt')).toBe('content2');
     });
 
     it('normalizes directory paths', async () => {
@@ -155,8 +157,8 @@ describe('ProjectBuilder', () => {
 
       await builder.create(structure);
 
-      expect(fs.isDirectory('/project/dir1')).toBe(true);
-      expect(fs.isDirectory('/project/dir2/nested')).toBe(true);
+      expect(await fs.isDirectory('/project/dir1')).toBe(true);
+      expect(await fs.isDirectory('/project/dir2/nested')).toBe(true);
     });
   });
 }); 

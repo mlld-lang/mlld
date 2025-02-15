@@ -66,6 +66,8 @@ export class TestContext {
    */
   async initialize(): Promise<void> {
     this.fs.initialize();
+    // Ensure project directory exists
+    await this.fs.mkdir('/project');
   }
 
   /**
@@ -130,14 +132,14 @@ export class TestContext {
   /**
    * Take a snapshot of the current filesystem state
    */
-  takeSnapshot(dir?: string) {
-    return this.snapshot.takeSnapshot();
+  async takeSnapshot(dir?: string): Promise<Map<string, string>> {
+    return this.snapshot.takeSnapshot(dir);
   }
 
   /**
    * Compare two filesystem snapshots
    */
-  compareSnapshots(before: Map<string, string>, after: Map<string, string>) {
+  compareSnapshots(before: Map<string, string>, after: Map<string, string>): SnapshotDiff {
     return this.snapshot.compare(before, after);
   }
 } 

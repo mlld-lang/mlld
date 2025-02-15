@@ -1,6 +1,10 @@
-import { ProjectBuilder, ProjectStructure } from './ProjectBuilder';
 import * as path from 'path';
-import * as fs from 'fs';
+import fs from 'fs';
+
+export interface ProjectStructure {
+  files: { [key: string]: string };
+  dirs?: string[];
+}
 
 /**
  * Manages loading and caching of test fixtures
@@ -9,22 +13,20 @@ export class FixtureManager {
   private fixtureCache: Map<string, ProjectStructure> = new Map();
 
   constructor(
-    private builder: ProjectBuilder,
     private fixturesDir: string = 'tests/fixtures'
   ) {}
 
   /**
-   * Load and create a fixture in the test filesystem
+   * Load a fixture by name
    */
-  async load(fixtureName: string): Promise<void> {
-    const fixture = await this.getFixture(fixtureName);
-    await this.builder.create(fixture);
+  async load(fixtureName: string): Promise<ProjectStructure> {
+    return this.getFixture(fixtureName);
   }
 
   /**
    * Get a fixture by name, using cache if available
    */
-  private async getFixture(fixtureName: string): Promise<ProjectStructure> {
+  private getFixture(fixtureName: string): ProjectStructure {
     // Check cache first
     const cached = this.fixtureCache.get(fixtureName);
     if (cached) {
@@ -37,8 +39,22 @@ export class FixtureManager {
       throw new Error(`Fixture not found: ${fixtureName}`);
     }
 
-    const data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-    this.validateFixture(data);
+    let data: any;
+    try {
+      const fileContent = fs.readFileSync(filePath, 'utf-8');
+      data = JSON.parse(fileContent);
+    } catch (err) {
+      if (err instanceof SyntaxError) {
+        throw new Error(`Invalid JSON in fixture ${fixtureName}: ${err.message}`);
+      }
+      throw err;
+    }
+
+    try {
+      this.validateFixture(data);
+    } catch (err) {
+      throw new Error(`Invalid fixture structure: ${err.message}`);
+    }
 
     // Cache for future use
     this.fixtureCache.set(fixtureName, data);

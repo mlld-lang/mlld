@@ -30,52 +30,71 @@ describe('TestContext', () => {
     it('writes and reads files', async () => {
       const content = 'test content';
       await context.writeFile('test.txt', content);
-      const result = context.fs.readFile('/project/test.txt');
+      const result = await context.fs.readFile('/test.txt');
       expect(result).toBe(content);
     });
   });
 
   describe('meld parsing', () => {
-    it('parses meld content', () => {
+    it('parses meld content', async () => {
       const content = '@text greeting = "Hello"';
-      const ast = context.parseMeld(content);
+      const ast = await context.parseMeld(content);
       expect(ast).toBeDefined();
-      expect(Array.isArray(ast)).toBe(true);
+      expect(ast).toBeInstanceOf(Array);
       expect(ast.length).toBe(1);
-      expect(ast[0].type).toBe('directive');
+      expect(ast[0].type).toBe('Directive');
+      expect(ast[0].directive).toBeDefined();
+      expect(ast[0].directive.kind).toBe('text');
+      expect(ast[0].directive.value).toBe('greeting = "Hello"');
+    });
+
+    it('parses meld content with locations', async () => {
+      const content = '@text greeting = "Hello"';
+      const ast = await context.parseMeldWithLocations(content);
+      expect(ast).toBeDefined();
+      expect(ast).toBeInstanceOf(Array);
+      expect(ast.length).toBe(1);
+      expect(ast[0].type).toBe('Directive');
+      expect(ast[0].directive).toBeDefined();
+      expect(ast[0].directive.kind).toBe('text');
+      expect(ast[0].directive.value).toBe('greeting = "Hello"');
+      expect(ast[0].location).toBeDefined();
+      expect(ast[0].location.start).toBeDefined();
+      expect(ast[0].location.end).toBeDefined();
     });
   });
 
   describe('xml conversion', () => {
-    it('converts content to xml', () => {
+    it('converts content to xml', async () => {
       const content = '# Test\nHello world';
-      const xml = context.convertToXml(content);
-      expect(xml).toContain('<heading>Test</heading>');
+      const xml = await context.convertToXml(content);
+      expect(xml).toContain('<Test>');
       expect(xml).toContain('Hello world');
+      expect(xml).toContain('</Test>');
     });
   });
 
   describe('project creation', () => {
     it('creates a basic project structure', async () => {
       await context.createBasicProject();
-      expect(context.fs.exists('/project')).toBe(true);
+      expect(await context.fs.exists('/project')).toBe(true);
     });
   });
 
   describe('snapshot functionality', () => {
     it('takes and compares snapshots', async () => {
       // Initial state
-      const before = context.takeSnapshot();
+      const before = await context.takeSnapshot();
       
       // Make some changes
       await context.writeFile('test.txt', 'content');
       
       // Take after snapshot
-      const after = context.takeSnapshot();
+      const after = await context.takeSnapshot();
       
       // Compare
       const diff = context.compareSnapshots(before, after);
-      expect(diff.added).toContain('/project/test.txt');
+      expect(diff.added).toContain('/test.txt');
       expect(diff.removed).toHaveLength(0);
       expect(diff.modified).toHaveLength(0);
     });
@@ -84,9 +103,9 @@ describe('TestContext', () => {
       await context.writeFile('dir1/test1.txt', 'content1');
       await context.writeFile('dir2/test2.txt', 'content2');
       
-      const snapshot = context.takeSnapshot('/project/dir1');
-      expect(snapshot.has('/project/dir1/test1.txt')).toBe(true);
-      expect(snapshot.has('/project/dir2/test2.txt')).toBe(false);
+      const snapshot = await context.takeSnapshot('/dir1');
+      expect(snapshot.has('/dir1/test1.txt')).toBe(true);
+      expect(snapshot.has('/dir2/test2.txt')).toBe(false);
     });
   });
 
@@ -100,13 +119,13 @@ describe('TestContext', () => {
     it('cleans up resources properly', async () => {
       // Create some test files
       await context.writeFile('test.txt', 'content');
-      expect(context.fs.exists('/project/test.txt')).toBe(true);
+      expect(await context.fs.exists('/test.txt')).toBe(true);
       
       // Cleanup
       await context.cleanup();
       
       // Verify cleanup
-      expect(context.fs.exists('/project/test.txt')).toBe(false);
+      expect(await context.fs.exists('/test.txt')).toBe(false);
     });
   });
 }); 

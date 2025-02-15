@@ -5,84 +5,87 @@ import * as path from 'path';
 describe('MemfsTestFileSystem', () => {
   let fs: MemfsTestFileSystem;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     fs = new MemfsTestFileSystem();
     fs.initialize();
+    // Ensure project directory exists
+    await fs.mkdir('/project');
   });
 
-  afterEach(() => {
-    fs.cleanup();
+  afterEach(async () => {
+    await fs.cleanup();
   });
 
   describe('basic file operations', () => {
-    it('writes and reads a file', () => {
+    it('writes and reads a file', async () => {
       const filePath = '/project/test.txt';
       const content = 'Hello, World!';
       
-      fs.writeFile(filePath, content);
-      expect(fs.readFile(filePath)).toBe(content);
+      await fs.writeFile(filePath, content);
+      const result = await fs.readFile(filePath);
+      expect(result).toBe(content);
     });
 
-    it('checks file existence', () => {
+    it('checks file existence', async () => {
       const filePath = '/project/test.txt';
       
-      expect(fs.exists(filePath)).toBe(false);
-      fs.writeFile(filePath, 'content');
-      expect(fs.exists(filePath)).toBe(true);
+      expect(await fs.exists(filePath)).toBe(false);
+      await fs.writeFile(filePath, 'content');
+      expect(await fs.exists(filePath)).toBe(true);
     });
 
-    it('removes files', () => {
+    it('removes files', async () => {
       const filePath = '/project/test.txt';
       
-      fs.writeFile(filePath, 'content');
-      expect(fs.exists(filePath)).toBe(true);
+      await fs.writeFile(filePath, 'content');
+      expect(await fs.exists(filePath)).toBe(true);
       
-      fs.remove(filePath);
-      expect(fs.exists(filePath)).toBe(false);
+      await fs.remove(filePath);
+      expect(await fs.exists(filePath)).toBe(false);
     });
   });
 
   describe('directory operations', () => {
-    it('creates directories', () => {
+    it('creates directories', async () => {
       const dirPath = '/project/test/nested';
       
-      fs.mkdir(dirPath);
-      expect(fs.exists(dirPath)).toBe(true);
-      expect(fs.isDirectory(dirPath)).toBe(true);
+      await fs.mkdir(dirPath);
+      expect(await fs.exists(dirPath)).toBe(true);
+      expect(await fs.isDirectory(dirPath)).toBe(true);
     });
 
-    it('lists directory contents', () => {
+    it('lists directory contents', async () => {
       const dirPath = '/project/test';
-      fs.mkdir(dirPath);
-      fs.writeFile(path.join(dirPath, 'file1.txt'), 'content1');
-      fs.writeFile(path.join(dirPath, 'file2.txt'), 'content2');
+      await fs.mkdir(dirPath);
+      await fs.writeFile(path.join(dirPath, 'file1.txt'), 'content1');
+      await fs.writeFile(path.join(dirPath, 'file2.txt'), 'content2');
 
-      const contents = fs.readdir(dirPath);
+      const contents = await fs.readDir(dirPath);
       expect(contents).toContain('file1.txt');
       expect(contents).toContain('file2.txt');
     });
 
-    it('removes directories recursively', () => {
+    it('removes directories recursively', async () => {
       const dirPath = '/project/test';
       const filePath = path.join(dirPath, 'file.txt');
       
-      fs.mkdir(dirPath);
-      fs.writeFile(filePath, 'content');
+      await fs.mkdir(dirPath);
+      await fs.writeFile(filePath, 'content');
       
-      fs.remove(dirPath);
-      expect(fs.exists(dirPath)).toBe(false);
-      expect(fs.exists(filePath)).toBe(false);
+      await fs.remove(dirPath);
+      expect(await fs.exists(dirPath)).toBe(false);
+      expect(await fs.exists(filePath)).toBe(false);
     });
   });
 
   describe('path handling', () => {
-    it('creates parent directories when writing files', () => {
+    it('creates parent directories when writing files', async () => {
       const filePath = '/project/deep/nested/test.txt';
       
-      fs.writeFile(filePath, 'content');
-      expect(fs.exists('/project/deep')).toBe(true);
-      expect(fs.exists('/project/deep/nested')).toBe(true);
-      expect(fs.exists(filePath)).toBe(true);
+      await fs.writeFile(filePath, 'content');
+      expect(await fs.exists('/project/deep')).toBe(true);
+      expect(await fs.exists('/project/deep/nested')).toBe(true);
+      expect(await fs.exists(filePath)).toBe(true);
     });
 
     it('converts relative paths to absolute', () => {
@@ -94,53 +97,53 @@ describe('MemfsTestFileSystem', () => {
   });
 
   describe('file type checks', () => {
-    it('identifies files correctly', () => {
+    it('identifies files correctly', async () => {
       const filePath = '/project/test.txt';
       const dirPath = '/project/dir';
       
-      fs.writeFile(filePath, 'content');
-      fs.mkdir(dirPath);
+      await fs.writeFile(filePath, 'content');
+      await fs.mkdir(dirPath);
       
-      expect(fs.isFile(filePath)).toBe(true);
-      expect(fs.isFile(dirPath)).toBe(false);
+      expect(await fs.isFile(filePath)).toBe(true);
+      expect(await fs.isFile(dirPath)).toBe(false);
     });
 
-    it('identifies directories correctly', () => {
+    it('identifies directories correctly', async () => {
       const filePath = '/project/test.txt';
       const dirPath = '/project/dir';
       
-      fs.writeFile(filePath, 'content');
-      fs.mkdir(dirPath);
+      await fs.writeFile(filePath, 'content');
+      await fs.mkdir(dirPath);
       
-      expect(fs.isDirectory(dirPath)).toBe(true);
-      expect(fs.isDirectory(filePath)).toBe(false);
+      expect(await fs.isDirectory(dirPath)).toBe(true);
+      expect(await fs.isDirectory(filePath)).toBe(false);
     });
   });
 
   describe('initialization and cleanup', () => {
-    it('creates project root on initialization', () => {
-      expect(fs.exists('/project')).toBe(true);
-      expect(fs.isDirectory('/project')).toBe(true);
+    it('creates project root on initialization', async () => {
+      expect(await fs.exists('/project')).toBe(true);
+      expect(await fs.isDirectory('/project')).toBe(true);
     });
 
-    it('cleans up all files on cleanup', () => {
-      fs.writeFile('/project/test.txt', 'content');
-      fs.mkdir('/project/dir');
+    it('cleans up all files on cleanup', async () => {
+      await fs.writeFile('/project/test.txt', 'content');
+      await fs.mkdir('/project/dir');
       
       fs.cleanup();
       
-      expect(fs.exists('/project/test.txt')).toBe(false);
-      expect(fs.exists('/project/dir')).toBe(false);
+      expect(await fs.exists('/project/test.txt')).toBe(false);
+      expect(await fs.exists('/project/dir')).toBe(false);
     });
   });
 
   describe('error handling', () => {
-    it('throws when reading non-existent file', () => {
-      expect(() => fs.readFile('/project/nonexistent.txt')).toThrow();
+    it('throws when reading non-existent file', async () => {
+      await expect(fs.readFile('/project/nonexistent.txt')).rejects.toThrow();
     });
 
-    it('throws when getting stats of non-existent path', () => {
-      expect(() => fs.stat('/project/nonexistent')).toThrow();
+    it('throws when getting stats of non-existent path', async () => {
+      await expect(fs.stat('/project/nonexistent')).rejects.toThrow();
     });
   });
 }); 

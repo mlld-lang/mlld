@@ -12,7 +12,8 @@ export default defineConfig({
       'services/**/*.test.ts',
       'core/**/*.test.ts',
       'cli/**/*.test.ts',
-      'sdk/**/*.test.ts'
+      'sdk/**/*.test.ts',
+      'tests/utils/__tests__/*.test.ts'
     ],
     exclude: [
       'node_modules',
