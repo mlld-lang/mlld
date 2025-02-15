@@ -7,6 +7,8 @@ import { PathResolver } from './resolvers/PathResolver';
 import { CommandResolver } from './resolvers/CommandResolver';
 import { resolutionLogger as logger } from '../../core/utils/logger';
 import { IFileSystemService } from '../FileSystemService/IFileSystemService';
+import { IParserService } from '../ParserService/IParserService';
+import type { MeldNode, DirectiveNode, TextNode, DirectiveKind } from 'meld-spec';
 
 /**
  * Service responsible for resolving variables, commands, and paths in different contexts
@@ -19,7 +21,8 @@ export class ResolutionService implements IResolutionService {
 
   constructor(
     private stateService: IStateService,
-    private fileSystemService: IFileSystemService
+    private fileSystemService: IFileSystemService,
+    private parserService: IParserService
   ) {
     this.textResolver = new TextResolver(stateService);
     this.dataResolver = new DataResolver(stateService);
@@ -28,17 +31,34 @@ export class ResolutionService implements IResolutionService {
   }
 
   /**
+   * Parse a string into AST nodes for resolution
+   */
+  private async parseForResolution(value: string): Promise<MeldNode[]> {
+    try {
+      return await this.parserService.parse(value);
+    } catch (error) {
+      // If parsing fails, treat the value as literal text
+      return [{
+        type: 'Text',
+        content: value
+      } as TextNode];
+    }
+  }
+
+  /**
    * Resolve text variables in a string
    */
   async resolveText(text: string, context: ResolutionContext): Promise<string> {
-    return this.textResolver.resolve(text, context);
+    const nodes = await this.parseForResolution(text);
+    return this.textResolver.resolve(nodes[0] as DirectiveNode, context);
   }
 
   /**
    * Resolve data variables and fields
    */
   async resolveData(ref: string, context: ResolutionContext): Promise<any> {
-    return this.dataResolver.resolve(ref, context);
+    const nodes = await this.parseForResolution(ref);
+    return this.dataResolver.resolve(nodes[0] as DirectiveNode, context);
   }
 
   /**
@@ -46,14 +66,23 @@ export class ResolutionService implements IResolutionService {
    */
   async resolvePath(path: string, context: ResolutionContext): Promise<string> {
     logger.debug('Resolving path', { path, context });
-    return this.pathResolver.resolve(path, context);
+    const nodes = await this.parseForResolution(path);
+    return this.pathResolver.resolve(nodes[0] as DirectiveNode, context);
   }
 
   /**
    * Resolve command references
    */
   async resolveCommand(cmd: string, args: string[], context: ResolutionContext): Promise<string> {
-    return this.commandResolver.resolve(cmd, args, context);
+    const node: DirectiveNode = {
+      type: 'Directive',
+      directive: {
+        kind: 'run',
+        name: cmd,
+        args
+      }
+    };
+    return this.commandResolver.resolve(node, context);
   }
 
   /**
@@ -80,30 +109,66 @@ export class ResolutionService implements IResolutionService {
     // 2. Check for circular references
     await this.detectCircularReferences(value);
 
-    // 3. Resolve based on content type
-    let result = value;
+    // 3. Parse the value into AST nodes
+    const nodes = await this.parseForResolution(value);
 
-    // Handle command references first if allowed
-    if (context.allowedVariableTypes.command) {
-      const cmdRef = this.commandResolver.parseCommandReference(result);
-      if (cmdRef) {
-        result = await this.resolveCommand(cmdRef.cmd, cmdRef.args, context);
+    // 4. Resolve each node
+    let result = '';
+    for (const node of nodes) {
+      if (node.type === 'Text') {
+        result += (node as TextNode).content;
+        continue;
       }
-    }
 
-    // Handle path variables if allowed
-    if (context.allowedVariableTypes.path && result.includes('$')) {
-      result = await this.resolvePath(result, context);
-    }
+      if (node.type === 'Directive') {
+        const directiveNode = node as DirectiveNode;
+        // Handle directive nodes based on their kind
+        switch (directiveNode.directive.kind) {
+          case 'text':
+            if (!context.allowedVariableTypes.text) {
+              throw new ResolutionError(
+                'Text variables are not allowed in this context',
+                ResolutionErrorCode.INVALID_CONTEXT,
+                { value, context }
+              );
+            }
+            result += await this.textResolver.resolve(directiveNode, context);
+            break;
 
-    // Handle data variables if allowed
-    if (context.allowedVariableTypes.data && result.includes('#{')) {
-      result = await this.resolveData(result, context);
-    }
+          case 'data':
+            if (!context.allowedVariableTypes.data) {
+              throw new ResolutionError(
+                'Data variables are not allowed in this context',
+                ResolutionErrorCode.INVALID_CONTEXT,
+                { value, context }
+              );
+            }
+            result += await this.dataResolver.resolve(directiveNode, context);
+            break;
 
-    // Handle text variables if allowed
-    if (context.allowedVariableTypes.text && result.includes('${')) {
-      result = await this.resolveText(result, context);
+          case 'path':
+            if (!context.allowedVariableTypes.path) {
+              throw new ResolutionError(
+                'Path variables are not allowed in this context',
+                ResolutionErrorCode.INVALID_CONTEXT,
+                { value, context }
+              );
+            }
+            result += await this.pathResolver.resolve(directiveNode, context);
+            break;
+
+          case 'run':
+            if (!context.allowedVariableTypes.command) {
+              throw new ResolutionError(
+                'Command references are not allowed in this context',
+                ResolutionErrorCode.INVALID_CONTEXT,
+                { value, context }
+              );
+            }
+            result += await this.commandResolver.resolve(directiveNode, context);
+            break;
+        }
+      }
     }
 
     return result;
@@ -113,53 +178,54 @@ export class ResolutionService implements IResolutionService {
    * Validate that resolution is allowed in the given context
    */
   async validateResolution(value: string, context: ResolutionContext): Promise<void> {
-    // Check for path variables
-    if (!context.allowedVariableTypes.path && value.includes('$')) {
-      const pathRefs = this.pathResolver.extractReferences(value);
-      if (pathRefs.length > 0) {
-        throw new ResolutionError(
-          'Path variables are not allowed in this context',
-          ResolutionErrorCode.INVALID_CONTEXT,
-          { value, context }
-        );
-      }
-    }
+    // Parse the value to check for variable types
+    const nodes = await this.parseForResolution(value);
 
-    // Check for command references
-    if (!context.allowedVariableTypes.command && /\$[A-Za-z_][A-Za-z0-9_]*\(/.test(value)) {
-      throw new ResolutionError(
-        'Command references are not allowed in this context',
-        ResolutionErrorCode.INVALID_CONTEXT,
-        { value, context }
-      );
-    }
+    for (const node of nodes) {
+      if (node.type !== 'Directive') continue;
 
-    // Check for data field access
-    if (!context.allowedVariableTypes.data && /#{[^}]+\.[^}]+}/.test(value)) {
-      throw new ResolutionError(
-        'Data field access is not allowed in this context',
-        ResolutionErrorCode.INVALID_CONTEXT,
-        { value, context }
-      );
-    }
+      const directiveNode = node as DirectiveNode;
+      // Check if the directive type is allowed
+      switch (directiveNode.directive.kind) {
+        case 'text':
+          if (!context.allowedVariableTypes.text) {
+            throw new ResolutionError(
+              'Text variables are not allowed in this context',
+              ResolutionErrorCode.INVALID_CONTEXT,
+              { value, context }
+            );
+          }
+          break;
 
-    // Check for text variables
-    if (!context.allowedVariableTypes.text && value.includes('${')) {
-      throw new ResolutionError(
-        'Text variables are not allowed in this context',
-        ResolutionErrorCode.INVALID_CONTEXT,
-        { value, context }
-      );
-    }
+        case 'data':
+          if (!context.allowedVariableTypes.data) {
+            throw new ResolutionError(
+              'Data variables are not allowed in this context',
+              ResolutionErrorCode.INVALID_CONTEXT,
+              { value, context }
+            );
+          }
+          break;
 
-    // Check for nested variables if not allowed
-    if (!context.allowNested) {
-      if (value.includes('${') && value.includes('${', value.indexOf('${') + 2)) {
-        throw new ResolutionError(
-          'Nested variable interpolation is not allowed in this context',
-          ResolutionErrorCode.INVALID_CONTEXT,
-          { value, context }
-        );
+        case 'path':
+          if (!context.allowedVariableTypes.path) {
+            throw new ResolutionError(
+              'Path variables are not allowed in this context',
+              ResolutionErrorCode.INVALID_CONTEXT,
+              { value, context }
+            );
+          }
+          break;
+
+        case 'run':
+          if (!context.allowedVariableTypes.command) {
+            throw new ResolutionError(
+              'Command references are not allowed in this context',
+              ResolutionErrorCode.INVALID_CONTEXT,
+              { value, context }
+            );
+          }
+          break;
       }
     }
   }
@@ -171,19 +237,31 @@ export class ResolutionService implements IResolutionService {
     const visited = new Set<string>();
     const stack = new Set<string>();
 
-    const checkReferences = (text: string) => {
-      // Get all variable references
-      const textRefs = this.textResolver.extractReferences(text);
-      const dataRefs = this.dataResolver.extractReferences(text);
-      const pathRefs = this.pathResolver.extractReferences(text);
-      const cmdRefs = this.commandResolver.extractReferences(text);
+    const checkReferences = async (text: string, currentRef?: string) => {
+      // Parse the text to get variable references
+      const nodes = await this.parseForResolution(text);
+      if (!nodes || !Array.isArray(nodes)) {
+        throw new ResolutionError(
+          'Invalid parse result',
+          ResolutionErrorCode.SYNTAX_ERROR,
+          { value: text }
+        );
+      }
 
-      const allRefs = [...textRefs, ...dataRefs, ...pathRefs, ...cmdRefs];
+      for (const node of nodes) {
+        if (node.type !== 'Directive') continue;
 
-      for (const ref of allRefs) {
+        const directiveNode = node as DirectiveNode;
+        const ref = directiveNode.directive.name;
+        if (!ref) continue;
+
+        // Skip if this is a direct reference to the current variable
+        if (ref === currentRef) continue;
+
         if (stack.has(ref)) {
+          const path = Array.from(stack).join(' -> ');
           throw new ResolutionError(
-            `Circular reference detected: ${Array.from(stack).join(' -> ')} -> ${ref}`,
+            `Circular reference detected: ${path} -> ${ref}`,
             ResolutionErrorCode.CIRCULAR_REFERENCE,
             { value: text }
           );
@@ -193,25 +271,31 @@ export class ResolutionService implements IResolutionService {
           visited.add(ref);
           stack.add(ref);
 
-          // Check the value of this reference for more references
-          const textValue = this.stateService.getTextVar(ref);
-          if (textValue) {
-            checkReferences(textValue);
+          let refValue: string | undefined;
+
+          switch (directiveNode.directive.kind) {
+            case 'text':
+              refValue = this.stateService.getTextVar(ref);
+              break;
+            case 'data':
+              const dataValue = this.stateService.getDataVar(ref);
+              if (dataValue && typeof dataValue === 'string') {
+                refValue = dataValue;
+              }
+              break;
+            case 'path':
+              refValue = this.stateService.getPathVar(ref);
+              break;
+            case 'run':
+              const cmdValue = this.stateService.getCommand(ref);
+              if (cmdValue) {
+                refValue = cmdValue.command;
+              }
+              break;
           }
 
-          const dataValue = this.stateService.getDataVar(ref);
-          if (dataValue && typeof dataValue === 'string') {
-            checkReferences(dataValue);
-          }
-
-          const pathValue = this.stateService.getPathVar(ref);
-          if (pathValue) {
-            checkReferences(pathValue);
-          }
-
-          const cmdValue = this.stateService.getCommand(ref);
-          if (cmdValue) {
-            checkReferences(cmdValue.command);
+          if (refValue) {
+            await checkReferences(refValue, ref);
           }
 
           stack.delete(ref);
@@ -219,7 +303,7 @@ export class ResolutionService implements IResolutionService {
       }
     };
 
-    checkReferences(value);
+    await checkReferences(value);
   }
 
   /**
@@ -258,7 +342,7 @@ export class ResolutionService implements IResolutionService {
       }
     }
 
-    // Extract the section content
-    return lines.slice(sectionStart, sectionEnd).join('\n');
+    // Extract the section content and trim trailing newlines
+    return lines.slice(sectionStart, sectionEnd).join('\n').trimEnd();
   }
 } 

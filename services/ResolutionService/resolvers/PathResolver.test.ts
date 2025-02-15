@@ -3,6 +3,7 @@ import { PathResolver } from './PathResolver';
 import { IStateService } from '../../StateService/IStateService';
 import { ResolutionContext } from '../IResolutionService';
 import { ResolutionError } from '../errors/ResolutionError';
+import type { MeldNode, DirectiveNode, TextNode } from 'meld-spec';
 
 describe('PathResolver', () => {
   let resolver: PathResolver;
@@ -41,129 +42,211 @@ describe('PathResolver', () => {
   });
 
   describe('resolve', () => {
-    it('should return path without variables unchanged', async () => {
-      const result = await resolver.resolve('/home/user/file', context);
+    it('should return content of text node unchanged', async () => {
+      const node: TextNode = {
+        type: 'Text',
+        content: '/home/user/file'
+      };
+      const result = await resolver.resolve(node, context);
       expect(result).toBe('/home/user/file');
     });
 
-    it('should resolve simple path variable', async () => {
-      const result = await resolver.resolve('$HOMEPATH', context);
+    it('should resolve path directive node', async () => {
+      const node: DirectiveNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'path',
+          name: 'HOMEPATH'
+        }
+      };
+      const result = await resolver.resolve(node, context);
       expect(result).toBe('/home/user');
       expect(stateService.getPathVar).toHaveBeenCalledWith('HOMEPATH');
     });
 
-    it('should resolve multiple path variables', async () => {
-      vi.mocked(stateService.getPathVar)
-        .mockImplementation((name) => {
-          if (name === 'HOMEPATH') return '/home/user';
-          if (name === 'CONFIG') return 'config';
-          return undefined;
-        });
-      
-      const result = await resolver.resolve('$HOMEPATH/$CONFIG', context);
-      expect(result).toBe('/home/user/config');
-      expect(stateService.getPathVar).toHaveBeenCalledWith('HOMEPATH');
-      expect(stateService.getPathVar).toHaveBeenCalledWith('CONFIG');
-    });
-
-    it('should handle $~ alias for $HOMEPATH', async () => {
-      const result = await resolver.resolve('$~/config', context);
-      expect(result).toBe('/home/user/config');
+    it('should handle $~ alias for HOMEPATH', async () => {
+      const node: DirectiveNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'path',
+          name: '~'
+        }
+      };
+      const result = await resolver.resolve(node, context);
+      expect(result).toBe('/home/user');
       expect(stateService.getPathVar).toHaveBeenCalledWith('HOMEPATH');
     });
 
-    it('should handle $. alias for $PROJECTPATH', async () => {
-      const result = await resolver.resolve('$./src', context);
-      expect(result).toBe('/project/src');
+    it('should handle $. alias for PROJECTPATH', async () => {
+      const node: DirectiveNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'path',
+          name: '.'
+        }
+      };
+      const result = await resolver.resolve(node, context);
+      expect(result).toBe('/project');
       expect(stateService.getPathVar).toHaveBeenCalledWith('PROJECTPATH');
-    });
-
-    it('should handle path variables in middle of path', async () => {
-      vi.mocked(stateService.getPathVar)
-        .mockImplementation((name) => {
-          if (name === 'HOMEPATH') return '/home/user';
-          if (name === 'SUBDIR') return 'src';
-          return undefined;
-        });
-      
-      const result = await resolver.resolve('$HOMEPATH/$SUBDIR/file.txt', context);
-      expect(result).toBe('/home/user/src/file.txt');
-      expect(stateService.getPathVar).toHaveBeenCalledWith('HOMEPATH');
-      expect(stateService.getPathVar).toHaveBeenCalledWith('SUBDIR');
     });
   });
 
   describe('error handling', () => {
     it('should throw when path variables are not allowed', async () => {
       context.allowedVariableTypes.path = false;
+      const node: DirectiveNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'path',
+          name: 'HOMEPATH',
+          value: '/home/user'
+        }
+      };
 
-      await expect(resolver.resolve('$HOMEPATH', context))
+      await expect(resolver.resolve(node, context))
         .rejects
         .toThrow('Path variables are not allowed in this context');
     });
 
     it('should throw on undefined path variable', async () => {
-      vi.mocked(stateService.getPathVar)
-        .mockImplementation((name) => undefined);
-
-      await expect(resolver.resolve('$missing', context))
+      const node: DirectiveNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'path',
+          name: 'missing'
+        }
+      };
+      
+      await expect(resolver.resolve(node, context))
         .rejects
         .toThrow('Undefined path variable: missing');
     });
 
     it('should throw when path is not absolute but required', async () => {
-      vi.mocked(stateService.getPathVar)
-        .mockImplementation((name) => 'relative/path');
-
-      await expect(resolver.resolve('$path', context))
+      const node: DirectiveNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'path',
+          name: 'path'
+        }
+      };
+      vi.mocked(stateService.getPathVar).mockReturnValue('relative/path');
+      
+      await expect(resolver.resolve(node, context))
         .rejects
         .toThrow('Path must be absolute');
     });
 
     it('should throw when path does not start with allowed root', async () => {
+      const node: DirectiveNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'path',
+          name: 'path'
+        }
+      };
       vi.mocked(stateService.getPathVar)
         .mockImplementation((name) => {
-          if (name === 'path') return '/other/path';
           if (name === 'HOMEPATH') return '/home/user';
           if (name === 'PROJECTPATH') return '/project';
+          if (name === 'path') return '/other/path';
           return undefined;
         });
 
-      await expect(resolver.resolve('$path', context))
+      context.pathValidation = {
+        requireAbsolute: true,
+        allowedRoots: ['HOMEPATH', 'PROJECTPATH']
+      };
+      
+      await expect(resolver.resolve(node, context))
         .rejects
         .toThrow('Path must start with one of: HOMEPATH, PROJECTPATH');
+    });
+
+    it('should throw on invalid node type', async () => {
+      const node: DirectiveNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'text',
+          name: 'test'
+        }
+      };
+      
+      await expect(resolver.resolve(node, context))
+        .rejects
+        .toThrow('Invalid node type for path resolution');
+    });
+
+    it('should throw on missing variable name', async () => {
+      const node: DirectiveNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'path'
+        }
+      };
+      
+      await expect(resolver.resolve(node, context))
+        .rejects
+        .toThrow('Path variable name is required');
     });
   });
 
   describe('extractReferences', () => {
-    it('should extract simple path variable', () => {
-      const refs = resolver.extractReferences('$HOMEPATH');
+    it('should extract variable name from path directive', () => {
+      const node: DirectiveNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'path',
+          name: 'test'
+        }
+      };
+      const refs = resolver.extractReferences(node);
+      expect(refs).toEqual(['test']);
+    });
+
+    it('should resolve ~ alias to HOMEPATH', () => {
+      const node: DirectiveNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'path',
+          name: '~'
+        }
+      };
+      const refs = resolver.extractReferences(node);
       expect(refs).toEqual(['HOMEPATH']);
     });
 
-    it('should extract multiple path variables', () => {
-      const refs = resolver.extractReferences('$HOMEPATH/to/$PROJECTPATH');
-      expect(refs).toEqual(['HOMEPATH', 'PROJECTPATH']);
-    });
-
-    it('should handle $~ and $. aliases', () => {
-      const refs = resolver.extractReferences('$~/config and $./src');
-      expect(refs).toEqual(['~', '.']);
-    });
-
-    it('should extract path variables from middle of path', () => {
-      const refs = resolver.extractReferences('/root/$PROJECTPATH/src');
+    it('should resolve . alias to PROJECTPATH', () => {
+      const node: DirectiveNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'path',
+          name: '.'
+        }
+      };
+      const refs = resolver.extractReferences(node);
       expect(refs).toEqual(['PROJECTPATH']);
     });
 
-    it('should return empty array for no references', () => {
-      const refs = resolver.extractReferences('/absolute/path');
+    it('should return empty array for non-path directive', () => {
+      const node: DirectiveNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'text',
+          name: 'test'
+        }
+      };
+      const refs = resolver.extractReferences(node);
       expect(refs).toEqual([]);
     });
 
-    it('should only match valid path variable names', () => {
-      const refs = resolver.extractReferences('$valid $123invalid $_valid');
-      expect(refs).toEqual(['valid', '_valid']);
+    it('should return empty array for text node', () => {
+      const node: TextNode = {
+        type: 'Text',
+        content: 'no references here'
+      };
+      const refs = resolver.extractReferences(node);
+      expect(refs).toEqual([]);
     });
   });
 }); 

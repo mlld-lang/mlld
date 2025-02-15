@@ -1,20 +1,22 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { CommandResolver } from './CommandResolver';
 import { IStateService } from '../../StateService/IStateService';
 import { ResolutionContext } from '../IResolutionService';
 import { ResolutionError } from '../errors/ResolutionError';
+import { TestContext } from '../../../tests/utils/TestContext';
+import type { MeldNode, DirectiveNode, TextNode } from 'meld-spec';
 
 describe('CommandResolver', () => {
   let resolver: CommandResolver;
   let stateService: IStateService;
   let context: ResolutionContext;
+  let testContext: TestContext;
 
-  beforeEach(() => {
-    stateService = {
-      getCommand: vi.fn(),
-      setCommand: vi.fn(),
-    } as unknown as IStateService;
+  beforeEach(async () => {
+    testContext = new TestContext();
+    await testContext.initialize();
 
+    stateService = testContext.factory.createMockStateService();
     resolver = new CommandResolver(stateService);
 
     context = {
@@ -24,150 +26,209 @@ describe('CommandResolver', () => {
         data: true,
         path: true,
         command: true
-      },
-      allowCommands: true
+      }
     };
   });
 
+  afterEach(async () => {
+    await testContext.cleanup();
+  });
+
   describe('resolve', () => {
-    it('should resolve simple command without parameters', async () => {
+    it('should return content of text node unchanged', async () => {
+      const node: TextNode = {
+        type: 'Text',
+        content: 'no commands here'
+      };
+      const result = await resolver.resolve(node, context);
+      expect(result).toBe('no commands here');
+    });
+
+    it('should resolve command without parameters', async () => {
+      const node: DirectiveNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'run',
+          name: 'simple',
+          args: []
+        }
+      };
       vi.mocked(stateService.getCommand).mockReturnValue({
         command: '@run [echo test]'
       });
 
-      const result = await resolver.resolve('simple', [], context);
+      const result = await resolver.resolve(node, context);
       expect(result).toBe('echo test');
       expect(stateService.getCommand).toHaveBeenCalledWith('simple');
     });
 
     it('should resolve command with parameters', async () => {
+      const node: DirectiveNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'run',
+          name: 'echo',
+          args: ['hello', 'world']
+        }
+      };
       vi.mocked(stateService.getCommand).mockReturnValue({
         command: '@run [echo ${param1} ${param2}]'
       });
 
-      const result = await resolver.resolve('echo', ['hello', 'world'], context);
+      const result = await resolver.resolve(node, context);
       expect(result).toBe('echo hello world');
       expect(stateService.getCommand).toHaveBeenCalledWith('echo');
     });
 
     it('should handle commands with options', async () => {
+      const node: DirectiveNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'run',
+          name: 'echo',
+          args: ['test']
+        }
+      };
       vi.mocked(stateService.getCommand).mockReturnValue({
         command: '@run [echo ${text}]',
         options: { background: true }
       });
 
-      const result = await resolver.resolve('echo', ['test'], context);
+      const result = await resolver.resolve(node, context);
       expect(result).toBe('echo test');
     });
   });
 
   describe('error handling', () => {
     it('should throw when commands are not allowed', async () => {
-      context.allowCommands = false;
+      context.allowedVariableTypes.command = false;
+      const node: DirectiveNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'run',
+          name: 'cmd',
+          args: []
+        }
+      };
 
-      await expect(resolver.resolve('cmd', [], context))
+      await expect(resolver.resolve(node, context))
         .rejects
         .toThrow('Command references are not allowed in this context');
     });
 
     it('should throw on undefined command', async () => {
+      const node: DirectiveNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'run',
+          name: 'missing',
+          args: []
+        }
+      };
       vi.mocked(stateService.getCommand).mockReturnValue(undefined);
 
-      await expect(resolver.resolve('missing', [], context))
+      await expect(resolver.resolve(node, context))
         .rejects
         .toThrow('Undefined command: missing');
     });
 
     it('should throw on invalid command format', async () => {
+      const node: DirectiveNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'run',
+          name: 'invalid',
+          args: []
+        }
+      };
       vi.mocked(stateService.getCommand).mockReturnValue({
         command: 'invalid format'
       });
 
-      await expect(resolver.resolve('invalid', [], context))
+      await expect(resolver.resolve(node, context))
         .rejects
         .toThrow('Invalid command definition: must start with @run [');
     });
 
     it('should throw on parameter count mismatch', async () => {
+      const node: DirectiveNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'run',
+          name: 'echo',
+          args: ['one']
+        }
+      };
       vi.mocked(stateService.getCommand).mockReturnValue({
         command: '@run [echo ${one} ${two}]'
       });
 
-      await expect(resolver.resolve('echo', ['one'], context))
+      await expect(resolver.resolve(node, context))
         .rejects
         .toThrow('Command echo expects 2 parameters but got 1');
     });
-  });
 
-  describe('parseCommandReference', () => {
-    it('should parse simple command without args', () => {
-      const result = resolver.parseCommandReference('$cmd()');
-      expect(result).toEqual({
-        cmd: 'cmd',
-        args: ['']
-      });
+    it('should throw on invalid node type', async () => {
+      const node: DirectiveNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'text',
+          name: 'test'
+        }
+      };
+      
+      await expect(resolver.resolve(node, context))
+        .rejects
+        .toThrow('Invalid node type for command resolution');
     });
 
-    it('should parse command with single arg', () => {
-      const result = resolver.parseCommandReference('$cmd(arg)');
-      expect(result).toEqual({
-        cmd: 'cmd',
-        args: ['arg']
-      });
-    });
-
-    it('should parse command with multiple args', () => {
-      const result = resolver.parseCommandReference('$cmd(one, two, three)');
-      expect(result).toEqual({
-        cmd: 'cmd',
-        args: ['one', 'two', 'three']
-      });
-    });
-
-    it('should handle whitespace in args', () => {
-      const result = resolver.parseCommandReference('$cmd( arg1 ,  arg2 )');
-      expect(result).toEqual({
-        cmd: 'cmd',
-        args: ['arg1', 'arg2']
-      });
-    });
-
-    it('should return null for invalid format', () => {
-      expect(resolver.parseCommandReference('not a command')).toBeNull();
-      expect(resolver.parseCommandReference('$cmd')).toBeNull();
-      expect(resolver.parseCommandReference('$cmd[')).toBeNull();
+    it('should throw on missing command name', async () => {
+      const node: DirectiveNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'run'
+        }
+      };
+      
+      await expect(resolver.resolve(node, context))
+        .rejects
+        .toThrow('Command name is required');
     });
   });
 
   describe('extractReferences', () => {
-    it('should extract simple command reference', () => {
-      const refs = resolver.extractReferences('$cmd()');
-      expect(refs).toEqual(['cmd']);
+    it('should extract command name from command directive', () => {
+      const node: DirectiveNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'run',
+          name: 'test',
+          args: []
+        }
+      };
+      const refs = resolver.extractReferences(node);
+      expect(refs).toEqual(['test']);
     });
 
-    it('should extract multiple command references', () => {
-      const refs = resolver.extractReferences('$one() and $two()');
-      expect(refs).toEqual(['one', 'two']);
-    });
-
-    it('should extract only command names, not args', () => {
-      const refs = resolver.extractReferences('$cmd(arg1, arg2)');
-      expect(refs).toEqual(['cmd']);
-    });
-
-    it('should handle repeated references', () => {
-      const refs = resolver.extractReferences('$cmd() and $cmd()');
-      expect(refs).toEqual(['cmd', 'cmd']);
-    });
-
-    it('should return empty array for no references', () => {
-      const refs = resolver.extractReferences('no commands here');
+    it('should return empty array for non-command directive', () => {
+      const node: DirectiveNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'text',
+          name: 'test'
+        }
+      };
+      const refs = resolver.extractReferences(node);
       expect(refs).toEqual([]);
     });
 
-    it('should only match valid command names', () => {
-      const refs = resolver.extractReferences('$valid() $123invalid() $_valid()');
-      expect(refs).toEqual(['valid', '_valid']);
+    it('should return empty array for text node', () => {
+      const node: TextNode = {
+        type: 'Text',
+        content: 'no references here'
+      };
+      const refs = resolver.extractReferences(node);
+      expect(refs).toEqual([]);
     });
   });
 }); 

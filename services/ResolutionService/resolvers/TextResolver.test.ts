@@ -3,6 +3,7 @@ import { TextResolver } from './TextResolver';
 import { IStateService } from '../../StateService/IStateService';
 import { ResolutionContext } from '../IResolutionService';
 import { ResolutionError } from '../errors/ResolutionError';
+import { MeldNode } from 'meld-spec';
 
 describe('TextResolver', () => {
   let resolver: TextResolver;
@@ -29,103 +30,160 @@ describe('TextResolver', () => {
   });
 
   describe('resolve', () => {
-    it('should return string without text variables unchanged', async () => {
-      const result = await resolver.resolve('no variables here', context);
+    it('should return content of text node unchanged', async () => {
+      const node: MeldNode = {
+        type: 'Text',
+        content: 'no variables here'
+      };
+      const result = await resolver.resolve(node, context);
       expect(result).toBe('no variables here');
     });
 
-    it('should resolve simple text variable', async () => {
-      vi.mocked(stateService.getTextVar).mockReturnValue('value');
-      const result = await resolver.resolve('${test}', context);
-      expect(result).toBe('value');
+    it('should resolve text directive node', async () => {
+      const node: MeldNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'text',
+          name: 'test',
+          value: 'value'
+        }
+      };
+      vi.mocked(stateService.getTextVar).mockReturnValue('resolved');
+      const result = await resolver.resolve(node, context);
+      expect(result).toBe('resolved');
       expect(stateService.getTextVar).toHaveBeenCalledWith('test');
     });
 
-    it('should resolve multiple text variables', async () => {
-      vi.mocked(stateService.getTextVar)
-        .mockReturnValueOnce('first')
-        .mockReturnValueOnce('second');
-      
-      const result = await resolver.resolve('${one} and ${two}', context);
-      expect(result).toBe('first and second');
-      expect(stateService.getTextVar).toHaveBeenCalledWith('one');
-      expect(stateService.getTextVar).toHaveBeenCalledWith('two');
-    });
-
     it('should handle format specifications', async () => {
+      const node: MeldNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'text',
+          name: 'test',
+          value: 'value',
+          format: '(format)'
+        }
+      };
       vi.mocked(stateService.getTextVar).mockReturnValue('value');
-      const result = await resolver.resolve('${test>>(format)}', context);
+      const result = await resolver.resolve(node, context);
       expect(result).toBe('value'); // Format not implemented yet
       expect(stateService.getTextVar).toHaveBeenCalledWith('test');
     });
 
     it('should handle environment variables', async () => {
+      const node: MeldNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'text',
+          name: 'ENV_TEST',
+          value: ''
+        }
+      };
       vi.mocked(stateService.getTextVar).mockReturnValue(undefined);
       
-      await expect(resolver.resolve('${ENV_TEST}', context))
+      await expect(resolver.resolve(node, context))
         .rejects
         .toThrow('Environment variable not set: ENV_TEST');
-    });
-
-    it('should handle variables in template literals', async () => {
-      vi.mocked(stateService.getTextVar).mockReturnValue('world');
-      const result = await resolver.resolve('`Hello ${name}!`', context);
-      expect(result).toBe('`Hello world!`');
     });
   });
 
   describe('error handling', () => {
     it('should throw when text variables are not allowed', async () => {
       context.allowedVariableTypes.text = false;
+      const node: MeldNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'text',
+          name: 'test',
+          value: 'value'
+        }
+      };
 
-      await expect(resolver.resolve('${test}', context))
+      await expect(resolver.resolve(node, context))
         .rejects
         .toThrow('Text variables are not allowed in this context');
     });
 
     it('should throw on undefined variable', async () => {
+      const node: MeldNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'text',
+          name: 'missing',
+          value: ''
+        }
+      };
       vi.mocked(stateService.getTextVar).mockReturnValue(undefined);
       
-      await expect(resolver.resolve('${missing}', context))
+      await expect(resolver.resolve(node, context))
         .rejects
         .toThrow('Undefined text variable: missing');
     });
 
-    it('should throw on nested variable interpolation', async () => {
-      vi.mocked(stateService.getTextVar)
-        .mockReturnValueOnce('inner')
-        .mockReturnValueOnce('outer');
+    it('should throw on invalid node type', async () => {
+      const node: MeldNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'data',
+          name: 'test',
+          value: ''
+        }
+      };
       
-      await expect(resolver.resolve('${outer${inner}}', context))
+      await expect(resolver.resolve(node, context))
         .rejects
-        .toThrow('Nested variable interpolation is not allowed');
+        .toThrow('Invalid node type for text resolution');
+    });
+
+    it('should throw on missing variable name', async () => {
+      const node: MeldNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'text',
+          value: ''
+        }
+      };
+      
+      await expect(resolver.resolve(node, context))
+        .rejects
+        .toThrow('Text variable name is required');
     });
   });
 
   describe('extractReferences', () => {
-    it('should extract simple variable references', () => {
-      const refs = resolver.extractReferences('${one} and ${two}');
-      expect(refs).toEqual(['one', 'two']);
-    });
-
-    it('should extract variables with format specifications', () => {
-      const refs = resolver.extractReferences('${test>>(format)}');
+    it('should extract variable name from text directive', () => {
+      const node: MeldNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'text',
+          name: 'test',
+          value: ''
+        }
+      };
+      const refs = resolver.extractReferences(node);
       expect(refs).toEqual(['test']);
     });
 
-    it('should return empty array for no references', () => {
-      const refs = resolver.extractReferences('no references here');
+    it('should return empty array for non-text directive', () => {
+      const node: MeldNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'data',
+          name: 'test',
+          value: ''
+        }
+      };
+      const refs = resolver.extractReferences(node);
       expect(refs).toEqual([]);
     });
 
-    it('should handle repeated references', () => {
-      const refs = resolver.extractReferences('${test} and ${test}');
-      expect(refs).toEqual(['test', 'test']);
-    });
-
-    it('should only match valid variable names', () => {
-      const refs = resolver.extractReferences('${valid} ${123invalid} ${_valid}');
-      expect(refs).toEqual(['valid', '_valid']);
+    it('should return empty array for text node', () => {
+      const node: MeldNode = {
+        type: 'Text',
+        content: 'no references here'
+      };
+      const refs = resolver.extractReferences(node);
+      expect(refs).toEqual([]);
     });
   });
 }); 

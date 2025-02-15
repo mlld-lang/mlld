@@ -15,9 +15,6 @@ export interface ResolutionContext {
     command: boolean; // $command
   };
   
-  /** Whether nested variable interpolation is allowed */
-  allowNested?: boolean;
-  
   /** Path validation rules when resolving paths */
   pathValidation?: {
     requireAbsolute: boolean;
