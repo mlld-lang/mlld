@@ -51,8 +51,9 @@ export class InterpreterService implements IInterpreterService {
 
       for (const node of nodes) {
         try {
-          // Process the node
-          const updatedState = await this.interpretNode(node, lastGoodState.clone());
+          // Process the node with a cloned state to ensure isolation
+          const nodeState = lastGoodState.clone();
+          const updatedState = await this.interpretNode(node, nodeState);
           
           // If successful, update the last good state
           lastGoodState = updatedState;
@@ -60,8 +61,19 @@ export class InterpreterService implements IInterpreterService {
         } catch (error) {
           // Roll back to last good state
           currentState = lastGoodState;
+          
           // Preserve MeldInterpreterError or wrap other errors
           if (error instanceof MeldInterpreterError) {
+            // Add state context if not present
+            if (!error.context?.state) {
+              error.context = {
+                ...error.context,
+                state: {
+                  filePath: lastGoodState.getCurrentFilePath(),
+                  nodeCount: lastGoodState.getNodes().length
+                }
+              };
+            }
             throw error;
           }
           throw new MeldInterpreterError(
@@ -73,7 +85,10 @@ export class InterpreterService implements IInterpreterService {
               context: {
                 nodeType: node.type,
                 location: node.location,
-                filePath: opts.filePath
+                filePath: opts.filePath,
+                state: {
+                  lastGoodStateNodes: lastGoodState.getNodes().length
+                }
               }
             }
           );
@@ -99,7 +114,10 @@ export class InterpreterService implements IInterpreterService {
             {
               cause: error,
               context: {
-                filePath: opts.filePath
+                filePath: opts.filePath,
+                state: {
+                  lastGoodStateNodes: lastGoodState.getNodes().length
+                }
               }
             }
           );
@@ -108,7 +126,8 @@ export class InterpreterService implements IInterpreterService {
 
       logger.debug('Interpretation completed successfully', {
         nodeCount: nodes.length,
-        filePath: opts.filePath
+        filePath: opts.filePath,
+        finalStateNodes: currentState.getNodes().length
       });
 
       return currentState;
@@ -144,10 +163,14 @@ export class InterpreterService implements IInterpreterService {
   ): Promise<IStateService> {
     logger.debug('Interpreting node', {
       type: node.type,
-      location: node.location
+      location: node.location,
+      filePath: state.getCurrentFilePath()
     });
 
     try {
+      // Take a snapshot before processing
+      const preNodeState = state.clone();
+
       switch (node.type) {
         case 'Text':
           // Add text node to state
@@ -176,7 +199,8 @@ export class InterpreterService implements IInterpreterService {
             {
               context: {
                 nodeType: node.type,
-                location: node.location
+                location: node.location,
+                filePath: state.getCurrentFilePath()
               }
             }
           );
@@ -184,10 +208,29 @@ export class InterpreterService implements IInterpreterService {
 
       return state;
     } catch (error) {
+      // Log detailed error information
+      logger.error('Node interpretation failed', {
+        nodeType: node.type,
+        location: node.location,
+        filePath: state.getCurrentFilePath(),
+        error
+      });
+
       // Preserve MeldInterpreterError or wrap other errors
       if (error instanceof MeldInterpreterError) {
+        // Add current state context if not present
+        if (!error.context?.state) {
+          error.context = {
+            ...error.context,
+            state: {
+              filePath: state.getCurrentFilePath(),
+              nodeCount: state.getNodes().length
+            }
+          };
+        }
         throw error;
       }
+
       throw new MeldInterpreterError(
         error.message,
         node.type,
@@ -197,7 +240,10 @@ export class InterpreterService implements IInterpreterService {
           context: {
             nodeType: node.type,
             location: node.location,
-            filePath: state.getCurrentFilePath()
+            filePath: state.getCurrentFilePath(),
+            state: {
+              nodeCount: state.getNodes().length
+            }
           }
         }
       );

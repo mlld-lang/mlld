@@ -1,6 +1,43 @@
-# InterpreterService
+## CURRENT STATUS & NEXT STEPS
 
-Below is a proposed design for the InterpreterService that works with raw AST nodes from meld-ast. This service orchestrates the interpretation of Meld documents while ensuring compatibility with the core Meld libraries and maintaining a clean, SOLID architecture.
+The InterpreterService implementation needs to be updated to handle state management and error handling more robustly. Key areas to focus on:
+
+1. State Management
+   - Need to properly handle state snapshots and rollbacks during interpretation
+   - Each node should be interpreted with a cloned state to allow rollback on error
+   - Only update the current state after successful node interpretation
+   - Maintain a "last good state" for rollback purposes
+
+2. Error Handling
+   - Ensure proper error wrapping and propagation
+   - Maintain node location information in errors
+   - Roll back to last good state on error
+   - Preserve error context through the stack
+
+3. Integration with DirectiveService
+   - Pass correct context to directive handlers
+   - Handle state merging after directive execution
+   - Ensure proper cleanup on errors
+
+4. Test Fixes Needed
+   - State rollback tests are failing
+   - Error propagation tests need updating
+   - State isolation tests need fixing
+   - Directive execution context tests need updating
+
+Key test cases that must pass:
+1. State rollback on error
+2. State isolation between nodes
+3. Proper error context preservation
+4. Correct state merging after imports
+5. Cleanup on circular imports
+
+Alignment with other services:
+- ImportDirectiveHandler shows how state should be managed with child states
+- DirectiveService demonstrates proper error wrapping
+- ResolutionService shows correct context passing
+
+IMPORTANT: Do not proceed with other changes until these core state management and error handling patterns are fixed.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 I. OVERVIEW & POSITION IN THE ARCHITECTURE

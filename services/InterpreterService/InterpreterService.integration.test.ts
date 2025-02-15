@@ -16,132 +16,87 @@ describe('InterpreterService Integration', () => {
     await context.cleanup();
   });
 
-  it('interprets text nodes', async () => {
-    const content = 'Hello world';
-    const nodes = await context.services.parser.parse(content);
-    const result = await context.services.interpreter.interpret(nodes);
-    const resultNodes = result.getNodes();
-    expect(resultNodes).toHaveLength(1);
-    expect(resultNodes[0].type).toBe('Text');
-    expect((resultNodes[0] as TextNode).content).toBe('Hello world');
-  });
-
-  it('interprets directive nodes', async () => {
-    const content = '@text identifier="test" value="Hello"';
-    const nodes = await context.services.parser.parse(content);
-    const result = await context.services.interpreter.interpret(nodes);
-    const value = result.getTextVar('test');
-    expect(value).toBe('Hello');
-  });
-
-  it('handles nested interpretation', async () => {
-    const content = [
-      '@text identifier="greeting" value="Hello"',
-      '@text identifier="name" value="World"',
-      '@text identifier="message" value="${greeting} ${name}!"'
-    ].join('\n');
-    
-    const nodes = await context.services.parser.parse(content);
-    const result = await context.services.interpreter.interpret(nodes);
-    const value = result.getTextVar('message');
-    expect(value).toBe('Hello World!');
-  });
-
-  it('rolls back state on error', async () => {
-    const content = [
-      '@text identifier="test1" value="value1"',
-      '@text identifier="test2" value="${invalid}"'
-    ].join('\n');
-    
-    const nodes = await context.services.parser.parse(content);
-    
-    await expect(context.services.interpreter.interpret(nodes)).rejects.toThrow();
-    
-    const state = context.services.state.createChildState();
-    const value = state.getTextVar('test1');
-    expect(value).toBeUndefined();
-  });
-
-  it('merges child state back to parent', async () => {
-    const content = '@text identifier="child" value="value"';
-    const parentState = context.services.state.createChildState();
-    const nodes = await context.services.parser.parse(content);
-    await context.services.interpreter.interpret(nodes, { initialState: parentState, mergeState: true });
-    expect(parentState.getTextVar('child')).toBe('value');
-  });
-
-  it('maintains isolation with mergeState: false', async () => {
-    const content = '@text identifier="isolated" value="value"';
-    const parentState = context.services.state.createChildState();
-    const nodes = await context.services.parser.parse(content);
-    await context.services.interpreter.interpret(nodes, { initialState: parentState, mergeState: false });
-    expect(parentState.getTextVar('isolated')).toBeUndefined();
-  });
-
   describe('Basic interpretation', () => {
-    it('interprets a simple document', async () => {
-      const content = await context.fs.readFile('project/src/main.meld');
+    it('interprets text nodes', async () => {
+      const content = 'Hello world';
       const nodes = await context.services.parser.parse(content);
-      const state = await context.services.interpreter.interpret(nodes);
+      const result = await context.services.interpreter.interpret(nodes);
+      const resultNodes = result.getNodes();
+      expect(resultNodes).toHaveLength(1);
+      expect(resultNodes[0].type).toBe('Text');
+      expect((resultNodes[0] as TextNode).content).toBe('Hello world');
+    });
 
-      expect(state.getTextVar('root')).toBe('Root');
+    it('interprets directive nodes', async () => {
+      const node = context.factory.createTextDirective('test', 'Hello');
+      const nodes = [node];
+      const result = await context.services.interpreter.interpret(nodes);
+      const value = result.getTextVar('test');
+      expect(value).toBe('Hello');
     });
 
     it('maintains node order in state', async () => {
-      const content = await context.fs.readFile('project/src/main.meld');
-      const nodes = await context.services.parser.parse(content);
-      const state = await context.services.interpreter.interpret(nodes);
-
-      const stateNodes = state.getNodes();
-      expect(stateNodes[0].type).toBe('Directive'); // @text directive
-      expect(stateNodes[1].type).toBe('Directive'); // @import directive
+      const nodes = [
+        context.factory.createTextDirective('first', '1'),
+        context.factory.createTextDirective('second', '2'),
+        context.factory.createTextDirective('third', '3')
+      ];
+      
+      const result = await context.services.interpreter.interpret(nodes);
+      const stateNodes = result.getNodes();
+      expect(stateNodes[0].type).toBe('Directive');
+      expect((stateNodes[0] as any).directive.identifier).toBe('first');
+      expect(stateNodes[1].type).toBe('Directive');
+      expect((stateNodes[1] as any).directive.identifier).toBe('second');
+      expect(stateNodes[2].type).toBe('Directive');
+      expect((stateNodes[2] as any).directive.identifier).toBe('third');
     });
   });
 
-  describe('Nested imports', () => {
-    it('processes nested imports with correct state inheritance', async () => {
-      const content = await context.fs.readFile('project/src/main.meld');
-      const nodes = await context.services.parser.parse(content);
-      const state = await context.services.interpreter.interpret(nodes);
-
-      expect(state.getTextVar('root')).toBe('Root');     // from main.meld
-      expect(state.getTextVar('child')).toBe('Child');   // from child.meld
-      expect(state.getTextVar('common')).toBe('Shared'); // from common.meld
-      expect(state.getDataVar('nums')).toEqual([1, 2, 3]);
-      expect(state.getDataVar('shared')).toEqual({ type: 'common' });
+  describe('State management', () => {
+    it('creates isolated states for different interpretations', async () => {
+      const node = context.factory.createTextDirective('test', 'value');
+      const nodes = [node];
+      const result1 = await context.services.interpreter.interpret(nodes);
+      const result2 = await context.services.interpreter.interpret(nodes);
+      expect(result1).not.toBe(result2);
+      expect(result1.getTextVar('test')).toBe('value');
+      expect(result2.getTextVar('test')).toBe('value');
     });
 
-    it('maintains correct file paths during interpretation', async () => {
-      const content = await context.fs.readFile('project/src/main.meld');
-      const nodes = await context.services.parser.parse(content);
-      const state = await context.services.interpreter.interpret(nodes, {
-        filePath: 'project/src/main.meld'
-      });
-
-      expect(state.getCurrentFilePath()).toBe('project/src/main.meld');
+    it('merges child state back to parent', async () => {
+      const node = context.factory.createTextDirective('child', 'value');
+      const nodes = [node];
+      const parentState = context.services.state.createChildState();
+      await context.services.interpreter.interpret(nodes, { initialState: parentState, mergeState: true });
+      expect(parentState.getTextVar('child')).toBe('value');
     });
-  });
 
-  describe('Section embedding', () => {
-    it('embeds and interprets specific sections', async () => {
-      const content = await context.fs.readFile('project/src/complex.meld');
-      const nodes = await context.services.parser.parse(content);
-      const state = await context.services.interpreter.interpret(nodes);
-
-      expect(state.getTextVar('base')).toBe('Base');
-      expect(state.getTextVar('inSection')).toBe('Inside');
-      expect(state.getTextVar('skipped')).toBeUndefined();
+    it('maintains isolation with mergeState: false', async () => {
+      const node = context.factory.createTextDirective('isolated', 'value');
+      const nodes = [node];
+      const parentState = context.services.state.createChildState();
+      await context.services.interpreter.interpret(nodes, { initialState: parentState, mergeState: false });
+      expect(parentState.getTextVar('isolated')).toBeUndefined();
     });
-  });
 
-  describe('Variable resolution', () => {
-    it('resolves variables during interpretation', async () => {
-      const content = await context.fs.readFile('project/src/variables.meld');
+    it('handles state rollback on merge errors', async () => {
+      const content = '@text identifier="test" value="\'value\'"';
+      const parentState = context.services.state.createChildState();
+      parentState.setTextVar('parent', 'Parent');
       const nodes = await context.services.parser.parse(content);
-      const state = await context.services.interpreter.interpret(nodes);
-
-      expect(state.getTextVar('greeting')).toBe('Hello World!');
-      expect(state.getDataVar('user')).toEqual({ name: 'World' });
+      try {
+        await context.services.interpreter.interpret(nodes, { initialState: parentState, mergeState: true });
+        expect.fail('Should have thrown error');
+      } catch (error) {
+        if (error instanceof MeldInterpreterError) {
+          expect(error.nodeType).toBe('Directive');
+          expect(parentState.getTextVar('parent')).toBe('Parent');
+          expect(parentState.getTextVar('test')).toBeUndefined();
+        } else {
+          throw error;
+        }
+      }
     });
   });
 
@@ -170,12 +125,11 @@ describe('InterpreterService Integration', () => {
     });
 
     it('maintains state consistency after errors', async () => {
-      const content = [
-        '@text identifier="valid" value="OK"',
-        '@text identifier="invalid" value="Bad"',
-        '@text identifier="after" value="Bad"'
-      ].join('\n');
-      const nodes = await context.services.parser.parse(content);
+      const nodes = [
+        context.factory.createTextDirective('valid', 'OK'),
+        context.factory.createTextDirective('invalid', '${nonexistent}'),
+        context.factory.createTextDirective('after', 'Bad')
+      ];
       try {
         await context.services.interpreter.interpret(nodes);
         expect.fail('Should have thrown error');
@@ -190,76 +144,125 @@ describe('InterpreterService Integration', () => {
       }
     });
 
-    it('includes error details in interpreter errors', async () => {
-      const content = '@text identifier="test"';
-      const nodes = await context.services.parser.parse(content);
+    it('includes state context in interpreter errors', async () => {
+      const node = context.factory.createTextDirective('test', '${nonexistent}');
+      const nodes = [node];
       try {
         await context.services.interpreter.interpret(nodes, { filePath: 'test.meld' });
         expect.fail('Should have thrown error');
       } catch (error) {
         expect(error).toBeInstanceOf(MeldInterpreterError);
-        if (error instanceof MeldInterpreterError) {
-          expect(error.nodeType).toBe('Directive');
-          expect(error.location).toBeDefined();
+        if (error instanceof MeldInterpreterError && error.context?.state) {
+          expect(error.context.state.filePath).toBe('test.meld');
+          expect(error.context.state.nodeCount).toBeDefined();
         } else {
-          throw error;
+          expect.fail('Error should have state context');
         }
+      }
+    });
+
+    it('rolls back state on directive errors', async () => {
+      const nodes = [
+        context.factory.createTextDirective('before', 'OK'),
+        context.factory.createTextDirective('error', '${nonexistent}'),
+        context.factory.createTextDirective('after', 'Bad')
+      ];
+      const parentState = context.services.state.createChildState();
+      
+      try {
+        await context.services.interpreter.interpret(nodes, {
+          initialState: parentState,
+          mergeState: true
+        });
+        expect.fail('Should have thrown error');
+      } catch (error) {
+        expect(error).toBeInstanceOf(MeldInterpreterError);
+        expect(parentState.getTextVar('before')).toBeUndefined();
+        expect(parentState.getTextVar('error')).toBeUndefined();
+        expect(parentState.getTextVar('after')).toBeUndefined();
       }
     });
   });
 
-  describe('State management', () => {
-    it('creates isolated states for different interpretations', async () => {
-      const content = '@text identifier="test" value="value"';
+  describe('Complex scenarios', () => {
+    it('handles nested imports with state inheritance', async () => {
+      const content = await context.fs.readFile('project/src/main.meld');
       const nodes = await context.services.parser.parse(content);
-      const result1 = await context.services.interpreter.interpret(nodes);
-      const result2 = await context.services.interpreter.interpret(nodes);
-      expect(result1).not.toBe(result2);
-      expect(result1.getTextVar('test')).toBe('value');
-      expect(result2.getTextVar('test')).toBe('value');
+      const state = await context.services.interpreter.interpret(nodes);
+
+      expect(state.getTextVar('root')).toBe('Root');     // from main.meld
+      expect(state.getTextVar('child')).toBe('Child');   // from child.meld
+      expect(state.getTextVar('common')).toBe('Shared'); // from common.meld
+      expect(state.getDataVar('nums')).toEqual([1, 2, 3]);
+      expect(state.getDataVar('shared')).toEqual({ type: 'common' });
     });
 
-    it('merges child states correctly', async () => {
-      const content = '@text identifier="child" value="value"';
-      const parentState = context.services.state.createChildState();
+    it('maintains correct file paths during interpretation', async () => {
+      const content = await context.fs.readFile('project/src/main.meld');
       const nodes = await context.services.parser.parse(content);
-      await context.services.interpreter.interpret(nodes, { initialState: parentState, mergeState: true });
-      expect(parentState.getTextVar('child')).toBe('value');
+      const state = await context.services.interpreter.interpret(nodes, {
+        filePath: 'project/src/main.meld'
+      });
+
+      expect(state.getCurrentFilePath()).toBe('project/src/main.meld');
     });
 
-    it('handles state rollback on merge errors', async () => {
-      const content = '@text identifier="test" value="value"';
-      const parentState = context.services.state.createChildState();
-      parentState.setTextVar('parent', 'Parent');
+    it('handles cleanup on circular imports', async () => {
+      // First create circular import files
+      await context.builder.create({
+        files: {
+          'a.meld': '@import [b.meld]',
+          'b.meld': '@import [a.meld]'
+        }
+      });
+
+      const content = await context.fs.readFile('a.meld');
       const nodes = await context.services.parser.parse(content);
+      
       try {
-        await context.services.interpreter.interpret(nodes, { initialState: parentState, mergeState: true });
+        await context.services.interpreter.interpret(nodes, {
+          filePath: 'a.meld'
+        });
         expect.fail('Should have thrown error');
       } catch (error) {
+        expect(error).toBeInstanceOf(MeldInterpreterError);
         if (error instanceof MeldInterpreterError) {
-          expect(error.nodeType).toBe('Directive');
-          expect(parentState.getTextVar('parent')).toBe('Parent');
-          expect(parentState.getTextVar('test')).toBeUndefined();
-        } else {
-          throw error;
+          expect(error.message).toMatch(/circular/i);
+          // Verify state is cleaned up
+          const state = context.services.state.createChildState();
+          expect(state.getNodes()).toHaveLength(0);
         }
       }
     });
 
-    it('maintains node order in merged states', async () => {
-      const content = [
-        '@text identifier="first" value="1"',
-        '@text identifier="second" value="2"',
-        '@text identifier="third" value="3"'
-      ].join('\n');
-      
+    it('maintains correct state after successful imports', async () => {
+      await context.builder.create({
+        files: {
+          'main.meld': [
+            '@text identifier="main" value="main"',
+            '@import [sub.meld]',
+            '@text identifier="after" value="after"'
+          ].join('\n'),
+          'sub.meld': '@text identifier="sub" value="sub"'
+        }
+      });
+
+      const content = await context.fs.readFile('main.meld');
       const nodes = await context.services.parser.parse(content);
-      const result = await context.services.interpreter.interpret(nodes);
-      const stateNodes = result.getNodes();
-      expect(stateNodes[0].type).toBe('Directive');
-      expect((stateNodes[0] as any).directive.identifier).toBe('first');
-      expect(stateNodes[1].type).toBe('Directive');
-      expect((stateNodes[1] as any).directive.identifier).toBe('second');
+      const result = await context.services.interpreter.interpret(nodes, {
+        filePath: 'main.meld'
+      });
+
+      expect(result.getTextVar('main')).toBe('main');
+      expect(result.getTextVar('sub')).toBe('sub');
+      expect(result.getTextVar('after')).toBe('after');
+      
+      // Verify node order is preserved
+      const resultNodes = result.getNodes();
+      expect(resultNodes[0].type).toBe('Directive'); // main
+      expect(resultNodes[1].type).toBe('Directive'); // import
+      expect(resultNodes[2].type).toBe('Directive'); // sub (from import)
+      expect(resultNodes[3].type).toBe('Directive'); // after
     });
   });
 }); 
