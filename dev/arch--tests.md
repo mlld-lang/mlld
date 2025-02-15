@@ -14,7 +14,200 @@ I. DIRECTORY STRUCTURE
 - Mocks go in `tests/mocks` 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-II. CORE UTILITIES & THEIR RESPONSIBILITIES
+II. DIRECTIVE TESTING STRUCTURE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1) Test Organization
+─────────────────────────────────────────────────────────────────────────
+Directive tests are organized in three layers:
+
+a) Individual Handler Tests:
+   - Located next to handler implementation (e.g., `TextDirectiveHandler.test.ts`)
+   - Focus on handler-specific logic and edge cases
+   - Test validation, value processing, and error handling
+   - Use mocked dependencies (ValidationService, StateService, etc.)
+
+b) DirectiveService Tests:
+   - Located at `services/DirectiveService/DirectiveService.test.ts`
+   - Test service-level functionality:
+     • Handler registration
+     • Service initialization
+     • Cross-handler interactions
+     • Error propagation
+     • Context management
+
+c) Integration Tests:
+   - Located at `services/DirectiveService/DirectiveService.integration.test.ts`
+   - Test full directive processing pipeline
+   - Use real service implementations
+   - Focus on end-to-end scenarios
+
+2) Handler Test Structure
+─────────────────────────────────────────────────────────────────────────
+Each directive handler test should follow this structure:
+
+```typescript
+describe('HandlerName', () => {
+  // 1. Value Processing Tests
+  describe('value processing', () => {
+    // Test basic value handling
+    // Test edge cases
+    // Test different value formats
+  });
+
+  // 2. Validation Integration
+  describe('validation', () => {
+    // Test integration with ValidationService
+    // Test validation error propagation
+  });
+
+  // 3. State Management
+  describe('state management', () => {
+    // Test state updates
+    // Test variable storage
+    // Test state inheritance if applicable
+  });
+
+  // 4. Error Handling
+  describe('error handling', () => {
+    // Test validation errors
+    // Test resolution errors
+    // Test state errors
+    // Verify error wrapping
+  });
+
+  // 5. Context Management (if applicable)
+  describe('context handling', () => {
+    // Test context creation
+    // Test context inheritance
+    // Test context validation
+  });
+});
+```
+
+3) Mocking Dependencies
+─────────────────────────────────────────────────────────────────────────
+Handler tests should mock their dependencies consistently:
+
+```typescript
+describe('TextDirectiveHandler', () => {
+  let handler: TextDirectiveHandler;
+  let validationService: IValidationService;
+  let stateService: IStateService;
+  let resolutionService: IResolutionService;
+
+  beforeEach(() => {
+    // Create fresh mocks for each test
+    validationService = {
+      validate: vi.fn()
+    };
+
+    stateService = {
+      setTextVar: vi.fn(),
+      getTextVar: vi.fn()
+    } as unknown as IStateService;
+
+    resolutionService = {
+      resolveInContext: vi.fn()
+    } as unknown as IResolutionService;
+
+    handler = new TextDirectiveHandler(
+      validationService,
+      stateService,
+      resolutionService
+    );
+  });
+
+  // Tests follow...
+});
+```
+
+4) Test Factory Usage
+─────────────────────────────────────────────────────────────────────────
+Use test factories to create consistent test nodes:
+
+```typescript
+import { createTextDirective, createLocation } from '../../../tests/utils/testFactories';
+
+it('processes a valid text directive', async () => {
+  const node = createTextDirective(
+    'greeting',
+    'Hello',
+    createLocation(1, 1)
+  );
+  
+  await handler.execute(node, { currentFilePath: 'test.meld' });
+  
+  expect(validationService.validate).toHaveBeenCalledWith(node);
+  expect(stateService.setTextVar).toHaveBeenCalledWith('greeting', 'Hello');
+});
+```
+
+5) Error Testing
+─────────────────────────────────────────────────────────────────────────
+Test both expected and unexpected errors:
+
+```typescript
+describe('error handling', () => {
+  it('propagates validation errors', async () => {
+    const node = createTextDirective('test', 'value', createLocation(1, 1));
+    
+    vi.mocked(validationService.validate).mockImplementationOnce(() => {
+      throw new DirectiveError('Validation error', 'text');
+    });
+
+    await expect(handler.execute(node)).rejects.toThrow(DirectiveError);
+  });
+
+  it('wraps unexpected errors', async () => {
+    const node = createTextDirective('test', 'value', createLocation(1, 1));
+    
+    vi.mocked(stateService.setTextVar).mockRejectedValueOnce(
+      new Error('Unexpected error')
+    );
+
+    const error = await handler.execute(node).catch(e => e);
+    expect(error).toBeInstanceOf(DirectiveError);
+    expect(error.details.cause).toBeDefined();
+  });
+});
+```
+
+6) Integration Testing
+─────────────────────────────────────────────────────────────────────────
+Integration tests should focus on real-world scenarios:
+
+```typescript
+describe('DirectiveService Integration', () => {
+  let service: DirectiveService;
+  
+  beforeEach(() => {
+    // Use real service implementations
+    service = new DirectiveService();
+    service.initialize(
+      new ValidationService(),
+      new StateService(),
+      new ResolutionService()
+    );
+  });
+
+  it('processes nested directives', async () => {
+    const content = `
+      @text greeting = "Hello ${name}"
+      @text name = "World"
+    `;
+    
+    const nodes = await parseContent(content);
+    await service.processDirectives(nodes);
+    
+    const state = service.getState();
+    expect(state.getTextVar('greeting')).toBe('Hello World');
+  });
+});
+```
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+III. CORE UTILITIES & THEIR RESPONSIBILITIES
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 1) TestContext
@@ -195,7 +388,7 @@ export class FixtureManager {
 • E.g. context.fs.writeFile("project/test.meld", "...").
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-III. EXAMPLE TEST CODE
+IV. EXAMPLE TEST CODE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Here's how a directive test might look using these utilities:
@@ -275,7 +468,7 @@ describe('Interpreter - @embed directive (integration)', () => {
 --------------------------------------------------------------------------------
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-IV. LOCATION HANDLING IN TESTS
+V. LOCATION HANDLING IN TESTS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 1) Core Location Types
@@ -407,7 +600,7 @@ describe('error handling', () => {
 ```
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-V. PATH HANDLING IN TESTS
+VI. PATH HANDLING IN TESTS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 1) Testing Path Resolution
@@ -553,7 +746,7 @@ describe('ImportDirectiveHandler', () => {
 ```
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-VI. BEST PRACTICES FOR TEST ASSERTIONS
+VII. BEST PRACTICES FOR TEST ASSERTIONS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 1) Location Assertions
@@ -611,7 +804,7 @@ await expect(parser.parse(content)).rejects.toMatchObject({
 ```
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-VII. CONCLUSION
+VIII. CONCLUSION
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 By following this testing architecture:

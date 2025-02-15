@@ -38,7 +38,7 @@ Below is a consolidated list of concrete changes needed to make the architecture
 • Remove the parse methods from "parser.ts" in the root if they conflict or are redundant. Migrate needed logic into ParserService.  
 
 ─────────────────────────────────────────────────────────────────────────
-3. Introduce "InterpreterService" for Node Iteration
+3. Introduce "InterpreterService" for Node Iteration [80% -- WAITING ON DIRECTIVES TO BE COMPLETED]
 ─────────────────────────────────────────────────────────────────────────
 [See detailed design in service-interpreter.md]
 
@@ -48,7 +48,7 @@ Below is a consolidated list of concrete changes needed to make the architecture
 • Keep relevant tests from "interpreter.test.ts" but re-scope them to the new InterpreterService class. Delete any legacy bits referencing old partial logic we no longer need.  
 
 ─────────────────────────────────────────────────────────────────────────
-4. Create "DirectiveService" with a Registry + Handlers
+4. Create "DirectiveService" with a Registry + Handlers [PARTIAL -- SEE BELOW]
 ─────────────────────────────────────────────────────────────────────────
 • In "DirectiveService/" folder:
   – A main DirectiveService.ts that routes DirectiveNode → correct handler (Text, Data, Import, etc.).  
@@ -82,7 +82,7 @@ Below is a consolidated list of concrete changes needed to make the architecture
 ✓ Migrated the best parts of "interpreter/state/state.js" into "StateService.ts"
 
 ─────────────────────────────────────────────────────────────────────────
-7. Create "ResolutionService" for Variable Resolution [90% COMPLETE]
+7. Create "ResolutionService" for Variable Resolution [90% COMPLETE -- WAITING ON DIRECTIVES TO BE COMPLETED]
 ─────────────────────────────────────────────────────────────────────────
 ✓ Created ResolutionService with:
   ✓ Variable resolution (${var}, #{data}, $path)

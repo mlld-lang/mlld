@@ -15,6 +15,7 @@ import { DirectiveError, DirectiveErrorCode } from './errors/DirectiveError';
 // Import handlers
 import { TextDirectiveHandler } from './handlers/definition/TextDirectiveHandler';
 import { DataDirectiveHandler } from './handlers/definition/DataDirectiveHandler';
+import { PathDirectiveHandler } from './handlers/definition/PathDirectiveHandler';
 import { RunDirectiveHandler } from './handlers/execution/RunDirectiveHandler';
 import { EmbedDirectiveHandler } from './handlers/execution/EmbedDirectiveHandler';
 import { ImportDirectiveHandler } from './handlers/execution/ImportDirectiveHandler';
@@ -99,6 +100,14 @@ export class DirectiveService implements IDirectiveService {
 
     this.registerHandler(
       new DataDirectiveHandler(
+        this.validationService!,
+        this.stateService!,
+        this.resolutionService!
+      )
+    );
+
+    this.registerHandler(
+      new PathDirectiveHandler(
         this.validationService!,
         this.stateService!,
         this.resolutionService!
