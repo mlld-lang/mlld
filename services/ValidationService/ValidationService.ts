@@ -24,7 +24,7 @@ export class ValidationService implements IValidationService {
     });
   }
   
-  validate(node: DirectiveNode): void {
+  async validate(node: DirectiveNode): Promise<void> {
     logger.debug('Validating directive', {
       kind: node.directive.kind,
       location: node.location

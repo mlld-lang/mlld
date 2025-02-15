@@ -13,7 +13,7 @@ import { createLocation, createEmbedDirective } from '../../../../tests/utils/te
 
 // Mock the logger
 vi.mock('@core/utils/logger', () => ({
-  embedLogger: {
+  directiveLogger: {
     debug: vi.fn(),
     info: vi.fn(),
     warn: vi.fn(),

@@ -127,7 +127,11 @@ export class DirectiveService implements IDirectiveService {
       new EmbedDirectiveHandler(
         this.validationService!,
         this.resolutionService!,
-        this.stateService!
+        this.stateService!,
+        this.circularityService!,
+        this.fileSystemService!,
+        this.parserService!,
+        this.interpreterService!
       )
     );
 
@@ -287,6 +291,7 @@ export class DirectiveService implements IDirectiveService {
   }
 
   getSupportedDirectives(): string[] {
+    this.ensureInitialized();
     return Array.from(this.handlers.keys());
   }
 
