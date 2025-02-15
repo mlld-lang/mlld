@@ -8,7 +8,7 @@ import { IFileSystemService } from '../../../FileSystemService/IFileSystemServic
 import { IParserService } from '../../../ParserService/IParserService';
 import { IInterpreterService } from '../../../InterpreterService/IInterpreterService';
 import { DirectiveError, DirectiveErrorCode } from '../../errors/DirectiveError';
-import { embedLogger as logger } from '../../../core/utils/logger';
+import { embedLogger as logger } from '@core/utils/logger';
 
 export class EmbedDirectiveHandler implements IDirectiveHandler {
   readonly kind = 'embed';

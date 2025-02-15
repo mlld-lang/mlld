@@ -12,7 +12,7 @@ import { DirectiveError, DirectiveErrorCode } from '../../errors/DirectiveError'
 import { createLocation, createEmbedDirective } from '../../../../tests/utils/testFactories';
 
 // Mock the logger
-vi.mock('../../../core/utils/logger', () => ({
+vi.mock('@core/utils/logger', () => ({
   embedLogger: {
     debug: vi.fn(),
     info: vi.fn(),

@@ -1,5 +1,5 @@
 import type { DirectiveNode, TextDirective, DataDirective, ImportDirective, EmbedDirective } from 'meld-spec';
-import { directiveLogger as logger } from '../../core/utils/logger';
+import { directiveLogger as logger } from '@core/utils/logger';
 import { IDirectiveService, IDirectiveHandler, DirectiveContext } from './IDirectiveService';
 import { IValidationService } from '../ValidationService/IValidationService';
 import { IStateService } from '../StateService/IStateService';

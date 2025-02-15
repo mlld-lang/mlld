@@ -5,7 +5,7 @@ import { IStateService } from '../../../StateService/IStateService';
 import { IResolutionService, ResolutionContext } from '../../../ResolutionService/IResolutionService';
 import { ResolutionContextFactory } from '../../../ResolutionService/ResolutionContextFactory';
 import { DirectiveError, DirectiveErrorCode } from '../../errors/DirectiveError';
-import { directiveLogger as logger } from '../../../../core/utils/logger';
+import { directiveLogger as logger } from '@core/utils/logger';
 
 /**
  * Handler for @path directives

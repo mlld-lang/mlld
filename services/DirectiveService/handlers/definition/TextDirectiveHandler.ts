@@ -4,7 +4,7 @@ import { IValidationService } from '../../../ValidationService/IValidationServic
 import { IStateService } from '../../../StateService/IStateService';
 import { IResolutionService } from '../../../ResolutionService/IResolutionService';
 import { ResolutionContextFactory } from '../../../ResolutionService/ResolutionContextFactory';
-import { directiveLogger as logger } from '../../../../core/utils/logger';
+import { directiveLogger as logger } from '@core/utils/logger';
 import { DirectiveError, DirectiveErrorCode } from '../../errors/DirectiveError';
 
 /**

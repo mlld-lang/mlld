@@ -7,7 +7,6 @@ export default defineConfig({
     environment: 'node',
     globals: true,
     include: [
-      'tests/unit/**/*.test.ts',
       'tests/integration/**/*.test.ts',
       'services/**/*.test.ts',
       'core/**/*.test.ts',

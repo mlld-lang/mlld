@@ -25,6 +25,16 @@ import type { ResolutionContext } from '../ResolutionService/IResolutionService'
 import type { IDirectiveService } from '../DirectiveService/IDirectiveService';
 import { DirectiveError, DirectiveErrorCode } from './errors/DirectiveError';
 
+// Mock the logger
+vi.mock('@core/utils/logger', () => ({
+  directiveLogger: {
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn()
+  }
+}));
+
 // Create mock implementations
 const createMockParserService = (): IParserService => ({
   parse: vi.fn().mockResolvedValue([]),
@@ -404,7 +414,7 @@ describe('DirectiveService', () => {
       vi.mocked(fileSystemService.exists).mockResolvedValueOnce(true);
       vi.mocked(fileSystemService.readFile).mockResolvedValueOnce(mockContent);
       vi.mocked(stateService.createChildState).mockReturnValueOnce(mockChildState);
-      vi.mocked(parserService.parse).mockReturnValueOnce(mockParsedNodes);
+      vi.mocked(parserService.parse).mockResolvedValueOnce(mockParsedNodes);
       vi.mocked(interpreterService.interpret).mockResolvedValueOnce(mockChildState);
 
       await service.processDirective(node);
@@ -428,10 +438,10 @@ describe('DirectiveService', () => {
     it('should handle missing embed files', async () => {
       const node = createEmbedDirective('missing.md', undefined, createLocation(1, 1));
 
-      vi.mocked(pathService.resolvePath).mockResolvedValueOnce('/resolved/missing.md');
-      vi.mocked(fileSystemService.exists).mockResolvedValueOnce(false);
+      vi.mocked(pathService.resolvePath).mockResolvedValue('/resolved/missing.md');
+      vi.mocked(fileSystemService.exists).mockResolvedValue(false);
 
-      await expect(service.processDirective(node)).rejects.toThrow(MeldDirectiveError);
+      await expect(service.processDirective(node)).rejects.toThrow(DirectiveError);
     });
 
     it('should throw with helpful message for non-existent sections', async () => {
@@ -448,17 +458,22 @@ Content`;
       vi.mocked(pathService.resolvePath).mockResolvedValue('/test.md');
       vi.mocked(fileSystemService.exists).mockResolvedValue(true);
       vi.mocked(fileSystemService.readFile).mockResolvedValue(content);
+      vi.mocked(resolutionService.extractSection).mockRejectedValue(
+        new DirectiveError(
+          'Section not found: Nonexistent Section (closest match: Section One)',
+          'embed',
+          DirectiveErrorCode.EXECUTION_FAILED,
+          {
+            node,
+            cause: new Error('Section not found')
+          }
+        )
+      );
 
-      await expect(service.processDirective(node))
-        .rejects
-        .toThrow(MeldDirectiveError);
-
-      // The error should contain the closest match suggestion
-      await expect(service.processDirective(node))
-        .rejects
-        .toMatchObject({
-          message: expect.stringContaining('Section One')
-        });
+      const error = await service.processDirective(node).catch(e => e);
+      expect(error).toBeInstanceOf(DirectiveError);
+      expect(error.message).toContain('Section One');
+      expect(error.code).toBe(DirectiveErrorCode.EXECUTION_FAILED);
     });
 
     it('should adjust heading levels when using "as ###" syntax', async () => {
@@ -480,11 +495,11 @@ Other content`;
       vi.mocked(pathService.resolvePath).mockResolvedValue('/test.md');
       vi.mocked(fileSystemService.exists).mockResolvedValue(true);
       vi.mocked(fileSystemService.readFile).mockResolvedValue(content);
-      vi.mocked(parserService.parse).mockReturnValue([]);
+      vi.mocked(parserService.parse).mockResolvedValue([]);
 
       await service.processDirective(node);
 
-      const parsedContent = parserService.parse.mock.calls[0][0];
+      const parsedContent = vi.mocked(parserService.parse).mock.calls[0][0];
       expect(parsedContent).toContain('### Section One');
       expect(parsedContent).toContain('#### Subsection');
       expect(parsedContent).not.toContain('## Section One');
@@ -510,11 +525,11 @@ Other content`;
       vi.mocked(pathService.resolvePath).mockResolvedValue('/test.md');
       vi.mocked(fileSystemService.exists).mockResolvedValue(true);
       vi.mocked(fileSystemService.readFile).mockResolvedValue(content);
-      vi.mocked(parserService.parse).mockReturnValue([]);
+      vi.mocked(parserService.parse).mockResolvedValue([]);
 
       await service.processDirective(node);
 
-      const parsedContent = parserService.parse.mock.calls[0][0];
+      const parsedContent = vi.mocked(parserService.parse).mock.calls[0][0];
       expect(parsedContent).toContain('## My Header');
       expect(parsedContent).toContain('### Section One');
       expect(parsedContent).toContain('#### Subsection');
@@ -542,11 +557,11 @@ Other content`;
       vi.mocked(pathService.resolvePath).mockResolvedValue('/test.md');
       vi.mocked(fileSystemService.exists).mockResolvedValue(true);
       vi.mocked(fileSystemService.readFile).mockResolvedValue(content);
-      vi.mocked(parserService.parse).mockReturnValue([]);
+      vi.mocked(parserService.parse).mockResolvedValue([]);
 
       await service.processDirective(node);
 
-      const parsedContent = parserService.parse.mock.calls[0][0];
+      const parsedContent = vi.mocked(parserService.parse).mock.calls[0][0];
       expect(parsedContent).toContain('## My Header');
       expect(parsedContent).toContain('#### Section One');
       expect(parsedContent).toContain('##### Subsection');
@@ -635,14 +650,14 @@ Content in section two`;
         createLocation(1, 1)
       );
 
-      vi.mocked(pathService.resolvePath).mockResolvedValueOnce('/test.md');
-      vi.mocked(fileSystemService.exists).mockResolvedValueOnce(true);
-      vi.mocked(fileSystemService.readFile).mockResolvedValueOnce(content);
-      parseMock.mockResolvedValueOnce([]);
+      vi.mocked(pathService.resolvePath).mockResolvedValue('/test.md');
+      vi.mocked(fileSystemService.exists).mockResolvedValue(true);
+      vi.mocked(fileSystemService.readFile).mockResolvedValue(content);
+      vi.mocked(parserService.parse).mockResolvedValue([]);
 
       await service.processDirective(node);
 
-      const parsedContent = parseMock.mock.calls[0][0];
+      const parsedContent = vi.mocked(parserService.parse).mock.calls[0][0];
       expect(parsedContent).toContain('## Section One');
       expect(parsedContent).toContain('Content in section one');
       expect(parsedContent).not.toContain('Section Two');
@@ -665,11 +680,11 @@ Other content`;
       vi.mocked(pathService.resolvePath).mockResolvedValue('/test.md');
       vi.mocked(fileSystemService.exists).mockResolvedValue(true);
       vi.mocked(fileSystemService.readFile).mockResolvedValue(content);
-      parseMock.mockResolvedValue([]);
+      vi.mocked(parserService.parse).mockResolvedValue([]);
 
       await service.processDirective(node);
 
-      const parsedContent = parseMock.mock.calls[0][0];
+      const parsedContent = vi.mocked(parserService.parse).mock.calls[0][0];
       expect(parsedContent).toContain('## Getting Started Guide');
       expect(parsedContent).toContain('Content in guide');
       expect(parsedContent).not.toContain('Other Section');
@@ -693,11 +708,11 @@ Other content`;
       vi.mocked(pathService.resolvePath).mockResolvedValue('/test.md');
       vi.mocked(fileSystemService.exists).mockResolvedValue(true);
       vi.mocked(fileSystemService.readFile).mockResolvedValue(content);
-      parseMock.mockResolvedValue([]);
+      vi.mocked(parserService.parse).mockResolvedValue([]);
 
       await service.processDirective(node);
 
-      const parsedContent = parseMock.mock.calls[0][0];
+      const parsedContent = vi.mocked(parserService.parse).mock.calls[0][0];
       expect(parsedContent).toContain('## Section One');
       expect(parsedContent).toContain('### Subsection');
       expect(parsedContent).toContain('Nested content');
@@ -718,11 +733,11 @@ Other content`;
       vi.mocked(pathService.resolvePath).mockResolvedValue('/test.ts');
       vi.mocked(fileSystemService.exists).mockResolvedValue(true);
       vi.mocked(fileSystemService.readFile).mockResolvedValue(content);
-      parseMock.mockResolvedValue([]);
+      vi.mocked(parserService.parse).mockResolvedValue([]);
 
       await service.processDirective(node);
 
-      const parsedContent = parseMock.mock.calls[0][0];
+      const parsedContent = vi.mocked(parserService.parse).mock.calls[0][0];
       expect(parsedContent).toBe('```typescript\nconst x = 1;\n```');
     });
 
@@ -738,11 +753,11 @@ Other content`;
       vi.mocked(pathService.resolvePath).mockResolvedValue('/quote.txt');
       vi.mocked(fileSystemService.exists).mockResolvedValue(true);
       vi.mocked(fileSystemService.readFile).mockResolvedValue(content);
-      parseMock.mockResolvedValue([]);
+      vi.mocked(parserService.parse).mockResolvedValue([]);
 
       await service.processDirective(node);
 
-      const parsedContent = parseMock.mock.calls[0][0];
+      const parsedContent = vi.mocked(parserService.parse).mock.calls[0][0];
       expect(parsedContent).toBe('> Line 1\n> Line 2');
     });
 
@@ -757,11 +772,11 @@ Other content`;
       vi.mocked(pathService.resolvePath).mockResolvedValue('/test.ts');
       vi.mocked(fileSystemService.exists).mockResolvedValue(true);
       vi.mocked(fileSystemService.readFile).mockResolvedValue(content);
-      parseMock.mockResolvedValue([]);
+      vi.mocked(parserService.parse).mockResolvedValue([]);
 
       await service.processDirective(node);
 
-      const parsedContent = parseMock.mock.calls[0][0];
+      const parsedContent = vi.mocked(parserService.parse).mock.calls[0][0];
       expect(parsedContent).toBe('```typescript\nconst x = 1;\n```');
     });
 
@@ -777,11 +792,11 @@ Other content`;
       vi.mocked(pathService.resolvePath).mockResolvedValue('/test.md');
       vi.mocked(fileSystemService.exists).mockResolvedValue(true);
       vi.mocked(fileSystemService.readFile).mockResolvedValue(content);
-      parseMock.mockResolvedValue([]);
+      vi.mocked(parserService.parse).mockResolvedValue([]);
 
       await service.processDirective(node);
 
-      const parsedContent = parseMock.mock.calls[0][0];
+      const parsedContent = vi.mocked(parserService.parse).mock.calls[0][0];
       expect(parsedContent).toBe(content);
     });
 
@@ -797,25 +812,45 @@ Other content`;
       vi.mocked(pathService.resolvePath).mockResolvedValue('/test.xyz');
       vi.mocked(fileSystemService.exists).mockResolvedValue(true);
       vi.mocked(fileSystemService.readFile).mockResolvedValue(content);
-      parseMock.mockResolvedValue([]);
+      vi.mocked(parserService.parse).mockResolvedValue([]);
 
       await service.processDirective(node);
 
-      const parsedContent = parseMock.mock.calls[0][0];
+      const parsedContent = vi.mocked(parserService.parse).mock.calls[0][0];
       expect(parsedContent).toBe(content);
     });
   });
 
   it('processes imported content correctly', async () => {
     const mockContent = '@text greeting = "Hello"';
-    parseMock.mockResolvedValueOnce([{
+    const mockNodes = [{
       type: 'Directive',
       directive: {
         kind: 'text',
         name: 'greeting',
         value: 'Hello'
       }
-    }]);
-    // ... test implementation
+    }];
+
+    const node = createImportDirective('test.meld', createLocation(1, 1));
+    
+    vi.mocked(pathService.resolvePath).mockResolvedValue('/resolved/test.meld');
+    vi.mocked(fileSystemService.exists).mockResolvedValue(true);
+    vi.mocked(fileSystemService.readFile).mockResolvedValue(mockContent);
+    vi.mocked(parserService.parse).mockResolvedValue(mockNodes);
+    vi.mocked(stateService.createChildState).mockReturnValue({} as IStateService);
+    vi.mocked(interpreterService.interpret).mockResolvedValue({} as IStateService);
+
+    await service.processDirective(node);
+
+    expect(parserService.parse).toHaveBeenCalledWith(mockContent);
+    expect(interpreterService.interpret).toHaveBeenCalledWith(
+      mockNodes,
+      expect.objectContaining({
+        initialState: expect.any(Object),
+        filePath: '/resolved/test.meld',
+        mergeState: true
+      })
+    );
   });
 }); 

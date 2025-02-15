@@ -5,7 +5,7 @@ import { IStateService } from '../../../StateService/IStateService';
 import { IResolutionService } from '../../../ResolutionService/IResolutionService';
 import { IFileSystemService } from '../../../FileSystemService/IFileSystemService';
 import { ResolutionContextFactory } from '../../../ResolutionService/ResolutionContextFactory';
-import { directiveLogger as logger } from '../../../../core/utils/logger';
+import { directiveLogger as logger } from '@core/utils/logger';
 import { DirectiveError, DirectiveErrorCode } from '../../errors/DirectiveError';
 
 /**

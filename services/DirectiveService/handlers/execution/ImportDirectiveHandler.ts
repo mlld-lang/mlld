@@ -11,7 +11,7 @@ import { IParserService } from '../../../ParserService/IParserService';
 import { IInterpreterService } from '../../../InterpreterService/IInterpreterService';
 import { ICircularityService } from '../../../CircularityService/ICircularityService';
 import { DirectiveError, DirectiveErrorCode } from '../../errors/DirectiveError';
-import { directiveLogger as logger } from '../../../../core/utils/logger';
+import { directiveLogger as logger } from '@core/utils/logger';
 
 /**
  * Handler for @import directives
