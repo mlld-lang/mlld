@@ -168,6 +168,13 @@ export class InterpreterService implements IInterpreterService {
     node: MeldNode,
     state: IStateService
   ): Promise<IStateService> {
+    if (!node) {
+      throw new MeldInterpreterError(
+        'No node provided for interpretation',
+        'interpretation'
+      );
+    }
+
     logger.debug('Interpreting node', {
       type: node.type,
       location: node.location,
@@ -185,12 +192,18 @@ export class InterpreterService implements IInterpreterService {
           break;
 
         case 'Directive':
-          // Process directive using DirectiveService
-          await this.directiveService!.processDirective(node, {
-            state,
-            filePath: state.getCurrentFilePath()
-          });
-          state.addNode(node);
+          try {
+            // Process directive using DirectiveService
+            await this.directiveService!.processDirective(node, {
+              state,
+              filePath: state.getCurrentFilePath()
+            });
+            state.addNode(node);
+          } catch (directiveError) {
+            // Restore state to pre-node state on directive error
+            state = preNodeState;
+            throw directiveError;
+          }
           break;
 
         case 'CodeFence':
@@ -202,7 +215,7 @@ export class InterpreterService implements IInterpreterService {
           throw new MeldInterpreterError(
             `Unknown node type: ${node.type}`,
             'unknown_node',
-            node.location?.start,
+            node.location,
             {
               context: {
                 nodeType: node.type,
@@ -241,7 +254,7 @@ export class InterpreterService implements IInterpreterService {
       throw new MeldInterpreterError(
         error.message,
         node.type,
-        node.location?.start,
+        node.location,
         {
           cause: error,
           context: {

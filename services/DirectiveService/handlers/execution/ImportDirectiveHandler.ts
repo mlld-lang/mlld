@@ -139,52 +139,40 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
     source: string;
     imports?: Array<{ identifier: string; alias?: string }>;
   } {
-    // Handle shorthand syntax: @import [file.meld]
-    if (!directive.from) {
-      return { source: directive.path };
+    // Parse path from value in new format
+    const pathMatch = directive.value?.match(/path\s*=\s*"([^"]+)"/);
+    if (!pathMatch) {
+      throw new DirectiveError(
+        'Import directive requires a path parameter in the format: path = "filepath"',
+        'import',
+        DirectiveErrorCode.INVALID_SYNTAX,
+        { node: directive }
+      );
     }
 
-    // Handle full syntax: @import [x,y,z] from [file.meld]
-    const importList = this.parseImportList(directive.path);
-    
-    // If it's a wildcard import, return no filter (imports all)
-    if (importList.length === 1 && importList[0].identifier === '*') {
-      return {
-        source: directive.from,
-        imports: []
-      };
+    const source = pathMatch[1];
+
+    // Check for import list
+    const importListMatch = directive.value?.match(/imports\s*=\s*\[(.*?)\]/);
+    if (importListMatch) {
+      const importList = importListMatch[1].trim();
+      if (importList) {
+        return {
+          source,
+          imports: this.parseImportList(importList)
+        };
+      }
     }
 
-    return {
-      source: directive.from,
-      imports: importList
-    };
+    return { source };
   }
 
   /**
    * Parse import list from string
    */
   private parseImportList(importList: string): Array<{ identifier: string; alias?: string }> {
-    // Remove brackets and split by comma
-    const items = importList.slice(1, -1).split(',').map(s => s.trim());
-    
-    return items.map(item => {
-      // Handle wildcard
-      if (item === '*') {
-        return { identifier: '*' };
-      }
-
-      // Check if it's a simple identifier or has an alias
-      const match = item.match(/^(\w+)(?:\s+as\s+(\w+))?$/);
-      if (!match) {
-        throw new DirectiveError(
-          `Invalid import specifier: ${item}`,
-          'import',
-          DirectiveErrorCode.VALIDATION_FAILED
-        );
-      }
-      
-      const [_, identifier, alias] = match;
+    return importList.split(',').map(item => {
+      const [identifier, alias] = item.trim().split(/\s+as\s+/).map(s => s.trim());
       return { identifier, alias };
     });
   }

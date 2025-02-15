@@ -7,48 +7,58 @@ import { MeldDirectiveError } from '../../../core/errors/MeldDirectiveError';
 export function validateImportDirective(node: DirectiveNode): void {
   const directive = node.directive as ImportDirective;
   
-  // Validate path
-  if (!directive.path || typeof directive.path !== 'string') {
+  // Parse path from value in new format
+  const pathMatch = directive.value?.match(/^path\s*=\s*"([^"]+)"$/);
+  if (!pathMatch) {
     throw new MeldDirectiveError(
-      'Import directive requires a path parameter',
+      'Import directive requires a path parameter in the format: path = "filepath"',
       'import',
-      node.location?.start
+      node.location
     );
   }
   
+  const path = pathMatch[1];
+  
   // Validate path format
-  if (directive.path.includes('..')) {
+  if (path.includes('..')) {
     throw new MeldDirectiveError(
       'Import path cannot contain parent directory references (..)',
       'import',
-      node.location?.start
+      node.location
     );
   }
   
   // Validate path is not empty
-  if (directive.path.trim() === '') {
+  if (path.trim() === '') {
     throw new MeldDirectiveError(
       'Import path cannot be empty',
       'import',
-      node.location?.start
+      node.location
     );
   }
   
-  // Check required fields from meld-spec
-  if (directive.section !== undefined && typeof directive.section !== 'string') {
-    throw new MeldDirectiveError(
-      'Import directive "section" property must be a string if provided',
-      'import',
-      node.location?.start
-    );
-  }
+  // Check section and fuzzy parameters if present in the value
+  const sectionMatch = directive.value?.match(/section\s*=\s*"([^"]+)"/);
+  const fuzzyMatch = directive.value?.match(/fuzzy\s*=\s*([\d.]+)/);
   
-  if (directive.fuzzy !== undefined) {
-    if (typeof directive.fuzzy !== 'number' || directive.fuzzy < 0 || directive.fuzzy > 1) {
+  if (sectionMatch) {
+    const section = sectionMatch[1];
+    if (typeof section !== 'string' || section.trim() === '') {
       throw new MeldDirectiveError(
-        'Import directive "fuzzy" property must be a number between 0 and 1 if provided',
+        'Import directive "section" parameter must be a non-empty string',
         'import',
-        node.location?.start
+        node.location
+      );
+    }
+  }
+  
+  if (fuzzyMatch) {
+    const fuzzy = parseFloat(fuzzyMatch[1]);
+    if (isNaN(fuzzy) || fuzzy < 0 || fuzzy > 1) {
+      throw new MeldDirectiveError(
+        'Import directive "fuzzy" parameter must be a number between 0 and 1',
+        'import',
+        node.location
       );
     }
   }
