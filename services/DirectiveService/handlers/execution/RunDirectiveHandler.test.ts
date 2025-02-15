@@ -24,8 +24,12 @@ describe('RunDirectiveHandler', () => {
 
   beforeEach(() => {
     validationService = {
-      validate: vi.fn()
-    };
+      validate: vi.fn(),
+      registerValidator: vi.fn(),
+      removeValidator: vi.fn(),
+      hasValidator: vi.fn(),
+      getRegisteredDirectiveKinds: vi.fn()
+    } as unknown as IValidationService;
 
     stateService = {
       setTextVar: vi.fn(),
@@ -57,8 +61,8 @@ describe('RunDirectiveHandler', () => {
       const node = createRunDirective('echo "test"', createLocation(1, 1));
       const context = { currentFilePath: 'test.meld' };
 
-      vi.mocked(resolutionService.resolveInContext).mockResolvedValueOnce('echo "test"');
-      vi.mocked(fileSystemService.executeCommand).mockResolvedValueOnce({
+      vi.mocked(resolutionService.resolveInContext).mockResolvedValue('echo "test"');
+      vi.mocked(fileSystemService.executeCommand).mockResolvedValue({
         stdout: 'test output',
         stderr: ''
       });
@@ -68,7 +72,16 @@ describe('RunDirectiveHandler', () => {
       expect(validationService.validate).toHaveBeenCalledWith(node);
       expect(resolutionService.resolveInContext).toHaveBeenCalledWith(
         'echo "test"',
-        expect.any(Object)
+        {
+          allowNested: false,
+          allowedVariableTypes: {
+            command: true,
+            data: false,
+            path: true,
+            text: true
+          },
+          currentFilePath: 'test.meld'
+        }
       );
       expect(fileSystemService.executeCommand).toHaveBeenCalledWith(
         'echo "test"',
@@ -81,8 +94,8 @@ describe('RunDirectiveHandler', () => {
       const node = createRunDirective('${cmd} ${arg}', createLocation(1, 1));
       const context = { currentFilePath: 'test.meld' };
 
-      vi.mocked(resolutionService.resolveInContext).mockResolvedValueOnce('echo "Hello World"');
-      vi.mocked(fileSystemService.executeCommand).mockResolvedValueOnce({
+      vi.mocked(resolutionService.resolveInContext).mockResolvedValue('echo "Hello World"');
+      vi.mocked(fileSystemService.executeCommand).mockResolvedValue({
         stdout: 'Hello World',
         stderr: ''
       });
@@ -92,7 +105,16 @@ describe('RunDirectiveHandler', () => {
       expect(validationService.validate).toHaveBeenCalledWith(node);
       expect(resolutionService.resolveInContext).toHaveBeenCalledWith(
         '${cmd} ${arg}',
-        expect.any(Object)
+        {
+          allowNested: false,
+          allowedVariableTypes: {
+            command: true,
+            data: false,
+            path: true,
+            text: true
+          },
+          currentFilePath: 'test.meld'
+        }
       );
       expect(fileSystemService.executeCommand).toHaveBeenCalledWith(
         'echo "Hello World"',
@@ -105,8 +127,8 @@ describe('RunDirectiveHandler', () => {
       const node = createRunDirective('cat $PROJECTPATH/test.txt', createLocation(1, 1));
       const context = { currentFilePath: 'test.meld' };
 
-      vi.mocked(resolutionService.resolveInContext).mockResolvedValueOnce('cat /workspace/test.txt');
-      vi.mocked(fileSystemService.executeCommand).mockResolvedValueOnce({
+      vi.mocked(resolutionService.resolveInContext).mockResolvedValue('cat /workspace/test.txt');
+      vi.mocked(fileSystemService.executeCommand).mockResolvedValue({
         stdout: 'file contents',
         stderr: ''
       });
@@ -116,7 +138,16 @@ describe('RunDirectiveHandler', () => {
       expect(validationService.validate).toHaveBeenCalledWith(node);
       expect(resolutionService.resolveInContext).toHaveBeenCalledWith(
         'cat $PROJECTPATH/test.txt',
-        expect.any(Object)
+        {
+          allowNested: false,
+          allowedVariableTypes: {
+            command: true,
+            data: false,
+            path: true,
+            text: true
+          },
+          currentFilePath: 'test.meld'
+        }
       );
       expect(fileSystemService.executeCommand).toHaveBeenCalledWith(
         'cat /workspace/test.txt',

@@ -29,16 +29,15 @@ export class TextDirectiveHandler implements IDirectiveHandler {
     try {
       // 1. Validate directive structure
       await this.validationService.validate(node);
-      const directive = node.directive as TextDirective;
 
-      // 2. Extract identifier and value
-      const { identifier, value } = directive;
+      // 2. Get validated directive
+      const directive = node.directive as TextDirective;
 
       // 3. Process value based on type
       let resolvedValue: string;
 
       // Remove quotes from string literals
-      const unquotedValue = this.removeQuotes(value);
+      const unquotedValue = this.removeQuotes(directive.value);
 
       // Check if the value is a standalone directive or contains embedded directives
       const hasDirective = unquotedValue.includes('@');
@@ -59,10 +58,10 @@ export class TextDirectiveHandler implements IDirectiveHandler {
       }
 
       // 4. Store in state
-      await this.stateService.setTextVar(identifier, resolvedValue);
+      await this.stateService.setTextVar(directive.identifier, resolvedValue);
 
       logger.debug('Text directive processed successfully', {
-        identifier,
+        identifier: directive.identifier,
         location: node.location
       });
     } catch (error) {

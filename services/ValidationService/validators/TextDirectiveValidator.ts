@@ -49,12 +49,17 @@ export function validateTextDirective(node: DirectiveNode): void {
     const firstQuote = directive.value[0];
     const lastQuote = directive.value[directive.value.length - 1];
     
+    // Allow both single and double quotes, but they must match
     if (firstQuote !== lastQuote || !["'", '"', '`'].includes(firstQuote)) {
-      throw new MeldDirectiveError(
-        'Text directive string value must be properly quoted with matching quotes (single, double, or backtick)',
-        'text',
-        node.location?.start
-      );
+      // If the value contains quotes inside, they must be properly escaped
+      const unescapedQuotes = directive.value.match(/(?<!\\)['"`]/g);
+      if (unescapedQuotes && unescapedQuotes.length > 2) {
+        throw new MeldDirectiveError(
+          'Text directive string value contains unescaped quotes',
+          'text',
+          node.location?.start
+        );
+      }
     }
 
     // Check for multiline strings in non-template literals

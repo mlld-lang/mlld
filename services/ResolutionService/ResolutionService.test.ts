@@ -91,7 +91,7 @@ describe('ResolutionService', () => {
         type: 'Directive',
         directive: {
           kind: 'data',
-          name: 'config',
+          identifier: 'config',
           value: '{ "key": "value" }'
         }
       };
@@ -107,7 +107,7 @@ describe('ResolutionService', () => {
         type: 'Directive',
         directive: {
           kind: 'path',
-          name: 'HOMEPATH'
+          identifier: 'HOMEPATH'
         }
       };
       vi.mocked(parserService.parse).mockResolvedValue([node]);
@@ -122,7 +122,7 @@ describe('ResolutionService', () => {
         type: 'Directive',
         directive: {
           kind: 'run',
-          name: 'echo',
+          identifier: 'echo',
           value: '$echo(hello)',
           args: ['hello']
         }
@@ -249,7 +249,7 @@ Content 2`;
         type: 'Directive',
         directive: {
           kind: 'data',
-          name: 'var',
+          identifier: 'var',
           value: 'value'
         }
       };
@@ -266,7 +266,7 @@ Content 2`;
         type: 'Directive',
         directive: {
           kind: 'path',
-          name: 'var'
+          identifier: 'var'
         }
       };
       vi.mocked(parserService.parse).mockResolvedValue([node]);
@@ -282,7 +282,7 @@ Content 2`;
         type: 'Directive',
         directive: {
           kind: 'run',
-          name: 'cmd',
+          identifier: 'cmd',
           value: '$cmd()',
           args: []
         }

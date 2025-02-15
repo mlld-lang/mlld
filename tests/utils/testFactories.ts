@@ -160,11 +160,10 @@ export function createPathDirective(
  * Create a run directive node for testing
  */
 export function createRunDirective(
-  identifier: string,
   command: string,
   location: Location = DEFAULT_LOCATION
 ): DirectiveNode {
-  return createDirectiveNode('run', { identifier, command }, location);
+  return createDirectiveNode('run', { command }, location);
 }
 
 /**

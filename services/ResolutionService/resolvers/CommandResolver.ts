@@ -20,10 +20,19 @@ export class CommandResolver {
 
     const directiveNode = node as DirectiveNode;
 
-    // Validate command variables are allowed
+    // Validate command type first
+    if (directiveNode.directive.kind !== 'run') {
+      throw new ResolutionError(
+        'Invalid node type for command resolution',
+        ResolutionErrorCode.SYNTAX_ERROR,
+        { value: JSON.stringify(node) }
+      );
+    }
+
+    // Validate commands are allowed
     if (!context.allowedVariableTypes.command) {
       throw new ResolutionError(
-        'Command variables are not allowed in this context',
+        'Command references are not allowed in this context',
         ResolutionErrorCode.INVALID_CONTEXT,
         { value: directiveNode.directive.value, context }
       );
@@ -38,7 +47,7 @@ export class CommandResolver {
       );
     }
 
-    // Get command value
+    // Get command definition
     const command = this.stateService.getCommand(directiveNode.directive.identifier);
     if (!command) {
       throw new ResolutionError(
@@ -58,7 +67,30 @@ export class CommandResolver {
       );
     }
 
-    return match[1];
+    // Get the command template and args
+    const template = match[1];
+    const args = directiveNode.directive.args || [];
+
+    // Count required parameters in template
+    const paramCount = (template.match(/\${[^}]+}/g) || []).length;
+    if (args.length !== paramCount) {
+      throw new ResolutionError(
+        `Command ${directiveNode.directive.identifier} expects ${paramCount} parameters but got ${args.length}`,
+        ResolutionErrorCode.SYNTAX_ERROR,
+        { value: directiveNode.directive.identifier }
+      );
+    }
+
+    // Replace parameters in template
+    let result = template;
+    const params = template.match(/\${([^}]+)}/g) || [];
+    for (let i = 0; i < params.length; i++) {
+      const param = params[i];
+      const value = args[i];
+      result = result.replace(param, value);
+    }
+
+    return result;
   }
 
   /**

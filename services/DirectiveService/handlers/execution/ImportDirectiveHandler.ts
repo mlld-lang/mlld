@@ -133,7 +133,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
   }
 
   /**
-   * Parse the import syntax to extract source and optional imports
+   * Parse import syntax to extract source and optional imports
    */
   private parseImportSyntax(directive: ImportDirective): { 
     source: string;
@@ -145,9 +145,19 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
     }
 
     // Handle full syntax: @import [x,y,z] from [file.meld]
+    const importList = this.parseImportList(directive.path);
+    
+    // If it's a wildcard import, return no filter (imports all)
+    if (importList.length === 1 && importList[0].identifier === '*') {
+      return {
+        source: directive.from,
+        imports: []
+      };
+    }
+
     return {
       source: directive.from,
-      imports: this.parseImportList(directive.path)
+      imports: importList
     };
   }
 
@@ -159,6 +169,11 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
     const items = importList.slice(1, -1).split(',').map(s => s.trim());
     
     return items.map(item => {
+      // Handle wildcard
+      if (item === '*') {
+        return { identifier: '*' };
+      }
+
       // Check if it's a simple identifier or has an alias
       const match = item.match(/^(\w+)(?:\s+as\s+(\w+))?$/);
       if (!match) {
@@ -182,6 +197,11 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
     importState: IStateService
   ): Promise<void> {
     for (const { identifier, alias } of imports) {
+      // Handle wildcard - no need to check variables
+      if (identifier === '*') {
+        continue;
+      }
+
       // Check if variable exists in imported state
       if (!importState.hasVariable(identifier)) {
         throw new DirectiveError(

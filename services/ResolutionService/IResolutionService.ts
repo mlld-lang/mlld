@@ -20,6 +20,9 @@ export interface ResolutionContext {
     requireAbsolute: boolean;
     allowedRoots: string[]; // e.g. [$HOMEPATH, $PROJECTPATH]
   };
+
+  /** Whether field access is allowed for data variables */
+  allowDataFields?: boolean;
 }
 
 /**

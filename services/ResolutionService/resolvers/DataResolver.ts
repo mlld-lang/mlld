@@ -44,8 +44,16 @@ export class DataResolver {
     }
 
     // Handle field access if present
-    if (field) {
-      return this.resolveField(value, field, identifier);
+    if (field || directiveNode.directive.fields) {
+      // Check if field access is allowed
+      if (context.allowDataFields === false) {
+        throw new ResolutionError(
+          'Field access is not allowed in this context',
+          ResolutionErrorCode.INVALID_CONTEXT,
+          { value: field || directiveNode.directive.fields, context }
+        );
+      }
+      return this.resolveField(value, field || directiveNode.directive.fields!, identifier);
     }
 
     // Convert value to string
@@ -84,7 +92,7 @@ export class DataResolver {
       );
     }
 
-    // Check for field access
+    // Check for field access in identifier
     const parts = identifier.split('.');
     if (parts.length > 1) {
       return {
@@ -116,18 +124,39 @@ export class DataResolver {
       );
     }
 
-    const fieldValue = field.split('.').reduce((obj, key) => {
-      if (obj === undefined || obj === null) {
+    let current = value;
+    const parts = field.split('.');
+
+    for (const part of parts) {
+      if (current === null || current === undefined) {
         throw new ResolutionError(
-          `Field not found: ${key} in ${identifier}.${field}`,
+          `Cannot access field '${part}' of undefined or null`,
           ResolutionErrorCode.FIELD_ACCESS_ERROR,
           { value: identifier }
         );
       }
-      return obj[key];
-    }, value);
 
-    return this.stringifyValue(fieldValue);
+      if (typeof current !== 'object') {
+        throw new ResolutionError(
+          `Cannot access field '${part}' of non-object value`,
+          ResolutionErrorCode.FIELD_ACCESS_ERROR,
+          { value: identifier }
+        );
+      }
+
+      if (!(part in current)) {
+        throw new ResolutionError(
+          `Field not found: ${part} in ${identifier}.${field}`,
+          ResolutionErrorCode.FIELD_ACCESS_ERROR,
+          { value: identifier }
+        );
+      }
+
+      current = current[part];
+    }
+
+    // For nested field access, we want to return the actual value, not a stringified object
+    return typeof current === 'object' ? JSON.stringify(current) : String(current);
   }
 
   /**

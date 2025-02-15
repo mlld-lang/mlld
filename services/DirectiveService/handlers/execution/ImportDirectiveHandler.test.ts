@@ -122,7 +122,7 @@ describe('ImportDirectiveHandler', () => {
 
   describe('import syntax variations', () => {
     it('should handle explicit imports with from syntax', async () => {
-      const node = createImportDirective('x,y,z', createLocation(1, 1), 'source.meld');
+      const node = createImportDirective('[x,y,z]', createLocation(1, 1), 'source.meld', 'source.meld');
       const mockContent = 'Test content';
       const mockParsedNodes = [{ type: 'Text', content: 'Test content' }] as MeldNode[];
 
@@ -140,7 +140,7 @@ describe('ImportDirectiveHandler', () => {
     });
 
     it('should handle aliased imports', async () => {
-      const node = createImportDirective('x as y', createLocation(1, 1), 'source.meld');
+      const node = createImportDirective('[x as y]', createLocation(1, 1), 'source.meld', 'source.meld');
       const mockContent = 'Test content';
       const mockParsedNodes = [{ type: 'Text', content: 'Test content' }] as MeldNode[];
       const mockValue = { data: 'test' };
@@ -160,7 +160,7 @@ describe('ImportDirectiveHandler', () => {
     });
 
     it('should handle wildcard imports', async () => {
-      const node = createImportDirective('*', createLocation(1, 1), 'source.meld');
+      const node = createImportDirective('[*]', createLocation(1, 1), 'source.meld', 'source.meld');
       const mockContent = 'Test content';
       const mockParsedNodes = [{ type: 'Text', content: 'Test content' }] as MeldNode[];
 
@@ -235,7 +235,7 @@ describe('ImportDirectiveHandler', () => {
     });
 
     it('should handle missing imported variables', async () => {
-      const node = createImportDirective('x,y', createLocation(1, 1), 'source.meld');
+      const node = createImportDirective('[x,y]', createLocation(1, 1), 'source.meld');
       const mockContent = 'Test content';
       const mockParsedNodes = [{ type: 'Text', content: 'Test content' }] as MeldNode[];
 

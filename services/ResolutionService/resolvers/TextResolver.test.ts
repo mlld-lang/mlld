@@ -139,14 +139,13 @@ describe('TextResolver', () => {
       const node: MeldNode = {
         type: 'Directive',
         directive: {
-          kind: 'text',
-          value: ''
+          kind: 'text'
         }
       };
-      
-      await expect(resolver.resolve(node, context))
+
+      await expect(() => resolver.resolve(node, context))
         .rejects
-        .toThrow('Text variable name is required');
+        .toThrow('Text variable identifier is required');
     });
   });
 

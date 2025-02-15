@@ -34,7 +34,6 @@ export class InterpreterService implements IInterpreterService {
 
     const opts = { ...DEFAULT_OPTIONS, ...options };
     let currentState = opts.initialState ?? this.stateService!.createChildState();
-    let stateSnapshot: IStateService | undefined;
 
     if (opts.filePath) {
       currentState.setCurrentFilePath(opts.filePath);
@@ -47,19 +46,37 @@ export class InterpreterService implements IInterpreterService {
 
     try {
       // Take a snapshot of initial state for rollback
-      stateSnapshot = currentState.clone();
+      const initialSnapshot = currentState.clone();
+      let lastGoodState = initialSnapshot;
 
       for (const node of nodes) {
         try {
-          currentState = await this.interpretNode(node, currentState);
-          // Update snapshot after each successful node
-          stateSnapshot = currentState.clone();
+          // Process the node
+          const updatedState = await this.interpretNode(node, lastGoodState.clone());
+          
+          // If successful, update the last good state
+          lastGoodState = updatedState;
+          currentState = updatedState;
         } catch (error) {
           // Roll back to last good state
-          if (stateSnapshot) {
-            currentState = stateSnapshot;
+          currentState = lastGoodState;
+          // Preserve MeldInterpreterError or wrap other errors
+          if (error instanceof MeldInterpreterError) {
+            throw error;
           }
-          throw error;
+          throw new MeldInterpreterError(
+            error.message,
+            node.type,
+            node.location?.start,
+            {
+              cause: error,
+              context: {
+                nodeType: node.type,
+                location: node.location,
+                filePath: opts.filePath
+              }
+            }
+          );
         }
       }
 
@@ -67,16 +84,24 @@ export class InterpreterService implements IInterpreterService {
       if (opts.mergeState && opts.initialState) {
         try {
           await opts.initialState.mergeChildState(currentState);
+          currentState = opts.initialState; // Use parent state after merge
         } catch (error) {
           logger.error('Failed to merge child state', {
             error,
             filePath: opts.filePath
           });
+          // Roll back to last good state
+          currentState = lastGoodState;
           throw new MeldInterpreterError(
             'Failed to merge child state',
             'state_merge',
             undefined,
-            { cause: error }
+            {
+              cause: error,
+              context: {
+                filePath: opts.filePath
+              }
+            }
           );
         }
       }
@@ -94,22 +119,22 @@ export class InterpreterService implements IInterpreterService {
         error
       });
 
-      // Enhance error with context if needed
-      if (!(error instanceof MeldInterpreterError)) {
-        throw new MeldInterpreterError(
-          error.message,
-          'interpretation',
-          undefined,
-          {
-            cause: error,
-            context: {
-              filePath: opts.filePath,
-              nodeCount: nodes.length
-            }
-          }
-        );
+      // Preserve MeldInterpreterError or wrap other errors
+      if (error instanceof MeldInterpreterError) {
+        throw error;
       }
-      throw error;
+      throw new MeldInterpreterError(
+        error.message,
+        'interpretation',
+        undefined,
+        {
+          cause: error,
+          context: {
+            filePath: opts.filePath,
+            nodeCount: nodes.length
+          }
+        }
+      );
     }
   }
 
@@ -130,20 +155,12 @@ export class InterpreterService implements IInterpreterService {
           break;
 
         case 'Directive':
-          // Take state snapshot before directive processing
-          const stateSnapshot = state.clone();
-          try {
-            // Process directive using DirectiveService
-            await this.directiveService!.processDirective(node, {
-              state,
-              filePath: state.getCurrentFilePath()
-            });
-            state.addNode(node);
-          } catch (error) {
-            // Roll back state on directive error
-            state = stateSnapshot;
-            throw error;
-          }
+          // Process directive using DirectiveService
+          await this.directiveService!.processDirective(node, {
+            state,
+            filePath: state.getCurrentFilePath()
+          });
+          state.addNode(node);
           break;
 
         case 'CodeFence':
@@ -167,23 +184,23 @@ export class InterpreterService implements IInterpreterService {
 
       return state;
     } catch (error) {
-      // Enhance non-MeldInterpreterErrors with context
-      if (!(error instanceof MeldInterpreterError)) {
-        throw new MeldInterpreterError(
-          error.message,
-          node.type,
-          node.location?.start,
-          {
-            cause: error,
-            context: {
-              nodeType: node.type,
-              location: node.location,
-              filePath: state.getCurrentFilePath()
-            }
-          }
-        );
+      // Preserve MeldInterpreterError or wrap other errors
+      if (error instanceof MeldInterpreterError) {
+        throw error;
       }
-      throw error;
+      throw new MeldInterpreterError(
+        error.message,
+        node.type,
+        node.location?.start,
+        {
+          cause: error,
+          context: {
+            nodeType: node.type,
+            location: node.location,
+            filePath: state.getCurrentFilePath()
+          }
+        }
+      );
     }
   }
 
