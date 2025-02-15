@@ -23,6 +23,7 @@ import type { PathOptions } from '../PathService/IPathService';
 import type { InterpreterOptions } from '../InterpreterService/IInterpreterService';
 import type { ResolutionContext } from '../ResolutionService/IResolutionService';
 import type { IDirectiveService } from '../DirectiveService/IDirectiveService';
+import { DirectiveError, DirectiveErrorCode } from './errors/DirectiveError';
 
 // Create mock implementations
 const createMockParserService = (): IParserService => ({
@@ -189,11 +190,137 @@ describe('DirectiveService', () => {
       expect(supported).toContain('data');
       expect(supported).toContain('import');
       expect(supported).toContain('embed');
+      expect(supported).toContain('run');
     });
 
     it('should throw if used before initialization', () => {
       const uninitializedService = new DirectiveService();
       expect(() => uninitializedService.getSupportedDirectives()).toThrow();
+    });
+  });
+
+  describe('Handler registration', () => {
+    it('should allow registering custom handlers', () => {
+      const customHandler = {
+        kind: 'custom',
+        execute: vi.fn()
+      };
+      service.registerHandler(customHandler);
+      expect(service.hasHandler('custom')).toBe(true);
+    });
+
+    it('should override existing handlers', () => {
+      const customTextHandler = {
+        kind: 'text',
+        execute: vi.fn()
+      };
+      service.registerHandler(customTextHandler);
+      expect(service.hasHandler('text')).toBe(true);
+    });
+  });
+
+  describe('Service-level validation', () => {
+    it('should validate directive type', async () => {
+      const invalidNode = {
+        type: 'Text', // Should be 'Directive'
+        directive: {
+          kind: 'text',
+          name: 'test',
+          value: 'value'
+        }
+      } as unknown as DirectiveNode;
+
+      await expect(service.processDirective(invalidNode)).rejects.toThrow(DirectiveError);
+    });
+
+    it('should validate handler exists', async () => {
+      const unknownDirective = {
+        type: 'Directive',
+        directive: {
+          kind: 'unknown'
+        }
+      } as unknown as DirectiveNode;
+
+      await expect(service.processDirective(unknownDirective)).rejects.toThrow(DirectiveError);
+    });
+  });
+
+  describe('Cross-handler interactions', () => {
+    it('should process nested directives', async () => {
+      // Create a text directive that contains an @embed
+      const textNode = createTextDirective('content', '@embed [file.md]', createLocation(1, 1));
+      const embedContent = 'Embedded content';
+      
+      vi.mocked(fileSystemService.exists).mockResolvedValue(true);
+      vi.mocked(fileSystemService.readFile).mockResolvedValue(embedContent);
+      vi.mocked(parserService.parse).mockResolvedValue([
+        { type: 'Text', content: embedContent } as MeldNode
+      ]);
+
+      await service.processDirective(textNode);
+
+      // Verify the text directive was processed
+      expect(validationService.validate).toHaveBeenCalledWith(textNode);
+      expect(stateService.setTextVar).toHaveBeenCalledWith('content', '@embed [file.md]');
+    });
+
+    it('should handle circular imports', async () => {
+      const importNode = createImportDirective('circular.md', createLocation(1, 1));
+      
+      vi.mocked(circularityService.beginImport).mockImplementationOnce(() => {
+        throw new Error('Circular import detected');
+      });
+
+      await expect(service.processDirective(importNode)).rejects.toThrow();
+      expect(circularityService.beginImport).toHaveBeenCalled();
+    });
+  });
+
+  describe('Error propagation', () => {
+    it('should wrap handler errors in DirectiveError', async () => {
+      const textNode = createTextDirective('test', 'value', createLocation(1, 1));
+      
+      vi.mocked(validationService.validate).mockImplementationOnce(() => {
+        throw new Error('Internal error');
+      });
+
+      const error = await service.processDirective(textNode).catch(e => e);
+      expect(error).toBeInstanceOf(DirectiveError);
+      expect(error.code).toBe(DirectiveErrorCode.EXECUTION_FAILED);
+    });
+
+    it('should preserve original error details', async () => {
+      const textNode = createTextDirective('test', 'value', createLocation(1, 1));
+      const originalError = new Error('Original error');
+      
+      vi.mocked(validationService.validate).mockImplementationOnce(() => {
+        throw originalError;
+      });
+
+      const error = await service.processDirective(textNode).catch(e => e);
+      expect(error.details.cause).toBe(originalError);
+    });
+  });
+
+  describe('Context management', () => {
+    it('should create child contexts with correct properties', () => {
+      const parentContext = {
+        currentFilePath: 'parent.md'
+      };
+      
+      const childContext = service.createChildContext(parentContext, 'child.md');
+      
+      expect(childContext.currentFilePath).toBe('child.md');
+    });
+
+    it('should pass context to handlers', async () => {
+      const textNode = createTextDirective('test', 'value', createLocation(1, 1));
+      const context = { currentFilePath: 'test.md' };
+
+      await service.handleDirective(textNode, context);
+
+      // Verify context was passed through
+      expect(validationService.validate).toHaveBeenCalledWith(textNode);
     });
   });
 

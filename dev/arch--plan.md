@@ -82,56 +82,183 @@ Below is a consolidated list of concrete changes needed to make the architecture
 ✓ Migrated the best parts of "interpreter/state/state.js" into "StateService.ts"
 
 ─────────────────────────────────────────────────────────────────────────
-7. Create "ResolutionService" for Variable Resolution [COMPLETE]
+7. Create "ResolutionService" for Variable Resolution [90% COMPLETE]
 ─────────────────────────────────────────────────────────────────────────
-• Create ResolutionService with:
-  - Variable resolution (${var}, #{data}, $path)
-  - Command resolution ($command(args))
-  - Path resolution in various contexts
-  - Resolution context management
-  - Explicit cycle detection for variables
-  - Context validation rules
-• Add dedicated resolvers:
-  - TextResolver (with nested interpolation detection)
-  - DataResolver (with field access validation)
-  - PathResolver (enforcing $HOMEPATH/$PROJECTPATH)
-  - CommandResolver (validating parameter types)
-• Add ResolutionContextFactory:
-  - Pre-defined contexts for each directive type
-  - Enforces grammar rules per context
-  - Prevents invalid variable usage
-• Implement clear separation between:
-  - Variable reference cycles (in ResolutionService)
-  - File import cycles (in CircularityService)
-• Add comprehensive test coverage:
-  - Variable resolution in each context
-  - Cycle detection
-  - Edge cases (nested interpolation, invalid contexts)
-  - Command parameter validation
-• Update dependent services to use ResolutionService
+✓ Created ResolutionService with:
+  ✓ Variable resolution (${var}, #{data}, $path)
+  ✓ Command resolution ($command(args))
+  ✓ Path resolution in various contexts
+  ✓ Resolution context management
+  ✓ Explicit cycle detection for variables
+  ✓ Context validation rules
+✓ Added dedicated resolvers:
+  ✓ TextResolver (with nested interpolation detection)
+  ✓ DataResolver (with field access validation)
+  ✓ PathResolver (enforcing $HOMEPATH/$PROJECTPATH)
+  ✓ CommandResolver (validating parameter types)
+✓ Added ResolutionContextFactory:
+  ✓ Pre-defined contexts for each directive type
+  ✓ Enforces grammar rules per context
+  ✓ Prevents invalid variable usage
+✓ Implemented clear separation between:
+  ✓ Variable reference cycles (in ResolutionService)
+  ✓ File import cycles (in CircularityService)
+• [TODO] Add remaining edge case tests
+• [TODO] Complete integration tests with DirectiveService
 
 ─────────────────────────────────────────────────────────────────────────
-8. Update DirectiveService for New Architecture [TODO]
+8. Update DirectiveService for New Architecture [40% COMPLETE]
 ─────────────────────────────────────────────────────────────────────────
-• Reorganize DirectiveService into:
+✓ Basic service structure and interfaces
+✓ Handler registration system
+• [TODO] Complete directive handlers:
   - Definition handlers (@text, @data, @path, @define)
   - Execution handlers (@run, @embed, @import)
-• Update handlers to:
+• [TODO] Update handlers to:
   - Store raw values in StateService
   - Use ResolutionService for all resolution
   - Use ResolutionContextFactory for correct contexts
   - Handle resolution errors properly
-• Add proper error handling:
+• [TODO] Add proper error handling:
   - Validation errors from ValidationService
   - Resolution errors from ResolutionService
   - Execution errors from handlers
-• Update tests to verify:
+• [TODO] Update tests to verify:
   - Correct context usage
   - Error handling
   - Integration with ResolutionService
 
+DETAILED IMPLEMENTATION PLAN:
+1. Definition Handlers (Phase 1)
+   a) TextDirectiveHandler
+      • Implement core handler with ResolutionService integration
+      • Add proper context validation
+      • Add comprehensive tests
+      • Integrate with StateService for storage
+   
+   b) DataDirectiveHandler
+      • Implement JSON parsing and validation
+      • Add field access validation
+      • Add schema support (if specified)
+      • Add comprehensive tests
+   
+   c) PathDirectiveHandler
+      • Implement with PathService integration
+      • Add path validation and normalization
+      • Add comprehensive tests
+   
+   d) DefineDirectiveHandler
+      • Implement command definition storage
+      • Add parameter validation
+      • Add metadata support (.risk, .about, etc.)
+      • Add comprehensive tests
+
+2. Execution Handlers (Phase 2)
+   a) RunDirectiveHandler
+      • Implement command resolution
+      • Add parameter interpolation
+      • Add execution context management
+      • Add comprehensive tests
+   
+   b) EmbedDirectiveHandler
+      • Implement content embedding
+      • Add section extraction
+      • Add header level adjustment
+      • Add comprehensive tests
+   
+   c) ImportDirectiveHandler
+      • Implement file importing
+      • Add circularity detection
+      • Add state inheritance
+      • Add comprehensive tests
+
+3. Integration & Error Handling (Phase 3)
+   a) Resolution Integration
+      • Integrate ResolutionContextFactory
+      • Add context validation
+      • Add cycle detection
+      • Add comprehensive tests
+   
+   b) Error System
+      • Implement DirectiveError hierarchy
+      • Add location tracking
+      • Add error recovery options
+      • Add comprehensive tests
+   
+   c) State Management
+      • Implement state inheritance
+      • Add state merging
+      • Add cleanup handling
+      • Add comprehensive tests
+
+4. Testing Infrastructure (Phase 4)
+   a) Unit Tests
+      • Add handler-specific test suites
+      • Add error case coverage
+      • Add edge case coverage
+   
+   b) Integration Tests
+      • Add cross-handler tests
+      • Add service integration tests
+      • Add full pipeline tests
+   
+   c) Performance Tests
+      • Add benchmarks
+      • Add memory usage tests
+      • Add load tests
+
+5. Documentation & Examples (Phase 5)
+   a) Handler Documentation
+      • Add detailed API docs
+      • Add usage examples
+      • Add error handling guides
+   
+   b) Integration Guides
+      • Add service integration docs
+      • Add extension guides
+      • Add troubleshooting guides
+
+IMPLEMENTATION ORDER:
+1. Start with TextDirectiveHandler as it's the simplest
+2. Move to DataDirectiveHandler as it builds on similar patterns
+3. Implement PathDirectiveHandler using existing PathService
+4. Add DefineDirectiveHandler to support command definitions
+5. Implement RunDirectiveHandler to execute commands
+6. Add EmbedDirectiveHandler for content inclusion
+7. Finally add ImportDirectiveHandler as it's most complex
+
+This order ensures we:
+• Build from simple to complex
+• Validate core patterns early
+• Have dependencies ready when needed
+• Can test thoroughly at each step
+
 ─────────────────────────────────────────────────────────────────────────
-9. Implement a Proper "PathService" [COMPLETED]
+9. Implement InterpreterService for Node Iteration [80% COMPLETE]
+─────────────────────────────────────────────────────────────────────────
+✓ Created InterpreterService with:
+  ✓ Node iteration and processing
+  ✓ State management
+  ✓ Basic error handling
+  ✓ Integration with DirectiveService
+✓ Comprehensive test coverage for basic functionality
+• [TODO] Add advanced error handling
+• [TODO] Add edge case handling
+• [TODO] Complete integration tests with all services
+
+─────────────────────────────────────────────────────────────────────────
+10. Create CLIService for Command Line Interface [70% COMPLETE]
+─────────────────────────────────────────────────────────────────────────
+✓ Basic CLI implementation
+✓ Argument parsing
+✓ Test coverage for main functionality
+• [TODO] Improve error handling
+• [TODO] Add more format options
+• [TODO] Enhance logging
+• [TODO] Add configuration options
+
+─────────────────────────────────────────────────────────────────────────
+11. Implement a Proper "PathService" [COMPLETED]
 ─────────────────────────────────────────────────────────────────────────
 ✓ Created PathService with:
   ✓ Path resolution and validation
@@ -144,7 +271,7 @@ Below is a consolidated list of concrete changes needed to make the architecture
   ✓ Migrated test coverage from path.test.ts
 
 ─────────────────────────────────────────────────────────────────────────
-10. Create a Proper "FileSystemService" [COMPLETED]
+12. Create a Proper "FileSystemService" [COMPLETED]
 ─────────────────────────────────────────────────────────────────────────
 ✓ Created FileSystemService with:
   ✓ Core file operations (readFile, writeFile, exists, stat)
@@ -157,7 +284,7 @@ Below is a consolidated list of concrete changes needed to make the architecture
   ✓ Migrated test coverage from fs-utils.test.ts
 
 ─────────────────────────────────────────────────────────────────────────
-11. "OutputService" to Handle Markdown vs. LLM XML
+13. "OutputService" to Handle Markdown vs. LLM XML
 ─────────────────────────────────────────────────────────────────────────
 [See detailed design in service-output.md]
 
@@ -169,7 +296,7 @@ Below is a consolidated list of concrete changes needed to make the architecture
 • Remove "CONVERTER.md" or unify it into a short doc in "OutputService/README.md" if desired.  
 
 ─────────────────────────────────────────────────────────────────────────
-12. Remove Or Rework "runMeld," "meld.ts," "cli.test.ts," Etc.
+14. Remove Or Rework "runMeld," "meld.ts," "cli.test.ts," Etc.
 ─────────────────────────────────────────────────────────────────────────
 • The old "runMeld" function in "meld.ts" or "cli.md" lumps together parse, interpret, and formatting in a single step. Under the new design:
   – We can keep a top-level "sdk/index.ts" that offers a unify function runMeld() if we want a single call. But internally, it calls:
@@ -180,7 +307,7 @@ Below is a consolidated list of concrete changes needed to make the architecture
 • "cli.test.ts," "cmd.ts," or "CLI.md" can be removed if we do not need a CLI. If we do keep a CLI, it should just be a thin wrapper calling the new services.  
 
 ─────────────────────────────────────────────────────────────────────────
-13. Clean Up Tests: Keep the Good Coverage, Delete Redundancies
+15. Clean Up Tests: Keep the Good Coverage, Delete Redundancies
 ─────────────────────────────────────────────────────────────────────────
 • Organize tests into "tests/unit/ServiceName.test.ts" and "tests/integration/...".  
 • Keep coverage from "embed.test.ts," "import.test.ts," "data.test.ts," etc. if they reflect real directive logic. Move them into "DirectiveService/handlers/tests/" or "integration."  
@@ -188,28 +315,28 @@ Below is a consolidated list of concrete changes needed to make the architecture
 • Maintain "Integration" tests that spin up the entire pipeline (ParserService → InterpreterService → OutputService).  
 
 ─────────────────────────────────────────────────────────────────────────
-14. Merge or Delete Partial or Duplicate Implementation Files
+16. Merge or Delete Partial or Duplicate Implementation Files
 ─────────────────────────────────────────────────────────────────────────
 • "location-helpers.ts," "location.ts," or "error-locations.test.ts" can be merged if we only need a single place to handle location adjustments.  
 • "meld-spec.d.ts" and "meld-ast.d.ts" can remain if they supply needed extra definitions but remove any partial duplication of official meld-ast or meld-spec.  
 • The "grammar" docs remain as reference, but integrate them into the new doc folder or remove references to old partial grammar code.  
 
 ─────────────────────────────────────────────────────────────────────────
-15. Update The "DESIGN DOCS TO BE REVIEWED AND IMPROVED"
+17. Update The "DESIGN DOCS TO BE REVIEWED AND IMPROVED"
 ─────────────────────────────────────────────────────────────────────────
 • Rewrite them to use consistent references to the new directory layout (services/ParserService, etc.).  
 • Remove repeated or contradictory sections that mention old code we are deleting.  
 • Reorder them so each service doc (PathService, FileSystemService, ValidationService, etc.) matches the final structure.  
 
 ─────────────────────────────────────────────────────────────────────────
-16. Simplify The Logging Approach [COMPLETED]
+18. Simplify The Logging Approach [COMPLETED]
 ─────────────────────────────────────────────────────────────────────────
 ✓ Created a centralized "logger.ts" in "core/utils/" using Winston.  
 ✓ Unified all logging into service-specific loggers with proper configuration.  
 ✓ Added structured logging with file and console output.  
 
 ─────────────────────────────────────────────────────────────────────────
-17. Final Clarifications
+19. Final Clarifications
 ─────────────────────────────────────────────────────────────────────────
 • No backward compatibility means we are free to remove everything not used in the final approach.  
 • The new architecture is fully services-based:
@@ -239,4 +366,4 @@ This order ensures we build from the ground up, with each service having its dep
 ─────────────────────────────────────────────────────────────────────────
 CONCLUSION
 ─────────────────────────────────────────────────────────────────────────
-By applying these 17 sets of changes, we will create a cohesive, maintainable codebase that strictly follows the services-based design described in the updated architecture documents. This yields a simpler code layout, targeted tests, and a clear separation of concerns for Parsing, Interpreting, Validating, Managing State, Handling Directives, Resolving Paths, Reading Files, and Outputting results.
+By applying these 19 sets of changes, we will create a cohesive, maintainable codebase that strictly follows the services-based design described in the updated architecture documents. This yields a simpler code layout, targeted tests, and a clear separation of concerns for Parsing, Interpreting, Validating, Managing State, Handling Directives, Resolving Paths, Reading Files, and Outputting results.
