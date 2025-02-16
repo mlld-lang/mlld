@@ -5,9 +5,9 @@ import { DirectiveNode, DirectiveData } from 'meld-spec';
 import { IDirectiveHandler, DirectiveContext } from '@services/DirectiveService/IDirectiveService.js';
 import { IValidationService } from '@services/ValidationService/IValidationService.js';
 import { IStateService } from '@services/StateService/IStateService.js';
-import { IResolutionService } from '@services/ResolutionService/IResolutionService.js';
+import { IResolutionService, ResolutionContext } from '@services/ResolutionService/IResolutionService.js';
 import { ResolutionContextFactory } from '@services/ResolutionService/ResolutionContextFactory.js';
-import { directiveLogger as logger } from '@core/utils/logger';
+import { directiveLogger as logger } from '@core/utils/logger.js';
 import { DirectiveError, DirectiveErrorCode } from '@services/DirectiveService/errors/DirectiveError.js';
 
 interface DataDirective extends DirectiveData {
@@ -75,17 +75,44 @@ export class DataDirectiveHandler implements IDirectiveHandler {
           resolvedValue = null;
         } else if (/^-?\d+(\.\d+)?$/.test(resolvedString)) {
           resolvedValue = Number(resolvedString);
-        } else if (resolvedString.startsWith('{') || resolvedString.startsWith('[')) {
-          resolvedValue = JSON.parse(resolvedString);
         } else {
-          resolvedValue = resolvedString;
+          // Try to parse as JSON first
+          try {
+            resolvedValue = JSON.parse(resolvedString);
+          } catch (parseError) {
+            // If it's a simple string, wrap it in quotes to make it valid JSON
+            if (!resolvedString.startsWith('{') && !resolvedString.startsWith('[') && !resolvedString.includes(' ')) {
+              try {
+                resolvedValue = JSON.parse(`"${resolvedString}"`);
+              } catch (stringParseError) {
+                // If even quoted string parsing fails, propagate the original error
+                logger.error('Invalid JSON format', {
+                  value: resolvedString,
+                  error: parseError,
+                  location: node.location
+                });
+                throw parseError;
+              }
+            } else {
+              // For invalid JSON objects/arrays, propagate the error
+              logger.error('Invalid JSON format', {
+                value: resolvedString,
+                error: parseError,
+                location: node.location
+              });
+              throw parseError;
+            }
+          }
         }
       } catch (error) {
+        if (error instanceof SyntaxError) {
+          throw error;
+        }
         throw new DirectiveError(
           'Invalid data value format',
           this.kind,
           DirectiveErrorCode.VALIDATION_FAILED,
-          { node, cause: error }
+          { node, cause: error instanceof Error ? error : undefined }
         );
       }
 
@@ -104,7 +131,11 @@ export class DataDirectiveHandler implements IDirectiveHandler {
         error
       });
 
-      // Wrap in DirectiveError if needed
+      // Propagate SyntaxError directly
+      if (error instanceof SyntaxError) {
+        throw error;
+      }
+   
       if (error instanceof DirectiveError) {
         throw error;
       }

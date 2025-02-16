@@ -33,9 +33,9 @@ import {
   createMockParserService,
   createMockInterpreterService,
   createMockPathService
-} from '../../tests/utils/testFactories';
+} from '@tests/utils/testFactories.js';
 import { DirectiveError, DirectiveErrorCode } from './errors/DirectiveError.js';
-import type { DirectiveNode, DirectiveKind, MeldNode } from '../../node_modules/meld-spec/dist/types.js';
+import type { DirectiveNode, DirectiveKind, MeldNode } from 'meld-spec';
 import type { IValidationService } from '@services/ValidationService/IValidationService.js';
 import type { IResolutionService, ResolutionContext } from '@services/ResolutionService/IResolutionService.js';
 import type { IStateService } from '@services/StateService/IStateService.js';
@@ -66,7 +66,25 @@ describe('DirectiveService', () => {
     // Create fresh instances of mocks using test context factories
     mockValidationService = testContext.factory.createMockValidationService();
     mockResolutionService = testContext.factory.createMockResolutionService();
-    mockStateService = testContext.factory.createMockStateService();
+    mockStateService = {
+      createChildState: vi.fn().mockReturnValue(mockStateService),
+      mergeChildState: vi.fn(),
+      getTextVar: vi.fn(),
+      setTextVar: vi.fn(),
+      getDataVar: vi.fn(),
+      setDataVar: vi.fn(),
+      getPathVar: vi.fn(),
+      setPathVar: vi.fn(),
+      appendContent: vi.fn(),
+      getContent: vi.fn(),
+      clone: vi.fn().mockReturnValue(mockStateService),
+      setCurrentFilePath: vi.fn(),
+      getCurrentFilePath: vi.fn(),
+      getNodes: vi.fn().mockReturnValue([]),
+      addNode: vi.fn(),
+      setImmutable: vi.fn(),
+      isImmutable: vi.fn().mockReturnValue(false)
+    } as unknown as IStateService;
     mockCircularityService = testContext.factory.createMockCircularityService();
     mockFileSystemService = testContext.factory.createMockFileSystemService();
     mockParserService = testContext.factory.createMockParserService();

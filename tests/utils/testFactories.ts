@@ -227,11 +227,11 @@ export function createEmbedDirective(
 
 // Create an import directive node for testing
 export function createImportDirective(
-  path: string,
+  imports: string,
   location?: Location,
   from?: string
 ): DirectiveNode {
-  const value = from ? `path = "${path}" from = "${from}"` : `path = "${path}"`;
+  const value = from ? `imports = [${imports}] path = "${from}"` : `path = "${imports}"`;
   return createTestDirective('import', 'import', value, location);
 }
 

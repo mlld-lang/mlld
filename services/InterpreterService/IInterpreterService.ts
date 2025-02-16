@@ -19,6 +19,13 @@ export interface InterpreterOptions {
    * @default true
    */
   mergeState?: boolean;
+
+  /**
+   * List of variables to import
+   * If undefined, all variables are imported
+   * If empty array, no variables are imported
+   */
+  importFilter?: string[];
 }
 
 export interface IInterpreterService {

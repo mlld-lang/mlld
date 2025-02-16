@@ -1,8 +1,5 @@
-import { DirectiveNode, ImportDirective } from 'meld-spec';
-// TODO: Use meld-ast nodes and types instead of meld-spec directly
-// TODO: Import MeldDirectiveError from core/errors for proper error hierarchy
-
-import { IDirectiveHandler } from '@services/DirectiveService/IDirectiveService.js';
+import { DirectiveNode } from 'meld-spec';
+import type { DirectiveContext, IDirectiveHandler } from '@services/DirectiveService/IDirectiveService.js';
 import { IValidationService } from '@services/ValidationService/IValidationService.js';
 import { IStateService } from '@services/StateService/IStateService.js';
 import { IResolutionService } from '@services/ResolutionService/IResolutionService.js';
@@ -11,7 +8,14 @@ import { IParserService } from '@services/ParserService/IParserService.js';
 import { IInterpreterService } from '@services/InterpreterService/IInterpreterService.js';
 import { ICircularityService } from '@services/CircularityService/ICircularityService.js';
 import { DirectiveError, DirectiveErrorCode } from '@services/DirectiveService/errors/DirectiveError.js';
-import { directiveLogger as logger } from '@core/utils/logger';
+import { directiveLogger as logger } from '@core/utils/logger.js';
+
+// Define the ImportDirective interface
+interface ImportDirective {
+  kind: 'import';
+  identifier: string;
+  value: string;
+}
 
 /**
  * Handler for @import directives
@@ -35,9 +39,8 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
     private circularityService: ICircularityService
   ) {}
 
-  async execute(node: DirectiveNode, context: { currentFilePath?: string }): Promise<void> {
+  async execute(node: DirectiveNode, context: DirectiveContext): Promise<void> {
     const directive = node.directive as ImportDirective;
-    const location = node.location;
 
     try {
       // 1. Validate the directive structure
@@ -57,8 +60,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
         pathValidation: {
           requireAbsolute: true,
           allowedRoots: ['$PROJECTPATH', '$HOMEPATH']
-        },
-        location
+        }
       });
 
       // 4. Check if file exists
@@ -67,7 +69,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
           `Import file not found: ${source}`,
           'import',
           DirectiveErrorCode.FILE_NOT_FOUND,
-          { path: resolvedPath }
+          { node, context }
         );
       }
 
@@ -82,33 +84,73 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
           'Circular import detected',
           'import',
           DirectiveErrorCode.CIRCULAR_REFERENCE,
-          { path: resolvedPath }
+          { node, context }
         );
       }
 
       try {
         // 6. Read and parse the file
         const content = await this.fileSystemService.readFile(resolvedPath);
-        const nodes = await this.parserService.parse(content, resolvedPath);
+        const nodes = await this.parserService.parseWithLocations(content, resolvedPath);
 
         // 7. Create child state for import
         const importState = this.stateService.createChildState();
 
         // 8. Process the imported content
-        await this.interpreterService.interpret(nodes, {
+        const importFilter = imports?.some(imp => imp.identifier === '*') ? undefined : imports?.map(imp => imp.identifier);
+        const processedState = await this.interpreterService.interpret(nodes, {
           initialState: importState,
           filePath: resolvedPath,
           mergeState: true,
-          importFilter: imports // Pass import filter for selective imports
+          importFilter
         });
 
         // 9. Handle import filtering and aliasing
-        if (imports && imports.length > 0) {
-          await this.processImportFilters(imports, importState);
+        if (imports && imports.length > 0 && !imports.some(imp => imp.identifier === '*')) {
+          // Check if all required variables exist
+          for (const imp of imports) {
+            // Skip wildcard imports
+            if (imp.identifier === '*') continue;
+            
+            // Check all variable types
+            const hasVar = processedState.getTextVar(imp.identifier) !== undefined ||
+                         processedState.getDataVar(imp.identifier) !== undefined ||
+                         processedState.getPathVar(imp.identifier) !== undefined;
+            
+            if (!hasVar) {
+              throw new DirectiveError(
+                `Imported variable not found: ${imp.identifier}`,
+                'import',
+                DirectiveErrorCode.VARIABLE_NOT_FOUND,
+                { node, context }
+              );
+            }
+
+            // Handle aliasing
+            if (imp.alias) {
+              // Try each variable type
+              const textValue = processedState.getTextVar(imp.identifier);
+              if (textValue !== undefined) {
+                processedState.setTextVar(imp.alias, textValue);
+                continue;
+              }
+
+              const dataValue = processedState.getDataVar(imp.identifier);
+              if (dataValue !== undefined) {
+                processedState.setDataVar(imp.alias, dataValue);
+                continue;
+              }
+
+              const pathValue = processedState.getPathVar(imp.identifier);
+              if (pathValue !== undefined) {
+                processedState.setPathVar(imp.alias, pathValue);
+              }
+            }
+          }
         }
 
-        // 10. Merge the filtered state back to parent
-        await this.stateService.mergeChildState(importState);
+        // 10. Merge the processed state back to parent
+        await this.stateService.mergeChildState(processedState);
 
       } finally {
         // Always end import tracking, even on error
@@ -120,14 +162,12 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
       if (error instanceof DirectiveError) {
         throw error;
       }
+      const message = error instanceof Error ? error.message : 'Unknown error';
       throw new DirectiveError(
-        `Import failed: ${error.message}`,
+        `Import failed: ${message}`,
         'import',
         DirectiveErrorCode.EXECUTION_FAILED,
-        { 
-          cause: error,
-          location: node.location
-        }
+        { node, context, cause: error instanceof Error ? error : undefined }
       );
     }
   }
@@ -143,8 +183,8 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
       throw new DirectiveError(
         'Import directive requires a path parameter in the format: path = "filepath"',
         'import',
-        DirectiveErrorCode.INVALID_SYNTAX,
-        { node: directive }
+        DirectiveErrorCode.VALIDATION_FAILED,
+        { node: { type: 'Directive', directive } as DirectiveNode }
       );
     }
 
@@ -158,8 +198,8 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
       throw new DirectiveError(
         'Import directive requires a path parameter in the format: path = "filepath"',
         'import',
-        DirectiveErrorCode.INVALID_SYNTAX,
-        { node: directive }
+        DirectiveErrorCode.VALIDATION_FAILED,
+        { node: { type: 'Directive', directive } as DirectiveNode }
       );
     }
 
@@ -202,7 +242,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
         throw new DirectiveError(
           `Invalid import syntax: ${item}`,
           'import',
-          DirectiveErrorCode.INVALID_SYNTAX
+          DirectiveErrorCode.VALIDATION_FAILED
         );
       }
       return {
@@ -219,26 +259,53 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
     imports: Array<{ identifier: string; alias?: string }>,
     importState: IStateService
   ): Promise<void> {
-    for (const { identifier, alias } of imports) {
-      // Handle wildcard - no need to check variables
+    // Create a map of all variables to check existence first
+    const variables = new Set<string>();
+    
+    for (const { identifier } of imports) {
+      // Skip wildcard imports
       if (identifier === '*') {
         continue;
       }
+      variables.add(identifier);
+    }
 
-      // Check if variable exists in imported state
-      if (!importState.hasVariable(identifier)) {
+    // Check all variables exist before modifying state
+    for (const identifier of variables) {
+      const exists = importState.getTextVar(identifier) !== undefined ||
+                    importState.getDataVar(identifier) !== undefined ||
+                    importState.getPathVar(identifier) !== undefined;
+      if (!exists) {
         throw new DirectiveError(
           `Imported variable not found: ${identifier}`,
           'import',
-          DirectiveErrorCode.VARIABLE_NOT_FOUND
+          DirectiveErrorCode.VALIDATION_FAILED
         );
       }
+    }
 
-      // Handle aliasing
-      if (alias) {
-        const value = importState.getVariable(identifier);
-        importState.setVariable(alias, value);
-        importState.removeVariable(identifier);
+    // Now handle aliasing
+    for (const { identifier, alias } of imports) {
+      if (identifier === '*' || !alias) {
+        continue;
+      }
+
+      // Try to get variable from each type
+      const textValue = importState.getTextVar(identifier);
+      if (textValue !== undefined) {
+        importState.setTextVar(alias, textValue);
+        continue;
+      }
+
+      const dataValue = importState.getDataVar(identifier);
+      if (dataValue !== undefined) {
+        importState.setDataVar(alias, dataValue);
+        continue;
+      }
+
+      const pathValue = importState.getPathVar(identifier);
+      if (pathValue !== undefined) {
+        importState.setPathVar(alias, pathValue);
       }
     }
   }

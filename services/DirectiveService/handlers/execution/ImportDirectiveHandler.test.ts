@@ -29,20 +29,24 @@ describe('ImportDirectiveHandler', () => {
 
     // Create a properly mocked child state
     mockChildState = {
-      hasVariable: vi.fn(),
-      getVariable: vi.fn(),
-      setVariable: vi.fn(),
-      removeVariable: vi.fn(),
+      getTextVar: vi.fn(),
+      setTextVar: vi.fn(),
+      getDataVar: vi.fn(),
+      setDataVar: vi.fn(),
+      getPathVar: vi.fn(),
+      setPathVar: vi.fn(),
       mergeChildState: vi.fn()
     } as unknown as IStateService;
 
     stateService = {
       createChildState: vi.fn().mockReturnValue(mockChildState),
       mergeChildState: vi.fn(),
-      hasVariable: vi.fn(),
-      getVariable: vi.fn(),
-      setVariable: vi.fn(),
-      removeVariable: vi.fn()
+      getTextVar: vi.fn(),
+      setTextVar: vi.fn(),
+      getDataVar: vi.fn(),
+      setDataVar: vi.fn(),
+      getPathVar: vi.fn(),
+      setPathVar: vi.fn()
     } as unknown as IStateService;
 
     resolutionService = {
@@ -55,7 +59,8 @@ describe('ImportDirectiveHandler', () => {
     } as unknown as IFileSystemService;
 
     parserService = {
-      parse: vi.fn()
+      parse: vi.fn(),
+      parseWithLocations: vi.fn()
     } as unknown as IParserService;
 
     interpreterService = {
@@ -83,12 +88,19 @@ describe('ImportDirectiveHandler', () => {
       // Setup
       const node = createImportDirective('test.meld', createLocation(1, 1));
       const mockContent = 'Test content';
-      const mockParsedNodes = [{ type: 'Text', content: 'Test content' }] as MeldNode[];
+      const mockParsedNodes = [{
+        type: 'Text',
+        content: 'Test content',
+        location: {
+          start: { line: 1, column: 1 },
+          end: { line: 1, column: 12 }
+        }
+      }] as unknown as MeldNode[];
 
       vi.mocked(resolutionService.resolvePath).mockResolvedValue('/resolved/test.meld');
       vi.mocked(fileSystemService.exists).mockResolvedValue(true);
       vi.mocked(fileSystemService.readFile).mockResolvedValue(mockContent);
-      vi.mocked(parserService.parse).mockResolvedValue(mockParsedNodes);
+      vi.mocked(parserService.parseWithLocations).mockResolvedValue(mockParsedNodes);
 
       // Execute
       await handler.execute(node, { currentFilePath: 'source.meld' });
@@ -108,7 +120,7 @@ describe('ImportDirectiveHandler', () => {
       );
       expect(fileSystemService.exists).toHaveBeenCalledWith('/resolved/test.meld');
       expect(fileSystemService.readFile).toHaveBeenCalledWith('/resolved/test.meld');
-      expect(parserService.parse).toHaveBeenCalledWith(mockContent, '/resolved/test.meld');
+      expect(parserService.parseWithLocations).toHaveBeenCalledWith(mockContent, '/resolved/test.meld');
       expect(interpreterService.interpret).toHaveBeenCalledWith(
         mockParsedNodes,
         expect.objectContaining({
@@ -122,52 +134,78 @@ describe('ImportDirectiveHandler', () => {
 
   describe('import syntax variations', () => {
     it('should handle explicit imports with from syntax', async () => {
-      const node = createImportDirective('[x,y,z]', createLocation(1, 1), 'source.meld', 'source.meld');
+      const node = createImportDirective('x,y,z', createLocation(1, 1), 'source.meld');
       const mockContent = 'Test content';
-      const mockParsedNodes = [{ type: 'Text', content: 'Test content' }] as MeldNode[];
+      const mockParsedNodes = [{
+        type: 'Text',
+        content: 'Test content',
+        location: {
+          start: { line: 1, column: 1 },
+          end: { line: 1, column: 12 }
+        }
+      }] as unknown as MeldNode[];
 
       vi.mocked(resolutionService.resolvePath).mockResolvedValue('/resolved/source.meld');
       vi.mocked(fileSystemService.exists).mockResolvedValue(true);
       vi.mocked(fileSystemService.readFile).mockResolvedValue(mockContent);
-      vi.mocked(parserService.parse).mockResolvedValue(mockParsedNodes);
-      vi.mocked(mockChildState.hasVariable).mockReturnValue(true);
+      vi.mocked(parserService.parseWithLocations).mockResolvedValue(mockParsedNodes);
+      vi.mocked(interpreterService.interpret).mockResolvedValue(mockChildState);
+      vi.mocked(mockChildState.getTextVar).mockReturnValue('value');
+      vi.mocked(mockChildState.getDataVar).mockReturnValue(undefined);
+      vi.mocked(mockChildState.getPathVar).mockReturnValue(undefined);
 
       await handler.execute(node, {});
 
-      expect(mockChildState.hasVariable).toHaveBeenCalledWith('x');
-      expect(mockChildState.hasVariable).toHaveBeenCalledWith('y');
-      expect(mockChildState.hasVariable).toHaveBeenCalledWith('z');
+      expect(mockChildState.getTextVar).toHaveBeenCalledWith('x');
+      expect(mockChildState.getTextVar).toHaveBeenCalledWith('y');
+      expect(mockChildState.getTextVar).toHaveBeenCalledWith('z');
     });
 
     it('should handle aliased imports', async () => {
-      const node = createImportDirective('[x as y]', createLocation(1, 1), 'source.meld', 'source.meld');
+      const node = createImportDirective('x as y', createLocation(1, 1), 'source.meld');
       const mockContent = 'Test content';
-      const mockParsedNodes = [{ type: 'Text', content: 'Test content' }] as MeldNode[];
+      const mockParsedNodes = [{
+        type: 'Text',
+        content: 'Test content',
+        location: {
+          start: { line: 1, column: 1 },
+          end: { line: 1, column: 12 }
+        }
+      }] as unknown as MeldNode[];
       const mockValue = { data: 'test' };
 
       vi.mocked(resolutionService.resolvePath).mockResolvedValue('/resolved/source.meld');
       vi.mocked(fileSystemService.exists).mockResolvedValue(true);
       vi.mocked(fileSystemService.readFile).mockResolvedValue(mockContent);
-      vi.mocked(parserService.parse).mockResolvedValue(mockParsedNodes);
-      vi.mocked(mockChildState.hasVariable).mockReturnValue(true);
-      vi.mocked(mockChildState.getVariable).mockReturnValue(mockValue);
+      vi.mocked(parserService.parseWithLocations).mockResolvedValue(mockParsedNodes);
+      vi.mocked(interpreterService.interpret).mockResolvedValue(mockChildState);
+      vi.mocked(mockChildState.getTextVar).mockReturnValue(undefined);
+      vi.mocked(mockChildState.getDataVar).mockReturnValue(mockValue);
+      vi.mocked(mockChildState.getPathVar).mockReturnValue(undefined);
 
       await handler.execute(node, {});
 
-      expect(mockChildState.getVariable).toHaveBeenCalledWith('x');
-      expect(mockChildState.setVariable).toHaveBeenCalledWith('y', mockValue);
-      expect(mockChildState.removeVariable).toHaveBeenCalledWith('x');
+      expect(mockChildState.getDataVar).toHaveBeenCalledWith('x');
+      expect(mockChildState.setDataVar).toHaveBeenCalledWith('y', mockValue);
     });
 
     it('should handle wildcard imports', async () => {
-      const node = createImportDirective('[*]', createLocation(1, 1), 'source.meld', 'source.meld');
+      const node = createImportDirective('*', createLocation(1, 1), 'source.meld');
       const mockContent = 'Test content';
-      const mockParsedNodes = [{ type: 'Text', content: 'Test content' }] as MeldNode[];
+      const mockParsedNodes = [{
+        type: 'Text',
+        content: 'Test content',
+        location: {
+          start: { line: 1, column: 1 },
+          end: { line: 1, column: 12 }
+        }
+      }] as unknown as MeldNode[];
 
       vi.mocked(resolutionService.resolvePath).mockResolvedValue('/resolved/source.meld');
       vi.mocked(fileSystemService.exists).mockResolvedValue(true);
       vi.mocked(fileSystemService.readFile).mockResolvedValue(mockContent);
-      vi.mocked(parserService.parse).mockResolvedValue(mockParsedNodes);
+      vi.mocked(parserService.parseWithLocations).mockResolvedValue(mockParsedNodes);
+      vi.mocked(interpreterService.interpret).mockResolvedValue(mockChildState);
 
       await handler.execute(node, {});
 
@@ -177,7 +215,36 @@ describe('ImportDirectiveHandler', () => {
           initialState: mockChildState,
           filePath: '/resolved/source.meld',
           mergeState: true,
-          importFilter: [] // Empty filter means import all
+          importFilter: undefined
+        })
+      );
+    });
+
+    it('should handle missing imported variables', async () => {
+      const node = createImportDirective('x,y', createLocation(1, 1), 'source.meld');
+      const mockContent = 'Test content';
+      const mockParsedNodes = [{
+        type: 'Text',
+        content: 'Test content',
+        location: {
+          start: { line: 1, column: 1 },
+          end: { line: 1, column: 12 }
+        }
+      }] as unknown as MeldNode[];
+
+      vi.mocked(resolutionService.resolvePath).mockResolvedValue('/resolved/source.meld');
+      vi.mocked(fileSystemService.exists).mockResolvedValue(true);
+      vi.mocked(fileSystemService.readFile).mockResolvedValue(mockContent);
+      vi.mocked(parserService.parseWithLocations).mockResolvedValue(mockParsedNodes);
+      vi.mocked(interpreterService.interpret).mockResolvedValue(mockChildState);
+      vi.mocked(mockChildState.getTextVar).mockReturnValue(undefined);
+      vi.mocked(mockChildState.getDataVar).mockReturnValue(undefined);
+      vi.mocked(mockChildState.getPathVar).mockReturnValue(undefined);
+
+      await expect(handler.execute(node, {})).rejects.toThrow(
+        expect.objectContaining({
+          message: expect.stringContaining('Imported variable not found: x'),
+          code: DirectiveErrorCode.VARIABLE_NOT_FOUND
         })
       );
     });
@@ -229,25 +296,9 @@ describe('ImportDirectiveHandler', () => {
       vi.mocked(resolutionService.resolvePath).mockResolvedValue('/resolved/test.meld');
       vi.mocked(fileSystemService.exists).mockResolvedValue(true);
       vi.mocked(fileSystemService.readFile).mockResolvedValue('content');
-      vi.mocked(parserService.parse).mockRejectedValue(new Error('Parse error'));
+      vi.mocked(parserService.parseWithLocations).mockRejectedValue(new Error('Parse error'));
 
       await expect(handler.execute(node, {})).rejects.toThrow(DirectiveError);
-    });
-
-    it('should handle missing imported variables', async () => {
-      const node = createImportDirective('[x,y]', createLocation(1, 1), 'source.meld');
-      const mockContent = 'Test content';
-      const mockParsedNodes = [{ type: 'Text', content: 'Test content' }] as MeldNode[];
-
-      vi.mocked(resolutionService.resolvePath).mockResolvedValue('/resolved/source.meld');
-      vi.mocked(fileSystemService.exists).mockResolvedValue(true);
-      vi.mocked(fileSystemService.readFile).mockResolvedValue(mockContent);
-      vi.mocked(parserService.parse).mockResolvedValue(mockParsedNodes);
-      vi.mocked(mockChildState.hasVariable).mockReturnValue(false);
-
-      const error = await handler.execute(node, {}).catch(e => e);
-      expect(error).toBeInstanceOf(DirectiveError);
-      expect(error.code).toBe(DirectiveErrorCode.VARIABLE_NOT_FOUND);
     });
   });
 
@@ -266,12 +317,20 @@ describe('ImportDirectiveHandler', () => {
     it('should merge states after successful import', async () => {
       const node = createImportDirective('test.meld', createLocation(1, 1));
       const mockContent = 'Test content';
-      const mockParsedNodes = [{ type: 'Text', content: 'Test content' }] as MeldNode[];
+      const mockParsedNodes = [{
+        type: 'Text',
+        content: 'Test content',
+        location: {
+          start: { line: 1, column: 1 },
+          end: { line: 1, column: 12 }
+        }
+      }] as unknown as MeldNode[];
 
       vi.mocked(resolutionService.resolvePath).mockResolvedValue('/resolved/test.meld');
       vi.mocked(fileSystemService.exists).mockResolvedValue(true);
       vi.mocked(fileSystemService.readFile).mockResolvedValue(mockContent);
-      vi.mocked(parserService.parse).mockResolvedValue(mockParsedNodes);
+      vi.mocked(parserService.parseWithLocations).mockResolvedValue(mockParsedNodes);
+      vi.mocked(interpreterService.interpret).mockResolvedValue(mockChildState);
 
       await handler.execute(node, {});
 
