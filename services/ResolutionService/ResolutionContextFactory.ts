@@ -4,6 +4,9 @@ import { ResolutionContext } from './IResolutionService.js';
  * Factory for creating resolution contexts appropriate for different directives
  */
 export class ResolutionContextFactory {
+  // Special path variables as defined by meld-ast
+  private static readonly SPECIAL_PATH_VARS = ['HOMEPATH', 'PROJECTPATH'];
+
   /**
    * Create context for @text directives
    * Allows all variable types and nested interpolation
@@ -54,7 +57,7 @@ export class ResolutionContextFactory {
       allowNested: false,
       pathValidation: {
         requireAbsolute: true,
-        allowedRoots: ['HOMEPATH', 'PROJECTPATH']
+        allowedRoots: ResolutionContextFactory.SPECIAL_PATH_VARS
       }
     };
   }
@@ -92,7 +95,7 @@ export class ResolutionContextFactory {
       allowNested: false,
       pathValidation: {
         requireAbsolute: true,
-        allowedRoots: ['HOMEPATH', 'PROJECTPATH']
+        allowedRoots: ResolutionContextFactory.SPECIAL_PATH_VARS
       }
     };
   }
@@ -130,7 +133,7 @@ export class ResolutionContextFactory {
       allowNested: false,
       pathValidation: {
         requireAbsolute: true,
-        allowedRoots: ['HOMEPATH', 'PROJECTPATH']
+        allowedRoots: ResolutionContextFactory.SPECIAL_PATH_VARS
       }
     };
   }

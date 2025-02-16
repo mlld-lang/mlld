@@ -1,7 +1,7 @@
 import { IStateService } from '@services/StateService/IStateService.js';
 import { ResolutionContext, ResolutionErrorCode } from '@services/ResolutionService/IResolutionService.js';
 import { ResolutionError } from '@services/ResolutionService/errors/ResolutionError.js';
-import type { MeldNode, DirectiveNode, TextNode } from 'meld-spec';
+import type { MeldNode, DirectiveNode, TextNode, PathVarNode } from 'meld-spec';
 
 /**
  * Handles resolution of path variables ($path)
@@ -29,73 +29,79 @@ export class PathResolver {
       );
     }
 
-    // Get the variable identifier and resolve any aliases
-    const { identifier } = this.parseDirective(directiveNode);
-    const resolvedIdentifier = this.resolveAlias(identifier);
+    // Validate node type
+    if (directiveNode.directive.kind !== 'path') {
+      throw new ResolutionError(
+        'Invalid node type for path resolution',
+        ResolutionErrorCode.INVALID_NODE_TYPE,
+        { value: directiveNode.directive.kind }
+      );
+    }
 
-    // Get variable value
-    const value = this.stateService.getPathVar(resolvedIdentifier);
+    // Get the variable identifier
+    const identifier = directiveNode.directive.identifier;
+    if (!identifier) {
+      throw new ResolutionError(
+        'Path variable identifier is required',
+        ResolutionErrorCode.SYNTAX_ERROR,
+        { value: JSON.stringify(directiveNode.directive) }
+      );
+    }
+
+    // Handle special path variables
+    if (identifier === '~' || identifier === 'HOMEPATH') {
+      return this.stateService.getPathVar('HOMEPATH') || '';
+    }
+    if (identifier === '.' || identifier === 'PROJECTPATH') {
+      return this.stateService.getPathVar('PROJECTPATH') || '';
+    }
+
+    // For regular path variables, get value from state
+    const value = this.stateService.getPathVar(identifier);
 
     if (value === undefined) {
       throw new ResolutionError(
         `Undefined path variable: ${identifier}`,
         ResolutionErrorCode.UNDEFINED_VARIABLE,
-        { value: identifier, context }
+        { value: identifier }
       );
     }
 
-    // Validate path against context requirements
-    return this.validatePath(value, context);
+    // Validate path if required
+    if (context.pathValidation) {
+      return this.validatePath(value, context);
+    }
+
+    return value;
   }
 
   /**
    * Extract references from a node
    */
   extractReferences(node: MeldNode): string[] {
-    if (node.type !== 'Directive' || (node as DirectiveNode).directive.kind !== 'path') {
+    if (node.type !== 'Directive') {
       return [];
     }
 
-    const { identifier } = (node as DirectiveNode).directive;
-    return [this.resolveAlias(identifier)];
-  }
-
-  /**
-   * Parse a directive node to extract identifier
-   */
-  private parseDirective(node: DirectiveNode): { identifier: string } {
-    if (node.directive.kind !== 'path') {
-      throw new ResolutionError(
-        'Invalid node type for path resolution',
-        ResolutionErrorCode.SYNTAX_ERROR,
-        { value: JSON.stringify(node) }
-      );
+    const directiveNode = node as DirectiveNode;
+    if (directiveNode.directive.kind !== 'path') {
+      return [];
     }
 
-    const identifier = node.directive.identifier;
+    const identifier = directiveNode.directive.identifier;
     if (!identifier) {
-      throw new ResolutionError(
-        'Path variable identifier is required',
-        ResolutionErrorCode.SYNTAX_ERROR,
-        { value: JSON.stringify(node) }
-      );
+      return [];
     }
 
-    return { identifier };
-  }
-
-  /**
-   * Resolve special path aliases
-   */
-  private resolveAlias(identifier: string): string {
-    switch (identifier) {
-      case '~':
-        return 'HOMEPATH';
-      case '.':
-        return 'PROJECTPATH';
-      default:
-        return identifier;
+    // Map special variables to their full names
+    if (identifier === '~') {
+      return ['HOMEPATH'];
     }
+    if (identifier === '.') {
+      return ['PROJECTPATH'];
+    }
+
+    return [identifier];
   }
 
   /**
@@ -103,6 +109,7 @@ export class PathResolver {
    */
   private validatePath(path: string, context: ResolutionContext): string {
     if (context.pathValidation) {
+      // Check if path is absolute or starts with a special variable
       if (context.pathValidation.requireAbsolute && !path.startsWith('/')) {
         throw new ResolutionError(
           'Path must be absolute',
@@ -111,12 +118,13 @@ export class PathResolver {
         );
       }
 
+      // Check if path starts with an allowed root
       if (context.pathValidation.allowedRoots?.length) {
         const hasAllowedRoot = context.pathValidation.allowedRoots.some(root => {
-          const resolvedRoot = this.stateService.getPathVar(root);
-          return resolvedRoot && (
-            path.startsWith(resolvedRoot + '/') || 
-            path === resolvedRoot
+          const rootVar = this.stateService.getPathVar(root);
+          return rootVar && (
+            path.startsWith(rootVar + '/') || 
+            path === rootVar
           );
         });
 
@@ -131,5 +139,32 @@ export class PathResolver {
     }
 
     return path;
+  }
+
+  /**
+   * Get all path variables referenced in a node
+   */
+  getReferencedVariables(node: MeldNode): string[] {
+    const pathVar = this.getPathVarFromNode(node);
+    if (!pathVar || pathVar.isSpecial) {
+      return [];
+    }
+    return [pathVar.identifier];
+  }
+
+  /**
+   * Helper to extract PathVarNode from a node
+   */
+  private getPathVarFromNode(node: MeldNode): PathVarNode | null {
+    if (node.type !== 'Directive' || (node as DirectiveNode).directive.kind !== 'path') {
+      return null;
+    }
+
+    const pathVar = (node as DirectiveNode).directive.value as PathVarNode;
+    if (!pathVar || pathVar.type !== 'PathVar') {
+      return null;
+    }
+
+    return pathVar;
   }
 } 

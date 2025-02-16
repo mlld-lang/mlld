@@ -1,4 +1,4 @@
-import { DirectiveNode, DirectiveData } from 'meld-spec';
+import { DirectiveNode } from 'meld-spec';
 // TODO: Use meld-ast nodes and types instead of meld-spec directly
 // TODO: Import MeldDirectiveError from core/errors for proper error hierarchy
 
@@ -10,15 +10,9 @@ import { ResolutionContextFactory } from '@services/ResolutionService/Resolution
 import { directiveLogger as logger } from '@core/utils/logger.js';
 import { DirectiveError, DirectiveErrorCode } from '@services/DirectiveService/errors/DirectiveError.js';
 
-interface DataDirective extends DirectiveData {
-  kind: 'data';
-  identifier: string;
-  value: any;
-}
-
 /**
  * Handler for @data directives
- * Stores structured data in state after resolving variables and validating schema
+ * Stores data values in state after resolving variables and processing embedded content
  */
 export class DataDirectiveHandler implements IDirectiveHandler {
   readonly kind = 'data';
@@ -30,16 +24,20 @@ export class DataDirectiveHandler implements IDirectiveHandler {
   ) {}
 
   async execute(node: DirectiveNode, context: DirectiveContext): Promise<void> {
+    logger.debug('Processing data directive', {
+      location: node.location,
+      context
+    });
+
     try {
       // 1. Validate directive structure
       await this.validationService.validate(node);
 
-      // 2. Extract directive details
-      const directive = node.directive as DataDirective;
-      const { identifier, value } = directive;
+      // 2. Get identifier and value from directive
+      const { identifier, value } = node.directive;
 
-      // Handle empty or undefined value
-      if (value === undefined || value === null) {
+      // 3. Process value based on type
+      if (!value) {
         throw new DirectiveError(
           'Data directive requires a value',
           this.kind,
@@ -48,99 +46,61 @@ export class DataDirectiveHandler implements IDirectiveHandler {
         );
       }
 
-      // 3. Create resolution context
+      // Check if this is a pass-through directive
+      if (typeof value === 'string' && (value.startsWith('@embed') || value.startsWith('@run') || value.startsWith('@call'))) {
+        await this.stateService.setDataVar(identifier, value);
+        return;
+      }
+
+      // Create resolution context
       const resolutionContext = ResolutionContextFactory.forDataDirective(
-        context.currentFilePath
+        context.currentFilePath ?? ''
       );
 
-      // 4. Convert value to string if it's not already
-      const stringValue = typeof value === 'string' 
-        ? value 
-        : JSON.stringify(value);
-
-      // 5. Resolve any variables in the string
-      const resolvedString = await this.resolutionService.resolveInContext(
-        stringValue,
+      // Resolve variables in the value
+      const resolvedValue = await this.resolutionService.resolveInContext(
+        typeof value === 'string' ? value : JSON.stringify(value),
         resolutionContext
       );
 
-      // 6. Parse the resolved string
-      let resolvedValue: any;
-      try {
-        if (resolvedString === 'true') {
-          resolvedValue = true;
-        } else if (resolvedString === 'false') {
-          resolvedValue = false;
-        } else if (resolvedString === 'null') {
-          resolvedValue = null;
-        } else if (/^-?\d+(\.\d+)?$/.test(resolvedString)) {
-          resolvedValue = Number(resolvedString);
-        } else {
-          // Try to parse as JSON first
+      // Parse the resolved value if it looks like JSON
+      let finalValue = resolvedValue;
+      if (typeof resolvedValue === 'string' && !resolvedValue.startsWith('@')) {
+        // Only attempt to parse if it looks like a JSON object or array
+        if (resolvedValue.trim().startsWith('{') || resolvedValue.trim().startsWith('[')) {
           try {
-            resolvedValue = JSON.parse(resolvedString);
-          } catch (parseError) {
-            // If it's a simple string, wrap it in quotes to make it valid JSON
-            if (!resolvedString.startsWith('{') && !resolvedString.startsWith('[') && !resolvedString.includes(' ')) {
-              try {
-                resolvedValue = JSON.parse(`"${resolvedString}"`);
-              } catch (stringParseError) {
-                // If even quoted string parsing fails, propagate the original error
-                logger.error('Invalid JSON format', {
-                  value: resolvedString,
-                  error: parseError,
-                  location: node.location
-                });
-                throw parseError;
-              }
-            } else {
-              // For invalid JSON objects/arrays, propagate the error
-              logger.error('Invalid JSON format', {
-                value: resolvedString,
-                error: parseError,
-                location: node.location
-              });
-              throw parseError;
-            }
+            finalValue = JSON.parse(resolvedValue);
+          } catch (e: unknown) {
+            // If parsing fails, throw a SyntaxError
+            logger.error('Failed to parse resolved value as JSON', {
+              value: resolvedValue,
+              error: e
+            });
+            throw new SyntaxError(`Invalid JSON: ${e instanceof Error ? e.message : 'Unknown error'}`);
           }
         }
-      } catch (error) {
-        if (error instanceof SyntaxError) {
-          throw error;
-        }
-        throw new DirectiveError(
-          'Invalid data value format',
-          this.kind,
-          DirectiveErrorCode.VALIDATION_FAILED,
-          { node, cause: error instanceof Error ? error : undefined }
-        );
       }
 
-      // 7. Store in state
-      await this.stateService.setDataVar(identifier, resolvedValue);
+      // 4. Store in state
+      await this.stateService.setDataVar(identifier, finalValue);
 
       logger.debug('Data directive processed successfully', {
         identifier,
-        valueType: typeof resolvedValue,
-        value: resolvedValue,
+        value: finalValue,
         location: node.location
       });
-    } catch (error: unknown) {
+    } catch (error) {
       logger.error('Failed to process data directive', {
         location: node.location,
         error
       });
 
-      // Propagate SyntaxError directly
-      if (error instanceof SyntaxError) {
-        throw error;
-      }
-   
-      if (error instanceof DirectiveError) {
+      // Wrap in DirectiveError if needed
+      if (error instanceof DirectiveError || error instanceof SyntaxError) {
         throw error;
       }
       throw new DirectiveError(
-        error instanceof Error ? error.message : 'Unknown error in data directive',
+        error instanceof Error ? error.message : 'Unknown error',
         this.kind,
         DirectiveErrorCode.EXECUTION_FAILED,
         {

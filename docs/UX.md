@@ -227,7 +227,8 @@ where:
 - name is a valid identifier
 - path cannot be empty
 - whitespace is optional inside {} and around ,
-- path can contain nested brackets (treated as text)
+- Value must be quoted with ', ", or `
+- Quotes must match (no mixing)
 
 ### @run
 ```
@@ -283,11 +284,10 @@ where:
 
 ### @path
 ```meld
-@path identifier = [path_value]
-@path identifier = [$HOMEPATH/path]
-@path identifier = [$PROJECTPATH/path]
-@path identifier = [$~/path]
-@path identifier = [$./path]
+@path identifier = "$HOMEPATH/path"
+@path identifier = "$~/path"
+@path identifier = "$PROJECTPATH/path"
+@path identifier = "$./path"
 ```
 where:
 - Must start with special path variable

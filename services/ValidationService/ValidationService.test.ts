@@ -7,6 +7,7 @@ import {
   createDataDirective,
   createImportDirective,
   createEmbedDirective,
+  createPathDirective,
   createLocation
 } from '@tests/utils/testFactories.js';
 import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
@@ -25,6 +26,7 @@ describe('ValidationService', () => {
       expect(kinds).toContain('data');
       expect(kinds).toContain('import');
       expect(kinds).toContain('embed');
+      expect(kinds).toContain('path');
     });
   });
   
@@ -110,6 +112,60 @@ describe('ValidationService', () => {
     
     it('should throw on invalid name format', async () => {
       const node = createDataDirective('123invalid', { key: 'value' }, createLocation(1, 1));
+      await expect(service.validate(node)).rejects.toThrow(MeldDirectiveError);
+      await expect(service.validate(node)).rejects.toMatchObject({
+        code: DirectiveErrorCode.VALIDATION_FAILED
+      });
+    });
+  });
+  
+  describe('Path directive validation', () => {
+    it('should validate a valid path directive with $HOMEPATH', async () => {
+      const node = createPathDirective('docs', '$HOMEPATH/docs', createLocation(1, 1));
+      await expect(service.validate(node)).resolves.not.toThrow();
+    });
+
+    it('should validate a valid path directive with $PROJECTPATH', async () => {
+      const node = createPathDirective('src', '$PROJECTPATH/src', createLocation(1, 1));
+      await expect(service.validate(node)).resolves.not.toThrow();
+    });
+
+    it('should validate a valid path directive with $~', async () => {
+      const node = createPathDirective('config', '$~/config', createLocation(1, 1));
+      await expect(service.validate(node)).resolves.not.toThrow();
+    });
+
+    it('should validate a valid path directive with $.', async () => {
+      const node = createPathDirective('test', '$./test', createLocation(1, 1));
+      await expect(service.validate(node)).resolves.not.toThrow();
+    });
+
+    it('should throw on missing identifier', async () => {
+      const node = createPathDirective('', '$HOMEPATH/docs', createLocation(1, 1));
+      await expect(service.validate(node)).rejects.toThrow(MeldDirectiveError);
+      await expect(service.validate(node)).rejects.toMatchObject({
+        code: DirectiveErrorCode.VALIDATION_FAILED
+      });
+    });
+
+    it('should throw on invalid identifier format', async () => {
+      const node = createPathDirective('123invalid', '$HOMEPATH/docs', createLocation(1, 1));
+      await expect(service.validate(node)).rejects.toThrow(MeldDirectiveError);
+      await expect(service.validate(node)).rejects.toMatchObject({
+        code: DirectiveErrorCode.VALIDATION_FAILED
+      });
+    });
+
+    it('should throw on missing value', async () => {
+      const node = createPathDirective('docs', '', createLocation(1, 1));
+      await expect(service.validate(node)).rejects.toThrow(MeldDirectiveError);
+      await expect(service.validate(node)).rejects.toMatchObject({
+        code: DirectiveErrorCode.VALIDATION_FAILED
+      });
+    });
+
+    it('should throw on empty path value', async () => {
+      const node = createPathDirective('docs', '   ', createLocation(1, 1));
       await expect(service.validate(node)).rejects.toThrow(MeldDirectiveError);
       await expect(service.validate(node)).rejects.toMatchObject({
         code: DirectiveErrorCode.VALIDATION_FAILED

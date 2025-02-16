@@ -180,10 +180,18 @@ export function createDataDirective(
 // Create a path directive node for testing
 export function createPathDirective(
   identifier: string,
-  path: string,
+  value: string,
   location?: Location
 ): DirectiveNode {
-  return createTestDirective('path', identifier, path, location);
+  return {
+    type: 'Directive',
+    directive: {
+      kind: 'path',
+      identifier,
+      value
+    },
+    location
+  };
 }
 
 // Create a run directive node for testing

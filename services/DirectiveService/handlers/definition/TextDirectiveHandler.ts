@@ -1,10 +1,10 @@
-import { DirectiveNode, TextDirective } from 'meld-spec';
+import { DirectiveNode } from 'meld-spec';
 import { IDirectiveHandler, DirectiveContext } from '@services/DirectiveService/IDirectiveService.js';
 import { IValidationService } from '@services/ValidationService/IValidationService.js';
 import { IStateService } from '@services/StateService/IStateService.js';
 import { IResolutionService } from '@services/ResolutionService/IResolutionService.js';
 import { ResolutionContextFactory } from '@services/ResolutionService/ResolutionContextFactory.js';
-import { directiveLogger as logger } from '@core/utils/logger';
+import { directiveLogger as logger } from '@core/utils/logger.js';
 import { DirectiveError, DirectiveErrorCode } from '@services/DirectiveService/errors/DirectiveError.js';
 
 /**
@@ -30,9 +30,8 @@ export class TextDirectiveHandler implements IDirectiveHandler {
       // 1. Validate directive structure
       await this.validationService.validate(node);
 
-      // 2. Get validated directive
-      const directive = node.directive as TextDirective;
-      const { identifier, value } = directive;
+      // 2. Get identifier and value from directive
+      const { identifier, value } = node.directive;
 
       // 3. Process value based on type
       if (!value) {
