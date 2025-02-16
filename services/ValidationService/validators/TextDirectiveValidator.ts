@@ -1,5 +1,6 @@
 import type { DirectiveNode, TextDirective } from 'meld-spec';
 import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
+import { DirectiveErrorCode } from '@services/DirectiveService/errors/DirectiveError.js';
 
 /**
  * Validates @text directives according to spec
@@ -12,7 +13,8 @@ export function validateTextDirective(node: DirectiveNode): void {
     throw new MeldDirectiveError(
       'Text directive requires an "identifier" property (string)',
       'text',
-      node.location?.start
+      node.location?.start,
+      DirectiveErrorCode.VALIDATION_FAILED
     );
   }
   
@@ -21,25 +23,28 @@ export function validateTextDirective(node: DirectiveNode): void {
     throw new MeldDirectiveError(
       'Text directive identifier must be a valid identifier (letters, numbers, underscore, starting with letter/underscore)',
       'text',
-      node.location?.start
+      node.location?.start,
+      DirectiveErrorCode.VALIDATION_FAILED
     );
   }
   
   // Validate value
-  if (directive.value === undefined) {
+  if (directive.value === undefined || directive.value === '') {
     throw new MeldDirectiveError(
-      'Text directive requires a "value" property',
+      'Text directive requires a non-empty "value" property',
       'text',
-      node.location?.start
+      node.location?.start,
+      DirectiveErrorCode.VALIDATION_FAILED
     );
   }
 
   // Value must be a string
   if (typeof directive.value !== 'string') {
     throw new MeldDirectiveError(
-      'Text directive value must be a string',
+      'Text directive "value" property must be a string',
       'text',
-      node.location?.start
+      node.location?.start,
+      DirectiveErrorCode.VALIDATION_FAILED
     );
   }
 

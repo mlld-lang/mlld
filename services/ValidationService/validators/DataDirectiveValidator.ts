@@ -1,5 +1,6 @@
 import { DirectiveNode, DataDirective } from 'meld-spec';
 import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
+import { DirectiveErrorCode } from '@services/DirectiveService/errors/DirectiveError.js';
 
 /**
  * Validates @data directives
@@ -12,7 +13,8 @@ export function validateDataDirective(node: DirectiveNode): void {
     throw new MeldDirectiveError(
       'Data directive requires an "identifier" property (string)',
       'data',
-      node.location?.start
+      node.location?.start,
+      DirectiveErrorCode.VALIDATION_FAILED
     );
   }
   
@@ -21,7 +23,8 @@ export function validateDataDirective(node: DirectiveNode): void {
     throw new MeldDirectiveError(
       'Data identifier must be a valid identifier (letters, numbers, underscore, starting with letter/underscore)',
       'data',
-      node.location?.start
+      node.location?.start,
+      DirectiveErrorCode.VALIDATION_FAILED
     );
   }
   
@@ -30,7 +33,8 @@ export function validateDataDirective(node: DirectiveNode): void {
     throw new MeldDirectiveError(
       'Data directive requires a value',
       'data',
-      node.location?.start
+      node.location?.start,
+      DirectiveErrorCode.VALIDATION_FAILED
     );
   }
   
@@ -42,7 +46,8 @@ export function validateDataDirective(node: DirectiveNode): void {
       throw new MeldDirectiveError(
         'Invalid JSON string in data directive',
         'data',
-        node.location?.start
+        node.location?.start,
+        DirectiveErrorCode.VALIDATION_FAILED
       );
     }
   }
@@ -54,7 +59,8 @@ export function validateDataDirective(node: DirectiveNode): void {
     throw new MeldDirectiveError(
       'Data value must be JSON-serializable',
       'data',
-      node.location?.start
+      node.location?.start,
+      DirectiveErrorCode.VALIDATION_FAILED
     );
   }
 } 

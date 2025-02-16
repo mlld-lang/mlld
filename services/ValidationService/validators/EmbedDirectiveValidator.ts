@@ -1,5 +1,6 @@
 import type { DirectiveNode, EmbedDirective } from 'meld-spec';
 import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
+import { DirectiveErrorCode } from '@services/DirectiveService/errors/DirectiveError.js';
 
 export function validateEmbedDirective(node: DirectiveNode): void {
   const directive = node.directive as EmbedDirective;
@@ -9,7 +10,8 @@ export function validateEmbedDirective(node: DirectiveNode): void {
     throw new MeldDirectiveError(
       'Embed directive requires a "path" property (string)',
       'embed',
-      node.location?.start
+      node.location?.start,
+      DirectiveErrorCode.VALIDATION_FAILED
     );
   }
   
@@ -18,7 +20,8 @@ export function validateEmbedDirective(node: DirectiveNode): void {
     throw new MeldDirectiveError(
       'Embed directive path cannot be empty',
       'embed',
-      node.location?.start
+      node.location?.start,
+      DirectiveErrorCode.VALIDATION_FAILED
     );
   }
   
@@ -27,7 +30,8 @@ export function validateEmbedDirective(node: DirectiveNode): void {
     throw new MeldDirectiveError(
       'Embed directive "section" property must be a string if provided',
       'embed',
-      node.location?.start
+      node.location?.start,
+      DirectiveErrorCode.VALIDATION_FAILED
     );
   }
   
@@ -36,7 +40,8 @@ export function validateEmbedDirective(node: DirectiveNode): void {
       throw new MeldDirectiveError(
         'Embed directive "fuzzy" property must be a number between 0 and 1 if provided',
         'embed',
-        node.location?.start
+        node.location?.start,
+        DirectiveErrorCode.VALIDATION_FAILED
       );
     }
   }
@@ -45,7 +50,8 @@ export function validateEmbedDirective(node: DirectiveNode): void {
     throw new MeldDirectiveError(
       'Embed directive "format" property must be a string if provided',
       'embed',
-      node.location?.start
+      node.location?.start,
+      DirectiveErrorCode.VALIDATION_FAILED
     );
   }
 } 

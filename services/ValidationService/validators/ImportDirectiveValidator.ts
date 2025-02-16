@@ -1,5 +1,6 @@
 import { DirectiveNode, ImportDirective } from 'meld-spec';
 import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
+import { DirectiveErrorCode } from '@services/DirectiveService/errors/DirectiveError.js';
 
 /**
  * Validates @import directives
@@ -13,7 +14,8 @@ export function validateImportDirective(node: DirectiveNode): void {
     throw new MeldDirectiveError(
       'Import directive requires a path parameter in the format: path = "filepath"',
       'import',
-      node.location
+      node.location,
+      DirectiveErrorCode.VALIDATION_FAILED
     );
   }
   
@@ -24,7 +26,8 @@ export function validateImportDirective(node: DirectiveNode): void {
     throw new MeldDirectiveError(
       'Import path cannot contain parent directory references (..)',
       'import',
-      node.location
+      node.location,
+      DirectiveErrorCode.VALIDATION_FAILED
     );
   }
   
@@ -33,7 +36,8 @@ export function validateImportDirective(node: DirectiveNode): void {
     throw new MeldDirectiveError(
       'Import path cannot be empty',
       'import',
-      node.location
+      node.location,
+      DirectiveErrorCode.VALIDATION_FAILED
     );
   }
   
@@ -47,7 +51,8 @@ export function validateImportDirective(node: DirectiveNode): void {
       throw new MeldDirectiveError(
         'Import directive "section" parameter must be a non-empty string',
         'import',
-        node.location
+        node.location,
+        DirectiveErrorCode.VALIDATION_FAILED
       );
     }
   }
@@ -58,7 +63,8 @@ export function validateImportDirective(node: DirectiveNode): void {
       throw new MeldDirectiveError(
         'Import directive "fuzzy" parameter must be a number between 0 and 1',
         'import',
-        node.location
+        node.location,
+        DirectiveErrorCode.VALIDATION_FAILED
       );
     }
   }

@@ -2,6 +2,7 @@ import type { DirectiveNode } from 'meld-spec';
 import { validationLogger as logger } from '@core/utils/logger.js';
 import { IValidationService } from './IValidationService.js';
 import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
+import { DirectiveErrorCode } from '@services/DirectiveService/errors/DirectiveError.js';
 
 // Import default validators
 import { validateTextDirective } from './validators/TextDirectiveValidator.js';
@@ -39,7 +40,8 @@ export class ValidationService implements IValidationService {
       throw new MeldDirectiveError(
         `Unknown directive kind: ${node.directive.kind}`,
         node.directive.kind,
-        node.location?.start
+        node.location?.start,
+        DirectiveErrorCode.HANDLER_NOT_FOUND
       );
     }
     
