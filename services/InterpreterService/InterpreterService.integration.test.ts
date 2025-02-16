@@ -191,7 +191,7 @@ describe('InterpreterService Integration', () => {
     });
 
     it('handles cleanup on circular imports', async () => {
-      const content = '@import path = "project/nested/circular1.meld"';
+      const content = '@import [project/nested/circular1.meld]';
       const nodes = await context.services.parser.parse(content);
       try {
         await context.services.interpreter.interpret(nodes);

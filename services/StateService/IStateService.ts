@@ -35,7 +35,7 @@ export interface IStateService {
   getImports(): Set<string>;
 
   // File path
-  getCurrentFilePath(): string;
+  getCurrentFilePath(): string | null;
   setCurrentFilePath(path: string): void;
 
   // State management

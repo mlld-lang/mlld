@@ -185,6 +185,9 @@ export class StateService implements IStateService {
   }
 
   createChildState(): IStateService {
+    logger.debug('Creating child state', {
+      parentFilePath: this.currentFilePath
+    });
     return new StateService(this);
   }
 
@@ -233,7 +236,7 @@ export class StateService implements IStateService {
 
   clone(): IStateService {
     logger.debug('Cloning state');
-    const newState = new StateService();
+    const newState = new StateService(this.parentState);
     
     // Copy all variables and state
     for (const [key, value] of this.textVars) {

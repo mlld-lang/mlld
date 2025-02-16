@@ -296,7 +296,7 @@ where:
 - Path segments separated by /
 - identifier cannot be empty
 - path cannot be empty
-- Can contain nested brackets (treated as text)
+- In quotes of any kind as long as they match
 
 ### @data 
 ```meld
@@ -393,17 +393,16 @@ where:
 - Cannot be empty
 
 ### Paths
-- Special path variables ($HOMEPATH/$~, $PROJECTPATH/$.) must be followed by / when used for paths
-- Can contain any characters except unescaped []
+- Special path variables $~ (aliased $HOMEPATH), $. (aliased $PROJECTPATH) must be followed by / when used for paths
+- Can contain any characters used in paths
 - Forward slashes as separators when used in paths
 - Cannot be empty
-- Nested brackets treated as text
 
 Examples:
 ```meld
-@import [$docs $src]           # Path vars without separators
+@embed [$docs]             # Path vars without separators
 @run [cpai $docs --stdout]     # Path var in command args
-@path home = [$HOMEPATH/path]  # Special path var with separator
+@path mypath = "$HOMEPATH/path"  # Special path var with separator
 ```
 
 ### Field Access

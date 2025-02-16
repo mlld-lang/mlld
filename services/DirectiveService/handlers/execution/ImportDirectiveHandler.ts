@@ -21,10 +21,14 @@ interface ImportDirective {
  * Handler for @import directives
  * Imports and processes Meld files, merging their state into the current interpreter state.
  * Supports:
- * - Basic imports: @import path = "file.meld"
- * - Explicit imports: @import imports = [x,y,z] path = "file.meld"
- * - Aliased imports: @import imports = [x as y] path = "file.meld"
- * - Wildcard imports: @import imports = [*] path = "file.meld"
+ * - Basic imports: @import [file.meld]
+ * - Explicit imports: @import [x,y,z] from [file.meld]
+ * - Aliased imports: @import [x as y] from [file.meld]
+ * - Wildcard imports: @import [*] from [file.meld]
+ * 
+ * Legacy format (deprecated):
+ * - @import path = "file.meld"
+ * - @import imports = [x,y,z] path = "file.meld"
  */
 export class ImportDirectiveHandler implements IDirectiveHandler {
   readonly kind = 'import';
@@ -91,10 +95,35 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
       try {
         // 6. Read and parse the file
         const content = await this.fileSystemService.readFile(resolvedPath);
+        if (!content) {
+          throw new DirectiveError(
+            'Import file is empty',
+            'import',
+            DirectiveErrorCode.VALIDATION_FAILED,
+            { node, context }
+          );
+        }
+
         const nodes = await this.parserService.parseWithLocations(content, resolvedPath);
+        if (!nodes || !Array.isArray(nodes)) {
+          throw new DirectiveError(
+            'Failed to parse imported content',
+            'import',
+            DirectiveErrorCode.VALIDATION_FAILED,
+            { node, context }
+          );
+        }
 
         // 7. Create child state for import
         const importState = this.stateService.createChildState();
+        if (!importState) {
+          throw new DirectiveError(
+            'Failed to create child state for import',
+            'import',
+            DirectiveErrorCode.STATE_ERROR,
+            { node, context }
+          );
+        }
 
         // 8. Process the imported content
         const importFilter = imports?.some(imp => imp.identifier === '*') ? undefined : imports?.map(imp => imp.identifier);
@@ -181,46 +210,51 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
   } {
     if (!directive.value) {
       throw new DirectiveError(
-        'Import directive requires a path parameter in the format: path = "filepath"',
+        'Import directive requires a path',
         'import',
         DirectiveErrorCode.VALIDATION_FAILED,
         { node: { type: 'Directive', directive } as DirectiveNode }
       );
     }
 
-    // First try new format with path parameter
-    const pathMatch = directive.value.match(/path\s*=\s*["']([^"']+)["']/);
-    
-    // Then try legacy format with direct path in brackets
-    const legacyMatch = directive.value.match(/^\s*\[([^\]]+)\]\s*$/);
-    
-    if (!pathMatch && !legacyMatch) {
-      throw new DirectiveError(
-        'Import directive requires a path parameter in the format: path = "filepath"',
-        'import',
-        DirectiveErrorCode.VALIDATION_FAILED,
-        { node: { type: 'Directive', directive } as DirectiveNode }
-      );
-    }
-
-    const source = pathMatch ? pathMatch[1] : legacyMatch![1];
-
-    // Check for import list in new format
-    const importListMatch = directive.value.match(/imports\s*=\s*\[(.*?)\]/);
-    
-    // Check for import list in legacy format (after 'from')
-    const legacyImportMatch = directive.value.match(/\[(.*?)\]\s+from\s+/);
-
-    if (importListMatch) {
-      const importList = importListMatch[1].trim();
-      if (importList) {
+    // Try new format: @import [x,y,z] from [file.md] or @import [file.md]
+    const newFormatMatch = directive.value.match(/^\s*\[([^\]]+)\](?:\s+from\s+\[([^\]]+)\])?\s*$/);
+    if (newFormatMatch) {
+      const [, importsOrPath, fromPath] = newFormatMatch;
+      if (fromPath) {
+        // Format: @import [x,y,z] from [file.md]
         return {
-          source,
-          imports: this.parseImportList(importList)
+          source: fromPath,
+          imports: this.parseImportList(importsOrPath)
+        };
+      } else {
+        // Format: @import [file.md]
+        return {
+          source: importsOrPath,
+          imports: [{ identifier: '*' }] // Wildcard import
         };
       }
-    } else if (legacyImportMatch) {
-      const importList = legacyImportMatch[1].trim();
+    }
+
+    // Try old format with path parameter
+    const pathMatch = directive.value.match(/path\s*=\s*["']([^"']+)["']/);
+    
+    if (!pathMatch) {
+      throw new DirectiveError(
+        'Invalid import syntax. Expected either @import [file.md] or @import [x,y,z] from [file.md]',
+        'import',
+        DirectiveErrorCode.VALIDATION_FAILED,
+        { node: { type: 'Directive', directive } as DirectiveNode }
+      );
+    }
+
+    const source = pathMatch[1];
+
+    // Check for import list in old format
+    const importListMatch = directive.value.match(/imports\s*=\s*\[(.*?)\]/);
+    
+    if (importListMatch) {
+      const importList = importListMatch[1].trim();
       if (importList) {
         return {
           source,
@@ -236,6 +270,10 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
    * Parse import list from string
    */
   private parseImportList(importList: string): Array<{ identifier: string; alias?: string }> {
+    if (importList === '*') {
+      return [{ identifier: '*' }];
+    }
+
     return importList.split(',').map(item => {
       const asMatch = item.trim().match(/^(\S+)(?:\s+as\s+(\S+))?$/);
       if (!asMatch) {

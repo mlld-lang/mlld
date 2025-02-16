@@ -62,22 +62,55 @@ export function createTestLocation(
 ): Location {
   return {
     start: { line: startLine, column: startColumn },
-    end: { line: endLine ?? startLine, column: endColumn ?? startColumn }
+    end: { line: endLine || startLine, column: endColumn || startColumn }
   };
 }
 
 // Mock the parse function to include locations
-export function parse(content: string): Promise<MeldNode[]> {
-  // Basic directive regex that captures @kind identifier = value
-  const directiveRegex = /@(\w+)\s+(\w+)\s*=\s*(["']?)(.*?)\3/;
-  const match = content.match(directiveRegex);
+export function parse(content: string, options?: { locations?: boolean }): Promise<MeldNode[]> {
+  if (!content || typeof content !== 'string') {
+    return Promise.resolve([]);
+  }
 
-  if (match) {
-    const [fullMatch, kind, identifier, quote, value] = match;
-    const location = {
-      start: { line: 1, column: 1 },
-      end: { line: 1, column: fullMatch.length }
-    };
+  // Always create a location, even if not requested in options
+  const createLocation = (start: number, end: number): Location => ({
+    start: { line: 1, column: start },
+    end: { line: 1, column: end }
+  });
+
+  // New directive regex that captures both formats:
+  // 1. @kind [value] or @kind [x,y,z] from [value]
+  // 2. @kind identifier = value
+  const newDirectiveRegex = /@(\w+)\s+\[([^\]]+)\](?:\s+from\s+\[([^\]]+)\])?/;
+  const oldDirectiveRegex = /@(\w+)\s+(\w+)\s*=\s*(["']?)(.*?)\3/;
+  
+  // Try new format first
+  const newMatch = content.match(newDirectiveRegex);
+  if (newMatch) {
+    const [fullMatch, kind, importsOrPath, fromPath] = newMatch;
+    const matchStart = content.indexOf(fullMatch);
+    const location = createLocation(matchStart + 1, matchStart + fullMatch.length);
+
+    let value: string;
+    if (fromPath) {
+      // Handle explicit imports list
+      value = `[${fromPath}]`;
+    } else {
+      // Handle simple path import
+      value = `[${importsOrPath.trim()}]`;
+    }
+
+    return Promise.resolve([
+      createTestDirective(kind, 'import', value, location)
+    ]);
+  }
+
+  // Try old format if new format doesn't match
+  const oldMatch = content.match(oldDirectiveRegex);
+  if (oldMatch) {
+    const [fullMatch, kind, identifier, quote, value] = oldMatch;
+    const matchStart = content.indexOf(fullMatch);
+    const location = createLocation(matchStart + 1, matchStart + fullMatch.length);
 
     // Preserve quotes in the value if they were present
     const finalValue = quote ? `${quote}${value}${quote}` : value;
@@ -88,10 +121,7 @@ export function parse(content: string): Promise<MeldNode[]> {
   }
 
   // If no directive match, treat as text
-  const location = {
-    start: { line: 1, column: 1 },
-    end: { line: 1, column: content.length }
-  };
+  const location = createLocation(1, content.length + 1);
 
   return Promise.resolve([
     createTestText(content, location)
