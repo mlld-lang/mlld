@@ -1,25 +1,25 @@
-import type { DirectiveNode, TextDirective, DataDirective, ImportDirective, EmbedDirective } from 'meld-spec';
-import { directiveLogger, embedLogger } from '@core/utils/logger';
-import { IDirectiveService, IDirectiveHandler, DirectiveContext } from './IDirectiveService';
-import { IValidationService } from '../ValidationService/IValidationService';
-import { IStateService } from '../StateService/IStateService';
-import { IPathService } from '../PathService/IPathService';
-import { IFileSystemService } from '../FileSystemService/IFileSystemService';
-import { IParserService } from '../ParserService/IParserService';
-import { IInterpreterService } from '../InterpreterService/IInterpreterService';
-import { MeldDirectiveError } from '../../core/errors/MeldDirectiveError';
-import { ICircularityService } from '../CircularityService/ICircularityService';
-import { IResolutionService } from '../ResolutionService/IResolutionService';
-import { DirectiveError, DirectiveErrorCode } from './errors/DirectiveError';
-import type { ILogger } from './handlers/execution/EmbedDirectiveHandler';
+import type { DirectiveNode, DirectiveKind, DirectiveData } from 'meld-spec';
+import { directiveLogger } from '../../core/utils/logger.js';
+import { IDirectiveService, IDirectiveHandler, DirectiveContext } from './IDirectiveService.js';
+import { IValidationService } from '@services/ValidationService/IValidationService.js';
+import { IStateService } from '@services/StateService/IStateService.js';
+import { IPathService } from '@services/PathService/IPathService.js';
+import { IFileSystemService } from '@services/FileSystemService/IFileSystemService.js';
+import { IParserService } from '@services/ParserService/IParserService.js';
+import { IInterpreterService } from '@services/InterpreterService/IInterpreterService.js';
+import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
+import { ICircularityService } from '@services/CircularityService/ICircularityService.js';
+import { IResolutionService } from '@services/ResolutionService/IResolutionService.js';
+import { DirectiveError, DirectiveErrorCode } from './errors/DirectiveError.js';
+import type { ILogger } from './handlers/execution/EmbedDirectiveHandler.js';
 
 // Import all handlers
-import { TextDirectiveHandler } from './handlers/definition/TextDirectiveHandler';
-import { DataDirectiveHandler } from './handlers/definition/DataDirectiveHandler';
-import { PathDirectiveHandler } from './handlers/definition/PathDirectiveHandler';
-import { RunDirectiveHandler } from './handlers/execution/RunDirectiveHandler';
-import { EmbedDirectiveHandler } from './handlers/execution/EmbedDirectiveHandler';
-import { ImportDirectiveHandler } from './handlers/execution/ImportDirectiveHandler';
+import { TextDirectiveHandler } from './handlers/definition/TextDirectiveHandler.js';
+import { DataDirectiveHandler } from './handlers/definition/DataDirectiveHandler.js';
+import { PathDirectiveHandler } from './handlers/definition/PathDirectiveHandler.js';
+import { RunDirectiveHandler } from './handlers/execution/RunDirectiveHandler.js';
+import { EmbedDirectiveHandler } from './handlers/execution/EmbedDirectiveHandler.js';
+import { ImportDirectiveHandler } from './handlers/execution/ImportDirectiveHandler.js';
 
 export class MeldLLMXMLError extends Error {
   constructor(
@@ -232,10 +232,8 @@ export class DirectiveService implements IDirectiveService {
    */
   private createContext(node: DirectiveNode, parentContext?: DirectiveContext): DirectiveContext {
     return {
-      currentFilePath: node.location?.filePath || '',
-      workingDirectory: this.fileSystemService!.getCwd(),
-      parentState: parentContext?.parentState,
-      parentContext
+      currentFilePath: node.location?.start.line ? node.location.start.line.toString() : '',
+      parentState: parentContext?.parentState
     };
   }
 
@@ -260,14 +258,22 @@ export class DirectiveService implements IDirectiveService {
   async validateDirective(node: DirectiveNode): Promise<void> {
     try {
       await this.validationService!.validate(node);
-    } catch (error) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorForLog = error instanceof Error ? error : new Error(String(error));
+      
+      this.logger.error('Failed to validate directive', {
+        kind: node.directive.kind,
+        location: node.location,
+        error: errorForLog
+      });
+      
       throw new DirectiveError(
-        error.message,
+        errorMessage,
         node.directive.kind,
         DirectiveErrorCode.VALIDATION_FAILED,
         {
-          node,
-          cause: error
+          node
         }
       );
     }
@@ -301,7 +307,7 @@ export class DirectiveService implements IDirectiveService {
   }
 
   private async handleTextDirective(node: DirectiveNode): Promise<void> {
-    const directive = node.directive as TextDirective;
+    const directive = node.directive;
     
     this.logger.debug('Processing text directive', {
       identifier: directive.identifier,
@@ -316,14 +322,18 @@ export class DirectiveService implements IDirectiveService {
         identifier: directive.identifier,
         location: node.location
       });
-    } catch (error) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorForLog = error instanceof Error ? error : new Error(String(error));
+      
       this.logger.error('Failed to process text directive', {
         identifier: directive.identifier,
         location: node.location,
-        error
+        error: errorForLog
       });
+      
       throw new MeldDirectiveError(
-        `Failed to set text variable: ${error.message}`,
+        errorMessage,
         'text',
         node.location?.start
       );
@@ -331,7 +341,7 @@ export class DirectiveService implements IDirectiveService {
   }
 
   private async handleDataDirective(node: DirectiveNode): Promise<void> {
-    const directive = node.directive as DataDirective;
+    const directive = node.directive;
     
     this.logger.debug('Processing data directive', {
       identifier: directive.identifier,
@@ -351,14 +361,18 @@ export class DirectiveService implements IDirectiveService {
         identifier: directive.identifier,
         location: node.location
       });
-    } catch (error) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorForLog = error instanceof Error ? error : new Error(String(error));
+      
       this.logger.error('Failed to process data directive', {
         identifier: directive.identifier,
         location: node.location,
-        error
+        error: errorForLog
       });
+      
       throw new MeldDirectiveError(
-        `Failed to set data variable: ${error.message}`,
+        errorMessage,
         'data',
         node.location?.start
       );
@@ -366,7 +380,7 @@ export class DirectiveService implements IDirectiveService {
   }
 
   private async handleImportDirective(node: DirectiveNode): Promise<void> {
-    const directive = node.directive as ImportDirective;
+    const directive = node.directive;
     
     this.logger.debug('Processing import directive', {
       path: directive.path,
@@ -421,15 +435,19 @@ export class DirectiveService implements IDirectiveService {
         // Always end import tracking, even if there was an error
         this.circularityService!.endImport(fullPath);
       }
-    } catch (error) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorForLog = error instanceof Error ? error : new Error(String(error));
+      
       this.logger.error('Failed to process import directive', {
         path: directive.path,
         section: directive.section,
         location: node.location,
-        error
+        error: errorForLog
       });
+      
       throw new MeldDirectiveError(
-        `Failed to import content: ${error.message}`,
+        errorMessage,
         'import',
         node.location?.start
       );
@@ -551,12 +569,13 @@ export class DirectiveService implements IDirectiveService {
   }
 
   private async handleEmbedDirective(node: DirectiveNode): Promise<void> {
-    const directive = node.directive as EmbedDirective;
+    const directive = node.directive;
     
     this.logger.debug('Processing embed directive', {
       path: directive.path,
       section: directive.section,
       fuzzy: directive.fuzzy,
+      names: directive.names,
       location: node.location
     });
 
@@ -564,7 +583,7 @@ export class DirectiveService implements IDirectiveService {
       // Path is already interpolated by meld-ast
       const fullPath = await this.pathService!.resolvePath(directive.path);
       
-      // Check for circular imports (embeds can also cause cycles)
+      // Check for circular imports
       this.circularityService!.beginImport(fullPath);
 
       try {
@@ -573,7 +592,7 @@ export class DirectiveService implements IDirectiveService {
           throw new Error(`Embed file not found: ${fullPath}`);
         }
 
-        // Create a child state for the embed
+        // Create a child state for the import
         const childState = await this.stateService!.createChildState();
 
         // Read the file content
@@ -606,15 +625,19 @@ export class DirectiveService implements IDirectiveService {
         // Always end import tracking, even if there was an error
         this.circularityService!.endImport(fullPath);
       }
-    } catch (error) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorForLog = error instanceof Error ? error : new Error(String(error));
+      
       this.logger.error('Failed to process embed directive', {
         path: directive.path,
         section: directive.section,
         location: node.location,
-        error
+        error: errorForLog
       });
+      
       throw new MeldDirectiveError(
-        `Failed to embed content: ${error.message}`,
+        errorMessage,
         'embed',
         node.location?.start
       );

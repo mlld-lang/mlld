@@ -75,6 +75,10 @@ export const loggingConfig = {
     },
     cli: {
       level: 'info'
+    },
+    embed: {
+      level: 'info',
+      includeMetadata: true
     }
   }
 } as const; 

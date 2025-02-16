@@ -1,10 +1,10 @@
-import { IParserService } from '../ParserService/IParserService';
-import { IInterpreterService } from '../InterpreterService/IInterpreterService';
-import { IOutputService } from '../OutputService/IOutputService';
-import { IFileSystemService } from '../FileSystemService/IFileSystemService';
-import { IPathService } from '../PathService/IPathService';
-import { IStateService } from '../StateService/IStateService';
-import { cliLogger as logger } from '../../core/utils/logger';
+import { IParserService } from '@services/ParserService/IParserService.js';
+import { IInterpreterService } from '@services/InterpreterService/IInterpreterService.js';
+import { IOutputService } from '@services/OutputService/IOutputService.js';
+import { IFileSystemService } from '@services/FileSystemService/IFileSystemService.js';
+import { IPathService } from '@services/PathService/IPathService.js';
+import { IStateService } from '@services/StateService/IStateService.js';
+import { cliLogger as logger } from '@core/utils/logger.js';
 
 export interface CLIOptions {
   input: string;

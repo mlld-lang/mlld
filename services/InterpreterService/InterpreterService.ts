@@ -1,14 +1,28 @@
-import type { MeldNode } from 'meld-spec';
-import { interpreterLogger as logger } from '../../core/utils/logger';
-import { IInterpreterService, type InterpreterOptions } from './IInterpreterService';
-import type { IDirectiveService } from '../DirectiveService/IDirectiveService';
-import type { IStateService } from '../StateService/IStateService';
-import { MeldInterpreterError } from '../../core/errors/MeldInterpreterError';
+import type { MeldNode, SourceLocation } from 'meld-spec';
+import { interpreterLogger as logger } from '@core/utils/logger.js';
+import { IInterpreterService, type InterpreterOptions } from './IInterpreterService.js';
+import type { IDirectiveService } from '@services/DirectiveService/IDirectiveService.js';
+import type { IStateService } from '@services/StateService/IStateService.js';
+import { MeldInterpreterError, type InterpreterLocation } from '@core/errors/MeldInterpreterError.js';
 
 const DEFAULT_OPTIONS: Required<Omit<InterpreterOptions, 'initialState'>> = {
-  filePath: undefined,
+  filePath: '',
   mergeState: true
 };
+
+function convertLocation(loc?: SourceLocation): InterpreterLocation | undefined {
+  if (!loc) return undefined;
+  return {
+    line: loc.start.line,
+    column: loc.start.column,
+  };
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'string') return error;
+  return 'Unknown error';
+}
 
 export class InterpreterService implements IInterpreterService {
   private directiveService?: IDirectiveService;
@@ -39,62 +53,90 @@ export class InterpreterService implements IInterpreterService {
       );
     }
 
-    const opts = { ...DEFAULT_OPTIONS, ...options };
-    let currentState = opts.initialState ?? this.stateService!.createChildState();
-
-    if (opts.filePath) {
-      currentState.setCurrentFilePath(opts.filePath);
+    if (!Array.isArray(nodes)) {
+      throw new MeldInterpreterError(
+        'Invalid nodes provided for interpretation: expected array',
+        'interpretation'
+      );
     }
 
-    logger.debug('Starting interpretation', {
-      nodeCount: nodes.length,
-      filePath: opts.filePath
-    });
+    const opts = { ...DEFAULT_OPTIONS, ...options };
+    let currentState: IStateService;
 
     try {
+      // Initialize state with proper cloning
+      currentState = this.stateService!.createChildState();
+      if (opts.initialState && opts.mergeState) {
+        await currentState.mergeChildState(opts.initialState.clone());
+      } else if (opts.initialState) {
+        // When mergeState is false, create a completely fresh state
+        currentState = this.stateService!.createChildState(opts.initialState);
+      }
+
+      if (!currentState) {
+        throw new MeldInterpreterError(
+          'Failed to initialize state for interpretation',
+          'interpretation'
+        );
+      }
+
+      if (opts.filePath) {
+        currentState.setCurrentFilePath(opts.filePath);
+      }
+
       // Take a snapshot of initial state for rollback
       const initialSnapshot = currentState.clone();
       let lastGoodState = initialSnapshot;
 
+      logger.debug('Starting interpretation', {
+        nodeCount: nodes?.length ?? 0,
+        filePath: opts.filePath
+      });
+
       for (const node of nodes) {
         try {
-          // Process the node with a cloned state to ensure isolation
-          const nodeState = lastGoodState.clone();
-          const updatedState = await this.interpretNode(node, nodeState);
+          // Process the node with current state
+          const updatedState = await this.interpretNode(node, currentState.clone());
           
-          // If successful, update the last good state
-          lastGoodState = updatedState;
+          // If successful, update the states
+          lastGoodState = updatedState.clone();
           currentState = updatedState;
         } catch (error) {
-          // Roll back to last good state
-          currentState = lastGoodState;
+          // Roll back to last good state and preserve node order
+          currentState = lastGoodState.clone();
           
           // Preserve MeldInterpreterError or wrap other errors
           if (error instanceof MeldInterpreterError) {
-            // Add state context if not present
-            if (!error.context?.state) {
-              error.context = {
-                ...error.context,
-                state: {
-                  filePath: lastGoodState.getCurrentFilePath(),
-                  nodeCount: lastGoodState.getNodes().length
+            // Create new error with updated context
+            throw new MeldInterpreterError(
+              error.message,
+              error.nodeType,
+              error.location,
+              {
+                cause: error.cause,
+                context: {
+                  ...error.context,
+                  state: {
+                    filePath: currentState.getCurrentFilePath(),
+                    nodeCount: currentState.getNodes()?.length ?? 0
+                  }
                 }
-              };
-            }
-            throw error;
+              }
+            );
           }
           throw new MeldInterpreterError(
-            error.message,
+            getErrorMessage(error),
             node.type,
-            node.location?.start,
+            convertLocation(node.location),
             {
-              cause: error,
+              cause: error instanceof Error ? error : undefined,
               context: {
                 nodeType: node.type,
-                location: node.location,
-                filePath: opts.filePath,
+                location: convertLocation(node.location),
+                filePath: currentState.getCurrentFilePath(),
                 state: {
-                  lastGoodStateNodes: lastGoodState.getNodes().length
+                  filePath: currentState.getCurrentFilePath(),
+                  nodeCount: currentState.getNodes()?.length ?? 0
                 }
               }
             }
@@ -105,42 +147,50 @@ export class InterpreterService implements IInterpreterService {
       // If mergeState is true and we have a parent state, merge back
       if (opts.mergeState && opts.initialState) {
         try {
-          await opts.initialState.mergeChildState(currentState);
+          const mergedState = currentState.clone();
+          await opts.initialState.mergeChildState(mergedState);
           currentState = opts.initialState; // Use parent state after merge
         } catch (error) {
           logger.error('Failed to merge child state', {
             error,
-            filePath: opts.filePath
+            filePath: currentState.getCurrentFilePath()
           });
           // Roll back to last good state
-          currentState = lastGoodState;
+          currentState = lastGoodState.clone();
           throw new MeldInterpreterError(
-            'Failed to merge child state',
+            getErrorMessage(error),
             'state_merge',
             undefined,
             {
-              cause: error,
+              cause: error instanceof Error ? error : undefined,
               context: {
-                filePath: opts.filePath,
+                filePath: currentState.getCurrentFilePath(),
                 state: {
-                  lastGoodStateNodes: lastGoodState.getNodes().length
+                  filePath: currentState.getCurrentFilePath(),
+                  nodeCount: currentState.getNodes()?.length ?? 0
                 }
               }
             }
           );
         }
+      } else {
+        // When mergeState is false, ensure we return a completely isolated state
+        const isolatedState = currentState.clone();
+        isolatedState.setImmutable(); // Prevent further modifications
+        currentState = isolatedState;
       }
 
       logger.debug('Interpretation completed successfully', {
-        nodeCount: nodes.length,
-        filePath: opts.filePath,
-        finalStateNodes: currentState.getNodes().length
+        nodeCount: nodes?.length ?? 0,
+        filePath: currentState.getCurrentFilePath(),
+        finalStateNodes: currentState.getNodes()?.length ?? 0,
+        mergedToParent: opts.mergeState && opts.initialState
       });
 
       return currentState;
     } catch (error) {
       logger.error('Interpretation failed', {
-        nodeCount: nodes.length,
+        nodeCount: nodes?.length ?? 0,
         filePath: opts.filePath,
         error
       });
@@ -150,14 +200,14 @@ export class InterpreterService implements IInterpreterService {
         throw error;
       }
       throw new MeldInterpreterError(
-        error.message,
+        getErrorMessage(error),
         'interpretation',
         undefined,
         {
-          cause: error,
+          cause: error instanceof Error ? error : undefined,
           context: {
             filePath: opts.filePath,
-            nodeCount: nodes.length
+            nodeCount: nodes?.length ?? 0
           }
         }
       );
@@ -175,6 +225,13 @@ export class InterpreterService implements IInterpreterService {
       );
     }
 
+    if (!state) {
+      throw new MeldInterpreterError(
+        'No state provided for node interpretation',
+        'interpretation'
+      );
+    }
+
     logger.debug('Interpreting node', {
       type: node.type,
       location: node.location,
@@ -184,85 +241,103 @@ export class InterpreterService implements IInterpreterService {
     try {
       // Take a snapshot before processing
       const preNodeState = state.clone();
+      let currentState = preNodeState;
 
       switch (node.type) {
         case 'Text':
-          // Add text node to state
-          state.addNode(node);
+          // Add text node to state and store its value
+          currentState.addNode(node);
+          if ('content' in node && 'identifier' in node) {
+            currentState.setTextVar((node as any).identifier, (node as any).content);
+          }
           break;
 
         case 'Directive':
+          if (!this.directiveService) {
+            throw new MeldInterpreterError(
+              'DirectiveService not initialized',
+              'interpretation'
+            );
+          }
           try {
-            // Process directive using DirectiveService
-            await this.directiveService!.processDirective(node, {
-              state,
-              filePath: state.getCurrentFilePath()
+            // Process directive using DirectiveService with cloned state
+            const processedState = currentState.clone();
+            await this.directiveService.processDirective(node, {
+              state: processedState,
+              filePath: processedState.getCurrentFilePath()
             });
-            state.addNode(node);
-          } catch (directiveError) {
+            currentState = processedState;
+            currentState.addNode(node);
+          } catch (error) {
             // Restore state to pre-node state on directive error
-            state = preNodeState;
-            throw directiveError;
+            currentState = preNodeState.clone();
+            
+            // Preserve or wrap the error
+            if (error instanceof MeldInterpreterError) {
+              throw error;
+            }
+            throw new MeldInterpreterError(
+              getErrorMessage(error),
+              'Directive',
+              convertLocation(node.location),
+              {
+                cause: error instanceof Error ? error : undefined,
+                context: {
+                  nodeType: node.type,
+                  location: convertLocation(node.location),
+                  filePath: currentState.getCurrentFilePath(),
+                  state: {
+                    filePath: currentState.getCurrentFilePath(),
+                    nodeCount: currentState.getNodes()?.length ?? 0
+                  }
+                }
+              }
+            );
           }
           break;
 
         case 'CodeFence':
-          // Add code fence node to state as-is
-          state.addNode(node);
+          // Add code fence node to state
+          currentState.addNode(node);
           break;
 
         default:
           throw new MeldInterpreterError(
             `Unknown node type: ${node.type}`,
             'unknown_node',
-            node.location,
+            convertLocation(node.location),
             {
               context: {
                 nodeType: node.type,
-                location: node.location,
-                filePath: state.getCurrentFilePath()
+                location: convertLocation(node.location),
+                state: {
+                  filePath: currentState.getCurrentFilePath(),
+                  nodeCount: currentState.getNodes()?.length ?? 0
+                }
               }
             }
           );
       }
 
-      return state;
+      return currentState;
     } catch (error) {
-      // Log detailed error information
-      logger.error('Node interpretation failed', {
-        nodeType: node.type,
-        location: node.location,
-        filePath: state.getCurrentFilePath(),
-        error
-      });
-
       // Preserve MeldInterpreterError or wrap other errors
       if (error instanceof MeldInterpreterError) {
-        // Add current state context if not present
-        if (!error.context?.state) {
-          error.context = {
-            ...error.context,
-            state: {
-              filePath: state.getCurrentFilePath(),
-              nodeCount: state.getNodes().length
-            }
-          };
-        }
         throw error;
       }
-
       throw new MeldInterpreterError(
-        error.message,
+        getErrorMessage(error),
         node.type,
-        node.location,
+        convertLocation(node.location),
         {
-          cause: error,
+          cause: error instanceof Error ? error : undefined,
           context: {
             nodeType: node.type,
-            location: node.location,
+            location: convertLocation(node.location),
             filePath: state.getCurrentFilePath(),
             state: {
-              nodeCount: state.getNodes().length
+              filePath: state.getCurrentFilePath(),
+              nodeCount: state.getNodes()?.length ?? 0
             }
           }
         }
@@ -274,19 +349,80 @@ export class InterpreterService implements IInterpreterService {
     parentState: IStateService,
     filePath?: string
   ): Promise<IStateService> {
-    const childState = parentState.createChildState();
-    
-    if (filePath) {
-      childState.setCurrentFilePath(filePath);
+    this.ensureInitialized();
+
+    if (!parentState) {
+      throw new MeldInterpreterError(
+        'No parent state provided for child context creation',
+        'context_creation'
+      );
     }
 
-    logger.debug('Created child interpreter context', { filePath });
-    return childState;
+    try {
+      // Create child state from parent
+      const childState = parentState.createChildState();
+
+      if (!childState) {
+        throw new MeldInterpreterError(
+          'Failed to create child state',
+          'context_creation',
+          undefined,
+          {
+            context: {
+              parentFilePath: parentState.getCurrentFilePath()
+            }
+          }
+        );
+      }
+
+      // Set file path if provided
+      if (filePath) {
+        childState.setCurrentFilePath(filePath);
+      }
+
+      logger.debug('Created child context', {
+        parentFilePath: parentState.getCurrentFilePath(),
+        childFilePath: filePath,
+        hasParent: true
+      });
+
+      return childState;
+    } catch (error) {
+      logger.error('Failed to create child context', {
+        parentFilePath: parentState.getCurrentFilePath(),
+        childFilePath: filePath,
+        error
+      });
+
+      // Preserve MeldInterpreterError or wrap other errors
+      if (error instanceof MeldInterpreterError) {
+        throw error;
+      }
+      throw new MeldInterpreterError(
+        getErrorMessage(error),
+        'context_creation',
+        undefined,
+        {
+          cause: error instanceof Error ? error : undefined,
+          context: {
+            parentFilePath: parentState.getCurrentFilePath(),
+            childFilePath: filePath,
+            state: {
+              filePath: parentState.getCurrentFilePath(),
+              nodeCount: parentState.getNodes()?.length ?? 0
+            }
+          }
+        }
+      );
+    }
   }
 
   private ensureInitialized(): void {
-    if (!this.initialized) {
-      throw new Error('InterpreterService must be initialized before use');
+    if (!this.initialized || !this.directiveService || !this.stateService) {
+      throw new MeldInterpreterError(
+        'InterpreterService must be initialized before use',
+        'initialization'
+      );
     }
   }
 } 

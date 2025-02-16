@@ -1,9 +1,9 @@
 import * as fs from 'fs-extra';
 import * as path from 'path';
-import { fsLogger as logger } from '../../core/utils/simpleLogger';
-import { IFileSystemService } from './IFileSystemService';
-import { MemfsTestFileSystem } from '../../tests/utils/MemfsTestFileSystem';
-import { MeldError } from '../../core/errors/MeldError';
+import { fsLogger as logger } from '@core/utils/simpleLogger.js';
+import { IFileSystemService } from './IFileSystemService.js';
+import { MemfsTestFileSystem } from '@tests/utils/MemfsTestFileSystem.js';
+import { MeldError } from '@core/errors/MeldError.js';
 
 export class FileSystemService implements IFileSystemService {
   private testMode = false;

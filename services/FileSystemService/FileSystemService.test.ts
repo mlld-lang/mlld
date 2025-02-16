@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { TestContext } from '../../tests/utils/TestContext';
-import { FileSystemService } from './FileSystemService';
-import { MeldError } from '../../core/errors/MeldError';
+import { TestContext } from '@tests/utils/TestContext.js';
+import { FileSystemService } from './FileSystemService.js';
+import { MeldError } from '@core/errors/MeldError.js';
 import path from 'path';
 
 describe('FileSystemService', () => {

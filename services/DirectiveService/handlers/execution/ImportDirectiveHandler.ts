@@ -2,25 +2,25 @@ import { DirectiveNode, ImportDirective } from 'meld-spec';
 // TODO: Use meld-ast nodes and types instead of meld-spec directly
 // TODO: Import MeldDirectiveError from core/errors for proper error hierarchy
 
-import { IDirectiveHandler } from '../../IDirectiveService';
-import { IValidationService } from '../../../ValidationService/IValidationService';
-import { IStateService } from '../../../StateService/IStateService';
-import { IResolutionService } from '../../../ResolutionService/IResolutionService';
-import { IFileSystemService } from '../../../FileSystemService/IFileSystemService';
-import { IParserService } from '../../../ParserService/IParserService';
-import { IInterpreterService } from '../../../InterpreterService/IInterpreterService';
-import { ICircularityService } from '../../../CircularityService/ICircularityService';
-import { DirectiveError, DirectiveErrorCode } from '../../errors/DirectiveError';
+import { IDirectiveHandler } from '@services/DirectiveService/IDirectiveService.js';
+import { IValidationService } from '@services/ValidationService/IValidationService.js';
+import { IStateService } from '@services/StateService/IStateService.js';
+import { IResolutionService } from '@services/ResolutionService/IResolutionService.js';
+import { IFileSystemService } from '@services/FileSystemService/IFileSystemService.js';
+import { IParserService } from '@services/ParserService/IParserService.js';
+import { IInterpreterService } from '@services/InterpreterService/IInterpreterService.js';
+import { ICircularityService } from '@services/CircularityService/ICircularityService.js';
+import { DirectiveError, DirectiveErrorCode } from '@services/DirectiveService/errors/DirectiveError.js';
 import { directiveLogger as logger } from '@core/utils/logger';
 
 /**
  * Handler for @import directives
  * Imports and processes Meld files, merging their state into the current interpreter state.
  * Supports:
- * - Basic imports: @import [file.meld]
- * - Explicit imports: @import [x,y,z] from [file.meld]
- * - Aliased imports: @import [x as y] from [file.meld]
- * - Wildcard imports: @import [*] from [file.meld]
+ * - Basic imports: @import path = "file.meld"
+ * - Explicit imports: @import imports = [x,y,z] path = "file.meld"
+ * - Aliased imports: @import imports = [x as y] path = "file.meld"
+ * - Wildcard imports: @import imports = [*] path = "file.meld"
  */
 export class ImportDirectiveHandler implements IDirectiveHandler {
   readonly kind = 'import';
@@ -108,7 +108,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
         }
 
         // 10. Merge the filtered state back to parent
-        await this.stateService.mergeStates(importState);
+        await this.stateService.mergeChildState(importState);
 
       } finally {
         // Always end import tracking, even on error
@@ -139,9 +139,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
     source: string;
     imports?: Array<{ identifier: string; alias?: string }>;
   } {
-    // Parse path from value in new format
-    const pathMatch = directive.value?.match(/path\s*=\s*"([^"]+)"/);
-    if (!pathMatch) {
+    if (!directive.value) {
       throw new DirectiveError(
         'Import directive requires a path parameter in the format: path = "filepath"',
         'import',
@@ -150,12 +148,39 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
       );
     }
 
-    const source = pathMatch[1];
+    // First try new format with path parameter
+    const pathMatch = directive.value.match(/path\s*=\s*["']([^"']+)["']/);
+    
+    // Then try legacy format with direct path in brackets
+    const legacyMatch = directive.value.match(/^\s*\[([^\]]+)\]\s*$/);
+    
+    if (!pathMatch && !legacyMatch) {
+      throw new DirectiveError(
+        'Import directive requires a path parameter in the format: path = "filepath"',
+        'import',
+        DirectiveErrorCode.INVALID_SYNTAX,
+        { node: directive }
+      );
+    }
 
-    // Check for import list
-    const importListMatch = directive.value?.match(/imports\s*=\s*\[(.*?)\]/);
+    const source = pathMatch ? pathMatch[1] : legacyMatch![1];
+
+    // Check for import list in new format
+    const importListMatch = directive.value.match(/imports\s*=\s*\[(.*?)\]/);
+    
+    // Check for import list in legacy format (after 'from')
+    const legacyImportMatch = directive.value.match(/\[(.*?)\]\s+from\s+/);
+
     if (importListMatch) {
       const importList = importListMatch[1].trim();
+      if (importList) {
+        return {
+          source,
+          imports: this.parseImportList(importList)
+        };
+      }
+    } else if (legacyImportMatch) {
+      const importList = legacyImportMatch[1].trim();
       if (importList) {
         return {
           source,
@@ -172,8 +197,18 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
    */
   private parseImportList(importList: string): Array<{ identifier: string; alias?: string }> {
     return importList.split(',').map(item => {
-      const [identifier, alias] = item.trim().split(/\s+as\s+/).map(s => s.trim());
-      return { identifier, alias };
+      const asMatch = item.trim().match(/^(\S+)(?:\s+as\s+(\S+))?$/);
+      if (!asMatch) {
+        throw new DirectiveError(
+          `Invalid import syntax: ${item}`,
+          'import',
+          DirectiveErrorCode.INVALID_SYNTAX
+        );
+      }
+      return {
+        identifier: asMatch[1],
+        alias: asMatch[2]
+      };
     });
   }
 

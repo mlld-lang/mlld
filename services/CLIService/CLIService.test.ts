@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { CLIService } from './CLIService';
-import { TestContext } from '../../tests/utils';
-import { IParserService } from '../ParserService/IParserService';
-import { IInterpreterService } from '../InterpreterService/IInterpreterService';
-import { IOutputService } from '../OutputService/IOutputService';
-import { IFileSystemService } from '../FileSystemService/IFileSystemService';
-import { IPathService } from '../PathService/IPathService';
-import { IStateService } from '../StateService/IStateService';
+import { CLIService } from './CLIService.js';
+import { TestContext } from '@tests/utils/index.js';
+import { IParserService } from '@services/ParserService/IParserService.js';
+import { IInterpreterService } from '@services/InterpreterService/IInterpreterService.js';
+import { IOutputService } from '@services/OutputService/IOutputService.js';
+import { IFileSystemService } from '@services/FileSystemService/IFileSystemService.js';
+import { IPathService } from '@services/PathService/IPathService.js';
+import { IStateService } from '@services/StateService/IStateService.js';
 
 describe('CLIService', () => {
   let context: TestContext;

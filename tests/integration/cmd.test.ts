@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { cmd } from '../../_old/src/cli/cmd';
+import { cmd } from '../../_old/src/cli/cmd.js';
 import * as pathModule from 'path';
-import { TestContext } from '../../tests/utils';
+import { TestContext } from '@tests/utils/index.js';
 import * as fs from 'fs';
 
 // Mock path module
@@ -15,7 +15,7 @@ vi.mock('path', async () => {
 });
 
 // Import path utils after mock setup
-import { pathTestUtils } from '../mocks/path';
+import { pathTestUtils } from '@tests/mocks/path.js';
 
 // Mock fs module
 vi.mock('fs', () => ({

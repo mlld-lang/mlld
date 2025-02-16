@@ -1,13 +1,23 @@
-import { parse, ParseError } from 'meld-ast';
+import { parse } from 'meld-ast';
 import type { MeldNode } from 'meld-spec';
-import { parserLogger as logger } from '../../core/utils/logger';
-import { IParserService } from './IParserService';
-import { MeldParseError } from '../../core/errors/MeldParseError';
-import type { Location, Position } from '../../core/types';
+import { parserLogger as logger } from '@core/utils/logger.js';
+import { IParserService } from './IParserService.js';
+import { MeldParseError } from '@core/errors/MeldParseError.js';
+import type { Location, Position } from '@core/types/index.js';
+
+// Define our own ParseError type since it's not exported from meld-ast
+interface ParseError {
+  message: string;
+  location: {
+    start: { line: number; column: number };
+    end: { line: number; column: number };
+  };
+}
 
 export class ParserService implements IParserService {
   private async parseContent(content: string): Promise<MeldNode[]> {
-    return parse(content);
+    // Cast the result to MeldNode[] since we know the structure matches
+    return parse(content) as unknown as MeldNode[];
   }
 
   async parse(content: string): Promise<MeldNode[]> {

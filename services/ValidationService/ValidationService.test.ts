@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { ValidationService } from './ValidationService';
-import { DirectiveError, DirectiveErrorCode } from '../DirectiveService/errors/DirectiveError';
+import { ValidationService } from './ValidationService.js';
+import { DirectiveError, DirectiveErrorCode } from '@services/DirectiveService/errors/DirectiveError.js';
 import type { DirectiveNode } from 'meld-spec';
 import {
   createTextDirective,
@@ -8,8 +8,8 @@ import {
   createImportDirective,
   createEmbedDirective,
   createLocation
-} from '../../tests/utils/testFactories';
-import { MeldDirectiveError } from '../../errors/MeldDirectiveError';
+} from '@tests/utils/testFactories.js';
+import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
 
 describe('ValidationService', () => {
   let service: ValidationService;

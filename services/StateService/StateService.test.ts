@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { StateService } from './StateService';
+import { StateService } from './StateService.js';
 import type { MeldNode } from 'meld-spec';
 
 describe('StateService', () => {

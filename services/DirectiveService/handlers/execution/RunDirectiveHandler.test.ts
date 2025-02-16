@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { RunDirectiveHandler } from './RunDirectiveHandler';
-import { createRunDirective, createLocation } from '../../../../tests/utils/testFactories';
-import type { IValidationService } from '../../../ValidationService/IValidationService';
-import type { IStateService } from '../../../StateService/IStateService';
-import type { IResolutionService } from '../../../ResolutionService/IResolutionService';
-import type { IFileSystemService } from '../../../FileSystemService/IFileSystemService';
+import { RunDirectiveHandler } from './RunDirectiveHandler.js';
+import { createRunDirective, createLocation } from '@tests/utils/testFactories.js';
+import type { IValidationService } from '@services/ValidationService/IValidationService.js';
+import type { IStateService } from '@services/StateService/IStateService.js';
+import type { IResolutionService } from '@services/ResolutionService/IResolutionService.js';
+import type { IFileSystemService } from '@services/FileSystemService/IFileSystemService.js';
 import type { DirectiveNode } from 'meld-spec';
-import { DirectiveError, DirectiveErrorCode } from '../../errors/DirectiveError';
+import { DirectiveError, DirectiveErrorCode } from '@services/DirectiveService/errors/DirectiveError.js';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 

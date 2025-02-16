@@ -1,5 +1,5 @@
 import type { DirectiveNode, EmbedDirective } from 'meld-spec';
-import { MeldDirectiveError } from '../../../core/errors/MeldDirectiveError';
+import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
 
 export function validateEmbedDirective(node: DirectiveNode): void {
   const directive = node.directive as EmbedDirective;

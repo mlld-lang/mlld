@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { TextResolver } from './TextResolver';
-import { IStateService } from '../../StateService/IStateService';
-import { ResolutionContext } from '../IResolutionService';
-import { ResolutionError } from '../errors/ResolutionError';
+import { TextResolver } from './TextResolver.js';
+import { IStateService } from '@services/StateService/IStateService.js';
+import { ResolutionContext } from '@services/ResolutionService/IResolutionService.js';
+import { ResolutionError } from '@services/ResolutionService/errors/ResolutionError.js';
 import { MeldNode } from 'meld-spec';
 
 describe('TextResolver', () => {

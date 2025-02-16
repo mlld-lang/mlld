@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { CommandResolver } from './CommandResolver';
-import { IStateService } from '../../StateService/IStateService';
-import { ResolutionContext, ResolutionErrorCode } from '../IResolutionService';
-import { ResolutionError } from '../errors/ResolutionError';
-import { TestContext } from '../../../tests/utils/TestContext';
+import { CommandResolver } from './CommandResolver.js';
+import { IStateService } from '@services/StateService/IStateService.js';
+import { ResolutionContext, ResolutionErrorCode } from '@services/ResolutionService/IResolutionService.js';
+import { ResolutionError } from '@services/ResolutionService/errors/ResolutionError.js';
+import { TestContext } from '@tests/utils/TestContext.js';
 import { MeldNode, DirectiveNode, TextNode } from 'meld-spec';
 
 describe('CommandResolver', () => {

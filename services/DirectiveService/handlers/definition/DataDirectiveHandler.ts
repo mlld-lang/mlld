@@ -1,14 +1,20 @@
-import { DirectiveNode, DirectiveData } from '../../../../node_modules/meld-spec/dist/types';
+import { DirectiveNode, DirectiveData } from 'meld-spec';
 // TODO: Use meld-ast nodes and types instead of meld-spec directly
 // TODO: Import MeldDirectiveError from core/errors for proper error hierarchy
 
-import { IDirectiveHandler, DirectiveContext } from '../../IDirectiveService';
-import { IValidationService } from '../../../ValidationService/IValidationService';
-import { IStateService } from '../../../StateService/IStateService';
-import { IResolutionService, ResolutionContext } from '../../../ResolutionService/IResolutionService';
-import { ResolutionContextFactory } from '../../../ResolutionService/ResolutionContextFactory';
-import { DirectiveError, DirectiveErrorCode } from '../../errors/DirectiveError';
+import { IDirectiveHandler, DirectiveContext } from '@services/DirectiveService/IDirectiveService.js';
+import { IValidationService } from '@services/ValidationService/IValidationService.js';
+import { IStateService } from '@services/StateService/IStateService.js';
+import { IResolutionService } from '@services/ResolutionService/IResolutionService.js';
+import { ResolutionContextFactory } from '@services/ResolutionService/ResolutionContextFactory.js';
 import { directiveLogger as logger } from '@core/utils/logger';
+import { DirectiveError, DirectiveErrorCode } from '@services/DirectiveService/errors/DirectiveError.js';
+
+interface DataDirective extends DirectiveData {
+  kind: 'data';
+  identifier: string;
+  value: any;
+}
 
 /**
  * Handler for @data directives
@@ -29,72 +35,89 @@ export class DataDirectiveHandler implements IDirectiveHandler {
       await this.validationService.validate(node);
 
       // 2. Extract directive details
-      const directive = node.directive as DirectiveData & {
-        kind: 'data';
-        identifier: string;
-        value: any;
-      };
+      const directive = node.directive as DataDirective;
       const { identifier, value } = directive;
 
-      // 3. Create appropriate resolution context
-      const resolutionContext = ResolutionContextFactory.forDataDirective(context.currentFilePath);
-
-      // 4. Resolve and parse value
-      let resolvedValue: any;
-      
-      // Handle value based on type
-      const stringValue = typeof value === 'string'
-        ? JSON.stringify(value)  // String values need to be stringified
-        : value;  // Object/array values are already stringified by the test factory
-
-      // Try to parse the value first to see if it's already JSON
-      let valueToResolve: string;
-      try {
-        JSON.parse(value);
-        // If it parses, it's already JSON, use as-is
-        valueToResolve = value;
-      } catch {
-        // If it doesn't parse, it needs to be stringified
-        valueToResolve = stringValue;
+      // Handle empty or undefined value
+      if (value === undefined || value === null) {
+        throw new DirectiveError(
+          'Data directive requires a value',
+          this.kind,
+          DirectiveErrorCode.VALIDATION_FAILED,
+          { node }
+        );
       }
 
-      // Resolve any variables in the string
+      // 3. Create resolution context
+      const resolutionContext = ResolutionContextFactory.forDataDirective(
+        context.currentFilePath
+      );
+
+      // 4. Convert value to string if it's not already
+      const stringValue = typeof value === 'string' 
+        ? value 
+        : JSON.stringify(value);
+
+      // 5. Resolve any variables in the string
       const resolvedString = await this.resolutionService.resolveInContext(
-        valueToResolve,
+        stringValue,
         resolutionContext
       );
 
-      // Always try to parse as JSON
+      // 6. Parse the resolved string
+      let resolvedValue: any;
       try {
-        resolvedValue = JSON.parse(resolvedString);
+        if (resolvedString === 'true') {
+          resolvedValue = true;
+        } else if (resolvedString === 'false') {
+          resolvedValue = false;
+        } else if (resolvedString === 'null') {
+          resolvedValue = null;
+        } else if (/^-?\d+(\.\d+)?$/.test(resolvedString)) {
+          resolvedValue = Number(resolvedString);
+        } else if (resolvedString.startsWith('{') || resolvedString.startsWith('[')) {
+          resolvedValue = JSON.parse(resolvedString);
+        } else {
+          resolvedValue = resolvedString;
+        }
       } catch (error) {
-        // Let SyntaxError propagate up
-        throw error;
-      }
-
-      // 5. Store in state
-      await this.stateService.setDataVar(identifier, resolvedValue);
-
-      logger.debug('Stored data variable', {
-        identifier,
-        valueType: typeof resolvedValue,
-        location: node.location
-      });
-    } catch (error) {
-      // Only wrap non-SyntaxErrors in DirectiveError
-      if (error instanceof Error && !(error instanceof SyntaxError)) {
         throw new DirectiveError(
-          error.message,
-          'data',
-          DirectiveErrorCode.EXECUTION_FAILED,
-          {
-            node,
-            context,
-            cause: error
-          }
+          'Invalid data value format',
+          this.kind,
+          DirectiveErrorCode.VALIDATION_FAILED,
+          { node, cause: error }
         );
       }
-      throw error;
+
+      // 7. Store in state
+      await this.stateService.setDataVar(identifier, resolvedValue);
+
+      logger.debug('Data directive processed successfully', {
+        identifier,
+        valueType: typeof resolvedValue,
+        value: resolvedValue,
+        location: node.location
+      });
+    } catch (error: unknown) {
+      logger.error('Failed to process data directive', {
+        location: node.location,
+        error
+      });
+
+      // Wrap in DirectiveError if needed
+      if (error instanceof DirectiveError) {
+        throw error;
+      }
+      throw new DirectiveError(
+        error instanceof Error ? error.message : 'Unknown error in data directive',
+        this.kind,
+        DirectiveErrorCode.EXECUTION_FAILED,
+        {
+          node,
+          context,
+          cause: error instanceof Error ? error : undefined
+        }
+      );
     }
   }
 

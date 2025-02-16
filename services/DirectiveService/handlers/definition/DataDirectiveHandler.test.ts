@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { DataDirectiveHandler } from './DataDirectiveHandler';
-import { createDataDirective, createLocation } from '../../../../tests/utils/testFactories';
-import type { IValidationService } from '../../../ValidationService/IValidationService';
-import type { IStateService } from '../../../StateService/IStateService';
-import type { IResolutionService } from '../../../ResolutionService/IResolutionService';
-import type { DirectiveNode } from '../../../../node_modules/meld-spec/dist/types';
-import type { ResolutionContext } from '../../../ResolutionService/IResolutionService';
+import { DataDirectiveHandler } from './DataDirectiveHandler.js';
+import { createDataDirective, createLocation } from '@tests/utils/testFactories.js';
+import type { IValidationService } from '@services/ValidationService/IValidationService.js';
+import type { IStateService } from '@services/StateService/IStateService.js';
+import type { IResolutionService } from '@services/ResolutionService/IResolutionService.js';
+import type { DirectiveNode } from 'meld-spec';
+import type { ResolutionContext } from '@services/ResolutionService/IResolutionService.js';
 
 describe('DataDirectiveHandler', () => {
   let handler: DataDirectiveHandler;
@@ -16,7 +16,7 @@ describe('DataDirectiveHandler', () => {
   beforeEach(() => {
     validationService = {
       validate: vi.fn()
-    };
+    } as unknown as IValidationService;
 
     stateService = {
       setDataVar: vi.fn()
@@ -34,24 +34,27 @@ describe('DataDirectiveHandler', () => {
   });
 
   describe('basic data handling', () => {
-    it('should handle simple data values', async () => {
-      const node = createDataDirective('test', 'value', createLocation(1, 1));
+    it('should handle simple data values with location information', async () => {
+      const location = createLocation(1, 1, 1, 20);
+      const node = createDataDirective('test', 'value', location);
       const context = { currentFilePath: 'test.meld' };
 
-      vi.mocked(resolutionService.resolveInContext).mockResolvedValueOnce('"value"');
+      vi.mocked(resolutionService.resolveInContext).mockResolvedValueOnce('value');
 
       await handler.execute(node, context);
 
       expect(validationService.validate).toHaveBeenCalledWith(node);
       expect(resolutionService.resolveInContext).toHaveBeenCalledWith(
-        '"value"',
+        'value',
         expect.any(Object)
       );
       expect(stateService.setDataVar).toHaveBeenCalledWith('test', 'value');
+      expect(node.location).toEqual(location);
     });
 
-    it('should handle object values', async () => {
-      const node = createDataDirective('test', { key: 'value' }, createLocation(1, 1));
+    it('should handle object values with location information', async () => {
+      const location = createLocation(1, 1, 1, 30);
+      const node = createDataDirective('test', { key: 'value' }, location);
       const context = { currentFilePath: 'test.meld' };
 
       vi.mocked(resolutionService.resolveInContext).mockResolvedValueOnce('{"key":"value"}');
@@ -64,10 +67,12 @@ describe('DataDirectiveHandler', () => {
         expect.any(Object)
       );
       expect(stateService.setDataVar).toHaveBeenCalledWith('test', { key: 'value' });
+      expect(node.location).toEqual(location);
     });
 
-    it('should handle array values', async () => {
-      const node = createDataDirective('test', [1, 2, 3], createLocation(1, 1));
+    it('should handle array values with location information', async () => {
+      const location = createLocation(1, 1, 1, 25);
+      const node = createDataDirective('test', [1, 2, 3], location);
       const context = { currentFilePath: 'test.meld' };
 
       vi.mocked(resolutionService.resolveInContext).mockResolvedValueOnce('[1,2,3]');
@@ -80,12 +85,14 @@ describe('DataDirectiveHandler', () => {
         expect.any(Object)
       );
       expect(stateService.setDataVar).toHaveBeenCalledWith('test', [1, 2, 3]);
+      expect(node.location).toEqual(location);
     });
   });
 
   describe('error handling', () => {
-    it('should propagate validation errors', async () => {
-      const node = createDataDirective('test', 'value', createLocation(1, 1));
+    it('should propagate validation errors with location information', async () => {
+      const location = createLocation(1, 1, 1, 15);
+      const node = createDataDirective('test', 'value', location);
       const context = { currentFilePath: 'test.meld' };
 
       vi.mocked(validationService.validate).mockImplementationOnce(() => {
@@ -93,10 +100,12 @@ describe('DataDirectiveHandler', () => {
       });
 
       await expect(handler.execute(node, context)).rejects.toThrow('Validation error');
+      expect(node.location).toEqual(location);
     });
 
-    it('should handle resolution errors', async () => {
-      const node = createDataDirective('test', 'value', createLocation(1, 1));
+    it('should handle resolution errors with location information', async () => {
+      const location = createLocation(1, 1, 1, 15);
+      const node = createDataDirective('test', 'value', location);
       const context = { currentFilePath: 'test.meld' };
 
       vi.mocked(resolutionService.resolveInContext).mockRejectedValueOnce(
@@ -104,15 +113,18 @@ describe('DataDirectiveHandler', () => {
       );
 
       await expect(handler.execute(node, context)).rejects.toThrow('Resolution error');
+      expect(node.location).toEqual(location);
     });
 
-    it('should handle invalid JSON', async () => {
-      const node = createDataDirective('test', 'value', createLocation(1, 1));
+    it('should handle invalid JSON with location information', async () => {
+      const location = createLocation(1, 1, 1, 15);
+      const node = createDataDirective('test', 'value', location);
       const context = { currentFilePath: 'test.meld' };
 
       vi.mocked(resolutionService.resolveInContext).mockResolvedValueOnce('invalid json');
 
       await expect(handler.execute(node, context)).rejects.toThrow(SyntaxError);
+      expect(node.location).toEqual(location);
     });
   });
 }); 

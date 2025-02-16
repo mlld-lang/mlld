@@ -1,8 +1,8 @@
-import { outputLogger as logger } from '../../core/utils/logger';
-import { MeldOutputError } from '../../core/errors/MeldOutputError';
+import { outputLogger as logger } from '@core/utils/logger.js';
+import { MeldOutputError } from '@core/errors/MeldOutputError.js';
 import type { MeldNode } from 'meld-spec';
-import type { IStateService } from '../StateService/IStateService';
-import { IOutputService, type OutputFormat, type OutputOptions } from './IOutputService';
+import type { IStateService } from '@services/StateService/IStateService.js';
+import { IOutputService, type OutputFormat, type OutputOptions } from './IOutputService.js';
 
 const DEFAULT_OPTIONS: Required<OutputOptions> = {
   includeState: false,

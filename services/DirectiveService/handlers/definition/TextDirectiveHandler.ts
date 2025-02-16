@@ -1,11 +1,11 @@
 import { DirectiveNode, TextDirective } from 'meld-spec';
-import { IDirectiveHandler, DirectiveContext } from '../../IDirectiveService';
-import { IValidationService } from '../../../ValidationService/IValidationService';
-import { IStateService } from '../../../StateService/IStateService';
-import { IResolutionService } from '../../../ResolutionService/IResolutionService';
-import { ResolutionContextFactory } from '../../../ResolutionService/ResolutionContextFactory';
+import { IDirectiveHandler, DirectiveContext } from '@services/DirectiveService/IDirectiveService.js';
+import { IValidationService } from '@services/ValidationService/IValidationService.js';
+import { IStateService } from '@services/StateService/IStateService.js';
+import { IResolutionService } from '@services/ResolutionService/IResolutionService.js';
+import { ResolutionContextFactory } from '@services/ResolutionService/ResolutionContextFactory.js';
 import { directiveLogger as logger } from '@core/utils/logger';
-import { DirectiveError, DirectiveErrorCode } from '../../errors/DirectiveError';
+import { DirectiveError, DirectiveErrorCode } from '@services/DirectiveService/errors/DirectiveError.js';
 
 /**
  * Handler for @text directives
@@ -32,36 +32,41 @@ export class TextDirectiveHandler implements IDirectiveHandler {
 
       // 2. Get validated directive
       const directive = node.directive as TextDirective;
+      const { identifier, value } = directive;
 
       // 3. Process value based on type
-      let resolvedValue: string;
-
-      // Remove quotes from string literals
-      const unquotedValue = this.removeQuotes(directive.value);
-
-      // Check if the value is a standalone directive or contains embedded directives
-      const hasDirective = unquotedValue.includes('@');
-
-      if (hasDirective) {
-        // For values containing directives, pass through without resolution
-        // but still remove quotes to match test expectations
-        resolvedValue = unquotedValue;
-      } else {
-        // For regular string values, resolve any variables
-        const resolutionContext = ResolutionContextFactory.forTextDirective(
-          context.currentFilePath
-        );
-        resolvedValue = await this.resolutionService.resolveInContext(
-          unquotedValue,
-          resolutionContext
+      if (!value) {
+        throw new DirectiveError(
+          'Text directive requires a value',
+          this.kind,
+          DirectiveErrorCode.VALIDATION_FAILED,
+          { node }
         );
       }
 
+      // Check if this is a pass-through directive
+      if (value.startsWith('@embed') || value.startsWith('@run') || value.startsWith('@call')) {
+        await this.stateService.setTextVar(identifier, value);
+        return;
+      }
+
+      // Create resolution context
+      const resolutionContext = ResolutionContextFactory.forTextDirective(
+        context.currentFilePath
+      );
+
+      // Resolve variables in the value
+      const resolvedValue = await this.resolutionService.resolveInContext(
+        value,
+        resolutionContext
+      );
+
       // 4. Store in state
-      await this.stateService.setTextVar(directive.identifier, resolvedValue);
+      await this.stateService.setTextVar(identifier, resolvedValue);
 
       logger.debug('Text directive processed successfully', {
-        identifier: directive.identifier,
+        identifier,
+        value: resolvedValue,
         location: node.location
       });
     } catch (error) {

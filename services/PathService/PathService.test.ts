@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { TestContext } from '../../tests/utils/TestContext';
-import { PathService } from './PathService';
-import { PathValidationError, PathErrorCode } from './errors/PathValidationError';
-import { createLocation } from '../../tests/utils/testFactories';
+import { TestContext } from '@tests/utils/TestContext.js';
+import { PathService } from './PathService.js';
+import { PathValidationError, PathErrorCode } from './errors/PathValidationError.js';
+import { createLocation } from '@tests/utils/testFactories.js';
 
 describe('PathService', () => {
   let context: TestContext;

@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { OutputService } from './OutputService';
-import { MeldOutputError } from '../../core/errors/MeldOutputError';
+import { OutputService } from './OutputService.js';
+import { MeldOutputError } from '@core/errors/MeldOutputError.js';
 import type { MeldNode } from 'meld-spec';
-import type { IStateService } from '../StateService/IStateService';
+import type { IStateService } from '@services/StateService/IStateService.js';
 import {
   createTextNode,
   createDirectiveNode,

@@ -5,15 +5,15 @@ import type {
   CodeFenceNode,
   DirectiveKindString
 } from 'meld-spec';
-import type { Location, Position } from '../../core/types';
-import type { IValidationService } from '../../services/ValidationService/IValidationService';
-import type { IResolutionService } from '../../services/ResolutionService/IResolutionService';
-import type { IStateService } from '../../services/StateService/IStateService';
-import type { ICircularityService } from '../../services/CircularityService/ICircularityService';
-import type { IFileSystemService } from '../../services/FileSystemService/IFileSystemService';
-import type { IParserService } from '../../services/ParserService/IParserService';
-import type { IInterpreterService } from '../../services/InterpreterService/IInterpreterService';
-import type { IPathService } from '../../services/PathService/IPathService';
+import type { Location, Position } from '@core/types.js';
+import type { IValidationService } from '@services/ValidationService/IValidationService.js';
+import type { IResolutionService } from '@services/ResolutionService/IResolutionService.js';
+import type { IStateService } from '@services/StateService/IStateService.js';
+import type { ICircularityService } from '@services/CircularityService/ICircularityService.js';
+import type { IFileSystemService } from '@services/FileSystemService/IFileSystemService.js';
+import type { IParserService } from '@services/ParserService/IParserService.js';
+import type { IInterpreterService } from '@services/InterpreterService/IInterpreterService.js';
+import type { IPathService } from '@services/PathService/IPathService.js';
 import { vi, type Mock } from 'vitest';
 
 const DEFAULT_POSITION: Position = { line: 1, column: 1 };
@@ -45,6 +45,69 @@ export function createLocation(
     end: createPosition(endLine ?? startLine, endColumn ?? startColumn),
     filePath
   };
+}
+
+/**
+ * Create a test directive node
+ */
+export function createTestDirective(
+  kind: DirectiveKindString,
+  identifier: string,
+  value: string,
+  location: Location = DEFAULT_LOCATION
+): DirectiveNode {
+  return {
+    type: 'Directive',
+    directive: {
+      kind,
+      identifier,
+      value
+    },
+    location
+  };
+}
+
+/**
+ * Create a test text node
+ */
+export function createTestText(
+  content: string,
+  location: Location = DEFAULT_LOCATION
+): TextNode {
+  return {
+    type: 'Text',
+    content,
+    location
+  };
+}
+
+/**
+ * Create a test code fence node
+ */
+export function createTestCodeFence(
+  content: string,
+  language?: string,
+  location: Location = DEFAULT_LOCATION
+): CodeFenceNode {
+  return {
+    type: 'CodeFence',
+    content,
+    language,
+    location
+  };
+}
+
+/**
+ * Create a test location
+ */
+export function createTestLocation(
+  startLine: number = 1,
+  startColumn: number = 1,
+  endLine?: number,
+  endColumn?: number,
+  filePath?: string
+): Location {
+  return createLocation(startLine, startColumn, endLine, endColumn, filePath);
 }
 
 /**
@@ -95,80 +158,50 @@ export function createCodeFenceNode(
   };
 }
 
-/**
- * Create a text directive node for testing
- */
+// Create a text directive node for testing
 export function createTextDirective(
   identifier: string,
   value: string,
   location?: Location
 ): DirectiveNode {
-  // Wrap value in quotes if it's not already quoted
-  const quotedValue = value.startsWith('"') || value.startsWith("'") || value.startsWith('`')
-    ? value
-    : `"${value}"`;
-
-  if (!location) return createDirectiveNode('text', { identifier, value: quotedValue });
-
-  return {
-    type: 'Directive',
-    directive: {
-      kind: 'text',
-      identifier,
-      value: quotedValue
-    },
-    location
-  };
+  return createTestDirective('text', identifier, value, location);
 }
 
-/**
- * Create a data directive node for testing
- */
+// Create a data directive node for testing
 export function createDataDirective(
   identifier: string,
   value: any,
   location?: Location
 ): DirectiveNode {
-  if (!location) return createDirectiveNode('data', { 
-    identifier, 
-    value: typeof value === 'string' ? value : JSON.stringify(value) 
-  });
-
-  return {
-    type: 'Directive',
-    directive: {
-      kind: 'data',
-      identifier,
-      value: typeof value === 'string' ? value : JSON.stringify(value)
-    },
-    location
-  };
+  const stringValue = typeof value === 'string' ? value : JSON.stringify(value);
+  return createTestDirective('data', identifier, stringValue, location);
 }
 
-/**
- * Create a path directive node for testing
- */
+// Create a path directive node for testing
 export function createPathDirective(
   identifier: string,
   path: string,
-  location: Location = DEFAULT_LOCATION
+  location?: Location
 ): DirectiveNode {
-  return createDirectiveNode('path', { identifier, path }, location);
+  return createTestDirective('path', identifier, path, location);
 }
 
-/**
- * Create a run directive node for testing
- */
+// Create a run directive node for testing
 export function createRunDirective(
   command: string,
-  location: Location = DEFAULT_LOCATION
+  location?: Location
 ): DirectiveNode {
-  return createDirectiveNode('run', { command }, location);
+  return {
+    type: 'Directive',
+    directive: {
+      kind: 'run',
+      command
+    },
+    location: location || DEFAULT_LOCATION
+  };
 }
 
-/**
- * Create an embed directive node for testing
- */
+// Create an embed directive node for testing
 export function createEmbedDirective(
   path: string,
   section?: string,
@@ -180,8 +213,6 @@ export function createEmbedDirective(
     format?: string;
   }
 ): DirectiveNode {
-  if (!location) return createDirectiveNode('embed', { path, section, ...options });
-
   return {
     type: 'Directive',
     directive: {
@@ -190,46 +221,35 @@ export function createEmbedDirective(
       section,
       ...options
     },
-    location
+    location: location || DEFAULT_LOCATION
   };
 }
 
-/**
- * Create an import directive node for testing
- */
+// Create an import directive node for testing
 export function createImportDirective(
   path: string,
-  location: Location,
+  location?: Location,
   from?: string
 ): DirectiveNode {
-  return {
-    type: 'Directive',
-    directive: {
-      kind: 'import',
-      path,
-      from
-    },
-    location
-  };
+  const value = from ? `path = "${path}" from = "${from}"` : `path = "${path}"`;
+  return createTestDirective('import', 'import', value, location);
 }
 
-/**
- * Create a define directive node for testing
- */
+// Create a define directive node for testing
 export function createDefineDirective(
   identifier: string,
   command: string,
   parameters: string[] = [],
-  location: Location = DEFAULT_LOCATION
+  location?: Location
 ): DirectiveNode {
-  return createDirectiveNode('define', { 
-    identifier, 
+  const value = {
     command: {
       kind: 'run',
       command
     },
     parameters
-  }, location);
+  };
+  return createTestDirective('define', identifier, JSON.stringify(value), location);
 }
 
 // Mock service creation functions

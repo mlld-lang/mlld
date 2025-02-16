@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { TestContext } from '../TestContext';
+import { TestContext } from '@tests/utils/TestContext.js';
 import * as path from 'path';
 
 describe('TestContext', () => {
@@ -45,7 +45,7 @@ describe('TestContext', () => {
       expect(ast[0].directive).toBeDefined();
       expect(ast[0].directive.kind).toBe('text');
       expect(ast[0].directive.identifier).toBe('greeting');
-      expect(ast[0].directive.value).toBe('"Hello"');
+      expect(ast[0].directive.value).toBe('Hello');
     });
 
     it('parses meld content with locations', async () => {
@@ -57,7 +57,7 @@ describe('TestContext', () => {
       expect(ast[0].directive).toBeDefined();
       expect(ast[0].directive.kind).toBe('text');
       expect(ast[0].directive.identifier).toBe('greeting');
-      expect(ast[0].directive.value).toBe('"Hello"');
+      expect(ast[0].directive.value).toBe('Hello');
       expect(ast[0].location).toBeDefined();
       expect(ast[0].location.start).toBeDefined();
       expect(ast[0].location.end).toBeDefined();

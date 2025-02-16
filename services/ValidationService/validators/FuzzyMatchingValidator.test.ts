@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { validateFuzzyThreshold } from './FuzzyMatchingValidator';
-import { MeldDirectiveError } from '../../../core/errors/MeldDirectiveError';
-import { createEmbedDirective, createLocation } from '../../../tests/utils/testFactories';
+import { validateFuzzyThreshold } from './FuzzyMatchingValidator.js';
+import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
+import { createEmbedDirective, createLocation } from '@tests/utils/testFactories.js';
 
 describe('FuzzyMatchingValidator', () => {
   describe('Fuzzy threshold validation', () => {

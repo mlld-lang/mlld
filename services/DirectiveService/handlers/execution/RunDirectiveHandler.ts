@@ -1,12 +1,12 @@
 import { DirectiveNode, RunDirective } from 'meld-spec';
-import { IDirectiveHandler, DirectiveContext } from '../../IDirectiveService';
-import { IValidationService } from '../../../ValidationService/IValidationService';
-import { IStateService } from '../../../StateService/IStateService';
-import { IResolutionService } from '../../../ResolutionService/IResolutionService';
-import { IFileSystemService } from '../../../FileSystemService/IFileSystemService';
-import { ResolutionContextFactory } from '../../../ResolutionService/ResolutionContextFactory';
+import { IDirectiveHandler, DirectiveContext } from '@services/DirectiveService/IDirectiveService.js';
+import { IValidationService } from '@services/ValidationService/IValidationService.js';
+import { IStateService } from '@services/StateService/IStateService.js';
+import { IResolutionService } from '@services/ResolutionService/IResolutionService.js';
+import { IFileSystemService } from '@services/FileSystemService/IFileSystemService.js';
+import { ResolutionContextFactory } from '@services/ResolutionService/ResolutionContextFactory.js';
 import { directiveLogger as logger } from '@core/utils/logger';
-import { DirectiveError, DirectiveErrorCode } from '../../errors/DirectiveError';
+import { DirectiveError, DirectiveErrorCode } from '@services/DirectiveService/errors/DirectiveError.js';
 
 /**
  * Handler for @run directives

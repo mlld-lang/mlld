@@ -1,15 +1,15 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { ImportDirectiveHandler } from './ImportDirectiveHandler';
-import { createImportDirective, createLocation } from '../../../../tests/utils/testFactories';
-import type { IValidationService } from '../../../ValidationService/IValidationService';
-import type { IStateService } from '../../../StateService/IStateService';
-import type { IResolutionService } from '../../../ResolutionService/IResolutionService';
-import type { IFileSystemService } from '../../../FileSystemService/IFileSystemService';
-import type { IParserService } from '../../../ParserService/IParserService';
-import type { IInterpreterService } from '../../../InterpreterService/IInterpreterService';
-import type { ICircularityService } from '../../../CircularityService/ICircularityService';
+import { ImportDirectiveHandler } from './ImportDirectiveHandler.js';
+import { createImportDirective, createLocation } from '@tests/utils/testFactories.js';
+import type { IValidationService } from '@services/ValidationService/IValidationService.js';
+import type { IStateService } from '@services/StateService/IStateService.js';
+import type { IResolutionService } from '@services/ResolutionService/IResolutionService.js';
+import type { IFileSystemService } from '@services/FileSystemService/IFileSystemService.js';
+import type { IParserService } from '@services/ParserService/IParserService.js';
+import type { IInterpreterService } from '@services/InterpreterService/IInterpreterService.js';
+import type { ICircularityService } from '@services/CircularityService/ICircularityService.js';
 import type { DirectiveNode, MeldNode } from 'meld-spec';
-import { DirectiveError, DirectiveErrorCode } from '../../errors/DirectiveError';
+import { DirectiveError, DirectiveErrorCode } from '@services/DirectiveService/errors/DirectiveError.js';
 
 describe('ImportDirectiveHandler', () => {
   let handler: ImportDirectiveHandler;
@@ -33,12 +33,12 @@ describe('ImportDirectiveHandler', () => {
       getVariable: vi.fn(),
       setVariable: vi.fn(),
       removeVariable: vi.fn(),
-      mergeStates: vi.fn()
+      mergeChildState: vi.fn()
     } as unknown as IStateService;
 
     stateService = {
       createChildState: vi.fn().mockReturnValue(mockChildState),
-      mergeStates: vi.fn(),
+      mergeChildState: vi.fn(),
       hasVariable: vi.fn(),
       getVariable: vi.fn(),
       setVariable: vi.fn(),
@@ -275,7 +275,7 @@ describe('ImportDirectiveHandler', () => {
 
       await handler.execute(node, {});
 
-      expect(stateService.mergeStates).toHaveBeenCalledWith(mockChildState);
+      expect(stateService.mergeChildState).toHaveBeenCalledWith(mockChildState);
     });
   });
 }); 

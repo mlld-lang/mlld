@@ -1,6 +1,6 @@
-import { IStateService } from '../../StateService/IStateService';
-import { ResolutionContext, ResolutionErrorCode } from '../IResolutionService';
-import { ResolutionError } from '../errors/ResolutionError';
+import { IStateService } from '@services/StateService/IStateService.js';
+import { ResolutionContext, ResolutionErrorCode } from '@services/ResolutionService/IResolutionService.js';
+import { ResolutionError } from '@services/ResolutionService/errors/ResolutionError.js';
 import { MeldNode, TextNode, DirectiveNode } from 'meld-spec';
 
 /**

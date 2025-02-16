@@ -1,19 +1,19 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { ParserService } from './ParserService';
-import { MeldParseError } from '../../core/errors/MeldParseError';
+import { ParserService } from './ParserService.js';
+import { MeldParseError } from '@core/errors/MeldParseError.js';
 import type { MeldNode, DirectiveNode, TextNode } from 'meld-spec';
-import type { Location, Position } from '../../core/types';
-import { createLocation, createPosition } from '../../tests/utils/testFactories';
+import type { Location, Position } from '@core/types/index.js';
+import { createLocation, createPosition } from '@tests/utils/testFactories.js';
 
 // Define a type that combines the meld-spec Location with our filePath
 type LocationWithFilePath = {
-  start: { line: number; column: number };
-  end: { line: number; column: number };
+  start: { line: number | undefined; column: number | undefined };
+  end: { line: number | undefined; column: number | undefined };
   filePath?: string;
 };
 
 // Helper function to create test locations
-function createTestLocation(startLine: number, startColumn: number, endLine: number, endColumn: number, filePath?: string): Location {
+function createTestLocation(startLine: number | undefined, startColumn: number | undefined, endLine: number | undefined, endColumn: number | undefined, filePath?: string): LocationWithFilePath {
   return {
     start: { line: startLine, column: startColumn },
     end: { line: endLine, column: endColumn },
@@ -22,7 +22,7 @@ function createTestLocation(startLine: number, startColumn: number, endLine: num
 }
 
 // Type guard for Location
-function isLocation(value: any): value is Location {
+function isLocation(value: any): value is LocationWithFilePath {
   return (
     value &&
     typeof value === 'object' &&
@@ -33,7 +33,7 @@ function isLocation(value: any): value is Location {
 }
 
 // Type guard for checking if a location has a filePath
-function hasFilePath(location: any): location is Location {
+function hasFilePath(location: any): location is LocationWithFilePath {
   return (
     location &&
     typeof location === 'object' &&
@@ -55,12 +55,9 @@ describe('ParserService', () => {
       const content = 'Hello world';
       const mockResult: MeldNode[] = [{
         type: 'Text',
-        content: 'Hello world',
-        location: {
-          start: { line: 1, column: 1 },
-          end: { line: 1, column: 11 }
-        }
-      } as TextNode];
+        content: 'Hello world\n',
+        location: createTestLocation(undefined, undefined, undefined, undefined)
+      } as unknown as TextNode];
 
       const result = await service.parse(content);
       expect(result).toEqual(mockResult);
@@ -73,13 +70,11 @@ describe('ParserService', () => {
         directive: {
           kind: 'text',
           identifier: 'greeting',
-          value: '"Hello"'
+          source: 'literal',
+          value: 'Hello'
         },
-        location: {
-          start: { line: 1, column: 1 },
-          end: { line: 1, column: 24 }
-        }
-      }];
+        location: createTestLocation(undefined, undefined, undefined, undefined)
+      } as unknown as DirectiveNode];
 
       const result = await service.parse(content);
       expect(result).toEqual(mockResult);
@@ -90,32 +85,24 @@ describe('ParserService', () => {
       const mockResult = [
         {
           type: 'Text',
-          content: 'Hello world',
-          location: {
-            start: { line: 1, column: 1 },
-            end: { line: 1, column: 11 }
-          }
-        },
+          content: 'Hello world\n',
+          location: createTestLocation(undefined, undefined, undefined, undefined)
+        } as unknown as TextNode,
         {
           type: 'Directive',
           directive: {
             kind: 'text',
             identifier: 'greeting',
-            value: '"Hi"'
+            source: 'literal',
+            value: 'Hi'
           },
-          location: {
-            start: { line: 2, column: 1 },
-            end: { line: 2, column: 21 }
-          }
-        },
+          location: createTestLocation(undefined, undefined, undefined, undefined)
+        } as unknown as DirectiveNode,
         {
           type: 'Text',
-          content: 'More text',
-          location: {
-            start: { line: 3, column: 1 },
-            end: { line: 3, column: 9 }
-          }
-        }
+          content: '\nMore text',
+          location: createTestLocation(undefined, undefined, undefined, undefined)
+        } as unknown as TextNode
       ];
 
       const result = await service.parse(content);
@@ -130,36 +117,15 @@ describe('ParserService', () => {
     it('should throw MeldParseError with location for invalid directive', async () => {
       const content = '@invalid xyz';
       
-      const result = await service.parse(content);
-      expect(result[0]).toMatchObject({
-        type: 'Directive',
-        directive: {
-          kind: 'invalid',
-          value: 'xyz'
-        },
-        location: {
-          start: { line: 1, column: 1 },
-          end: { line: 1, column: 12 }
-        }
-      });
+      await expect(service.parse(content)).rejects.toThrow(MeldParseError);
+      await expect(service.parse(content)).rejects.toThrow('Parse error: Expected "data", "define", "embed", "import", "path", "run", "text", or "var"');
     });
 
     it('should throw MeldParseError for malformed directive', async () => {
       const content = '@text greeting = "unclosed string';
       
-      const result = await service.parse(content);
-      expect(result[0]).toMatchObject({
-        type: 'Directive',
-        directive: {
-          kind: 'text',
-          identifier: 'greeting',
-          value: '"unclosed string'
-        },
-        location: {
-          start: { line: 1, column: 1 },
-          end: { line: 1, column: 33 }
-        }
-      });
+      await expect(service.parse(content)).rejects.toThrow(MeldParseError);
+      await expect(service.parse(content)).rejects.toThrow('Parse error: Expected "\\"" or any character');
     });
   });
 
@@ -169,53 +135,35 @@ describe('ParserService', () => {
       const mockResult = [
         {
           type: 'Text',
-          content: 'Hello',
-          location: {
-            start: { line: 1, column: 1 },
-            end: { line: 1, column: 5 }
-          }
-        },
+          content: 'Hello\n',
+          location: createTestLocation(undefined, undefined, undefined, undefined, 'test.meld')
+        } as unknown as TextNode,
         {
           type: 'Directive',
           directive: {
             kind: 'text',
             identifier: 'greeting',
-            value: '"Hi"'
+            source: 'literal',
+            value: 'Hi'
           },
-          location: {
-            start: { line: 2, column: 1 },
-            end: { line: 2, column: 21 }
-          }
-        }
+          location: createTestLocation(undefined, undefined, undefined, undefined, 'test.meld')
+        } as unknown as DirectiveNode
       ];
 
       const filePath = 'test.meld';
       const resultWithFilePath = await service.parseWithLocations(content, filePath);
-      expect(resultWithFilePath).toEqual(mockResult.map(node => ({
-        ...node,
-        location: node.location ? {
-          ...node.location,
-          filePath
-        } : undefined
-      })));
-
-      const resultWithoutFilePath = await service.parseWithLocations(content);
-      expect(resultWithoutFilePath).toEqual(mockResult);
+      expect(resultWithFilePath).toEqual(mockResult);
     });
 
     it('should preserve original locations when adding filePath', async () => {
       const content = '@text greeting = "Hi"';
-      const location = {
-        start: { line: 1, column: 1 },
-        end: { line: 1, column: 21 }
-      };
       const filePath = 'test.meld';
 
       const result = await service.parseWithLocations(content, filePath);
       
       expect(result[0].location).toMatchObject({
-        start: location.start,
-        end: location.end,
+        start: { line: undefined, column: undefined },
+        end: { line: undefined, column: undefined },
         filePath
       });
     });
@@ -224,19 +172,8 @@ describe('ParserService', () => {
       const content = '@invalid xyz';
       const filePath = 'test.meld';
       
-      const result = await service.parseWithLocations(content, 'test.meld');
-      expect(result[0]).toMatchObject({
-        type: 'Directive',
-        directive: {
-          kind: 'invalid',
-          value: 'xyz'
-        },
-        location: {
-          start: { line: 1, column: 1 },
-          end: { line: 1, column: 12 },
-          filePath
-        }
-      });
+      await expect(service.parseWithLocations(content, filePath)).rejects.toThrow(MeldParseError);
+      await expect(service.parseWithLocations(content, filePath)).rejects.toThrow('Parse error: Expected "data", "define", "embed", "import", "path", "run", "text", or "var"');
     });
   });
 

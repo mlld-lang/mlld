@@ -1,5 +1,5 @@
 import { DirectiveNode, DataDirective } from 'meld-spec';
-import { MeldDirectiveError } from '../../../core/errors/MeldDirectiveError';
+import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
 
 /**
  * Validates @data directives

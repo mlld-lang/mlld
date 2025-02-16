@@ -1,5 +1,5 @@
-import { IFileSystemService } from '../FileSystemService/IFileSystemService';
-import type { Location } from '../../core/types';
+import { IFileSystemService } from '@services/FileSystemService/IFileSystemService.js';
+import type { Location } from '@core/types.js';
 
 /**
  * Options for path validation and operations

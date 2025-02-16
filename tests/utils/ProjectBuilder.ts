@@ -1,4 +1,4 @@
-import { MemfsTestFileSystem } from './MemfsTestFileSystem';
+import { MemfsTestFileSystem } from './MemfsTestFileSystem.js';
 import * as path from 'path';
 
 /**

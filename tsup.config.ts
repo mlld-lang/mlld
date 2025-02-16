@@ -2,7 +2,7 @@ import { defineConfig } from 'tsup';
 
 export default defineConfig({
   entry: {
-    index: 'sdk/index.ts',
+    index: 'api/index.ts',
     cli: 'cli/index.ts',
   },
   format: ['cjs', 'esm'],
@@ -20,5 +20,12 @@ export default defineConfig({
     'minimatch',
     'winston',
     'yargs'
-  ]
+  ],
+  esbuildOptions(options) {
+    options.alias = {
+      '@core': './core',
+      '@services': './services',
+      '@tests': './tests'
+    }
+  }
 }); 

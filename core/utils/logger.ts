@@ -1,6 +1,6 @@
 import winston from 'winston';
 import path from 'path';
-import { loggingConfig } from '../config/logging';
+import { loggingConfig } from '@core/config/logging.js';
 
 // Add colors to Winston
 winston.addColors(loggingConfig.colors);
@@ -111,6 +111,7 @@ export const circularityLogger = createServiceLogger('circularity');
 export const resolutionLogger = createServiceLogger('resolution');
 export const importLogger = createServiceLogger('import');
 export const cliLogger = createServiceLogger('cli');
+export const embedLogger = createServiceLogger('embed');
 
 // Export default logger for general use
 export default logger;

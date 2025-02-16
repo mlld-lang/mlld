@@ -1,6 +1,6 @@
-import type { MeldNode } from 'meld-spec';
-import { stateLogger as logger } from '../../core/utils/logger';
-import { IStateService } from './IStateService';
+import type { MeldNode, TextNode } from 'meld-spec';
+import { stateLogger as logger } from '@core/utils/logger.js';
+import { IStateService } from './IStateService.js';
 
 export class StateService implements IStateService {
   private nodes: MeldNode[] = [];
@@ -100,6 +100,10 @@ export class StateService implements IStateService {
     logger.debug('Set command', { name, command });
   }
 
+  getAllCommands(): Map<string, { command: string; options?: Record<string, unknown> }> {
+    return new Map(this.commands);
+  }
+
   getNodes(): MeldNode[] {
     return [...this.nodes];
   }
@@ -123,7 +127,7 @@ export class StateService implements IStateService {
         start: { line: 0, column: 0 },
         end: { line: 0, column: 0 }
       }
-    });
+    } as TextNode);
     this.localChanges.add(`node:${this.nodes.length}`);
     logger.debug('Appended content', { contentLength: content.length });
   }
@@ -185,18 +189,15 @@ export class StateService implements IStateService {
   }
 
   mergeChildState(childState: IStateService): void {
-    logger.debug('Merging child state', {
-      parentChanges: Array.from(this.localChanges),
-      childChanges: childState.getLocalChanges()
-    });
+    this.checkMutable();
 
     // Merge text variables
-    for (const [key, value] of childState.getAllTextVars()) {
+    for (const [key, value] of childState.getLocalTextVars()) {
       this.setTextVar(key, value);
     }
 
     // Merge data variables
-    for (const [key, value] of childState.getAllDataVars()) {
+    for (const [key, value] of childState.getLocalDataVars()) {
       this.setDataVar(key, value);
     }
 
@@ -206,14 +207,8 @@ export class StateService implements IStateService {
     }
 
     // Merge commands
-    for (const [key, value] of new Map(Array.from(childState.getNodes().map(node => 
-      ['command', node])))) {
-      this.setCommand(key, value as any);
-    }
-
-    // Merge imports
-    for (const importPath of childState.getImports()) {
-      this.addImport(importPath);
+    for (const [key, value] of childState.getAllCommands()) {
+      this.setCommand(key, value);
     }
 
     // Merge nodes
@@ -221,8 +216,18 @@ export class StateService implements IStateService {
       this.addNode(node);
     }
 
+    // Merge imports
+    for (const importPath of childState.getImports()) {
+      this.addImport(importPath);
+    }
+
     logger.debug('Merged child state', {
-      resultingChanges: Array.from(this.localChanges)
+      textVars: childState.getLocalTextVars().size,
+      dataVars: childState.getLocalDataVars().size,
+      pathVars: childState.getAllPathVars().size,
+      commands: childState.getAllCommands().size,
+      nodes: childState.getNodes().length,
+      imports: childState.getImports().size
     });
   }
 

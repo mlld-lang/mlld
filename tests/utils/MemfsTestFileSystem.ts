@@ -1,7 +1,7 @@
 import { Volume } from 'memfs';
 import * as path from 'path';
 import type { Stats } from 'fs';
-import { filesystemLogger as logger } from '../../core/utils/logger';
+import { filesystemLogger as logger } from '@core/utils/logger.js';
 
 /**
  * In-memory filesystem for testing using memfs.

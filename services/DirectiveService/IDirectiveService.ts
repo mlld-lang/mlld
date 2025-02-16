@@ -1,12 +1,12 @@
 import { DirectiveNode } from 'meld-spec';
-import { IStateService } from '../StateService/IStateService';
-import type { IValidationService } from '../ValidationService/IValidationService';
-import type { IPathService } from '../PathService/IPathService';
-import type { IFileSystemService } from '../FileSystemService/IFileSystemService';
-import type { IParserService } from '../ParserService/IParserService';
-import type { IInterpreterService } from '../InterpreterService/IInterpreterService';
-import type { ICircularityService } from '../CircularityService/ICircularityService';
-import type { IResolutionService } from '../ResolutionService/IResolutionService';
+import { IStateService } from '@services/StateService/IStateService.js';
+import type { IValidationService } from '@services/ValidationService/IValidationService.js';
+import type { IPathService } from '@services/PathService/IPathService.js';
+import type { IFileSystemService } from '@services/FileSystemService/IFileSystemService.js';
+import type { IParserService } from '@services/ParserService/IParserService.js';
+import type { IInterpreterService } from '@services/InterpreterService/IInterpreterService.js';
+import type { ICircularityService } from '@services/CircularityService/ICircularityService.js';
+import type { IResolutionService } from '@services/ResolutionService/IResolutionService.js';
 
 /**
  * Context for directive execution
@@ -94,7 +94,7 @@ export interface IDirectiveService {
    * Values in the directive will already be interpolated by meld-ast
    * @throws {MeldDirectiveError} If directive processing fails
    */
-  processDirective(node: DirectiveNode): Promise<void>;
+  processDirective(node: DirectiveNode, parentContext?: DirectiveContext): Promise<void>;
 
   /**
    * Process multiple directive nodes in sequence

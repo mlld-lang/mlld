@@ -21,6 +21,7 @@ export interface IStateService {
   // Commands
   getCommand(name: string): { command: string; options?: Record<string, unknown> } | undefined;
   setCommand(name: string, command: string | { command: string; options?: Record<string, unknown> }): void;
+  getAllCommands(): Map<string, { command: string; options?: Record<string, unknown> }>;
 
   // Nodes
   getNodes(): MeldNode[];

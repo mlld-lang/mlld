@@ -1,5 +1,5 @@
 import { beforeEach, afterEach, vi } from 'vitest';
-import { TestContext } from './utils';
+import { TestContext } from '@tests/utils/index.js';
 
 // Reset all mocks before each test
 beforeEach(() => {

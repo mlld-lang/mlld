@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { MemfsTestFileSystem } from '../MemfsTestFileSystem';
+import { MemfsTestFileSystem } from '@tests/utils/MemfsTestFileSystem.js';
 import * as path from 'path';
 
 describe('MemfsTestFileSystem', () => {

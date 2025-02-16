@@ -1,4 +1,4 @@
-import { ResolutionContext } from './IResolutionService';
+import { ResolutionContext } from './IResolutionService.js';
 
 /**
  * Factory for creating resolution contexts appropriate for different directives

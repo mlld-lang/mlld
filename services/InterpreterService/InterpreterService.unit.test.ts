@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, vi, Vi } from 'vitest';
-import { InterpreterService } from './InterpreterService';
-import { DirectiveService } from '../DirectiveService/DirectiveService';
-import { StateService } from '../StateService/StateService';
-import { MeldInterpreterError } from '../../core/errors/MeldInterpreterError';
-import { MeldNode, MeldDirective, MeldText } from '../../../core/types';
+import { InterpreterService } from './InterpreterService.js';
+import { DirectiveService } from '@services/DirectiveService/DirectiveService.js';
+import { StateService } from '@services/StateService/StateService.js';
+import { MeldInterpreterError } from '@core/errors/MeldInterpreterError.js';
+import { MeldNode, MeldDirective, MeldText } from '../../../core/types.js';
 
 // Mock dependencies
 vi.mock('../../DirectiveService/DirectiveService');
@@ -238,6 +238,106 @@ describe('InterpreterService Unit', () => {
         directiveNode,
         expect.objectContaining(options)
       );
+    });
+  });
+
+  describe('child context creation', () => {
+    it('creates child context with parent state', async () => {
+      const parentState = mockStateService;
+      const childState = await service.createChildContext(parentState);
+      expect(mockStateService.createChildState).toHaveBeenCalled();
+      expect(childState).toBeDefined();
+    });
+
+    it('sets file path in child context when provided', async () => {
+      const parentState = mockStateService;
+      const filePath = 'test.meld';
+      const childState = await service.createChildContext(parentState, filePath);
+      expect(mockChildState.setCurrentFilePath).toHaveBeenCalledWith(filePath);
+    });
+
+    it('handles errors in child context creation', async () => {
+      const parentState = mockStateService;
+      mockStateService.createChildState.mockImplementationOnce(() => {
+        throw new Error('Failed to create child state');
+      });
+
+      await expect(service.createChildContext(parentState)).rejects.toThrow(MeldInterpreterError);
+    });
+  });
+
+  describe('edge cases', () => {
+    it('handles empty node arrays', async () => {
+      const result = await service.interpret([]);
+      expect(result).toBeDefined();
+      expect(result.getNodes()).toHaveLength(0);
+    });
+
+    it('handles null/undefined nodes', async () => {
+      await expect(service.interpret(null as any)).rejects.toThrow('No nodes provided');
+      await expect(service.interpret(undefined as any)).rejects.toThrow('No nodes provided');
+    });
+
+    it('handles state initialization failures', async () => {
+      mockStateService.createChildState.mockImplementationOnce(() => {
+        throw new Error('State creation failed');
+      });
+
+      await expect(service.interpret([])).rejects.toThrow(MeldInterpreterError);
+    });
+
+    it('handles directive service initialization failures', async () => {
+      mockDirectiveService.processDirective.mockImplementationOnce(() => {
+        throw new Error('Directive processing failed');
+      });
+
+      const directiveNode = {
+        type: 'Directive',
+        directive: { kind: 'text', identifier: 'test', value: 'value' },
+        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 10 } }
+      };
+
+      await expect(service.interpret([directiveNode])).rejects.toThrow(MeldInterpreterError);
+    });
+
+    it('preserves node order in state', async () => {
+      const nodes = [
+        { type: 'Text', content: 'first', location: { line: 1, column: 1 } },
+        { type: 'Text', content: 'second', location: { line: 2, column: 1 } }
+      ];
+
+      const result = await service.interpret(nodes);
+      const resultNodes = result.getNodes();
+      expect(resultNodes).toHaveLength(2);
+      expect(resultNodes[0].type).toBe('Text');
+      expect((resultNodes[0] as any).content).toBe('first');
+      expect(resultNodes[1].type).toBe('Text');
+      expect((resultNodes[1] as any).content).toBe('second');
+    });
+
+    it('handles state rollback on partial failures', async () => {
+      const nodes = [
+        { type: 'Text', content: 'first', location: { line: 1, column: 1 } },
+        { 
+          type: 'Directive',
+          directive: { kind: 'text', identifier: 'test', value: 'value' },
+          location: { start: { line: 2, column: 1 }, end: { line: 2, column: 10 } }
+        },
+        { type: 'Text', content: 'third', location: { line: 3, column: 1 } }
+      ];
+
+      mockDirectiveService.processDirective.mockImplementationOnce(() => {
+        throw new Error('Directive processing failed');
+      });
+
+      try {
+        await service.interpret(nodes);
+        expect.fail('Should have thrown error');
+      } catch (error) {
+        expect(error).toBeInstanceOf(MeldInterpreterError);
+        const state = mockStateService.createChildState();
+        expect(state.getNodes()).toHaveLength(0);
+      }
     });
   });
 }); 

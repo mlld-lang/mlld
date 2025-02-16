@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { PathResolver } from './PathResolver';
-import { IStateService } from '../../StateService/IStateService';
-import { ResolutionContext } from '../IResolutionService';
-import { ResolutionError } from '../errors/ResolutionError';
+import { PathResolver } from './PathResolver.js';
+import { IStateService } from '@services/StateService/IStateService.js';
+import { ResolutionContext } from '@services/ResolutionService/IResolutionService.js';
+import { ResolutionError } from '@services/ResolutionService/errors/ResolutionError.js';
 import type { MeldNode, DirectiveNode, TextNode } from 'meld-spec';
 
 describe('PathResolver', () => {

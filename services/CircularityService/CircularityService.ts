@@ -1,6 +1,6 @@
-import { ICircularityService } from './ICircularityService';
-import { MeldImportError } from '../../core/errors/MeldImportError';
-import { importLogger as logger } from '../../core/utils/logger';
+import { ICircularityService } from './ICircularityService.js';
+import { MeldImportError } from '@core/errors/MeldImportError.js';
+import { importLogger as logger } from '@core/utils/logger.js';
 
 export class CircularityService implements ICircularityService {
   private importStack: string[] = [];

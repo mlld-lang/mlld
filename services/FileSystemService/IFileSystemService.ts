@@ -1,5 +1,5 @@
 import type { Stats } from 'fs';
-import { MemfsTestFileSystem } from '../../tests/utils/MemfsTestFileSystem';
+import { MemfsTestFileSystem } from '@tests/utils/MemfsTestFileSystem.js';
 
 export interface CommandResult {
   stdout: string;

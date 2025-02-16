@@ -17,7 +17,7 @@
       "@interpreter/*": ["interpreter/*"],
       "@output/*": ["output/*"],
       "@cli/*": ["cli/*"],
-      "@sdk/*": ["sdk/*"],
+      "@sdk/*": ["api/*"],
       "@tests/*": ["tests/*"]
     }
   },
@@ -28,7 +28,7 @@
     "interpreter/**/*",
     "output/**/*",
     "cli/**/*",
-    "sdk/**/*",
+    "api/**/*",
     "tests/**/*",
     "*.ts"
   ],

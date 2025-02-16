@@ -1,5 +1,5 @@
 import type { DirectiveNode, TextDirective } from 'meld-spec';
-import { MeldDirectiveError } from '../../../core/errors/MeldDirectiveError';
+import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
 
 /**
  * Validates @text directives according to spec

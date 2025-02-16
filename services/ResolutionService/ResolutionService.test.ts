@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { ResolutionService } from './ResolutionService';
-import { IStateService } from '../StateService/IStateService';
-import { IFileSystemService } from '../FileSystemService/IFileSystemService';
-import { IParserService } from '../ParserService/IParserService';
-import { ResolutionContext } from './IResolutionService';
-import { ResolutionError } from './errors/ResolutionError';
+import { ResolutionService } from './ResolutionService.js';
+import { IStateService } from '@services/StateService/IStateService.js';
+import { IFileSystemService } from '@services/FileSystemService/IFileSystemService.js';
+import { IParserService } from '@services/ParserService/IParserService.js';
+import { ResolutionContext } from './IResolutionService.js';
+import { ResolutionError } from './errors/ResolutionError.js';
 import type { MeldNode, DirectiveNode, TextNode } from 'meld-spec';
 
 // Mock the logger

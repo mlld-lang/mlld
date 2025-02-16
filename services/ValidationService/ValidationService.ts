@@ -1,13 +1,13 @@
 import type { DirectiveNode } from 'meld-spec';
-import { validationLogger as logger } from '../../core/utils/logger';
-import { IValidationService } from './IValidationService';
-import { MeldDirectiveError } from '../../core/errors/MeldDirectiveError';
+import { validationLogger as logger } from '@core/utils/logger.js';
+import { IValidationService } from './IValidationService.js';
+import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
 
 // Import default validators
-import { validateTextDirective } from './validators/TextDirectiveValidator';
-import { validateDataDirective } from './validators/DataDirectiveValidator';
-import { validateImportDirective } from './validators/ImportDirectiveValidator';
-import { validateEmbedDirective } from './validators/EmbedDirectiveValidator';
+import { validateTextDirective } from './validators/TextDirectiveValidator.js';
+import { validateDataDirective } from './validators/DataDirectiveValidator.js';
+import { validateImportDirective } from './validators/ImportDirectiveValidator.js';
+import { validateEmbedDirective } from './validators/EmbedDirectiveValidator.js';
 
 export class ValidationService implements IValidationService {
   private validators = new Map<string, (node: DirectiveNode) => Promise<void>>();

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { TestContext } from '../../tests/utils';
-import { MeldInterpreterError } from '../../core/errors/MeldInterpreterError';
+import { TestContext } from '@tests/utils/index.js';
+import { MeldInterpreterError } from '@core/errors/MeldInterpreterError.js';
 import type { TextNode } from 'meld-spec';
 
 describe('InterpreterService Integration', () => {
@@ -261,6 +261,81 @@ describe('InterpreterService Integration', () => {
       expect(resultNodes[1].type).toBe('Directive'); // import
       expect(resultNodes[2].type).toBe('Directive'); // sub (from import)
       expect(resultNodes[3].type).toBe('Directive'); // after
+    });
+  });
+
+  describe('AST structure handling', () => {
+    it('handles text directives with correct format', async () => {
+      const content = '@text greeting = "Hello"';
+      const nodes = await context.services.parser.parse(content);
+      const result = await context.services.interpreter.interpret(nodes);
+      expect(result.getTextVar('greeting')).toBe('Hello');
+    });
+
+    it('handles data directives with correct format', async () => {
+      const content = '@data count = 42';
+      const nodes = await context.services.parser.parse(content);
+      const result = await context.services.interpreter.interpret(nodes);
+      expect(result.getDataVar('count')).toBe(42);
+    });
+
+    it('handles path directives with correct format', async () => {
+      const content = '@path config = "$HOMEPATH/.config/settings.json"';
+      const nodes = await context.services.parser.parse(content);
+      const result = await context.services.interpreter.interpret(nodes);
+      const configPath = result.getTextVar('config');
+      expect(configPath).toContain('.config/settings.json');
+    });
+
+    it('handles complex directives with schema validation', async () => {
+      const content = '@data user : Person = { "name": "Alice", "age": 30 }';
+      const nodes = await context.services.parser.parse(content);
+      const result = await context.services.interpreter.interpret(nodes);
+      const user = result.getDataVar('user');
+      expect(user).toEqual({ name: 'Alice', age: 30 });
+    });
+
+    it('maintains correct node order with mixed content', async () => {
+      const content = `
+# Title
+@text greeting = "Hello"
+Some text
+@data count = 42
+\`\`\`
+code block
+\`\`\`
+@path config = "$HOMEPATH/config.json"
+`;
+      const nodes = await context.services.parser.parse(content);
+      const result = await context.services.interpreter.interpret(nodes);
+      const resultNodes = result.getNodes();
+      
+      // Verify node order and types
+      expect(resultNodes[0].type).toBe('Text'); // # Title
+      expect(resultNodes[1].type).toBe('Directive'); // @text
+      expect(resultNodes[2].type).toBe('Text'); // Some text
+      expect(resultNodes[3].type).toBe('Directive'); // @data
+      expect(resultNodes[4].type).toBe('CodeFence'); // code block
+      expect(resultNodes[5].type).toBe('Directive'); // @path
+    });
+
+    it('handles nested directive values correctly', async () => {
+      const content = `
+@text name = "Alice"
+@text greeting = "Hello \${name}"
+@data config = {
+  "user": "\${name}",
+  "message": "\${greeting}"
+}`;
+      const nodes = await context.services.parser.parse(content);
+      const result = await context.services.interpreter.interpret(nodes);
+      
+      expect(result.getTextVar('name')).toBe('Alice');
+      expect(result.getTextVar('greeting')).toBe('Hello Alice');
+      expect(result.getDataVar('config')).toEqual({
+        user: 'Alice',
+        message: 'Hello Alice'
+      });
     });
   });
 }); 

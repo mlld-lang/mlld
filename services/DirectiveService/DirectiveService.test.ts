@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from 'vitest';
-import { DirectiveService } from './DirectiveService';
-import { TestContext } from '../../tests/utils/TestContext';
-import type { ILogger } from './handlers/execution/EmbedDirectiveHandler';
+import { DirectiveService } from './DirectiveService.js';
+import { TestContext } from '@tests/utils/TestContext.js';
+import type { ILogger } from './handlers/execution/EmbedDirectiveHandler.js';
 
 // Mock the logger
 const mockLogger: ILogger = {
@@ -34,17 +34,17 @@ import {
   createMockInterpreterService,
   createMockPathService
 } from '../../tests/utils/testFactories';
-import { DirectiveError, DirectiveErrorCode } from './errors/DirectiveError';
-import type { DirectiveNode, DirectiveKind, MeldNode } from '../../node_modules/meld-spec/dist/types';
-import type { IValidationService } from '../ValidationService/IValidationService';
-import type { IResolutionService, ResolutionContext } from '../ResolutionService/IResolutionService';
-import type { IStateService } from '../StateService/IStateService';
-import type { ICircularityService } from '../CircularityService/ICircularityService';
-import type { IFileSystemService } from '../FileSystemService/IFileSystemService';
-import type { IParserService } from '../ParserService/IParserService';
-import type { IInterpreterService, InterpreterOptions } from '../InterpreterService/IInterpreterService';
-import type { IPathService, PathOptions } from '../PathService/IPathService';
-import type { IDirectiveService } from './IDirectiveService';
+import { DirectiveError, DirectiveErrorCode } from './errors/DirectiveError.js';
+import type { DirectiveNode, DirectiveKind, MeldNode } from '../../node_modules/meld-spec/dist/types.js';
+import type { IValidationService } from '@services/ValidationService/IValidationService.js';
+import type { IResolutionService, ResolutionContext } from '@services/ResolutionService/IResolutionService.js';
+import type { IStateService } from '@services/StateService/IStateService.js';
+import type { ICircularityService } from '@services/CircularityService/ICircularityService.js';
+import type { IFileSystemService } from '@services/FileSystemService/IFileSystemService.js';
+import type { IParserService } from '@services/ParserService/IParserService.js';
+import type { IInterpreterService, InterpreterOptions } from '@services/InterpreterService/IInterpreterService.js';
+import type { IPathService, PathOptions } from '@services/PathService/IPathService.js';
+import type { IDirectiveService } from './IDirectiveService.js';
 
 describe('DirectiveService', () => {
   let testContext: TestContext;

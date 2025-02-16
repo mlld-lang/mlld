@@ -1,13 +1,13 @@
-import { IStateService } from '../StateService/IStateService';
-import { IResolutionService, ResolutionContext, ResolutionErrorCode } from './IResolutionService';
-import { ResolutionError } from './errors/ResolutionError';
-import { TextResolver } from './resolvers/TextResolver';
-import { DataResolver } from './resolvers/DataResolver';
-import { PathResolver } from './resolvers/PathResolver';
-import { CommandResolver } from './resolvers/CommandResolver';
-import { resolutionLogger as logger } from '../../core/utils/logger';
-import { IFileSystemService } from '../FileSystemService/IFileSystemService';
-import { IParserService } from '../ParserService/IParserService';
+import { IStateService } from '@services/StateService/IStateService.js';
+import { IResolutionService, ResolutionContext, ResolutionErrorCode } from './IResolutionService.js';
+import { ResolutionError } from './errors/ResolutionError.js';
+import { TextResolver } from './resolvers/TextResolver.js';
+import { DataResolver } from './resolvers/DataResolver.js';
+import { PathResolver } from './resolvers/PathResolver.js';
+import { CommandResolver } from './resolvers/CommandResolver.js';
+import { resolutionLogger as logger } from '@core/utils/logger.js';
+import { IFileSystemService } from '@services/FileSystemService/IFileSystemService.js';
+import { IParserService } from '@services/ParserService/IParserService.js';
 import type { MeldNode, DirectiveNode, TextNode, DirectiveKind } from 'meld-spec';
 
 /**

@@ -1,5 +1,5 @@
 import { DirectiveNode } from 'meld-spec';
-import { DirectiveContext } from '../IDirectiveService';
+import { DirectiveContext } from '@services/DirectiveService/IDirectiveService.js';
 
 /**
  * Error codes for directive failures

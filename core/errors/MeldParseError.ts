@@ -1,4 +1,4 @@
-import type { Location, Position } from '../types';
+import type { Location, Position } from '@core/types.js';
 
 /**
  * Error thrown when parsing Meld content fails

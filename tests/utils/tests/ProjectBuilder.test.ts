@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { ProjectBuilder } from '../ProjectBuilder';
-import { MemfsTestFileSystem } from '../MemfsTestFileSystem';
+import { ProjectBuilder } from '@tests/utils/ProjectBuilder.js';
+import { MemfsTestFileSystem } from '@tests/utils/MemfsTestFileSystem.js';
 
 describe('ProjectBuilder', () => {
   let fs: MemfsTestFileSystem;

@@ -11,17 +11,17 @@ vi.mock('../../../../core/utils/logger', () => ({
 }));
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import type { DirectiveNode, DirectiveData } from '../../../../node_modules/meld-spec/dist/types';
-import { EmbedDirectiveHandler, type ILogger } from './EmbedDirectiveHandler';
-import type { IValidationService } from '../../../ValidationService/IValidationService';
-import type { IResolutionService } from '../../../ResolutionService/IResolutionService';
-import type { IStateService } from '../../../StateService/IStateService';
-import type { ICircularityService } from '../../../CircularityService/ICircularityService';
-import type { IFileSystemService } from '../../../FileSystemService/IFileSystemService';
-import type { IParserService } from '../../../ParserService/IParserService';
-import type { IInterpreterService } from '../../../InterpreterService/IInterpreterService';
-import { DirectiveError, DirectiveErrorCode } from '../../errors/DirectiveError';
-import { createLocation, createEmbedDirective } from '../../../../tests/utils/testFactories';
+import type { DirectiveNode, DirectiveData } from '../../../../node_modules/meld-spec/dist/types.js';
+import { EmbedDirectiveHandler, type ILogger } from './EmbedDirectiveHandler.js';
+import type { IValidationService } from '@services/ValidationService/IValidationService.js';
+import type { IResolutionService } from '@services/ResolutionService/IResolutionService.js';
+import type { IStateService } from '@services/StateService/IStateService.js';
+import type { ICircularityService } from '@services/CircularityService/ICircularityService.js';
+import type { IFileSystemService } from '@services/FileSystemService/IFileSystemService.js';
+import type { IParserService } from '@services/ParserService/IParserService.js';
+import type { IInterpreterService } from '@services/InterpreterService/IInterpreterService.js';
+import { DirectiveError, DirectiveErrorCode } from '@services/DirectiveService/errors/DirectiveError.js';
+import { createLocation, createEmbedDirective } from '@tests/utils/testFactories.js';
 
 interface EmbedDirective extends DirectiveData {
   kind: 'embed';

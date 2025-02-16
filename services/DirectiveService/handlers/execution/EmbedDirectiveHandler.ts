@@ -1,14 +1,14 @@
 import { DirectiveNode, EmbedDirective } from 'meld-spec';
-import { IDirectiveHandler, DirectiveContext } from '../../IDirectiveService';
-import { IValidationService } from '../../../ValidationService/IValidationService';
-import { IResolutionService } from '../../../ResolutionService/IResolutionService';
-import { IStateService } from '../../../StateService/IStateService';
-import { ICircularityService } from '../../../CircularityService/ICircularityService';
-import { IFileSystemService } from '../../../FileSystemService/IFileSystemService';
-import { IParserService } from '../../../ParserService/IParserService';
-import { IInterpreterService } from '../../../InterpreterService/IInterpreterService';
-import { DirectiveError, DirectiveErrorCode } from '../../errors/DirectiveError';
-import { embedLogger } from '../../../../core/utils/logger';
+import { IDirectiveHandler, DirectiveContext } from '@services/DirectiveService/IDirectiveService.js';
+import { IValidationService } from '@services/ValidationService/IValidationService.js';
+import { IResolutionService } from '@services/ResolutionService/IResolutionService.js';
+import { IStateService } from '@services/StateService/IStateService.js';
+import { ICircularityService } from '@services/CircularityService/ICircularityService.js';
+import { IFileSystemService } from '@services/FileSystemService/IFileSystemService.js';
+import { IParserService } from '@services/ParserService/IParserService.js';
+import { IInterpreterService } from '@services/InterpreterService/IInterpreterService.js';
+import { DirectiveError, DirectiveErrorCode } from '@services/DirectiveService/errors/DirectiveError.js';
+import { embedLogger } from '@core/utils/logger.js';
 
 export interface ILogger {
   debug: (message: string, ...args: any[]) => void;

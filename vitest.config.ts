@@ -1,7 +1,9 @@
 import { defineConfig } from 'vitest/config';
 import { resolve } from 'path';
+import tsconfigPaths from 'vite-tsconfig-paths';
 
 export default defineConfig({
+  plugins: [tsconfigPaths()],
   test: {
     setupFiles: ['tests/setup.ts'],
     environment: 'node',
@@ -29,8 +31,8 @@ export default defineConfig({
       '@cli': resolve(__dirname, './cli'),
       '@sdk': resolve(__dirname, './sdk'),
       '@tests': resolve(__dirname, './tests'),
-      'meld-ast': resolve(__dirname, './tests/__mocks__/meld-ast.ts'),
-      'meld-spec': resolve(__dirname, './tests/__mocks__/meld-spec.ts')
+      'meld-spec': resolve(__dirname, './tests/__mocks__/meld-spec.ts'),
+      'meld-ast': resolve(__dirname, 'node_modules/meld-ast/dist/esm/index.js')
     }
   }
 }); 

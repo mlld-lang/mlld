@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { FixtureManager, FileSystem } from '../FixtureManager';
+import { FixtureManager, FileSystem } from '@tests/utils/FixtureManager.js';
 import path from 'path';
 
 describe('FixtureManager', () => {

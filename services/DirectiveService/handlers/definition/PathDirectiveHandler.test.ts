@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { PathDirectiveHandler } from './PathDirectiveHandler';
-import { createPathDirective, createLocation } from '../../../../tests/utils/testFactories';
-import type { IValidationService } from '../../../ValidationService/IValidationService';
-import type { IStateService } from '../../../StateService/IStateService';
-import type { IResolutionService } from '../../../ResolutionService/IResolutionService';
-import type { DirectiveNode } from '../../../../node_modules/meld-spec/dist/types';
-import { DirectiveError } from '../../errors/DirectiveError';
+import { PathDirectiveHandler } from './PathDirectiveHandler.js';
+import { createPathDirective, createLocation } from '@tests/utils/testFactories.js';
+import type { IValidationService } from '@services/ValidationService/IValidationService.js';
+import type { IStateService } from '@services/StateService/IStateService.js';
+import type { IResolutionService } from '@services/ResolutionService/IResolutionService.js';
+import type { DirectiveNode } from '../../../../node_modules/meld-spec/dist/types.js';
+import { DirectiveError } from '@services/DirectiveService/errors/DirectiveError.js';
 
 describe('PathDirectiveHandler', () => {
   let handler: PathDirectiveHandler;

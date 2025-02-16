@@ -1,9 +1,9 @@
 import { vi, beforeEach } from 'vitest';
 import type { DirectiveNode, MeldNode } from 'meld-spec';
-import { InterpreterState } from '../../_old/src/interpreter/state/state';
-import { ErrorFactory } from '../../_old/src/interpreter/errors/factory';
-import { HandlerContext } from '../../_old/src/interpreter/directives/types';
-import { embedDirectiveHandler, importDirectiveHandler } from './directive-handlers';
+import { InterpreterState } from '../../_old/src/interpreter/state/state.js';
+import { ErrorFactory } from '../../_old/src/interpreter/errors/factory.js';
+import { HandlerContext } from '../../_old/src/interpreter/directives/types.js';
+import { embedDirectiveHandler, importDirectiveHandler } from './directive-handlers.js';
 
 // Mock file system state
 const mockFiles: Record<string, string> = {};

@@ -1,5 +1,5 @@
 import type { DirectiveNode } from 'meld-spec';
-import { MeldDirectiveError } from '../../../core/errors/MeldDirectiveError';
+import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
 
 /**
  * Validates fuzzy matching threshold values in directives that support them.

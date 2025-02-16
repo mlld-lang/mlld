@@ -1,6 +1,6 @@
 import type { MeldNode } from 'meld-spec';
-import type { IStateService } from '../StateService/IStateService';
-import type { IDirectiveService } from '../DirectiveService/IDirectiveService';
+import type { IStateService } from '@services/StateService/IStateService.js';
+import type { IDirectiveService } from '@services/DirectiveService/IDirectiveService.js';
 
 export interface InterpreterOptions {
   /**
