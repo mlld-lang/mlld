@@ -1,157 +1,308 @@
-# Meld Architecture Documentation
+# Meld Architecture
 
-## Overview
+───────────────────────────────────────────────────────────
+1. INTRODUCTION
+───────────────────────────────────────────────────────────
 
-Meld is a powerful document processing system that combines markdown content with directives for dynamic content generation. It uses llmxml for markdown processing and section extraction, providing robust support for both LLM-friendly XML output and standard markdown.
+Meld is a specialized, directive-based scripting language designed for embedding small “@directives” inside an otherwise plain text (e.g., Markdown-like) document. The code in this repository implements:
 
-## Core Components
+• Meld grammar rules and token types (e.g., text directives, path directives, data directives).  
+• The parsing layer that converts Meld content into an AST (Abstract Syntax Tree).  
+• A directive interpretation layer that processes these AST nodes and manipulates internal “states” to store variables and more.  
+• A resolution layer to handle variable references, path expansions, data manipulations, etc.  
+• Testing utilities and an in-memory FS (memfs) to simulate filesystems for thorough testing.  
 
-### Converter
-The converter module handles transformation between formats:
-- Uses llmxml as the core library for markdown processing
-- Provides markdown ↔ XML conversion
-- Supports basic section extraction with fuzzy matching
-- Implements error handling with typed errors
+The main idea:  
+1. Meld code is parsed to an AST.  
+2. Each directive node is validated and interpreted, updating a shared “state” (variables, data structures, commands, etc.).  
+3. Optional transformations (e.g., output formatting) generate final representations (Markdown, LLM-friendly XML, etc.).  
 
-The XML format currently supports:
-```xml
-<code language="language-name">
-  Code content here
-</code>
+Below is an overview of the directory and service-level architecture, referencing code from this codebase.
 
-<directive kind="directive-name">
-</directive>
-```
+───────────────────────────────────────────────────────────
+2. DIRECTORY & FILE STRUCTURE
+───────────────────────────────────────────────────────────
 
-Key features of the XML format:
-- Basic structural elements for code and directives
-- Language attribution for code blocks
-- Directive type preservation
-- Plain text content handling
+At a high level, the project is arranged as follows (select key entries included):
 
-```
-   +----------------+        +----------------+
-   |    Markdown    |  --->  |      XML      |
-   |    Content     |  <---  |    Content    |
-   +----------------+        +----------------+
-           |                        |
-           |        llmxml          |
-           +----------------------->+
-           |                       |
-           +<----------------------+
-```
+project-root/  
+ ├─ services/  
+ │   ├─ PathService/  
+ │   ├─ FileSystemService/  
+ │   ├─ CircularityService/  
+ │   ├─ ValidationService/  
+ │   ├─ StateService/  
+ │   ├─ InterpolationService/ (in code: “ResolutionService/” covers interpolation, variable resolution, etc.)  
+ │   ├─ DirectiveService/  
+ │   ├─ ParserService/  
+ │   ├─ InterpreterService/  
+ │   ├─ OutputService/  
+ │   └─ …  
+ ├─ tests/  
+ │   ├─ integration/  
+ │   ├─ unit/  
+ │   ├─ fixtures/  
+ │   ├─ utils/  ← Contains MemfsTestFileSystem.ts, ProjectBuilder.ts, TestContext.ts, etc.  
+ │   └─ …  
+ ├─ parser/  
+ │   └─ ParserService.ts  ← Wraps meld-ast parsing  
+ ├─ interpreter/  
+ │   └─ InterpreterService.ts ← Orchestrates main interpretation pipeline  
+ ├─ output/  
+ │   └─ OutputService.ts  ← For final format conversions to Markdown, LLM XML, etc.  
+ ├─ cli/  
+ │   └─ CLIService.ts     ← Command-line interface logic  
+ ├─ sdk/  
+ │   └─ index.ts          ← High-level API (runMeld, parseMeld, etc.)  
+ ├─ core/  
+ │   ├─ errors/  
+ │   ├─ config/  
+ │   ├─ types/  
+ │   └─ utils/            ← Logging, basic utility modules  
+ ├─ MeldDirectiveError.ts, MeldError.ts, etc.  ← Central error classes  
+ └─ package.json  
 
-### Directives
-Directives are special commands that modify or generate content:
+Key subfolders:  
+• services/: Each major feature or subsystem is placed in a dedicated subfolder, with a main service class and possibly test code in the tests subfolder.  
+• tests/utils/: The fixture manager, memfs-based filesystem, test contexts, and snapshot-based testing approach all live here.  
+• parser/, interpreter/, output/, etc.: May contain top-level classes that create or coordinate the underlying service classes.  
 
-#### @embed
-- Includes external file content
-- Supports section extraction with fuzzy matching
-- Handles nested content
-- Example: `@embed [file.md # Section Name >> fuzzy=0.7]`
+───────────────────────────────────────────────────────────
+3. CORE LIBRARIES & THEIR ROLE
+───────────────────────────────────────────────────────────
 
-#### @import
-- Imports and processes Meld files
-- Merges state into current context
-- Example: `@import path/to/file.meld`
+1) meld-ast (Inlined or Imported)  
+   • parse(content: string): MeldNode[]  
+   • Basic parsing that identifies directives vs. text nodes.  
+   • Produces an AST which other services manipulate.  
 
-#### @define
-- Creates reusable variables
-- Example: `@define name = value`
+2) llmxml (Inlined or a utility)  
+   • Converts content to an LLM-friendly XML format or can parse partially.  
+   • OutputService may call it if user requests “llm” format.  
 
-### Interpreter
-The interpreter processes Meld content:
-1. Parses directives and content
-2. Executes directives in order
-3. Maintains state
-4. Handles errors and logging
+3) meld-spec (In code, references the grammar rules, directive structures, etc.)  
+   • Contains interface definitions for MeldNode, DirectiveNode, TextNode, etc.  
+   • Contains directive kind enumerations.  
 
-## Error Handling
+───────────────────────────────────────────────────────────
+4. HIGH-LEVEL FLOW
+───────────────────────────────────────────────────────────
 
-### Converter Errors
-The system implements basic error handling:
-- PARSE_ERROR: Indicates markdown parsing failures
-- INVALID_FORMAT: Reports structural issues
-- SECTION_NOT_FOUND: Occurs when section extraction fails
-- INVALID_LEVEL: Reports issues with heading levels
-- INVALID_SECTION_OPTIONS: Indicates problems with extraction options
+Below is a simplified flow of how Meld content is processed:
 
-Each error includes:
-- Specific error code
-- Error message
-- Basic error details when available
+   ┌─────────────────────────────┐
+   │   Meld Source Document      │
+   └─────────────────────────────┘
+                │
+                ▼
+   ┌─────────────────────────────┐
+   │ ParserService.parse(...)    │
+   │   → uses meld-ast to parse  │
+   └─────────────────────────────┘
+                │ AST (MeldNode[])
+                ▼
+   ┌─────────────────────────────────────────────────┐
+   │ InterpreterService.interpret(nodes, options)   │
+   │   → For each node, pass to DirectiveService     │
+   └─────────────────────────────────────────────────┘
+                │
+                ▼
+   ┌──────────────────────────────────────────┐
+   │ DirectiveService                        │
+   │   → For each directive, route to        │
+   │     the correct directive handler       │
+   └──────────────────────────────────────────┘
+                │
+                ▼
+   ┌───────────────────────────────────────────────┐
+   │ StateService + ResolutionService + Others    │
+   │   → Where variables are stored/resolved      │
+   │   → Path expansions, data lookups, etc.      │
+   └───────────────────────────────────────────────┘
+                │
+                ▼
+   ┌──────────────────────────────────────────┐
+   │ OutputService (optional)                │
+   │   → Convert final AST/State to markdown,│
+   │     LLM XML, or other formats.          │
+   └──────────────────────────────────────────┘
 
-### Directive Errors
-- File not found
-- Permission denied
-- Invalid syntax
-- Circular references
-- Section extraction failures
+───────────────────────────────────────────────────────────
+5. MAJOR SERVICES (OVERVIEW)
+───────────────────────────────────────────────────────────
 
-### State Errors
-- Invalid variable names
-- Type mismatches
-- Undefined references
+Below are the key “services” in the codebase. Each follows the single responsibility principle:
 
-## Logging
-- Structured logging with winston
-- Debug-level content tracking
-- Error reporting with context
-- Performance metrics
+1) ParserService  
+   – Wraps the meld-ast parse(content) function.  
+   – Possibly merges location info with file paths (parseWithLocations).  
+   – Produces an array of MeldNode objects.
 
-## File Processing
+2) DirectiveService  
+   – Routes directives to the correct directive handler (e.g., text, data, import, embed).  
+   – Validates each directive using ValidationService.  
+   – Calls ResolutionService for variable resolution as needed.  
+   – Updates StateService with results of directive execution (e.g., setting text or data variables).  
 
-### Content Types
-- Markdown (.md)
-- Meld files (.meld)
-- Text files (.txt)
-- Other supported formats
+3) InterpreterService  
+   – Orchestrates the main interpret(nodes) pipeline.  
+   – For each AST node:
+       a) If it’s text, store it or pass it along.  
+       b) If it’s a directive, calls DirectiveService.  
+   – Maintains the top-level process flow.
 
-### Section Extraction
-Section extraction provides:
-- Basic fuzzy matching for headings
-- Configurable threshold
-- Optional nested section inclusion
-- Simple error reporting
+4) StateService  
+   – Stores variables in maps:
+       • textVars (for @text),  
+       • dataVars (for @data),  
+       • pathVars (for @path),  
+       • commands (for @define or custom commands).  
+   – Also tracks a list of MeldNodes that represent the final structure.  
+   – Provides child states for nested imports or embedded content.  
+   – Has immutability toggles to freeze the state after finalization.  
 
-Example section extraction:
-```
-@embed [file.md # Setup Guide >> fuzzy=0.9]  // Custom threshold
-@embed [file.md # Getting Started]           // Default threshold
-```
+5) ResolutionService  
+   – Central logic for variable interpolation:
+       • Text variables (“${var}”),  
+       • Data references (“#{data.field}”),  
+       • Path expansions (“$HOMEPATH/path”, etc.),  
+       • Command references.  
+   – Offers context-based resolution (some directives disallow data variables, etc.).  
+   – Checks for circular references via CircularityService.  
+   – Ties in with the parser to parse sub-fragments that contain variables.
 
-The matching system:
-- Supports basic fuzzy matching
-- Uses configurable thresholds
-- Allows nested section inclusion
+6) CircularityService  
+   – Tracks imports to prevent infinite loops (A imports B, B imports A).  
+   – Also helps detect variable-based circular references in advanced usage.
 
-## State Management
-- Variable tracking
-- Content accumulation
-- Directive results
-- Error context
+7) PathService  
+   – Focuses on validating and normalizing paths.  
+   – Checks absolute vs. relative, ensures no disallowed “..”, etc.  
 
-## Testing
-- Unit tests for components
-- Integration tests for directives
-- Format conversion tests
-- Error handling coverage
-- Section extraction verification
+8) ValidationService  
+   – Houses validators for directives: @text, @data, @import, @embed, etc.  
+   – Each directive has a corresponding validator function.  
+   – Throws MeldDirectiveError if validation fails.  
 
-## Security
-- Path validation
-- Permission checks
-- Content validation
-- Error isolation
+9) FileSystemService  
+   – Abstracts file operations (read, write), used by the code to avoid direct fs calls.  
+   – Possibly uses MemfsTestFileSystem in test mode.  
 
-## Performance
-- Async file operations
-- Efficient content processing
-- Minimal memory usage
-- Caching where appropriate
+10) OutputService  
+   – Takes final AST plus a state, converts to desired format (markdown or llm).  
+   – Potentially calls llmxml to produce LLM-friendly XML.  
 
-## References
-- [CLI Documentation](../src/cli/__docs__/CLI.md)
-- [Interpreter Documentation](../src/interpreter/__docs__/README.md)
-- [Converter Documentation](../src/converter/__docs__/CONVERTER.md)
-- [Directive Documentation](../src/interpreter/directives/__docs__/DIRECTIVES.md) 
+───────────────────────────────────────────────────────────
+6. TESTING INFRASTRUCTURE
+───────────────────────────────────────────────────────────
+
+All tests are heavily reliant on a memory-based filesystem (memfs) for isolation and speed. The major testing utilities include:
+
+1) MemfsTestFileSystem  
+   – Thin wrapper around memfs.  
+   – Offers readFile, writeFile, mkdir, etc. with in-memory data.  
+   – Provides an ephemeral environment for all test IO.  
+
+2) TestContext  
+   – Central test harness that creates a new MemfsTestFileSystem, plus references to all major services (ParserService, DirectiveService, etc.).  
+   – Allows writing files, snapshotting the FS, and comparing.  
+
+3) TestSnapshot  
+   – Takes “snapshots” of the current Memfs FS, storing a Map<filePath, content>.  
+   – Compares snapshots to detect added/removed/modified files.  
+
+4) ProjectBuilder  
+   – Creates mock “projects” in the in-memory FS (e.g., directories and files) from a JSON structure.  
+   – Useful for complex, multi-file tests or large fixture-based testing.  
+
+Testing Approach Summarized:
+• Each test either uses a fresh TestContext or recreates MemfsTestFileSystem.  
+• The test can write files, run the Meld interpreter pipeline, then assert results.  
+• Snapshots can be used to see exactly which files changed.  
+
+───────────────────────────────────────────────────────────
+7. DETAILED ASCII SERVICE RELATION
+───────────────────────────────────────────────────────────
+
+Below is a more expanded ASCII diagram showing services with references:
+
+                                 +---------------------+
+                                 |    ParserService    |
+                                 | meld-ast parsing    |
+                                 +----------+----------+
+                                            |
+                                            v
+ +------------+                 +---------------------+
+ | Circularity|  <----------->  |  ResolutionService  |
+ |  Service   |                 |(also does variable, |
+ +------------+                 | path, data resol.)  |
+                                            |
+                                            v
+ +------------+  +---------------------+  +-----------+
+ | Validation|-> | DirectiveService   |->|StateService|
+ +------------+  +---------+-----------+  +-----------+
+                              |   |
+                              v   v
+                   +---------------+--------------+
+                   |   Handler(s): text, data,   |
+                   |   embed, import, etc.       |
+                   +---------------+--------------+
+                                   |
+                                   v
+                        +---------------------+
+                        | InterpreterService |
+                        +---------------------+
+                                   |
+                                   v
+                        +---------------------+
+                        | OutputService (opt)|
+                        +---------------------+
+
+Key relationships:
+• InterpreterService orchestrates directives → DirectiveService → uses Validation & Resolution.  
+• ResolutionService consults CircularityService for import cycles, etc.  
+• DirectiveService updates or reads from StateService.  
+
+───────────────────────────────────────────────────────────
+8. EXAMPLE USAGE SCENARIO
+───────────────────────────────────────────────────────────
+
+1) Input: A .meld file with lines like:  
+   @text greeting = "Hello"  
+   @data config = { "value": 123 }  
+   @import [ path = "other.meld" ]  
+
+2) We load the file from disk.  
+3) ParserService → parse the content → AST.  
+4) InterpreterService → interpret(AST).  
+   a) For each directive, DirectiveService → validation → resolution → update StateService.  
+   b) If an import is encountered, CircularityService ensures no infinite loops.  
+5) Once done, the final StateService has textVars.greeting = "Hello", dataVars.config = { value: 123 }, etc.  
+6) OutputService can generate the final text or an LLM-XML representation.  
+
+───────────────────────────────────────────────────────────
+9. ERROR HANDLING
+───────────────────────────────────────────────────────────
+
+• MeldDirectiveError thrown if a directive fails validation or interpretation.  
+• MeldParseError if the parser cannot parse content.  
+• PathValidationError for invalid paths.  
+• ResolutionError for variable resolution issues.  
+• MeldError as a base class for other specialized errors.  
+
+These errors typically bubble up to the caller or test.  
+
+───────────────────────────────────────────────────────────
+10. CONCLUSION
+───────────────────────────────────────────────────────────
+
+This codebase implements the entire Meld language pipeline:  
+• Parsing Meld documents into an AST.  
+• Validating & interpreting directives.  
+• Storing data in a hierarchical state.  
+• Resolving references (text, data, paths, commands).  
+• (Optionally) generating final formatted output.  
+
+Plus, it has a robust test environment with an in-memory FS, snapshots, and a test harness (TestContext) for integration and unit tests. Everything is layered to keep parsing, state management, directive logic, and resolution separate, adhering to SOLID design principles.  
+
+The ASCII diagrams, modules, and file references in this overview represent the CURRENT code as it is: multiple specialized services collaborating to parse and interpret Meld scripts thoroughly—test coverage is facilitated by the in-memory mocking and snapshot-based verification.

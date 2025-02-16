@@ -16,8 +16,8 @@ interface ParseError {
 
 export class ParserService implements IParserService {
   private async parseContent(content: string): Promise<MeldNode[]> {
-    // Cast the result to MeldNode[] since we know the structure matches
-    return parse(content) as unknown as MeldNode[];
+    // Enable location tracking via a type-cast
+    return (parse as any)(content, { locations: true }) as unknown as MeldNode[];
   }
 
   async parse(content: string): Promise<MeldNode[]> {
@@ -29,34 +29,45 @@ export class ParserService implements IParserService {
       logger.debug('Parsing Meld content', { contentLength: content.length });
       const nodes = await this.parseContent(content);
       logger.debug('Successfully parsed content', { nodeCount: nodes?.length ?? 0 });
-      return nodes ?? [];
+      // Map each node to ensure it has default location data if missing
+      const nodesWithLocations = (nodes ?? []).map(node => this.addDefaultLocation(node));
+      return nodesWithLocations;
     } catch (error) {
       logger.error('Failed to parse content', { error });
       
       if (error instanceof MeldParseError) {
-        throw error;
+        const defaultLocation = { start: { line: 1, column: 1 }, end: { line: 1, column: content.length || 1 } };
+        let loc = error.location;
+        if (!loc || !loc.start || loc.start.line == null || loc.start.column == null || !loc.end || loc.end.line == null || loc.end.column == null) {
+          loc = defaultLocation;
+        }
+        throw new MeldParseError(error.message, loc);
       }
       
-      // Convert meld-ast ParseError to our MeldParseError
       if (this.isParseError(error)) {
-        const position: Position = {
-          line: error.location.start.line,
-          column: error.location.start.column
-        };
-        const meldError = new MeldParseError(error.message, position);
-        // Ensure proper prototype chain for instanceof checks
+        const pos = (error.location && error.location.start) ? error.location.start : { line: 1, column: 1 };
+        const meldError = new MeldParseError(error.message, pos);
         Object.setPrototypeOf(meldError, MeldParseError.prototype);
         throw meldError;
       }
       
-      // Wrap unknown errors in MeldParseError
       const message = error instanceof Error ? error.message : 'Unknown error';
-      const position: Position = { line: 1, column: 1 };
-      const meldError = new MeldParseError(message, position);
-      // Ensure proper prototype chain for instanceof checks
+      const meldError = new MeldParseError(message, { line: 1, column: 1 });
       Object.setPrototypeOf(meldError, MeldParseError.prototype);
       throw meldError;
     }
+  }
+
+  // Add default location to a node if missing. For successful parse, we set default location as { start: {1,1}, end: {1,1} }.
+  private addDefaultLocation(node: MeldNode): MeldNode {
+    if (!node.location ||
+        typeof node.location.start.line !== 'number' ||
+        typeof node.location.start.column !== 'number' ||
+        typeof node.location.end.line !== 'number' ||
+        typeof node.location.end.column !== 'number') {
+      return { ...node, location: { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } } };
+    }
+    return node;
   }
 
   async parseWithLocations(content: string, filePath?: string): Promise<MeldNode[]> {
@@ -66,35 +77,27 @@ export class ParserService implements IParserService {
         filePath 
       });
 
-      // Parse using base method first
       const nodes = await this.parse(content);
-      
-      // Only add filePath to existing locations by creating new location objects
       if (filePath) {
         return nodes.map(node => {
-          if (!node?.location) return node;
-          return {
-            ...node,
-            location: {
-              start: node.location.start,
-              end: node.location.end,
-              filePath
-            }
-          };
+          if (node.location) {
+            return { ...node, location: { ...node.location, filePath } };
+          } else {
+            return node;
+          }
         });
       }
-
+      
       logger.debug('Successfully added locations', { nodeCount: nodes?.length ?? 0 });
       return nodes;
     } catch (error) {
-      // Create new error with location instead of modifying existing
       if (error instanceof MeldParseError) {
-        const location: Location = {
-          start: error.location?.start ?? { line: 1, column: 1 },
-          end: error.location?.end ?? { line: 1, column: 1 },
-          filePath
-        };
-        throw new MeldParseError(error.message, location);
+        const defaultLocation = { start: { line: 1, column: 1 }, end: { line: 1, column: content.length || 1 } };
+        let loc = error.location;
+        if (!loc || !loc.start || loc.start.line == null || loc.start.column == null || !loc.end || loc.end.line == null || loc.end.column == null) {
+          loc = { ...defaultLocation, filePath };
+        }
+        throw new MeldParseError(error.message, loc);
       }
       throw error;
     }

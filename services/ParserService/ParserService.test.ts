@@ -55,8 +55,8 @@ describe('ParserService', () => {
       const content = 'Hello world';
       const mockResult: MeldNode[] = [{
         type: 'Text',
-        content: 'Hello world\n',
-        location: createTestLocation(undefined, undefined, undefined, undefined)
+        content: 'Hello world',
+        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 12 } }
       } as unknown as TextNode];
 
       const result = await service.parse(content);
@@ -73,7 +73,7 @@ describe('ParserService', () => {
           source: 'literal',
           value: 'Hello'
         },
-        location: createTestLocation(undefined, undefined, undefined, undefined)
+        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 23 } }
       } as unknown as DirectiveNode];
 
       const result = await service.parse(content);
@@ -86,7 +86,7 @@ describe('ParserService', () => {
         {
           type: 'Text',
           content: 'Hello world\n',
-          location: createTestLocation(undefined, undefined, undefined, undefined)
+          location: { start: { line: 1, column: 1 }, end: { line: 1, column: 12 } }
         } as unknown as TextNode,
         {
           type: 'Directive',
@@ -96,12 +96,12 @@ describe('ParserService', () => {
             source: 'literal',
             value: 'Hi'
           },
-          location: createTestLocation(undefined, undefined, undefined, undefined)
+          location: { start: { line: 1, column: 1 }, end: { line: 1, column: 20 } }
         } as unknown as DirectiveNode,
         {
           type: 'Text',
           content: '\nMore text',
-          location: createTestLocation(undefined, undefined, undefined, undefined)
+          location: { start: { line: 1, column: 1 }, end: { line: 1, column: 10 } }
         } as unknown as TextNode
       ];
 
@@ -136,7 +136,7 @@ describe('ParserService', () => {
         {
           type: 'Text',
           content: 'Hello\n',
-          location: createTestLocation(undefined, undefined, undefined, undefined, 'test.meld')
+          location: { start: { line: 1, column: 1 }, end: { line: 1, column: 6 }, filePath: 'test.meld' }
         } as unknown as TextNode,
         {
           type: 'Directive',
@@ -146,7 +146,7 @@ describe('ParserService', () => {
             source: 'literal',
             value: 'Hi'
           },
-          location: createTestLocation(undefined, undefined, undefined, undefined, 'test.meld')
+          location: { start: { line: 1, column: 1 }, end: { line: 1, column: 20 }, filePath: 'test.meld' }
         } as unknown as DirectiveNode
       ];
 
@@ -162,8 +162,8 @@ describe('ParserService', () => {
       const result = await service.parseWithLocations(content, filePath);
       
       expect(result[0].location).toMatchObject({
-        start: { line: undefined, column: undefined },
-        end: { line: undefined, column: undefined },
+        start: { line: 1, column: 1 },
+        end: { line: 1, column: 20 },
         filePath
       });
     });
@@ -184,10 +184,7 @@ describe('ParserService', () => {
       expect(result).toEqual([{
         type: 'Text',
         content: 'content',
-        location: {
-          start: { line: 1, column: 1 },
-          end: { line: 1, column: 7 }
-        }
+        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 8 } }
       }]);
     });
 
@@ -197,10 +194,7 @@ describe('ParserService', () => {
       expect(result).toEqual([{
         type: 'Text',
         content: 'content',
-        location: {
-          start: { line: 1, column: 1 },
-          end: { line: 1, column: 7 }
-        }
+        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 8 } }
       }]);
     });
 
@@ -210,10 +204,7 @@ describe('ParserService', () => {
       expect(result).toEqual([{
         type: 'Text',
         content: 'content',
-        location: {
-          start: { line: 1, column: 1 },
-          end: { line: 1, column: 7 }
-        }
+        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 8 } }
       }]);
     });
   });
