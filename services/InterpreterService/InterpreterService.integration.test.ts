@@ -118,7 +118,8 @@ describe('InterpreterService Integration', () => {
         if (error instanceof MeldInterpreterError) {
           // Verify error details
           expect(error.nodeType).toBe('Directive');
-          expect(error.message).toMatch(/nonexistent/i);
+          expect(error.message).toMatch(/Failed to resolve variables in text directive/i);
+          expect(error.cause?.message).toMatch(/Undefined variable: nonexistent/i);
           
           // Verify state was rolled back
           expect(parentState.getTextVar('original')).toBe('value');
@@ -380,8 +381,8 @@ describe('InterpreterService Integration', () => {
       const parentState = context.services.state.createChildState();
 
       // Create config data directive
-      const configNode = context.factory.createDataDirective('config', { user: 'Alice' }, context.factory.createLocation(1, 1));
-      configNode.directive.value = JSON.stringify({ user: 'Alice' });
+      const configData = { user: 'Alice' };
+      const configNode = context.factory.createDataDirective('config', configData, context.factory.createLocation(1, 1));
 
       // First interpret the config node
       const configResult = await context.services.interpreter.interpret([configNode], {

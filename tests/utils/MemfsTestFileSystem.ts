@@ -31,9 +31,12 @@ export class MemfsTestFileSystem {
     logger.debug('Resetting filesystem');
     try {
       this.vol.reset();
-      // Re-initialize root after reset
+      // Re-initialize root and project structure
       this.vol.mkdirSync(this.root, { recursive: true });
-      logger.debug('Filesystem reset complete, root directory re-initialized');
+      this.vol.mkdirSync('/project', { recursive: true });
+      this.vol.mkdirSync('/project/src', { recursive: true });
+      this.vol.mkdirSync('/project/src/nested', { recursive: true });
+      logger.debug('Filesystem reset complete, project structure initialized');
     } catch (error) {
       logger.error('Error initializing filesystem', { error });
       throw new Error(`Error initializing filesystem: ${error.message}`);
@@ -456,31 +459,27 @@ export class MemfsTestFileSystem {
    * Helper to load a project structure from our fixture format
    */
   async loadFixture(fixture: { files?: Record<string, string>; dirs?: string[] }): Promise<void> {
-    logger.debug('Loading fixture', { 
-      dirCount: fixture.dirs?.length || 0,
-      fileCount: Object.keys(fixture.files || {}).length 
-    });
-
+    logger.debug('Loading fixture', { fixture });
+    
     try {
-      // First create all directories
+      // First ensure all directories exist
       if (fixture.dirs) {
         for (const dir of fixture.dirs) {
-          logger.debug('Creating fixture directory', { dir });
-          // Keep the project/ prefix
-          await this.ensureDir(dir);
+          const memfsPath = this.getMemfsPath(dir);
+          logger.debug('Creating fixture directory', { dir, memfsPath });
+          await this.mkdir(memfsPath);
         }
       }
 
-      // Then create all files
+      // Then write all files
       if (fixture.files) {
         for (const [filePath, content] of Object.entries(fixture.files)) {
-          logger.debug('Creating fixture file', { filePath, contentLength: content.length });
-          // Keep the project/ prefix
+          logger.debug('Writing fixture file', { filePath });
           await this.writeFile(filePath, content);
         }
       }
 
-      logger.debug('Fixture loading complete');
+      logger.debug('Fixture loaded successfully');
     } catch (error) {
       logger.error('Error loading fixture', { error });
       throw new Error(`Error loading fixture: ${error.message}`);

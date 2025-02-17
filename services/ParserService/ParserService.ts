@@ -16,8 +16,20 @@ interface ParseError {
 
 export class ParserService implements IParserService {
   private async parseContent(content: string): Promise<MeldNode[]> {
-    // Enable location tracking via a type-cast
-    return (parse as any)(content, { locations: true }) as unknown as MeldNode[];
+    try {
+      // Enable location tracking via a type-cast
+      return (parse as any)(content, { locations: true }) as unknown as MeldNode[];
+    } catch (error) {
+      // Preserve the original error details from meld-ast
+      const parseError = error as ParseError;
+      if (this.isParseError(parseError)) {
+        throw new MeldParseError(
+          `Parse error: ${parseError.message}`,
+          parseError.location
+        );
+      }
+      throw error;
+    }
   }
 
   async parse(content: string): Promise<MeldNode[]> {
@@ -37,7 +49,7 @@ export class ParserService implements IParserService {
       logger.error('Failed to parse content', { error });
       
       if (error instanceof MeldParseError) {
-        const defaultLocation = { start: { line: 1, column: 1 }, end: { line: 1, column: content.length || 1 } };
+        const defaultLocation = { start: { line: 1, column: 1 }, end: { line: 1, column: content ? content.length : 1 } };
         let loc = error.location;
         if (!loc || !loc.start || loc.start.line == null || loc.start.column == null || !loc.end || loc.end.line == null || loc.end.column == null) {
           loc = defaultLocation;
@@ -55,15 +67,24 @@ export class ParserService implements IParserService {
         // Fall back to default location if original is missing or invalid
         const defaultLocation = { 
           start: { line: 1, column: 1 }, 
-          end: { line: 1, column: content.length || 1 } 
+          end: { line: 1, column: 1 } 
         };
+        if (content && typeof content === 'string') {
+          defaultLocation.end.column = content.length;
+        }
         const meldError = new MeldParseError(error.message, defaultLocation);
         Object.setPrototypeOf(meldError, MeldParseError.prototype);
         throw meldError;
       }
       
       const message = error instanceof Error ? error.message : 'Unknown error';
-      const defaultLocation = { start: { line: 1, column: 1 }, end: { line: 1, column: content.length || 1 } };
+      const defaultLocation = { 
+        start: { line: 1, column: 1 }, 
+        end: { line: 1, column: 1 } 
+      };
+      if (content && typeof content === 'string') {
+        defaultLocation.end.column = content.length;
+      }
       const meldError = new MeldParseError(message, defaultLocation);
       Object.setPrototypeOf(meldError, MeldParseError.prototype);
       throw meldError;
@@ -145,7 +166,7 @@ export class ParserService implements IParserService {
       return nodes;
     } catch (error) {
       if (error instanceof MeldParseError) {
-        const defaultLocation = { start: { line: 1, column: 1 }, end: { line: 1, column: content.length || 1 } };
+        const defaultLocation = { start: { line: 1, column: 1 }, end: { line: 1, column: content ? content.length : 1 } };
         let loc = error.location;
         if (!loc || !loc.start || loc.start.line == null || loc.start.column == null || !loc.end || loc.end.line == null || loc.end.column == null) {
           loc = { ...defaultLocation, filePath };

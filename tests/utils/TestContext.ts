@@ -139,6 +139,10 @@ export class TestContext {
     this.fs.initialize();
     // Ensure project directory exists
     await this.fs.mkdir('/project');
+    // Ensure fixture directories exist
+    await this.fs.mkdir('/project/src');
+    await this.fs.mkdir('/project/nested');
+    await this.fs.mkdir('/project/shared');
   }
 
   /**

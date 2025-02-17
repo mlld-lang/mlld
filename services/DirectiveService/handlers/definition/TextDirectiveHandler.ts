@@ -49,16 +49,30 @@ export class TextDirectiveHandler implements IDirectiveHandler {
 
       // 2. Validate directive structure
       try {
+        if (!node || !node.directive) {
+          throw new DirectiveError(
+            'Invalid directive: missing required fields',
+            this.kind,
+            DirectiveErrorCode.VALIDATION_FAILED,
+            { node, context }
+          );
+        }
         await this.validationService.validate(node);
       } catch (error) {
+        // If it's already a DirectiveError, just rethrow
+        if (error instanceof DirectiveError) {
+          throw error;
+        }
+        // Otherwise wrap in DirectiveError
+        const errorMessage = error instanceof Error ? error.message : 'Text directive validation failed';
         throw new DirectiveError(
-          'Text directive validation failed',
+          errorMessage,
           this.kind,
           DirectiveErrorCode.VALIDATION_FAILED,
           {
             node,
             context,
-            cause: error instanceof Error ? error : undefined,
+            cause: error instanceof Error ? error : new Error(errorMessage),
             location: node.location
           }
         );

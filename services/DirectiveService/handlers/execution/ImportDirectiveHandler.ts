@@ -94,6 +94,14 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
 
         // Read file content
         const content = await this.fileSystemService.readFile(resolvedPath);
+        if (!content) {
+          throw new DirectiveError(
+            `Empty or invalid import file: ${resolvedPath}`,
+            this.kind,
+            DirectiveErrorCode.VALIDATION_FAILED,
+            { node, context }
+          );
+        }
 
         // Parse content
         const nodes = await this.parserService.parse(content);
