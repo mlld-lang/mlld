@@ -6,6 +6,9 @@ import { IResolutionService } from '@services/ResolutionService/IResolutionServi
 import { ResolutionContextFactory } from '@services/ResolutionService/ResolutionContextFactory.js';
 import { directiveLogger as logger } from '@core/utils/logger.js';
 import { DirectiveError, DirectiveErrorCode } from '@services/DirectiveService/errors/DirectiveError.js';
+import { StringLiteralHandler } from '@services/ResolutionService/resolvers/StringLiteralHandler.js';
+import { VariableReferenceResolver } from '@services/ResolutionService/resolvers/VariableReferenceResolver.js';
+import { ResolutionError } from '@services/ResolutionService/errors/ResolutionError.js';
 
 /**
  * Handler for @text directives
@@ -13,80 +16,98 @@ import { DirectiveError, DirectiveErrorCode } from '@services/DirectiveService/e
  */
 export class TextDirectiveHandler implements IDirectiveHandler {
   readonly kind = 'text';
+  private stringLiteralHandler: StringLiteralHandler;
+  private variableReferenceResolver: VariableReferenceResolver;
 
   constructor(
     private validationService: IValidationService,
     private stateService: IStateService,
     private resolutionService: IResolutionService
-  ) {}
+  ) {
+    this.stringLiteralHandler = new StringLiteralHandler();
+    this.variableReferenceResolver = new VariableReferenceResolver(
+      stateService,
+      resolutionService
+    );
+  }
 
-  async execute(node: DirectiveNode, context: DirectiveContext): Promise<IStateService> {
-    logger.debug('Processing text directive', {
-      location: node.location,
-      context
-    });
+  /**
+   * Checks if a value appears to be a string literal
+   * This is a preliminary check before full validation
+   */
+  private isStringLiteral(value: string): boolean {
+    const firstChar = value[0];
+    const lastChar = value[value.length - 1];
+    const validQuotes = ["'", '"', '`'];
+    return validQuotes.includes(firstChar) && firstChar === lastChar;
+  }
 
+  public async execute(node: DirectiveNode, context: DirectiveContext): Promise<IStateService> {
     try {
-      // 1. Validate directive structure
-      await this.validationService.validate(node);
+      // 1. Create a new state for modifications
+      const newState = context.state.clone();
 
-      // 2. Get identifier and value from directive
-      const { identifier, value } = node.directive;
-
-      // 3. Process value based on type
-      if (!value) {
+      // 2. Validate directive structure
+      try {
+        await this.validationService.validate(node);
+      } catch (error) {
         throw new DirectiveError(
-          'Text directive requires a value',
+          'Text directive validation failed',
           this.kind,
           DirectiveErrorCode.VALIDATION_FAILED,
-          { node }
+          {
+            node,
+            context,
+            cause: error instanceof Error ? error : undefined,
+            location: node.location
+          }
         );
       }
 
-      // Create a new state for modifications
-      const newState = context.state.clone();
+      // 3. Get identifier and value from directive
+      const { identifier, value } = node.directive;
 
-      // Check if this is a pass-through directive
-      if (value.startsWith('@embed') || value.startsWith('@run') || value.startsWith('@call')) {
-        newState.setTextVar(identifier, value);
-        return newState;
+      // 4. Resolve any variables in the value
+      let resolvedValue: string;
+      try {
+        resolvedValue = await this.resolutionService.resolveInContext(value, {
+          ...context,
+          allowedVariableTypes: {
+            text: true,
+            data: true,
+            path: true,
+            command: true
+          }
+        });
+      } catch (error) {
+        if (error instanceof ResolutionError) {
+          throw new DirectiveError(
+            'Failed to resolve variables in text directive',
+            this.kind,
+            DirectiveErrorCode.RESOLUTION_FAILED,
+            {
+              node,
+              context,
+              cause: error,
+              location: node.location
+            }
+          );
+        }
+        throw error;
       }
 
-      // Create resolution context
-      const resolutionContext = ResolutionContextFactory.forTextDirective(
-        context.currentFilePath
-      );
-
-      // Resolve variables in the value
-      const resolvedValue = await this.resolutionService.resolveInContext(
-        value,
-        resolutionContext
-      );
-
-      // 4. Store in state
+      // 5. Set the resolved value in the new state
       newState.setTextVar(identifier, resolvedValue);
 
-      logger.debug('Text directive processed successfully', {
-        identifier,
-        value: resolvedValue,
-        location: node.location
-      });
-
       return newState;
-    } catch (error: unknown) {
-      logger.error('Failed to process text directive', {
-        location: node.location,
-        error
-      });
-
-      // Wrap in DirectiveError if needed
+    } catch (error) {
       if (error instanceof DirectiveError) {
         throw error;
       }
       throw new DirectiveError(
-        error instanceof Error ? error.message : String(error),
+        'Failed to process text directive',
         this.kind,
-        DirectiveErrorCode.RESOLUTION_FAILED,
+        DirectiveErrorCode.EXECUTION_FAILED,
         {
           node,
           context,

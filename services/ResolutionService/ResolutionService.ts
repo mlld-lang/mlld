@@ -20,6 +20,7 @@ export class ResolutionService implements IResolutionService {
   private pathResolver: PathResolver;
   private commandResolver: CommandResolver;
   private contentResolver: ContentResolver;
+  private readonly variablePattern = /\${([^}]+)}/g;
 
   constructor(
     private stateService: IStateService,
@@ -106,6 +107,20 @@ export class ResolutionService implements IResolutionService {
    * Resolve raw content nodes, preserving formatting but skipping comments
    */
   async resolveContent(nodes: MeldNode[], context: ResolutionContext): Promise<string> {
+    if (!Array.isArray(nodes)) {
+      // If a string path is provided, read the file
+      const path = String(nodes);
+      if (!await this.fileSystemService.exists(path)) {
+        throw new ResolutionError(
+          `File not found: ${path}`,
+          ResolutionErrorCode.INVALID_PATH,
+          { value: path }
+        );
+      }
+      return this.fileSystemService.readFile(path);
+    }
+
+    // Otherwise, process the nodes
     return this.contentResolver.resolve(nodes, context);
   }
 
@@ -116,140 +131,187 @@ export class ResolutionService implements IResolutionService {
     // 1. Validate resolution is allowed in this context
     await this.validateResolution(value, context);
 
-    // 2. Check for circular references
-    await this.detectCircularReferences(value);
+    // 2. Initialize resolution tracking
+    const resolutionPath: string[] = [];
 
-    // 3. Handle variable interpolation
+    // 3. First pass: resolve nested variables
     let result = value;
+    let hasNested = true;
+    let iterations = 0;
+    const MAX_ITERATIONS = 100;
 
-    // Handle ${var} text/data variables
-    const textVarRegex = /\${([^}]+)}/g;
-    let match;
-    while ((match = textVarRegex.exec(value)) !== null) {
-      const [fullMatch, varPath] = match;
-      const [varName, ...fieldPath] = varPath.split('.');
+    // Handle command references ($cmd(args)) first
+    const cmdRegex = /\$([A-Za-z0-9_]+)\(([^)]*)\)/g;
+    let match: RegExpExecArray | null;
+    
+    while ((match = cmdRegex.exec(result)) !== null) {
+      const [fullMatch, cmdName, argsStr] = match;
       
-      // Try text variable first
-      let varValue = this.stateService.getTextVar(varName);
-      
-      // If not found in text vars, try data vars
-      if (varValue === undefined) {
-        varValue = this.stateService.getDataVar(varName);
-      }
-      
-      if (varValue === undefined) {
+      // Check for circular references
+      if (resolutionPath.includes(cmdName)) {
+        const path = [...resolutionPath, cmdName].join(' -> ');
         throw new ResolutionError(
-          `Undefined variable: ${varName}`,
-          ResolutionErrorCode.UNDEFINED_VARIABLE,
-          { value: varName, context }
+          `Circular reference detected: ${path}`,
+          ResolutionErrorCode.CIRCULAR_REFERENCE,
+          { value, context }
         );
       }
 
-      // Handle field access if needed
-      if (fieldPath.length > 0) {
-        const field = fieldPath.join('.');
-        const dataNode: DirectiveNode = {
+      resolutionPath.push(cmdName);
+
+      try {
+        // Parse and resolve arguments
+        const args = argsStr.split(',')
+          .map(arg => arg.trim())
+          .filter(arg => arg.length > 0);
+
+        const cmdValue = await this.commandResolver.resolve({
           type: 'Directive',
           directive: {
-            kind: 'data' as const,
-            identifier: varName,
-            fields: field,
-            value: varValue
-          },
-          location: undefined
-        };
-
-        // Create a new context for field resolution
-        const fieldContext: ResolutionContext = {
-          ...context,
-          allowDataFields: true,
-          allowedVariableTypes: {
-            ...context.allowedVariableTypes,
-            data: true
+            kind: 'run',
+            identifier: cmdName,
+            args
           }
-        };
+        } as DirectiveNode, context);
 
-        varValue = await this.dataResolver.resolve(dataNode, fieldContext);
+        // Replace in the original text
+        result = result.replace(fullMatch, cmdValue);
+      } finally {
+        resolutionPath.pop();
       }
-
-      // Replace the variable reference with its value
-      result = result.replace(fullMatch, String(varValue));
     }
 
-    // Handle #{data} variables
+    // Handle data variables (#{...})
     const dataVarRegex = /#{([^}]+)}/g;
-    while ((match = dataVarRegex.exec(value)) !== null) {
+    while ((match = dataVarRegex.exec(result)) !== null) {
       const [fullMatch, varPath] = match;
-      const [varName, ...fieldPath] = varPath.split('.');
-      
-      const varValue = this.stateService.getDataVar(varName);
-      
-      if (varValue === undefined) {
+      const parts = varPath.split('.');
+      const baseVar = parts[0];
+
+      // Check for circular references
+      if (resolutionPath.includes(baseVar)) {
+        const path = [...resolutionPath, baseVar].join(' -> ');
         throw new ResolutionError(
-          `Undefined data variable: ${varName}`,
-          ResolutionErrorCode.UNDEFINED_VARIABLE,
-          { value: varName, context }
+          `Circular reference detected: ${path}`,
+          ResolutionErrorCode.CIRCULAR_REFERENCE,
+          { value, context }
         );
       }
 
-      // Handle field access if needed
-      let resolvedValue = varValue;
-      if (fieldPath.length > 0) {
-        const field = fieldPath.join('.');
-        const dataNode: DirectiveNode = {
-          type: 'Directive',
-          directive: {
-            kind: 'data' as const,
-            identifier: varName,
-            fields: field,
-            value: varValue
-          },
-          location: undefined
-        };
-        resolvedValue = await this.dataResolver.resolve(dataNode, context);
-      }
+      resolutionPath.push(baseVar);
 
-      // Replace the variable reference with its value
-      result = result.replace(fullMatch, String(resolvedValue));
+      try {
+        // Get the data variable value
+        let varValue = this.stateService.getDataVar(baseVar);
+        
+        if (varValue === undefined) {
+          throw new ResolutionError(
+            `Undefined data variable: ${baseVar}`,
+            ResolutionErrorCode.UNDEFINED_VARIABLE,
+            { value: baseVar, context }
+          );
+        }
+
+        // Handle field access if needed
+        if (parts.length > 1) {
+          const fieldPath = parts.slice(1);
+          let current = varValue;
+          for (const field of fieldPath) {
+            if (current === undefined || current === null) {
+              throw new ResolutionError(
+                `Cannot access field '${field}' of undefined`,
+                ResolutionErrorCode.UNDEFINED_VARIABLE,
+                { value: varPath, context }
+              );
+            }
+            current = current[field];
+          }
+          varValue = current;
+        }
+
+        // Replace in the original text
+        result = result.replace(
+          fullMatch,
+          JSON.stringify(varValue)
+        );
+      } finally {
+        resolutionPath.pop();
+      }
     }
 
-    // Handle $path variables
-    const pathVarRegex = /\$([A-Za-z0-9_]+)/g;
-    while ((match = pathVarRegex.exec(value)) !== null) {
+    // Handle path variables ($VAR)
+    const pathVarRegex = /\$([A-Za-z0-9_]+)(?!\()/g;
+    while ((match = pathVarRegex.exec(result)) !== null) {
       const [fullMatch, varName] = match;
       
-      const varValue = this.stateService.getPathVar(varName);
-      
-      if (varValue === undefined) {
+      // Check for circular references
+      if (resolutionPath.includes(varName)) {
+        const path = [...resolutionPath, varName].join(' -> ');
         throw new ResolutionError(
-          `Undefined path variable: ${varName}`,
-          ResolutionErrorCode.UNDEFINED_VARIABLE,
-          { value: varName, context }
+          `Circular reference detected: ${path}`,
+          ResolutionErrorCode.CIRCULAR_REFERENCE,
+          { value, context }
         );
       }
 
-      // Replace the variable reference with its value
-      result = result.replace(fullMatch, varValue);
+      resolutionPath.push(varName);
+
+      try {
+        const varValue = this.stateService.getPathVar(varName);
+        
+        if (varValue === undefined) {
+          throw new ResolutionError(
+            `Undefined path variable: ${varName}`,
+            ResolutionErrorCode.UNDEFINED_VARIABLE,
+            { value: varName, context }
+          );
+        }
+
+        // Replace in the original text
+        result = result.replace(fullMatch, varValue);
+      } finally {
+        resolutionPath.pop();
+      }
     }
 
-    // Handle $command(args) references
-    const cmdRegex = /\$([A-Za-z0-9_]+)\(([^)]*)\)/g;
-    while ((match = cmdRegex.exec(value)) !== null) {
-      const [fullMatch, cmdName, argsStr] = match;
-      const args = argsStr.split(',').map(arg => arg.trim());
-      
-      const cmdValue = await this.commandResolver.resolve({
-        type: 'Directive' as const,
-        directive: {
-          kind: 'run' as const,
-          identifier: cmdName,
-          args
-        },
-        location: undefined
-      } as DirectiveNode, context);
+    // Handle text variables (${...})
+    this.variablePattern.lastIndex = 0;
+    while ((match = this.variablePattern.exec(result)) !== null) {
+      const [fullMatch, varPath] = match;
+      const parts = varPath.split('.');
+      const baseVar = parts[0];
 
-      // Replace the command reference with its value
-      result = result.replace(fullMatch, cmdValue);
+      // Check for circular references
+      if (resolutionPath.includes(baseVar)) {
+        const path = [...resolutionPath, baseVar].join(' -> ');
+        throw new ResolutionError(
+          `Circular reference detected: ${path}`,
+          ResolutionErrorCode.CIRCULAR_REFERENCE,
+          { value, context }
+        );
+      }
+
+      resolutionPath.push(baseVar);
+
+      try {
+        // Get the base variable value
+        let varValue = this.stateService.getTextVar(baseVar);
+        if (varValue === undefined) {
+          throw new ResolutionError(
+            `Undefined variable: ${baseVar}`,
+            ResolutionErrorCode.UNDEFINED_VARIABLE,
+            { value: baseVar, context }
+          );
+        }
+
+        // Replace in the original text
+        result = result.replace(
+          fullMatch,
+          String(varValue)
+        );
+      } finally {
+        resolutionPath.pop();
+      }
     }
 
     return result;

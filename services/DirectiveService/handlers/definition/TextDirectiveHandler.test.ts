@@ -1,227 +1,239 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { TextDirectiveHandler } from './TextDirectiveHandler.js';
-import { createTextDirective, createLocation } from '@tests/utils/testFactories.js';
-import type { IValidationService } from '@services/ValidationService/IValidationService.js';
-import type { IStateService } from '@services/StateService/IStateService.js';
-import type { IResolutionService } from '@services/ResolutionService/IResolutionService.js';
-import type { DirectiveNode } from 'meld-spec';
+import { createMockStateService, createMockValidationService, createMockResolutionService } from '@tests/utils/testFactories.js';
 import { DirectiveError } from '@services/DirectiveService/errors/DirectiveError.js';
-import { DirectiveErrorCode } from '@services/DirectiveService/errors/DirectiveError.js';
+import type { DirectiveNode } from 'meld-spec';
+import type { IStateService } from '@services/StateService/IStateService.js';
 
 describe('TextDirectiveHandler', () => {
   let handler: TextDirectiveHandler;
-  let validationService: IValidationService;
-  let stateService: IStateService;
-  let resolutionService: IResolutionService;
+  let stateService: ReturnType<typeof createMockStateService>;
+  let validationService: ReturnType<typeof createMockValidationService>;
+  let resolutionService: ReturnType<typeof createMockResolutionService>;
   let clonedState: IStateService;
 
   beforeEach(() => {
-    validationService = {
-      validate: vi.fn()
-    };
-
     clonedState = {
       setTextVar: vi.fn(),
-      clone: vi.fn()
+      getTextVar: vi.fn(),
+      getDataVar: vi.fn(),
+      clone: vi.fn(),
     } as unknown as IStateService;
 
     stateService = {
       setTextVar: vi.fn(),
+      getTextVar: vi.fn(),
+      getDataVar: vi.fn(),
       clone: vi.fn().mockReturnValue(clonedState)
     } as unknown as IStateService;
 
-    resolutionService = {
-      resolveInContext: vi.fn()
-    } as unknown as IResolutionService;
-
-    handler = new TextDirectiveHandler(
-      validationService,
-      stateService,
-      resolutionService
-    );
+    validationService = createMockValidationService();
+    resolutionService = createMockResolutionService();
+    handler = new TextDirectiveHandler(validationService, stateService, resolutionService);
   });
 
-  describe('string literal handling', () => {
-    it('should process string literals with location information', async () => {
-      const location = createLocation(1, 1, 1, 20);
-      const node = createTextDirective('greeting', 'Hello', location);
-      const context = { currentFilePath: 'test.meld', state: stateService };
-
-      vi.mocked(resolutionService.resolveInContext).mockResolvedValueOnce('Hello');
-
-      const result = await handler.execute(node, context);
-
-      expect(validationService.validate).toHaveBeenCalledWith(node);
-      expect(stateService.clone).toHaveBeenCalled();
-      expect(resolutionService.resolveInContext).toHaveBeenCalledWith(
-        'Hello',
-        expect.objectContaining({
-          allowNested: true,
-          allowedVariableTypes: {
-            command: true,
-            data: true,
-            path: true,
-            text: true
-          },
-          currentFilePath: 'test.meld'
-        })
-      );
-      expect(clonedState.setTextVar).toHaveBeenCalledWith('greeting', 'Hello');
-      expect(result).toBe(clonedState);
-      expect(node.location).toEqual(location);
-    });
-
-    it('should process double-quoted string', async () => {
-      const node = createTextDirective('greeting', 'Hello', createLocation(1, 1));
-      const context = { currentFilePath: 'test.meld', state: stateService };
-
-      vi.mocked(resolutionService.resolveInContext).mockResolvedValueOnce('Hello');
-
-      const result = await handler.execute(node, context);
-
-      expect(stateService.clone).toHaveBeenCalled();
-      expect(clonedState.setTextVar).toHaveBeenCalledWith('greeting', 'Hello');
-      expect(result).toBe(clonedState);
-    });
-
-    it('should process template literal', async () => {
-      const node = createTextDirective('greeting', 'Hello', createLocation(1, 1));
-      const context = { currentFilePath: 'test.meld', state: stateService };
-
-      vi.mocked(resolutionService.resolveInContext).mockResolvedValueOnce('Hello');
-
-      const result = await handler.execute(node, context);
-
-      expect(stateService.clone).toHaveBeenCalled();
-      expect(clonedState.setTextVar).toHaveBeenCalledWith('greeting', 'Hello');
-      expect(result).toBe(clonedState);
-    });
-
-    it('should handle variables in string with location information', async () => {
-      const location = createLocation(1, 1, 1, 25);
-      const node = createTextDirective('greeting', 'Hello ${name}', location);
-      const context = { currentFilePath: 'test.meld', state: stateService };
-
-      vi.mocked(resolutionService.resolveInContext).mockResolvedValueOnce('Hello World');
-
-      const result = await handler.execute(node, context);
-
-      expect(stateService.clone).toHaveBeenCalled();
-      expect(clonedState.setTextVar).toHaveBeenCalledWith('greeting', 'Hello World');
-      expect(result).toBe(clonedState);
-      expect(node.location).toEqual(location);
-    });
-  });
-
-  describe('directive value handling', () => {
-    it('should pass through @embed directive with location information', async () => {
-      const location = createLocation(1, 1, 1, 30);
-      const embedValue = '@embed [content.md]';
-      const node = createTextDirective('content', embedValue, location);
-      const context = { currentFilePath: 'test.meld', state: stateService };
-
-      const result = await handler.execute(node, context);
-
-      expect(validationService.validate).toHaveBeenCalledWith(node);
-      expect(stateService.clone).toHaveBeenCalled();
-      expect(resolutionService.resolveInContext).not.toHaveBeenCalled();
-      expect(clonedState.setTextVar).toHaveBeenCalledWith('content', embedValue);
-      expect(result).toBe(clonedState);
-      expect(node.location).toEqual(location);
-    });
-
-    it('should pass through @run directive with location information', async () => {
-      const location = createLocation(1, 1, 1, 25);
-      const runValue = '@run [command]';
-      const node = createTextDirective('result', runValue, location);
-      const context = { currentFilePath: 'test.meld', state: stateService };
-
-      const result = await handler.execute(node, context);
-
-      expect(validationService.validate).toHaveBeenCalledWith(node);
-      expect(stateService.clone).toHaveBeenCalled();
-      expect(resolutionService.resolveInContext).not.toHaveBeenCalled();
-      expect(clonedState.setTextVar).toHaveBeenCalledWith('result', runValue);
-      expect(result).toBe(clonedState);
-      expect(node.location).toEqual(location);
-    });
-
-    it('should pass through @call directive with location information', async () => {
-      const location = createLocation(1, 1, 1, 35);
-      const callValue = '@call api.method [path]';
-      const node = createTextDirective('result', callValue, location);
-      const context = { currentFilePath: 'test.meld', state: stateService };
-
-      const result = await handler.execute(node, context);
-
-      expect(validationService.validate).toHaveBeenCalledWith(node);
-      expect(stateService.clone).toHaveBeenCalled();
-      expect(resolutionService.resolveInContext).not.toHaveBeenCalled();
-      expect(clonedState.setTextVar).toHaveBeenCalledWith('result', callValue);
-      expect(result).toBe(clonedState);
-      expect(node.location).toEqual(location);
-    });
-  });
-
-  describe('error handling', () => {
-    it('should propagate validation errors with location information', async () => {
-      const node = createTextDirective('invalid', createLocation(1, 1, 1, 15));
-      const context = {
-        currentFilePath: 'test.meld',
-        state: stateService,
-        parentState: undefined
+  describe('execute', () => {
+    it('should handle string literals correctly', async () => {
+      const node: DirectiveNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'text',
+          identifier: 'greeting',
+          value: "'Hello, world!'"
+        }
       };
 
-      vi.mocked(validationService.validate).mockImplementation(() => {
-        throw new DirectiveError('Validation failed', 'text');
-      });
-
-      await expect(handler.execute(node, context)).rejects.toThrow(DirectiveError);
-    });
-
-    it('should handle resolution errors with location information', async () => {
-      const node = createTextDirective('${missing}', createLocation(1, 1, 1, 20));
       const context = {
-        currentFilePath: 'test.meld',
         state: stateService,
-        parentState: undefined
+        currentFilePath: 'test.meld'
       };
 
-      vi.mocked(validationService.validate).mockResolvedValue(undefined);
-      vi.mocked(resolutionService.resolveInContext).mockImplementation(() => {
-        throw new Error('Resolution failed');
-      });
-
-      await expect(handler.execute(node, context)).rejects.toThrow(DirectiveError);
+      const result = await handler.execute(node, context);
+      expect(clonedState.setTextVar).toHaveBeenCalledWith('greeting', 'Hello, world!');
     });
 
-    it('should wrap non-DirectiveErrors with location information', async () => {
-      const location = createLocation(1, 1, 1, 15);
-      const node = createTextDirective('error', location);
-      const context = {
-        currentFilePath: 'test.meld',
-        state: stateService,
-        parentState: undefined
+    it('should handle string literals with escaped quotes', async () => {
+      const node: DirectiveNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'text',
+          identifier: 'message',
+          value: '"Say \\"hello\\" to the world"'
+        }
       };
 
-      vi.mocked(validationService.validate).mockResolvedValue(undefined);
-      vi.mocked(resolutionService.resolveInContext).mockImplementation(() => {
-        throw new Error('Resolution failed');
-      });
+      const context = {
+        state: stateService,
+        currentFilePath: 'test.meld'
+      };
 
-      try {
-        await handler.execute(node, context);
-        expect.fail('Should have thrown error');
-      } catch (error) {
-        expect(error).toBeInstanceOf(DirectiveError);
-        expect(error.details.cause).toBeDefined();
-        expect(error.location).toEqual({
-          start: { line: 1, column: 1 },
-          end: { line: 1, column: 15 }
-        });
-        expect(error.kind).toBe('text');
-        expect(error.code).toBe(DirectiveErrorCode.RESOLUTION_FAILED);
-      }
+      const result = await handler.execute(node, context);
+      expect(clonedState.setTextVar).toHaveBeenCalledWith('message', 'Say "hello" to the world');
+    });
+
+    it('should handle multiline string literals with backticks', async () => {
+      const node: DirectiveNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'text',
+          identifier: 'template',
+          value: '`line1\nline2`'
+        }
+      };
+
+      const context = {
+        state: stateService,
+        currentFilePath: 'test.meld'
+      };
+
+      const result = await handler.execute(node, context);
+      expect(clonedState.setTextVar).toHaveBeenCalledWith('template', 'line1\nline2');
+    });
+
+    it('should reject invalid string literals', async () => {
+      const node: DirectiveNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'text',
+          identifier: 'invalid',
+          value: "'unclosed string"
+        }
+      };
+
+      const context = {
+        state: stateService,
+        currentFilePath: 'test.meld'
+      };
+
+      await expect(handler.execute(node, context))
+        .rejects
+        .toThrow(DirectiveError);
+    });
+
+    it('should handle variable references', async () => {
+      const node: DirectiveNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'text',
+          identifier: 'message',
+          value: 'Hello ${name}!'
+        }
+      };
+
+      const context = {
+        state: stateService,
+        currentFilePath: 'test.meld'
+      };
+
+      vi.mocked(stateService.getTextVar).mockReturnValue('World');
+
+      const result = await handler.execute(node, context);
+      expect(clonedState.setTextVar).toHaveBeenCalledWith('message', 'Hello World!');
+    });
+
+    it('should handle data variable references', async () => {
+      const node: DirectiveNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'text',
+          identifier: 'greeting',
+          value: 'Hello ${user.name}!'
+        }
+      };
+
+      const context = {
+        state: stateService,
+        currentFilePath: 'test.meld'
+      };
+
+      vi.mocked(stateService.getDataVar).mockReturnValue({ name: 'Alice' });
+
+      const result = await handler.execute(node, context);
+      expect(clonedState.setTextVar).toHaveBeenCalledWith('greeting', 'Hello Alice!');
+    });
+
+    it('should handle environment variables', async () => {
+      const node: DirectiveNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'text',
+          identifier: 'path',
+          value: '${ENV_HOME}/project'
+        }
+      };
+
+      const context = {
+        state: stateService,
+        currentFilePath: 'test.meld'
+      };
+
+      process.env.ENV_HOME = '/home/user';
+
+      const result = await handler.execute(node, context);
+      expect(clonedState.setTextVar).toHaveBeenCalledWith('path', '/home/user/project');
+
+      delete process.env.ENV_HOME;
+    });
+
+    it('should handle pass-through directives', async () => {
+      const node: DirectiveNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'text',
+          identifier: 'command',
+          value: '@run echo "test"'
+        }
+      };
+
+      const context = {
+        state: stateService,
+        currentFilePath: 'test.meld'
+      };
+
+      const result = await handler.execute(node, context);
+      expect(clonedState.setTextVar).toHaveBeenCalledWith('command', '@run echo "test"');
+    });
+
+    it('should throw on missing value', async () => {
+      const node: DirectiveNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'text',
+          identifier: 'empty'
+        }
+      };
+
+      const context = {
+        state: stateService,
+        currentFilePath: 'test.meld'
+      };
+
+      await expect(handler.execute(node, context))
+        .rejects
+        .toThrow(DirectiveError);
+    });
+
+    it('should throw on undefined variables', async () => {
+      const node: DirectiveNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'text',
+          identifier: 'greeting',
+          value: 'Hello ${missing}!'
+        }
+      };
+
+      const context = {
+        state: stateService,
+        currentFilePath: 'test.meld'
+      };
+
+      vi.mocked(stateService.getTextVar).mockReturnValue(undefined);
+      vi.mocked(stateService.getDataVar).mockReturnValue(undefined);
+
+      await expect(handler.execute(node, context))
+        .rejects
+        .toThrow(DirectiveError);
     });
   });
 }); 

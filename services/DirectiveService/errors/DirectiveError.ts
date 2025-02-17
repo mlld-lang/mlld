@@ -1,6 +1,6 @@
 import { DirectiveNode } from 'meld-spec';
 import { DirectiveContext } from '@services/DirectiveService/IDirectiveService.js';
-import type { Location } from '@core/types/Location.js';
+import type { Location } from '@core/types/index.js';
 
 /**
  * Error codes for directive failures
@@ -22,6 +22,7 @@ export enum DirectiveErrorCode {
  */
 export class DirectiveError extends Error {
   public readonly location?: Location;
+  public readonly cause?: Error;
 
   constructor(
     message: string,
@@ -37,5 +38,6 @@ export class DirectiveError extends Error {
     super(`Directive error (${kind}): ${message}`);
     this.name = 'DirectiveError';
     this.location = details?.location ?? details?.node?.location;
+    this.cause = details?.cause;
   }
 } 

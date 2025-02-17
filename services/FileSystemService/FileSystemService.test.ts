@@ -1,12 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { TestContext } from '@tests/utils/TestContext.js';
 import { FileSystemService } from './FileSystemService.js';
+import { PathOperationsService } from './PathOperationsService.js';
 import { MeldError } from '@core/errors/MeldError.js';
 import path from 'path';
 
 describe('FileSystemService', () => {
   let context: TestContext;
   let service: FileSystemService;
+  let pathOps: PathOperationsService;
 
   beforeEach(async () => {
     // Initialize test context
@@ -16,8 +18,19 @@ describe('FileSystemService', () => {
     // Load test fixture
     await context.fixtures.load('fileSystemProject');
 
-    // Initialize service with test filesystem
-    service = new FileSystemService(context.fs);
+    // Initialize services
+    pathOps = new PathOperationsService();
+    service = new FileSystemService(pathOps, context.fs);
+
+    // Set up test files and directories
+    await service.ensureDir('project/list-dir');
+    await service.writeFile('project/list-dir/file1.txt', 'content1');
+    await service.writeFile('project/list-dir/file2.txt', 'content2');
+    await service.writeFile('project/test.txt', 'Hello, World!');
+    await service.writeFile('project/exists.txt', 'exists');
+    await service.writeFile('project/stats.txt', 'stats');
+    await service.ensureDir('project/stats-dir');
+    await service.ensureDir('project/empty-dir');
   });
 
   afterEach(async () => {
@@ -95,33 +108,6 @@ describe('FileSystemService', () => {
     it('throws MeldError when reading non-existent directory', async () => {
       await expect(service.readDir('project/nonexistent'))
         .rejects.toThrow(MeldError);
-    });
-  });
-
-  describe('Path operations', () => {
-    it('joins paths', () => {
-      expect(service.join('project', 'nested', 'file.txt'))
-        .toBe('project/nested/file.txt');
-    });
-
-    it('resolves paths', () => {
-      expect(service.resolve('project/nested', '../file.txt'))
-        .toBe(path.resolve('project/file.txt'));
-    });
-
-    it('gets dirname', () => {
-      expect(service.dirname('project/nested/file.txt'))
-        .toBe('project/nested');
-    });
-
-    it('gets basename', () => {
-      expect(service.basename('project/nested/file.txt'))
-        .toBe('file.txt');
-    });
-
-    it('normalizes paths', () => {
-      expect(service.normalize('project/./nested/../file.txt'))
-        .toBe('project/file.txt');
     });
   });
 

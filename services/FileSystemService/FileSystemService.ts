@@ -1,227 +1,240 @@
 import * as fs from 'fs-extra';
-import * as path from 'path';
 import { fsLogger as logger } from '@core/utils/simpleLogger.js';
 import { IFileSystemService } from './IFileSystemService.js';
-import { MemfsTestFileSystem } from '@tests/utils/MemfsTestFileSystem.js';
+import { IPathOperationsService } from './IPathOperationsService.js';
+import { IFileSystem } from './IFileSystem.js';
 import { MeldError } from '@core/errors/MeldError.js';
 
-export class FileSystemService implements IFileSystemService {
-  private testMode = false;
-  private testFs: MemfsTestFileSystem | null = null;
+interface FileOperationContext {
+  operation: string;
+  path: string;
+  details?: Record<string, unknown>;
+}
 
-  constructor(testFs?: MemfsTestFileSystem) {
-    if (testFs) {
-      this.enableTestMode(testFs);
+// Create a wrapper to adapt fs-extra to our IFileSystem interface
+class NodeFileSystem implements IFileSystem {
+  async readFile(path: string): Promise<string> {
+    return fs.readFile(path, 'utf-8');
+  }
+
+  async writeFile(path: string, content: string): Promise<void> {
+    return fs.writeFile(path, content, 'utf-8');
+  }
+
+  async exists(path: string): Promise<boolean> {
+    return fs.pathExists(path);
+  }
+
+  async stat(path: string): Promise<fs.Stats> {
+    return fs.stat(path);
+  }
+
+  async readDir(path: string): Promise<string[]> {
+    return fs.readdir(path);
+  }
+
+  async mkdir(path: string): Promise<void> {
+    return fs.mkdir(path, { recursive: true });
+  }
+
+  async isDirectory(path: string): Promise<boolean> {
+    try {
+      const stats = await fs.stat(path);
+      return stats.isDirectory();
+    } catch (error) {
+      if (error.code === 'ENOENT') {
+        return false;
+      }
+      throw error;
     }
+  }
+
+  async isFile(path: string): Promise<boolean> {
+    try {
+      const stats = await fs.stat(path);
+      return stats.isFile();
+    } catch (error) {
+      if (error.code === 'ENOENT') {
+        return false;
+      }
+      throw error;
+    }
+  }
+}
+
+export class FileSystemService implements IFileSystemService {
+  private readonly fs: IFileSystem;
+
+  constructor(
+    private readonly pathOps: IPathOperationsService,
+    fileSystem?: IFileSystem
+  ) {
+    this.fs = fileSystem || new NodeFileSystem();
   }
 
   // File operations
   async readFile(filePath: string): Promise<string> {
+    const context: FileOperationContext = {
+      operation: 'readFile',
+      path: filePath
+    };
+
     try {
-      if (this.testMode && this.testFs) {
-        return await this.testFs.readFile(this.normalize(filePath));
-      }
-      
-      logger.debug('Reading file', { filePath });
-      const content = await fs.readFile(filePath, 'utf-8');
-      logger.debug('Successfully read file', { filePath, contentLength: content.length });
+      logger.debug('Reading file', context);
+      const content = await this.fs.readFile(filePath);
+      logger.debug('Successfully read file', { ...context, contentLength: content.length });
       return content;
     } catch (error) {
-      logger.error('Failed to read file', { filePath, error });
-      throw new MeldError(`Failed to read file: ${filePath}`, { cause: error });
+      logger.error('Failed to read file', { ...context, error });
+      throw new MeldError(`Failed to read file: ${filePath}`, { 
+        cause: error,
+        context
+      });
     }
   }
 
   async writeFile(filePath: string, content: string): Promise<void> {
-    try {
-      if (this.testMode && this.testFs) {
-        await this.testFs.writeFile(this.normalize(filePath), content);
-        return;
-      }
+    const context: FileOperationContext = {
+      operation: 'writeFile',
+      path: filePath,
+      details: { contentLength: content.length }
+    };
 
-      logger.debug('Writing file', { filePath, contentLength: content.length });
-      // Ensure parent directory exists
-      await this.ensureDir(path.dirname(filePath));
-      await fs.writeFile(filePath, content, 'utf-8');
-      logger.debug('Successfully wrote file', { filePath });
+    try {
+      logger.debug('Writing file', context);
+      await this.ensureDir(this.pathOps.dirname(filePath));
+      await this.fs.writeFile(filePath, content);
+      logger.debug('Successfully wrote file', context);
     } catch (error) {
-      logger.error('Failed to write file', { filePath, error });
-      throw new MeldError(`Failed to write file: ${filePath}`, { cause: error });
+      logger.error('Failed to write file', { ...context, error });
+      throw new MeldError(`Failed to write file: ${filePath}`, {
+        cause: error,
+        context
+      });
     }
   }
 
   async exists(filePath: string): Promise<boolean> {
-    try {
-      if (this.testMode && this.testFs) {
-        return await this.testFs.exists(this.normalize(filePath));
-      }
+    const context: FileOperationContext = {
+      operation: 'exists',
+      path: filePath
+    };
 
-      logger.debug('Checking if path exists', { filePath });
-      const exists = await fs.pathExists(filePath);
-      logger.debug('Path existence check complete', { filePath, exists });
+    try {
+      logger.debug('Checking if path exists', context);
+      const exists = await this.fs.exists(filePath);
+      logger.debug('Path existence check complete', { ...context, exists });
       return exists;
     } catch (error) {
-      logger.error('Failed to check path existence', { filePath, error });
-      throw new MeldError(`Failed to check if path exists: ${filePath}`, { cause: error });
+      logger.error('Failed to check path existence', { ...context, error });
+      throw new MeldError(`Failed to check if path exists: ${filePath}`, {
+        cause: error,
+        context
+      });
     }
   }
 
   async stat(filePath: string): Promise<fs.Stats> {
-    try {
-      if (this.testMode && this.testFs) {
-        return await this.testFs.stat(this.normalize(filePath));
-      }
+    const context: FileOperationContext = {
+      operation: 'stat',
+      path: filePath
+    };
 
-      logger.debug('Getting file stats', { filePath });
-      const stats = await fs.stat(filePath);
-      logger.debug('Successfully got file stats', { filePath, isDirectory: stats.isDirectory() });
+    try {
+      logger.debug('Getting file stats', context);
+      const stats = await this.fs.stat(filePath);
+      logger.debug('Successfully got file stats', { ...context, isDirectory: stats.isDirectory() });
       return stats;
     } catch (error) {
-      logger.error('Failed to get file stats', { filePath, error });
-      throw new MeldError(`Failed to get file stats: ${filePath}`, { cause: error });
+      logger.error('Failed to get file stats', { ...context, error });
+      throw new MeldError(`Failed to get file stats: ${filePath}`, {
+        cause: error,
+        context
+      });
     }
   }
 
   // Directory operations
   async readDir(dirPath: string): Promise<string[]> {
-    try {
-      if (this.testMode && this.testFs) {
-        return await this.testFs.readDir(this.normalize(dirPath));
-      }
+    const context: FileOperationContext = {
+      operation: 'readDir',
+      path: dirPath
+    };
 
-      logger.debug('Reading directory', { dirPath });
-      const files = await fs.readdir(dirPath);
-      logger.debug('Successfully read directory', { dirPath, fileCount: files.length });
+    try {
+      logger.debug('Reading directory', context);
+      const files = await this.fs.readDir(dirPath);
+      logger.debug('Successfully read directory', { ...context, fileCount: files.length });
       return files;
     } catch (error) {
-      logger.error('Failed to read directory', { dirPath, error });
-      throw new MeldError(`Failed to read directory: ${dirPath}`, { cause: error });
+      logger.error('Failed to read directory', { ...context, error });
+      throw new MeldError(`Failed to read directory: ${dirPath}`, {
+        cause: error,
+        context
+      });
     }
   }
 
   async ensureDir(dirPath: string): Promise<void> {
-    try {
-      if (this.testMode && this.testFs) {
-        await this.testFs.ensureDir(this.normalize(dirPath));
-        return;
-      }
+    const context: FileOperationContext = {
+      operation: 'ensureDir',
+      path: dirPath
+    };
 
-      logger.debug('Ensuring directory exists', { dirPath });
-      await fs.ensureDir(dirPath);
-      logger.debug('Successfully ensured directory exists', { dirPath });
+    try {
+      logger.debug('Ensuring directory exists', context);
+      await this.fs.mkdir(dirPath);
+      logger.debug('Successfully ensured directory exists', context);
     } catch (error) {
-      logger.error('Failed to ensure directory exists', { dirPath, error });
-      throw new MeldError(`Failed to ensure directory exists: ${dirPath}`, { cause: error });
+      logger.error('Failed to ensure directory exists', { ...context, error });
+      throw new MeldError(`Failed to ensure directory exists: ${dirPath}`, {
+        cause: error,
+        context
+      });
     }
   }
 
   async isDirectory(filePath: string): Promise<boolean> {
-    try {
-      if (this.testMode && this.testFs) {
-        return await this.testFs.isDirectory(this.normalize(filePath));
-      }
+    const context: FileOperationContext = {
+      operation: 'isDirectory',
+      path: filePath
+    };
 
-      logger.debug('Checking if path is directory', { filePath });
-      const stats = await fs.stat(filePath);
-      const isDir = stats.isDirectory();
-      logger.debug('Path directory check complete', { filePath, isDirectory: isDir });
+    try {
+      logger.debug('Checking if path is directory', context);
+      const isDir = await this.fs.isDirectory(filePath);
+      logger.debug('Path directory check complete', { ...context, isDirectory: isDir });
       return isDir;
     } catch (error) {
-      if (error.code === 'ENOENT') {
-        return false;
-      }
-      logger.error('Failed to check if path is directory', { filePath, error });
-      throw new MeldError(`Failed to check if path is directory: ${filePath}`, { cause: error });
+      logger.error('Failed to check if path is directory', { ...context, error });
+      throw new MeldError(`Failed to check if path is directory: ${filePath}`, {
+        cause: error,
+        context
+      });
     }
   }
 
   async isFile(filePath: string): Promise<boolean> {
-    try {
-      if (this.testMode && this.testFs) {
-        return await this.testFs.isFile(this.normalize(filePath));
-      }
+    const context: FileOperationContext = {
+      operation: 'isFile',
+      path: filePath
+    };
 
-      logger.debug('Checking if path is file', { filePath });
-      const stats = await fs.stat(filePath);
-      const isFile = stats.isFile();
-      logger.debug('Path file check complete', { filePath, isFile });
+    try {
+      logger.debug('Checking if path is file', context);
+      const isFile = await this.fs.isFile(filePath);
+      logger.debug('Path file check complete', { ...context, isFile });
       return isFile;
     } catch (error) {
-      if (error.code === 'ENOENT') {
-        return false;
-      }
-      logger.error('Failed to check if path is file', { filePath, error });
-      throw new MeldError(`Failed to check if path is file: ${filePath}`, { cause: error });
+      logger.error('Failed to check if path is file', { ...context, error });
+      throw new MeldError(`Failed to check if path is file: ${filePath}`, {
+        cause: error,
+        context
+      });
     }
-  }
-
-  // Path operations
-  join(...paths: string[]): string {
-    return path.join(...paths);
-  }
-
-  resolve(...paths: string[]): string {
-    return path.resolve(...paths);
-  }
-
-  dirname(filePath: string): string {
-    return path.dirname(filePath);
-  }
-
-  basename(filePath: string): string {
-    return path.basename(filePath);
-  }
-
-  normalize(filePath: string): string {
-    return path.normalize(filePath);
-  }
-
-  // Test mode
-  enableTestMode(testFs: MemfsTestFileSystem): void {
-    this.testMode = true;
-    this.testFs = testFs;
-  }
-
-  disableTestMode(): void {
-    this.testMode = false;
-    this.testFs = null;
-  }
-
-  isTestMode(): boolean {
-    return this.testMode;
-  }
-
-  // Command execution
-  async executeCommand(command: string, options?: { cwd?: string }): Promise<CommandResult> {
-    if (this.testMode) {
-      return { stdout: '', stderr: '' };
-    }
-    throw new Error('executeCommand not implemented in production mode');
   }
 
   getCwd(): string {
-    if (this.testMode) {
-      return '/project';
-    }
     return process.cwd();
-  }
-
-  // Mock file system (for testing)
-  mockFile(path: string, content: string): void {
-    if (this.testMode && this.testFs) {
-      this.testFs.writeFile(this.normalize(path), content);
-    }
-  }
-
-  mockDir(path: string): void {
-    if (this.testMode && this.testFs) {
-      this.testFs.mkdir(this.normalize(path));
-    }
-  }
-
-  clearMocks(): void {
-    if (this.testMode && this.testFs) {
-      this.testFs.initialize();
-    }
   }
 } 

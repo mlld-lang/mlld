@@ -329,14 +329,74 @@ export function createMockResolutionService(): IResolutionService {
     resolveContent: vi.fn(),
     resolvePath: vi.fn(),
     resolveCommand: vi.fn(),
+    resolveText: vi.fn(),
+    resolveData: vi.fn(),
+    validateResolution: vi.fn(),
     extractSection: vi.fn()
   };
 
   // Set default implementations
-  mockService.resolveInContext.mockImplementation(async () => '');
-  mockService.resolveContent.mockImplementation(async () => '');
-  mockService.resolvePath.mockImplementation(async () => '');
-  mockService.resolveCommand.mockImplementation(async () => '');
+  mockService.resolveInContext.mockImplementation(async (value: string, context: any) => {
+    // Validate string literals
+    if (value.startsWith("'") || value.startsWith('"') || value.startsWith('`')) {
+      const quote = value[0];
+      if (value[value.length - 1] !== quote) {
+        throw new Error('Unclosed string literal');
+      }
+      
+      // Check for unescaped quotes
+      const content = value.slice(1, -1);
+      const unescapedQuotes = new RegExp(`(?<!\\\\)${quote}`, 'g');
+      if (unescapedQuotes.test(content)) {
+        throw new Error('Invalid string literal: unescaped quotes');
+      }
+
+      // Return unescaped content
+      return content.replace(new RegExp(`\\\\${quote}`, 'g'), quote);
+    }
+
+    // Handle variable references
+    const varPattern = /\${([^}]+)}/g;
+    return value.replace(varPattern, (match, varPath) => {
+      const parts = varPath.split('.');
+      const baseVar = parts[0];
+
+      // Check for environment variables
+      if (baseVar.startsWith('ENV_')) {
+        return process.env[baseVar] || '';
+      }
+
+      // Try text variables first
+      let varValue = context.state.getTextVar(baseVar);
+      
+      // Then try data variables if allowed
+      if (varValue === undefined && context.allowedVariableTypes?.data) {
+        varValue = context.state.getDataVar(baseVar);
+        if (varValue && parts.length > 1) {
+          // Handle nested data access
+          for (let i = 1; i < parts.length; i++) {
+            varValue = varValue[parts[i]];
+          }
+        }
+      }
+
+      if (varValue === undefined) {
+        throw new Error(`Undefined variable: ${baseVar}`);
+      }
+
+      return String(varValue);
+    });
+  });
+
+  mockService.resolveContent.mockImplementation(async (nodes) => {
+    return nodes.map(n => n.type === 'Text' ? n.content : '').join('');
+  });
+
+  mockService.resolvePath.mockImplementation(async (path) => path);
+  mockService.resolveCommand.mockImplementation(async (cmd) => cmd);
+  mockService.resolveText.mockImplementation(async (text) => text);
+  mockService.resolveData.mockImplementation(async (ref) => ref);
+  mockService.validateResolution.mockImplementation(async () => {});
   mockService.extractSection.mockImplementation(async () => '');
 
   return mockService as unknown as IResolutionService;
