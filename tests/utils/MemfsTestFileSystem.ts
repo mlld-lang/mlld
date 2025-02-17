@@ -94,11 +94,9 @@ export class MemfsTestFileSystem {
       return result;
     }
 
-    // For relative paths, join with project root and ensure proper format
-    const withRoot = path.join('/project', normalized)
-      .replace(/\\/g, '/');
-    const result = forMemfs ? withRoot.slice(1) : withRoot;
-    logger.debug('Resolved relative path', { result, withRoot, normalized });
+    // For relative paths, preserve the path as-is for memfs
+    const result = forMemfs ? normalized : `/${normalized}`;
+    logger.debug('Resolved relative path', { result });
     return result;
   }
 
@@ -465,6 +463,7 @@ export class MemfsTestFileSystem {
       if (fixture.dirs) {
         for (const dir of fixture.dirs) {
           logger.debug('Creating fixture directory', { dir });
+          // Keep the project/ prefix
           await this.ensureDir(dir);
         }
       }
@@ -473,6 +472,7 @@ export class MemfsTestFileSystem {
       if (fixture.files) {
         for (const [filePath, content] of Object.entries(fixture.files)) {
           logger.debug('Creating fixture file', { filePath, contentLength: content.length });
+          // Keep the project/ prefix
           await this.writeFile(filePath, content);
         }
       }

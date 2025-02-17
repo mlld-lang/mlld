@@ -24,6 +24,7 @@ import type { IFileSystemService } from '@services/FileSystemService/IFileSystem
 import * as fs from 'fs-extra';
 import * as path from 'path';
 import { filesystemLogger as logger } from '@core/utils/logger.js';
+import { PathOperationsService } from '@services/FileSystemService/PathOperationsService.js';
 
 interface SnapshotDiff {
   added: string[];
@@ -86,10 +87,11 @@ export class TestContext {
 
     this.factory = testFactories;
 
-    // Initialize all services
+    // Initialize services
+    const pathOps = new PathOperationsService();
+    const filesystem = new FileSystemService(pathOps, this.fs);
     const validation = new ValidationService();
     const state = new StateService();
-    const filesystem = new FileSystemService(this.fs);
     const path = new PathService();
     path.initialize(filesystem);
     const parser = new ParserService();

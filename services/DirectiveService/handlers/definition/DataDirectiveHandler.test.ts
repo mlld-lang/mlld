@@ -1,6 +1,7 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { DataDirectiveHandler } from './DataDirectiveHandler.js';
 import { createDataDirective, createLocation, createDirectiveNode } from '@tests/utils/testFactories.js';
+import { TestContext } from '@tests/utils/TestContext.js';
 import type { IValidationService } from '@services/ValidationService/IValidationService.js';
 import type { IStateService } from '@services/StateService/IStateService.js';
 import type { IResolutionService } from '@services/ResolutionService/IResolutionService.js';
@@ -9,13 +10,18 @@ import type { ResolutionContext } from '@services/ResolutionService/IResolutionS
 import { DirectiveError } from '@services/DirectiveService/errors/DirectiveError.js';
 
 describe('DataDirectiveHandler', () => {
+  let context: TestContext;
   let handler: DataDirectiveHandler;
   let validationService: IValidationService;
   let stateService: IStateService;
   let resolutionService: IResolutionService;
   let clonedState: IStateService;
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    // Initialize test context with memfs
+    context = new TestContext();
+    await context.initialize();
+
     validationService = {
       validate: vi.fn()
     } as unknown as IValidationService;
@@ -41,17 +47,25 @@ describe('DataDirectiveHandler', () => {
     );
   });
 
+  afterEach(async () => {
+    await context.cleanup();
+  });
+
   describe('basic data handling', () => {
     it('should process simple JSON data', async () => {
       const node = createDirectiveNode('data', {
         identifier: 'config',
         value: '{"key": "value"}'
-      }, createLocation(1, 1));
-      const context = { currentFilePath: 'test.meld', state: stateService };
+      }, createLocation(1, 1, 1, 20, '/test.meld'));
+
+      const directiveContext = { 
+        currentFilePath: '/test.meld', 
+        state: stateService 
+      };
 
       vi.mocked(resolutionService.resolveInContext).mockResolvedValueOnce('{"key": "value"}');
 
-      const result = await handler.execute(node, context);
+      const result = await handler.execute(node, directiveContext);
 
       expect(validationService.validate).toHaveBeenCalledWith(node);
       expect(stateService.clone).toHaveBeenCalled();
@@ -68,12 +82,16 @@ describe('DataDirectiveHandler', () => {
       const node = createDirectiveNode('data', {
         identifier: 'config',
         value: jsonData
-      }, createLocation(1, 1));
-      const context = { currentFilePath: 'test.meld', state: stateService };
+      }, createLocation(1, 1, 1, 35, '/test.meld'));
+
+      const directiveContext = { 
+        currentFilePath: '/test.meld', 
+        state: stateService 
+      };
 
       vi.mocked(resolutionService.resolveInContext).mockResolvedValueOnce(jsonData);
 
-      const result = await handler.execute(node, context);
+      const result = await handler.execute(node, directiveContext);
 
       expect(stateService.clone).toHaveBeenCalled();
       expect(clonedState.setDataVar).toHaveBeenCalledWith('config', { nested: { key: 'value' } });
@@ -85,12 +103,16 @@ describe('DataDirectiveHandler', () => {
       const node = createDirectiveNode('data', {
         identifier: 'numbers',
         value: jsonData
-      }, createLocation(1, 1));
-      const context = { currentFilePath: 'test.meld', state: stateService };
+      }, createLocation(1, 1, 1, 15, '/test.meld'));
+
+      const directiveContext = { 
+        currentFilePath: '/test.meld', 
+        state: stateService 
+      };
 
       vi.mocked(resolutionService.resolveInContext).mockResolvedValueOnce(jsonData);
 
-      const result = await handler.execute(node, context);
+      const result = await handler.execute(node, directiveContext);
 
       expect(stateService.clone).toHaveBeenCalled();
       expect(clonedState.setDataVar).toHaveBeenCalledWith('numbers', [1, 2, 3]);
@@ -103,9 +125,10 @@ describe('DataDirectiveHandler', () => {
       const node = createDirectiveNode('data', {
         identifier: 'invalid',
         value: '{invalid: json}'
-      }, createLocation(1, 1));
-      const context = {
-        currentFilePath: 'test.meld',
+      }, createLocation(1, 1, 1, 20, '/test.meld'));
+
+      const directiveContext = {
+        currentFilePath: '/test.meld',
         state: stateService,
         parentState: undefined
       };
@@ -113,16 +136,17 @@ describe('DataDirectiveHandler', () => {
       vi.mocked(validationService.validate).mockResolvedValue(undefined);
       vi.mocked(resolutionService.resolveInContext).mockResolvedValue('{invalid: json}');
 
-      await expect(handler.execute(node, context)).rejects.toThrow(DirectiveError);
+      await expect(handler.execute(node, directiveContext)).rejects.toThrow(DirectiveError);
     });
 
     it('should handle resolution errors', async () => {
       const node = createDirectiveNode('data', {
         identifier: 'error',
         value: '${missing}'
-      }, createLocation(1, 1));
-      const context = {
-        currentFilePath: 'test.meld',
+      }, createLocation(1, 1, 1, 15, '/test.meld'));
+
+      const directiveContext = {
+        currentFilePath: '/test.meld',
         state: stateService,
         parentState: undefined
       };
@@ -132,16 +156,17 @@ describe('DataDirectiveHandler', () => {
         throw new Error('Resolution failed');
       });
 
-      await expect(handler.execute(node, context)).rejects.toThrow(DirectiveError);
+      await expect(handler.execute(node, directiveContext)).rejects.toThrow(DirectiveError);
     });
 
     it('should handle state errors', async () => {
       const node = createDirectiveNode('data', {
         identifier: 'error',
         value: '{ "key": "value" }'
-      }, createLocation(1, 1));
-      const context = {
-        currentFilePath: 'test.meld',
+      }, createLocation(1, 1, 1, 25, '/test.meld'));
+
+      const directiveContext = {
+        currentFilePath: '/test.meld',
         state: stateService,
         parentState: undefined
       };
@@ -158,7 +183,116 @@ describe('DataDirectiveHandler', () => {
       vi.mocked(validationService.validate).mockResolvedValue(undefined);
       vi.mocked(resolutionService.resolveInContext).mockResolvedValue('{ "key": "value" }');
 
-      await expect(handler.execute(node, context)).rejects.toThrow(DirectiveError);
+      await expect(handler.execute(node, directiveContext)).rejects.toThrow(DirectiveError);
+    });
+  });
+
+  describe('variable resolution', () => {
+    it('should resolve variables in nested JSON structures', async () => {
+      const node = createDirectiveNode('data', {
+        identifier: 'config',
+        value: JSON.stringify({
+          user: {
+            name: '${userName}',
+            role: '${userRole}',
+            settings: {
+              theme: '${theme}',
+              items: ['${item1}', '${item2}']
+            }
+          }
+        })
+      }, createLocation(1, 1, 1, 50, '/test.meld'));
+
+      const directiveContext = {
+        currentFilePath: '/test.meld',
+        state: stateService
+      };
+
+      // Mock resolveInContext to handle variables within strings
+      vi.mocked(resolutionService.resolveInContext)
+        .mockImplementation(async (value: string) => {
+          return value.replace(/\${([^}]+)}/g, (match, varName) => {
+            const vars: Record<string, string> = {
+              userName: 'Alice',
+              userRole: 'admin',
+              theme: 'dark',
+              item1: 'first',
+              item2: 'second'
+            };
+            return vars[varName] || match;
+          });
+        });
+
+      const result = await handler.execute(node, directiveContext);
+
+      expect(clonedState.setDataVar).toHaveBeenCalledWith('config', {
+        user: {
+          name: 'Alice',
+          role: 'admin',
+          settings: {
+            theme: 'dark',
+            items: ['first', 'second']
+          }
+        }
+      });
+    });
+
+    it('should handle JSON strings containing variable references', async () => {
+      const node = createDirectiveNode('data', {
+        identifier: 'message',
+        value: '{"text": "Hello ${user}!"}'
+      }, createLocation(1, 1, 1, 30, '/test.meld'));
+
+      const directiveContext = {
+        currentFilePath: '/test.meld',
+        state: stateService
+      };
+
+      // Mock resolveInContext to handle variables within strings
+      vi.mocked(resolutionService.resolveInContext)
+        .mockImplementation(async (value: string) => {
+          return value.replace(/\${([^}]+)}/g, (match, varName) => {
+            const vars: Record<string, string> = {
+              user: 'Alice'
+            };
+            return vars[varName] || match;
+          });
+        });
+
+      const result = await handler.execute(node, directiveContext);
+
+      expect(clonedState.setDataVar).toHaveBeenCalledWith('message', {
+        text: 'Hello Alice!'
+      });
+    });
+
+    it('should preserve JSON structure when resolving variables', async () => {
+      const node = createDirectiveNode('data', {
+        identifier: 'data',
+        value: '{"array": [1, "${var}", 3], "object": {"key": "${var}"}}'
+      }, createLocation(1, 1, 1, 40, '/test.meld'));
+
+      const directiveContext = {
+        currentFilePath: '/test.meld',
+        state: stateService
+      };
+
+      vi.mocked(resolutionService.resolveInContext)
+        .mockImplementation(async (value: string) => {
+          return value.replace(/\${([^}]+)}/g, (match, varName) => {
+            const vars: Record<string, string> = {
+              var: '2'
+            };
+            return vars[varName] || match;
+          });
+        });
+
+      const result = await handler.execute(node, directiveContext);
+
+      expect(clonedState.setDataVar).toHaveBeenCalledWith('data', {
+        array: [1, '2', 3],
+        object: { key: '2' }
+      });
     });
   });
 }); 

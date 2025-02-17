@@ -3,63 +3,13 @@ import { fsLogger as logger } from '@core/utils/simpleLogger.js';
 import { IFileSystemService } from './IFileSystemService.js';
 import { IPathOperationsService } from './IPathOperationsService.js';
 import { IFileSystem } from './IFileSystem.js';
+import { NodeFileSystem } from './NodeFileSystem.js';
 import { MeldError } from '@core/errors/MeldError.js';
 
 interface FileOperationContext {
   operation: string;
   path: string;
   details?: Record<string, unknown>;
-}
-
-// Create a wrapper to adapt fs-extra to our IFileSystem interface
-class NodeFileSystem implements IFileSystem {
-  async readFile(path: string): Promise<string> {
-    return fs.readFile(path, 'utf-8');
-  }
-
-  async writeFile(path: string, content: string): Promise<void> {
-    return fs.writeFile(path, content, 'utf-8');
-  }
-
-  async exists(path: string): Promise<boolean> {
-    return fs.pathExists(path);
-  }
-
-  async stat(path: string): Promise<fs.Stats> {
-    return fs.stat(path);
-  }
-
-  async readDir(path: string): Promise<string[]> {
-    return fs.readdir(path);
-  }
-
-  async mkdir(path: string): Promise<void> {
-    return fs.mkdir(path, { recursive: true });
-  }
-
-  async isDirectory(path: string): Promise<boolean> {
-    try {
-      const stats = await fs.stat(path);
-      return stats.isDirectory();
-    } catch (error) {
-      if (error.code === 'ENOENT') {
-        return false;
-      }
-      throw error;
-    }
-  }
-
-  async isFile(path: string): Promise<boolean> {
-    try {
-      const stats = await fs.stat(path);
-      return stats.isFile();
-    } catch (error) {
-      if (error.code === 'ENOENT') {
-        return false;
-      }
-      throw error;
-    }
-  }
 }
 
 export class FileSystemService implements IFileSystemService {

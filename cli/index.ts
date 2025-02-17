@@ -6,12 +6,16 @@ import { FileSystemService } from '@services/FileSystemService/FileSystemService
 import { PathService } from '@services/PathService/PathService.js';
 import { StateService } from '@services/StateService/StateService.js';
 import { DirectiveService } from '@services/DirectiveService/DirectiveService.js';
+import { PathOperationsService } from '@services/FileSystemService/PathOperationsService.js';
+import { NodeFileSystem } from '@services/FileSystemService/NodeFileSystem.js';
 
 // TODO: Implement CLI
 export async function main() {
   // Create service instances
   const stateService = new StateService();
-  const fileSystemService = new FileSystemService();
+  const pathOps = new PathOperationsService();
+  const nodeFs = new NodeFileSystem();
+  const fileSystemService = new FileSystemService(pathOps, nodeFs);
   const parserService = new ParserService();
   const pathService = new PathService();
   const outputService = new OutputService();
