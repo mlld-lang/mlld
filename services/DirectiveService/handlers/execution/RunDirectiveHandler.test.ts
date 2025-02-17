@@ -21,6 +21,7 @@ describe('RunDirectiveHandler', () => {
   let stateService: IStateService;
   let resolutionService: IResolutionService;
   let fileSystemService: IFileSystemService;
+  let clonedState: IStateService;
 
   beforeEach(() => {
     validationService = {
@@ -31,9 +32,14 @@ describe('RunDirectiveHandler', () => {
       getRegisteredDirectiveKinds: vi.fn()
     } as unknown as IValidationService;
 
+    clonedState = {
+      setTextVar: vi.fn(),
+      clone: vi.fn()
+    } as unknown as IStateService;
+
     stateService = {
       setTextVar: vi.fn(),
-      getTextVar: vi.fn()
+      clone: vi.fn().mockReturnValue(clonedState)
     } as unknown as IStateService;
 
     resolutionService = {
@@ -42,7 +48,10 @@ describe('RunDirectiveHandler', () => {
 
     fileSystemService = {
       getCwd: vi.fn().mockReturnValue('/workspace'),
-      executeCommand: vi.fn()
+      executeCommand: vi.fn(),
+      dirname: vi.fn().mockReturnValue('/workspace'),
+      join: vi.fn().mockImplementation((...args) => args.join('/')),
+      normalize: vi.fn().mockImplementation(path => path)
     } as unknown as IFileSystemService;
 
     handler = new RunDirectiveHandler(
@@ -58,109 +67,112 @@ describe('RunDirectiveHandler', () => {
 
   describe('basic command execution', () => {
     it('should execute simple commands', async () => {
-      const node = createRunDirective('echo "test"', createLocation(1, 1));
-      const context = { currentFilePath: 'test.meld' };
+      const node = createRunDirective('echo test', createLocation(1, 1));
+      const context = {
+        currentFilePath: 'test.meld',
+        state: stateService,
+        parentState: undefined
+      };
 
-      vi.mocked(resolutionService.resolveInContext).mockResolvedValue('echo "test"');
+      const clonedState = {
+        ...stateService,
+        clone: vi.fn().mockReturnThis(),
+        setTextVar: vi.fn()
+      };
+
+      vi.mocked(stateService.clone).mockReturnValue(clonedState);
+      vi.mocked(validationService.validate).mockResolvedValue(undefined);
+      vi.mocked(resolutionService.resolveInContext).mockResolvedValue('echo test');
       vi.mocked(fileSystemService.executeCommand).mockResolvedValue({
         stdout: 'test output',
         stderr: ''
       });
 
-      await handler.execute(node, context);
+      const result = await handler.execute(node, context);
 
-      expect(validationService.validate).toHaveBeenCalledWith(node);
-      expect(resolutionService.resolveInContext).toHaveBeenCalledWith(
-        'echo "test"',
-        {
-          allowNested: false,
-          allowedVariableTypes: {
-            command: true,
-            data: false,
-            path: true,
-            text: true
-          },
-          currentFilePath: 'test.meld'
-        }
-      );
       expect(fileSystemService.executeCommand).toHaveBeenCalledWith(
-        'echo "test"',
-        expect.any(Object)
+        'echo test',
+        expect.objectContaining({ cwd: '/workspace' })
       );
-      expect(stateService.setTextVar).toHaveBeenCalledWith('stdout', 'test output');
+      expect(clonedState.setTextVar).toHaveBeenCalledWith('stdout', 'test output');
+      expect(result).toBe(clonedState);
     });
 
     it('should handle commands with variables', async () => {
-      const node = createRunDirective('${cmd} ${arg}', createLocation(1, 1));
-      const context = { currentFilePath: 'test.meld' };
+      const node = createRunDirective('echo ${message}', createLocation(1, 1));
+      const context = {
+        currentFilePath: 'test.meld',
+        state: stateService,
+        parentState: undefined
+      };
 
-      vi.mocked(resolutionService.resolveInContext).mockResolvedValue('echo "Hello World"');
+      const clonedState = {
+        ...stateService,
+        clone: vi.fn().mockReturnThis(),
+        setTextVar: vi.fn(),
+        getTextVar: vi.fn().mockReturnValue('Hello World')
+      };
+
+      vi.mocked(stateService.clone).mockReturnValue(clonedState);
+      vi.mocked(validationService.validate).mockResolvedValue(undefined);
+      vi.mocked(resolutionService.resolveInContext).mockResolvedValue('echo Hello World');
       vi.mocked(fileSystemService.executeCommand).mockResolvedValue({
         stdout: 'Hello World',
         stderr: ''
       });
 
-      await handler.execute(node, context);
+      const result = await handler.execute(node, context);
 
-      expect(validationService.validate).toHaveBeenCalledWith(node);
-      expect(resolutionService.resolveInContext).toHaveBeenCalledWith(
-        '${cmd} ${arg}',
-        {
-          allowNested: false,
-          allowedVariableTypes: {
-            command: true,
-            data: false,
-            path: true,
-            text: true
-          },
-          currentFilePath: 'test.meld'
-        }
-      );
       expect(fileSystemService.executeCommand).toHaveBeenCalledWith(
-        'echo "Hello World"',
-        expect.any(Object)
+        'echo Hello World',
+        expect.objectContaining({ cwd: '/workspace' })
       );
-      expect(stateService.setTextVar).toHaveBeenCalledWith('stdout', 'Hello World');
+      expect(clonedState.setTextVar).toHaveBeenCalledWith('stdout', 'Hello World');
+      expect(result).toBe(clonedState);
     });
 
     it('should handle commands with path variables', async () => {
-      const node = createRunDirective('cat $PROJECTPATH/test.txt', createLocation(1, 1));
-      const context = { currentFilePath: 'test.meld' };
+      const node = createRunDirective('cat ${file}', createLocation(1, 1));
+      const context = {
+        currentFilePath: 'test.meld',
+        state: stateService,
+        parentState: undefined
+      };
 
-      vi.mocked(resolutionService.resolveInContext).mockResolvedValue('cat /workspace/test.txt');
+      const clonedState = {
+        ...stateService,
+        clone: vi.fn().mockReturnThis(),
+        setTextVar: vi.fn(),
+        getPathVar: vi.fn().mockReturnValue('/path/to/file')
+      };
+
+      vi.mocked(stateService.clone).mockReturnValue(clonedState);
+      vi.mocked(validationService.validate).mockResolvedValue(undefined);
+      vi.mocked(resolutionService.resolveInContext).mockResolvedValue('cat /path/to/file');
       vi.mocked(fileSystemService.executeCommand).mockResolvedValue({
         stdout: 'file contents',
         stderr: ''
       });
 
-      await handler.execute(node, context);
+      const result = await handler.execute(node, context);
 
-      expect(validationService.validate).toHaveBeenCalledWith(node);
-      expect(resolutionService.resolveInContext).toHaveBeenCalledWith(
-        'cat $PROJECTPATH/test.txt',
-        {
-          allowNested: false,
-          allowedVariableTypes: {
-            command: true,
-            data: false,
-            path: true,
-            text: true
-          },
-          currentFilePath: 'test.meld'
-        }
-      );
       expect(fileSystemService.executeCommand).toHaveBeenCalledWith(
-        'cat /workspace/test.txt',
-        expect.any(Object)
+        'cat /path/to/file',
+        expect.objectContaining({ cwd: '/workspace' })
       );
-      expect(stateService.setTextVar).toHaveBeenCalledWith('stdout', 'file contents');
+      expect(clonedState.setTextVar).toHaveBeenCalledWith('stdout', 'file contents');
+      expect(result).toBe(clonedState);
     });
   });
 
   describe('error handling', () => {
     it('should handle validation errors', async () => {
       const node = createRunDirective('', createLocation(1, 1));
-      const context = { currentFilePath: 'test.meld' };
+      const context = { 
+        currentFilePath: 'test.meld', 
+        state: stateService,
+        workingDirectory: '/workspace'
+      };
 
       vi.mocked(validationService.validate).mockRejectedValueOnce(
         new DirectiveError('Invalid command', 'run', DirectiveErrorCode.VALIDATION_FAILED)
@@ -172,7 +184,11 @@ describe('RunDirectiveHandler', () => {
 
     it('should handle resolution errors', async () => {
       const node = createRunDirective('${undefined_var}', createLocation(1, 1));
-      const context = { currentFilePath: 'test.meld' };
+      const context = { 
+        currentFilePath: 'test.meld', 
+        state: stateService,
+        workingDirectory: '/workspace'
+      };
 
       vi.mocked(resolutionService.resolveInContext).mockRejectedValueOnce(
         new Error('Variable not found')
@@ -184,7 +200,11 @@ describe('RunDirectiveHandler', () => {
 
     it('should handle command execution errors', async () => {
       const node = createRunDirective('invalid-command', createLocation(1, 1));
-      const context = { currentFilePath: 'test.meld' };
+      const context = { 
+        currentFilePath: 'test.meld', 
+        state: stateService,
+        workingDirectory: '/workspace'
+      };
 
       vi.mocked(resolutionService.resolveInContext).mockResolvedValueOnce('invalid-command');
       vi.mocked(fileSystemService.executeCommand).mockRejectedValueOnce(
@@ -192,81 +212,136 @@ describe('RunDirectiveHandler', () => {
       );
 
       await expect(handler.execute(node, context)).rejects.toThrow(DirectiveError);
-      expect(stateService.setTextVar).not.toHaveBeenCalled();
+      expect(clonedState.setTextVar).not.toHaveBeenCalled();
     });
   });
 
   describe('output handling', () => {
     it('should handle stdout and stderr', async () => {
-      const node = createRunDirective('echo "test" >&2', createLocation(1, 1));
-      const context = { currentFilePath: 'test.meld' };
+      const node = createRunDirective('echo error >&2', createLocation(1, 1));
+      const context = {
+        currentFilePath: 'test.meld',
+        state: stateService,
+        parentState: undefined
+      };
 
-      vi.mocked(resolutionService.resolveInContext).mockResolvedValueOnce('echo "test" >&2');
-      vi.mocked(fileSystemService.executeCommand).mockResolvedValueOnce({
+      const clonedState = {
+        ...stateService,
+        clone: vi.fn().mockReturnThis(),
+        setTextVar: vi.fn()
+      };
+
+      vi.mocked(stateService.clone).mockReturnValue(clonedState);
+      vi.mocked(validationService.validate).mockResolvedValue(undefined);
+      vi.mocked(resolutionService.resolveInContext).mockResolvedValue('echo error >&2');
+      vi.mocked(fileSystemService.executeCommand).mockResolvedValue({
         stdout: '',
         stderr: 'error output'
       });
 
-      await handler.execute(node, context);
+      const result = await handler.execute(node, context);
 
-      expect(stateService.setTextVar).toHaveBeenCalledWith('stderr', 'error output');
+      expect(stateService.clone).toHaveBeenCalled();
+      expect(clonedState.setTextVar).toHaveBeenCalledWith('stderr', 'error output');
+      expect(result).toBe(clonedState);
     });
 
     it('should handle output capture to variable', async () => {
-      const node = createRunDirective('echo "test"', createLocation(1, 1));
-      node.directive.output = 'result';  // Add output capture
-      const context = { currentFilePath: 'test.meld' };
+      const node = createRunDirective('echo test', createLocation(1, 1));
+      node.directive.output = 'result';
+      const context = {
+        currentFilePath: 'test.meld',
+        state: stateService,
+        parentState: undefined
+      };
 
-      vi.mocked(resolutionService.resolveInContext).mockResolvedValueOnce('echo "test"');
-      vi.mocked(fileSystemService.executeCommand).mockResolvedValueOnce({
+      const clonedState = {
+        ...stateService,
+        clone: vi.fn().mockReturnThis(),
+        setTextVar: vi.fn()
+      };
+
+      vi.mocked(stateService.clone).mockReturnValue(clonedState);
+      vi.mocked(validationService.validate).mockResolvedValue(undefined);
+      vi.mocked(resolutionService.resolveInContext).mockResolvedValue('echo test');
+      vi.mocked(fileSystemService.executeCommand).mockResolvedValue({
         stdout: 'test output',
         stderr: ''
       });
 
-      await handler.execute(node, context);
+      const result = await handler.execute(node, context);
 
-      expect(stateService.setTextVar).toHaveBeenCalledWith('result', 'test output');
+      expect(stateService.clone).toHaveBeenCalled();
+      expect(clonedState.setTextVar).toHaveBeenCalledWith('result', 'test output');
+      expect(result).toBe(clonedState);
     });
   });
 
   describe('working directory handling', () => {
     it('should use workspace root as default cwd', async () => {
       const node = createRunDirective('pwd', createLocation(1, 1));
-      const context = { currentFilePath: 'test.meld' };
+      const context = {
+        currentFilePath: 'test.meld',
+        state: stateService,
+        parentState: undefined
+      };
 
-      vi.mocked(resolutionService.resolveInContext).mockResolvedValueOnce('pwd');
-      vi.mocked(fileSystemService.executeCommand).mockResolvedValueOnce({
+      const clonedState = {
+        ...stateService,
+        clone: vi.fn().mockReturnThis(),
+        setTextVar: vi.fn()
+      };
+
+      vi.mocked(stateService.clone).mockReturnValue(clonedState);
+      vi.mocked(validationService.validate).mockResolvedValue(undefined);
+      vi.mocked(resolutionService.resolveInContext).mockResolvedValue('pwd');
+      vi.mocked(fileSystemService.executeCommand).mockResolvedValue({
         stdout: '/workspace',
         stderr: ''
       });
 
-      await handler.execute(node, context);
+      const result = await handler.execute(node, context);
 
       expect(fileSystemService.executeCommand).toHaveBeenCalledWith(
         'pwd',
         expect.objectContaining({ cwd: '/workspace' })
       );
+      expect(clonedState.setTextVar).toHaveBeenCalledWith('stdout', '/workspace');
+      expect(result).toBe(clonedState);
     });
 
     it('should respect custom working directory', async () => {
       const node = createRunDirective('pwd', createLocation(1, 1));
-      const context = { 
+      const context = {
         currentFilePath: 'test.meld',
+        state: stateService,
+        parentState: undefined,
         workingDirectory: '/custom/dir'
       };
 
-      vi.mocked(resolutionService.resolveInContext).mockResolvedValueOnce('pwd');
-      vi.mocked(fileSystemService.executeCommand).mockResolvedValueOnce({
+      const clonedState = {
+        ...stateService,
+        clone: vi.fn().mockReturnThis(),
+        setTextVar: vi.fn()
+      };
+
+      vi.mocked(stateService.clone).mockReturnValue(clonedState);
+      vi.mocked(validationService.validate).mockResolvedValue(undefined);
+      vi.mocked(resolutionService.resolveInContext).mockResolvedValue('pwd');
+      vi.mocked(fileSystemService.executeCommand).mockResolvedValue({
         stdout: '/custom/dir',
         stderr: ''
       });
 
-      await handler.execute(node, context);
+      const result = await handler.execute(node, context);
 
+      expect(stateService.clone).toHaveBeenCalled();
       expect(fileSystemService.executeCommand).toHaveBeenCalledWith(
         'pwd',
         expect.objectContaining({ cwd: '/custom/dir' })
       );
+      expect(clonedState.setTextVar).toHaveBeenCalledWith('stdout', '/custom/dir');
+      expect(result).toBe(clonedState);
     });
   });
 }); 

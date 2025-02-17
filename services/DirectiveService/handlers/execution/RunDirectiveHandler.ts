@@ -1,16 +1,15 @@
-import { DirectiveNode, RunDirective } from 'meld-spec';
+import { DirectiveNode } from 'meld-spec';
 import { IDirectiveHandler, DirectiveContext } from '@services/DirectiveService/IDirectiveService.js';
 import { IValidationService } from '@services/ValidationService/IValidationService.js';
-import { IStateService } from '@services/StateService/IStateService.js';
 import { IResolutionService } from '@services/ResolutionService/IResolutionService.js';
+import { IStateService } from '@services/StateService/IStateService.js';
 import { IFileSystemService } from '@services/FileSystemService/IFileSystemService.js';
-import { ResolutionContextFactory } from '@services/ResolutionService/ResolutionContextFactory.js';
-import { directiveLogger as logger } from '@core/utils/logger';
 import { DirectiveError, DirectiveErrorCode } from '@services/DirectiveService/errors/DirectiveError.js';
+import { directiveLogger as logger } from '@core/utils/logger.js';
 
 /**
  * Handler for @run directives
- * Executes commands with resolved variables and captures output
+ * Executes commands and stores their output in state
  */
 export class RunDirectiveHandler implements IDirectiveHandler {
   readonly kind = 'run';
@@ -22,7 +21,7 @@ export class RunDirectiveHandler implements IDirectiveHandler {
     private fileSystemService: IFileSystemService
   ) {}
 
-  async execute(node: DirectiveNode, context: DirectiveContext): Promise<void> {
+  async execute(node: DirectiveNode, context: DirectiveContext): Promise<IStateService> {
     logger.debug('Processing run directive', {
       location: node.location,
       context
@@ -31,48 +30,70 @@ export class RunDirectiveHandler implements IDirectiveHandler {
     try {
       // 1. Validate directive structure
       await this.validationService.validate(node);
-      const directive = node.directive as RunDirective;
 
-      // 2. Extract command
-      const { command } = directive;
+      // 2. Get command from directive
+      const { command, output } = node.directive;
 
-      // 3. Create resolution context for command
-      const resolutionContext = ResolutionContextFactory.forRunDirective(
-        context.currentFilePath
-      );
+      // 3. Process command
+      if (!command) {
+        throw new DirectiveError(
+          'Run directive requires a command',
+          this.kind,
+          DirectiveErrorCode.VALIDATION_FAILED,
+          { node }
+        );
+      }
 
-      // 4. Resolve command with variables
+      // Create a new state for modifications
+      const newState = context.state.clone();
+
+      // Create resolution context
+      const resolutionContext = {
+        currentFilePath: context.currentFilePath,
+        state: context.state,
+        allowedVariableTypes: {
+          text: true,
+          data: true,
+          path: true,
+          command: true
+        }
+      };
+
+      // Resolve variables in command
       const resolvedCommand = await this.resolutionService.resolveInContext(
         command,
         resolutionContext
       );
 
-      // 5. Execute command
-      const cwd = context.workingDirectory || this.fileSystemService.getCwd();
-      const { stdout, stderr } = await this.fileSystemService.executeCommand(
-        resolvedCommand,
-        { cwd }
-      );
+      // Determine working directory
+      const cwd = context.workingDirectory || 
+        (context.currentFilePath ? this.fileSystemService.dirname(context.currentFilePath) : undefined);
 
-      // 6. Store output
-      if (directive.output) {
-        // If output variable specified, store there
-        await this.stateService.setTextVar(directive.output, stdout || stderr || '');
+      // Execute command
+      const result = await this.fileSystemService.executeCommand(resolvedCommand, { cwd });
+
+      // Store result in state
+      if (output) {
+        // If output is specified, store in that variable
+        newState.setTextVar(output, result.stdout);
       } else {
         // Otherwise store in stdout/stderr variables
-        if (stdout) {
-          await this.stateService.setTextVar('stdout', stdout);
+        if (result.stdout) {
+          newState.setTextVar('stdout', result.stdout);
         }
-        if (stderr) {
-          await this.stateService.setTextVar('stderr', stderr);
+        if (result.stderr) {
+          newState.setTextVar('stderr', result.stderr);
         }
       }
 
       logger.debug('Run directive processed successfully', {
         command: resolvedCommand,
+        output: result,
         location: node.location
       });
-    } catch (error) {
+
+      return newState;
+    } catch (error: any) {
       logger.error('Failed to process run directive', {
         location: node.location,
         error
@@ -83,13 +104,13 @@ export class RunDirectiveHandler implements IDirectiveHandler {
         throw error;
       }
       throw new DirectiveError(
-        error.message,
+        error?.message || 'Unknown error',
         this.kind,
         DirectiveErrorCode.EXECUTION_FAILED,
         {
           node,
           context,
-          cause: error
+          cause: error instanceof Error ? error : new Error(String(error))
         }
       );
     }

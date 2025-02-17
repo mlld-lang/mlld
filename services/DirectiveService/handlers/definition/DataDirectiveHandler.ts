@@ -23,7 +23,7 @@ export class DataDirectiveHandler implements IDirectiveHandler {
     private resolutionService: IResolutionService
   ) {}
 
-  async execute(node: DirectiveNode, context: DirectiveContext): Promise<void> {
+  async execute(node: DirectiveNode, context: DirectiveContext): Promise<IStateService> {
     logger.debug('Processing data directive', {
       location: node.location,
       context
@@ -46,67 +46,67 @@ export class DataDirectiveHandler implements IDirectiveHandler {
         );
       }
 
-      // Check if this is a pass-through directive
-      if (typeof value === 'string' && (value.startsWith('@embed') || value.startsWith('@run') || value.startsWith('@call'))) {
-        await this.stateService.setDataVar(identifier, value);
-        return;
-      }
+      // Create a new state for modifications
+      const newState = context.state.clone();
 
       // Create resolution context
       const resolutionContext = ResolutionContextFactory.forDataDirective(
-        context.currentFilePath ?? ''
+        context.currentFilePath
       );
 
-      // Resolve variables in the value
-      const resolvedValue = await this.resolutionService.resolveInContext(
-        typeof value === 'string' ? value : JSON.stringify(value),
-        resolutionContext
-      );
+      // Parse JSON if needed
+      let parsedValue: unknown;
+      try {
+        // First resolve variables in the string value
+        const resolvedValue = await this.resolutionService.resolveInContext(
+          value,
+          resolutionContext
+        );
 
-      // Parse the resolved value if it looks like JSON
-      let finalValue = resolvedValue;
-      if (typeof resolvedValue === 'string' && !resolvedValue.startsWith('@')) {
-        // Only attempt to parse if it looks like a JSON object or array
-        if (resolvedValue.trim().startsWith('{') || resolvedValue.trim().startsWith('[')) {
-          try {
-            finalValue = JSON.parse(resolvedValue);
-          } catch (e: unknown) {
-            // If parsing fails, throw a SyntaxError
-            logger.error('Failed to parse resolved value as JSON', {
-              value: resolvedValue,
-              error: e
-            });
-            throw new SyntaxError(`Invalid JSON: ${e instanceof Error ? e.message : 'Unknown error'}`);
-          }
-        }
+        // Then parse as JSON if it's a string
+        parsedValue = typeof resolvedValue === 'string' 
+          ? JSON.parse(resolvedValue)
+          : resolvedValue;
+
+        // Finally resolve any variables in the parsed object's fields
+        parsedValue = await this.resolveObjectFields(parsedValue, resolutionContext);
+      } catch (error: any) {
+        throw new DirectiveError(
+          `Invalid JSON in data directive: ${error?.message || 'Unknown error'}`,
+          this.kind,
+          DirectiveErrorCode.VALIDATION_FAILED,
+          { node, cause: error instanceof Error ? error : new Error(String(error)) }
+        );
       }
 
       // 4. Store in state
-      await this.stateService.setDataVar(identifier, finalValue);
+      newState.setDataVar(identifier, parsedValue);
 
       logger.debug('Data directive processed successfully', {
         identifier,
-        value: finalValue,
+        value: parsedValue,
         location: node.location
       });
-    } catch (error) {
+
+      return newState;
+    } catch (error: any) {
       logger.error('Failed to process data directive', {
         location: node.location,
         error
       });
 
       // Wrap in DirectiveError if needed
-      if (error instanceof DirectiveError || error instanceof SyntaxError) {
+      if (error instanceof DirectiveError) {
         throw error;
       }
       throw new DirectiveError(
-        error instanceof Error ? error.message : 'Unknown error',
+        error?.message || 'Unknown error',
         this.kind,
         DirectiveErrorCode.EXECUTION_FAILED,
         {
           node,
           context,
-          cause: error instanceof Error ? error : undefined
+          cause: error instanceof Error ? error : new Error(String(error))
         }
       );
     }

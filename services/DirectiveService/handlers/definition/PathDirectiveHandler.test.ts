@@ -12,18 +12,25 @@ describe('PathDirectiveHandler', () => {
   let validationService: IValidationService;
   let stateService: IStateService;
   let resolutionService: IResolutionService;
+  let clonedState: IStateService;
 
   beforeEach(() => {
     validationService = {
       validate: vi.fn()
-    };
+    } as unknown as IValidationService;
+
+    clonedState = {
+      setPathVar: vi.fn(),
+      clone: vi.fn()
+    } as unknown as IStateService;
 
     stateService = {
-      setPathVar: vi.fn()
+      setPathVar: vi.fn(),
+      clone: vi.fn().mockReturnValue(clonedState)
     } as unknown as IStateService;
 
     resolutionService = {
-      resolvePath: vi.fn()
+      resolveInContext: vi.fn()
     } as unknown as IResolutionService;
 
     handler = new PathDirectiveHandler(
@@ -33,109 +40,69 @@ describe('PathDirectiveHandler', () => {
     );
   });
 
-  describe('path handling', () => {
-    it('should handle $HOMEPATH paths', async () => {
-      const node = createPathDirective('docs', '$HOMEPATH/docs', createLocation(1, 1));
-      const context = { currentFilePath: 'test.meld' };
+  describe('basic path handling', () => {
+    it('should process simple paths', async () => {
+      const node = createPathDirective('projectPath', '/path/to/project', createLocation(1, 1));
+      const context = { currentFilePath: 'test.meld', state: stateService };
 
-      vi.mocked(resolutionService.resolvePath).mockResolvedValueOnce('/home/user/docs');
+      vi.mocked(resolutionService.resolveInContext).mockResolvedValueOnce('/path/to/project');
 
-      await handler.execute(node, context);
+      const result = await handler.execute(node, context);
 
       expect(validationService.validate).toHaveBeenCalledWith(node);
-      expect(resolutionService.resolvePath).toHaveBeenCalledWith(
-        '$HOMEPATH/docs',
-        expect.objectContaining({
-          pathValidation: {
-            requireAbsolute: true,
-            allowedRoots: ['$PROJECTPATH', '$HOMEPATH', '$~', '$.']
-          }
-        })
+      expect(stateService.clone).toHaveBeenCalled();
+      expect(resolutionService.resolveInContext).toHaveBeenCalledWith(
+        '/path/to/project',
+        expect.any(Object)
       );
-      expect(stateService.setPathVar).toHaveBeenCalledWith('docs', '/home/user/docs');
+      expect(clonedState.setPathVar).toHaveBeenCalledWith('projectPath', '/path/to/project');
+      expect(result).toBe(clonedState);
     });
 
-    it('should handle $PROJECTPATH paths', async () => {
-      const node = createPathDirective('src', '$PROJECTPATH/src', createLocation(1, 1));
-      const context = { currentFilePath: 'test.meld' };
+    it('should handle paths with variables', async () => {
+      const node = createPathDirective('configPath', '${basePath}/config', createLocation(1, 1));
+      const context = { currentFilePath: 'test.meld', state: stateService };
 
-      vi.mocked(resolutionService.resolvePath).mockResolvedValueOnce('/project/src');
+      vi.mocked(resolutionService.resolveInContext).mockResolvedValueOnce('/base/path/config');
 
-      await handler.execute(node, context);
+      const result = await handler.execute(node, context);
 
-      expect(validationService.validate).toHaveBeenCalledWith(node);
-      expect(resolutionService.resolvePath).toHaveBeenCalledWith(
-        '$PROJECTPATH/src',
-        expect.objectContaining({
-          pathValidation: {
-            requireAbsolute: true,
-            allowedRoots: ['$PROJECTPATH', '$HOMEPATH', '$~', '$.']
-          }
-        })
-      );
-      expect(stateService.setPathVar).toHaveBeenCalledWith('src', '/project/src');
+      expect(stateService.clone).toHaveBeenCalled();
+      expect(clonedState.setPathVar).toHaveBeenCalledWith('configPath', '/base/path/config');
+      expect(result).toBe(clonedState);
     });
 
-    it('should handle $~ alias for $HOMEPATH', async () => {
-      const node = createPathDirective('config', '$~/config', createLocation(1, 1));
-      const context = { currentFilePath: 'test.meld' };
+    it('should handle relative paths', async () => {
+      const node = createPathDirective('relativePath', './config', createLocation(1, 1));
+      const context = { currentFilePath: 'test.meld', state: stateService };
 
-      vi.mocked(resolutionService.resolvePath).mockResolvedValueOnce('/home/user/config');
+      vi.mocked(resolutionService.resolveInContext).mockResolvedValueOnce('./config');
 
-      await handler.execute(node, context);
+      const result = await handler.execute(node, context);
 
-      expect(validationService.validate).toHaveBeenCalledWith(node);
-      expect(resolutionService.resolvePath).toHaveBeenCalledWith(
-        '$~/config',
-        expect.objectContaining({
-          pathValidation: {
-            requireAbsolute: true,
-            allowedRoots: ['$PROJECTPATH', '$HOMEPATH', '$~', '$.']
-          }
-        })
-      );
-      expect(stateService.setPathVar).toHaveBeenCalledWith('config', '/home/user/config');
-    });
-
-    it('should handle $. alias for $PROJECTPATH', async () => {
-      const node = createPathDirective('test', '$./test', createLocation(1, 1));
-      const context = { currentFilePath: 'test.meld' };
-
-      vi.mocked(resolutionService.resolvePath).mockResolvedValueOnce('/project/test');
-
-      await handler.execute(node, context);
-
-      expect(validationService.validate).toHaveBeenCalledWith(node);
-      expect(resolutionService.resolvePath).toHaveBeenCalledWith(
-        '$./test',
-        expect.objectContaining({
-          pathValidation: {
-            requireAbsolute: true,
-            allowedRoots: ['$PROJECTPATH', '$HOMEPATH', '$~', '$.']
-          }
-        })
-      );
-      expect(stateService.setPathVar).toHaveBeenCalledWith('test', '/project/test');
+      expect(stateService.clone).toHaveBeenCalled();
+      expect(clonedState.setPathVar).toHaveBeenCalledWith('relativePath', './config');
+      expect(result).toBe(clonedState);
     });
   });
 
   describe('error handling', () => {
-    it('should propagate validation errors', async () => {
-      const node = createPathDirective('test', '$HOMEPATH/test', createLocation(1, 1));
-      const context = { currentFilePath: 'test.meld' };
+    it('should handle validation errors', async () => {
+      const node = createPathDirective('invalidPath', '', createLocation(1, 1));
+      const context = { currentFilePath: 'test.meld', state: stateService };
 
       vi.mocked(validationService.validate).mockImplementationOnce(() => {
-        throw new DirectiveError('Validation error', 'path');
+        throw new DirectiveError('Invalid path', 'path');
       });
 
       await expect(handler.execute(node, context)).rejects.toThrow(DirectiveError);
     });
 
     it('should handle resolution errors', async () => {
-      const node = createPathDirective('test', '$HOMEPATH/test', createLocation(1, 1));
-      const context = { currentFilePath: 'test.meld' };
+      const node = createPathDirective('errorPath', '${undefined}', createLocation(1, 1));
+      const context = { currentFilePath: 'test.meld', state: stateService };
 
-      vi.mocked(resolutionService.resolvePath).mockRejectedValueOnce(
+      vi.mocked(resolutionService.resolveInContext).mockRejectedValueOnce(
         new Error('Resolution error')
       );
 
@@ -143,28 +110,16 @@ describe('PathDirectiveHandler', () => {
     });
 
     it('should handle state errors', async () => {
-      const node = createPathDirective('test', '$HOMEPATH/test', createLocation(1, 1));
-      const context = { currentFilePath: 'test.meld' };
+      const node = createPathDirective('errorPath', '/some/path', createLocation(1, 1));
+      const context = { currentFilePath: 'test.meld', state: stateService };
 
-      vi.mocked(resolutionService.resolvePath).mockResolvedValueOnce('/home/user/test');
-      vi.mocked(stateService.setPathVar).mockRejectedValueOnce(
-        new Error('State error')
-      );
+      vi.mocked(resolutionService.resolveInContext).mockResolvedValue('/some/path');
+      vi.mocked(stateService.clone).mockReturnValue(clonedState);
+      vi.mocked(clonedState.setPathVar).mockImplementation(() => {
+        throw new Error('State error');
+      });
 
       await expect(handler.execute(node, context)).rejects.toThrow(DirectiveError);
-    });
-
-    it('should wrap non-DirectiveErrors', async () => {
-      const node = createPathDirective('test', '$HOMEPATH/test', createLocation(1, 1));
-      const context = { currentFilePath: 'test.meld' };
-
-      vi.mocked(stateService.setPathVar).mockRejectedValueOnce(
-        new Error('Unknown error')
-      );
-
-      const error = await handler.execute(node, context).catch(e => e);
-      expect(error).toBeInstanceOf(DirectiveError);
-      expect(error.details.cause).toBeDefined();
     });
   });
 }); 

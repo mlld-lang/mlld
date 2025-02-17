@@ -16,6 +16,10 @@ export interface DirectiveContext {
   currentFilePath?: string;
   /** Parent state for nested contexts */
   parentState?: IStateService;
+  /** Current state for this directive */
+  state: IStateService;
+  /** Working directory for command execution */
+  workingDirectory?: string;
 }
 
 /**
@@ -27,11 +31,12 @@ export interface IDirectiveHandler {
 
   /**
    * Execute the directive
+   * @returns The updated state after directive execution
    */
   execute(
     node: DirectiveNode,
     context: DirectiveContext
-  ): Promise<void>;
+  ): Promise<IStateService>;
 }
 
 /**
@@ -60,11 +65,12 @@ export interface IDirectiveService {
 
   /**
    * Handle a directive node
+   * @returns The updated state after directive execution
    */
   handleDirective(
     node: DirectiveNode,
     context: DirectiveContext
-  ): Promise<void>;
+  ): Promise<IStateService>;
 
   /**
    * Register a new directive handler
@@ -92,15 +98,17 @@ export interface IDirectiveService {
   /**
    * Process a directive node, validating and executing it
    * Values in the directive will already be interpolated by meld-ast
+   * @returns The updated state after directive execution
    * @throws {MeldDirectiveError} If directive processing fails
    */
-  processDirective(node: DirectiveNode, parentContext?: DirectiveContext): Promise<void>;
+  processDirective(node: DirectiveNode, parentContext?: DirectiveContext): Promise<IStateService>;
 
   /**
    * Process multiple directive nodes in sequence
+   * @returns The final state after processing all directives
    * @throws {MeldDirectiveError} If any directive processing fails
    */
-  processDirectives(nodes: DirectiveNode[]): Promise<void>;
+  processDirectives(nodes: DirectiveNode[], parentContext?: DirectiveContext): Promise<IStateService>;
 
   /**
    * Check if a directive kind is supported

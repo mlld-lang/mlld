@@ -33,7 +33,7 @@ export class DataResolver {
     const { identifier, field } = this.parseDirective(directiveNode);
 
     // Get variable value
-    const value = this.stateService.getDataVar(identifier);
+    const value = directiveNode.directive.value ?? this.stateService.getDataVar(identifier);
 
     if (value === undefined) {
       throw new ResolutionError(
@@ -108,25 +108,11 @@ export class DataResolver {
    * Resolve a field path in a data value
    */
   private resolveField(value: any, field: string, identifier: string): string {
-    if (value === null || value === undefined) {
-      throw new ResolutionError(
-        `Cannot access field '${field}' of undefined or null`,
-        ResolutionErrorCode.FIELD_ACCESS_ERROR,
-        { value: identifier }
-      );
-    }
-
-    if (typeof value !== 'object') {
-      throw new ResolutionError(
-        `Cannot access field '${field}' of non-object value`,
-        ResolutionErrorCode.FIELD_ACCESS_ERROR,
-        { value: identifier }
-      );
-    }
-
-    let current = value;
+    // Split field path into parts
     const parts = field.split('.');
+    let current = value;
 
+    // Traverse the object using the field path
     for (const part of parts) {
       if (current === null || current === undefined) {
         throw new ResolutionError(
@@ -155,8 +141,8 @@ export class DataResolver {
       current = current[part];
     }
 
-    // For nested field access, we want to return the actual value, not a stringified object
-    return typeof current === 'object' ? JSON.stringify(current) : String(current);
+    // Return the actual value for field access
+    return String(current);
   }
 
   /**

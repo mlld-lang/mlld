@@ -1,182 +1,190 @@
-import type { MeldNode, TextNode } from 'meld-spec';
+import type { MeldNode } from 'meld-spec';
 import { stateLogger as logger } from '@core/utils/logger.js';
-import { IStateService } from './IStateService.js';
+import type { IStateService } from './IStateService.js';
+import type { StateNode, CommandDefinition } from './types.js';
+import { StateFactory } from './StateFactory.js';
 
 export class StateService implements IStateService {
-  private nodes: MeldNode[] = [];
-  private textVars: Map<string, string> = new Map();
-  private dataVars: Map<string, any> = new Map();
-  private pathVars: Map<string, string> = new Map();
-  private commands: Map<string, { command: string; options?: Record<string, unknown> }> = new Map();
-  private imports: Set<string> = new Set();
-  private currentFilePath: string | null = null;
+  private stateFactory: StateFactory;
+  private currentState: StateNode;
   private _isImmutable: boolean = false;
-  private localChanges: Set<string>;
-  private parentState?: IStateService;
 
   constructor(parentState?: IStateService) {
-    this.parentState = parentState;
-    this.localChanges = new Set();
-    logger.debug('Created new state service instance', {
-      hasParent: !!parentState
+    this.stateFactory = new StateFactory();
+    this.currentState = this.stateFactory.createState({
+      source: 'constructor',
+      parentState: parentState ? (parentState as StateService).currentState : undefined
     });
   }
 
+  // Text variables
   getTextVar(name: string): string | undefined {
-    const value = this.textVars.get(name) ?? this.parentState?.getTextVar(name);
-    logger.debug('Getting text variable', { name, found: !!value });
-    return value;
+    return this.currentState.variables.text.get(name);
   }
 
   setTextVar(name: string, value: string): void {
     this.checkMutable();
-    this.textVars.set(name, value);
-    this.localChanges.add(`text:${name}`);
-    logger.debug('Set text variable', { name, value });
+    const text = new Map(this.currentState.variables.text);
+    text.set(name, value);
+    this.updateState({
+      variables: {
+        ...this.currentState.variables,
+        text
+      }
+    }, `setTextVar:${name}`);
   }
 
   getAllTextVars(): Map<string, string> {
-    return new Map(this.textVars);
+    return new Map(this.currentState.variables.text);
   }
 
   getLocalTextVars(): Map<string, string> {
-    return new Map(Array.from(this.textVars.entries())
-      .filter(([key]) => !this.imports.has(key)));
+    return new Map(this.currentState.variables.text);
   }
 
-  getDataVar(name: string): any {
-    const value = this.dataVars.get(name) ?? this.parentState?.getDataVar(name);
-    logger.debug('Getting data variable', { name, found: !!value });
-    return value;
+  // Data variables
+  getDataVar(name: string): unknown {
+    return this.currentState.variables.data.get(name);
   }
 
-  setDataVar(name: string, value: any): void {
+  setDataVar(name: string, value: unknown): void {
     this.checkMutable();
-    this.dataVars.set(name, value);
-    this.localChanges.add(`data:${name}`);
-    logger.debug('Set data variable', { name, valueType: typeof value });
+    const data = new Map(this.currentState.variables.data);
+    data.set(name, value);
+    this.updateState({
+      variables: {
+        ...this.currentState.variables,
+        data
+      }
+    }, `setDataVar:${name}`);
   }
 
-  getAllDataVars(): Map<string, any> {
-    return new Map(this.dataVars);
+  getAllDataVars(): Map<string, unknown> {
+    return new Map(this.currentState.variables.data);
   }
 
-  getLocalDataVars(): Map<string, any> {
-    return new Map(Array.from(this.dataVars.entries())
-      .filter(([key]) => !this.imports.has(key)));
+  getLocalDataVars(): Map<string, unknown> {
+    return new Map(this.currentState.variables.data);
   }
 
+  // Path variables
   getPathVar(name: string): string | undefined {
-    const value = this.pathVars.get(name) ?? this.parentState?.getPathVar(name);
-    logger.debug('Getting path variable', { name, found: !!value });
-    return value;
+    return this.currentState.variables.path.get(name);
   }
 
   setPathVar(name: string, value: string): void {
     this.checkMutable();
-    this.pathVars.set(name, value);
-    this.localChanges.add(`path:${name}`);
-    logger.debug('Set path variable', { name, value });
+    const path = new Map(this.currentState.variables.path);
+    path.set(name, value);
+    this.updateState({
+      variables: {
+        ...this.currentState.variables,
+        path
+      }
+    }, `setPathVar:${name}`);
   }
 
   getAllPathVars(): Map<string, string> {
-    return new Map(this.pathVars);
+    return new Map(this.currentState.variables.path);
   }
 
+  // Commands
   getCommand(name: string): { command: string; options?: Record<string, unknown> } | undefined {
-    const command = this.commands.get(name) ?? this.parentState?.getCommand(name);
-    logger.debug('Getting command', { name, found: !!command });
-    return command;
+    const cmd = this.currentState.commands.get(name);
+    if (!cmd) return undefined;
+    return {
+      command: cmd.command,
+      options: cmd.options ? { ...cmd.options } : undefined
+    };
   }
 
   setCommand(name: string, command: string | { command: string; options?: Record<string, unknown> }): void {
     this.checkMutable();
-    if (typeof command === 'string') {
-      this.commands.set(name, { command });
-    } else {
-      this.commands.set(name, command);
-    }
-    this.localChanges.add(`command:${name}`);
-    logger.debug('Set command', { name, command });
+    const commands = new Map(this.currentState.commands);
+    const cmdDef: CommandDefinition = typeof command === 'string' 
+      ? { command } 
+      : { command: command.command, options: command.options };
+    commands.set(name, cmdDef);
+    this.updateState({ commands }, `setCommand:${name}`);
   }
 
   getAllCommands(): Map<string, { command: string; options?: Record<string, unknown> }> {
-    return new Map(this.commands);
+    const commands = new Map<string, { command: string; options?: Record<string, unknown> }>();
+    for (const [name, cmd] of this.currentState.commands) {
+      commands.set(name, {
+        command: cmd.command,
+        options: cmd.options ? { ...cmd.options } : undefined
+      });
+    }
+    return commands;
   }
 
+  // Nodes
   getNodes(): MeldNode[] {
-    return [...this.nodes];
+    return [...this.currentState.nodes];
   }
 
   addNode(node: MeldNode): void {
     this.checkMutable();
-    this.nodes.push(node);
-    this.localChanges.add(`node:${this.nodes.length}`);
-    logger.debug('Added node', {
-      type: node.type,
-      location: node.location
-    });
+    this.updateState({
+      nodes: [...this.currentState.nodes, node]
+    }, 'addNode');
   }
 
   appendContent(content: string): void {
     this.checkMutable();
-    this.nodes.push({
-      type: 'Text',
-      content,
-      location: {
-        start: { line: 0, column: 0 },
-        end: { line: 0, column: 0 }
-      }
-    } as TextNode);
-    this.localChanges.add(`node:${this.nodes.length}`);
-    logger.debug('Appended content', { contentLength: content.length });
+    // Create a text node and add it
+    const node: MeldNode = {
+      type: 'text',
+      value: content,
+      location: { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } }
+    };
+    this.addNode(node);
   }
 
+  // Imports
   addImport(path: string): void {
     this.checkMutable();
-    this.imports.add(path);
-    this.localChanges.add(`import:${path}`);
-    logger.debug('Added import', { path });
+    const imports = new Set(this.currentState.imports);
+    imports.add(path);
+    this.updateState({ imports }, `addImport:${path}`);
   }
 
   removeImport(path: string): void {
     this.checkMutable();
-    this.imports.delete(path);
-    this.localChanges.delete(`import:${path}`);
-    logger.debug('Removed import', { path });
+    const imports = new Set(this.currentState.imports);
+    imports.delete(path);
+    this.updateState({ imports }, `removeImport:${path}`);
   }
 
   hasImport(path: string): boolean {
-    return this.imports.has(path) || !!this.parentState?.hasImport(path);
+    return this.currentState.imports.has(path);
   }
 
   getImports(): Set<string> {
-    return new Set(this.imports);
+    return new Set(this.currentState.imports);
   }
 
-  getCurrentFilePath(): string {
-    return this.currentFilePath ?? '';
+  // File path
+  getCurrentFilePath(): string | null {
+    return this.currentState.filePath ?? null;
   }
 
   setCurrentFilePath(path: string): void {
     this.checkMutable();
-    this.currentFilePath = path;
-    this.localChanges.add(`file:${path}`);
-    logger.debug('Set current file path', { path });
+    this.updateState({ filePath: path }, 'setCurrentFilePath');
   }
 
+  // State management
   hasLocalChanges(): boolean {
-    return this.localChanges.size > 0;
+    return true; // In immutable model, any non-empty state has local changes
   }
 
   getLocalChanges(): string[] {
-    return Array.from(this.localChanges);
+    return ['state']; // In immutable model, the entire state is considered changed
   }
 
   setImmutable(): void {
-    logger.debug('Making state immutable', {
-      changes: Array.from(this.localChanges)
-    });
     this._isImmutable = true;
   }
 
@@ -185,93 +193,38 @@ export class StateService implements IStateService {
   }
 
   createChildState(): IStateService {
-    logger.debug('Creating child state', {
-      parentFilePath: this.currentFilePath
+    const child = new StateService(this);
+    logger.debug('Created child state', {
+      parentPath: this.getCurrentFilePath(),
+      childPath: child.getCurrentFilePath()
     });
-    return new StateService(this);
+    return child;
   }
 
   mergeChildState(childState: IStateService): void {
     this.checkMutable();
-
-    // Merge text variables
-    for (const [key, value] of childState.getLocalTextVars()) {
-      this.setTextVar(key, value);
-    }
-
-    // Merge data variables
-    for (const [key, value] of childState.getLocalDataVars()) {
-      this.setDataVar(key, value);
-    }
-
-    // Merge path variables
-    for (const [key, value] of childState.getAllPathVars()) {
-      this.setPathVar(key, value);
-    }
-
-    // Merge commands
-    for (const [key, value] of childState.getAllCommands()) {
-      this.setCommand(key, value);
-    }
-
-    // Merge nodes
-    for (const node of childState.getNodes()) {
-      this.addNode(node);
-    }
-
-    // Merge imports
-    for (const importPath of childState.getImports()) {
-      this.addImport(importPath);
-    }
-
-    logger.debug('Merged child state', {
-      textVars: childState.getLocalTextVars().size,
-      dataVars: childState.getLocalDataVars().size,
-      pathVars: childState.getAllPathVars().size,
-      commands: childState.getAllCommands().size,
-      nodes: childState.getNodes().length,
-      imports: childState.getImports().size
-    });
+    const child = childState as StateService;
+    this.currentState = this.stateFactory.mergeStates(this.currentState, child.currentState);
   }
 
   clone(): IStateService {
-    logger.debug('Cloning state');
-    const newState = new StateService(this.parentState);
-    
-    // Copy all variables and state
-    for (const [key, value] of this.textVars) {
-      newState.setTextVar(key, value);
-    }
-    for (const [key, value] of this.dataVars) {
-      newState.setDataVar(key, value);
-    }
-    for (const [key, value] of this.pathVars) {
-      newState.setPathVar(key, value);
-    }
-    for (const [key, value] of this.commands) {
-      newState.setCommand(key, value);
-    }
-    for (const importPath of this.imports) {
-      newState.addImport(importPath);
-    }
-    for (const node of this.nodes) {
-      newState.addNode(node);
-    }
-
-    if (this.currentFilePath) {
-      newState.setCurrentFilePath(this.currentFilePath);
-    }
-    if (this._isImmutable) {
-      newState.setImmutable();
-    }
-
-    return newState;
+    const cloned = new StateService();
+    cloned.currentState = this.stateFactory.createState({
+      source: 'clone',
+      parentState: this.currentState
+    });
+    cloned._isImmutable = this._isImmutable;
+    return cloned;
   }
 
   private checkMutable(): void {
-    if (this.isImmutable) {
-      logger.error('Attempted to modify immutable state');
+    if (this._isImmutable) {
       throw new Error('Cannot modify immutable state');
     }
+  }
+
+  private updateState(updates: Partial<StateNode>, source: string): void {
+    this.currentState = this.stateFactory.updateState(this.currentState, updates);
+    logger.debug('Updated state', { source, updates });
   }
 } 

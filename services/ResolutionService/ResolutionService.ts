@@ -5,6 +5,7 @@ import { TextResolver } from './resolvers/TextResolver.js';
 import { DataResolver } from './resolvers/DataResolver.js';
 import { PathResolver } from './resolvers/PathResolver.js';
 import { CommandResolver } from './resolvers/CommandResolver.js';
+import { ContentResolver } from './resolvers/ContentResolver.js';
 import { resolutionLogger as logger } from '@core/utils/logger.js';
 import { IFileSystemService } from '@services/FileSystemService/IFileSystemService.js';
 import { IParserService } from '@services/ParserService/IParserService.js';
@@ -18,6 +19,7 @@ export class ResolutionService implements IResolutionService {
   private dataResolver: DataResolver;
   private pathResolver: PathResolver;
   private commandResolver: CommandResolver;
+  private contentResolver: ContentResolver;
 
   constructor(
     private stateService: IStateService,
@@ -28,6 +30,7 @@ export class ResolutionService implements IResolutionService {
     this.dataResolver = new DataResolver(stateService);
     this.pathResolver = new PathResolver(stateService);
     this.commandResolver = new CommandResolver(stateService);
+    this.contentResolver = new ContentResolver(stateService);
   }
 
   /**
@@ -88,7 +91,7 @@ export class ResolutionService implements IResolutionService {
   /**
    * Resolve content from a file path
    */
-  async resolveContent(path: string): Promise<string> {
+  async resolveFile(path: string): Promise<string> {
     if (!await this.fileSystemService.exists(path)) {
       throw new ResolutionError(
         `File not found: ${path}`,
@@ -97,6 +100,13 @@ export class ResolutionService implements IResolutionService {
       );
     }
     return this.fileSystemService.readFile(path);
+  }
+
+  /**
+   * Resolve raw content nodes, preserving formatting but skipping comments
+   */
+  async resolveContent(nodes: MeldNode[], context: ResolutionContext): Promise<string> {
+    return this.contentResolver.resolve(nodes, context);
   }
 
   /**
@@ -109,66 +119,137 @@ export class ResolutionService implements IResolutionService {
     // 2. Check for circular references
     await this.detectCircularReferences(value);
 
-    // 3. Parse the value into AST nodes
-    const nodes = await this.parseForResolution(value);
+    // 3. Handle variable interpolation
+    let result = value;
 
-    // 4. Resolve each node
-    let result = '';
-    for (const node of nodes) {
-      if (node.type === 'Text') {
-        result += (node as TextNode).content;
-        continue;
+    // Handle ${var} text/data variables
+    const textVarRegex = /\${([^}]+)}/g;
+    let match;
+    while ((match = textVarRegex.exec(value)) !== null) {
+      const [fullMatch, varPath] = match;
+      const [varName, ...fieldPath] = varPath.split('.');
+      
+      // Try text variable first
+      let varValue = this.stateService.getTextVar(varName);
+      
+      // If not found in text vars, try data vars
+      if (varValue === undefined) {
+        varValue = this.stateService.getDataVar(varName);
+      }
+      
+      if (varValue === undefined) {
+        throw new ResolutionError(
+          `Undefined variable: ${varName}`,
+          ResolutionErrorCode.UNDEFINED_VARIABLE,
+          { value: varName, context }
+        );
       }
 
-      if (node.type === 'Directive') {
-        const directiveNode = node as DirectiveNode;
-        // Handle directive nodes based on their kind
-        switch (directiveNode.directive.kind) {
-          case 'text':
-            if (!context.allowedVariableTypes.text) {
-              throw new ResolutionError(
-                'Text variables are not allowed in this context',
-                ResolutionErrorCode.INVALID_CONTEXT,
-                { value, context }
-              );
-            }
-            result += await this.textResolver.resolve(directiveNode, context);
-            break;
+      // Handle field access if needed
+      if (fieldPath.length > 0) {
+        const field = fieldPath.join('.');
+        const dataNode: DirectiveNode = {
+          type: 'Directive',
+          directive: {
+            kind: 'data' as const,
+            identifier: varName,
+            fields: field,
+            value: varValue
+          },
+          location: undefined
+        };
 
-          case 'data':
-            if (!context.allowedVariableTypes.data) {
-              throw new ResolutionError(
-                'Data variables are not allowed in this context',
-                ResolutionErrorCode.INVALID_CONTEXT,
-                { value, context }
-              );
-            }
-            result += await this.dataResolver.resolve(directiveNode, context);
-            break;
+        // Create a new context for field resolution
+        const fieldContext: ResolutionContext = {
+          ...context,
+          allowDataFields: true,
+          allowedVariableTypes: {
+            ...context.allowedVariableTypes,
+            data: true
+          }
+        };
 
-          case 'path':
-            if (!context.allowedVariableTypes.path) {
-              throw new ResolutionError(
-                'Path variables are not allowed in this context',
-                ResolutionErrorCode.INVALID_CONTEXT,
-                { value, context }
-              );
-            }
-            result += await this.pathResolver.resolve(directiveNode, context);
-            break;
-
-          case 'run':
-            if (!context.allowedVariableTypes.command) {
-              throw new ResolutionError(
-                'Command references are not allowed in this context',
-                ResolutionErrorCode.INVALID_CONTEXT,
-                { value, context }
-              );
-            }
-            result += await this.commandResolver.resolve(directiveNode, context);
-            break;
-        }
+        varValue = await this.dataResolver.resolve(dataNode, fieldContext);
       }
+
+      // Replace the variable reference with its value
+      result = result.replace(fullMatch, String(varValue));
+    }
+
+    // Handle #{data} variables
+    const dataVarRegex = /#{([^}]+)}/g;
+    while ((match = dataVarRegex.exec(value)) !== null) {
+      const [fullMatch, varPath] = match;
+      const [varName, ...fieldPath] = varPath.split('.');
+      
+      const varValue = this.stateService.getDataVar(varName);
+      
+      if (varValue === undefined) {
+        throw new ResolutionError(
+          `Undefined data variable: ${varName}`,
+          ResolutionErrorCode.UNDEFINED_VARIABLE,
+          { value: varName, context }
+        );
+      }
+
+      // Handle field access if needed
+      let resolvedValue = varValue;
+      if (fieldPath.length > 0) {
+        const field = fieldPath.join('.');
+        const dataNode: DirectiveNode = {
+          type: 'Directive',
+          directive: {
+            kind: 'data' as const,
+            identifier: varName,
+            fields: field,
+            value: varValue
+          },
+          location: undefined
+        };
+        resolvedValue = await this.dataResolver.resolve(dataNode, context);
+      }
+
+      // Replace the variable reference with its value
+      result = result.replace(fullMatch, String(resolvedValue));
+    }
+
+    // Handle $path variables
+    const pathVarRegex = /\$([A-Za-z0-9_]+)/g;
+    while ((match = pathVarRegex.exec(value)) !== null) {
+      const [fullMatch, varName] = match;
+      
+      const varValue = this.stateService.getPathVar(varName);
+      
+      if (varValue === undefined) {
+        throw new ResolutionError(
+          `Undefined path variable: ${varName}`,
+          ResolutionErrorCode.UNDEFINED_VARIABLE,
+          { value: varName, context }
+        );
+      }
+
+      // Replace the variable reference with its value
+      result = result.replace(fullMatch, varValue);
+    }
+
+    // Handle $command(args) references
+    const cmdRegex = /\$([A-Za-z0-9_]+)\(([^)]*)\)/g;
+    while ((match = cmdRegex.exec(value)) !== null) {
+      const [fullMatch, cmdName, argsStr] = match;
+      const args = argsStr.split(',').map(arg => arg.trim());
+      
+      const cmdValue = await this.commandResolver.resolve({
+        type: 'Directive' as const,
+        directive: {
+          kind: 'run' as const,
+          identifier: cmdName,
+          args
+        },
+        location: undefined
+      } as DirectiveNode, context);
+
+      // Replace the command reference with its value
+      result = result.replace(fullMatch, cmdValue);
     }
 
     return result;

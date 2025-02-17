@@ -15,8 +15,7 @@ interface PathDirective extends DirectiveData {
 
 /**
  * Handler for @path directives
- * Stores path variables that must start with special path variables ($HOMEPATH/$~ or $PROJECTPATH/$.)
- * Format: @path identifier = "path/to/file"
+ * Stores path values in state after resolving variables
  */
 export class PathDirectiveHandler implements IDirectiveHandler {
   readonly kind = 'path';
@@ -27,24 +26,20 @@ export class PathDirectiveHandler implements IDirectiveHandler {
     private resolutionService: IResolutionService
   ) {}
 
-  async execute(node: DirectiveNode, context: DirectiveContext): Promise<void> {
+  async execute(node: DirectiveNode, context: DirectiveContext): Promise<IStateService> {
+    logger.debug('Processing path directive', {
+      location: node.location,
+      context
+    });
+
     try {
       // 1. Validate directive structure
       await this.validationService.validate(node);
 
-      // 2. Extract directive details
-      const directive = node.directive as PathDirective;
-      const { identifier, value } = directive;
+      // 2. Get identifier and value from directive
+      const { identifier, value } = node.directive;
 
-      if (!identifier) {
-        throw new DirectiveError(
-          'Path directive requires an identifier',
-          this.kind,
-          DirectiveErrorCode.VALIDATION_FAILED,
-          { node }
-        );
-      }
-
+      // 3. Process value based on type
       if (!value) {
         throw new DirectiveError(
           'Path directive requires a value',
@@ -54,80 +49,48 @@ export class PathDirectiveHandler implements IDirectiveHandler {
         );
       }
 
-      // 3. Create appropriate resolution context
+      // Create a new state for modifications
+      const newState = context.state.clone();
+
+      // Create resolution context
       const resolutionContext = ResolutionContextFactory.forPathDirective(
         context.currentFilePath
       );
 
-      // 4. Resolve path value
-      let resolvedPath: string;
-      try {
-        resolvedPath = await this.resolutionService.resolvePath(value, {
-          allowedVariableTypes: {
-            text: true,
-            data: false,
-            path: true,
-            command: false
-          },
-          pathValidation: {
-            requireAbsolute: true,
-            allowedRoots: ['$PROJECTPATH', '$HOMEPATH', '$~', '$.']
-          },
-          location: node.location
-        });
-      } catch (error) {
-        throw new DirectiveError(
-          error instanceof Error ? error.message : 'Failed to resolve path',
-          this.kind,
-          DirectiveErrorCode.RESOLUTION_FAILED,
-          {
-            node,
-            context,
-            cause: error instanceof Error ? error : undefined
-          }
-        );
-      }
+      // Resolve variables in the value
+      const resolvedValue = await this.resolutionService.resolveInContext(
+        value,
+        resolutionContext
+      );
 
-      // 5. Store in state
-      try {
-        await this.stateService.setPathVar(identifier, resolvedPath);
-      } catch (error) {
-        throw new DirectiveError(
-          error instanceof Error ? error.message : 'Failed to store path in state',
-          this.kind,
-          DirectiveErrorCode.STATE_ERROR,
-          {
-            node,
-            context,
-            cause: error instanceof Error ? error : undefined
-          }
-        );
-      }
+      // 4. Store in state
+      newState.setPathVar(identifier, resolvedValue);
 
-      logger.debug('Stored path variable', {
+      logger.debug('Path directive processed successfully', {
         identifier,
-        originalPath: value,
-        resolvedPath,
+        value: resolvedValue,
         location: node.location
       });
-    } catch (error) {
+
+      return newState;
+    } catch (error: any) {
       logger.error('Failed to process path directive', {
         location: node.location,
         error
       });
 
-      // Preserve DirectiveError or wrap other errors
+      // Wrap in DirectiveError if needed
       if (error instanceof DirectiveError) {
         throw error;
       }
       throw new DirectiveError(
-        error instanceof Error ? error.message : 'Unknown error in path directive',
+        error?.message || 'Unknown error',
         this.kind,
         DirectiveErrorCode.EXECUTION_FAILED,
         {
           node,
           context,
-          cause: error instanceof Error ? error : undefined
+          cause: error instanceof Error ? error : new Error(String(error))
         }
       );
     }

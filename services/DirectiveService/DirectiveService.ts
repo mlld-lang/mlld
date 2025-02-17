@@ -166,65 +166,28 @@ export class DirectiveService implements IDirectiveService {
   /**
    * Handle a directive node
    */
-  async handleDirective(node: DirectiveNode, parentContext?: DirectiveContext): Promise<void> {
-    return this.processDirective(node, parentContext);
-  }
-
-  /**
-   * Process a directive node
-   */
-  async processDirective(node: DirectiveNode, parentContext?: DirectiveContext): Promise<void> {
-    this.ensureInitialized();
-
-    const handler = this.handlers.get(node.directive.kind);
-    if (!handler) {
-      throw new DirectiveError(
-        `No handler found for directive: ${node.directive.kind}`,
-        node.directive.kind,
-        DirectiveErrorCode.HANDLER_NOT_FOUND,
-        { node }
-      );
-    }
-
-    try {
-      // Create context for directive execution
-      const context: DirectiveContext = this.createContext(node, parentContext);
-
-      // Validate the directive
-      await this.validateDirective(node);
-
-      // Execute handler
-      await handler.execute(node, context);
-
-      this.logger.debug(`Successfully processed ${node.directive.kind} directive`, {
-        location: node.location
-      });
-    } catch (error) {
-      // If it's already a DirectiveError, rethrow
-      if (error instanceof DirectiveError) {
-        throw error;
-      }
-
-      // Otherwise wrap in DirectiveError
-      throw new DirectiveError(
-        error.message,
-        node.directive.kind,
-        DirectiveErrorCode.EXECUTION_FAILED,
-        {
-          node,
-          cause: error
-        }
-      );
-    }
+  public async handleDirective(node: DirectiveNode, context: DirectiveContext): Promise<IStateService> {
+    return this.processDirective(node, context);
   }
 
   /**
    * Process multiple directives in sequence
    */
-  async processDirectives(nodes: DirectiveNode[], parentContext?: DirectiveContext): Promise<void> {
+  async processDirectives(nodes: DirectiveNode[], parentContext?: DirectiveContext): Promise<IStateService> {
+    let currentState = parentContext?.state?.clone() || this.stateService!.createChildState();
+
     for (const node of nodes) {
-      await this.processDirective(node, parentContext);
+      // Create a new context with the current state
+      const nodeContext = {
+        ...this.createContext(node, parentContext),
+        state: currentState
+      };
+
+      // Process directive and update current state
+      currentState = await this.processDirective(node, nodeContext);
     }
+
+    return currentState;
   }
 
   /**
@@ -233,7 +196,8 @@ export class DirectiveService implements IDirectiveService {
   private createContext(node: DirectiveNode, parentContext?: DirectiveContext): DirectiveContext {
     return {
       currentFilePath: node.location?.start.line ? node.location.start.line.toString() : '',
-      parentState: parentContext?.parentState
+      parentState: parentContext?.state,
+      state: parentContext?.state?.clone() || this.stateService!.createChildState()
     };
   }
 
@@ -282,13 +246,11 @@ export class DirectiveService implements IDirectiveService {
   /**
    * Create a child context for nested directives
    */
-  createChildContext(
-    parentContext: DirectiveContext,
-    filePath: string
-  ): DirectiveContext {
+  public createChildContext(parentContext: DirectiveContext, filePath: string): DirectiveContext {
     return {
       currentFilePath: filePath,
-      parentState: parentContext.parentState
+      state: parentContext.state.createChildState(),
+      parentState: parentContext.state
     };
   }
 
@@ -640,6 +602,35 @@ export class DirectiveService implements IDirectiveService {
         errorMessage,
         'embed',
         node.location?.start
+      );
+    }
+  }
+
+  public async processDirective(node: DirectiveNode, context: DirectiveContext): Promise<IStateService> {
+    if (!this.initialized) {
+      throw new Error('DirectiveService must be initialized before use');
+    }
+
+    try {
+      const handler = this.handlers.get(node.directive.kind);
+      if (!handler) {
+        throw new DirectiveError(
+          `No handler found for directive kind: ${node.directive.kind}`,
+          node.directive.kind,
+          DirectiveErrorCode.HANDLER_NOT_FOUND,
+          { node }
+        );
+      }
+      return await handler.execute(node, context);
+    } catch (error) {
+      if (error instanceof DirectiveError) {
+        throw error;
+      }
+      throw new DirectiveError(
+        (error as Error)?.message || 'Unknown error',
+        node.directive.kind,
+        DirectiveErrorCode.EXECUTION_FAILED,
+        { node, cause: error as Error }
       );
     }
   }

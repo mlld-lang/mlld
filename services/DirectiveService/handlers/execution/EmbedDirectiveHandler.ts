@@ -1,4 +1,4 @@
-import { DirectiveNode, EmbedDirective } from 'meld-spec';
+import { DirectiveNode } from 'meld-spec';
 import { IDirectiveHandler, DirectiveContext } from '@services/DirectiveService/IDirectiveService.js';
 import { IValidationService } from '@services/ValidationService/IValidationService.js';
 import { IResolutionService } from '@services/ResolutionService/IResolutionService.js';
@@ -19,11 +19,10 @@ export interface ILogger {
 
 /**
  * Handler for @embed directives
- * Embeds content from other files into the current document
+ * Embeds content from files or sections of files
  */
 export class EmbedDirectiveHandler implements IDirectiveHandler {
   readonly kind = 'embed';
-  private logger: ILogger;
 
   constructor(
     private validationService: IValidationService,
@@ -33,147 +32,130 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
     private fileSystemService: IFileSystemService,
     private parserService: IParserService,
     private interpreterService: IInterpreterService,
-    logger?: ILogger
-  ) {
-    this.logger = logger || embedLogger;
-  }
+    private logger: ILogger = embedLogger
+  ) {}
 
-  async execute(node: DirectiveNode): Promise<void> {
-    const directive = node.directive as EmbedDirective;
-    
+  async execute(node: DirectiveNode, context: DirectiveContext): Promise<IStateService> {
     this.logger.debug('Processing embed directive', {
-      path: directive.path,
-      section: directive.section,
-      fuzzy: directive.fuzzy,
-      names: directive.names,
-      location: node.location
+      location: node.location,
+      context
     });
 
     try {
-      // 1. Validate the directive
+      // 1. Validate directive structure
       await this.validationService.validate(node);
-      
-      // 2. Resolve the path and any variables
-      const resolvedPath = await this.resolutionService.resolvePath(directive.path, {
+
+      // 2. Get path and section from directive
+      const { path, section, fuzzy } = node.directive;
+
+      // 3. Process path
+      if (!path) {
+        throw new DirectiveError(
+          'Embed directive requires a path',
+          this.kind,
+          DirectiveErrorCode.VALIDATION_FAILED,
+          { node }
+        );
+      }
+
+      // Create a new state for modifications
+      const newState = context.state.clone();
+
+      // Create resolution context
+      const resolutionContext = {
+        currentFilePath: context.currentFilePath,
+        state: context.state,
         allowedVariableTypes: {
           text: true,
           data: true,
           path: true,
           command: false
-        },
-        pathValidation: {
-          requireAbsolute: true,
-          allowedRoots: ['$PROJECTPATH', '$HOMEPATH']
         }
-      });
+      };
 
-      // 3. Check for circular references
+      // Resolve variables in path
+      const resolvedPath = await this.resolutionService.resolveInContext(
+        path,
+        resolutionContext
+      );
+
+      // Check for circular imports
       this.circularityService.beginImport(resolvedPath);
 
       try {
-        // 4. Check if file exists
+        // Check if file exists
         if (!await this.fileSystemService.exists(resolvedPath)) {
           throw new DirectiveError(
             `Embed file not found: ${resolvedPath}`,
             this.kind,
-            DirectiveErrorCode.FILE_NOT_FOUND
+            DirectiveErrorCode.FILE_NOT_FOUND,
+            { node, path: resolvedPath }
           );
         }
 
-        // 5. Read the file content
-        const rawContent = await this.fileSystemService.readFile(resolvedPath);
+        // Read file content
+        const content = await this.fileSystemService.readFile(resolvedPath);
 
-        // 6. Process the content based on directive options
-        let processedContent = rawContent;
-
-        // 6a. If section is specified, extract it first
-        if (directive.section) {
+        // Extract section if specified
+        let processedContent = content;
+        if (section) {
+          const resolvedSection = await this.resolutionService.resolveInContext(
+            section,
+            resolutionContext
+          );
           processedContent = await this.resolutionService.extractSection(
-            processedContent,
-            directive.section
+            content,
+            resolvedSection,
+            fuzzy
           );
         }
 
-        // 6b. If it's a .meld file and contains directives, parse and interpret it
-        if (resolvedPath.endsWith('.meld') && processedContent.includes('@')) {
-          // Create a child state for the embed
-          const childState = await this.stateService.createChildState();
+        // Parse content
+        const nodes = await this.parserService.parse(processedContent);
 
-          try {
-            // Parse and interpret the content
-            const parsedNodes = await this.parserService.parse(processedContent);
-            await this.interpreterService.interpret(parsedNodes, {
-              initialState: childState,
-              filePath: resolvedPath,
-              mergeState: true
-            });
+        // Create child state for interpretation
+        const childState = newState.createChildState();
 
-            // Early return since interpret will handle adding nodes
-            return;
-          } catch (error) {
-            throw new DirectiveError(
-              `Failed to parse .meld file: ${error.message}`,
-              this.kind,
-              DirectiveErrorCode.PARSE_ERROR,
-              { cause: error }
-            );
-          }
-        }
+        // Interpret content
+        const interpretedState = await this.interpreterService.interpret(nodes, {
+          initialState: childState,
+          filePath: resolvedPath,
+          mergeState: true
+        });
 
-        // 7. Handle named embeds or process content
-        if (directive.names && directive.names.length > 0) {
-          // Set each named variable with the raw content
-          for (const name of directive.names) {
-            await this.stateService.setTextVar(name, rawContent);
-          }
-        } else {
-          // If no names specified, process and append the content
+        // Merge interpreted state back
+        newState.mergeChildState(interpretedState);
 
-          // 7b. Resolve any variables in the content
-          processedContent = await this.resolutionService.resolveContent(processedContent);
-
-          // 7c. If heading level is specified, validate and apply it
-          if (directive.headingLevel !== undefined) {
-            if (directive.headingLevel < 1 || directive.headingLevel > 6) {
-              throw new DirectiveError(
-                `Invalid heading level: ${directive.headingLevel}. Must be between 1 and 6.`,
-                this.kind,
-                DirectiveErrorCode.VALIDATION_FAILED
-              );
-            }
-          }
-
-          // 7d. Append the processed content
-          await this.stateService.appendContent(processedContent);
-        }
-
-        this.logger.debug('Embed content processed', {
+        this.logger.debug('Embed directive processed successfully', {
           path: resolvedPath,
-          section: directive.section,
-          names: directive.names,
+          section,
           location: node.location
         });
+
+        return newState;
       } finally {
-        // Always end import tracking, even if there was an error
+        // Always end import tracking
         this.circularityService.endImport(resolvedPath);
       }
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to process embed directive', {
-        path: directive.path,
-        section: directive.section,
         location: node.location,
         error
       });
 
+      // Wrap in DirectiveError if needed
       if (error instanceof DirectiveError) {
         throw error;
       }
-
       throw new DirectiveError(
-        `Failed to embed content: ${error.message}`,
+        error?.message || 'Unknown error',
         this.kind,
         DirectiveErrorCode.EXECUTION_FAILED,
-        { cause: error }
+        {
+          node,
+          context,
+          cause: error instanceof Error ? error : new Error(String(error))
+        }
       );
     }
   }

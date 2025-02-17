@@ -1,4 +1,4 @@
-import { MeldNode } from 'meld-spec';
+import type { MeldNode } from 'meld-spec';
 
 /**
  * Context for variable resolution, specifying what types of variables and operations are allowed
@@ -67,7 +67,12 @@ export interface IResolutionService {
   /**
    * Resolve content from a file path
    */
-  resolveContent(path: string): Promise<string>;
+  resolveFile(path: string): Promise<string>;
+
+  /**
+   * Resolve raw content nodes, preserving formatting but skipping comments
+   */
+  resolveContent(nodes: MeldNode[], context: ResolutionContext): Promise<string>;
 
   /**
    * Resolve any value based on the provided context rules

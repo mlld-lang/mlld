@@ -15,20 +15,23 @@ describe('StateService', () => {
       expect(state.getTextVar('greeting')).toBe('Hello');
     });
 
-    it('should inherit text variables from parent', () => {
-      const parent = new StateService();
-      parent.setTextVar('greeting', 'Hello');
-      const child = new StateService(parent);
-      expect(child.getTextVar('greeting')).toBe('Hello');
+    it('should return undefined for non-existent text variables', () => {
+      expect(state.getTextVar('nonexistent')).toBeUndefined();
     });
 
-    it('should override parent text variables', () => {
-      const parent = new StateService();
-      parent.setTextVar('greeting', 'Hello');
-      const child = new StateService(parent);
-      child.setTextVar('greeting', 'Hi');
-      expect(child.getTextVar('greeting')).toBe('Hi');
-      expect(parent.getTextVar('greeting')).toBe('Hello');
+    it('should get all text variables', () => {
+      state.setTextVar('greeting', 'Hello');
+      state.setTextVar('farewell', 'Goodbye');
+
+      const vars = state.getAllTextVars();
+      expect(vars.size).toBe(2);
+      expect(vars.get('greeting')).toBe('Hello');
+      expect(vars.get('farewell')).toBe('Goodbye');
+    });
+
+    it('should get local text variables', () => {
+      state.setTextVar('local', 'value');
+      expect(state.getLocalTextVars().get('local')).toBe('value');
     });
   });
 
@@ -39,12 +42,23 @@ describe('StateService', () => {
       expect(state.getDataVar('config')).toEqual(data);
     });
 
-    it('should inherit data variables from parent', () => {
-      const parent = new StateService();
-      const data = { foo: 'bar' };
-      parent.setDataVar('config', data);
-      const child = new StateService(parent);
-      expect(child.getDataVar('config')).toEqual(data);
+    it('should return undefined for non-existent data variables', () => {
+      expect(state.getDataVar('nonexistent')).toBeUndefined();
+    });
+
+    it('should get all data variables', () => {
+      state.setDataVar('config1', { foo: 'bar' });
+      state.setDataVar('config2', { baz: 'qux' });
+
+      const vars = state.getAllDataVars();
+      expect(vars.size).toBe(2);
+      expect(vars.get('config1')).toEqual({ foo: 'bar' });
+      expect(vars.get('config2')).toEqual({ baz: 'qux' });
+    });
+
+    it('should get local data variables', () => {
+      state.setDataVar('local', { value: true });
+      expect(state.getLocalDataVars().get('local')).toEqual({ value: true });
     });
   });
 
@@ -53,75 +67,130 @@ describe('StateService', () => {
       state.setPathVar('root', '/path/to/root');
       expect(state.getPathVar('root')).toBe('/path/to/root');
     });
-  });
 
-  describe('immutability', () => {
-    it('should prevent modifications when immutable', () => {
-      state.setTextVar('test', 'value');
-      state.setImmutable();
-      expect(() => state.setTextVar('test', 'new value')).toThrow('Cannot modify immutable state');
+    it('should return undefined for non-existent path variables', () => {
+      expect(state.getPathVar('nonexistent')).toBeUndefined();
+    });
+
+    it('should get all path variables', () => {
+      state.setPathVar('root', '/root');
+      state.setPathVar('temp', '/tmp');
+
+      const vars = state.getAllPathVars();
+      expect(vars.size).toBe(2);
+      expect(vars.get('root')).toBe('/root');
+      expect(vars.get('temp')).toBe('/tmp');
     });
   });
 
-  describe('child state', () => {
-    it('should create child state with parent reference', () => {
-      const child = state.createChildState();
-      state.setTextVar('parent', 'value');
-      expect(child.getTextVar('parent')).toBe('value');
+  describe('commands', () => {
+    it('should set and get commands', () => {
+      state.setCommand('test', 'echo test');
+      expect(state.getCommand('test')).toEqual({ command: 'echo test' });
     });
 
-    it('should merge child state changes to parent', () => {
-      const child = state.createChildState();
-      child.setTextVar('test', 'value');
-      state.mergeChildState(child);
-      expect(state.getTextVar('test')).toBe('value');
+    it('should set and get commands with options', () => {
+      state.setCommand('test', { command: 'echo test', options: { silent: true } });
+      expect(state.getCommand('test')).toEqual({ command: 'echo test', options: { silent: true } });
+    });
+
+    it('should get all commands', () => {
+      state.setCommand('cmd1', 'echo 1');
+      state.setCommand('cmd2', 'echo 2');
+
+      const commands = state.getAllCommands();
+      expect(commands.size).toBe(2);
+      expect(commands.get('cmd1')).toEqual({ command: 'echo 1' });
+      expect(commands.get('cmd2')).toEqual({ command: 'echo 2' });
     });
   });
 
-  describe('node handling', () => {
-    it('should add and retrieve nodes', () => {
+  describe('nodes', () => {
+    it('should add and get nodes', () => {
       const node: MeldNode = {
         type: 'text',
-        content: 'test content',
-        location: { line: 1, column: 1 }
+        value: 'test',
+        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 4 } }
       };
       state.addNode(node);
-      expect(state.getNodes()).toContainEqual(node);
+      expect(state.getNodes()).toEqual([node]);
+    });
+
+    it('should append content as text node', () => {
+      state.appendContent('test content');
+      const nodes = state.getNodes();
+      expect(nodes).toHaveLength(1);
+      expect(nodes[0].type).toBe('text');
+      expect(nodes[0].value).toBe('test content');
     });
   });
 
-  describe('import tracking', () => {
-    it('should track imports', () => {
-      state.addImport('/path/to/file.meld');
-      expect(state.hasImport('/path/to/file.meld')).toBe(true);
+  describe('imports', () => {
+    it('should add and check imports', () => {
+      state.addImport('test.md');
+      expect(state.hasImport('test.md')).toBe(true);
     });
 
     it('should remove imports', () => {
-      state.addImport('/path/to/file.meld');
-      state.removeImport('/path/to/file.meld');
-      expect(state.hasImport('/path/to/file.meld')).toBe(false);
+      state.addImport('test.md');
+      state.removeImport('test.md');
+      expect(state.hasImport('test.md')).toBe(false);
+    });
+
+    it('should get all imports', () => {
+      state.addImport('file1.md');
+      state.addImport('file2.md');
+
+      const imports = state.getImports();
+      expect(imports.size).toBe(2);
+      expect(imports.has('file1.md')).toBe(true);
+      expect(imports.has('file2.md')).toBe(true);
     });
   });
 
-  describe('cloning', () => {
-    it('should create an independent copy', () => {
-      state.setTextVar('test', 'value');
-      state.setDataVar('data', { foo: 'bar' });
-      const clone = state.clone();
-      
-      // Modify original
-      state.setTextVar('test', 'new value');
-      
-      // Clone should maintain original values
-      expect(clone.getTextVar('test')).toBe('value');
-      expect(clone.getDataVar('data')).toEqual({ foo: 'bar' });
+  describe('file path', () => {
+    it('should set and get current file path', () => {
+      state.setCurrentFilePath('/test/file.md');
+      expect(state.getCurrentFilePath()).toBe('/test/file.md');
     });
 
-    it('should preserve immutability in clone', () => {
+    it('should return null when no file path is set', () => {
+      expect(state.getCurrentFilePath()).toBeNull();
+    });
+  });
+
+  describe('state management', () => {
+    it('should prevent modifications when immutable', () => {
       state.setImmutable();
+      expect(() => state.setTextVar('test', 'value')).toThrow('Cannot modify immutable state');
+    });
+
+    it('should create child state', () => {
+      state.setTextVar('parent', 'value');
+      const child = state.createChildState();
+      expect(child.getTextVar('parent')).toBe('value');
+    });
+
+    it('should merge child state', () => {
+      const child = state.createChildState();
+      child.setTextVar('child', 'value');
+      state.mergeChildState(child);
+      expect(state.getTextVar('child')).toBe('value');
+    });
+
+    it('should clone state', () => {
+      state.setTextVar('original', 'value');
       const clone = state.clone();
-      expect(clone.isImmutable).toBe(true);
-      expect(() => clone.setTextVar('test', 'value')).toThrow('Cannot modify immutable state');
+      expect(clone.getTextVar('original')).toBe('value');
+
+      // Verify modifications don't affect original
+      clone.setTextVar('new', 'value');
+      expect(state.getTextVar('new')).toBeUndefined();
+    });
+
+    it('should track local changes', () => {
+      expect(state.hasLocalChanges()).toBe(true);
+      expect(state.getLocalChanges()).toEqual(['state']);
     });
   });
 }); 

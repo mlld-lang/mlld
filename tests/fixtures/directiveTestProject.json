@@ -4,10 +4,16 @@
     "project/includes"
   ],
   "files": {
-    "project/src/main.meld": "@text greeting = \"Hello\"\n@data config = { \"key\": \"value\" }",
-    "project/includes/section.meld": "# Section One\nContent here\n\n# Section Two\nMore content",
-    "project/includes/import.meld": "@text imported = \"I was imported\"\n@data nums = [1, 2, 3]",
-    "project/includes/nested.meld": "@import [section.meld]\n@text nested = \"I am nested\"",
-    "project/includes/complex.meld": "# Main Section\n@text section1 = \"First\"\n\n# Sub Section\n@text section2 = \"Second\""
+    "test.meld": "@text greeting = \"Hello\"",
+    "test-interpolation.meld": "@text greeting = \"Hello ${name}\"",
+    "test-data.meld": "@data config = { \"key\": \"value\" }",
+    "test-data-interpolation.meld": "@data config = { \"greeting\": \"Hello ${user}\" }",
+    "module.meld": "@text greeting = \"Hello\"",
+    "main.meld": "@import [module.meld]",
+    "inner.meld": "@text greeting = \"Hello\"",
+    "middle.meld": "@import [inner.meld]",
+    "outer.meld": "@import [middle.meld]",
+    "a.meld": "@import [b.meld]",
+    "b.meld": "@import [a.meld]"
   }
 } 

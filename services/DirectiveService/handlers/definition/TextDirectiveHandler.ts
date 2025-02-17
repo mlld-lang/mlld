@@ -20,7 +20,7 @@ export class TextDirectiveHandler implements IDirectiveHandler {
     private resolutionService: IResolutionService
   ) {}
 
-  async execute(node: DirectiveNode, context: DirectiveContext): Promise<void> {
+  async execute(node: DirectiveNode, context: DirectiveContext): Promise<IStateService> {
     logger.debug('Processing text directive', {
       location: node.location,
       context
@@ -43,10 +43,13 @@ export class TextDirectiveHandler implements IDirectiveHandler {
         );
       }
 
+      // Create a new state for modifications
+      const newState = context.state.clone();
+
       // Check if this is a pass-through directive
       if (value.startsWith('@embed') || value.startsWith('@run') || value.startsWith('@call')) {
-        await this.stateService.setTextVar(identifier, value);
-        return;
+        newState.setTextVar(identifier, value);
+        return newState;
       }
 
       // Create resolution context
@@ -61,14 +64,16 @@ export class TextDirectiveHandler implements IDirectiveHandler {
       );
 
       // 4. Store in state
-      await this.stateService.setTextVar(identifier, resolvedValue);
+      newState.setTextVar(identifier, resolvedValue);
 
       logger.debug('Text directive processed successfully', {
         identifier,
         value: resolvedValue,
         location: node.location
       });
-    } catch (error) {
+
+      return newState;
+    } catch (error: unknown) {
       logger.error('Failed to process text directive', {
         location: node.location,
         error
@@ -79,26 +84,16 @@ export class TextDirectiveHandler implements IDirectiveHandler {
         throw error;
       }
       throw new DirectiveError(
-        error.message,
+        error instanceof Error ? error.message : String(error),
         this.kind,
-        DirectiveErrorCode.EXECUTION_FAILED,
+        DirectiveErrorCode.RESOLUTION_FAILED,
         {
           node,
           context,
-          cause: error
+          cause: error instanceof Error ? error : undefined,
+          location: node.location
         }
       );
     }
-  }
-
-  /**
-   * Remove quotes from a string literal while preserving the content
-   */
-  private removeQuotes(value: string): string {
-    const firstChar = value[0];
-    if (["'", '"', '`'].includes(firstChar) && value.endsWith(firstChar)) {
-      return value.slice(1, -1);
-    }
-    return value;
   }
 } 

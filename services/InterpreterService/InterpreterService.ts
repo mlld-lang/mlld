@@ -68,7 +68,7 @@ export class InterpreterService implements IInterpreterService {
       if (opts.initialState) {
         if (opts.mergeState) {
           // When mergeState is true, create child state from initial state
-          currentState = opts.initialState.createChildState(opts.initialState);
+          currentState = opts.initialState.createChildState();
         } else {
           // When mergeState is false, create completely isolated state
           currentState = this.stateService!.createChildState();
@@ -81,7 +81,7 @@ export class InterpreterService implements IInterpreterService {
       if (!currentState) {
         throw new MeldInterpreterError(
           'Failed to initialize state for interpretation',
-          'interpretation'
+          'initialization'
         );
       }
 
@@ -113,26 +113,7 @@ export class InterpreterService implements IInterpreterService {
           
           // Preserve MeldInterpreterError or wrap other errors
           if (error instanceof MeldInterpreterError) {
-            // Create new error with updated context but preserve original message
-            const newError = new MeldInterpreterError(
-              error.message,
-              error.nodeType || node.type,
-              error.location || convertLocation(node.location),
-              {
-                cause: error.cause,
-                context: {
-                  ...error.context,
-                  nodeType: node.type,
-                  location: convertLocation(node.location),
-                  state: {
-                    filePath: currentState.getCurrentFilePath(),
-                    nodeCount: currentState.getNodes()?.length ?? 0
-                  }
-                }
-              }
-            );
-            Object.setPrototypeOf(newError, MeldInterpreterError.prototype);
-            throw newError;
+            throw error;
           }
           throw new MeldInterpreterError(
             getErrorMessage(error),
@@ -156,8 +137,9 @@ export class InterpreterService implements IInterpreterService {
       // If mergeState is true and we have a parent state, merge back
       if (opts.mergeState && opts.initialState) {
         try {
+          // Create a new state for merging to maintain immutability
           const mergedState = currentState.clone();
-          await opts.initialState.mergeChildState(mergedState);
+          opts.initialState.mergeChildState(mergedState);
           currentState = opts.initialState; // Use parent state after merge
         } catch (error) {
           logger.error('Failed to merge child state', {
@@ -264,26 +246,33 @@ export class InterpreterService implements IInterpreterService {
       // Process based on node type
       switch (node.type) {
         case 'Text':
-          currentState.addNode(node);
+          // Create new state for text node
+          const textState = currentState.clone();
+          textState.addNode(node);
+          currentState = textState;
           break;
 
         case 'Directive':
           if (!this.directiveService) {
             throw new MeldInterpreterError(
               'Directive service not initialized',
-              'interpretation'
+              'directive_service'
             );
           }
+          // Process directive with cloned state to maintain immutability
+          const directiveState = currentState.clone();
+          // Add the node first to maintain order
+          directiveState.addNode(node);
           currentState = await this.directiveService.processDirective(node, {
-            state: currentState,
-            filePath: state.getCurrentFilePath()
+            state: directiveState,
+            filePath: state.getCurrentFilePath() ?? undefined
           });
           break;
 
         default:
           throw new MeldInterpreterError(
             `Unknown node type: ${node.type}`,
-            'interpretation',
+            'unknown_node',
             convertLocation(node.location)
           );
       }

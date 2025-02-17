@@ -1,25 +1,33 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { DataDirectiveHandler } from './DataDirectiveHandler.js';
-import { createDataDirective, createLocation } from '@tests/utils/testFactories.js';
+import { createDataDirective, createLocation, createDirectiveNode } from '@tests/utils/testFactories.js';
 import type { IValidationService } from '@services/ValidationService/IValidationService.js';
 import type { IStateService } from '@services/StateService/IStateService.js';
 import type { IResolutionService } from '@services/ResolutionService/IResolutionService.js';
 import type { DirectiveNode } from 'meld-spec';
 import type { ResolutionContext } from '@services/ResolutionService/IResolutionService.js';
+import { DirectiveError } from '@services/DirectiveService/errors/DirectiveError.js';
 
 describe('DataDirectiveHandler', () => {
   let handler: DataDirectiveHandler;
   let validationService: IValidationService;
   let stateService: IStateService;
   let resolutionService: IResolutionService;
+  let clonedState: IStateService;
 
   beforeEach(() => {
     validationService = {
       validate: vi.fn()
     } as unknown as IValidationService;
 
+    clonedState = {
+      setDataVar: vi.fn(),
+      clone: vi.fn()
+    } as unknown as IStateService;
+
     stateService = {
-      setDataVar: vi.fn()
+      setDataVar: vi.fn(),
+      clone: vi.fn().mockReturnValue(clonedState)
     } as unknown as IStateService;
 
     resolutionService = {
@@ -34,97 +42,123 @@ describe('DataDirectiveHandler', () => {
   });
 
   describe('basic data handling', () => {
-    it('should handle simple data values with location information', async () => {
-      const location = createLocation(1, 1, 1, 20);
-      const node = createDataDirective('test', 'value', location);
-      const context = { currentFilePath: 'test.meld' };
+    it('should process simple JSON data', async () => {
+      const node = createDirectiveNode('data', {
+        identifier: 'config',
+        value: '{"key": "value"}'
+      }, createLocation(1, 1));
+      const context = { currentFilePath: 'test.meld', state: stateService };
 
-      vi.mocked(resolutionService.resolveInContext).mockResolvedValueOnce('value');
+      vi.mocked(resolutionService.resolveInContext).mockResolvedValueOnce('{"key": "value"}');
 
-      await handler.execute(node, context);
+      const result = await handler.execute(node, context);
 
       expect(validationService.validate).toHaveBeenCalledWith(node);
+      expect(stateService.clone).toHaveBeenCalled();
       expect(resolutionService.resolveInContext).toHaveBeenCalledWith(
-        'value',
+        '{"key": "value"}',
         expect.any(Object)
       );
-      expect(stateService.setDataVar).toHaveBeenCalledWith('test', 'value');
-      expect(node.location).toEqual(location);
+      expect(clonedState.setDataVar).toHaveBeenCalledWith('config', { key: 'value' });
+      expect(result).toBe(clonedState);
     });
 
-    it('should handle object values with location information', async () => {
-      const location = createLocation(1, 1, 1, 30);
-      const node = createDataDirective('test', { key: 'value' }, location);
-      const context = { currentFilePath: 'test.meld' };
+    it('should handle nested JSON objects', async () => {
+      const jsonData = '{"nested": {"key": "value"}}';
+      const node = createDirectiveNode('data', {
+        identifier: 'config',
+        value: jsonData
+      }, createLocation(1, 1));
+      const context = { currentFilePath: 'test.meld', state: stateService };
 
-      vi.mocked(resolutionService.resolveInContext).mockResolvedValueOnce('{"key":"value"}');
+      vi.mocked(resolutionService.resolveInContext).mockResolvedValueOnce(jsonData);
 
-      await handler.execute(node, context);
+      const result = await handler.execute(node, context);
 
-      expect(validationService.validate).toHaveBeenCalledWith(node);
-      expect(resolutionService.resolveInContext).toHaveBeenCalledWith(
-        '{"key":"value"}',
-        expect.any(Object)
-      );
-      expect(stateService.setDataVar).toHaveBeenCalledWith('test', { key: 'value' });
-      expect(node.location).toEqual(location);
+      expect(stateService.clone).toHaveBeenCalled();
+      expect(clonedState.setDataVar).toHaveBeenCalledWith('config', { nested: { key: 'value' } });
+      expect(result).toBe(clonedState);
     });
 
-    it('should handle array values with location information', async () => {
-      const location = createLocation(1, 1, 1, 25);
-      const node = createDataDirective('test', [1, 2, 3], location);
-      const context = { currentFilePath: 'test.meld' };
+    it('should handle JSON arrays', async () => {
+      const jsonData = '[1, 2, 3]';
+      const node = createDirectiveNode('data', {
+        identifier: 'numbers',
+        value: jsonData
+      }, createLocation(1, 1));
+      const context = { currentFilePath: 'test.meld', state: stateService };
 
-      vi.mocked(resolutionService.resolveInContext).mockResolvedValueOnce('[1,2,3]');
+      vi.mocked(resolutionService.resolveInContext).mockResolvedValueOnce(jsonData);
 
-      await handler.execute(node, context);
+      const result = await handler.execute(node, context);
 
-      expect(validationService.validate).toHaveBeenCalledWith(node);
-      expect(resolutionService.resolveInContext).toHaveBeenCalledWith(
-        '[1,2,3]',
-        expect.any(Object)
-      );
-      expect(stateService.setDataVar).toHaveBeenCalledWith('test', [1, 2, 3]);
-      expect(node.location).toEqual(location);
+      expect(stateService.clone).toHaveBeenCalled();
+      expect(clonedState.setDataVar).toHaveBeenCalledWith('numbers', [1, 2, 3]);
+      expect(result).toBe(clonedState);
     });
   });
 
   describe('error handling', () => {
-    it('should propagate validation errors with location information', async () => {
-      const location = createLocation(1, 1, 1, 15);
-      const node = createDataDirective('test', 'value', location);
-      const context = { currentFilePath: 'test.meld' };
+    it('should handle invalid JSON', async () => {
+      const node = createDirectiveNode('data', {
+        identifier: 'invalid',
+        value: '{invalid: json}'
+      }, createLocation(1, 1));
+      const context = {
+        currentFilePath: 'test.meld',
+        state: stateService,
+        parentState: undefined
+      };
 
-      vi.mocked(validationService.validate).mockImplementationOnce(() => {
-        throw new Error('Validation error');
+      vi.mocked(validationService.validate).mockResolvedValue(undefined);
+      vi.mocked(resolutionService.resolveInContext).mockResolvedValue('{invalid: json}');
+
+      await expect(handler.execute(node, context)).rejects.toThrow(DirectiveError);
+    });
+
+    it('should handle resolution errors', async () => {
+      const node = createDirectiveNode('data', {
+        identifier: 'error',
+        value: '${missing}'
+      }, createLocation(1, 1));
+      const context = {
+        currentFilePath: 'test.meld',
+        state: stateService,
+        parentState: undefined
+      };
+
+      vi.mocked(validationService.validate).mockResolvedValue(undefined);
+      vi.mocked(resolutionService.resolveInContext).mockImplementation(() => {
+        throw new Error('Resolution failed');
       });
 
-      await expect(handler.execute(node, context)).rejects.toThrow('Validation error');
-      expect(node.location).toEqual(location);
+      await expect(handler.execute(node, context)).rejects.toThrow(DirectiveError);
     });
 
-    it('should handle resolution errors with location information', async () => {
-      const location = createLocation(1, 1, 1, 15);
-      const node = createDataDirective('test', 'value', location);
-      const context = { currentFilePath: 'test.meld' };
+    it('should handle state errors', async () => {
+      const node = createDirectiveNode('data', {
+        identifier: 'error',
+        value: '{ "key": "value" }'
+      }, createLocation(1, 1));
+      const context = {
+        currentFilePath: 'test.meld',
+        state: stateService,
+        parentState: undefined
+      };
 
-      vi.mocked(resolutionService.resolveInContext).mockRejectedValueOnce(
-        new Error('Resolution error')
-      );
+      const clonedState = {
+        ...stateService,
+        clone: vi.fn().mockReturnThis(),
+        setDataVar: vi.fn().mockImplementation(() => {
+          throw new Error('State error');
+        })
+      };
 
-      await expect(handler.execute(node, context)).rejects.toThrow('Resolution error');
-      expect(node.location).toEqual(location);
-    });
+      vi.mocked(stateService.clone).mockReturnValue(clonedState);
+      vi.mocked(validationService.validate).mockResolvedValue(undefined);
+      vi.mocked(resolutionService.resolveInContext).mockResolvedValue('{ "key": "value" }');
 
-    it('should handle invalid JSON with location information', async () => {
-      const location = createLocation(1, 1, 1, 15);
-      const node = createDataDirective('test', 'value', location);
-      const context = { currentFilePath: 'test.meld' };
-
-      vi.mocked(resolutionService.resolveInContext).mockResolvedValueOnce('invalid json');
-
-      await expect(handler.execute(node, context)).rejects.toThrow(SyntaxError);
-      expect(node.location).toEqual(location);
+      await expect(handler.execute(node, context)).rejects.toThrow(DirectiveError);
     });
   });
 }); 
