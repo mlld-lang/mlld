@@ -38,23 +38,30 @@ export class DataDirectiveHandler implements IDirectiveHandler {
     };
 
     try {
-      // First resolve any variables in the entire JSON string
-      const resolvedJsonString = await this.resolutionService.resolveInContext(value, resolutionContext);
-
-      // Then parse the JSON
       let parsedValue: unknown;
-      try {
-        parsedValue = JSON.parse(resolvedJsonString);
-      } catch (error) {
-        if (error instanceof Error) {
-          throw new DirectiveError(
-            `Invalid JSON in data directive: ${error.message}`,
-            'data',
-            DirectiveErrorCode.VALIDATION_FAILED,
-            { node, context }
-          );
+
+      // Handle both string and object values
+      if (typeof value === 'string') {
+        // First resolve any variables in the JSON string
+        const resolvedJsonString = await this.resolutionService.resolveInContext(value, resolutionContext);
+
+        // Then parse the JSON
+        try {
+          parsedValue = JSON.parse(resolvedJsonString);
+        } catch (error) {
+          if (error instanceof Error) {
+            throw new DirectiveError(
+              `Invalid JSON in data directive: ${error.message}`,
+              'data',
+              DirectiveErrorCode.VALIDATION_FAILED,
+              { node, context }
+            );
+          }
+          throw error;
         }
-        throw error;
+      } else {
+        // Value is already an object, just use it directly
+        parsedValue = value;
       }
 
       // Then recursively resolve any remaining variables in the parsed value

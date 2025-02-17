@@ -94,8 +94,11 @@ export class MemfsTestFileSystem {
       return result;
     }
 
-    // For relative paths, preserve the path as-is for memfs
-    const result = forMemfs ? normalized : `/${normalized}`;
+    // For relative paths, resolve them relative to /project
+    const projectPath = '/project';
+    const result = forMemfs 
+      ? path.join(projectPath.slice(1), normalized) 
+      : path.join(projectPath, normalized);
     logger.debug('Resolved relative path', { result });
     return result;
   }
