@@ -7,6 +7,9 @@ export default defineConfig({
   test: {
     setupFiles: ['tests/setup.ts'],
     environment: 'node',
+    env: {
+      NODE_ENV: 'test'
+    },
     globals: true,
     include: [
       'tests/integration/**/*.test.ts',
@@ -33,6 +36,10 @@ export default defineConfig({
       '@tests': resolve(__dirname, './tests'),
       'meld-spec': resolve(__dirname, './tests/__mocks__/meld-spec.ts'),
       'meld-ast': resolve(__dirname, 'node_modules/meld-ast/dist/esm/index.js')
+    },
+    coverage: {
+      reporter: ['text', 'json', 'html'],
+      exclude: ['**/node_modules/**', '**/dist/**', '**/build/**']
     }
   }
 }); 

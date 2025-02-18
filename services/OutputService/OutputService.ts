@@ -20,6 +20,7 @@ export class OutputService implements IOutputService {
   constructor() {
     // Register default formatters
     this.registerFormat('markdown', this.convertToMarkdown.bind(this));
+    this.registerFormat('md', this.convertToMarkdown.bind(this));
     this.registerFormat('llm', this.convertToLLMXML.bind(this));
 
     logger.debug('OutputService initialized with default formatters', {

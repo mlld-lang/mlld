@@ -258,7 +258,6 @@ export class ResolutionService implements IResolutionService {
 
       try {
         const varValue = this.stateService.getPathVar(varName);
-        
         if (varValue === undefined) {
           throw new ResolutionError(
             `Undefined path variable: ${varName}`,
@@ -266,8 +265,6 @@ export class ResolutionService implements IResolutionService {
             { value: varName, context }
           );
         }
-
-        // Replace in the original text
         result = result.replace(fullMatch, varValue);
       } finally {
         resolutionPath.pop();
@@ -275,15 +272,13 @@ export class ResolutionService implements IResolutionService {
     }
 
     // Handle text variables (${...})
-    this.variablePattern.lastIndex = 0;
-    while ((match = this.variablePattern.exec(result)) !== null) {
-      const [fullMatch, varPath] = match;
-      const parts = varPath.split('.');
-      const baseVar = parts[0];
-
+    const textVarRegex = /\${([^}]+)}/g;
+    while ((match = textVarRegex.exec(result)) !== null) {
+      const [fullMatch, varName] = match;
+      
       // Check for circular references
-      if (resolutionPath.includes(baseVar)) {
-        const path = [...resolutionPath, baseVar].join(' -> ');
+      if (resolutionPath.includes(varName)) {
+        const path = [...resolutionPath, varName].join(' -> ');
         throw new ResolutionError(
           `Circular reference detected: ${path}`,
           ResolutionErrorCode.CIRCULAR_REFERENCE,
@@ -291,24 +286,18 @@ export class ResolutionService implements IResolutionService {
         );
       }
 
-      resolutionPath.push(baseVar);
+      resolutionPath.push(varName);
 
       try {
-        // Get the base variable value
-        let varValue = this.stateService.getTextVar(baseVar);
+        const varValue = this.stateService.getTextVar(varName);
         if (varValue === undefined) {
           throw new ResolutionError(
-            `Undefined variable: ${baseVar}`,
+            `Undefined variable: ${varName}`,
             ResolutionErrorCode.UNDEFINED_VARIABLE,
-            { value: baseVar, context }
+            { value: varName, context }
           );
         }
-
-        // Replace in the original text
-        result = result.replace(
-          fullMatch,
-          String(varValue)
-        );
+        result = result.replace(fullMatch, varValue);
       } finally {
         resolutionPath.pop();
       }

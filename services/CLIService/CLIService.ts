@@ -146,12 +146,23 @@ export class CLIService implements ICLIService {
   }
 
   private async processFile(options: CLIOptions): Promise<void> {
+    // If project path is set, make input path relative to it
+    let inputPath = options.input;
+    if (options.projectPath) {
+      inputPath = `${options.projectPath}/${options.input}`;
+    }
+
     // Resolve input path
-    const inputPath = await this.pathService.resolvePath(options.input);
+    inputPath = await this.pathService.resolvePath(inputPath);
     
     // Verify input file exists
     if (!await this.fileSystemService.exists(inputPath)) {
       throw new Error(`File not found: ${inputPath}`);
+    }
+
+    // Verify file extension
+    if (!inputPath.endsWith('.meld')) {
+      throw new Error('Invalid file extension: File must have .meld extension');
     }
 
     // Read input file
@@ -194,7 +205,12 @@ export class CLIService implements ICLIService {
       console.log(output);
       logger.info('Successfully wrote output to stdout');
     } else {
-      const outputPath = await this.pathService.resolvePath(options.output);
+      // If project path is set, make output path relative to it
+      let outputPath = options.output;
+      if (options.projectPath) {
+        outputPath = `${options.projectPath}/${options.output}`;
+      }
+      outputPath = await this.pathService.resolvePath(outputPath);
       await this.fileSystemService.writeFile(outputPath, output);
       logger.info('Successfully wrote output to file', { outputPath });
     }

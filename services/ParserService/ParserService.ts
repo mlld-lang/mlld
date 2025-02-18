@@ -35,8 +35,8 @@ export class ParserService implements IParserService {
   async parse(content: string): Promise<MeldNode[]> {
     try {
       if (!content) {
-        const defaultLocation = { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } };
-        throw new MeldParseError('Empty content provided', defaultLocation);
+        logger.debug('Empty content provided, returning empty array');
+        return [];
       }
       
       logger.debug('Parsing Meld content', { contentLength: content.length });

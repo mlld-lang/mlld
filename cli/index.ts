@@ -9,23 +9,48 @@ import { DirectiveService } from '@services/DirectiveService/DirectiveService.js
 import { PathOperationsService } from '@services/FileSystemService/PathOperationsService.js';
 import { NodeFileSystem } from '@services/FileSystemService/NodeFileSystem.js';
 import { cliLogger as logger } from '@core/utils/logger.js';
+import { ValidationService } from '@services/ValidationService/ValidationService.js';
+import { CircularityService } from '@services/CircularityService/CircularityService.js';
+import { ResolutionService } from '@services/ResolutionService/ResolutionService.js';
 
 // TODO: Implement CLI
-export async function main() {
+export async function main(customFs?: NodeFileSystem) {
   try {
     // Create service instances
     const stateService = new StateService();
     const pathOps = new PathOperationsService();
-    const nodeFs = new NodeFileSystem();
+    const nodeFs = customFs || new NodeFileSystem();
     const fileSystemService = new FileSystemService(pathOps, nodeFs);
     const parserService = new ParserService();
     const pathService = new PathService();
     const outputService = new OutputService();
     const interpreterService = new InterpreterService();
     const directiveService = new DirectiveService();
+    const validationService = new ValidationService();
+    const circularityService = new CircularityService();
+    const resolutionService = new ResolutionService(stateService, fileSystemService, parserService);
 
     // Initialize services that need it
     pathService.initialize(fileSystemService);
+
+    // Enable test mode for PathService in test environment
+    if (process.env.NODE_ENV === 'test') {
+      pathService.enableTestMode();
+      pathService.setProjectPath('/project');
+      // Add project path to process.argv for CLI service
+      process.argv.push('--project-path', '/project');
+    }
+
+    directiveService.initialize(
+      validationService,
+      stateService,
+      pathService,
+      fileSystemService,
+      parserService,
+      interpreterService,
+      circularityService,
+      resolutionService
+    );
     interpreterService.initialize(directiveService, stateService);
 
     // Create CLI service with dependencies
@@ -40,12 +65,21 @@ export async function main() {
 
     // Run with process arguments
     await cli.run(process.argv);
-    process.exit(0);
+
+    // Only exit in non-test environments
+    if (process.env.NODE_ENV !== 'test') {
+      process.exit(0);
+    }
   } catch (error) {
     logger.error('CLI execution failed', {
       error: error instanceof Error ? error.message : String(error)
     });
-    process.exit(1);
+    
+    // Only exit in non-test environments
+    if (process.env.NODE_ENV !== 'test') {
+      process.exit(1);
+    }
+    throw error;
   }
 }
 
