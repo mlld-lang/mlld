@@ -23,12 +23,12 @@ export async function main(customFs?: NodeFileSystem) {
     const fileSystemService = new FileSystemService(pathOps, nodeFs);
     const parserService = new ParserService();
     const pathService = new PathService();
-    const outputService = new OutputService();
-    const interpreterService = new InterpreterService();
-    const directiveService = new DirectiveService();
     const validationService = new ValidationService();
     const circularityService = new CircularityService();
     const resolutionService = new ResolutionService(stateService, fileSystemService, parserService);
+    const outputService = new OutputService(resolutionService);
+    const interpreterService = new InterpreterService();
+    const directiveService = new DirectiveService();
 
     // Initialize services that need it
     pathService.initialize(fileSystemService);

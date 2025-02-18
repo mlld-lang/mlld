@@ -104,9 +104,14 @@ export class InterpreterService implements IInterpreterService {
           // Process the node with current state
           const updatedState = await this.interpretNode(node, currentState);
           
-          // If successful, update the states
+          // If successful, update the states and merge back to parent if needed
           lastGoodState = updatedState.clone();
           currentState = updatedState;
+          
+          // Merge back to parent state if we have one
+          if (opts.mergeState && opts.initialState) {
+            opts.initialState.mergeChildState(currentState);
+          }
         } catch (error) {
           // Roll back to last good state and preserve node order
           currentState = lastGoodState.clone();
@@ -140,7 +145,8 @@ export class InterpreterService implements IInterpreterService {
           // Create a new state for merging to maintain immutability
           const mergedState = currentState.clone();
           opts.initialState.mergeChildState(mergedState);
-          currentState = opts.initialState; // Use parent state after merge
+          // Get a fresh clone of the parent state after merge to ensure we have all updates
+          currentState = opts.initialState.clone();
         } catch (error) {
           logger.error('Failed to merge child state', {
             error,

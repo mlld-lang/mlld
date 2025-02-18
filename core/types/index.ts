@@ -1,3 +1,6 @@
+import type { NodeFileSystem } from '@services/FileSystemService/NodeFileSystem.js';
+import type { OutputFormat } from '@services/OutputService/IOutputService.js';
+
 /**
  * Represents a position in a file
  */
@@ -28,4 +31,9 @@ export interface Range {
   start: Position;
   end: Position;
   filePath?: string;
+}
+
+export interface ProcessOptions {
+  fs?: NodeFileSystem;
+  format?: OutputFormat;
 } 

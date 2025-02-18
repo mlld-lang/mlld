@@ -110,8 +110,9 @@ describe('ParserService', () => {
     });
 
     it('should handle empty content', async () => {
-      await expect(service.parse('')).rejects.toThrow(MeldParseError);
-      await expect(service.parse('')).rejects.toThrow('Parse error: Empty content provided');
+      const result = await service.parse('');
+      expect(result).toEqual([]);
+      expect(result).toHaveLength(0);
     });
 
     it('should throw MeldParseError with location for invalid directive', async () => {

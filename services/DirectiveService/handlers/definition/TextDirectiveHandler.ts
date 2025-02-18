@@ -39,7 +39,25 @@ export class TextDirectiveHandler implements IDirectiveHandler {
     const firstChar = value[0];
     const lastChar = value[value.length - 1];
     const validQuotes = ["'", '"', '`'];
-    return validQuotes.includes(firstChar) && firstChar === lastChar;
+    
+    // Check for matching quotes
+    if (!validQuotes.includes(firstChar) || firstChar !== lastChar) {
+      return false;
+    }
+
+    // Check for unclosed quotes
+    let isEscaped = false;
+    for (let i = 1; i < value.length - 1; i++) {
+      if (value[i] === '\\') {
+        isEscaped = !isEscaped;
+      } else if (value[i] === firstChar && !isEscaped) {
+        return false; // Found an unescaped quote in the middle
+      } else {
+        isEscaped = false;
+      }
+    }
+
+    return true;
   }
 
   public async execute(node: DirectiveNode, context: DirectiveContext): Promise<IStateService> {
@@ -81,33 +99,56 @@ export class TextDirectiveHandler implements IDirectiveHandler {
       // 3. Get identifier and value from directive
       const { identifier, value } = node.directive;
 
-      // 4. Resolve any variables in the value
+      // 4. Handle the value based on whether it's a string literal or needs variable resolution
       let resolvedValue: string;
-      try {
-        resolvedValue = await this.resolutionService.resolveInContext(value, {
-          ...context,
-          allowedVariableTypes: {
-            text: true,
-            data: true,
-            path: true,
-            command: true
-          }
-        });
-      } catch (error) {
-        if (error instanceof ResolutionError) {
+      if (value.startsWith('"') || value.startsWith("'") || value.startsWith('`')) {
+        if (!this.isStringLiteral(value)) {
           throw new DirectiveError(
-            'Failed to resolve variables in text directive',
+            'Invalid string literal format',
             this.kind,
-            DirectiveErrorCode.RESOLUTION_FAILED,
+            DirectiveErrorCode.VALIDATION_FAILED,
             {
               node,
               context,
-              cause: error,
               location: node.location
             }
           );
         }
-        throw error;
+        // For string literals, strip the quotes and handle escapes
+        resolvedValue = this.stringLiteralHandler.parseLiteral(value);
+      } else {
+        // For values with variables, resolve them using the resolution service
+        try {
+          // Create a resolution context that includes the original state
+          const resolutionContext = {
+            currentFilePath: context.currentFilePath,
+            allowedVariableTypes: {
+              text: true,
+              data: true,
+              path: true,
+              command: true
+            },
+            state: context.state
+          };
+
+          // Use the resolution service directly to resolve variables
+          resolvedValue = await this.resolutionService.resolveInContext(value, resolutionContext);
+        } catch (error) {
+          if (error instanceof ResolutionError) {
+            throw new DirectiveError(
+              'Failed to resolve variables in text directive',
+              this.kind,
+              DirectiveErrorCode.RESOLUTION_FAILED,
+              {
+                node,
+                context,
+                cause: error,
+                location: node.location
+              }
+            );
+          }
+          throw error;
+        }
       }
 
       // 5. Set the resolved value in the new state

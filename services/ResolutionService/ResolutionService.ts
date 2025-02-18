@@ -140,139 +140,10 @@ export class ResolutionService implements IResolutionService {
     let iterations = 0;
     const MAX_ITERATIONS = 100;
 
-    // Handle command references ($cmd(args)) first
-    const cmdRegex = /\$([A-Za-z0-9_]+)\(([^)]*)\)/g;
+    // Handle text variables (${...}) first since they may contain other variable types
+    const textVarRegex = /\${([^}]+)}/g;
     let match: RegExpExecArray | null;
     
-    while ((match = cmdRegex.exec(result)) !== null) {
-      const [fullMatch, cmdName, argsStr] = match;
-      
-      // Check for circular references
-      if (resolutionPath.includes(cmdName)) {
-        const path = [...resolutionPath, cmdName].join(' -> ');
-        throw new ResolutionError(
-          `Circular reference detected: ${path}`,
-          ResolutionErrorCode.CIRCULAR_REFERENCE,
-          { value, context }
-        );
-      }
-
-      resolutionPath.push(cmdName);
-
-      try {
-        // Parse and resolve arguments
-        const args = argsStr.split(',')
-          .map(arg => arg.trim())
-          .filter(arg => arg.length > 0);
-
-        const cmdValue = await this.commandResolver.resolve({
-          type: 'Directive',
-          directive: {
-            kind: 'run',
-            identifier: cmdName,
-            args
-          }
-        } as DirectiveNode, context);
-
-        // Replace in the original text
-        result = result.replace(fullMatch, cmdValue);
-      } finally {
-        resolutionPath.pop();
-      }
-    }
-
-    // Handle data variables (#{...})
-    const dataVarRegex = /#{([^}]+)}/g;
-    while ((match = dataVarRegex.exec(result)) !== null) {
-      const [fullMatch, varPath] = match;
-      const parts = varPath.split('.');
-      const baseVar = parts[0];
-
-      // Check for circular references
-      if (resolutionPath.includes(baseVar)) {
-        const path = [...resolutionPath, baseVar].join(' -> ');
-        throw new ResolutionError(
-          `Circular reference detected: ${path}`,
-          ResolutionErrorCode.CIRCULAR_REFERENCE,
-          { value, context }
-        );
-      }
-
-      resolutionPath.push(baseVar);
-
-      try {
-        // Get the data variable value
-        let varValue = this.stateService.getDataVar(baseVar);
-        
-        if (varValue === undefined) {
-          throw new ResolutionError(
-            `Undefined data variable: ${baseVar}`,
-            ResolutionErrorCode.UNDEFINED_VARIABLE,
-            { value: baseVar, context }
-          );
-        }
-
-        // Handle field access if needed
-        if (parts.length > 1) {
-          const fieldPath = parts.slice(1);
-          let current = varValue;
-          for (const field of fieldPath) {
-            if (current === undefined || current === null) {
-              throw new ResolutionError(
-                `Cannot access field '${field}' of undefined`,
-                ResolutionErrorCode.UNDEFINED_VARIABLE,
-                { value: varPath, context }
-              );
-            }
-            current = current[field];
-          }
-          varValue = current;
-        }
-
-        // Replace in the original text
-        result = result.replace(
-          fullMatch,
-          JSON.stringify(varValue)
-        );
-      } finally {
-        resolutionPath.pop();
-      }
-    }
-
-    // Handle path variables ($VAR)
-    const pathVarRegex = /\$([A-Za-z0-9_]+)(?!\()/g;
-    while ((match = pathVarRegex.exec(result)) !== null) {
-      const [fullMatch, varName] = match;
-      
-      // Check for circular references
-      if (resolutionPath.includes(varName)) {
-        const path = [...resolutionPath, varName].join(' -> ');
-        throw new ResolutionError(
-          `Circular reference detected: ${path}`,
-          ResolutionErrorCode.CIRCULAR_REFERENCE,
-          { value, context }
-        );
-      }
-
-      resolutionPath.push(varName);
-
-      try {
-        const varValue = this.stateService.getPathVar(varName);
-        if (varValue === undefined) {
-          throw new ResolutionError(
-            `Undefined path variable: ${varName}`,
-            ResolutionErrorCode.UNDEFINED_VARIABLE,
-            { value: varName, context }
-          );
-        }
-        result = result.replace(fullMatch, varValue);
-      } finally {
-        resolutionPath.pop();
-      }
-    }
-
-    // Handle text variables (${...})
-    const textVarRegex = /\${([^}]+)}/g;
     while ((match = textVarRegex.exec(result)) !== null) {
       const [fullMatch, varName] = match;
       
@@ -289,10 +160,74 @@ export class ResolutionService implements IResolutionService {
       resolutionPath.push(varName);
 
       try {
-        const varValue = this.stateService.getTextVar(varName);
+        const varValue = context.state.getTextVar(varName);
         if (varValue === undefined) {
           throw new ResolutionError(
             `Undefined variable: ${varName}`,
+            ResolutionErrorCode.UNDEFINED_VARIABLE,
+            { value: varName, context }
+          );
+        }
+        result = result.replace(fullMatch, varValue);
+      } finally {
+        resolutionPath.pop();
+      }
+    }
+
+    // Handle data variables (#{...})
+    const dataVarRegex = /#{([^}]+)}/g;
+    while ((match = dataVarRegex.exec(result)) !== null) {
+      const [fullMatch, varName] = match;
+      
+      // Check for circular references
+      if (resolutionPath.includes(varName)) {
+        const path = [...resolutionPath, varName].join(' -> ');
+        throw new ResolutionError(
+          `Circular reference detected: ${path}`,
+          ResolutionErrorCode.CIRCULAR_REFERENCE,
+          { value, context }
+        );
+      }
+
+      resolutionPath.push(varName);
+
+      try {
+        const varValue = context.state.getDataVar(varName);
+        if (varValue === undefined) {
+          throw new ResolutionError(
+            `Undefined data variable: ${varName}`,
+            ResolutionErrorCode.UNDEFINED_VARIABLE,
+            { value: varName, context }
+          );
+        }
+        result = result.replace(fullMatch, JSON.stringify(varValue));
+      } finally {
+        resolutionPath.pop();
+      }
+    }
+
+    // Handle path variables ($path)
+    const pathVarRegex = /\$([A-Za-z0-9_]+)/g;
+    while ((match = pathVarRegex.exec(result)) !== null) {
+      const [fullMatch, varName] = match;
+      
+      // Check for circular references
+      if (resolutionPath.includes(varName)) {
+        const path = [...resolutionPath, varName].join(' -> ');
+        throw new ResolutionError(
+          `Circular reference detected: ${path}`,
+          ResolutionErrorCode.CIRCULAR_REFERENCE,
+          { value, context }
+        );
+      }
+
+      resolutionPath.push(varName);
+
+      try {
+        const varValue = context.state.getPathVar(varName);
+        if (varValue === undefined) {
+          throw new ResolutionError(
+            `Undefined path variable: ${varName}`,
             ResolutionErrorCode.UNDEFINED_VARIABLE,
             { value: varName, context }
           );

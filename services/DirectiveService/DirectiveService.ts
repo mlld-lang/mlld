@@ -177,14 +177,18 @@ export class DirectiveService implements IDirectiveService {
     let currentState = parentContext?.state?.clone() || this.stateService!.createChildState();
 
     for (const node of nodes) {
-      // Create a new context with the current state
+      // Create a new context with the current state as parent and a new child state
       const nodeContext = {
-        ...this.createContext(node, parentContext),
-        state: currentState
+        currentFilePath: parentContext?.currentFilePath || '',
+        parentState: currentState,
+        state: currentState.createChildState()
       };
 
-      // Process directive and update current state
-      currentState = await this.processDirective(node, nodeContext);
+      // Process directive and get the updated state
+      const updatedState = await this.processDirective(node, nodeContext);
+      
+      // Merge the updated state back into the current state
+      currentState.mergeChildState(updatedState);
     }
 
     return currentState;

@@ -192,9 +192,9 @@ export class TestContext {
   /**
    * Convert content to XML using llmxml
    */
-  async convertToXml(content: string) {
-    const { LLMXML } = await import('llmxml');
-    const llmxml = new LLMXML();
+  public async toXML(content: any): Promise<string> {
+    const { createLLMXML } = await import('llmxml');
+    const llmxml = createLLMXML();
     return llmxml.toXML(content);
   }
 

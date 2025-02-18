@@ -40,13 +40,13 @@ export async function main(filePath: string, options: ProcessOptions = {}): Prom
   const fs = new FileSystemService(pathOps, options.fs || new NodeFileSystem());
   const parser = new ParserService();
   const interpreter = new InterpreterService();
-  const output = new OutputService();
   const state = new StateService();
   const directives = new DirectiveService();
   const validation = new ValidationService();
   const circularity = new CircularityService();
   const resolution = new ResolutionService(state, fs, parser);
   const path = new PathService();
+  const output = new OutputService(resolution);
 
   // Initialize services
   directives.initialize(
@@ -68,10 +68,10 @@ export async function main(filePath: string, options: ProcessOptions = {}): Prom
   const ast = await parser.parse(content);
   
   // Interpret the AST
-  const result = await interpreter.interpret(ast, { filePath, initialState: state });
+  const resultState = await interpreter.interpret(ast, { filePath, initialState: state });
   
-  // Convert to desired format
-  const converted = await output.convert(ast, result, options.format || 'llm');
+  // Convert to desired format using the updated state
+  const converted = await output.convert(ast, resultState, options.format || 'llm');
   
   return converted;
 }

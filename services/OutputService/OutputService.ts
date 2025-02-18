@@ -1,8 +1,15 @@
-import { outputLogger as logger } from '@core/utils/logger.js';
-import { MeldOutputError } from '@core/errors/MeldOutputError.js';
-import type { MeldNode } from 'meld-spec';
 import type { IStateService } from '@services/StateService/IStateService.js';
 import { IOutputService, type OutputFormat, type OutputOptions } from './IOutputService.js';
+import type { IResolutionService } from '@services/ResolutionService/IResolutionService.js';
+import type { MeldNode, TextNode, CodeFenceNode, DirectiveNode } from 'meld-spec';
+import { outputLogger as logger } from '@core/utils/logger.js';
+import { MeldOutputError } from '@core/errors/MeldOutputError.js';
+
+type FormatConverter = (
+  nodes: MeldNode[],
+  state: IStateService,
+  options?: OutputOptions
+) => Promise<string>;
 
 const DEFAULT_OPTIONS: Required<OutputOptions> = {
   includeState: false,
@@ -11,11 +18,7 @@ const DEFAULT_OPTIONS: Required<OutputOptions> = {
 };
 
 export class OutputService implements IOutputService {
-  private formatters = new Map<string, (
-    nodes: MeldNode[],
-    state: IStateService,
-    options?: OutputOptions
-  ) => Promise<string>>();
+  private formatters = new Map<string, FormatConverter>();
 
   constructor() {
     // Register default formatters
@@ -76,7 +79,7 @@ export class OutputService implements IOutputService {
 
   registerFormat(
     format: string,
-    converter: (nodes: MeldNode[], state: IStateService, options?: OutputOptions) => Promise<string>
+    converter: FormatConverter
   ): void {
     if (!format || typeof format !== 'string') {
       throw new Error('Format must be a non-empty string');
@@ -100,13 +103,14 @@ export class OutputService implements IOutputService {
   private async convertToMarkdown(
     nodes: MeldNode[],
     state: IStateService,
-    options: Required<OutputOptions>
+    options?: OutputOptions
   ): Promise<string> {
+    const opts = { ...DEFAULT_OPTIONS, ...options };
     try {
       let output = '';
 
       // Add state variables if requested
-      if (options.includeState) {
+      if (opts.includeState) {
         output += this.formatStateVariables(state);
         if (nodes.length > 0) {
           output += '\n\n';
@@ -115,11 +119,11 @@ export class OutputService implements IOutputService {
 
       // Process nodes
       for (const node of nodes) {
-        output += await this.nodeToMarkdown(node, options);
+        output += await this.nodeToMarkdown(node, opts);
       }
 
       // Clean up extra newlines if not preserving formatting
-      if (!options.preserveFormatting) {
+      if (!opts.preserveFormatting) {
         output = output.replace(/\n{3,}/g, '\n\n').trim();
       }
 
@@ -136,35 +140,17 @@ export class OutputService implements IOutputService {
   private async convertToLLMXML(
     nodes: MeldNode[],
     state: IStateService,
-    options: Required<OutputOptions>
+    options?: OutputOptions
   ): Promise<string> {
+    const opts = { ...DEFAULT_OPTIONS, ...options };
     try {
-      let output = '<meld>';
-
-      // Add state variables if requested
-      if (options.includeState) {
-        output += '\n  <state>';
-        output += await this.stateToXML(state);
-        output += '\n  </state>';
-      }
-
-      // Process nodes
-      if (nodes.length > 0) {
-        output += '\n  <content>';
-        for (const node of nodes) {
-          output += await this.nodeToXML(node, options);
-        }
-        output += '\n  </content>';
-      }
-
-      output += '\n</meld>';
-
-      // Clean up extra newlines if not preserving formatting
-      if (!options.preserveFormatting) {
-        output = output.replace(/\n{3,}/g, '\n\n').trim();
-      }
-
-      return output;
+      // First convert everything to markdown format
+      const markdown = await this.convertToMarkdown(nodes, state, opts);
+      
+      // Use llmxml to handle sectioning the markdown content
+      const { createLLMXML } = await import('llmxml');
+      const llmxml = createLLMXML();
+      return llmxml.toXML(markdown);
     } catch (error) {
       throw new MeldOutputError(
         'Failed to convert to LLM XML',
@@ -201,17 +187,20 @@ export class OutputService implements IOutputService {
 
   private async nodeToMarkdown(
     node: MeldNode,
-    options: Required<OutputOptions>
+    options: OutputOptions
   ): Promise<string> {
     try {
       switch (node.type) {
         case 'Text':
-          return node.content;
+          const textNode = node as TextNode;
+          return textNode.content;
         case 'CodeFence':
-          return `\`\`\`${node.language || ''}\n${node.content}\n\`\`\`\n`;
+          const codeNode = node as CodeFenceNode;
+          return `\`\`\`${codeNode.language || ''}\n${codeNode.content}\n\`\`\`\n`;
         case 'Directive':
-          // Format directive as a markdown comment
-          return `<!-- @${node.directive.kind} ${JSON.stringify(node.directive)} -->\n`;
+          const directiveNode = node as DirectiveNode;
+          // Format directive as a readable section instead of HTML comment
+          return `### ${directiveNode.directive.kind} Directive\n${JSON.stringify(directiveNode.directive, null, 2)}\n\n`;
         default:
           throw new MeldOutputError(`Unknown node type: ${(node as any).type}`, 'markdown');
       }
@@ -222,70 +211,5 @@ export class OutputService implements IOutputService {
         error instanceof Error ? error : undefined
       );
     }
-  }
-
-  private async nodeToXML(
-    node: MeldNode,
-    options: Required<OutputOptions>
-  ): Promise<string> {
-    try {
-      switch (node.type) {
-        case 'Text':
-          return `\n    <text>${this.escapeXML(node.content)}</text>`;
-        case 'CodeFence':
-          return `\n    <code language="${this.escapeXML(node.language || '')}">${this.escapeXML(node.content)}</code>`;
-        case 'Directive':
-          return `\n    <directive kind="${this.escapeXML(node.directive.kind)}">${
-            typeof node.directive.value === 'string' 
-              ? `<value>${this.escapeXML(node.directive.value)}</value>`
-              : Object.entries(node.directive)
-                  .map(([key, val]) => `<${key}>${this.escapeXML(String(val))}</${key}>`)
-                  .join('')
-          }</directive>`;
-        default:
-          throw new MeldOutputError(`Unknown node type: ${(node as any).type}`, 'llm');
-      }
-    } catch (error) {
-      throw new MeldOutputError(
-        'Failed to convert node to XML',
-        'llm',
-        error instanceof Error ? error : undefined
-      );
-    }
-  }
-
-  private async stateToXML(state: IStateService): Promise<string> {
-    let output = '';
-
-    // Format text variables
-    const textVars = state.getAllTextVars();
-    if (textVars.size > 0) {
-      output += '\n    <text-vars>';
-      for (const [name, value] of textVars) {
-        output += `\n      <var name="${this.escapeXML(name)}">${this.escapeXML(value)}</var>`;
-      }
-      output += '\n    </text-vars>';
-    }
-
-    // Format data variables
-    const dataVars = state.getAllDataVars();
-    if (dataVars.size > 0) {
-      output += '\n    <data-vars>';
-      for (const [name, value] of dataVars) {
-        output += `\n      <var name="${this.escapeXML(name)}">${this.escapeXML(JSON.stringify(value))}</var>`;
-      }
-      output += '\n    </data-vars>';
-    }
-
-    return output;
-  }
-
-  private escapeXML(str: string): string {
-    return str
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&apos;');
   }
 } 

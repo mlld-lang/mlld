@@ -1,4 +1,5 @@
 import type { MeldNode } from 'meld-spec';
+import { IStateService } from '@services/StateService/IStateService.js';
 
 /**
  * Context for variable resolution, specifying what types of variables and operations are allowed
@@ -23,6 +24,9 @@ export interface ResolutionContext {
 
   /** Whether field access is allowed for data variables */
   allowDataFields?: boolean;
+
+  /** The state service to use for variable resolution */
+  state: IStateService;
 }
 
 /**

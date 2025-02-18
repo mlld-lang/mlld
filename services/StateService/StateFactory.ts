@@ -52,13 +52,13 @@ export class StateFactory implements IStateFactory {
   }
 
   mergeStates(parent: StateNode, child: StateNode): StateNode {
-    // Create new maps with parent values
+    // Create new maps with parent values as base
     const text = new Map(parent.variables.text);
     const data = new Map(parent.variables.data);
     const path = new Map(parent.variables.path);
     const commands = new Map(parent.commands);
 
-    // Merge child variables
+    // Merge child variables - last write wins
     for (const [key, value] of child.variables.text) {
       text.set(key, value);
     }
@@ -81,8 +81,9 @@ export class StateFactory implements IStateFactory {
       },
       commands,
       imports: new Set([...parent.imports, ...child.imports]),
+      // Preserve node order by appending all child nodes
       nodes: [...parent.nodes, ...child.nodes],
-      filePath: parent.filePath,
+      filePath: child.filePath ?? parent.filePath,
       parentState: parent.parentState
     };
 

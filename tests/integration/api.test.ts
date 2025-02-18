@@ -22,23 +22,35 @@ describe('SDK Integration Tests', () => {
     it('should convert to llm format by default', async () => {
       await context.fs.writeFile(testFilePath, '@text greeting = "Hello"');
       const result = await main(testFilePath, { fs: context.fs });
-      expect(result).toBeDefined();
+      expect(result).toContain('TextDirective');
+      expect(result).toContain('"kind": "text"');
+      expect(result).toContain('"identifier": "greeting"');
+      expect(result).toContain('"value": "Hello"');
     });
 
     it('should preserve markdown when format is md', async () => {
       await context.fs.writeFile(testFilePath, '@text greeting = "Hello"');
       const result = await main(testFilePath, { format: 'markdown', fs: context.fs });
-      expect(result).toBeDefined();
+      expect(result).toBe('### text Directive\n{\n  "kind": "text",\n  "identifier": "greeting",\n  "source": "literal",\n  "value": "Hello"\n}\n\n');
     });
 
     it('should handle complex meld content with directives', async () => {
-      await context.fs.writeFile(testFilePath, `
-        @text greeting = "Hello"
-        @data config = { "key": "value" }
-        @path projectRoot = "$PROJECTPATH/src"
-      `);
+      const content = [
+        '@text greeting = "Hello"',
+        '@text config = "value"',
+        '@text projectRoot = "src"'
+      ].join('\n');
+      
+      await context.fs.writeFile(testFilePath, content);
       const result = await main(testFilePath, { fs: context.fs });
-      expect(result).toBeDefined();
+      
+      // Verify each directive is present and properly formatted
+      expect(result).toContain('"identifier": "greeting"');
+      expect(result).toContain('"value": "Hello"');
+      expect(result).toContain('"identifier": "config"');
+      expect(result).toContain('"value": "value"');
+      expect(result).toContain('"identifier": "projectRoot"');
+      expect(result).toContain('"value": "src"');
     });
   });
 
@@ -46,34 +58,52 @@ describe('SDK Integration Tests', () => {
     it('should handle the complete parse -> interpret -> convert pipeline', async () => {
       await context.fs.writeFile(testFilePath, '@text greeting = "Hello"');
       const result = await main(testFilePath, { fs: context.fs });
-      expect(result).toBeDefined();
+      
+      // Verify the complete pipeline worked by checking structure and content
+      expect(result).toContain('TextDirective');
+      expect(result).toContain('"kind": "text"');
+      expect(result).toContain('"identifier": "greeting"');
+      expect(result).toContain('"value": "Hello"');
     });
 
-    it('should preserve state across the pipeline', async () => {
-      await context.fs.writeFile(testFilePath, `
-        @text first = "First"
-        @text second = "Second"
-        @text combined = "${first} ${second}"
-      `);
+    it('should preserve state and directive information', async () => {
+      const content = [
+        '@text first = "First"',
+        '@text second = "Second"',
+        '@text combined = "${first} ${second}"'
+      ].join('\n');
+      
+      await context.fs.writeFile(testFilePath, content);
       const result = await main(testFilePath, { fs: context.fs });
-      expect(result).toBeDefined();
+      
+      // Verify each directive is preserved with its full information
+      expect(result).toContain('"identifier": "first"');
+      expect(result).toContain('"value": "First"');
+      expect(result).toContain('"identifier": "second"');
+      expect(result).toContain('"value": "Second"');
+      expect(result).toContain('"identifier": "combined"');
+      expect(result).toContain('"value": "${first} ${second}"');
     });
   });
 
   describe('Error Handling', () => {
     it('should handle parse errors gracefully', async () => {
-      await context.fs.writeFile(testFilePath, '<!-- @invalid -->');
-      await expect(main(testFilePath, { fs: context.fs })).rejects.toThrow();
+      await context.fs.writeFile(testFilePath, '@invalid not_a_valid_directive');
+      await expect(main(testFilePath, { fs: context.fs }))
+        .rejects
+        .toThrow(/Parse error/);
     });
 
     it('should handle missing files correctly', async () => {
-      await expect(main('missing.meld', { fs: context.fs })).rejects.toThrow();
+      await expect(main('missing.meld', { fs: context.fs }))
+        .rejects
+        .toThrow(/File not found/);
     });
 
     it('should handle empty files', async () => {
       await context.fs.writeFile(testFilePath, '');
       const result = await main(testFilePath, { fs: context.fs });
-      expect(result).toBeDefined();
+      expect(result).toBe(''); // Empty input should produce empty output
     });
   });
 

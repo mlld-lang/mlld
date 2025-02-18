@@ -54,7 +54,8 @@ describe('ResolutionService', () => {
         data: true,
         path: true,
         command: true
-      }
+      },
+      state: stateService
     };
   });
 
