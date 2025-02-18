@@ -2,6 +2,7 @@ import { Volume } from 'memfs';
 import * as path from 'path';
 import type { Stats } from 'fs';
 import { filesystemLogger as logger } from '@core/utils/logger.js';
+import { EventEmitter } from 'events';
 
 /**
  * In-memory filesystem for testing using memfs.
@@ -10,11 +11,13 @@ import { filesystemLogger as logger } from '@core/utils/logger.js';
 export class MemfsTestFileSystem {
   private vol: Volume;
   private root: string = '/';
+  private watcher: EventEmitter;
 
   constructor() {
     logger.debug('Initializing MemfsTestFileSystem');
     try {
       this.vol = new Volume();
+      this.watcher = new EventEmitter();
       // Initialize root directory
       this.vol.mkdirSync(this.root, { recursive: true });
       logger.debug('Root directory initialized');
@@ -181,54 +184,70 @@ export class MemfsTestFileSystem {
   }
 
   /**
-   * Write a file, creating parent directories if needed
+   * Watch a directory for changes
+   * @param dir Directory to watch
+   * @param options Watch options
+   * @returns An async iterator that yields file change events
    */
-  async writeFile(filePath: string | undefined | null, content: string): Promise<void> {
-    logger.debug('Writing file', { filePath });
+  async *watch(
+    watchPath: string | undefined | null,
+    options?: { recursive?: boolean }
+  ): AsyncIterableIterator<{ filename: string; eventType: string }> {
+    const memfsPath = this.getMemfsPath(watchPath);
+    logger.debug('Starting watch', { path: memfsPath });
 
-    // Handle undefined/null paths
-    if (filePath === undefined || filePath === null) {
-      logger.error('Cannot write file: path is undefined/null');
-      throw new Error('EINVAL: Invalid file path: path is undefined or null');
-    }
+    // Create a queue to store events
+    const queue: { filename: string; eventType: string }[] = [];
+    let resolve: ((value: IteratorResult<{ filename: string; eventType: string }, any>) => void) | null = null;
 
-    // Handle empty paths
-    if (filePath.trim() === '') {
-      logger.error('Cannot write file: path is empty');
-      throw new Error('EINVAL: Invalid file path: path is empty');
-    }
+    // Set up event handlers
+    const onChange = (filename: string, eventType: string) => {
+      const event = { filename, eventType };
+      if (resolve) {
+        resolve({ value: event, done: false });
+        resolve = null;
+      } else {
+        queue.push(event);
+      }
+    };
 
-    const memfsPath = this.getMemfsPath(filePath);
-    logger.debug('Resolved memfs path for write', { memfsPath });
-    
+    this.watcher.on('change', onChange);
+
     try {
-      // Check if target exists and is a directory
-      if (this.vol.existsSync(memfsPath)) {
-        logger.debug('Path exists, checking if directory', { memfsPath });
-        const stats = this.vol.statSync(memfsPath);
-        if (stats.isDirectory()) {
-          logger.error('Cannot write to directory', { filePath, memfsPath });
-          throw new Error(`EISDIR: Cannot write to directory: ${filePath}`);
+      while (true) {
+        if (queue.length > 0) {
+          const event = queue.shift()!;
+          yield event;
+        } else {
+          yield await new Promise<{ filename: string; eventType: string }>((res) => {
+            resolve = (result) => res(result.value);
+          });
         }
       }
-      
-      // Ensure parent directory exists
-      const dirPath = path.dirname(memfsPath);
-      logger.debug('Ensuring parent directory exists', { dirPath });
-      this.vol.mkdirSync(dirPath, { recursive: true });
+    } finally {
+      this.watcher.off('change', onChange);
+    }
+  }
 
-      // Write the file
-      logger.debug('Writing file content', { memfsPath, contentLength: content.length });
-      this.vol.writeFileSync(memfsPath, content, 'utf-8');
-      logger.debug('File written successfully', { filePath, memfsPath });
-    } catch (error) {
-      if (error.message.startsWith('EISDIR:') || 
-          error.message.startsWith('ENOTDIR:') ||
-          error.message.startsWith('EINVAL:')) {
-        throw error;
+  /**
+   * Write a file and emit a change event
+   */
+  async writeFile(filePath: string | undefined | null, content: string): Promise<void> {
+    const memfsPath = this.getMemfsPath(filePath);
+    const dirPath = path.dirname(memfsPath);
+    
+    try {
+      // Create parent directories if they don't exist
+      if (!this.vol.existsSync(dirPath)) {
+        this.vol.mkdirSync(dirPath, { recursive: true });
       }
-      logger.error('Error writing file', { filePath, memfsPath, error });
-      throw new Error(`Error writing file '${filePath}': ${error.message}`);
+      
+      this.vol.writeFileSync(memfsPath, content, 'utf-8');
+      this.watcher.emit('change', path.basename(memfsPath), 'change');
+      logger.debug('File written successfully', { path: memfsPath });
+    } catch (error) {
+      logger.error('Error writing file', { path: memfsPath, error });
+      throw new Error(`Error writing file ${memfsPath}: ${error.message}`);
     }
   }
 

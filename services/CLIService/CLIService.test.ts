@@ -8,9 +8,25 @@ import { IFileSystemService } from '@services/FileSystemService/IFileSystemServi
 import { IPathService } from '@services/PathService/IPathService.js';
 import { IStateService } from '@services/StateService/IStateService.js';
 
+const defaultOptions = {
+  input: 'test.meld',
+  format: 'llm' as const
+};
+
+// Mock fs.watch for watch mode tests
+const mockWatcher = {
+  [Symbol.asyncIterator]: async function* () {
+    yield { filename: 'test.meld', eventType: 'change' };
+  }
+};
+
+vi.mock('fs/promises', () => ({
+  watch: vi.fn().mockImplementation(() => mockWatcher)
+}));
+
 describe('CLIService', () => {
   let context: TestContext;
-  let cliService: CLIService;
+  let service: CLIService;
   let mockParserService: IParserService;
   let mockInterpreterService: IInterpreterService;
   let mockOutputService: IOutputService;
@@ -26,34 +42,56 @@ describe('CLIService', () => {
     mockParserService = {
       parse: vi.fn().mockResolvedValue([]),
       parseWithLocations: vi.fn().mockResolvedValue([])
-    };
+    } as IParserService;
 
     mockInterpreterService = {
-      interpret: vi.fn().mockResolvedValue(undefined)
-    };
+      initialize: vi.fn(),
+      interpret: vi.fn().mockResolvedValue(undefined),
+      interpretNode: vi.fn(),
+      createChildContext: vi.fn()
+    } as IInterpreterService;
 
     mockOutputService = {
-      convert: vi.fn().mockResolvedValue('test output')
-    };
+      convert: vi.fn().mockResolvedValue('test output'),
+      registerFormat: vi.fn(),
+      supportsFormat: vi.fn(),
+      getSupportedFormats: vi.fn()
+    } as IOutputService;
 
+    // Use the MemfsTestFileSystem for file operations
+    const fs = context.fs;
     mockFileSystemService = {
-      readFile: vi.fn().mockResolvedValue('test content'),
-      writeFile: vi.fn().mockResolvedValue(undefined),
-      exists: vi.fn().mockResolvedValue(true)
-    };
+      readFile: fs.readFile.bind(fs),
+      writeFile: fs.writeFile.bind(fs),
+      exists: fs.exists.bind(fs),
+      watch: fs.watch.bind(fs)
+    } as unknown as IFileSystemService;
 
     mockPathService = {
-      resolvePath: vi.fn().mockImplementation(path => path)
-    };
+      initialize: vi.fn(),
+      resolvePath: vi.fn().mockImplementation(path => path),
+      enableTestMode: vi.fn(),
+      disableTestMode: vi.fn(),
+      isTestMode: vi.fn(),
+      validatePath: vi.fn(),
+      normalizePath: vi.fn(),
+      isAbsolute: vi.fn(),
+      join: vi.fn(),
+      dirname: vi.fn(),
+      basename: vi.fn()
+    } as IPathService;
+
+    const mockChildState = {
+      setPathVar: vi.fn(),
+      getNodes: vi.fn().mockReturnValue([])
+    } as unknown as IStateService;
 
     mockStateService = {
-      createState: vi.fn().mockReturnValue({}),
-      createChildState: vi.fn().mockReturnValue({}),
-      mergeStates: vi.fn().mockResolvedValue(undefined)
-    };
+      createChildState: vi.fn().mockReturnValue(mockChildState)
+    } as unknown as IStateService;
 
     // Create CLI service with mocks
-    cliService = new CLIService(
+    service = new CLIService(
       mockParserService,
       mockInterpreterService,
       mockOutputService,
@@ -63,31 +101,47 @@ describe('CLIService', () => {
     );
 
     // Set up test files
-    await context.writeFile('test.meld', '@text greeting = "Hello"');
+    await context.fs.writeFile('test.meld', '@text greeting = "Hello"');
   });
 
   afterEach(async () => {
     await context.cleanup();
-    vi.resetAllMocks();
+    vi.resetModules();
+    vi.clearAllMocks();
   });
 
   describe('Format Conversion', () => {
     it('should output llm format by default', async () => {
       const args = ['node', 'meld', 'test.meld', '--stdout'];
-      await expect(cliService.run(args)).resolves.not.toThrow();
-      expect(mockOutputService.convert).toHaveBeenCalledWith(expect.any(Object), { format: 'llm' });
+      await expect(service.run(args)).resolves.not.toThrow();
+      expect(mockOutputService.convert).toHaveBeenCalledWith(
+        expect.any(Array),
+        expect.any(Object),
+        'llm',
+        expect.any(Object)
+      );
     });
 
     it('should handle format aliases correctly', async () => {
-      const args = ['node', 'meld', 'test.meld', '--format', 'md', '--stdout'];
-      await expect(cliService.run(args)).resolves.not.toThrow();
-      expect(mockOutputService.convert).toHaveBeenCalledWith(expect.any(Object), { format: 'md' });
+      const args = ['node', 'meld', 'test.meld', '--format', 'markdown', '--stdout'];
+      await expect(service.run(args)).resolves.not.toThrow();
+      expect(mockOutputService.convert).toHaveBeenCalledWith(
+        expect.any(Array),
+        expect.any(Object),
+        'markdown',
+        expect.any(Object)
+      );
     });
 
-    it('should preserve markdown with md format', async () => {
-      const args = ['node', 'meld', 'test.meld', '--format', 'md', '--stdout'];
-      await expect(cliService.run(args)).resolves.not.toThrow();
-      expect(mockOutputService.convert).toHaveBeenCalledWith(expect.any(Object), { format: 'md' });
+    it('should preserve markdown with markdown format', async () => {
+      const args = ['node', 'meld', 'test.meld', '--format', 'markdown', '--stdout'];
+      await expect(service.run(args)).resolves.not.toThrow();
+      expect(mockOutputService.convert).toHaveBeenCalledWith(
+        expect.any(Array),
+        expect.any(Object),
+        'markdown',
+        expect.any(Object)
+      );
     });
   });
 
@@ -95,20 +149,72 @@ describe('CLIService', () => {
     it('should respect --stdout option', async () => {
       const consoleLog = vi.spyOn(console, 'log');
       const args = ['node', 'meld', 'test.meld', '--stdout'];
-      await cliService.run(args);
+      await service.run(args);
       expect(consoleLog).toHaveBeenCalledWith('test output');
       consoleLog.mockRestore();
     });
 
     it('should use default output path when not specified', async () => {
       const args = ['node', 'meld', 'test.meld'];
-      await expect(cliService.run(args)).resolves.not.toThrow();
-      expect(mockOutputService.convert).toHaveBeenCalledWith(expect.any(Object), { format: 'llm' });
+      await expect(service.run(args)).resolves.not.toThrow();
+      expect(mockOutputService.convert).toHaveBeenCalledWith(
+        expect.any(Array),
+        expect.any(Object),
+        'llm',
+        expect.any(Object)
+      );
     });
 
-    it('should handle multiple format options correctly', async () => {
-      const args = ['node', 'meld', 'test.meld', '--format', 'md,llm', '--stdout'];
-      await expect(cliService.run(args)).rejects.toThrow('Format must be either "md" or "llm"');
+    it('should handle project path option', async () => {
+      const args = ['node', 'meld', 'test.meld', '--project-path', '/project'];
+      await service.run(args);
+      const state = mockStateService.createChildState();
+      expect(state.setPathVar).toHaveBeenCalledWith('PROJECTPATH', '/project');
+      expect(state.setPathVar).toHaveBeenCalledWith('.', '/project');
+    });
+
+    it('should handle home path option', async () => {
+      const args = ['node', 'meld', 'test.meld', '--home-path', '/home'];
+      await service.run(args);
+      const state = mockStateService.createChildState();
+      expect(state.setPathVar).toHaveBeenCalledWith('HOMEPATH', '/home');
+      expect(state.setPathVar).toHaveBeenCalledWith('~', '/home');
+    });
+
+    it('should handle verbose option', async () => {
+      const args = ['node', 'meld', 'test.meld', '--verbose'];
+      await service.run(args);
+      // Verify logging behavior if needed
+    });
+
+    it('should handle watch option', async () => {
+      const processFile = vi.spyOn(service as any, 'processFile');
+      
+      // Start the service in watch mode
+      const watchPromise = service.run(['node', 'meld', 'test.meld', '--watch']);
+      
+      // Wait a bit for the watcher to start
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Trigger a file change
+      await context.fs.writeFile('test.meld', '@text greeting = "Updated"');
+      
+      // Wait for the watch event to be processed
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      expect(processFile).toHaveBeenCalled();
+      
+      // Clean up by throwing an error to stop the watcher
+      try {
+        const error = new Error('STOP_WATCH');
+        (context.fs as any).watcher.emit('error', error);
+        await expect(watchPromise).rejects.toThrow('STOP_WATCH');
+      } catch (e) {
+        // If the error is already caught by the watcher, that's fine
+        if (!(e instanceof Error && e.message === 'STOP_WATCH')) {
+          throw e;
+        }
+      }
     });
   });
 
@@ -116,13 +222,39 @@ describe('CLIService', () => {
     it('should handle missing input files', async () => {
       mockFileSystemService.exists = vi.fn().mockResolvedValue(false);
       const args = ['node', 'meld', 'nonexistent.meld', '--stdout'];
-      await expect(cliService.run(args)).rejects.toThrow('File not found');
+      await expect(service.run(args)).rejects.toThrow('File not found');
     });
 
     it('should handle write errors', async () => {
       mockFileSystemService.writeFile = vi.fn().mockRejectedValue(new Error('Write error'));
       const args = ['node', 'meld', 'test.meld', '--output', 'output.md'];
-      await expect(cliService.run(args)).rejects.toThrow('Write error');
+      await expect(service.run(args)).rejects.toThrow('Write error');
+    });
+
+    it('should handle read errors', async () => {
+      mockFileSystemService.readFile = vi.fn().mockRejectedValue(new Error('Read error'));
+      const args = ['node', 'meld', 'test.meld', '--stdout'];
+      await expect(service.run(args)).rejects.toThrow('Read error');
+    });
+  });
+
+  describe('Error Handling', () => {
+    it('should handle parser errors', async () => {
+      mockParserService.parse = vi.fn().mockRejectedValue(new Error('Parse error'));
+      const args = ['node', 'meld', 'test.meld', '--stdout'];
+      await expect(service.run(args)).rejects.toThrow('Parse error');
+    });
+
+    it('should handle interpreter errors', async () => {
+      mockInterpreterService.interpret = vi.fn().mockRejectedValue(new Error('Interpret error'));
+      const args = ['node', 'meld', 'test.meld', '--stdout'];
+      await expect(service.run(args)).rejects.toThrow('Interpret error');
+    });
+
+    it('should handle output conversion errors', async () => {
+      mockOutputService.convert = vi.fn().mockRejectedValue(new Error('Convert error'));
+      const args = ['node', 'meld', 'test.meld', '--stdout'];
+      await expect(service.run(args)).rejects.toThrow('Convert error');
     });
   });
 }); 

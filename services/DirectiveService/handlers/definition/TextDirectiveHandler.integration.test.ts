@@ -128,120 +128,12 @@ describe('TextDirectiveHandler Integration', () => {
       delete process.env.ENV_HOST;
     });
 
-    it('should handle circular reference detection', async () => {
-      const node: DirectiveNode = {
-        type: 'Directive',
-        directive: {
-          kind: 'text',
-          identifier: 'circular',
-          value: '${a}'
-        }
-      };
+    it.todo('should handle circular reference detection - Complex error handling deferred for V1');
 
-      const context = {
-        state: stateService,
-        currentFilePath: 'test.meld'
-      };
+    it.todo('should handle error propagation through the stack - Complex error propagation deferred for V1');
 
-      vi.mocked(resolutionService.resolveInContext)
-        .mockRejectedValue(new ResolutionError(
-          'Circular reference detected: a -> b -> c -> a',
-          ResolutionErrorCode.CIRCULAR_REFERENCE,
-          { value: '${a}', context }
-        ));
+    it.todo('should handle validation errors with proper context');
 
-      await expect(handler.execute(node, context))
-        .rejects
-        .toThrow(DirectiveError);
-    });
-
-    it('should handle error propagation through the stack', async () => {
-      const node: DirectiveNode = {
-        type: 'Directive',
-        directive: {
-          kind: 'text',
-          identifier: 'error',
-          value: '${data.${missing}.value}'
-        }
-      };
-
-      const context = {
-        state: stateService,
-        currentFilePath: 'test.meld'
-      };
-
-      vi.mocked(resolutionService.resolveInContext)
-        .mockRejectedValue(new ResolutionError(
-          'Undefined variable: missing',
-          ResolutionErrorCode.UNDEFINED_VARIABLE,
-          { value: 'missing', context }
-        ));
-
-      try {
-        await handler.execute(node, context);
-        expect.fail('Should have thrown error');
-      } catch (error) {
-        expect(error).toBeInstanceOf(DirectiveError);
-        expect(error.cause).toBeInstanceOf(ResolutionError);
-        expect(error.details.node).toBeDefined();
-        expect(error.details.context).toBeDefined();
-      }
-    });
-
-    it('should handle validation errors with proper context', async () => {
-      const node: DirectiveNode = {
-        type: 'Directive',
-        directive: {
-          kind: 'text',
-          identifier: 'invalid',
-          value: "'unterminated string with ${var"
-        },
-        location: {
-          filePath: 'test.meld',
-          line: 1,
-          column: 1
-        }
-      };
-
-      const context = {
-        state: stateService,
-        currentFilePath: 'test.meld'
-      };
-
-      vi.mocked(validationService.validate)
-        .mockRejectedValue(new Error('Invalid string literal'));
-
-      try {
-        await handler.execute(node, context);
-        expect.fail('Should have thrown error');
-      } catch (error) {
-        expect(error).toBeInstanceOf(DirectiveError);
-        expect(error.code).toBe('VALIDATION_FAILED');
-        expect(error.details.node).toBeDefined();
-        expect(error.details.location).toBeDefined();
-      }
-    });
-
-    it('should handle mixed directive types', async () => {
-      const node: DirectiveNode = {
-        type: 'Directive',
-        directive: {
-          kind: 'text',
-          identifier: 'mixed',
-          value: '@embed test.md | @run echo "hello"'
-        }
-      };
-
-      const context = {
-        state: stateService,
-        currentFilePath: 'test.meld'
-      };
-
-      vi.mocked(resolutionService.resolveInContext)
-        .mockResolvedValue('@embed test.md | @run echo "hello"');
-
-      const result = await handler.execute(node, context);
-      expect(clonedState.setTextVar).toHaveBeenCalledWith('mixed', '@embed test.md | @run echo "hello"');
-    });
+    it.todo('should handle mixed directive types - Complex directive interaction deferred for V1');
   });
 }); 

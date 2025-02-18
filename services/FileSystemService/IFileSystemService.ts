@@ -13,6 +13,9 @@ export interface IFileSystemService {
   ensureDir(path: string): Promise<void>;
   isDirectory(path: string): Promise<boolean>;
   
+  // File watching
+  watch(path: string, options?: { recursive?: boolean }): AsyncIterableIterator<{ filename: string; eventType: string }>;
+  
   // Working directory
   getCwd(): string;
 } 

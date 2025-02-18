@@ -1,4 +1,5 @@
 import * as fs from 'fs-extra';
+import { watch } from 'fs/promises';
 import type { IFileSystem } from './IFileSystem.js';
 import type { Stats } from 'fs';
 
@@ -52,5 +53,9 @@ export class NodeFileSystem implements IFileSystem {
       }
       throw error;
     }
+  }
+
+  watch(path: string, options?: { recursive?: boolean }): AsyncIterableIterator<{ filename: string; eventType: string }> {
+    return watch(path, options);
   }
 } 

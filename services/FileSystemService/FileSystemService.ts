@@ -187,4 +187,23 @@ export class FileSystemService implements IFileSystemService {
   getCwd(): string {
     return process.cwd();
   }
+
+  watch(path: string, options?: { recursive?: boolean }): AsyncIterableIterator<{ filename: string; eventType: string }> {
+    const context: FileOperationContext = {
+      operation: 'watch',
+      path,
+      details: { options }
+    };
+
+    try {
+      logger.debug('Starting file watch', context);
+      return this.fs.watch(path, options);
+    } catch (error) {
+      logger.error('Failed to watch file', { ...context, error });
+      throw new MeldError(`Failed to watch file: ${path}`, {
+        cause: error,
+        context
+      });
+    }
+  }
 } 

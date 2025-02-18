@@ -12,4 +12,7 @@ export interface IFileSystem {
   mkdir(path: string): Promise<void>;
   isDirectory(path: string): Promise<boolean>;
   isFile(path: string): Promise<boolean>;
+  
+  // File watching
+  watch(path: string, options?: { recursive?: boolean }): AsyncIterableIterator<{ filename: string; eventType: string }>;
 } 
