@@ -65,7 +65,7 @@ export class ParserService implements IParserService {
       return [];
     }
 
-    return nodes.map(node => {
+    return nodes.map((node, index) => {
       if (!node || !node.location || !node.type) {
         return node;
       }
@@ -79,12 +79,21 @@ export class ParserService implements IParserService {
         }
 
         const lines = textNode.content.split('\n');
+        const lastLine = lines[lines.length - 1];
         
-        // Start position remains unchanged
-        location.start = {
-          line: location.start.line,
-          column: location.start.column
-        };
+        // If this text node follows a directive, use the directive's end position as start
+        const prevNode = index > 0 ? nodes[index - 1] : null;
+        if (prevNode?.type === 'Directive' && prevNode.location?.end?.line !== undefined && prevNode.location.end.column !== undefined) {
+          location.start = {
+            line: prevNode.location.end.line,
+            column: prevNode.location.end.column
+          };
+        } else {
+          location.start = {
+            line: location.start.line,
+            column: location.start.column
+          };
+        }
         
         // End position depends on whether there are newlines
         if (lines.length === 1) {
@@ -93,10 +102,9 @@ export class ParserService implements IParserService {
             column: location.start.column + textNode.content.length - 1
           };
         } else {
-          // For multi-line text, preserve original line numbers
           location.end = {
             line: location.start.line + lines.length - 1,
-            column: lines[lines.length - 1].length + 1
+            column: lastLine.length === 0 ? 0 : lastLine.length + 1
           };
         }
       } else if (node.type === 'Directive') {
@@ -110,10 +118,10 @@ export class ParserService implements IParserService {
           return { ...node, location };
         }
         
-        // Preserve original start position
+        // Directives always start at column 1
         location.start = {
           line: location.start.line,
-          column: location.start.column
+          column: 1
         };
         
         // Calculate exact length: @kind identifier = value
@@ -133,7 +141,7 @@ export class ParserService implements IParserService {
         const directiveStr = `@${directive.kind} ${directive.identifier} = ${valueStr}`;
         location.end = {
           line: location.start.line,
-          column: location.start.column + directiveStr.length - 1
+          column: directiveStr.length // No need to subtract 1 since we want the position after the last char
         };
       }
 

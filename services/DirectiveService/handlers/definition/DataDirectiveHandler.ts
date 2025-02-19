@@ -34,7 +34,8 @@ export class DataDirectiveHandler implements IDirectiveHandler {
         path: true,
         command: true
       },
-      currentFilePath: context.currentFilePath
+      currentFilePath: context.currentFilePath,
+      state: context.state
     };
 
     try {
@@ -48,6 +49,8 @@ export class DataDirectiveHandler implements IDirectiveHandler {
         // Then parse the JSON
         try {
           parsedValue = JSON.parse(resolvedJsonString);
+          // Recursively resolve any variables in the parsed object
+          parsedValue = await this.resolveObjectFields(parsedValue, resolutionContext);
         } catch (error) {
           if (error instanceof Error) {
             throw new DirectiveError(
@@ -60,16 +63,13 @@ export class DataDirectiveHandler implements IDirectiveHandler {
           throw error;
         }
       } else {
-        // Value is already an object, just use it directly
-        parsedValue = value;
+        // Value is already an object, resolve variables in it
+        parsedValue = await this.resolveObjectFields(value, resolutionContext);
       }
-
-      // Then recursively resolve any remaining variables in the parsed value
-      const resolvedValue = await this.resolveObjectFields(parsedValue, resolutionContext);
 
       // Store the resolved value in a new state
       const newState = context.state.clone();
-      newState.setDataVar(identifier, resolvedValue);
+      newState.setDataVar(identifier, parsedValue);
       return newState;
     } catch (error) {
       if (error instanceof Error) {

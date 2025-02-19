@@ -56,7 +56,7 @@ describe('ParserService', () => {
       const mockResult: MeldNode[] = [{
         type: 'Text',
         content: 'Hello world',
-        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 12 } }
+        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 11 } }
       } as unknown as TextNode];
 
       const result = await service.parse(content);
@@ -73,7 +73,7 @@ describe('ParserService', () => {
           source: 'literal',
           value: 'Hello'
         },
-        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 23 } }
+        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 24 } }
       } as unknown as DirectiveNode];
 
       const result = await service.parse(content);
@@ -86,7 +86,7 @@ describe('ParserService', () => {
         {
           type: 'Text',
           content: 'Hello world\n',
-          location: { start: { line: 1, column: 1 }, end: { line: 1, column: 12 } }
+          location: { start: { line: 1, column: 1 }, end: { line: 2, column: 0 } }
         } as unknown as TextNode,
         {
           type: 'Directive',
@@ -96,12 +96,12 @@ describe('ParserService', () => {
             source: 'literal',
             value: 'Hi'
           },
-          location: { start: { line: 1, column: 1 }, end: { line: 1, column: 20 } }
+          location: { start: { line: 2, column: 1 }, end: { line: 2, column: 21 } }
         } as unknown as DirectiveNode,
         {
           type: 'Text',
           content: '\nMore text',
-          location: { start: { line: 1, column: 1 }, end: { line: 1, column: 10 } }
+          location: { start: { line: 2, column: 22 }, end: { line: 3, column: 10 } }
         } as unknown as TextNode
       ];
 
@@ -137,7 +137,7 @@ describe('ParserService', () => {
         {
           type: 'Text',
           content: 'Hello\n',
-          location: { start: { line: 1, column: 1 }, end: { line: 1, column: 6 }, filePath: 'test.meld' }
+          location: { start: { line: 1, column: 1 }, end: { line: 2, column: 0 }, filePath: 'test.meld' }
         } as unknown as TextNode,
         {
           type: 'Directive',
@@ -147,7 +147,7 @@ describe('ParserService', () => {
             source: 'literal',
             value: 'Hi'
           },
-          location: { start: { line: 1, column: 1 }, end: { line: 1, column: 20 }, filePath: 'test.meld' }
+          location: { start: { line: 2, column: 1 }, end: { line: 2, column: 21 }, filePath: 'test.meld' }
         } as unknown as DirectiveNode
       ];
 
@@ -164,7 +164,7 @@ describe('ParserService', () => {
       
       expect(result[0].location).toMatchObject({
         start: { line: 1, column: 1 },
-        end: { line: 1, column: 20 },
+        end: { line: 1, column: 21 },
         filePath
       });
     });
@@ -185,7 +185,7 @@ describe('ParserService', () => {
       expect(result).toEqual([{
         type: 'Text',
         content: 'content',
-        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 8 } }
+        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 7 } }
       }]);
     });
 
@@ -195,7 +195,7 @@ describe('ParserService', () => {
       expect(result).toEqual([{
         type: 'Text',
         content: 'content',
-        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 8 } }
+        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 7 } }
       }]);
     });
 
@@ -205,7 +205,7 @@ describe('ParserService', () => {
       expect(result).toEqual([{
         type: 'Text',
         content: 'content',
-        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 8 } }
+        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 7 } }
       }]);
     });
   });

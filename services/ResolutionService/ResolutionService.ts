@@ -238,6 +238,54 @@ export class ResolutionService implements IResolutionService {
       }
     }
 
+    // Handle command references ($command(args))
+    const commandVarRegex = /\$([A-Za-z0-9_]+)\((.*?)\)/g;
+    while ((match = commandVarRegex.exec(result)) !== null) {
+      const [fullMatch, commandName, argsStr] = match;
+      
+      // Check for circular references
+      if (resolutionPath.includes(commandName)) {
+        const path = [...resolutionPath, commandName].join(' -> ');
+        throw new ResolutionError(
+          `Circular reference detected: ${path}`,
+          ResolutionErrorCode.CIRCULAR_REFERENCE,
+          { value, context }
+        );
+      }
+
+      resolutionPath.push(commandName);
+
+      try {
+        const command = context.state.getCommand(commandName);
+        if (!command) {
+          throw new ResolutionError(
+            `Undefined command: ${commandName}`,
+            ResolutionErrorCode.UNDEFINED_VARIABLE,
+            { value: commandName, context }
+          );
+        }
+
+        // Parse args - split by comma and trim whitespace
+        const args = argsStr.split(',').map(arg => arg.trim());
+
+        // Create a directive node for the command resolver
+        const commandNode: DirectiveNode = {
+          type: 'Directive',
+          directive: {
+            kind: 'run',
+            identifier: commandName,
+            value: fullMatch,
+            args
+          }
+        };
+
+        const resolvedCommand = await this.commandResolver.resolve(commandNode, context);
+        result = result.replace(fullMatch, resolvedCommand);
+      } finally {
+        resolutionPath.pop();
+      }
+    }
+
     return result;
   }
 
