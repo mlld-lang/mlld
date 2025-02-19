@@ -10,6 +10,7 @@ import { validateDataDirective } from './validators/DataDirectiveValidator.js';
 import { validateImportDirective } from './validators/ImportDirectiveValidator.js';
 import { validateEmbedDirective } from './validators/EmbedDirectiveValidator.js';
 import { validatePathDirective } from './validators/PathDirectiveValidator.js';
+import { validateDefineDirective } from './validators/DefineDirectiveValidator.js';
 
 export class ValidationService implements IValidationService {
   private validators = new Map<string, (node: DirectiveNode) => Promise<void>>();
@@ -21,6 +22,7 @@ export class ValidationService implements IValidationService {
     this.registerValidator('import', async (node) => validateImportDirective(node));
     this.registerValidator('embed', async (node) => validateEmbedDirective(node));
     this.registerValidator('path', async (node) => validatePathDirective(node));
+    this.registerValidator('define', async (node) => validateDefineDirective(node));
     
     logger.debug('ValidationService initialized with default validators', {
       validators: Array.from(this.validators.keys())

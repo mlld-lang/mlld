@@ -17,6 +17,7 @@ import type { ILogger } from './handlers/execution/EmbedDirectiveHandler.js';
 import { TextDirectiveHandler } from './handlers/definition/TextDirectiveHandler.js';
 import { DataDirectiveHandler } from './handlers/definition/DataDirectiveHandler.js';
 import { PathDirectiveHandler } from './handlers/definition/PathDirectiveHandler.js';
+import { DefineDirectiveHandler } from './handlers/definition/DefineDirectiveHandler.js';
 import { RunDirectiveHandler } from './handlers/execution/RunDirectiveHandler.js';
 import { EmbedDirectiveHandler } from './handlers/execution/EmbedDirectiveHandler.js';
 import { ImportDirectiveHandler } from './handlers/execution/ImportDirectiveHandler.js';
@@ -105,6 +106,14 @@ export class DirectiveService implements IDirectiveService {
 
     this.registerHandler(
       new PathDirectiveHandler(
+        this.validationService!,
+        this.stateService!,
+        this.resolutionService!
+      )
+    );
+
+    this.registerHandler(
+      new DefineDirectiveHandler(
         this.validationService!,
         this.stateService!,
         this.resolutionService!
@@ -611,30 +620,74 @@ export class DirectiveService implements IDirectiveService {
   }
 
   public async processDirective(node: DirectiveNode, context: DirectiveContext): Promise<IStateService> {
-    if (!this.initialized) {
-      throw new Error('DirectiveService must be initialized before use');
-    }
+    this.ensureInitialized();
 
     try {
-      const handler = this.handlers.get(node.directive.kind);
+      if (!node.directive || !node.directive.kind) {
+        throw new DirectiveError(
+          'Invalid directive format',
+          'unknown',
+          DirectiveErrorCode.VALIDATION_FAILED,
+          { node }
+        );
+      }
+
+      const kind = node.directive.kind.toLowerCase();
+      const handler = this.handlers.get(kind);
+      
       if (!handler) {
         throw new DirectiveError(
-          `No handler found for directive kind: ${node.directive.kind}`,
-          node.directive.kind,
+          `Unknown directive kind: ${kind}`,
+          kind,
           DirectiveErrorCode.HANDLER_NOT_FOUND,
           { node }
         );
       }
-      return await handler.execute(node, context);
+
+      if (typeof handler.handle !== 'function') {
+        throw new DirectiveError(
+          `Invalid handler for directive kind: ${kind}`,
+          kind,
+          DirectiveErrorCode.HANDLER_NOT_FOUND,
+          { node }
+        );
+      }
+
+      // Validate directive before handling
+      await this.validateDirective(node);
+
+      // Handle the directive
+      await handler.handle(node, context);
+
+      return context.state;
     } catch (error) {
       if (error instanceof DirectiveError) {
         throw error;
       }
+
+      // Simplify error messages for common cases
+      let message = error instanceof Error ? error.message : String(error);
+      let code = DirectiveErrorCode.EXECUTION_FAILED;
+      
+      if (message.includes('file not found') || message.includes('no such file')) {
+        message = `Referenced file not found: ${node.directive.path || node.directive.value}`;
+        code = DirectiveErrorCode.FILE_NOT_FOUND;
+      } else if (message.includes('circular import') || message.includes('circular reference')) {
+        message = 'Circular import detected';
+        code = DirectiveErrorCode.CIRCULAR_IMPORT;
+      } else if (message.includes('parameter count') || message.includes('wrong number of parameters')) {
+        message = 'Invalid parameter count';
+        code = DirectiveErrorCode.VALIDATION_FAILED;
+      } else if (message.includes('invalid path') || message.includes('path validation failed')) {
+        message = 'Invalid path';
+        code = DirectiveErrorCode.VALIDATION_FAILED;
+      }
+
       throw new DirectiveError(
-        (error as Error)?.message || 'Unknown error',
-        node.directive.kind,
-        DirectiveErrorCode.EXECUTION_FAILED,
-        { node, cause: error as Error }
+        message,
+        node.directive?.kind || 'unknown',
+        code,
+        { node, error: error instanceof Error ? error : undefined }
       );
     }
   }

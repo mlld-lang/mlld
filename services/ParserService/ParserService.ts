@@ -48,8 +48,20 @@ export class ParserService implements IParserService {
       }
     } catch (error) {
       if (error instanceof MeldAstError) {
+        // Simplify error messages for common cases
+        let message = error.message;
+        if (message.includes('Expected') && message.includes('but') && message.includes('found')) {
+          message = 'Invalid syntax';
+        } else if (message.includes('undefined variable')) {
+          message = 'Undefined variable';
+        } else if (message.includes('circular reference')) {
+          message = 'Circular reference detected';
+        } else if (message.includes('type mismatch')) {
+          message = 'Type mismatch';
+        }
+
         throw new MeldParseError(
-          `Parse error: ${error.message}`,
+          message,
           error.location || { 
             start: { line: 1, column: 1 }, 
             end: { line: 1, column: content ? content.length : 1 } 
