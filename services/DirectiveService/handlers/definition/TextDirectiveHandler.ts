@@ -7,6 +7,7 @@ import { ResolutionContextFactory } from '@services/ResolutionService/Resolution
 import { directiveLogger as logger } from '@core/utils/logger.js';
 import { DirectiveError, DirectiveErrorCode } from '@services/DirectiveService/errors/DirectiveError.js';
 import { StringLiteralHandler } from '@services/ResolutionService/resolvers/StringLiteralHandler.js';
+import { StringConcatenationHandler } from '@services/ResolutionService/resolvers/StringConcatenationHandler.js';
 import { VariableReferenceResolver } from '@services/ResolutionService/resolvers/VariableReferenceResolver.js';
 import { ResolutionError } from '@services/ResolutionService/errors/ResolutionError.js';
 
@@ -17,6 +18,7 @@ import { ResolutionError } from '@services/ResolutionService/errors/ResolutionEr
 export class TextDirectiveHandler implements IDirectiveHandler {
   readonly kind = 'text';
   private stringLiteralHandler: StringLiteralHandler;
+  private stringConcatenationHandler: StringConcatenationHandler;
   private variableReferenceResolver: VariableReferenceResolver;
 
   constructor(
@@ -25,6 +27,7 @@ export class TextDirectiveHandler implements IDirectiveHandler {
     private resolutionService: IResolutionService
   ) {
     this.stringLiteralHandler = new StringLiteralHandler();
+    this.stringConcatenationHandler = new StringConcatenationHandler(resolutionService);
     this.variableReferenceResolver = new VariableReferenceResolver(
       stateService,
       resolutionService
@@ -99,39 +102,47 @@ export class TextDirectiveHandler implements IDirectiveHandler {
       // 3. Get identifier and value from directive
       const { identifier, value } = node.directive;
 
-      // 4. Handle the value based on whether it's a string literal or needs variable resolution
+      // 4. Handle the value based on its type
       let resolvedValue: string;
-      if (value.startsWith('"') || value.startsWith("'") || value.startsWith('`')) {
-        if (!this.isStringLiteral(value)) {
-          throw new DirectiveError(
-            'Invalid string literal format',
-            this.kind,
-            DirectiveErrorCode.VALIDATION_FAILED,
-            {
-              node,
-              context,
-              location: node.location
-            }
-          );
+
+      // Create a resolution context that includes the original state
+      const resolutionContext = {
+        currentFilePath: context.currentFilePath,
+        allowedVariableTypes: {
+          text: true,
+          data: true,
+          path: true,
+          command: true
+        },
+        state: context.state
+      };
+
+      // Check for string concatenation first
+      if (this.stringConcatenationHandler.hasConcatenation(value)) {
+        try {
+          resolvedValue = await this.stringConcatenationHandler.resolveConcatenation(value, resolutionContext);
+        } catch (error) {
+          if (error instanceof ResolutionError) {
+            throw new DirectiveError(
+              'Failed to resolve string concatenation',
+              this.kind,
+              DirectiveErrorCode.RESOLUTION_FAILED,
+              {
+                node,
+                context,
+                cause: error,
+                location: node.location
+              }
+            );
+          }
+          throw error;
         }
+      } else if (this.stringLiteralHandler.isStringLiteral(value)) {
         // For string literals, strip the quotes and handle escapes
         resolvedValue = this.stringLiteralHandler.parseLiteral(value);
       } else {
         // For values with variables, resolve them using the resolution service
         try {
-          // Create a resolution context that includes the original state
-          const resolutionContext = {
-            currentFilePath: context.currentFilePath,
-            allowedVariableTypes: {
-              text: true,
-              data: true,
-              path: true,
-              command: true
-            },
-            state: context.state
-          };
-
-          // Use the resolution service directly to resolve variables
           resolvedValue = await this.resolutionService.resolveInContext(value, resolutionContext);
         } catch (error) {
           if (error instanceof ResolutionError) {

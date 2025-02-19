@@ -236,4 +236,106 @@ describe('TextDirectiveHandler', () => {
         .toThrow(DirectiveError);
     });
   });
+
+  describe('string concatenation', () => {
+    it('should handle basic string concatenation', async () => {
+      const node: DirectiveNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'text',
+          identifier: 'greeting',
+          value: '"Hello" ++ " " ++ "World"'
+        }
+      };
+
+      const context = {
+        state: stateService,
+        currentFilePath: 'test.meld'
+      };
+
+      const result = await handler.execute(node, context);
+      expect(clonedState.setTextVar).toHaveBeenCalledWith('greeting', 'Hello World');
+    });
+
+    it('should handle string concatenation with variables', async () => {
+      const node: DirectiveNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'text',
+          identifier: 'message',
+          value: '"Hello" ++ " " ++ ${name}'
+        }
+      };
+
+      const context = {
+        state: stateService,
+        currentFilePath: 'test.meld'
+      };
+
+      vi.mocked(resolutionService.resolveInContext).mockResolvedValueOnce('World');
+
+      const result = await handler.execute(node, context);
+      expect(clonedState.setTextVar).toHaveBeenCalledWith('message', 'Hello World');
+    });
+
+    it('should handle string concatenation with embedded content', async () => {
+      const node: DirectiveNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'text',
+          identifier: 'doc',
+          value: '"Prefix: " ++ @embed [header.md] ++ @embed [footer.md]'
+        }
+      };
+
+      const context = {
+        state: stateService,
+        currentFilePath: 'test.meld'
+      };
+
+      vi.mocked(resolutionService.resolveInContext)
+        .mockResolvedValueOnce('Header')
+        .mockResolvedValueOnce('Footer');
+
+      const result = await handler.execute(node, context);
+      expect(clonedState.setTextVar).toHaveBeenCalledWith('doc', 'Prefix: HeaderFooter');
+    });
+
+    it('should reject invalid concatenation syntax', async () => {
+      const node: DirectiveNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'text',
+          identifier: 'bad',
+          value: '"no"++"spaces"'
+        }
+      };
+
+      const context = {
+        state: stateService,
+        currentFilePath: 'test.meld'
+      };
+
+      await expect(handler.execute(node, context)).rejects.toThrow(DirectiveError);
+    });
+
+    it('should handle concatenation with mixed quote types', async () => {
+      const node: DirectiveNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'text',
+          identifier: 'mixed',
+          value: '"double" ++ \'single\' ++ `backtick`'
+        }
+      };
+
+      const context = {
+        state: stateService,
+        currentFilePath: 'test.meld'
+      };
+
+      const result = await handler.execute(node, context);
+      expect(clonedState.setTextVar).toHaveBeenCalledWith('mixed', 'doublesinglebacktick');
+    });
+  });
 }); 

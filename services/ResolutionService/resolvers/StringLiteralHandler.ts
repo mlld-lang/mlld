@@ -8,6 +8,38 @@ export class StringLiteralHandler {
   private readonly MIN_CONTENT_LENGTH = 1;
 
   /**
+   * Checks if a value appears to be a string literal
+   * This is a preliminary check before full validation
+   */
+  isStringLiteral(value: string): boolean {
+    if (!value || value.length < 2) {
+      return false;
+    }
+
+    const firstChar = value[0];
+    const lastChar = value[value.length - 1];
+    
+    // Check for matching quotes
+    if (!this.QUOTE_TYPES.includes(firstChar as any) || firstChar !== lastChar) {
+      return false;
+    }
+
+    // Check for unclosed quotes
+    let isEscaped = false;
+    for (let i = 1; i < value.length - 1; i++) {
+      if (value[i] === '\\') {
+        isEscaped = !isEscaped;
+      } else if (value[i] === firstChar && !isEscaped) {
+        return false; // Found an unescaped quote in the middle
+      } else {
+        isEscaped = false;
+      }
+    }
+
+    return true;
+  }
+
+  /**
    * Validates a string literal for proper quoting and content
    * @throws ResolutionError if the literal is invalid
    */

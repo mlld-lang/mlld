@@ -4,27 +4,21 @@ import type { MeldNode, TextNode, CodeFenceNode, CommentNode } from 'meld-spec';
 
 /**
  * Handles resolution of raw content (text, code blocks, comments)
- * Preserves formatting of text and code blocks while skipping comments
+ * Preserves original document formatting while skipping comments and directives
  */
 export class ContentResolver {
   constructor(private stateService: IStateService) {}
 
   /**
-   * Resolve content nodes, preserving formatting but skipping comments
+   * Resolve content nodes, preserving original formatting but skipping comments and directives
    */
   async resolve(nodes: MeldNode[], context: ResolutionContext): Promise<string> {
     const resolvedParts: string[] = [];
-    let lastNodeType: string | null = null;
 
     for (const node of nodes) {
       // Skip comments and directives
       if (node.type === 'Comment' || node.type === 'Directive') {
         continue;
-      }
-
-      // Add spacing between different node types
-      if (lastNodeType && lastNodeType !== node.type) {
-        resolvedParts.push('');
       }
 
       switch (node.type) {
@@ -42,14 +36,11 @@ export class ContentResolver {
           resolvedParts.push('```');
           break;
       }
-
-      lastNodeType = node.type;
     }
 
-    // Join with single newlines, trimming any extra whitespace
+    // Join parts without adding any additional whitespace
     return resolvedParts
       .filter(part => part !== undefined)
-      .join('\n')
-      .trim();
+      .join('');
   }
 } 
