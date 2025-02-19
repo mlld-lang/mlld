@@ -1,4 +1,5 @@
-export { parse, ParseError } from 'meld-ast';
+export { parse, MeldAstError } from 'meld-ast';
+
 export type { 
   MeldNode,
   DirectiveNode,
@@ -12,12 +13,5 @@ export type {
   SourceLocation,
   NodeType,
   DirectiveKind,
-  DirectiveData,
-  CommandDefinition,
-  CommandMetadata,
-  RiskLevel,
-  ValidationResult,
-  Example,
-  ParseOptions,
-  ParseResult
-} from 'meld-ast';
+  DirectiveData
+} from 'meld-spec';

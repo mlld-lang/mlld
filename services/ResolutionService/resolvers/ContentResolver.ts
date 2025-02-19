@@ -30,10 +30,11 @@ export class ContentResolver {
         case 'CodeFence':
           // Code fence - preserve backticks, language and content exactly
           const codeFence = node as CodeFenceNode;
-          const fence = '```' + (codeFence.language || '');
-          resolvedParts.push(fence);
-          resolvedParts.push(codeFence.content);
-          resolvedParts.push('```');
+          // Extract backtick count from content
+          const backtickMatch = codeFence.content.match(/^(`+)/);
+          const backticks = backtickMatch ? backtickMatch[1] : '```';
+          const fence = backticks + (codeFence.language || '');
+          resolvedParts.push(`${fence}\n${codeFence.content.split('\n').slice(1, -1).join('\n')}\n${backticks}`);
           break;
       }
     }

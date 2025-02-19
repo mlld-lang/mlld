@@ -5,6 +5,7 @@ import { IPathOperationsService } from './IPathOperationsService.js';
 import { IFileSystem } from './IFileSystem.js';
 import { NodeFileSystem } from './NodeFileSystem.js';
 import { MeldError } from '@core/errors/MeldError.js';
+import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
 
 interface FileOperationContext {
   operation: string;
@@ -40,6 +41,9 @@ export class FileSystemService implements IFileSystemService {
       return content;
     } catch (error) {
       logger.error('Failed to read file', { ...context, error });
+      if (error.code === 'ENOENT') {
+        throw new MeldFileNotFoundError(filePath, error);
+      }
       throw new MeldError(`Failed to read file: ${filePath}`, { 
         cause: error,
         context

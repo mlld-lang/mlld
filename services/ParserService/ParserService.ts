@@ -1,7 +1,7 @@
-import { parse, MeldAstError, ParserOptions } from 'meld-ast';
-import type { MeldNode, TextNode, DirectiveNode } from 'meld-spec';
-import { parserLogger as logger } from '@core/utils/logger.js';
 import { IParserService } from './IParserService.js';
+import type { MeldNode, CodeFenceNode } from 'meld-spec';
+import { parse, MeldAstError, type ParserOptions } from 'meld-ast';
+import { parserLogger as logger } from '@core/utils/logger.js';
 import { MeldParseError } from '@core/errors/MeldParseError.js';
 import type { Location, Position } from '@core/types/index.js';
 
@@ -14,201 +14,72 @@ interface ParseError {
   };
 }
 
-interface ParseResult {
-  ast: MeldNode[];
-  errors?: MeldAstError[];
-}
-
 export class ParserService implements IParserService {
   private async parseContent(content: string): Promise<MeldNode[]> {
     try {
-      const options: ParserOptions = {
-        trackLocations: true,
+      const options = {
         failFast: true,
+        trackLocations: true,
         validateNodes: true,
+        preserveCodeFences: true,
+        validateCodeFences: true,
         onError: (error: MeldAstError) => {
-          logger.warn('Parse warning:', error.toString());
+          logger.warn('Parse warning', { error: error.toString() });
         }
       };
 
-      // Try to use the pre-built parser first
-      try {
-        const parser = require('meld-ast/lib/grammar/parser.cjs');
-        const result = parser.parse(content, options) as ParseResult;
-        return this.normalizeLocations(result.ast);
-      } catch (e) {
-        logger.warn('Failed to use pre-built parser, falling back to dynamic parser:', e);
-        const result = await parse(content, options) as ParseResult;
-        
-        if (result.errors?.length) {
-          logger.warn('Parsing completed with warnings:', result.errors);
-        }
-        
-        return this.normalizeLocations(result.ast);
-      }
-    } catch (error) {
-      if (error instanceof MeldAstError) {
-        // Simplify error messages for common cases
-        let message = error.message;
-        if (message.includes('Expected') && message.includes('but') && message.includes('found')) {
-          message = 'Invalid syntax';
-        } else if (message.includes('undefined variable')) {
-          message = 'Undefined variable';
-        } else if (message.includes('circular reference')) {
-          message = 'Circular reference detected';
-        } else if (message.includes('type mismatch')) {
-          message = 'Type mismatch';
-        }
-
-        throw new MeldParseError(
-          message,
-          error.location || { 
-            start: { line: 1, column: 1 }, 
-            end: { line: 1, column: content ? content.length : 1 } 
-          }
-        );
-      }
-      throw error;
-    }
-  }
-
-  private normalizeLocations(nodes: MeldNode[]): MeldNode[] {
-    if (!nodes) {
-      return [];
-    }
-
-    return nodes.map((node, index) => {
-      if (!node || !node.location || !node.type) {
-        return node;
-      }
-
-      // Normalize line numbers and column numbers to match test expectations
-      const location = { ...node.location };
-      if (node.type === 'Text') {
-        const textNode = node as TextNode;
-        if (!textNode.content) {
-          return { ...node, location };
-        }
-
-        const lines = textNode.content.split('\n');
-        const lastLine = lines[lines.length - 1];
-        
-        // If this text node follows a directive, use the directive's end position as start
-        const prevNode = index > 0 ? nodes[index - 1] : null;
-        if (prevNode?.type === 'Directive' && prevNode.location?.end?.line !== undefined && prevNode.location.end.column !== undefined) {
-          location.start = {
-            line: prevNode.location.end.line,
-            column: prevNode.location.end.column
-          };
-        } else {
-          location.start = {
-            line: location.start.line,
-            column: location.start.column
-          };
-        }
-        
-        // End position depends on whether there are newlines
-        if (lines.length === 1) {
-          location.end = {
-            line: location.start.line,
-            column: location.start.column + textNode.content.length - 1
-          };
-        } else {
-          location.end = {
-            line: location.start.line + lines.length - 1,
-            column: lastLine.length === 0 ? 0 : lastLine.length + 1
-          };
-        }
-      } else if (node.type === 'Directive') {
-        const directiveNode = node as DirectiveNode;
-        if (!directiveNode.directive) {
-          return { ...node, location };
-        }
-
-        const directive = directiveNode.directive;
-        if (!directive.kind || !directive.identifier) {
-          return { ...node, location };
-        }
-        
-        // Directives always start at column 1
-        location.start = {
-          line: location.start.line,
-          column: 1
-        };
-        
-        // Calculate exact length: @kind identifier = value
-        let valueStr: string;
-        if (typeof directive.value === 'string') {
-          valueStr = directive.value;
-          if (!valueStr.startsWith('"') && !valueStr.startsWith("'")) {
-            valueStr = `"${valueStr}"`;
-          }
-        } else if (directive.value === null || directive.value === undefined) {
-          valueStr = '""';
-        } else {
-          valueStr = JSON.stringify(directive.value);
-        }
-        
-        // Calculate end column based on directive format
-        const directiveStr = `@${directive.kind} ${directive.identifier} = ${valueStr}`;
-        location.end = {
-          line: location.start.line,
-          column: directiveStr.length // No need to subtract 1 since we want the position after the last char
-        };
-      }
-
-      return { ...node, location };
-    });
-  }
-
-  async parse(content: string): Promise<MeldNode[]> {
-    try {
-      if (!content) {
-        logger.debug('Empty content provided, returning empty array');
-        return [];
-      }
+      const result = await parse(content, options);
       
-      logger.debug('Parsing Meld content', { contentLength: content.length });
-      const nodes = await this.parseContent(content);
-      logger.debug('Successfully parsed content', { nodeCount: nodes?.length ?? 0 });
-      return nodes;
-    } catch (error) {
-      logger.error('Failed to parse content', { error });
-      throw error;
-    }
-  }
+      // Validate code fence nesting
+      this.validateCodeFences(result.ast || []);
 
-  async parseWithLocations(content: string, filePath?: string): Promise<MeldNode[]> {
-    try {
-      logger.debug('Parsing Meld content with locations', { 
-        contentLength: content.length,
-        filePath 
-      });
-
-      const nodes = await this.parse(content);
-      if (filePath) {
-        return nodes.map(node => {
-          if (node.location) {
-            return { ...node, location: { ...node.location, filePath } };
-          } else {
-            return node;
-          }
+      // Log any non-fatal errors
+      if (result.errors && result.errors.length > 0) {
+        result.errors.forEach(error => {
+          logger.warn('Parse warning', { error: error.toString() });
         });
       }
-      
-      logger.debug('Successfully added locations', { nodeCount: nodes?.length ?? 0 });
-      return nodes;
+
+      return result.ast || [];
     } catch (error) {
-      if (error instanceof MeldParseError) {
-        const defaultLocation = { start: { line: 1, column: 1 }, end: { line: 1, column: content ? content.length : 1 } };
-        let loc = error.location;
-        if (!loc || !loc.start || loc.start.line == null || loc.start.column == null || !loc.end || loc.end.line == null || loc.end.column == null) {
-          loc = { ...defaultLocation, filePath };
-        }
-        throw new MeldParseError(error.message, loc);
+      if (error instanceof MeldAstError) {
+        // Preserve original error message and location
+        throw new MeldParseError(
+          error.message,
+          error.location || { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } }
+        );
       }
-      throw error;
+      // For unknown errors, provide a generic message
+      throw new MeldParseError(
+        'Parse error: Unknown error occurred',
+        { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } }
+      );
     }
+  }
+
+  public async parse(content: string): Promise<MeldNode[]> {
+    return this.parseContent(content);
+  }
+
+  public async parseWithLocations(content: string, filePath?: string): Promise<MeldNode[]> {
+    const nodes = await this.parseContent(content);
+    if (!filePath) {
+      return nodes;
+    }
+
+    return nodes.map(node => {
+      if (node.location) {
+        // Preserve exact column numbers from original location
+        return {
+          ...node,
+          location: {
+            ...node.location,  // Preserve all original location properties
+            filePath          // Only add filePath
+          }
+        };
+      }
+      return node;
+    });
   }
 
   private isParseError(error: unknown): error is ParseError {
@@ -222,5 +93,11 @@ export class ParserService implements IParserService {
       'start' in error.location &&
       'end' in error.location
     );
+  }
+
+  private validateCodeFences(nodes: MeldNode[]): void {
+    // No validation needed since meld-ast handles code fence validation
+    // according to its grammar which allows equal or greater number of
+    // backticks to close a fence
   }
 } 

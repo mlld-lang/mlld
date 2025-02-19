@@ -156,13 +156,28 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
       // Not JSON, treat as raw command
     }
 
-    // Validate parameters after ensuring command format
-    const parameters = this.validateParameters(paramRefs, paramRefs, node);
+    // Extract command from directive value
+    const commandMatch = value.match(/=\s*@run\s*\[(.*?)\]/);
+    if (!commandMatch) {
+      throw new DirectiveError(
+        'Invalid command format. Expected @run directive',
+        this.kind,
+        DirectiveErrorCode.VALIDATION_FAILED,
+        { node }
+      );
+    }
 
-    // Store the raw command
+    // Extract parameters from the command definition
+    const paramMatch = value.match(/^(\w+)(?:\((.*?)\))?/);
+    const declaredParams = paramMatch?.[2]?.split(',').map(p => p.trim()).filter(Boolean) || [];
+
+    // Validate parameters after ensuring command format
+    const parameters = this.validateParameters(declaredParams, paramRefs, node);
+
+    // Store just the command portion
     return {
       parameters,
-      command: value.trim()
+      command: commandMatch[1].trim()
     };
   }
 

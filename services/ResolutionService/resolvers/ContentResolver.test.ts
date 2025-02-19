@@ -58,7 +58,7 @@ describe('ContentResolver', () => {
       } as TextNode,
       {
         type: 'CodeFence',
-        content: '\nBasic fence\n',
+        content: '```\nBasic fence\n```',
         language: '',
         location: { start: { line: 3, column: 1 }, end: { line: 5, column: 1 } }
       } as CodeFenceNode,
@@ -69,7 +69,7 @@ describe('ContentResolver', () => {
       } as TextNode,
       {
         type: 'CodeFence',
-        content: '\nNested fence with\n```\ninner fence\n```\n',
+        content: '````\nNested fence with\n```\ninner fence\n```\n````',
         language: '',
         location: { start: { line: 6, column: 1 }, end: { line: 11, column: 1 } }
       } as CodeFenceNode
@@ -78,7 +78,7 @@ describe('ContentResolver', () => {
     const result = await resolver.resolve(nodes, context);
 
     // Each part should be preserved exactly as is, with no extra whitespace added
-    expect(result).toBe('Before nested fences:\n\n```\nBasic fence\n```\n```\nNested fence with\n```\ninner fence\n```\n```');
+    expect(result).toBe('Before nested fences:\n\n```\nBasic fence\n```\n````\nNested fence with\n```\ninner fence\n```\n````');
   });
 
   it('should skip comments while preserving surrounding whitespace', async () => {

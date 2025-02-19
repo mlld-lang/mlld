@@ -10,6 +10,7 @@ import { resolutionLogger as logger } from '@core/utils/logger.js';
 import { IFileSystemService } from '@services/FileSystemService/IFileSystemService.js';
 import { IParserService } from '@services/ParserService/IParserService.js';
 import type { MeldNode, DirectiveNode, TextNode, DirectiveKind, CodeFenceNode } from 'meld-spec';
+import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
 
 /**
  * Internal type for heading nodes in the ResolutionService
@@ -127,11 +128,7 @@ export class ResolutionService implements IResolutionService {
    */
   async resolveFile(path: string): Promise<string> {
     if (!await this.fileSystemService.exists(path)) {
-      throw new ResolutionError(
-        `File not found: ${path}`,
-        ResolutionErrorCode.INVALID_PATH,
-        { value: path }
-      );
+      throw new MeldFileNotFoundError(path);
     }
     return this.fileSystemService.readFile(path);
   }

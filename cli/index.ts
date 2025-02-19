@@ -13,6 +13,7 @@ import { ValidationService } from '@services/ValidationService/ValidationService
 import { CircularityService } from '@services/CircularityService/CircularityService.js';
 import { ResolutionService } from '@services/ResolutionService/ResolutionService.js';
 import { IFileSystem } from '@services/FileSystemService/IFileSystem.js';
+import { createInterface } from 'readline';
 
 // Create services
 const parserService = new ParserService();

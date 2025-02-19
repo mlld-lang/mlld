@@ -11,31 +11,13 @@ export default defineConfig({
       NODE_ENV: 'production'
     },
     globals: true,
-    include: [
-      'tests/integration/**/*.test.ts',
-      'services/**/*.test.ts',
-      'core/**/*.test.ts',
-      'cli/**/*.test.ts',
-      'sdk/**/*.test.ts',
-      'tests/utils/tests/*.test.ts'
-    ],
-    exclude: [
-      'node_modules',
-      'dist',
-      '_old',
-      '_meld'
-    ],
+    include: ['**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
+    exclude: ['**/node_modules/**', '**/dist/**', '**/.{idea,git,cache,output,temp}/**'],
     alias: {
       '@core': resolve(__dirname, './core'),
       '@services': resolve(__dirname, './services'),
-      '@parser': resolve(__dirname, './parser'),
-      '@interpreter': resolve(__dirname, './interpreter'),
-      '@output': resolve(__dirname, './output'),
-      '@cli': resolve(__dirname, './cli'),
-      '@sdk': resolve(__dirname, './sdk'),
       '@tests': resolve(__dirname, './tests'),
-      'meld-spec': resolve(__dirname, './tests/__mocks__/meld-spec.ts'),
-      'peggy': resolve(__dirname, './node_modules/peggy')
+      '@api': resolve(__dirname, './api')
     },
     coverage: {
       reporter: ['text', 'json', 'html'],

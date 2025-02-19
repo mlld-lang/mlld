@@ -15,6 +15,13 @@ import type { IParserService } from '@services/ParserService/IParserService.js';
 import type { IInterpreterService } from '@services/InterpreterService/IInterpreterService.js';
 import type { IPathService } from '@services/PathService/IPathService.js';
 import { vi, type Mock } from 'vitest';
+import { 
+  createPosition,
+  createTestLocation as createSourceLocation,
+  createTestDirective,
+  createTestText,
+  createTestCodeFence
+} from './nodeFactories.js';
 
 const DEFAULT_POSITION: Position = { line: 1, column: 1 };
 const DEFAULT_LOCATION: Location = {
@@ -24,14 +31,7 @@ const DEFAULT_LOCATION: Location = {
 };
 
 /**
- * Create a position object for testing
- */
-export function createPosition(line: number, column: number): Position {
-  return { line, column };
-}
-
-/**
- * Create a location object for testing
+ * Create a location object for testing (includes filePath)
  */
 export function createLocation(
   startLine: number = 1,
@@ -40,9 +40,9 @@ export function createLocation(
   endColumn?: number,
   filePath?: string
 ): Location {
+  const sourceLocation = createSourceLocation(startLine, startColumn, endLine, endColumn);
   return {
-    start: createPosition(startLine, startColumn),
-    end: createPosition(endLine ?? startLine, endColumn ?? startColumn),
+    ...sourceLocation,
     filePath
   };
 }
@@ -183,15 +183,7 @@ export function createPathDirective(
   value: string,
   location?: Location
 ): DirectiveNode {
-  return {
-    type: 'Directive',
-    directive: {
-      kind: 'path',
-      identifier,
-      value
-    },
-    location
-  };
+  return createTestDirective('path', identifier, value, location);
 }
 
 // Create a run directive node for testing
@@ -203,6 +195,8 @@ export function createRunDirective(
     type: 'Directive',
     directive: {
       kind: 'run',
+      identifier: 'run',
+      value: `[${command}]`,
       command
     },
     location: location || DEFAULT_LOCATION
@@ -221,11 +215,13 @@ export function createEmbedDirective(
     format?: string;
   }
 ): DirectiveNode {
+  const value = section ? `[${path} # ${section}]` : `[${path}]`;
   return {
     type: 'Directive',
     directive: {
       kind: 'embed',
       path,
+      value,
       section,
       ...options
     },
@@ -250,14 +246,20 @@ export function createDefineDirective(
   parameters: string[] = [],
   location?: Location
 ): DirectiveNode {
-  const value = {
-    command: {
-      kind: 'run',
-      command
+  const value = parameters.length > 0 
+    ? `${identifier}(${parameters.join(', ')}) = @run [${command}]`
+    : `${identifier} = @run [${command}]`;
+  return {
+    type: 'Directive',
+    directive: {
+      kind: 'define',
+      identifier,
+      value,
+      command,
+      parameters
     },
-    parameters
+    location: location || DEFAULT_LOCATION
   };
-  return createTestDirective('define', identifier, JSON.stringify(value), location);
 }
 
 // Mock service creation functions

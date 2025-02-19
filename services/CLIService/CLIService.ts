@@ -7,11 +7,15 @@ import { IStateService } from '@services/StateService/IStateService.js';
 import { cliLogger as logger } from '@core/utils/logger.js';
 import { watch } from 'fs/promises';
 import { dirname } from 'path';
+import { createInterface } from 'readline';
+import { MeldParseError } from '@core/errors/MeldParseError.js';
+import { MeldInterpreterError } from '@core/errors/MeldInterpreterError.js';
+import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
 
 export interface CLIOptions {
   input: string;
   output?: string;
-  format?: 'markdown' | 'llm';
+  format?: 'markdown' | 'md' | 'llm';
   stdout?: boolean;
   verbose?: boolean;
   strict?: boolean;
@@ -35,6 +39,22 @@ export class CLIService implements ICLIService {
     private stateService: IStateService
   ) {}
 
+  private normalizeFormat(format: string): 'markdown' | 'llm' {
+    switch (format.toLowerCase()) {
+      case 'md':
+      case 'markdown':
+        return 'markdown';
+      case 'llm':
+        return 'llm';
+      default:
+        throw new Error(`Invalid format: ${format}. Must be 'markdown', 'md', or 'llm'`);
+    }
+  }
+
+  private getOutputExtension(format: 'markdown' | 'llm'): string {
+    return format === 'markdown' ? '.md' : '.xml';
+  }
+
   private parseArgs(args: string[]): CLIOptions {
     const options: CLIOptions = {
       input: '',
@@ -50,7 +70,7 @@ export class CLIService implements ICLIService {
           break;
         case '--format':
         case '-f':
-          options.format = args[++i] as 'markdown' | 'llm';
+          options.format = this.normalizeFormat(args[++i]);
           break;
         case '--stdout':
           options.stdout = true;
@@ -96,6 +116,41 @@ export class CLIService implements ICLIService {
     return options;
   }
 
+  private isFatalError(error: Error): boolean {
+    // Parse errors are always fatal
+    if (error instanceof MeldParseError) {
+      return true;
+    }
+
+    // Resolution errors for missing fields/env vars are warnings
+    if (error instanceof MeldResolutionError) {
+      if (error.message.includes('UNDEFINED_VARIABLE')) {
+        return false;
+      }
+    }
+
+    // Interpreter errors for missing fields are warnings
+    if (error instanceof MeldInterpreterError) {
+      if (error.message.includes('UNDEFINED_VARIABLE')) {
+        return false;
+      }
+    }
+
+    // All other errors are fatal
+    return true;
+  }
+
+  private handleError(error: Error): void {
+    if (this.isFatalError(error)) {
+      throw error;
+    } else {
+      // Log warning and continue
+      logger.warn('Non-fatal error occurred', {
+        error: error.message
+      });
+    }
+  }
+
   async run(args: string[]): Promise<void> {
     logger.info('Starting CLI execution', { args });
 
@@ -114,10 +169,15 @@ export class CLIService implements ICLIService {
 
       await this.processFile(options);
     } catch (error) {
-      logger.error('CLI execution failed', {
-        error: error instanceof Error ? error.message : String(error)
-      });
-      throw error;
+      if (error instanceof Error) {
+        this.handleError(error);
+      } else {
+        // Unknown errors are always fatal
+        logger.error('CLI execution failed', {
+          error: String(error)
+        });
+        throw error;
+      }
     }
   }
 
@@ -143,6 +203,24 @@ export class CLIService implements ICLIService {
       });
       throw error;
     }
+  }
+
+  private async confirmOverwrite(path: string): Promise<boolean> {
+    if (!await this.fileSystemService.exists(path)) {
+      return true;
+    }
+
+    const rl = createInterface({
+      input: process.stdin,
+      output: process.stdout
+    });
+
+    return new Promise((resolve) => {
+      rl.question(`File ${path} already exists. Overwrite? [Y/n] `, (answer) => {
+        rl.close();
+        resolve(answer.toLowerCase() !== 'n');
+      });
+    });
   }
 
   private async processFile(options: CLIOptions): Promise<void> {
@@ -195,11 +273,19 @@ export class CLIService implements ICLIService {
       }
 
       // Interpret nodes
-      await this.interpreterService.interpret(nodes, {
-        initialState: state,
-        filePath: inputPath,
-        mergeState: true
-      });
+      try {
+        await this.interpreterService.interpret(nodes, {
+          initialState: state,
+          filePath: inputPath,
+          mergeState: true
+        });
+      } catch (error) {
+        if (error instanceof Error) {
+          this.handleError(error);
+        } else {
+          throw error;
+        }
+      }
 
       // Convert to output format
       const output = await this.outputService.convert(
@@ -213,26 +299,47 @@ export class CLIService implements ICLIService {
       );
 
       // Write output
-      if (options.stdout || !options.output) {
+      if (options.stdout) {
         console.log(output);
         logger.info('Successfully wrote output to stdout');
       } else {
-        // If project path is set, make output path relative to it
+        // Determine output path
         let outputPath = options.output;
+        
+        if (!outputPath) {
+          // If no output path specified, use input path with new extension
+          const inputExt = '.meld';
+          const outputExt = this.getOutputExtension(options.format || 'llm');
+          outputPath = options.input.replace(new RegExp(`${inputExt}$`), outputExt);
+        } else if (!outputPath.includes('.')) {
+          // If output path has no extension, add default extension
+          outputPath += this.getOutputExtension(options.format || 'llm');
+        }
+        
+        // If project path is set, make output path relative to it
         if (options.projectPath) {
-          outputPath = `${options.projectPath}/${options.output}`;
+          outputPath = `${options.projectPath}/${outputPath}`;
         }
         outputPath = await this.pathService.resolvePath(outputPath);
+
+        // Check for file overwrite
+        if (await this.fileSystemService.exists(outputPath)) {
+          const shouldOverwrite = await this.confirmOverwrite(outputPath);
+          if (!shouldOverwrite) {
+            logger.info('Operation cancelled by user');
+            return;
+          }
+        }
+
         await this.fileSystemService.writeFile(outputPath, output);
-        logger.info('Successfully wrote output to file', { outputPath });
+        logger.info('Successfully wrote output file', { path: outputPath });
       }
     } catch (error) {
-      logger.error('Failed to process file', {
-        error: error instanceof Error ? error.message : String(error),
-        inputPath,
-        options
-      });
-      throw error;
+      if (error instanceof Error) {
+        this.handleError(error);
+      } else {
+        throw error;
+      }
     }
   }
 } 

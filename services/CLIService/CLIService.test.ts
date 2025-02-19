@@ -7,6 +7,7 @@ import { IOutputService } from '@services/OutputService/IOutputService.js';
 import { IFileSystemService } from '@services/FileSystemService/IFileSystemService.js';
 import { IPathService } from '@services/PathService/IPathService.js';
 import { IStateService } from '@services/StateService/IStateService.js';
+import * as readline from 'readline';
 
 const defaultOptions = {
   input: 'test.meld',
@@ -22,6 +23,14 @@ const mockWatcher = {
 
 vi.mock('fs/promises', () => ({
   watch: vi.fn().mockImplementation(() => mockWatcher)
+}));
+
+// Move mock setup to top level
+vi.mock('readline', () => ({
+  createInterface: vi.fn().mockReturnValue({
+    question: vi.fn().mockImplementation((_, cb) => cb('y')),
+    close: vi.fn()
+  })
 }));
 
 describe('CLIService', () => {
@@ -255,6 +264,56 @@ describe('CLIService', () => {
       mockOutputService.convert = vi.fn().mockRejectedValue(new Error('Convert error'));
       const args = ['node', 'meld', 'test.meld', '--stdout'];
       await expect(service.run(args)).rejects.toThrow('Convert error');
+    });
+  });
+
+  describe('File Overwrite Handling', () => {
+    it('should prompt for overwrite when file exists', async () => {
+      // Create existing output file
+      await mockFileSystemService.writeFile('test.xml', 'existing content');
+      
+      const args = ['node', 'meld', 'test.meld'];
+      await service.run(args);
+      
+      expect(readline.createInterface().question).toHaveBeenCalled();
+      expect(readline.createInterface().question).toHaveBeenCalledWith(
+        expect.stringContaining('Overwrite?'),
+        expect.any(Function)
+      );
+    });
+
+    it('should skip overwrite prompt with explicit output path', async () => {
+      // Create existing output file
+      await mockFileSystemService.writeFile('custom.xml', 'existing content');
+      
+      const args = ['node', 'meld', 'test.meld', '--output', 'custom.xml'];
+      await service.run(args);
+      
+      expect(readline.createInterface().question).not.toHaveBeenCalled();
+    });
+
+    it('should cancel operation when overwrite is rejected', async () => {
+      // Create existing output file
+      await mockFileSystemService.writeFile('test.xml', 'existing content');
+      
+      const args = ['node', 'meld', 'test.meld'];
+      await service.run(args);
+      
+      // Verify file wasn't overwritten
+      const content = await mockFileSystemService.readFile('test.xml', 'utf8');
+      expect(content).toBe('existing content');
+    });
+
+    it('should proceed with overwrite when confirmed', async () => {
+      // Create existing output file
+      await mockFileSystemService.writeFile('test.xml', 'existing content');
+      
+      const args = ['node', 'meld', 'test.meld'];
+      await service.run(args);
+      
+      // Verify file was overwritten
+      expect(mockOutputService.convert).toHaveBeenCalled();
+      expect(mockFileSystemService.writeFile).toHaveBeenCalled();
     });
   });
 }); 
