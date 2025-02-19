@@ -613,11 +613,28 @@ Examples:
 - `import [file.md]` is shorthand for `import [*] from [file.md]`
 
 ### Error Handling Philosophy
-- Silent fail in meld build output
-- Warn on command line
-- Missing data fields return empty string
-- Missing files produce blank output with warning
-- Command failures output error text unless configured to halt
+Meld has three categories of error handling:
+
+#### Fatal Errors (Halt Execution)
+- Missing or inaccessible referenced files
+- Invalid syntax in meld files
+- Invalid file extensions
+- Circular imports
+- Type mismatches (using wrong variable type)
+- Missing required command parameters
+- Invalid path references (not using $HOMEPATH/$PROJECTPATH)
+
+#### Warning Errors (Continue with Warning)
+- Missing optional fields in data structures (return empty string)
+- Missing environment variables (when referenced)
+- Command execution that produces stderr but exits with code 0
+- Fields accessed on non-existent data paths (return empty string)
+
+#### Silent Operation (No Error/Warning)
+- Expected stderr output from successfully running commands
+- Empty or partial results from valid operations
+- Type coercion in string concatenation
+- Normal command output to stderr
 
 ### Variables & Environment
 - No restrictions on ENV var names

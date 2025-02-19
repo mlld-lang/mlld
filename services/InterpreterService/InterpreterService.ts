@@ -104,16 +104,13 @@ export class InterpreterService implements IInterpreterService {
           // Process the node with current state
           const updatedState = await this.interpretNode(node, currentState);
           
-          // If successful, update the states and merge back to parent if needed
-          lastGoodState = updatedState.clone();
+          // If successful, update the states
           currentState = updatedState;
+          lastGoodState = currentState.clone();
           
-          // Merge back to parent state if we have one
-          if (opts.mergeState && opts.initialState) {
-            opts.initialState.mergeChildState(currentState);
-          }
+          // Do not merge back to parent state here - wait until all nodes are processed
         } catch (error) {
-          // Roll back to last good state and preserve node order
+          // Roll back to last good state
           currentState = lastGoodState.clone();
           
           // Preserve MeldInterpreterError or wrap other errors
@@ -139,14 +136,12 @@ export class InterpreterService implements IInterpreterService {
         }
       }
 
-      // If mergeState is true and we have a parent state, merge back
+      // Only merge back to parent state after all nodes are processed successfully
       if (opts.mergeState && opts.initialState) {
         try {
-          // Create a new state for merging to maintain immutability
-          const mergedState = currentState.clone();
-          opts.initialState.mergeChildState(mergedState);
-          // Get a fresh clone of the parent state after merge to ensure we have all updates
-          currentState = opts.initialState.clone();
+          opts.initialState.mergeChildState(currentState);
+          // Return the parent state after successful merge
+          return opts.initialState;
         } catch (error) {
           logger.error('Failed to merge child state', {
             error,
@@ -175,7 +170,7 @@ export class InterpreterService implements IInterpreterService {
         const isolatedState = this.stateService!.createChildState();
         isolatedState.mergeChildState(currentState);
         isolatedState.setImmutable(); // Prevent further modifications
-        currentState = isolatedState;
+        return isolatedState;
       }
 
       logger.debug('Interpretation completed successfully', {

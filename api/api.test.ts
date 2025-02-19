@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { main } from '../../api/index.js';
+import { main } from './index.js';
 import { TestContext } from '@tests/utils/index.js';
 
 describe('SDK Integration Tests', () => {

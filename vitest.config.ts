@@ -8,7 +8,7 @@ export default defineConfig({
     setupFiles: ['tests/setup.ts'],
     environment: 'node',
     env: {
-      NODE_ENV: 'test'
+      NODE_ENV: 'production'
     },
     globals: true,
     include: [
@@ -35,11 +35,20 @@ export default defineConfig({
       '@sdk': resolve(__dirname, './sdk'),
       '@tests': resolve(__dirname, './tests'),
       'meld-spec': resolve(__dirname, './tests/__mocks__/meld-spec.ts'),
-      'meld-ast': resolve(__dirname, 'node_modules/meld-ast/dist/esm/index.js')
+      'peggy': resolve(__dirname, './node_modules/peggy')
     },
     coverage: {
       reporter: ['text', 'json', 'html'],
       exclude: ['**/node_modules/**', '**/dist/**', '**/build/**']
+    }
+  },
+  build: {
+    target: 'esnext',
+    rollupOptions: {
+      external: ['peggy'],
+      output: {
+        format: 'esm'
+      }
     }
   }
 }); 

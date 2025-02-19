@@ -13,13 +13,17 @@ interface FileOperationContext {
 }
 
 export class FileSystemService implements IFileSystemService {
-  private readonly fs: IFileSystem;
+  private fs: IFileSystem;
 
   constructor(
     private readonly pathOps: IPathOperationsService,
     fileSystem?: IFileSystem
   ) {
     this.fs = fileSystem || new NodeFileSystem();
+  }
+
+  setFileSystem(fileSystem: IFileSystem): void {
+    this.fs = fileSystem;
   }
 
   // File operations

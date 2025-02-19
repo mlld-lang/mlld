@@ -12,81 +12,82 @@ import { cliLogger as logger } from '@core/utils/logger.js';
 import { ValidationService } from '@services/ValidationService/ValidationService.js';
 import { CircularityService } from '@services/CircularityService/CircularityService.js';
 import { ResolutionService } from '@services/ResolutionService/ResolutionService.js';
+import { IFileSystem } from '@services/FileSystemService/IFileSystem.js';
 
-// TODO: Implement CLI
-export async function main(customFs?: NodeFileSystem) {
+// Create services
+const parserService = new ParserService();
+const interpreterService = new InterpreterService();
+const outputService = new OutputService();
+const pathOps = new PathOperationsService();
+const nodeFs = new NodeFileSystem();
+const fileSystemService = new FileSystemService(pathOps, nodeFs);
+const pathService = new PathService();
+const stateService = new StateService();
+const validationService = new ValidationService();
+const circularityService = new CircularityService();
+const resolutionService = new ResolutionService(stateService, fileSystemService, parserService);
+const directiveService = new DirectiveService();
+
+// Initialize services
+directiveService.initialize(
+  validationService,
+  stateService,
+  pathService,
+  fileSystemService,
+  parserService,
+  interpreterService,
+  circularityService,
+  resolutionService
+);
+
+// Initialize interpreter service
+interpreterService.initialize(directiveService, stateService);
+
+// Create CLI service
+const cliService = new CLIService(
+  parserService,
+  interpreterService,
+  outputService,
+  fileSystemService,
+  pathService,
+  stateService
+);
+
+// Run CLI
+export async function main(fsAdapter?: IFileSystem) {
   try {
-    // Create service instances
-    const stateService = new StateService();
-    const pathOps = new PathOperationsService();
-    const nodeFs = customFs || new NodeFileSystem();
-    const fileSystemService = new FileSystemService(pathOps, nodeFs);
-    const parserService = new ParserService();
-    const pathService = new PathService();
-    const validationService = new ValidationService();
-    const circularityService = new CircularityService();
-    const resolutionService = new ResolutionService(stateService, fileSystemService, parserService);
-    const outputService = new OutputService(resolutionService);
-    const interpreterService = new InterpreterService();
-    const directiveService = new DirectiveService();
+    if (fsAdapter) {
+      // In test mode, use the provided file system adapter
+      fileSystemService.setFileSystem(fsAdapter);
+    }
 
-    // Initialize services that need it
+    // Initialize path service
     pathService.initialize(fileSystemService);
 
-    // Enable test mode for PathService in test environment
-    if (process.env.NODE_ENV === 'test') {
-      pathService.enableTestMode();
-      pathService.setProjectPath('/project');
-      // Add project path to process.argv for CLI service
-      process.argv.push('--project-path', '/project');
-    }
-
-    directiveService.initialize(
-      validationService,
-      stateService,
-      pathService,
-      fileSystemService,
-      parserService,
-      interpreterService,
-      circularityService,
-      resolutionService
-    );
-    interpreterService.initialize(directiveService, stateService);
-
-    // Create CLI service with dependencies
-    const cli = new CLIService(
-      parserService,
-      interpreterService,
-      outputService,
-      fileSystemService,
-      pathService,
-      stateService
-    );
-
-    // Run with process arguments
-    await cli.run(process.argv);
-
-    // Only exit in non-test environments
-    if (process.env.NODE_ENV !== 'test') {
-      process.exit(0);
-    }
+    await cliService.run(process.argv);
   } catch (error) {
     logger.error('CLI execution failed', {
       error: error instanceof Error ? error.message : String(error)
     });
     
-    // Only exit in non-test environments
-    if (process.env.NODE_ENV !== 'test') {
+    // In test mode, throw the error for proper test handling
+    if (process.env.NODE_ENV === 'test') {
+      // Preserve the original error message and type
+      if (error instanceof Error) {
+        throw error;
+      } else {
+        throw new Error(String(error));
+      }
+    } else {
+      // In production, exit with error code
       process.exit(1);
     }
-    throw error;
   }
 }
 
-// Run if this is the main module
+// Only run if this is the main module
 if (require.main === module) {
-  main().catch(error => {
-    console.error('Unhandled error:', error);
+  main().catch(() => {
     process.exit(1);
   });
 } 

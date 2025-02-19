@@ -148,71 +148,91 @@ export class CLIService implements ICLIService {
   private async processFile(options: CLIOptions): Promise<void> {
     // If project path is set, make input path relative to it
     let inputPath = options.input;
-    if (options.projectPath) {
-      inputPath = `${options.projectPath}/${options.input}`;
-    }
-
-    // Resolve input path
-    inputPath = await this.pathService.resolvePath(inputPath);
     
-    // Verify input file exists
-    if (!await this.fileSystemService.exists(inputPath)) {
-      throw new Error(`File not found: ${inputPath}`);
-    }
-
-    // Verify file extension
-    if (!inputPath.endsWith('.meld')) {
-      throw new Error('Invalid file extension: File must have .meld extension');
-    }
-
-    // Read input file
-    const content = await this.fileSystemService.readFile(inputPath);
-
-    // Parse content
-    const nodes = await this.parserService.parse(content);
-
-    // Create initial state with project and home paths if provided
-    const state = this.stateService.createChildState();
-    if (options.projectPath) {
-      state.setPathVar('PROJECTPATH', options.projectPath);
-      state.setPathVar('.', options.projectPath);
-    }
-    if (options.homePath) {
-      state.setPathVar('HOMEPATH', options.homePath);
-      state.setPathVar('~', options.homePath);
-    }
-
-    // Interpret nodes
-    await this.interpreterService.interpret(nodes, {
-      initialState: state,
-      filePath: inputPath,
-      mergeState: true
-    });
-
-    // Convert to output format
-    const output = await this.outputService.convert(
-      nodes,
-      state,
-      options.format || 'llm',
-      {
-        includeState: false,
-        preserveFormatting: true
+    try {
+      // First try to resolve as an absolute path
+      inputPath = await this.pathService.resolvePath(inputPath);
+      
+      // If file doesn't exist at absolute path, try relative to project path
+      if (!await this.fileSystemService.exists(inputPath)) {
+        if (options.projectPath) {
+          const projectPath = `${options.projectPath}/${options.input}`;
+          if (await this.fileSystemService.exists(projectPath)) {
+            inputPath = projectPath;
+          }
+        }
+        
+        // If still not found, try relative to current directory
+        if (!await this.fileSystemService.exists(inputPath)) {
+          const relativePath = await this.pathService.resolvePath(`./${options.input}`);
+          if (!await this.fileSystemService.exists(relativePath)) {
+            throw new Error(`File not found: ${options.input}`);
+          }
+          inputPath = relativePath;
+        }
       }
-    );
 
-    // Write output
-    if (options.stdout || !options.output) {
-      console.log(output);
-      logger.info('Successfully wrote output to stdout');
-    } else {
-      // If project path is set, make output path relative to it
-      let outputPath = options.output;
+      // Verify file extension
+      if (!inputPath.endsWith('.meld')) {
+        throw new Error('Invalid file extension: File must have .meld extension');
+      }
+
+      // Read input file
+      const content = await this.fileSystemService.readFile(inputPath);
+
+      // Parse content
+      const nodes = await this.parserService.parse(content);
+
+      // Create initial state with project and home paths if provided
+      const state = this.stateService.createChildState();
       if (options.projectPath) {
-        outputPath = `${options.projectPath}/${options.output}`;
+        state.setPathVar('PROJECTPATH', options.projectPath);
+        state.setPathVar('.', options.projectPath);
       }
-      outputPath = await this.pathService.resolvePath(outputPath);
-      await this.fileSystemService.writeFile(outputPath, output);
-      logger.info('Successfully wrote output to file', { outputPath });
+      if (options.homePath) {
+        state.setPathVar('HOMEPATH', options.homePath);
+        state.setPathVar('~', options.homePath);
+      }
+
+      // Interpret nodes
+      await this.interpreterService.interpret(nodes, {
+        initialState: state,
+        filePath: inputPath,
+        mergeState: true
+      });
+
+      // Convert to output format
+      const output = await this.outputService.convert(
+        nodes,
+        state,
+        options.format || 'llm',
+        {
+          includeState: false,
+          preserveFormatting: true
+        }
+      );
+
+      // Write output
+      if (options.stdout || !options.output) {
+        console.log(output);
+        logger.info('Successfully wrote output to stdout');
+      } else {
+        // If project path is set, make output path relative to it
+        let outputPath = options.output;
+        if (options.projectPath) {
+          outputPath = `${options.projectPath}/${options.output}`;
+        }
+        outputPath = await this.pathService.resolvePath(outputPath);
+        await this.fileSystemService.writeFile(outputPath, output);
+        logger.info('Successfully wrote output to file', { outputPath });
+      }
+    } catch (error) {
+      logger.error('Failed to process file', {
+        error: error instanceof Error ? error.message : String(error),
+        inputPath,
+        options
+      });
+      throw error;
     }
   }
 } 
