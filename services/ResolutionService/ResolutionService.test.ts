@@ -198,7 +198,7 @@ Content 1
 Content 2`;
 
       const result = await service.extractSection(content, 'Section 1');
-      expect(result).toBe('## Section 1\nContent 1');
+      expect(result).toBe('## Section 1\n\nContent 1');
     });
 
     it('should include content until next heading of same or higher level', async () => {
@@ -214,7 +214,7 @@ Subcontent
 Content 2`;
 
       const result = await service.extractSection(content, 'Section 1');
-      expect(result).toBe('## Section 1\nContent 1\n### Subsection\nSubcontent');
+      expect(result).toBe('## Section 1\n\nContent 1\n\n### Subsection\n\nSubcontent');
     });
 
     it('should throw when section is not found', async () => {

@@ -644,7 +644,7 @@ export class DirectiveService implements IDirectiveService {
         );
       }
 
-      if (typeof handler.handle !== 'function') {
+      if (typeof handler.execute !== 'function') {
         throw new DirectiveError(
           `Invalid handler for directive kind: ${kind}`,
           kind,
@@ -656,10 +656,8 @@ export class DirectiveService implements IDirectiveService {
       // Validate directive before handling
       await this.validateDirective(node);
 
-      // Handle the directive
-      await handler.handle(node, context);
-
-      return context.state;
+      // Execute the directive
+      return await handler.execute(node, context);
     } catch (error) {
       if (error instanceof DirectiveError) {
         throw error;

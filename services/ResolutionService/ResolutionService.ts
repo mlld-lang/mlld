@@ -9,7 +9,38 @@ import { ContentResolver } from './resolvers/ContentResolver.js';
 import { resolutionLogger as logger } from '@core/utils/logger.js';
 import { IFileSystemService } from '@services/FileSystemService/IFileSystemService.js';
 import { IParserService } from '@services/ParserService/IParserService.js';
-import type { MeldNode, DirectiveNode, TextNode, DirectiveKind } from 'meld-spec';
+import type { MeldNode, DirectiveNode, TextNode, DirectiveKind, CodeFenceNode } from 'meld-spec';
+
+/**
+ * Internal type for heading nodes in the ResolutionService
+ * This is converted from TextNode when we detect a heading pattern
+ */
+interface InternalHeadingNode {
+  content: string;
+  level: number;
+}
+
+/**
+ * Convert a TextNode to an InternalHeadingNode if it matches heading pattern
+ * Returns null if the node is not a heading
+ */
+function parseHeadingNode(node: TextNode): InternalHeadingNode | null {
+  const headingMatch = node.content.match(/^(#{1,6})\s+(.+)$/);
+  if (!headingMatch) {
+    return null;
+  }
+  return {
+    level: headingMatch[1].length,
+    content: headingMatch[2].trim()
+  };
+}
+
+/**
+ * Check if a node is a text node that represents a heading
+ */
+function isHeadingTextNode(node: MeldNode): node is TextNode {
+  return node.type === 'Text' && (node as TextNode).content.match(/^#{1,6}\s+.+$/) !== null;
+}
 
 /**
  * Service responsible for resolving variables, commands, and paths in different contexts
@@ -39,7 +70,8 @@ export class ResolutionService implements IResolutionService {
    */
   private async parseForResolution(value: string): Promise<MeldNode[]> {
     try {
-      return await this.parserService.parse(value);
+      const nodes = await this.parserService.parse(value);
+      return nodes || [];
     } catch (error) {
       // If parsing fails, treat the value as literal text
       return [{
@@ -410,40 +442,101 @@ export class ResolutionService implements IResolutionService {
   /**
    * Extract a section from content by its heading
    */
-  async extractSection(content: string, section: string): Promise<string> {
-    // Split content into lines
-    const lines = content.split('\n');
-    
-    // Find the section heading
-    const sectionStart = lines.findIndex(line => {
-      // Remove heading markers and trim
-      const heading = line.replace(/^#+\s*/, '').trim();
-      return heading === section;
-    });
-
-    if (sectionStart === -1) {
+  async extractSection(content: string, heading: string, fuzzy?: number): Promise<string> {
+    try {
+      // Use llmxml for section extraction
+      const { createLLMXML } = await import('llmxml');
+      const llmxml = createLLMXML({
+        defaultFuzzyThreshold: fuzzy || 0.7,
+        warningLevel: 'none'
+      });
+      
+      // Extract the section directly from markdown
+      const section = await llmxml.getSection(content, heading, {
+        exact: !fuzzy,
+        includeNested: true,
+        fuzzyThreshold: fuzzy
+      });
+      
+      if (!section) {
+        throw new ResolutionError(
+          'Section not found: ' + heading,
+          ResolutionErrorCode.SECTION_NOT_FOUND
+        );
+      }
+      
+      return section;
+    } catch (error) {
+      if (error instanceof ResolutionError) {
+        throw error;
+      }
       throw new ResolutionError(
-        `Section not found: ${section}`,
-        ResolutionErrorCode.INVALID_PATH,
-        { value: section }
+        'Section not found: ' + heading,
+        ResolutionErrorCode.SECTION_NOT_FOUND
       );
     }
+  }
 
-    // Find the next heading of same or higher level
-    const currentLine = lines[sectionStart];
-    const headingLevel = (currentLine.match(/^#+/) || [''])[0].length;
-    
-    let sectionEnd = lines.length;
-    for (let i = sectionStart + 1; i < lines.length; i++) {
-      const line = lines[i];
-      const match = line.match(/^#+/);
-      if (match && match[0].length <= headingLevel) {
-        sectionEnd = i;
-        break;
+  private calculateSimilarity(str1: string, str2: string): number {
+    // Convert strings to lowercase for case-insensitive comparison
+    const s1 = str1.toLowerCase();
+    const s2 = str2.toLowerCase();
+
+    // If either string is empty, return 0
+    if (!s1 || !s2) {
+      return 0;
+    }
+
+    // If strings are equal, return 1
+    if (s1 === s2) {
+      return 1;
+    }
+
+    // Calculate Levenshtein distance
+    const m = s1.length;
+    const n = s2.length;
+    const d: number[][] = Array(m + 1).fill(0).map(() => Array(n + 1).fill(0));
+
+    // Initialize first row and column
+    for (let i = 0; i <= m; i++) {
+      d[i][0] = i;
+    }
+    for (let j = 0; j <= n; j++) {
+      d[0][j] = j;
+    }
+
+    // Fill in the rest of the matrix
+    for (let i = 1; i <= m; i++) {
+      for (let j = 1; j <= n; j++) {
+        const cost = s1[i - 1] === s2[j - 1] ? 0 : 1;
+        d[i][j] = Math.min(
+          d[i - 1][j] + 1,      // deletion
+          d[i][j - 1] + 1,      // insertion
+          d[i - 1][j - 1] + cost // substitution
+        );
       }
     }
 
-    // Extract the section content and trim trailing newlines
-    return lines.slice(sectionStart, sectionEnd).join('\n').trimEnd();
+    // Convert distance to similarity score between 0 and 1
+    const maxLength = Math.max(m, n);
+    const distance = d[m][n];
+    return 1 - (distance / maxLength);
+  }
+
+  private nodesToString(nodes: MeldNode[]): string {
+    return nodes.map(node => {
+      switch (node.type) {
+        case 'Text':
+          return (node as TextNode).content;
+        case 'CodeFence':
+          const codeFence = node as CodeFenceNode;
+          return '```' + (codeFence.language || '') + '\n' + codeFence.content + '\n```';
+        case 'Directive':
+          const directive = node as DirectiveNode;
+          return `@${directive.directive.kind} ${directive.directive.value || ''}`;
+        default:
+          return '';
+      }
+    }).join('\n');
   }
 } 

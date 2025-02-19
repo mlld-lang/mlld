@@ -145,19 +145,11 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
         // Validate parameters before processing command
         const parameters = this.validateParameters(parsed.parameters || [], paramRefs, node);
 
-        // Add @run prefix if not present
+        // Store the raw command
         const command = parsed.command.command.trim();
-        if (!command) {
-          return {
-            parameters,
-            command: ''
-          };
-        }
-
-        // Add @run prefix if not present
         return {
           parameters,
-          command: command.startsWith('@run ') ? command : `@run ${command}`
+          command
         };
       }
     } catch (e) {
@@ -167,18 +159,10 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
     // Validate parameters after ensuring command format
     const parameters = this.validateParameters(paramRefs, paramRefs, node);
 
-    // Add @run prefix if not present and command is not empty
-    const trimmedCommand = value.trim();
-    if (!trimmedCommand) {
-      return {
-        parameters,
-        command: ''
-      };
-    }
-
+    // Store the raw command
     return {
       parameters,
-      command: trimmedCommand.startsWith('@run ') ? trimmedCommand : `@run ${trimmedCommand}`
+      command: value.trim()
     };
   }
 

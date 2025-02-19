@@ -41,6 +41,7 @@
   },
   "homepage": "https://github.com/adamavenir/meld#readme",
   "dependencies": {
+    "@types/xmldom": "^0.1.34",
     "glob": "^11.0.1",
     "llmxml": "^1.1.2",
     "marked": "^4.0.12",
@@ -49,6 +50,7 @@
     "minimatch": "^3.0.4",
     "peggy": "^4.2.0",
     "winston": "^3.17.0",
+    "xmldom": "^0.6.0",
     "yargs": "^17.7.2"
   },
   "devDependencies": {

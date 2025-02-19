@@ -42,10 +42,10 @@ export function validateDefineDirective(node: DirectiveNode): void {
   try {
     const parsed = JSON.parse(directive.value);
     if (parsed.command?.kind === 'run' && typeof parsed.command.command === 'string') {
-      // For JSON format, validate command
-      if (!parsed.command.command.startsWith('@run ')) {
+      // For JSON format, validate command is not empty
+      if (!parsed.command.command.trim()) {
         throw new MeldDirectiveError(
-          'Command must start with @run',
+          'Command cannot be empty',
           'define',
           node.location?.start,
           DirectiveErrorCode.VALIDATION_FAILED
@@ -54,10 +54,10 @@ export function validateDefineDirective(node: DirectiveNode): void {
       return;
     }
   } catch (e) {
-    // Not JSON, validate raw command
-    if (!directive.value.startsWith('@run ')) {
+    // Not JSON, validate raw command is not empty
+    if (!directive.value.trim()) {
       throw new MeldDirectiveError(
-        'Command must start with @run',
+        'Command cannot be empty',
         'define',
         node.location?.start,
         DirectiveErrorCode.VALIDATION_FAILED

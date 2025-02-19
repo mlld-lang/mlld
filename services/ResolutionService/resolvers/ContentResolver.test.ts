@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ContentResolver } from './ContentResolver.js';
-import type { MeldNode, TextNode, CodeBlockNode, CommentNode } from 'meld-spec';
+import type { MeldNode, TextNode, CodeFenceNode, CommentNode } from 'meld-spec';
 import { createMockStateService } from '@tests/utils/testFactories.js';
 
 describe('ContentResolver', () => {
@@ -29,17 +29,18 @@ describe('ContentResolver', () => {
 
   it('should preserve code blocks with backticks', async () => {
     const nodes: MeldNode[] = [{
-      type: 'CodeBlock',
+      type: 'CodeFence',
       content: 'const x = 42;',
+      language: '',
       location: { start: { line: 1, column: 1 }, end: { line: 1, column: 13 } }
-    } as CodeBlockNode];
+    } as CodeFenceNode];
 
     const result = await resolver.resolve(nodes, {
       allowedVariableTypes: {},
       currentFilePath: ''
     });
 
-    expect(result).toBe('`const x = 42;`');
+    expect(result).toBe('```\nconst x = 42;\n```');
   });
 
   it('should skip comment nodes', async () => {
@@ -66,21 +67,22 @@ describe('ContentResolver', () => {
       currentFilePath: ''
     });
 
-    expect(result).toBe('BeforeAfter');
+    expect(result).toBe('Before\nAfter');
   });
 
   it('should handle mixed content types', async () => {
     const nodes: MeldNode[] = [
       {
         type: 'Text',
-        content: 'Text before\n',
+        content: 'Text before',
         location: { start: { line: 1, column: 1 }, end: { line: 1, column: 11 } }
       } as TextNode,
       {
-        type: 'CodeBlock',
+        type: 'CodeFence',
         content: 'console.log("test");',
+        language: '',
         location: { start: { line: 2, column: 1 }, end: { line: 2, column: 20 } }
-      } as CodeBlockNode,
+      } as CodeFenceNode,
       {
         type: 'Comment',
         content: 'Skip this comment',
@@ -88,7 +90,7 @@ describe('ContentResolver', () => {
       } as CommentNode,
       {
         type: 'Text',
-        content: '\nText after',
+        content: 'Text after',
         location: { start: { line: 4, column: 1 }, end: { line: 4, column: 10 } }
       } as TextNode
     ];
@@ -98,14 +100,14 @@ describe('ContentResolver', () => {
       currentFilePath: ''
     });
 
-    expect(result).toBe('Text before\n`console.log("test");`\nText after');
+    expect(result).toBe('Text before\n\n```\nconsole.log("test");\n```\n\nText after');
   });
 
   it('should skip directive nodes', async () => {
     const nodes: MeldNode[] = [
       {
         type: 'Text',
-        content: 'Before\n',
+        content: 'Before',
         location: { start: { line: 1, column: 1 }, end: { line: 1, column: 7 } }
       } as TextNode,
       {
@@ -119,7 +121,7 @@ describe('ContentResolver', () => {
       },
       {
         type: 'Text',
-        content: '\nAfter',
+        content: 'After',
         location: { start: { line: 3, column: 1 }, end: { line: 3, column: 6 } }
       } as TextNode
     ];
@@ -129,6 +131,6 @@ describe('ContentResolver', () => {
       currentFilePath: ''
     });
 
-    expect(result).toBe('Before\n\nAfter');
+    expect(result).toBe('Before\nAfter');
   });
 }); 

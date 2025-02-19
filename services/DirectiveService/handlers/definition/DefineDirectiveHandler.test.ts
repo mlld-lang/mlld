@@ -53,7 +53,7 @@ describe('DefineDirectiveHandler', () => {
       const result = await handler.execute(node, context);
       expect(clonedState.setCommand).toHaveBeenCalledWith('greet', {
         parameters: [],
-        command: '@run echo "Hello"'
+        command: 'echo "Hello"'
       });
     });
 
@@ -73,7 +73,7 @@ describe('DefineDirectiveHandler', () => {
       const result = await handler.execute(node, context);
       expect(clonedState.setCommand).toHaveBeenCalledWith('greet', {
         parameters: ['name'],
-        command: '@run echo "Hello ${name}"'
+        command: 'echo "Hello ${name}"'
       });
     });
 
@@ -93,7 +93,7 @@ describe('DefineDirectiveHandler', () => {
       const result = await handler.execute(node, context);
       expect(clonedState.setCommand).toHaveBeenCalledWith('greet', {
         parameters: ['first', 'last'],
-        command: '@run echo "Hello ${first} ${last}"'
+        command: 'echo "Hello ${first} ${last}"'
       });
     });
   });
@@ -115,7 +115,7 @@ describe('DefineDirectiveHandler', () => {
       const result = await handler.execute(node, context);
       expect(clonedState.setCommand).toHaveBeenCalledWith('risky', {
         parameters: [],
-        command: '@run rm -rf /',
+        command: 'rm -rf /',
         metadata: {
           risk: 'high'
         }
@@ -138,7 +138,7 @@ describe('DefineDirectiveHandler', () => {
       const result = await handler.execute(node, context);
       expect(clonedState.setCommand).toHaveBeenCalledWith('cmd', {
         parameters: [],
-        command: '@run echo "test"',
+        command: 'echo "test"',
         metadata: {
           about: 'This is a description'
         }
@@ -164,10 +164,10 @@ describe('DefineDirectiveHandler', () => {
       expect(validationService.validate).toHaveBeenCalledWith(node);
     });
 
-    it('should reject non-@run commands', async () => {
+    it('should reject empty commands', async () => {
       const node = createDefineDirective(
         'invalid',
-        'echo "Hello"',
+        '',
         [],
         createLocation(1, 1, 1, 20)
       );
@@ -178,7 +178,7 @@ describe('DefineDirectiveHandler', () => {
       };
 
       vi.mocked(validationService.validate).mockRejectedValueOnce(
-        new DirectiveError('Command must start with @run', 'define')
+        new DirectiveError('Command cannot be empty', 'define')
       );
 
       await expect(handler.execute(node, context))
@@ -309,7 +309,7 @@ describe('DefineDirectiveHandler', () => {
       await handler.execute(node, context);
       expect(clonedState.setCommand).toHaveBeenCalledWith('cmd', {
         parameters: [],
-        command: '@run echo "test"'
+        command: 'echo "test"'
       });
     });
   });

@@ -119,14 +119,14 @@ describe('ParserService', () => {
       const content = '@invalid xyz';
       
       await expect(service.parse(content)).rejects.toThrow(MeldParseError);
-      await expect(service.parse(content)).rejects.toThrow('Parse error: Expected "data", "define", "embed", "import", "path", "run", "text", or "var"');
+      await expect(service.parse(content)).rejects.toThrow('Parse error: Invalid syntax at line 1, column 2');
     });
 
     it('should throw MeldParseError for malformed directive', async () => {
       const content = '@text greeting = "unclosed string';
       
       await expect(service.parse(content)).rejects.toThrow(MeldParseError);
-      await expect(service.parse(content)).rejects.toThrow('Parse error: Expected "\\"" or any character');
+      await expect(service.parse(content)).rejects.toThrow('Parse error: Invalid syntax at line 1, column 34');
     });
   });
 
@@ -174,7 +174,7 @@ describe('ParserService', () => {
       const filePath = 'test.meld';
       
       await expect(service.parseWithLocations(content, filePath)).rejects.toThrow(MeldParseError);
-      await expect(service.parseWithLocations(content, filePath)).rejects.toThrow('Parse error: Expected "data", "define", "embed", "import", "path", "run", "text", or "var"');
+      await expect(service.parseWithLocations(content, filePath)).rejects.toThrow('Parse error: Invalid syntax at line 1, column 2');
     });
   });
 

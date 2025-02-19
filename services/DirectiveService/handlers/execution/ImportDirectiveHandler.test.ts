@@ -110,7 +110,10 @@ describe('ImportDirectiveHandler', () => {
       vi.mocked(resolutionService.resolveInContext).mockResolvedValueOnce('vars.meld');
       vi.mocked(fileSystemService.exists).mockResolvedValueOnce(true);
       vi.mocked(fileSystemService.readFile).mockResolvedValueOnce('# Variables');
-      vi.mocked(parserService.parse).mockResolvedValueOnce([]);
+      vi.mocked(parserService.parse)
+        .mockResolvedValueOnce([]) // For file content
+        .mockResolvedValueOnce([]); // For import list parsing
+
       vi.mocked(interpreterService.interpret).mockResolvedValueOnce(childState);
 
       // Mock some variables in the child state
@@ -139,7 +142,21 @@ describe('ImportDirectiveHandler', () => {
       vi.mocked(resolutionService.resolveInContext).mockResolvedValueOnce('vars.meld');
       vi.mocked(fileSystemService.exists).mockResolvedValueOnce(true);
       vi.mocked(fileSystemService.readFile).mockResolvedValueOnce('# Variables');
-      vi.mocked(parserService.parse).mockResolvedValueOnce([]);
+      
+      // Mock parsing the import list
+      vi.mocked(parserService.parse)
+        .mockResolvedValueOnce([]) // For file content
+        .mockResolvedValueOnce([{
+          type: 'Directive',
+          directive: {
+            kind: 'import',
+            imports: [
+              { name: 'var1' },
+              { name: 'var2', alias: 'alias2' }
+            ]
+          }
+        }]); // For import list parsing
+
       vi.mocked(interpreterService.interpret).mockResolvedValueOnce(childState);
 
       // Mock variables in the child state
@@ -152,6 +169,23 @@ describe('ImportDirectiveHandler', () => {
       expect(clonedState.setTextVar).toHaveBeenCalledWith('var1', 'value1');
       expect(clonedState.setTextVar).toHaveBeenCalledWith('alias2', 'value2');
       expect(result).toBe(clonedState);
+    });
+
+    it('should handle invalid import list syntax', async () => {
+      const node = createImportDirective('vars.meld', createLocation(1, 1));
+      node.directive.path = 'vars.meld';
+      node.directive.importList = 'invalid syntax';
+      const context = { currentFilePath: 'test.meld', state: stateService };
+
+      vi.mocked(resolutionService.resolveInContext).mockResolvedValueOnce('vars.meld');
+      vi.mocked(fileSystemService.exists).mockResolvedValueOnce(true);
+      vi.mocked(fileSystemService.readFile).mockResolvedValueOnce('# Variables');
+      vi.mocked(parserService.parse)
+        .mockResolvedValueOnce([]) // For file content
+        .mockRejectedValueOnce(new Error('Parse error')); // For import list parsing
+
+      await expect(handler.execute(node, context)).rejects.toThrow(DirectiveError);
+      expect(circularityService.endImport).toHaveBeenCalled();
     });
   });
 

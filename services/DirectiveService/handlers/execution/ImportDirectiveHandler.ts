@@ -117,7 +117,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
         });
 
         // Parse import list
-        const imports = this.parseImportList(importList || '*');
+        const imports = await this.parseImportList(importList || '*');
 
         // Import variables based on list
         for (const { identifier, alias } of imports) {
@@ -167,25 +167,42 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
   /**
    * Parse import list from string
    */
-  private parseImportList(importList: string): Array<{ identifier: string; alias?: string }> {
+  private async parseImportList(importList: string): Promise<Array<{ identifier: string; alias?: string }>> {
     if (importList === '*') {
       return [{ identifier: '*' }];
     }
 
-    return importList.split(',').map(item => {
-      const asMatch = item.trim().match(/^(\S+)(?:\s+as\s+(\S+))?$/);
-      if (!asMatch) {
+    // Create a mock import directive to parse the list
+    const mockContent = `@import [${importList}] from [file.md]`;
+    
+    try {
+      // Parse the mock content
+      const nodes = await this.parserService.parse(mockContent);
+      
+      if (!nodes || nodes.length === 0 || nodes[0].type !== 'Directive' || nodes[0].directive.kind !== 'import') {
         throw new DirectiveError(
-          `Invalid import syntax: ${item}`,
+          'Failed to parse import list',
           this.kind,
           DirectiveErrorCode.VALIDATION_FAILED
         );
       }
-      return {
-        identifier: asMatch[1],
-        alias: asMatch[2]
-      };
-    });
+
+      const importNode = nodes[0] as DirectiveNode;
+      const importItems = importNode.directive.imports || [];
+
+      return importItems.map(item => ({
+        identifier: item.name,
+        alias: item.alias
+      }));
+    } catch (error) {
+      // If parsing fails, it's an invalid import syntax
+      throw new DirectiveError(
+        `Invalid import syntax: ${importList}`,
+        this.kind,
+        DirectiveErrorCode.VALIDATION_FAILED,
+        { cause: error instanceof Error ? error : new Error(String(error)) }
+      );
+    }
   }
 
   /**
