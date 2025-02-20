@@ -17,6 +17,11 @@ export default defineConfig([
     splitting: true,
     treeshake: true,
     outDir: 'dist',
+    outExtension({ format }) {
+      return {
+        js: format === 'cjs' ? '.cjs' : '.mjs'
+      }
+    },
     tsconfig: 'tsconfig.build.json',
     external: [
       'meld-ast',
@@ -50,6 +55,11 @@ export default defineConfig([
     sourcemap: true,
     treeshake: true,
     outDir: 'dist',
+    outExtension({ format }) {
+      return {
+        js: '.cjs'
+      }
+    },
     tsconfig: 'tsconfig.build.json',
     external: [
       'meld-ast',
