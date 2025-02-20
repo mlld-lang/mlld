@@ -131,7 +131,7 @@ describe('InterpreterService Unit', () => {
         directiveNode,
         expect.objectContaining({
           state: expect.any(Object),
-          filePath: 'test.meld'
+          currentFilePath: 'test.meld'
         })
       );
     });
@@ -265,7 +265,7 @@ describe('InterpreterService Unit', () => {
         directiveNode,
         expect.objectContaining({
           state: expect.any(Object),
-          filePath: 'test.meld'
+          currentFilePath: 'test.meld'
         })
       );
     });

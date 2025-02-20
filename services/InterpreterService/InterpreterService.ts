@@ -275,7 +275,8 @@ export class InterpreterService implements IInterpreterService {
           }
           const directiveNode = node as DirectiveNode;
           currentState = await this.directiveService.processDirective(directiveNode, {
-            state: directiveState
+            state: directiveState,
+            currentFilePath: state.getCurrentFilePath() ?? undefined
           });
           break;
 

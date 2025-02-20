@@ -118,8 +118,33 @@ export class ParserService implements IParserService {
   }
 
   private validateCodeFences(nodes: MeldNode[]): void {
-    // No validation needed since meld-ast handles code fence validation
-    // according to its grammar which allows equal or greater number of
-    // backticks to close a fence
+    // Validate that code fences are closed with exactly the same number of backticks
+    for (const node of nodes) {
+      if (node.type === 'CodeFence') {
+        const codeFence = node as CodeFenceNode;
+        const content = codeFence.content;
+        
+        // Extract opening and closing backticks
+        const openMatch = content.match(/^(`+)/);
+        const closeMatch = content.match(/\n(`+)$/);
+        
+        if (!openMatch || !closeMatch) {
+          throw new MeldParseError(
+            'Invalid code fence: missing opening or closing backticks',
+            node.location || { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } }
+          );
+        }
+
+        const openTicks = openMatch[1];
+        const closeTicks = closeMatch[1];
+
+        if (openTicks.length !== closeTicks.length) {
+          throw new MeldParseError(
+            `Code fence must be closed with exactly ${openTicks.length} backticks, got ${closeTicks.length}`,
+            node.location || { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } }
+          );
+        }
+      }
+    }
   }
 } 

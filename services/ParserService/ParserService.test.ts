@@ -136,17 +136,13 @@ describe('ParserService', () => {
       const content = '```\nouter\n```\ninner\n```\n```';
       const result = await service.parse(content);
       
-      expect(result).toHaveLength(5);
+      expect(result).toHaveLength(3);
       expect(result[0].type).toBe('CodeFence');
       expect((result[0] as CodeFenceNode).content).toBe('```\nouter\n```');
       expect(result[1].type).toBe('Text');
       expect((result[1] as TextNode).content).toBe('inner\n');
-      expect(result[2].type).toBe('Text');
-      expect((result[2] as TextNode).content).toBe('```');
-      expect(result[3].type).toBe('Text');
-      expect((result[3] as TextNode).content).toBe('\n');
-      expect(result[4].type).toBe('Text');
-      expect((result[4] as TextNode).content).toBe('```');
+      expect(result[2].type).toBe('CodeFence');
+      expect((result[2] as CodeFenceNode).content).toBe('```\n\n```');
     });
 
     it('should parse mixed content', async () => {
