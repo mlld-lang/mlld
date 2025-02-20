@@ -105,8 +105,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
           );
           processedContent = await this.resolutionService.extractSection(
             content,
-            resolvedSection,
-            fuzzy
+            resolvedSection
           );
         }
 

@@ -171,8 +171,7 @@ describe('EmbedDirectiveHandler', () => {
       expect(stateService.clone).toHaveBeenCalled();
       expect(resolutionService.extractSection).toHaveBeenCalledWith(
         '# Content',
-        'Introduction',
-        undefined
+        'Introduction'
       );
       expect(clonedState.mergeChildState).toHaveBeenCalledWith(childState);
       expect(result).toBe(clonedState);

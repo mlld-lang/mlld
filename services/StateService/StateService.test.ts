@@ -120,8 +120,8 @@ describe('StateService', () => {
       state.appendContent('test content');
       const nodes = state.getNodes();
       expect(nodes).toHaveLength(1);
-      expect(nodes[0].type).toBe('text');
-      expect(nodes[0].value).toBe('test content');
+      expect(nodes[0].type).toBe('Text');
+      expect(nodes[0].content).toBe('test content');
     });
   });
 

@@ -135,8 +135,8 @@ export class StateService implements IStateService {
     this.checkMutable();
     // Create a text node and add it
     const node: MeldNode = {
-      type: 'text',
-      value: content,
+      type: 'Text',
+      content: content,
       location: { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } }
     } as TextNode;
     this.addNode(node);

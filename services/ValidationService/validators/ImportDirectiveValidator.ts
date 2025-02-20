@@ -18,13 +18,14 @@ export function validateImportDirective(node: DirectiveNode): void {
   }
 
   // Try new format: @import [x,y,z] from [file.md] or @import [file.md]
+  // Now also handles path variables like [$./file.md]
   const newFormatMatch = directive.value.match(/^\s*\[([^\]]+)\](?:\s+from\s+\[([^\]]+)\])?\s*$/);
   if (newFormatMatch) {
     const [, importsOrPath, fromPath] = newFormatMatch;
     const path = fromPath || importsOrPath;
 
     // Validate path
-    validatePath(path, node);
+    validatePath(path.trim(), node);
 
     // If it's an explicit import list, validate each import
     if (fromPath && importsOrPath !== '*') {
@@ -68,10 +69,10 @@ function validatePath(path: string, node: DirectiveNode): void {
     );
   }
 
-  // Validate path format
-  if (path.includes('..')) {
+  // Allow path variables starting with $ but still validate ..
+  if (!path.startsWith('$') && path.includes('..')) {
     throw new MeldDirectiveError(
-      'Import path cannot contain parent directory references (..)',
+      'Import path cannot contain parent directory references (..) unless using a path variable',
       'import',
       node.location,
       DirectiveErrorCode.VALIDATION_FAILED
