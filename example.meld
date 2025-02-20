@@ -1,0 +1,24 @@
+@import [$./example-import.meld]
+
+## Your role
+@text role_text = `#{role.architect}`
+
+## Documentation
+### Target UX
+@embed [$./docs/UX.md] 
+### Architecture
+@embed [$./docs/ARCHITECTURE.md] 
+### Meld Processing Pipeline
+@embed [$./docs/PIPELINE.md]
+
+## Codebase
+@run [cpai api cli core services --tree --stdout]
+
+## Code
+@run [cpai api cli core services --stdout]
+
+## Test Results
+@run[npm test]
+
+## Your task
+@text task_text = `#{task.code_review}`
