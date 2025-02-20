@@ -251,6 +251,10 @@ export class InterpreterService implements IInterpreterService {
           currentState = textState;
           break;
 
+        case 'Comment':
+          // Comments are ignored during interpretation
+          break;
+
         case 'Directive':
           if (!this.directiveService) {
             throw new MeldInterpreterError(
