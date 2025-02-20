@@ -38,7 +38,7 @@ export class ParserService implements IParserService {
       const options = {
         failFast: true,
         trackLocations: true,
-        validateNodes: true,
+        validateNodes: false,
         preserveCodeFences: true,
         validateCodeFences: true,
         onError: (error: unknown) => {

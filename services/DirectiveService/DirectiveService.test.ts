@@ -134,9 +134,8 @@ describe('DirectiveService', () => {
 
     describe('Import directives', () => {
       it('should process basic import', async () => {
-        // Create import directive node
+        // Create import directive node with value property
         const node = context.factory.createImportDirective('module.meld', context.factory.createLocation(1, 1));
-        node.directive.path = 'module.meld';
         
         const result = await service.processDirective(node, {
           currentFilePath: 'main.meld',
@@ -147,9 +146,8 @@ describe('DirectiveService', () => {
       });
 
       it('should handle nested imports', async () => {
-        // Create import directive node
+        // Create import directive node with value property
         const node = context.factory.createImportDirective('inner.meld', context.factory.createLocation(1, 1));
-        node.directive.path = 'inner.meld';
         
         const result = await service.processDirective(node, {
           currentFilePath: 'middle.meld',
@@ -160,9 +158,8 @@ describe('DirectiveService', () => {
       });
 
       it('should detect circular imports', async () => {
-        // Create import directive node
+        // Create import directive node with value property
         const node = context.factory.createImportDirective('b.meld', context.factory.createLocation(1, 1));
-        node.directive.path = 'b.meld';
         
         await expect(service.processDirective(node, {
           currentFilePath: 'a.meld',

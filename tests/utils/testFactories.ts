@@ -236,7 +236,17 @@ export function createImportDirective(
   from?: string
 ): DirectiveNode {
   const value = from ? `[${imports}] from [${from}]` : `[${imports}]`;
-  return createTestDirective('import', 'import', value, location);
+  const path = from || imports;
+  return {
+    type: 'Directive',
+    directive: {
+      kind: 'import',
+      identifier: 'import',
+      value,
+      path
+    },
+    location: location || DEFAULT_LOCATION
+  };
 }
 
 // Create a define directive node for testing
