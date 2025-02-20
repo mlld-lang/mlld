@@ -100,6 +100,99 @@ describe('ImportDirectiveHandler', () => {
     );
   });
 
+  describe('special path variables', () => {
+    beforeEach(() => {
+      // Mock path resolution for special variables
+      resolutionService.resolveInContext = vi.fn().mockImplementation(async (path) => {
+        if (path.includes('$.') || path.includes('$PROJECTPATH')) {
+          return '/project/path/test.meld';
+        }
+        if (path.includes('$~') || path.includes('$HOMEPATH')) {
+          return '/home/user/test.meld';
+        }
+        return path;
+      });
+      
+      // Mock file system for resolved paths
+      fileSystemService.exists.mockResolvedValue(true);
+      fileSystemService.readFile.mockResolvedValue('mock content');
+      parserService.parse.mockReturnValue([]);
+      interpreterService.interpret.mockResolvedValue(childState);
+    });
+
+    it('should handle $. alias for project path', async () => {
+      const node = createImportDirective('*', createLocation(1, 1));
+      node.directive.path = '$./test.meld';
+      node.directive.importList = '*';
+      const context = { filePath: '/some/path', state: stateService };
+
+      await handler.execute(node, context);
+
+      expect(resolutionService.resolveInContext).toHaveBeenCalledWith(
+        '$./test.meld',
+        expect.any(Object)
+      );
+      expect(fileSystemService.exists).toHaveBeenCalledWith('/project/path/test.meld');
+    });
+
+    it('should handle $PROJECTPATH for project path', async () => {
+      const node = createImportDirective('*', createLocation(1, 1));
+      node.directive.path = '$PROJECTPATH/test.meld';
+      node.directive.importList = '*';
+      const context = { filePath: '/some/path', state: stateService };
+
+      await handler.execute(node, context);
+
+      expect(resolutionService.resolveInContext).toHaveBeenCalledWith(
+        '$PROJECTPATH/test.meld',
+        expect.any(Object)
+      );
+      expect(fileSystemService.exists).toHaveBeenCalledWith('/project/path/test.meld');
+    });
+
+    it('should handle $~ alias for home path', async () => {
+      const node = createImportDirective('*', createLocation(1, 1));
+      node.directive.path = '$~/test.meld';
+      node.directive.importList = '*';
+      const context = { filePath: '/some/path', state: stateService };
+
+      await handler.execute(node, context);
+
+      expect(resolutionService.resolveInContext).toHaveBeenCalledWith(
+        '$~/test.meld',
+        expect.any(Object)
+      );
+      expect(fileSystemService.exists).toHaveBeenCalledWith('/home/user/test.meld');
+    });
+
+    it('should handle $HOMEPATH for home path', async () => {
+      const node = createImportDirective('*', createLocation(1, 1));
+      node.directive.path = '$HOMEPATH/test.meld';
+      node.directive.importList = '*';
+      const context = { filePath: '/some/path', state: stateService };
+
+      await handler.execute(node, context);
+
+      expect(resolutionService.resolveInContext).toHaveBeenCalledWith(
+        '$HOMEPATH/test.meld',
+        expect.any(Object)
+      );
+      expect(fileSystemService.exists).toHaveBeenCalledWith('/home/user/test.meld');
+    });
+
+    it('should throw error if resolved path does not exist', async () => {
+      fileSystemService.exists.mockResolvedValue(false);
+      const node = createImportDirective('*', createLocation(1, 1));
+      node.directive.path = '$./nonexistent.meld';
+      node.directive.importList = '*';
+      const context = { filePath: '/some/path', state: stateService };
+
+      await expect(handler.execute(node, context))
+        .rejects
+        .toThrow('Import file not found');
+    });
+  });
+
   describe('basic importing', () => {
     it('should import all variables with *', async () => {
       const node = createImportDirective('vars.meld', createLocation(1, 1));

@@ -44,6 +44,81 @@ meld input.meld --stdout
 - `.mll`: Alternative extension for Meld files
 - `.mll.md`: Alternative extension for Meld Markdown files
 
+## Writing Meld Files
+
+Meld is a simple scripting language designed to work within markdown-like documents. It processes special `@directive` lines while preserving all other content as-is.
+
+### Core Directives
+
+```meld
+@text name = "value"              # Define a text variable
+@data config = { "key": "value" } # Define a structured data variable
+@path docs = "$PROJECTPATH/docs"  # Define a path (must use $PROJECTPATH or $HOMEPATH)
+@embed [file.md]                  # Embed content from another file
+@embed [file.md # section]        # Embed specific section from file
+@run [command]                    # Run a shell command
+@import [file.meld]               # Import another meld file
+@define cmd = @run [echo "hi"]    # Define a reusable command
+```
+
+### Variables & Interpolation
+
+```meld
+${textvar}                    # Reference a text variable
+#{datavar}                    # Reference a data variable
+#{datavar.field}             # Access data field
+$pathvar                     # Reference a path variable
+
+# Variables can be used in strings and commands:
+@text greeting = "Hello ${name}!"
+@run [cat ${file}]
+```
+
+### Comments & Code Fences
+
+```meld
+>> This is a comment
+>> Comments must start at line beginning
+
+# Code fences preserve content exactly:
+```python
+def hello():
+    print("Hi")  # @text directives here are preserved as-is
+```
+```
+
+### String Values
+
+- Use single quotes, double quotes, or backticks
+- Quotes must match (no mixing)
+- Use backticks for template strings with variables:
+```meld
+@text simple = "Hello"
+@text template = `Hello ${name}!`
+@text multiline = [[`
+  Multi-line
+  template with ${vars}
+`]]
+```
+
+### Path Variables
+
+- Must use `$PROJECTPATH` (or `$.`) or `$HOMEPATH` (or `$~`)
+- Forward slashes as separators
+```meld
+@path docs = "$PROJECTPATH/docs"
+@path home = "$HOMEPATH/meld"
+```
+
+### Data Variables
+
+- Store structured data (objects/arrays)
+- Support field access
+```meld
+@data user = { "name": "Alice", "id": 123 }
+@text name = "User: #{user.name}"
+```
+
 ## SDK Usage
 
 The Meld SDK provides three main functions for working with Meld content:

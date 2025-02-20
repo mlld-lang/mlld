@@ -1,9 +1,10 @@
 import { defineConfig } from 'vitest/config';
 import { resolve } from 'path';
-import tsconfigPaths from 'vite-tsconfig-paths';
+import { fileURLToPath } from 'url';
+
+const __dirname = fileURLToPath(new URL('.', import.meta.url));
 
 export default defineConfig({
-  plugins: [tsconfigPaths()],
   test: {
     setupFiles: ['tests/setup.ts'],
     environment: 'node',
