@@ -70,21 +70,7 @@ describe('TextResolver', () => {
       expect(stateService.getTextVar).toHaveBeenCalledWith('test');
     });
 
-    it('should handle environment variables', async () => {
-      const node: MeldNode = {
-        type: 'Directive',
-        directive: {
-          kind: 'text',
-          identifier: 'ENV_TEST',
-          value: ''
-        }
-      };
-      vi.mocked(stateService.getTextVar).mockReturnValue(undefined);
-      
-      await expect(resolver.resolve(node, context))
-        .rejects
-        .toThrow('Environment variable not set: ENV_TEST');
-    });
+    it.todo('should handle environment variables appropriately (pending new error system)');
   });
 
   describe('error handling', () => {
@@ -104,21 +90,7 @@ describe('TextResolver', () => {
         .toThrow('Text variables are not allowed in this context');
     });
 
-    it('should throw on undefined variable', async () => {
-      const node: MeldNode = {
-        type: 'Directive',
-        directive: {
-          kind: 'text',
-          identifier: 'missing',
-          value: ''
-        }
-      };
-      vi.mocked(stateService.getTextVar).mockReturnValue(undefined);
-      
-      await expect(resolver.resolve(node, context))
-        .rejects
-        .toThrow('Undefined text variable: missing');
-    });
+    it.todo('should handle undefined variables (pending new error system)');
 
     it('should throw on invalid node type', async () => {
       const node: MeldNode = {

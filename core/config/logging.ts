@@ -18,7 +18,7 @@ export const loggingConfig = {
   },
 
   // Default level based on environment
-  defaultLevel: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
+  defaultLevel: 'info',
 
   // Format configuration
   format: {

@@ -1,4 +1,4 @@
-import type { Location, Position } from '@core/types.js';
+import type { Location, Position } from '@core/types/index.js';
 
 interface SerializedParseError {
   name: string;

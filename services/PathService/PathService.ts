@@ -1,7 +1,7 @@
 import { IPathService, PathOptions } from './IPathService.js';
 import { IFileSystemService } from '@services/FileSystemService/IFileSystemService.js';
 import { PathValidationError, PathErrorCode } from './errors/PathValidationError.js';
-import type { Location } from '@core/types.js';
+import type { Location } from '@core/types/index.js';
 import * as path from 'path';
 
 /**

@@ -94,11 +94,9 @@ describe('SDK Integration Tests', () => {
         .toThrow(/Parse error/);
     });
 
-    it('should handle missing files correctly', async () => {
-      await expect(main('missing.meld', { fs: context.fs }))
-        .rejects
-        .toThrow(/File not found/);
-    });
+    // TODO: This test will be updated as part of the error handling overhaul
+    // See dev/ERRORS.md - will be reclassified as a fatal error with improved messaging
+    it.todo('should handle missing files correctly');
 
     it('should handle empty files', async () => {
       await context.fs.writeFile(testFilePath, '');

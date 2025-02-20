@@ -3,6 +3,7 @@ import * as path from 'path';
 import type { Stats } from 'fs';
 import { filesystemLogger as logger } from '@core/utils/logger.js';
 import { EventEmitter } from 'events';
+import { IFileSystem } from '@core/interfaces/IFileSystem';
 
 /**
  * In-memory filesystem for testing using memfs.
@@ -154,33 +155,8 @@ export class MemfsTestFileSystem {
   /**
    * Ensure a directory exists, creating it and its parents if needed
    */
-  private async ensureDir(dirPath: string): Promise<void> {
-    logger.debug('Ensuring directory exists', { dirPath });
-    const memfsPath = this.getMemfsPath(dirPath);
-    
-    try {
-      // Check if path exists
-      if (this.vol.existsSync(memfsPath)) {
-        const stats = this.vol.statSync(memfsPath);
-        if (stats.isDirectory()) {
-          logger.debug('Directory already exists', { dirPath: memfsPath });
-          return;
-        }
-        logger.error('Path exists but is not a directory', { dirPath: memfsPath });
-        throw new Error(`ENOTDIR: Path exists but is not a directory: ${dirPath}`);
-      }
-
-      // Create directory and parents
-      logger.debug('Creating directory', { dirPath: memfsPath });
-      this.vol.mkdirSync(memfsPath, { recursive: true });
-      logger.debug('Directory created successfully', { dirPath: memfsPath });
-    } catch (error) {
-      if (error.message.startsWith('ENOTDIR:')) {
-        throw error;
-      }
-      logger.error('Error creating directory', { dirPath: memfsPath, error });
-      throw new Error(`Error creating directory '${dirPath}': ${error.message}`);
-    }
+  async ensureDir(dirPath: string): Promise<void> {
+    await this.mkdir(dirPath);
   }
 
   /**
@@ -617,5 +593,13 @@ export class MemfsTestFileSystem {
       logger.error('Error removing path', { path, memfsPath, error });
       throw new Error(`Error removing path '${path}': ${error.message}`);
     }
+  }
+
+  getCwd(): string {
+    return '/project';
+  }
+
+  setFileSystem(fileSystem: IFileSystem): void {
+    // No-op for test filesystem
   }
 } 

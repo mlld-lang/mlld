@@ -1,4 +1,4 @@
-import type { MeldNode } from 'meld-spec';
+import type { MeldNode, TextNode } from 'meld-spec';
 import { stateLogger as logger } from '@core/utils/logger.js';
 import type { IStateService } from './IStateService.js';
 import type { StateNode, CommandDefinition } from './types.js';
@@ -135,10 +135,10 @@ export class StateService implements IStateService {
     this.checkMutable();
     // Create a text node and add it
     const node: MeldNode = {
-      type: 'text',
-      value: content,
+      type: 'Text',
+      content: content,
       location: { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } }
-    };
+    } as TextNode;
     this.addNode(node);
   }
 

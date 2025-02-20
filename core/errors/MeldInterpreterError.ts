@@ -23,6 +23,8 @@ export interface InterpreterErrorContext {
   filePath?: string;
   nodeType?: string;
   location?: InterpreterLocation;
+  parentFilePath?: string;
+  childFilePath?: string;
   state?: {
     filePath?: string;
     nodeCount?: number;

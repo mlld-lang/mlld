@@ -672,7 +672,7 @@ export class DirectiveService implements IDirectiveService {
         code = DirectiveErrorCode.FILE_NOT_FOUND;
       } else if (message.includes('circular import') || message.includes('circular reference')) {
         message = 'Circular import detected';
-        code = DirectiveErrorCode.CIRCULAR_IMPORT;
+        code = DirectiveErrorCode.CIRCULAR_REFERENCE;
       } else if (message.includes('parameter count') || message.includes('wrong number of parameters')) {
         message = 'Invalid parameter count';
         code = DirectiveErrorCode.VALIDATION_FAILED;
@@ -685,7 +685,7 @@ export class DirectiveService implements IDirectiveService {
         message,
         node.directive?.kind || 'unknown',
         code,
-        { node, error: error instanceof Error ? error : undefined }
+        { node, cause: error instanceof Error ? error : undefined }
       );
     }
   }

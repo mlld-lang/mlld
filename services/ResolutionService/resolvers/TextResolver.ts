@@ -38,11 +38,8 @@ export class TextResolver {
     if (value === undefined) {
       // Special handling for ENV variables
       if (identifier.startsWith('ENV_')) {
-        throw new ResolutionError(
-          `Environment variable not set: ${identifier}`,
-          ResolutionErrorCode.UNDEFINED_VARIABLE,
-          { value: identifier, context }
-        );
+        console.warn(`Warning: Environment variable not set: ${identifier}`);
+        return '';
       }
       throw new ResolutionError(
         `Undefined text variable: ${identifier}`,

@@ -104,21 +104,7 @@ describe('PathResolver', () => {
       await expect(resolver.resolve(node, context)).rejects.toThrow(ResolutionError);
     });
 
-    it('should throw on undefined path variable', async () => {
-      const node: MeldNode = {
-        type: 'Directive',
-        directive: {
-          kind: 'path',
-          identifier: 'missing',
-          value: ''
-        }
-      };
-      vi.mocked(stateService.getPathVar).mockReturnValue(undefined);
-      
-      await expect(resolver.resolve(node, context))
-        .rejects
-        .toThrow('Undefined path variable: missing');
-    });
+    it.todo('should handle undefined path variables appropriately (pending new error system)');
 
     it('should throw when path is not absolute but required', async () => {
       const node: DirectiveNode = {

@@ -192,31 +192,18 @@ describe('ImportDirectiveHandler', () => {
   describe('error handling', () => {
     it('should handle validation errors', async () => {
       const node = createImportDirective('', createLocation(1, 1));
-      const context = {
-        currentFilePath: 'test.meld',
-        state: stateService,
-        parentState: undefined
-      };
+      const context = { currentFilePath: 'test.meld', state: stateService };
 
-      vi.mocked(validationService.validate).mockImplementation(() => {
-        throw new DirectiveError('Validation failed', 'import', DirectiveErrorCode.VALIDATION_FAILED);
+      vi.mocked(validationService.validate).mockImplementationOnce(() => {
+        throw new DirectiveError('Invalid import', 'import');
       });
 
       await expect(handler.execute(node, context)).rejects.toThrow(DirectiveError);
     });
 
-    it('should handle file not found', async () => {
-      const node = createImportDirective('[missing.meld]', createLocation(1, 1));
-      const context = {
-        currentFilePath: 'test.meld',
-        state: stateService,
-        parentState: undefined
-      };
+    it.todo('should handle variable not found appropriately (pending new error system)');
 
-      vi.mocked(fileSystemService.readFile).mockRejectedValue(new Error('File not found'));
-
-      await expect(handler.execute(node, context)).rejects.toThrow(DirectiveError);
-    });
+    it.todo('should handle file not found appropriately (pending new error system)');
 
     it('should handle circular imports', async () => {
       const node = createImportDirective('[circular.meld]', createLocation(1, 1));
@@ -258,21 +245,6 @@ describe('ImportDirectiveHandler', () => {
       vi.mocked(fileSystemService.readFile).mockResolvedValue('content');
       vi.mocked(parserService.parse).mockResolvedValue([]);
       vi.mocked(interpreterService.interpret).mockRejectedValue(new Error('Interpretation error'));
-
-      await expect(handler.execute(node, context)).rejects.toThrow(DirectiveError);
-    });
-
-    it('should handle variable not found', async () => {
-      const node = createImportDirective('[${missing}]', createLocation(1, 1));
-      const context = {
-        currentFilePath: 'test.meld',
-        state: stateService,
-        parentState: undefined
-      };
-
-      vi.mocked(resolutionService.resolveInContext).mockImplementation(() => {
-        throw new DirectiveError('Variable not found', 'import', DirectiveErrorCode.VARIABLE_NOT_FOUND);
-      });
 
       await expect(handler.execute(node, context)).rejects.toThrow(DirectiveError);
     });

@@ -12,7 +12,7 @@ export class NodeFileSystem implements IFileSystem {
   }
 
   async writeFile(path: string, content: string): Promise<void> {
-    return fs.writeFile(path, content, 'utf-8');
+    await fs.writeFile(path, content, 'utf-8');
   }
 
   async exists(path: string): Promise<boolean> {
@@ -28,7 +28,7 @@ export class NodeFileSystem implements IFileSystem {
   }
 
   async mkdir(path: string): Promise<void> {
-    return fs.mkdir(path, { recursive: true });
+    await fs.mkdir(path, { recursive: true });
   }
 
   async isDirectory(path: string): Promise<boolean> {
@@ -36,7 +36,7 @@ export class NodeFileSystem implements IFileSystem {
       const stats = await fs.stat(path);
       return stats.isDirectory();
     } catch (error) {
-      if (error.code === 'ENOENT') {
+      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
         return false;
       }
       throw error;
@@ -48,7 +48,7 @@ export class NodeFileSystem implements IFileSystem {
       const stats = await fs.stat(path);
       return stats.isFile();
     } catch (error) {
-      if (error.code === 'ENOENT') {
+      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
         return false;
       }
       throw error;
@@ -56,6 +56,6 @@ export class NodeFileSystem implements IFileSystem {
   }
 
   watch(path: string, options?: { recursive?: boolean }): AsyncIterableIterator<{ filename: string; eventType: string }> {
-    return watch(path, options);
+    return watch(path, options) as AsyncIterableIterator<{ filename: string; eventType: string }>;
   }
 } 

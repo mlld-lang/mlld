@@ -16,6 +16,7 @@ export * from '@core/types/index.js';
 export * from '@core/errors/MeldDirectiveError.js';
 export * from '@core/errors/MeldInterpreterError.js';
 export * from '@core/errors/MeldParseError.js';
+import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
 
 // Import service classes
 import { InterpreterService } from '@services/InterpreterService/InterpreterService.js';
@@ -33,7 +34,7 @@ import { NodeFileSystem } from '@services/FileSystemService/NodeFileSystem.js';
 import { ProcessOptions } from '@core/types/index.js';
 
 // Package info
-export const version = '0.1.0';
+export { version } from '@core/version.js';
 
 export async function main(filePath: string, options: ProcessOptions = {}): Promise<string> {
   const pathOps = new PathOperationsService();
@@ -46,7 +47,7 @@ export async function main(filePath: string, options: ProcessOptions = {}): Prom
   const circularity = new CircularityService();
   const resolution = new ResolutionService(state, fs, parser);
   const path = new PathService();
-  const output = new OutputService(resolution);
+  const output = new OutputService();
 
   // Initialize services
   directives.initialize(
@@ -61,17 +62,30 @@ export async function main(filePath: string, options: ProcessOptions = {}): Prom
   );
   interpreter.initialize(directives, state);
   
-  // Read the file
-  const content = await fs.readFile(filePath);
-  
-  // Parse the content
-  const ast = await parser.parse(content);
-  
-  // Interpret the AST
-  const resultState = await interpreter.interpret(ast, { filePath, initialState: state });
-  
-  // Convert to desired format using the updated state
-  const converted = await output.convert(ast, resultState, options.format || 'llm');
-  
-  return converted;
+  try {
+    // Read the file
+    const content = await fs.readFile(filePath);
+    
+    // Parse the content
+    const ast = await parser.parse(content);
+    
+    // Interpret the AST
+    const resultState = await interpreter.interpret(ast, { filePath, initialState: state });
+    
+    // Convert to desired format using the updated state
+    const converted = await output.convert(ast, resultState, options.format || 'llm');
+    
+    return converted;
+  } catch (error) {
+    // If it's a MeldFileNotFoundError, just throw it as is
+    if (error instanceof MeldFileNotFoundError) {
+      throw error;
+    }
+    // For other Error instances, preserve the error
+    if (error instanceof Error) {
+      throw error;
+    }
+    // For non-Error objects, convert to string
+    throw new Error(String(error));
+  }
 }

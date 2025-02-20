@@ -1,5 +1,5 @@
 import * as fs from 'fs-extra';
-import { fsLogger as logger } from '@core/utils/simpleLogger.js';
+import { filesystemLogger as logger } from '@core/utils/logger.js';
 import { IFileSystemService } from './IFileSystemService.js';
 import { IPathOperationsService } from './IPathOperationsService.js';
 import { IFileSystem } from './IFileSystem.js';
@@ -11,6 +11,7 @@ interface FileOperationContext {
   operation: string;
   path: string;
   details?: Record<string, unknown>;
+  [key: string]: unknown;
 }
 
 export class FileSystemService implements IFileSystemService {
@@ -40,13 +41,15 @@ export class FileSystemService implements IFileSystemService {
       logger.debug('Successfully read file', { ...context, contentLength: content.length });
       return content;
     } catch (error) {
-      logger.error('Failed to read file', { ...context, error });
-      if (error.code === 'ENOENT') {
-        throw new MeldFileNotFoundError(filePath, error);
+      const err = error as Error;
+      if (err.message.includes('ENOENT')) {
+        logger.error('File not found', { ...context, error: err });
+        throw new MeldFileNotFoundError(filePath, err);
       }
-      throw new MeldError(`Failed to read file: ${filePath}`, { 
-        cause: error,
-        context
+      logger.error('Error reading file', { ...context, error: err });
+      throw new MeldError(`Error reading file: ${filePath}`, { 
+        cause: err,
+        filePath
       });
     }
   }
@@ -64,10 +67,11 @@ export class FileSystemService implements IFileSystemService {
       await this.fs.writeFile(filePath, content);
       logger.debug('Successfully wrote file', context);
     } catch (error) {
-      logger.error('Failed to write file', { ...context, error });
+      const err = error as Error;
+      logger.error('Failed to write file', { ...context, error: err });
       throw new MeldError(`Failed to write file: ${filePath}`, {
-        cause: error,
-        context
+        cause: err,
+        filePath
       });
     }
   }
@@ -84,10 +88,11 @@ export class FileSystemService implements IFileSystemService {
       logger.debug('Path existence check complete', { ...context, exists });
       return exists;
     } catch (error) {
-      logger.error('Failed to check path existence', { ...context, error });
+      const err = error as Error;
+      logger.error('Failed to check path existence', { ...context, error: err });
       throw new MeldError(`Failed to check if path exists: ${filePath}`, {
-        cause: error,
-        context
+        cause: err,
+        filePath
       });
     }
   }
@@ -104,10 +109,11 @@ export class FileSystemService implements IFileSystemService {
       logger.debug('Successfully got file stats', { ...context, isDirectory: stats.isDirectory() });
       return stats;
     } catch (error) {
-      logger.error('Failed to get file stats', { ...context, error });
+      const err = error as Error;
+      logger.error('Failed to get file stats', { ...context, error: err });
       throw new MeldError(`Failed to get file stats: ${filePath}`, {
-        cause: error,
-        context
+        cause: err,
+        filePath
       });
     }
   }
@@ -125,10 +131,11 @@ export class FileSystemService implements IFileSystemService {
       logger.debug('Successfully read directory', { ...context, fileCount: files.length });
       return files;
     } catch (error) {
-      logger.error('Failed to read directory', { ...context, error });
+      const err = error as Error;
+      logger.error('Failed to read directory', { ...context, error: err });
       throw new MeldError(`Failed to read directory: ${dirPath}`, {
-        cause: error,
-        context
+        cause: err,
+        filePath: dirPath
       });
     }
   }
@@ -144,10 +151,11 @@ export class FileSystemService implements IFileSystemService {
       await this.fs.mkdir(dirPath);
       logger.debug('Successfully ensured directory exists', context);
     } catch (error) {
-      logger.error('Failed to ensure directory exists', { ...context, error });
+      const err = error as Error;
+      logger.error('Failed to ensure directory exists', { ...context, error: err });
       throw new MeldError(`Failed to ensure directory exists: ${dirPath}`, {
-        cause: error,
-        context
+        cause: err,
+        filePath: dirPath
       });
     }
   }
@@ -164,10 +172,11 @@ export class FileSystemService implements IFileSystemService {
       logger.debug('Path directory check complete', { ...context, isDirectory: isDir });
       return isDir;
     } catch (error) {
-      logger.error('Failed to check if path is directory', { ...context, error });
+      const err = error as Error;
+      logger.error('Failed to check if path is directory', { ...context, error: err });
       throw new MeldError(`Failed to check if path is directory: ${filePath}`, {
-        cause: error,
-        context
+        cause: err,
+        filePath
       });
     }
   }
@@ -184,10 +193,11 @@ export class FileSystemService implements IFileSystemService {
       logger.debug('Path file check complete', { ...context, isFile });
       return isFile;
     } catch (error) {
-      logger.error('Failed to check if path is file', { ...context, error });
+      const err = error as Error;
+      logger.error('Failed to check if path is file', { ...context, error: err });
       throw new MeldError(`Failed to check if path is file: ${filePath}`, {
-        cause: error,
-        context
+        cause: err,
+        filePath
       });
     }
   }
@@ -207,10 +217,11 @@ export class FileSystemService implements IFileSystemService {
       logger.debug('Starting file watch', context);
       return this.fs.watch(path, options);
     } catch (error) {
-      logger.error('Failed to watch file', { ...context, error });
+      const err = error as Error;
+      logger.error('Failed to watch file', { ...context, error: err });
       throw new MeldError(`Failed to watch file: ${path}`, {
-        cause: error,
-        context
+        cause: err,
+        filePath: path
       });
     }
   }

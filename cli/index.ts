@@ -86,9 +86,7 @@ export async function main(fsAdapter?: IFileSystem) {
   }
 }
 
-// Only run if this is the main module
-if (require.main === module) {
-  main().catch(() => {
-    process.exit(1);
-  });
-} 
+// Run the CLI if this is the main module
+main().catch(() => {
+  process.exit(1);
+}); 

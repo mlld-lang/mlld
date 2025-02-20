@@ -1,5 +1,5 @@
 import * as path from 'path';
-import { IPathOperationsService } from './IPathOperationsService';
+import { IPathOperationsService } from './IPathOperationsService.js';
 
 export class PathOperationsService implements IPathOperationsService {
   join(...paths: string[]): string {

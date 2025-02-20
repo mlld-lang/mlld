@@ -1,6 +1,5 @@
 import { IParserService } from './IParserService.js';
 import type { MeldNode, CodeFenceNode } from 'meld-spec';
-import { parse, MeldAstError, type ParserOptions } from 'meld-ast';
 import { parserLogger as logger } from '@core/utils/logger.js';
 import { MeldParseError } from '@core/errors/MeldParseError.js';
 import type { Location, Position } from '@core/types/index.js';
@@ -14,17 +13,38 @@ interface ParseError {
   };
 }
 
+interface MeldAstError {
+  message: string;
+  location?: {
+    start: { line: number; column: number };
+    end: { line: number; column: number };
+  };
+  toString(): string;
+}
+
+function isMeldAstError(error: unknown): error is MeldAstError {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'message' in error &&
+    typeof (error as any).toString === 'function'
+  );
+}
+
 export class ParserService implements IParserService {
   private async parseContent(content: string): Promise<MeldNode[]> {
     try {
+      const { parse } = await import('meld-ast');
       const options = {
         failFast: true,
         trackLocations: true,
         validateNodes: true,
         preserveCodeFences: true,
         validateCodeFences: true,
-        onError: (error: MeldAstError) => {
-          logger.warn('Parse warning', { error: error.toString() });
+        onError: (error: unknown) => {
+          if (isMeldAstError(error)) {
+            logger.warn('Parse warning', { error: error.toString() });
+          }
         }
       };
 
@@ -36,13 +56,15 @@ export class ParserService implements IParserService {
       // Log any non-fatal errors
       if (result.errors && result.errors.length > 0) {
         result.errors.forEach(error => {
-          logger.warn('Parse warning', { error: error.toString() });
+          if (isMeldAstError(error)) {
+            logger.warn('Parse warning', { error: error.toString() });
+          }
         });
       }
 
       return result.ast || [];
     } catch (error) {
-      if (error instanceof MeldAstError) {
+      if (isMeldAstError(error)) {
         // Preserve original error message and location
         throw new MeldParseError(
           error.message,

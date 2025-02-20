@@ -4,13 +4,14 @@ import { IOutputService, type OutputFormat } from '@services/OutputService/IOutp
 import { IFileSystemService } from '@services/FileSystemService/IFileSystemService.js';
 import { IPathService } from '@services/PathService/IPathService.js';
 import { IStateService } from '@services/StateService/IStateService.js';
-import { cliLogger as logger } from '@core/utils/logger.js';
+import { cliLogger as logger, stateLogger, parserLogger, interpreterLogger, filesystemLogger, validationLogger, outputLogger, pathLogger, directiveLogger, circularityLogger, resolutionLogger, importLogger, embedLogger } from '@core/utils/logger.js';
 import { watch } from 'fs/promises';
 import { dirname } from 'path';
 import { createInterface } from 'readline';
 import { MeldParseError } from '@core/errors/MeldParseError.js';
 import { MeldInterpreterError } from '@core/errors/MeldInterpreterError.js';
 import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
+import { version } from '@core/version.js';
 
 export interface CLIOptions {
   input: string;
@@ -23,6 +24,8 @@ export interface CLIOptions {
   projectPath?: string;
   homePath?: string;
   watch?: boolean;
+  version?: boolean;
+  debug?: boolean;
 }
 
 export interface ICLIService {
@@ -30,6 +33,22 @@ export interface ICLIService {
 }
 
 export class CLIService implements ICLIService {
+  private allLoggers = [
+    logger,
+    stateLogger,
+    parserLogger,
+    interpreterLogger,
+    filesystemLogger,
+    validationLogger,
+    outputLogger,
+    pathLogger,
+    directiveLogger,
+    circularityLogger,
+    resolutionLogger,
+    importLogger,
+    embedLogger
+  ];
+
   constructor(
     private parserService: IParserService,
     private interpreterService: IInterpreterService,
@@ -64,6 +83,9 @@ export class CLIService implements ICLIService {
     for (let i = 0; i < args.length; i++) {
       const arg = args[i];
       switch (arg) {
+        case '--version':
+          options.version = true;
+          break;
         case '--output':
         case '-o':
           options.output = args[++i];
@@ -99,6 +121,10 @@ export class CLIService implements ICLIService {
         case '-w':
           options.watch = true;
           break;
+        case '--debug':
+        case '-d':
+          options.debug = true;
+          break;
         default:
           // If no flag is specified, treat as input file
           if (!arg.startsWith('-')) {
@@ -109,7 +135,8 @@ export class CLIService implements ICLIService {
       }
     }
 
-    if (!options.input) {
+    // Don't require input file if version flag is set
+    if (!options.input && !options.version) {
       throw new Error('Input file is required');
     }
 
@@ -152,10 +179,22 @@ export class CLIService implements ICLIService {
   }
 
   async run(args: string[]): Promise<void> {
-    logger.info('Starting CLI execution', { args });
-
     try {
       const options = this.parseArgs(args);
+
+      // Handle version flag first, before any logging
+      if (options.version) {
+        console.log(`meld version ${version}`);
+        return;
+      }
+
+      // Set log level based on debug flag for all loggers
+      const logLevel = options.debug ? 'debug' : 'info';
+      this.allLoggers.forEach(logger => {
+        logger.level = logLevel;
+      });
+
+      logger.debug('Starting CLI execution', { args });
 
       if (options.verbose) {
         logger.info('Verbose mode enabled');

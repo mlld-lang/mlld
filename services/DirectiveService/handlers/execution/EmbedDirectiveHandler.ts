@@ -89,7 +89,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
             `Embed file not found: ${resolvedPath}`,
             this.kind,
             DirectiveErrorCode.FILE_NOT_FOUND,
-            { node, path: resolvedPath }
+            { node, context }
           );
         }
 
@@ -105,8 +105,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
           );
           processedContent = await this.resolutionService.extractSection(
             content,
-            resolvedSection,
-            fuzzy
+            resolvedSection
           );
         }
 
@@ -166,7 +165,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
       throw new DirectiveError(
         `Invalid heading level: ${level}. Must be between 1 and 6.`,
         this.kind,
-        DirectiveErrorCode.INVALID_HEADING_LEVEL
+        DirectiveErrorCode.VALIDATION_FAILED
       );
     }
     

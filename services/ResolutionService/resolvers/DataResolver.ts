@@ -46,57 +46,21 @@ export class DataResolver {
       );
     }
 
-    const value = this.stateService.getDataVar(identifier);
+    const value = await this.stateService.getDataVar(identifier);
     if (value === undefined) {
-      throw new ResolutionError(
-        `Undefined data variable: ${identifier}`,
-        ResolutionErrorCode.UNDEFINED_VARIABLE,
-        { value: identifier, context }
-      );
+      console.warn(`Warning: Data variable '${identifier}' not found`);
+      return '';
     }
 
-    // Handle field access if needed
-    if (directiveNode.directive.fields) {
-      if (!context.allowDataFields) {
-        throw new ResolutionError(
-          'Field access is not allowed in this context',
-          ResolutionErrorCode.FIELD_ACCESS_ERROR,
-          { value: directiveNode.directive.fields, context }
-        );
+    // Handle field access
+    if (directiveNode.directive.field) {
+      const field = directiveNode.directive.field;
+      const fieldValue = value[field];
+      if (fieldValue === undefined) {
+        console.warn(`Warning: Field '${field}' not found in data variable '${identifier}'`);
+        return '';
       }
-
-      const fields = directiveNode.directive.fields.split('.');
-      let current = value;
-
-      for (const field of fields) {
-        if (current === undefined || current === null) {
-          throw new ResolutionError(
-            `Cannot access field '${field}' of undefined or null`,
-            ResolutionErrorCode.FIELD_ACCESS_ERROR,
-            { value: directiveNode.directive.fields, context }
-          );
-        }
-
-        if (typeof current !== 'object') {
-          throw new ResolutionError(
-            `Cannot access field '${field}' of non-object value`,
-            ResolutionErrorCode.FIELD_ACCESS_ERROR,
-            { value: directiveNode.directive.fields, context }
-          );
-        }
-
-        if (!(field in current)) {
-          throw new ResolutionError(
-            `Field not found: ${field} in ${identifier}.${directiveNode.directive.fields}`,
-            ResolutionErrorCode.FIELD_ACCESS_ERROR,
-            { value: directiveNode.directive.fields, context }
-          );
-        }
-
-        current = current[field];
-      }
-
-      return this.stringifyValue(current);
+      return this.stringifyValue(fieldValue);
     }
 
     return this.stringifyValue(value);
@@ -117,8 +81,12 @@ export class DataResolver {
    * Convert a value to string format
    */
   private stringifyValue(value: any): string {
-    if (value === null || value === undefined) {
+    if (value === undefined) {
       return '';
+    }
+
+    if (value === null) {
+      return 'null';
     }
 
     if (typeof value === 'object') {

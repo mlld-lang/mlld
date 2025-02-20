@@ -1,4 +1,4 @@
-import type { MeldNode, SourceLocation } from 'meld-spec';
+import type { MeldNode, SourceLocation, DirectiveNode } from 'meld-spec';
 import { interpreterLogger as logger } from '@core/utils/logger.js';
 import { IInterpreterService, type InterpreterOptions } from './IInterpreterService.js';
 import type { IDirectiveService } from '@services/DirectiveService/IDirectiveService.js';
@@ -7,7 +7,8 @@ import { MeldInterpreterError, type InterpreterLocation } from '@core/errors/Mel
 
 const DEFAULT_OPTIONS: Required<Omit<InterpreterOptions, 'initialState'>> = {
   filePath: '',
-  mergeState: true
+  mergeState: true,
+  importFilter: []
 };
 
 function convertLocation(loc?: SourceLocation): InterpreterLocation | undefined {
@@ -127,8 +128,7 @@ export class InterpreterService implements IInterpreterService {
                 nodeType: node.type,
                 location: convertLocation(node.location),
                 state: {
-                  filePath: currentState.getCurrentFilePath(),
-                  nodeCount: currentState.getNodes()?.length ?? 0
+                  filePath: currentState.getCurrentFilePath() ?? undefined
                 }
               }
             }
@@ -156,10 +156,9 @@ export class InterpreterService implements IInterpreterService {
             {
               cause: error instanceof Error ? error : undefined,
               context: {
-                filePath: currentState.getCurrentFilePath(),
+                filePath: currentState.getCurrentFilePath() ?? undefined,
                 state: {
-                  filePath: currentState.getCurrentFilePath(),
-                  nodeCount: currentState.getNodes()?.length ?? 0
+                  filePath: currentState.getCurrentFilePath() ?? undefined
                 }
               }
             }
@@ -199,8 +198,7 @@ export class InterpreterService implements IInterpreterService {
         {
           cause: error instanceof Error ? error : undefined,
           context: {
-            filePath: opts.filePath,
-            nodeCount: nodes?.length ?? 0
+            filePath: opts.filePath
           }
         }
       );
@@ -264,9 +262,16 @@ export class InterpreterService implements IInterpreterService {
           const directiveState = currentState.clone();
           // Add the node first to maintain order
           directiveState.addNode(node);
-          currentState = await this.directiveService.processDirective(node, {
-            state: directiveState,
-            filePath: state.getCurrentFilePath() ?? undefined
+          if (node.type !== 'Directive' || !('directive' in node) || !node.directive) {
+            throw new MeldInterpreterError(
+              'Invalid directive node',
+              'invalid_directive',
+              convertLocation(node.location)
+            );
+          }
+          const directiveNode = node as DirectiveNode;
+          currentState = await this.directiveService.processDirective(directiveNode, {
+            state: directiveState
           });
           break;
 
@@ -294,8 +299,7 @@ export class InterpreterService implements IInterpreterService {
             nodeType: node.type,
             location: convertLocation(node.location),
             state: {
-              filePath: state.getCurrentFilePath(),
-              nodeCount: state.getNodes()?.length ?? 0
+              filePath: state.getCurrentFilePath() ?? undefined
             }
           }
         }
@@ -327,7 +331,7 @@ export class InterpreterService implements IInterpreterService {
           undefined,
           {
             context: {
-              parentFilePath: parentState.getCurrentFilePath()
+              parentFilePath: parentState.getCurrentFilePath() ?? undefined
             }
           }
         );
@@ -363,11 +367,10 @@ export class InterpreterService implements IInterpreterService {
         {
           cause: error instanceof Error ? error : undefined,
           context: {
-            parentFilePath: parentState.getCurrentFilePath(),
+            parentFilePath: parentState.getCurrentFilePath() ?? undefined,
             childFilePath: filePath,
             state: {
-              filePath: parentState.getCurrentFilePath(),
-              nodeCount: parentState.getNodes()?.length ?? 0
+              filePath: parentState.getCurrentFilePath() ?? undefined
             }
           }
         }

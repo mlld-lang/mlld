@@ -59,13 +59,14 @@ export interface Logger {
   info(message: string, context?: Record<string, unknown>): void;
   debug(message: string, context?: Record<string, unknown>): void;
   trace(message: string, context?: Record<string, unknown>): void;
+  level: string;
 }
 
 // Create a service-specific logger factory
 export function createServiceLogger(serviceName: keyof typeof loggingConfig.services): winston.Logger {
   const serviceConfig = loggingConfig.services[serviceName];
   
-  return winston.createLogger({
+  const logger = winston.createLogger({
     level: serviceConfig.level,
     format: winston.format.combine(
       winston.format.timestamp(),
@@ -74,21 +75,33 @@ export function createServiceLogger(serviceName: keyof typeof loggingConfig.serv
     defaultMeta: { service: serviceName },
     transports: [
       new winston.transports.Console({
-        level: process.env.NODE_ENV === 'test' ? 'error' : 'info'
+        format: consoleFormat,
+        level: serviceConfig.level
       })
     ]
   });
+
+  // Add a method to update the log level
+  let currentLevel = serviceConfig.level;
+  Object.defineProperty(logger, 'level', {
+    get() {
+      return currentLevel;
+    },
+    set(newLevel: string) {
+      currentLevel = newLevel;
+      logger.transports.forEach(transport => {
+        transport.level = newLevel;
+      });
+    }
+  });
+
+  return logger;
 }
 
 // Ensure logs directory exists
 import fs from 'fs';
 if (!fs.existsSync(loggingConfig.files.directory)) {
   fs.mkdirSync(loggingConfig.files.directory);
-}
-
-// Configure logger based on environment
-if (process.env.NODE_ENV !== 'production') {
-  logger.level = 'debug';
 }
 
 // Add a stream interface for use with other logging tools
