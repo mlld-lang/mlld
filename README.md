@@ -1,6 +1,10 @@
-# Meld Language Interpreter
+**NOTE:** If you're looking for [the old 'meld' package for aspect oriented programming](https://www.npmjs.com/package/meld/v/1.3.2), you'll want to pin your version to `<2.0.0`
 
-Official interpreter for the Meld language. This package parses and executes Meld files according to the language specification.
+---
+
+# meld
+
+This is the interpreter, cli, and sdk for the meld prompt scripting language.
 
 ## Installation
 
@@ -28,8 +32,8 @@ meld input.meld --stdout
 
 ### Supported Options
 
-- `--format, -f`: Output format (default: 'llm')
-  - Supported formats: llm, md, xml (alias for llm), markdown (alias for md)
+- `--format, -f`: Output format (default: xml)
+  - Supported formats: md, xml
 - `--output, -o`: Output file path (default: input filename with new extension)
 - `--stdout`: Print to stdout instead of file
 
@@ -123,4 +127,4 @@ try {
 
 ## License
 
-ISC
+MIT

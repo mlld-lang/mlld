@@ -1,7 +1,7 @@
 {
   "name": "meld",
-  "version": "0.1.0",
-  "description": "Official interpreter for the Meld language",
+  "version": "10.0.0",
+  "description": "meld interpreter, cli, and api --- NOTE: If you're looking for the old 'meld' package for aspect oriented programming, you'll want to pin your version to <2.0.0",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
@@ -23,7 +23,8 @@
     "test:coverage": "vitest run --coverage",
     "lint": "eslint . --ext .ts",
     "clean": "rimraf dist",
-    "prepublishOnly": "npm run clean && npm run build"
+    "prepublishOnly": "npm run clean && npm run build",
+    "postinstall": "node scripts/install-warning.js"
   },
   "repository": {
     "type": "git",
@@ -32,10 +33,13 @@
   "keywords": [
     "meld",
     "interpreter",
-    "language"
+    "language",
+    "llm",
+    "prompt",
+    "cli"
   ],
-  "author": "",
-  "license": "ISC",
+  "author": "Adam Avenir",
+  "license": "MIT",
   "bugs": {
     "url": "https://github.com/adamavenir/meld/issues"
   },
