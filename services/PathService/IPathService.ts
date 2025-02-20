@@ -7,15 +7,15 @@ import type { Location } from '@core/types/index.js';
 export interface PathOptions {
   /**
    * Base directory to resolve relative paths against.
-   * If provided, paths will be validated to ensure they are within this directory
-   * unless allowOutsideBaseDir is true.
+   * For paths without slashes, this is used as the base directory.
+   * For paths with $. or $~, this is ignored.
    */
   baseDir?: string;
 
   /**
-   * Whether to allow paths that resolve outside the base directory.
-   * Only applicable if baseDir is provided.
-   * @default false
+   * Whether to allow paths outside the base directory.
+   * If false, paths must be within the base directory.
+   * Default is true.
    */
   allowOutsideBaseDir?: boolean;
 
@@ -43,8 +43,21 @@ export interface PathOptions {
 }
 
 /**
- * Service for validating and normalizing paths.
- * Does not handle path variable resolution - that is handled by ResolutionService.
+ * Service for validating and normalizing paths according to Meld's strict rules:
+ * 
+ * 1. Simple paths (no slashes):
+ *    - Allowed only when path contains no slashes
+ *    - Example: file.meld
+ * 
+ * 2. Paths with slashes:
+ *    - Must start with $. (alias for $PROJECTPATH) or $~ (alias for $HOMEPATH)
+ *    - Example: $./path/to/file.meld or $~/path/to/file.meld
+ * 
+ * 3. Forbidden:
+ *    - Parent directory references (..)
+ *    - Current directory references (.)
+ *    - Raw absolute paths
+ *    - Paths with slashes not using $. or $~
  */
 export interface IPathService {
   /**
@@ -70,18 +83,20 @@ export interface IPathService {
   isTestMode(): boolean;
 
   /**
-   * Resolve a path to its absolute form.
-   * This includes resolving '..' and '.' segments.
+   * Resolve a path to its absolute form according to Meld's path rules:
+   * - Simple paths are resolved relative to baseDir or cwd
+   * - $. paths are resolved relative to project root
+   * - $~ paths are resolved relative to home directory
    * 
    * @param filePath The path to resolve
-   * @param baseDir Optional base directory to resolve relative paths against
+   * @param baseDir Optional base directory for simple paths
    * @returns The resolved absolute path
+   * @throws PathValidationError if path format is invalid
    */
   resolvePath(filePath: string, baseDir?: string): string;
 
   /**
-   * Validate a path according to the specified options.
-   * The path should already have any variables resolved by ResolutionService.
+   * Validate a path according to Meld's rules and the specified options.
    * 
    * @param filePath The path to validate
    * @param options Options for validation
@@ -90,16 +105,8 @@ export interface IPathService {
   validatePath(filePath: string, options?: PathOptions): Promise<string>;
 
   /**
-   * Normalize a path by resolving '..' and '.' segments.
-   * Does not resolve variables or make the path absolute.
-   * 
-   * @param filePath The path to normalize
-   * @returns The normalized path
-   */
-  normalizePath(filePath: string): string;
-
-  /**
    * Join multiple path segments together.
+   * Note: This is a low-level utility and does not enforce Meld path rules.
    * 
    * @param paths The path segments to join
    * @returns The joined path
@@ -108,6 +115,7 @@ export interface IPathService {
 
   /**
    * Get the directory name of a path.
+   * Note: This is a low-level utility and does not enforce Meld path rules.
    * 
    * @param filePath The path to get the directory from
    * @returns The directory name
@@ -116,6 +124,7 @@ export interface IPathService {
 
   /**
    * Get the base name of a path.
+   * Note: This is a low-level utility and does not enforce Meld path rules.
    * 
    * @param filePath The path to get the base name from
    * @returns The base name
