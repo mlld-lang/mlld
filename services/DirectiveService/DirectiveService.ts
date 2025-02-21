@@ -151,8 +151,7 @@ export class DirectiveService implements IDirectiveService {
         this.fileSystemService!,
         this.parserService!,
         this.interpreterService!,
-        this.circularityService!,
-        this.pathService!
+        this.circularityService!
       )
     );
   }

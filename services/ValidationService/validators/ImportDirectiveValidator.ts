@@ -20,15 +20,9 @@ export function validateImportDirective(node: DirectiveNode): void {
     );
   }
 
-  // If it's a direct path property, validate it
-  if (directive.path) {
-    validatePath(directive.path.trim(), node);
-    return;
-  }
-
   // Try new format: @import [x,y,z] from [file.md] or @import [file.md]
   // Now also handles path variables like [$./file.md]
-  const newFormatMatch = value.match(/^\s*\[(\$?[^\]]+)\](?:\s+from\s+\[(\$?[^\]]+)\])?\s*$/);
+  const newFormatMatch = value.match(/^\s*\[([^\]]+)\](?:\s+from\s+\[([^\]]+)\])?\s*$/);
   if (newFormatMatch) {
     const [, importsOrPath, fromPath] = newFormatMatch;
     const path = fromPath || importsOrPath;

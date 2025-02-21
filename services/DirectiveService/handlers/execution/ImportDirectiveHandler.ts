@@ -7,7 +7,6 @@ import { IFileSystemService } from '@services/FileSystemService/IFileSystemServi
 import { IParserService } from '@services/ParserService/IParserService.js';
 import { IInterpreterService } from '@services/InterpreterService/IInterpreterService.js';
 import { ICircularityService } from '@services/CircularityService/ICircularityService.js';
-import { IPathService } from '@services/PathService/IPathService.js';
 import { DirectiveError, DirectiveErrorCode } from '@services/DirectiveService/errors/DirectiveError.js';
 import { directiveLogger as logger } from '@core/utils/logger.js';
 
@@ -32,8 +31,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
     private fileSystemService: IFileSystemService,
     private parserService: IParserService,
     private interpreterService: IInterpreterService,
-    private circularityService: ICircularityService,
-    private pathService: IPathService
+    private circularityService: ICircularityService
   ) {}
 
   async execute(node: DirectiveNode, context: DirectiveContext): Promise<IStateService> {
@@ -47,11 +45,10 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
       await this.validationService.validate(node);
 
       // 2. Get path and import list from directive
-      const { path, value, importList } = node.directive;
+      const { path, importList } = node.directive;
 
-      // 3. Process path - handle both old format (value) and new format (path)
-      const directivePath = path || value;
-      if (!directivePath) {
+      // 3. Process path
+      if (!path) {
         throw new DirectiveError(
           'Import directive requires a path',
           this.kind,
@@ -75,25 +72,20 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
         }
       };
 
-      // First resolve any variables in the path that aren't path aliases
-      const resolvedPath = await this.resolutionService.resolveInContext(directivePath, resolutionContext);
-
-      // Then validate and resolve the path using PathService
-      const finalPath = await this.pathService.validatePath(resolvedPath, {
-        currentFilePath: context.currentFilePath,
-        allowDotSegments: false,
-        allowAbsolute: false,
-        location: node.location
-      });
+      // Resolve variables in path
+      const resolvedPath = await this.resolutionService.resolveInContext(
+        path,
+        resolutionContext
+      );
 
       // Check for circular imports
-      this.circularityService.beginImport(finalPath);
+      this.circularityService.beginImport(resolvedPath);
 
       try {
         // Check if file exists
-        if (!await this.fileSystemService.exists(finalPath)) {
+        if (!await this.fileSystemService.exists(resolvedPath)) {
           throw new DirectiveError(
-            `Import file not found: ${finalPath}`,
+            `Import file not found: ${resolvedPath}`,
             this.kind,
             DirectiveErrorCode.FILE_NOT_FOUND,
             { node, context }
@@ -101,10 +93,10 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
         }
 
         // Read file content
-        const content = await this.fileSystemService.readFile(finalPath);
+        const content = await this.fileSystemService.readFile(resolvedPath);
         if (!content) {
           throw new DirectiveError(
-            `Empty or invalid import file: ${finalPath}`,
+            `Empty or invalid import file: ${resolvedPath}`,
             this.kind,
             DirectiveErrorCode.VALIDATION_FAILED,
             { node, context }
@@ -120,7 +112,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
         // Interpret content
         const interpretedState = await this.interpreterService.interpret(nodes, {
           initialState: childState,
-          filePath: finalPath,
+          filePath: resolvedPath,
           mergeState: true
         });
 
@@ -139,7 +131,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
         }
 
         logger.debug('Import directive processed successfully', {
-          path: finalPath,
+          path: resolvedPath,
           imports,
           location: node.location
         });
@@ -147,7 +139,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
         return newState;
       } finally {
         // Always end import tracking
-        this.circularityService.endImport(finalPath);
+        this.circularityService.endImport(resolvedPath);
       }
     } catch (error: any) {
       logger.error('Failed to process import directive', {
