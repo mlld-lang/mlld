@@ -12,9 +12,11 @@ The Meld pipeline processes `.meld` files through several stages to produce eith
                           │                     │                     │
                           ▼                     ▼                     ▼
                     ┌─────────────┐     ┌──────────────┐     ┌──────────────┐
-                    │  AST Nodes  │     │    State     │     │ prompt.llm or│
-                    │             │     │   Service    │     │  prompt.md   │
-                    └─────────────┘     └──────────────┘     └──────────────┘
+                    │  AST Nodes  │     │    State     │     │ Clean Output │
+                    │             │     │   Service    │     │ (No Directive│
+                    └─────────────┘     │(Original &   │     │ Definitions) │
+                                       │Transformed)   │     └──────────────┘
+                                       └──────────────┘
 ```
 
 ## Detailed Flow
@@ -60,38 +62,42 @@ The Meld pipeline processes `.meld` files through several stages to produce eith
                               ▼
    ┌─────────────┐     ┌─────────────┐
    │  Resolution │◄────┤   Handler   │
-   │   Service   │     │  (by type)  │
-   └──────┬──────┘     └─────────────┘
-          │
+   │   Service   │     │(with node   │
+   └──────┬──────┘     │replacements)│
+          │            └─────────────┘
           ▼
    ┌─────────────┐
    │    State    │
    │   Service   │
+   │(Original &  │
+   │Transformed) │
    └─────────────┘
    ```
    - Processes each AST node sequentially
    - Routes directives to appropriate handlers
-   - Maintains state (variables, imports, etc.)
+   - Handlers can provide replacement nodes
+   - Maintains both original and transformed states
    - Resolves variables and references
    - Handles file imports and embedding
 
 4. **Output Generation** (`OutputService`)
    ```ascii
    ┌─────────────┐     ┌─────────────┐
-   │  Final AST  │     │   Format    │
-   │  & State    ├────►│  Converter  │
-   └─────────────┘     └──────┬──────┘
+   │Transformed  │     │   Format    │
+   │  Nodes &    ├────►│  Converter  │
+   │   State     │     └──────┬──────┘
                               │
                               ▼
    ┌─────────────┐     ┌─────────────┐
-   │  llmxml or  │◄────┤  Formatted  │
-   │  markdown   │     │   Output    │
-   └─────────────┘     └─────────────┘
+   │Clean Output │◄────┤  Formatted  │
+   │(No Directive│     │   Output    │
+   │Definitions) │     └─────────────┘
+   └─────────────┘
    ```
-   - Takes final AST and state
+   - Takes transformed nodes and state
    - Converts to requested format:
      - `llm`: Uses `llmxml` library for LLM-friendly XML
-     - `markdown`: Preserves original markdown with resolved variables
+     - `markdown`: Clean markdown without directive definitions
    - Writes output to file or stdout
 
 ## Service Responsibilities
@@ -110,16 +116,19 @@ The Meld pipeline processes `.meld` files through several stages to produce eith
 
 3. **InterpreterService**
    - Orchestrates directive processing
+   - Handles node transformations
    - Maintains interpretation state
    - Handles imports and embedding
 
 4. **DirectiveService**
    - Routes directives to handlers
    - Validates directive syntax
+   - Supports node transformation
    - Updates state based on directive results
 
 5. **StateService**
    - Stores variables and commands
+   - Maintains original and transformed nodes
    - Manages scope and inheritance
    - Tracks file dependencies
 
@@ -129,8 +138,9 @@ The Meld pipeline processes `.meld` files through several stages to produce eith
    - Manages circular dependencies
 
 7. **OutputService**
-   - Converts final AST to output format
+   - Uses transformed nodes for clean output
    - Supports markdown and LLM XML
+   - Generates directive-free output
    - Handles formatting options
 
 ## Current Implementation Status
@@ -140,7 +150,14 @@ The current implementation fully supports the desired pipeline flow:
 1. ✅ File input via `meld prompt.meld`
 2. ✅ Parsing and AST generation
 3. ✅ Directive interpretation and state management
-4. ✅ Variable resolution and content embedding
-5. ✅ Output generation in both `.llm` and `.md` formats
+4. ✅ Node transformation and replacement
+5. ✅ Variable resolution and content embedding
+6. ✅ Clean output generation without directive definitions
+7. ✅ Output in both `.llm` and `.md` formats
 
-The pipeline is working as intended, with robust error handling and clear separation of concerns between services. 
+The pipeline is working as intended, with:
+- Robust error handling
+- Clear separation of concerns between services
+- Support for node transformations
+- Clean output generation without directive definitions
+- Proper state management for both original and transformed nodes 

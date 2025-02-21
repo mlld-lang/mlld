@@ -6,6 +6,10 @@ import { IFileSystem } from './IFileSystem.js';
 import { NodeFileSystem } from './NodeFileSystem.js';
 import { MeldError } from '@core/errors/MeldError.js';
 import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
 
 interface FileOperationContext {
   operation: string;
@@ -222,6 +226,34 @@ export class FileSystemService implements IFileSystemService {
       throw new MeldError(`Failed to watch file: ${path}`, {
         cause: err,
         filePath: path
+      });
+    }
+  }
+
+  async executeCommand(command: string, options?: { cwd?: string }): Promise<{ stdout: string; stderr: string }> {
+    const context: FileOperationContext = {
+      operation: 'executeCommand',
+      command,
+      options
+    };
+
+    try {
+      logger.debug('Executing command', context);
+      const result = await execAsync(command, {
+        cwd: options?.cwd || this.getCwd()
+      });
+      logger.debug('Command execution successful', {
+        ...context,
+        stdout: result.stdout,
+        stderr: result.stderr
+      });
+      return result;
+    } catch (error) {
+      const err = error as Error;
+      logger.error('Command execution failed', { ...context, error: err });
+      throw new MeldError(`Failed to execute command: ${command}`, {
+        cause: err,
+        command
       });
     }
   }

@@ -30,6 +30,7 @@ export interface IStateService {
 
   // Node transformation (new)
   getTransformedNodes(): MeldNode[];
+  setTransformedNodes(nodes: MeldNode[]): void;
   transformNode(original: MeldNode, transformed: MeldNode): void;
   isTransformationEnabled(): boolean;
   enableTransformation(enable: boolean): void;

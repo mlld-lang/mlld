@@ -20,5 +20,8 @@ export interface IFileSystemService {
   // Working directory
   getCwd(): string;
 
+  // Command execution
+  executeCommand(command: string, options?: { cwd?: string }): Promise<{ stdout: string; stderr: string }>;
+
   setFileSystem(fileSystem: IFileSystem): void;
 } 

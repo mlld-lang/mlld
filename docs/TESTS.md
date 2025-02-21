@@ -130,11 +130,19 @@ Directive handler tests should cover:
 3. State Management
    - State updates
    - Command/variable storage
+   - Original and transformed node states
+   - Node replacement handling
 
-4. Error Handling
+4. Transformation Behavior
+   - Node replacement generation
+   - Transformation state preservation
+   - Clean output verification
+
+5. Error Handling
    - Validation errors
    - Resolution errors
    - State errors
+   - Transformation errors
 
 Example structure:
 ```typescript
@@ -165,6 +173,24 @@ describe('HandlerName', () => {
 
   describe('state management', () => {
     // State management tests
+  });
+
+  describe('transformation', () => {
+    it('should provide correct replacement nodes', async () => {
+      const node = createDirectiveNode('test', { value: 'example' });
+      const result = await handler.execute(node, context);
+      
+      expect(result.replacement).toBeDefined();
+      expect(result.replacement.type).toBe('Text');
+      expect(result.replacement.content).toBe('example');
+    });
+
+    it('should preserve location in transformed nodes', async () => {
+      const node = createDirectiveNode('test', { value: 'example' });
+      const result = await handler.execute(node, context);
+      
+      expect(result.replacement.location).toEqual(node.location);
+    });
   });
 
   describe('error handling', () => {
@@ -203,6 +229,28 @@ describe('Service Integration', () => {
   it('should process complex scenarios', async () => {
     // Test end-to-end flows
   });
+
+  it('should generate clean output without directives', async () => {
+    const input = `
+      @text greeting = "Hello"
+      @run [echo ${greeting}]
+      Regular text
+    `;
+    
+    const result = await processDocument(input);
+    
+    expect(result).not.toContain('@text');
+    expect(result).not.toContain('@run');
+    expect(result).toContain('Hello');
+    expect(result).toContain('Regular text');
+  });
+
+  it('should maintain both original and transformed states', async () => {
+    const state = await processDocument(input);
+    
+    expect(state.getOriginalNodes()).toHaveLength(3);
+    expect(state.getTransformedNodes()).toHaveLength(2);
+  });
 });
 ```
 
@@ -230,12 +278,22 @@ describe('Service Integration', () => {
    - Always include location information in test nodes
    - Use `createLocation` helper for consistency
    - Test location propagation in errors
+   - Verify location preservation in transformed nodes
 
 5. **State Management**
    - Test state immutability
    - Verify state cloning
    - Test parent/child state relationships
    - Validate state updates
+   - Test both original and transformed node states
+   - Verify transformation state persistence
+
+6. **Transformation Testing**
+   - Test node replacement generation
+   - Verify clean output formatting
+   - Test transformation state inheritance
+   - Validate directive removal in output
+   - Test complex transformation scenarios
 
 ## Running Tests
 

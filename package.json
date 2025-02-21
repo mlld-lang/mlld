@@ -47,7 +47,7 @@
   "dependencies": {
     "@types/xmldom": "^0.1.34",
     "glob": "^11.0.1",
-    "llmxml": "^1.1.2",
+    "llmxml": "^1.2.0",
     "marked": "^4.0.12",
     "meld-ast": "^1.3.3",
     "meld-spec": "^0.3.10",

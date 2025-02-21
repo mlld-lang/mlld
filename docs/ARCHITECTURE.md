@@ -108,29 +108,31 @@ Below is a simplified flow of how Meld content is processed:
                 │ AST (MeldNode[])
                 ▼
    ┌─────────────────────────────────────────────────┐
-   │ InterpreterService.interpret(nodes, options)   │
+   │ InterpreterService.interpret(nodes, options)    │
    │   → For each node, pass to DirectiveService     │
+   │   → Handles node transformations                │
    └─────────────────────────────────────────────────┘
                 │
                 ▼
    ┌──────────────────────────────────────────┐
-   │ DirectiveService                        │
-   │   → For each directive, route to        │
-   │     the correct directive handler       │
+   │ DirectiveService                         │
+   │   → Routes to correct directive handler  │
+   │   → Handlers can provide replacements    │
    └──────────────────────────────────────────┘
                 │
                 ▼
    ┌───────────────────────────────────────────────┐
-   │ StateService + ResolutionService + Others    │
-   │   → Where variables are stored/resolved      │
-   │   → Path expansions, data lookups, etc.      │
+   │ StateService + ResolutionService + Others     │
+   │   → Stores variables and transformed nodes    │
+   │   → Path expansions, data lookups, etc.       │
    └───────────────────────────────────────────────┘
                 │
                 ▼
    ┌──────────────────────────────────────────┐
-   │ OutputService (optional)                │
-   │   → Convert final AST/State to markdown,│
-   │     LLM XML, or other formats.          │
+   │ OutputService                            │
+   │   → Uses transformed nodes for output    │
+   │   → Generates clean, directive-free      │
+   │     markdown, LLM XML, or other formats  │
    └──────────────────────────────────────────┘
 
 ## MAJOR SERVICES (OVERVIEW)
@@ -152,14 +154,20 @@ Below are the key "services" in the codebase. Each follows the single responsibi
    - Routes directives to the correct directive handler  
    - Validates directives using ValidationService  
    - Calls ResolutionService for variable resolution  
-   - Updates StateService with directive execution results  
+   - Updates StateService with directive execution results
+   - Supports node transformation through DirectiveResult interface
+   - Handlers can provide replacement nodes for transformed output
 
 ### InterpreterService  
    - Orchestrates the main interpret(nodes) pipeline  
    - For each AST node:
        a) If it's text, store it or pass it along  
-       b) If it's a directive, calls DirectiveService  
-   - Maintains the top-level process flow  
+       b) If it's a directive:
+          - Calls DirectiveService for processing
+          - Handles node transformations if provided
+          - Updates state with transformed nodes
+   - Maintains the top-level process flow
+   - Supports transformation mode through feature flags
 
 ### StateService  
    - Stores variables in maps:
@@ -167,7 +175,9 @@ Below are the key "services" in the codebase. Each follows the single responsibi
        • dataVars (for @data)  
        • pathVars (for @path)  
        • commands (for @define)  
-   - Tracks MeldNodes for final structure  
+   - Tracks both original and transformed MeldNodes
+   - Provides transformation capabilities for directive processing
+   - Maintains transformation state during cloning
    - Provides child states for nested imports  
    - Supports immutability toggles  
 
@@ -204,10 +214,12 @@ Below are the key "services" in the codebase. Each follows the single responsibi
     - Handles path resolution and validation  
 
 ### OutputService  
-    - Converts final AST and state to desired format  
+    - Converts final AST and state to desired format
+    - Uses transformed nodes when available
     - Supports markdown and LLM XML output  
     - Integrates with llmxml for LLM-friendly formatting  
-    - Handles format-specific transformations  
+    - Handles format-specific transformations
+    - Provides clean output without directive definitions
 
 ## TESTING INFRASTRUCTURE
 
@@ -272,28 +284,34 @@ Below is a more expanded ASCII diagram showing services with references:
       |                                   v
  +------------+  +---------------------+  +-----------+
  | Validation|-> | DirectiveService   |->|StateService|
- |  Service  |   +---------+-----------+  +-----------+
- +------------+            |   |
-      ^                    v   v
+ |  Service  |   | Node Transformation|  |Original &  |
+ +------------+   +---------+-----------+ |Transformed|
+      ^                    |   |         |   Nodes    |
+      |                    v   v         +-----------+
       |         +---------------+--------------+
       +---------|   Handler(s): text, data,   |
                 |   embed, import, etc.       |
+                | (with node replacements)    |
                 +---------------+--------------+
                                    |
                                    v
                         +---------------------+
                         | InterpreterService |
+                        | Transform Pipeline  |
                         +----------+----------+
                                    |
                                    v
                         +---------------------+
                         |   OutputService    |
+                        | Clean Output Gen   |
                         +---------------------+
 
 Key relationships:
-• InterpreterService orchestrates directives → DirectiveService → uses Validation & Resolution.  
-• ResolutionService consults CircularityService for import cycles, etc.  
-• DirectiveService updates or reads from StateService.  
+• InterpreterService orchestrates directive processing and transformation pipeline
+• DirectiveService processes directives and manages node transformations
+• Handlers can provide replacement nodes for transformed output
+• StateService maintains both original and transformed node states
+• OutputService uses transformed nodes for clean output generation
 
 ## EXAMPLE USAGE SCENARIO
 

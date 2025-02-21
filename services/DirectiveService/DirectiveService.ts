@@ -86,7 +86,7 @@ export class DirectiveService implements IDirectiveService {
   /**
    * Register all default directive handlers
    */
-  private registerDefaultHandlers(): void {
+  public registerDefaultHandlers(): void {
     // Definition handlers
     this.registerHandler(
       new TextDirectiveHandler(

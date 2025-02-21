@@ -36,56 +36,106 @@ import { ProcessOptions } from '@core/types/index.js';
 // Package info
 export { version } from '@core/version.js';
 
-export async function main(filePath: string, options: ProcessOptions = {}): Promise<string> {
+export async function main(filePath: string, options: ProcessOptions & { services?: any } = {}): Promise<string> {
+  // Use services from test context if provided, otherwise create new ones
   const pathOps = new PathOperationsService();
-  const fs = new FileSystemService(pathOps, options.fs || new NodeFileSystem());
-  const parser = new ParserService();
-  const interpreter = new InterpreterService();
-  const state = new StateService();
-  const directives = new DirectiveService();
-  const validation = new ValidationService();
-  const circularity = new CircularityService();
-  const resolution = new ResolutionService(state, fs, parser);
-  const path = new PathService();
-  const output = new OutputService();
-
-  // Initialize services
-  directives.initialize(
-    validation,
-    state,
-    path,
-    fs,
-    parser,
-    interpreter,
-    circularity,
-    resolution
-  );
-  interpreter.initialize(directives, state);
+  const fs = options.fs || new NodeFileSystem();
+  const filesystem = new FileSystemService(pathOps, fs);
   
-  try {
-    // Read the file
-    const content = await fs.readFile(filePath);
+  if (options.services) {
+    // Use services from test context
+    const { parser, interpreter, directive, validation, state, path, circularity, resolution, output } = options.services;
     
-    // Parse the content
-    const ast = await parser.parse(content);
+    // Initialize services
+    path.initialize(filesystem);
+    directive.initialize(
+      validation,
+      state,
+      path,
+      filesystem,
+      parser,
+      interpreter,
+      circularity,
+      resolution
+    );
+    interpreter.initialize(directive, state);
     
-    // Interpret the AST
-    const resultState = await interpreter.interpret(ast, { filePath, initialState: state });
-    
-    // Convert to desired format using the updated state
-    const converted = await output.convert(ast, resultState, options.format || 'llm');
-    
-    return converted;
-  } catch (error) {
-    // If it's a MeldFileNotFoundError, just throw it as is
-    if (error instanceof MeldFileNotFoundError) {
-      throw error;
+    try {
+      // Read the file
+      const content = await filesystem.readFile(filePath);
+      
+      // Parse the content
+      const ast = await parser.parse(content);
+      
+      // Interpret the AST
+      const resultState = await interpreter.interpret(ast, { filePath, initialState: state });
+      
+      // Convert to desired format using the updated state
+      const converted = await output.convert(ast, resultState, options.format || 'llm');
+      
+      return converted;
+    } catch (error) {
+      // If it's a MeldFileNotFoundError, just throw it as is
+      if (error instanceof MeldFileNotFoundError) {
+        throw error;
+      }
+      // For other Error instances, preserve the error
+      if (error instanceof Error) {
+        throw error;
+      }
+      // For non-Error objects, convert to string
+      throw new Error(String(error));
     }
-    // For other Error instances, preserve the error
-    if (error instanceof Error) {
-      throw error;
+  } else {
+    // Create new services
+    const parser = new ParserService();
+    const interpreter = new InterpreterService();
+    const state = new StateService();
+    const directives = new DirectiveService();
+    const validation = new ValidationService();
+    const circularity = new CircularityService();
+    const resolution = new ResolutionService(state, filesystem, parser);
+    const path = new PathService();
+    const output = new OutputService();
+
+    // Initialize services
+    directives.initialize(
+      validation,
+      state,
+      path,
+      filesystem,
+      parser,
+      interpreter,
+      circularity,
+      resolution
+    );
+    interpreter.initialize(directives, state);
+    
+    try {
+      // Read the file
+      const content = await filesystem.readFile(filePath);
+      
+      // Parse the content
+      const ast = await parser.parse(content);
+      
+      // Interpret the AST
+      const resultState = await interpreter.interpret(ast, { filePath, initialState: state });
+      
+      // Convert to desired format using the updated state
+      const converted = await output.convert(ast, resultState, options.format || 'llm');
+      
+      return converted;
+    } catch (error) {
+      // If it's a MeldFileNotFoundError, just throw it as is
+      if (error instanceof MeldFileNotFoundError) {
+        throw error;
+      }
+      // For other Error instances, preserve the error
+      if (error instanceof Error) {
+        throw error;
+      }
+      // For non-Error objects, convert to string
+      throw new Error(String(error));
     }
-    // For non-Error objects, convert to string
-    throw new Error(String(error));
   }
 }

@@ -12,6 +12,7 @@ import { PathService } from '@services/PathService/PathService.js';
 import { CircularityService } from '@services/CircularityService/CircularityService.js';
 import { ResolutionService } from '@services/ResolutionService/ResolutionService.js';
 import { FileSystemService } from '@services/FileSystemService/FileSystemService.js';
+import { OutputService } from '@services/OutputService/OutputService.js';
 import type { IParserService } from '@services/ParserService/IParserService.js';
 import type { IInterpreterService } from '@services/InterpreterService/IInterpreterService.js';
 import type { IDirectiveService } from '@services/DirectiveService/IDirectiveService.js';
@@ -21,6 +22,7 @@ import type { IPathService } from '@services/PathService/IPathService.js';
 import type { ICircularityService } from '@services/CircularityService/ICircularityService.js';
 import type { IResolutionService } from '@services/ResolutionService/IResolutionService.js';
 import type { IFileSystemService } from '@services/FileSystemService/IFileSystemService.js';
+import type { IOutputService } from '@services/OutputService/IOutputService.js';
 import * as fs from 'fs-extra';
 import * as path from 'path';
 import { filesystemLogger as logger } from '@core/utils/logger.js';
@@ -52,6 +54,7 @@ interface TestServices {
   circularity: ICircularityService;
   resolution: IResolutionService;
   filesystem: IFileSystemService;
+  output: IOutputService;
 }
 
 /**
@@ -92,12 +95,15 @@ export class TestContext {
     const filesystem = new FileSystemService(pathOps, this.fs);
     const validation = new ValidationService();
     const state = new StateService();
+    state.setCurrentFilePath('test.meld'); // Set initial file path
+    state.enableTransformation(true); // Enable transformation by default for tests
     const path = new PathService();
     path.initialize(filesystem);
     const parser = new ParserService();
     const circularity = new CircularityService();
     const interpreter = new InterpreterService();
     const resolution = new ResolutionService(state, filesystem, parser);
+    const output = new OutputService();
 
     // Initialize directive service
     const directive = new DirectiveService();
@@ -118,6 +124,9 @@ export class TestContext {
     // Update directive service with interpreter reference
     directive.updateInterpreterService(interpreter);
 
+    // Register default handlers after all services are initialized
+    directive.registerDefaultHandlers();
+
     // Expose services
     this.services = {
       parser,
@@ -128,7 +137,8 @@ export class TestContext {
       path,
       circularity,
       resolution,
-      filesystem
+      filesystem,
+      output
     };
   }
 

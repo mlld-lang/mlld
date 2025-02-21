@@ -45,13 +45,18 @@ export class OutputService implements IOutputService {
       options: opts
     });
 
+    // Use transformed nodes if available in state
+    const nodesToProcess = state.isTransformationEnabled() && state.getTransformedNodes().length > 0
+      ? state.getTransformedNodes()
+      : nodes;
+
     const formatter = this.formatters.get(format);
     if (!formatter) {
       throw new MeldOutputError(`Unsupported format: ${format}`, format);
     }
 
     try {
-      const result = await formatter(nodes, state, opts);
+      const result = await formatter(nodesToProcess, state, opts);
       
       logger.debug('Successfully converted output', {
         format,
@@ -117,9 +122,12 @@ export class OutputService implements IOutputService {
         }
       }
 
+      // Check if we're using transformed nodes
+      const isTransformed = state.isTransformationEnabled() && state.getTransformedNodes();
+
       // Process nodes
       for (const node of nodes) {
-        output += await this.nodeToMarkdown(node, opts);
+        output += await this.nodeToMarkdown(node, opts, isTransformed, state);
       }
 
       // Clean up extra newlines if not preserving formatting
@@ -187,7 +195,9 @@ export class OutputService implements IOutputService {
 
   private async nodeToMarkdown(
     node: MeldNode,
-    options: OutputOptions
+    options: OutputOptions,
+    isTransformed: boolean = false,
+    state: IStateService
   ): Promise<string> {
     try {
       switch (node.type) {
@@ -198,9 +208,25 @@ export class OutputService implements IOutputService {
           const codeNode = node as CodeFenceNode;
           return `\`\`\`${codeNode.language || ''}\n${codeNode.content}\n\`\`\`\n`;
         case 'Directive':
+          // If we're processing transformed nodes, we shouldn't see any directives
+          // They should have been transformed into Text or CodeFence nodes
+          if (isTransformed) {
+            throw new MeldOutputError('Unexpected directive in transformed nodes', 'markdown');
+          }
+          
+          // In non-transformation mode, return empty string for definition directives
           const directiveNode = node as DirectiveNode;
-          // Format directive as a readable section instead of HTML comment
-          return `### ${directiveNode.directive.kind} Directive\n${JSON.stringify(directiveNode.directive, null, 2)}\n\n`;
+          const kind = directiveNode.directive.kind;
+          if (['text', 'data', 'path', 'import', 'define'].includes(kind)) {
+            return '';
+          }
+          // For non-transformed execution directives, show the command as a placeholder
+          if (kind === 'run') {
+            const command = directiveNode.directive.command;
+            return `${command}\n`;
+          }
+          // For other execution directives, return empty string for now
+          return '';
         default:
           throw new MeldOutputError(`Unknown node type: ${(node as any).type}`, 'markdown');
       }
@@ -212,4 +238,4 @@ export class OutputService implements IOutputService {
       );
     }
   }
-} 
+}

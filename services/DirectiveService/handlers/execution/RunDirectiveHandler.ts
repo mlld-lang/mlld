@@ -29,7 +29,7 @@ export class RunDirectiveHandler implements IDirectiveHandler {
 
     try {
       // Validate the directive
-      await this.validationService.validate(directive, 'run');
+      await this.validationService.validate(node);
 
       // Resolve the command
       const resolvedCommand = await this.resolutionService.resolveInContext(
@@ -59,7 +59,7 @@ export class RunDirectiveHandler implements IDirectiveHandler {
       if (clonedState.isTransformationEnabled()) {
         const content = stdout && stderr ? `${stdout}\n${stderr}` : stdout || stderr;
         const replacementNode: MeldNode = {
-          type: 'text',
+          type: 'Text',
           content,
           location: node.location
         };

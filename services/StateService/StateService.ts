@@ -126,10 +126,14 @@ export class StateService implements IStateService {
   }
 
   getTransformedNodes(): MeldNode[] {
-    if (!this._transformationEnabled || !this.currentState.transformedNodes) {
-      return this.getNodes();
-    }
-    return [...this.currentState.transformedNodes];
+    return this.currentState.transformedNodes ? [...this.currentState.transformedNodes] : [...this.currentState.nodes];
+  }
+
+  setTransformedNodes(nodes: MeldNode[]): void {
+    this.checkMutable();
+    this.updateState({
+      transformedNodes: [...nodes]
+    }, 'setTransformedNodes');
   }
 
   addNode(node: MeldNode): void {
@@ -138,10 +142,10 @@ export class StateService implements IStateService {
       nodes: [...this.currentState.nodes, node]
     };
     
-    // If transformation is enabled, also add to transformed nodes
-    if (this._transformationEnabled) {
-      updates.transformedNodes = [...(this.currentState.transformedNodes || []), node];
-    }
+    updates.transformedNodes = [
+      ...(this.currentState.transformedNodes || this.currentState.nodes),
+      node
+    ];
     
     this.updateState(updates, 'addNode');
   }
@@ -149,20 +153,19 @@ export class StateService implements IStateService {
   transformNode(original: MeldNode, transformed: MeldNode): void {
     this.checkMutable();
     if (!this._transformationEnabled) {
-      return; // Silently ignore if transformation is not enabled
+      return;
     }
 
-    const originalIndex = this.currentState.nodes.indexOf(original);
-    if (originalIndex === -1) {
+    const transformedNodes = this.currentState.transformedNodes || this.currentState.nodes;
+    const index = transformedNodes.findIndex(node => node === original);
+    if (index === -1) {
       throw new Error('Cannot transform node: original node not found');
     }
 
-    const currentTransformed = this.currentState.transformedNodes || this.currentState.nodes;
-    const newTransformed = [...currentTransformed];
-    newTransformed[originalIndex] = transformed;
-
+    const updatedNodes = [...transformedNodes];
+    updatedNodes[index] = transformed;
     this.updateState({
-      transformedNodes: newTransformed
+      transformedNodes: updatedNodes
     }, 'transformNode');
   }
 
@@ -263,12 +266,30 @@ export class StateService implements IStateService {
 
   clone(): IStateService {
     const cloned = new StateService();
+    
+    // Create a completely new state without parent reference
     cloned.currentState = this.stateFactory.createState({
       source: 'clone',
-      parentState: this.currentState
+      filePath: this.currentState.filePath
     });
+
+    // Copy all state
+    cloned.updateState({
+      variables: {
+        text: new Map(this.currentState.variables.text),
+        data: new Map(this.currentState.variables.data),
+        path: new Map(this.currentState.variables.path)
+      },
+      commands: new Map(this.currentState.commands),
+      nodes: [...this.currentState.nodes],
+      transformedNodes: this.currentState.transformedNodes ? [...this.currentState.transformedNodes] : undefined,
+      imports: new Set(this.currentState.imports)
+    }, 'clone');
+
+    // Copy flags
     cloned._isImmutable = this._isImmutable;
     cloned._transformationEnabled = this._transformationEnabled;
+
     return cloned;
   }
 

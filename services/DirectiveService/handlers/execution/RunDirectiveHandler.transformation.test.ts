@@ -68,7 +68,7 @@ describe('RunDirectiveHandler Transformation', () => {
 
       expect(result.replacementNode).toBeDefined();
       expect(result.replacementNode).toEqual({
-        type: 'text',
+        type: 'Text',
         content: 'test output',
         location: node.location
       });
@@ -90,7 +90,7 @@ describe('RunDirectiveHandler Transformation', () => {
 
       expect(result.replacementNode).toBeDefined();
       expect(result.replacementNode).toEqual({
-        type: 'text',
+        type: 'Text',
         content: 'Hello World',
         location: node.location
       });
@@ -112,7 +112,7 @@ describe('RunDirectiveHandler Transformation', () => {
 
       expect(result.replacementNode).toBeDefined();
       expect(result.replacementNode).toEqual({
-        type: 'text',
+        type: 'Text',
         content: 'error output',
         location: node.location
       });
@@ -134,7 +134,7 @@ describe('RunDirectiveHandler Transformation', () => {
 
       expect(result.replacementNode).toBeDefined();
       expect(result.replacementNode).toEqual({
-        type: 'text',
+        type: 'Text',
         content: 'test output\nerror output',
         location: node.location
       });

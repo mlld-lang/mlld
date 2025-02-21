@@ -24,7 +24,18 @@ export interface OutputOptions {
 
 export interface IOutputService {
   /**
-   * Convert Meld nodes and state to the specified output format
+   * Convert Meld nodes and state to the specified output format.
+   * If state.isTransformationEnabled() is true and state.getTransformedNodes() is available,
+   * the transformed nodes will be used instead of the input nodes.
+   * 
+   * In non-transformation mode:
+   * - Definition directives (@text, @data, @path, @import, @define) are omitted
+   * - Execution directives (@run, @embed) show placeholders
+   * 
+   * In transformation mode:
+   * - All directives are replaced with their transformed results
+   * - Plain text and code fences are preserved as-is
+   * 
    * @throws {MeldOutputError} If conversion fails
    */
   convert(

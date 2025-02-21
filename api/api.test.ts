@@ -19,77 +19,113 @@ describe('SDK Integration Tests', () => {
   });
 
   describe('Format Conversion', () => {
-    it('should convert to llm format by default', async () => {
+    it('should handle definition directives correctly', async () => {
       await context.fs.writeFile(testFilePath, '@text greeting = "Hello"');
-      const result = await main(testFilePath, { fs: context.fs });
-      expect(result).toContain('TextDirective');
-      expect(result).toContain('"kind": "text"');
-      expect(result).toContain('"identifier": "greeting"');
-      expect(result).toContain('"value": "Hello"');
+      const result = await main(testFilePath, { 
+        fs: context.fs,
+        services: context.services
+      });
+      // Definition directives should be omitted from output
+      expect(result).toBe('');
     });
 
-    it('should preserve markdown when format is md', async () => {
-      await context.fs.writeFile(testFilePath, '@text greeting = "Hello"');
-      const result = await main(testFilePath, { format: 'markdown', fs: context.fs });
-      expect(result).toBe('### text Directive\n{\n  "kind": "text",\n  "identifier": "greeting",\n  "source": "literal",\n  "value": "Hello"\n}\n\n');
+    it('should handle execution directives correctly', async () => {
+      await context.fs.writeFile(testFilePath, '@run [echo test]');
+      const result = await main(testFilePath, { 
+        fs: context.fs,
+        services: context.services
+      });
+      expect(result).toContain('[run directive output placeholder]');
     });
 
-    it('should handle complex meld content with directives', async () => {
-      const content = [
-        '@text greeting = "Hello"',
-        '@text config = "value"',
-        '@text projectRoot = "src"'
-      ].join('\n');
-      
+    it('should handle complex meld content with mixed directives', async () => {
+      const content = `
+        @text greeting = "Hello"
+        @data config = { "value": 123 }
+        Some text content
+        @run [echo test]
+        More text
+      `;
       await context.fs.writeFile(testFilePath, content);
-      const result = await main(testFilePath, { fs: context.fs });
+      const result = await main(testFilePath, { 
+        fs: context.fs,
+        services: context.services
+      });
       
-      // Verify each directive is present and properly formatted
-      expect(result).toContain('"identifier": "greeting"');
-      expect(result).toContain('"value": "Hello"');
-      expect(result).toContain('"identifier": "config"');
-      expect(result).toContain('"value": "value"');
-      expect(result).toContain('"identifier": "projectRoot"');
-      expect(result).toContain('"value": "src"');
+      // Definition directives should be omitted
+      expect(result).not.toContain('"identifier": "greeting"');
+      expect(result).not.toContain('"value": "Hello"');
+      expect(result).not.toContain('"identifier": "config"');
+      
+      // Text content should be preserved
+      expect(result).toContain('Some text content');
+      expect(result).toContain('More text');
+      
+      // Execution directives should show placeholder
+      expect(result).toContain('[run directive output placeholder]');
     });
   });
 
   describe('Full Pipeline Integration', () => {
     it('should handle the complete parse -> interpret -> convert pipeline', async () => {
-      await context.fs.writeFile(testFilePath, '@text greeting = "Hello"');
-      const result = await main(testFilePath, { fs: context.fs });
+      const content = `
+        @text greeting = "Hello"
+        @run [echo test]
+        Some content
+      `;
+      await context.fs.writeFile(testFilePath, content);
+      const result = await main(testFilePath, { 
+        fs: context.fs,
+        services: context.services
+      });
       
-      // Verify the complete pipeline worked by checking structure and content
-      expect(result).toContain('TextDirective');
-      expect(result).toContain('"kind": "text"');
-      expect(result).toContain('"identifier": "greeting"');
-      expect(result).toContain('"value": "Hello"');
+      // Definition directive should be omitted
+      expect(result).not.toContain('"kind": "text"');
+      expect(result).not.toContain('"identifier": "greeting"');
+      
+      // Execution directive should show placeholder
+      expect(result).toContain('[run directive output placeholder]');
+      
+      // Text content should be preserved
+      expect(result).toContain('Some content');
     });
 
-    it('should preserve state and directive information', async () => {
-      const content = [
-        '@text first = "First"',
-        '@text second = "Second"',
-        '@text combined = "${first} ${second}"'
-      ].join('\n');
-      
+    it('should preserve state and content in transformation mode', async () => {
+      const content = `
+        @text first = "First"
+        @text second = "Second"
+        @run [echo test]
+        Content
+      `;
       await context.fs.writeFile(testFilePath, content);
-      const result = await main(testFilePath, { fs: context.fs });
       
-      // Verify each directive is preserved with its full information
-      expect(result).toContain('"identifier": "first"');
-      expect(result).toContain('"value": "First"');
-      expect(result).toContain('"identifier": "second"');
-      expect(result).toContain('"value": "Second"');
-      expect(result).toContain('"identifier": "combined"');
-      expect(result).toContain('"value": "${first} ${second}"');
+      // Enable transformation mode
+      const result = await main(testFilePath, {
+        fs: context.fs,
+        services: context.services,
+        options: { enableTransformation: true }
+      });
+      
+      // In transformation mode, directives should be replaced with their results
+      expect(result).not.toContain('"identifier": "first"');
+      expect(result).not.toContain('"value": "First"');
+      expect(result).not.toContain('"identifier": "second"');
+      
+      // Text content should be preserved
+      expect(result).toContain('Content');
+      
+      // Run directive should be transformed (if transformation is working)
+      expect(result).toContain('test');
     });
   });
 
   describe('Error Handling', () => {
     it('should handle parse errors gracefully', async () => {
       await context.fs.writeFile(testFilePath, '@invalid not_a_valid_directive');
-      await expect(main(testFilePath, { fs: context.fs }))
+      await expect(main(testFilePath, { 
+        fs: context.fs,
+        services: context.services
+      }))
         .rejects
         .toThrow(/Parse error/);
     });
@@ -100,7 +136,10 @@ describe('SDK Integration Tests', () => {
 
     it('should handle empty files', async () => {
       await context.fs.writeFile(testFilePath, '');
-      const result = await main(testFilePath, { fs: context.fs });
+      const result = await main(testFilePath, { 
+        fs: context.fs,
+        services: context.services
+      });
       expect(result).toBe(''); // Empty input should produce empty output
     });
   });

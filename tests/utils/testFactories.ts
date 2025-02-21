@@ -311,7 +311,27 @@ export function createMockStateService(): IStateService {
     isImmutable: vi.fn(),
     makeImmutable: vi.fn(),
     clone: vi.fn(),
-    mergeStates: vi.fn()
+    mergeStates: vi.fn(),
+    getAllTextVars: vi.fn(),
+    getAllDataVars: vi.fn(),
+    getAllPathVars: vi.fn(),
+    getAllCommands: vi.fn(),
+    getNodes: vi.fn(),
+    addNode: vi.fn(),
+    getTransformedNodes: vi.fn(),
+    transformNode: vi.fn(),
+    isTransformationEnabled: vi.fn(),
+    enableTransformation: vi.fn(),
+    addImport: vi.fn(),
+    removeImport: vi.fn(),
+    hasImport: vi.fn(),
+    getImports: vi.fn(),
+    getCurrentFilePath: vi.fn(),
+    setCurrentFilePath: vi.fn(),
+    hasLocalChanges: vi.fn(),
+    getLocalChanges: vi.fn(),
+    setImmutable: vi.fn(),
+    mergeChildState: vi.fn()
   };
 
   // Set default implementations
@@ -325,12 +345,52 @@ export function createMockStateService(): IStateService {
   mockService.getCommand.mockImplementation(() => '');
   mockService.appendContent.mockImplementation(() => {});
   mockService.getContent.mockImplementation(() => '');
-  mockService.createChildState.mockImplementation(() => null);
+  mockService.createChildState.mockImplementation(() => createMockStateService());
   mockService.getParentState.mockImplementation(() => undefined);
   mockService.isImmutable.mockImplementation(() => false);
   mockService.makeImmutable.mockImplementation(() => {});
-  mockService.clone.mockImplementation(() => null);
-  mockService.mergeStates.mockImplementation(() => {});
+  mockService.setImmutable.mockImplementation(() => {});
+  mockService.mergeChildState.mockImplementation(() => {});
+  mockService.clone.mockImplementation(() => {
+    const newMock = createMockStateService();
+    // Copy all state
+    newMock.getTextVar.mockImplementation(mockService.getTextVar);
+    newMock.getDataVar.mockImplementation(mockService.getDataVar);
+    newMock.getPathVar.mockImplementation(mockService.getPathVar);
+    newMock.getCommand.mockImplementation(mockService.getCommand);
+    newMock.getAllTextVars.mockImplementation(mockService.getAllTextVars);
+    newMock.getAllDataVars.mockImplementation(mockService.getAllDataVars);
+    newMock.getAllPathVars.mockImplementation(mockService.getAllPathVars);
+    newMock.getAllCommands.mockImplementation(mockService.getAllCommands);
+    newMock.getNodes.mockImplementation(mockService.getNodes);
+    newMock.getTransformedNodes.mockImplementation(mockService.getTransformedNodes);
+    newMock.isTransformationEnabled.mockImplementation(mockService.isTransformationEnabled);
+    newMock.getCurrentFilePath.mockImplementation(mockService.getCurrentFilePath);
+    newMock.hasLocalChanges.mockImplementation(mockService.hasLocalChanges);
+    newMock.getLocalChanges.mockImplementation(mockService.getLocalChanges);
+    newMock.isImmutable.mockImplementation(mockService.isImmutable);
+    return newMock;
+  });
+
+  // Restore other mock implementations
+  mockService.getAllTextVars.mockImplementation(() => new Map());
+  mockService.getAllDataVars.mockImplementation(() => new Map());
+  mockService.getAllPathVars.mockImplementation(() => new Map());
+  mockService.getAllCommands.mockImplementation(() => new Map());
+  mockService.getNodes.mockImplementation(() => []);
+  mockService.addNode.mockImplementation(() => {});
+  mockService.getTransformedNodes.mockImplementation(() => []);
+  mockService.transformNode.mockImplementation(() => {});
+  mockService.isTransformationEnabled.mockImplementation(() => false);
+  mockService.enableTransformation.mockImplementation(() => {});
+  mockService.addImport.mockImplementation(() => {});
+  mockService.removeImport.mockImplementation(() => {});
+  mockService.hasImport.mockImplementation(() => false);
+  mockService.getImports.mockImplementation(() => new Set());
+  mockService.getCurrentFilePath.mockImplementation(() => null);
+  mockService.setCurrentFilePath.mockImplementation(() => {});
+  mockService.hasLocalChanges.mockImplementation(() => false);
+  mockService.getLocalChanges.mockImplementation(() => []);
 
   return mockService as unknown as IStateService;
 }
