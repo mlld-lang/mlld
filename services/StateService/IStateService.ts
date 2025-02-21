@@ -28,6 +28,12 @@ export interface IStateService {
   addNode(node: MeldNode): void;
   appendContent(content: string): void;
 
+  // Node transformation (new)
+  getTransformedNodes(): MeldNode[];
+  transformNode(original: MeldNode, transformed: MeldNode): void;
+  isTransformationEnabled(): boolean;
+  enableTransformation(enable: boolean): void;
+
   // Imports
   addImport(path: string): void;
   removeImport(path: string): void;

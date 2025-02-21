@@ -1,11 +1,12 @@
-import { DirectiveNode } from 'meld-spec';
-import { IDirectiveHandler, DirectiveContext } from '@services/DirectiveService/IDirectiveService.js';
-import { IValidationService } from '@services/ValidationService/IValidationService.js';
-import { IResolutionService } from '@services/ResolutionService/IResolutionService.js';
-import { IStateService } from '@services/StateService/IStateService.js';
-import { IFileSystemService } from '@services/FileSystemService/IFileSystemService.js';
+import type { DirectiveNode, DirectiveContext, MeldNode } from 'meld-spec';
+import type { IValidationService } from '@services/ValidationService/IValidationService.js';
+import type { IStateService } from '@services/StateService/IStateService.js';
+import type { IResolutionService } from '@services/ResolutionService/IResolutionService.js';
+import type { IFileSystemService } from '@services/FileSystemService/IFileSystemService.js';
 import { DirectiveError, DirectiveErrorCode } from '@services/DirectiveService/errors/DirectiveError.js';
-import { directiveLogger as logger } from '@core/utils/logger.js';
+import { directiveLogger } from '../../../../core/utils/logger.js';
+import type { DirectiveResult } from '@services/DirectiveService/IDirectiveService.js';
+import type { IDirectiveHandler } from '@services/DirectiveService/IDirectiveService.js';
 
 /**
  * Handler for @run directives
@@ -21,97 +22,60 @@ export class RunDirectiveHandler implements IDirectiveHandler {
     private fileSystemService: IFileSystemService
   ) {}
 
-  async execute(node: DirectiveNode, context: DirectiveContext): Promise<IStateService> {
-    logger.debug('Processing run directive', {
-      location: node.location,
-      context
-    });
+  async execute(node: DirectiveNode, context: DirectiveContext): Promise<DirectiveResult> {
+    const { directive } = node;
+    const { state } = context;
+    const clonedState = state.clone();
 
     try {
-      // 1. Validate directive structure
-      await this.validationService.validate(node);
+      // Validate the directive
+      await this.validationService.validate(directive, 'run');
 
-      // 2. Get command from directive
-      const { command, output } = node.directive;
-
-      // 3. Process command
-      if (!command) {
-        throw new DirectiveError(
-          'Run directive requires a command',
-          this.kind,
-          DirectiveErrorCode.VALIDATION_FAILED,
-          { node }
-        );
-      }
-
-      // Create a new state for modifications
-      const newState = context.state.clone();
-
-      // Create resolution context
-      const resolutionContext = {
-        currentFilePath: context.currentFilePath,
-        state: context.state,
-        allowedVariableTypes: {
-          text: true,
-          data: true,
-          path: true,
-          command: true
-        }
-      };
-
-      // Resolve variables in command
+      // Resolve the command
       const resolvedCommand = await this.resolutionService.resolveInContext(
-        command,
-        resolutionContext
+        directive.command,
+        context
       );
 
-      // Determine working directory
-      const cwd = context.workingDirectory || 
-        (context.currentFilePath ? this.fileSystemService.dirname(context.currentFilePath) : undefined);
-
-      // Execute command
-      const result = await this.fileSystemService.executeCommand(resolvedCommand, { cwd });
-
-      // Store result in state
-      if (output) {
-        // If output is specified, store in that variable
-        newState.setTextVar(output, result.stdout);
-      } else {
-        // Otherwise store in stdout/stderr variables
-        if (result.stdout) {
-          newState.setTextVar('stdout', result.stdout);
+      // Execute the command
+      const { stdout, stderr } = await this.fileSystemService.executeCommand(
+        resolvedCommand,
+        {
+          cwd: context.workingDirectory || this.fileSystemService.getCwd()
         }
-        if (result.stderr) {
-          newState.setTextVar('stderr', result.stderr);
+      );
+
+      // Store the output in state variables
+      if (directive.output) {
+        clonedState.setTextVar(directive.output, stdout);
+      } else {
+        clonedState.setTextVar('stdout', stdout);
+        if (stderr) {
+          clonedState.setTextVar('stderr', stderr);
         }
       }
 
-      logger.debug('Run directive processed successfully', {
-        command: resolvedCommand,
-        output: result,
-        location: node.location
-      });
+      // If transformation is enabled, return a replacement node with the command output
+      if (clonedState.isTransformationEnabled()) {
+        const content = stdout && stderr ? `${stdout}\n${stderr}` : stdout || stderr;
+        const replacementNode: MeldNode = {
+          type: 'text',
+          content,
+          location: node.location
+        };
+        return { state: clonedState, replacementNode };
+      }
 
-      return newState;
-    } catch (error: any) {
-      logger.error('Failed to process run directive', {
-        location: node.location,
-        error
-      });
-
-      // Wrap in DirectiveError if needed
+      return { state: clonedState };
+    } catch (error) {
+      directiveLogger.error('Error executing run directive:', error);
       if (error instanceof DirectiveError) {
         throw error;
       }
       throw new DirectiveError(
-        error?.message || 'Unknown error',
-        this.kind,
-        DirectiveErrorCode.EXECUTION_FAILED,
-        {
-          node,
-          context,
-          cause: error instanceof Error ? error : new Error(String(error))
-        }
+        `Failed to execute command: ${error.message}`,
+        'run',
+        DirectiveErrorCode.EXECUTION_FAILED
       );
     }
   }

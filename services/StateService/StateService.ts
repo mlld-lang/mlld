@@ -8,6 +8,7 @@ export class StateService implements IStateService {
   private stateFactory: StateFactory;
   private currentState: StateNode;
   private _isImmutable: boolean = false;
+  private _transformationEnabled: boolean = false;
 
   constructor(parentState?: IStateService) {
     this.stateFactory = new StateFactory();
@@ -124,11 +125,64 @@ export class StateService implements IStateService {
     return [...this.currentState.nodes];
   }
 
+  getTransformedNodes(): MeldNode[] {
+    if (!this._transformationEnabled || !this.currentState.transformedNodes) {
+      return this.getNodes();
+    }
+    return [...this.currentState.transformedNodes];
+  }
+
   addNode(node: MeldNode): void {
     this.checkMutable();
-    this.updateState({
+    const updates: Partial<StateNode> = {
       nodes: [...this.currentState.nodes, node]
-    }, 'addNode');
+    };
+    
+    // If transformation is enabled, also add to transformed nodes
+    if (this._transformationEnabled) {
+      updates.transformedNodes = [...(this.currentState.transformedNodes || []), node];
+    }
+    
+    this.updateState(updates, 'addNode');
+  }
+
+  transformNode(original: MeldNode, transformed: MeldNode): void {
+    this.checkMutable();
+    if (!this._transformationEnabled) {
+      return; // Silently ignore if transformation is not enabled
+    }
+
+    const originalIndex = this.currentState.nodes.indexOf(original);
+    if (originalIndex === -1) {
+      throw new Error('Cannot transform node: original node not found');
+    }
+
+    const currentTransformed = this.currentState.transformedNodes || this.currentState.nodes;
+    const newTransformed = [...currentTransformed];
+    newTransformed[originalIndex] = transformed;
+
+    this.updateState({
+      transformedNodes: newTransformed
+    }, 'transformNode');
+  }
+
+  isTransformationEnabled(): boolean {
+    return this._transformationEnabled;
+  }
+
+  enableTransformation(enable: boolean): void {
+    if (this._transformationEnabled === enable) {
+      return;
+    }
+    this._transformationEnabled = enable;
+    
+    // Initialize transformed nodes if enabling
+    if (enable) {
+      // Always initialize with a fresh copy of nodes, even if transformedNodes already exists
+      this.updateState({
+        transformedNodes: [...this.currentState.nodes]
+      }, 'enableTransformation');
+    }
   }
 
   appendContent(content: string): void {
@@ -214,6 +268,7 @@ export class StateService implements IStateService {
       parentState: this.currentState
     });
     cloned._isImmutable = this._isImmutable;
+    cloned._transformationEnabled = this._transformationEnabled;
     return cloned;
   }
 

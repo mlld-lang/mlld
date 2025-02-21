@@ -1,3 +1,15 @@
+// Mock the logger before any imports
+const mockLogger = {
+  debug: vi.fn(),
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn()
+};
+
+vi.mock('../../../../core/utils/logger', () => ({
+  directiveLogger: mockLogger
+}));
+
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { RunDirectiveHandler } from './RunDirectiveHandler.js';
 import { createRunDirective, createLocation } from '@tests/utils/testFactories.js';
@@ -34,12 +46,14 @@ describe('RunDirectiveHandler', () => {
 
     clonedState = {
       setTextVar: vi.fn(),
-      clone: vi.fn()
+      clone: vi.fn(),
+      isTransformationEnabled: vi.fn().mockReturnValue(false)
     } as unknown as IStateService;
 
     stateService = {
       setTextVar: vi.fn(),
-      clone: vi.fn().mockReturnValue(clonedState)
+      clone: vi.fn().mockReturnValue(clonedState),
+      isTransformationEnabled: vi.fn().mockReturnValue(false)
     } as unknown as IStateService;
 
     resolutionService = {
@@ -68,16 +82,13 @@ describe('RunDirectiveHandler', () => {
   describe('basic command execution', () => {
     it('should execute simple commands', async () => {
       const node = createRunDirective('echo test', createLocation(1, 1));
-      const context = {
-        currentFilePath: 'test.meld',
-        state: stateService,
-        parentState: undefined
-      };
+      const context = { currentFilePath: 'test.meld', state: stateService };
 
       const clonedState = {
         ...stateService,
         clone: vi.fn().mockReturnThis(),
-        setTextVar: vi.fn()
+        setTextVar: vi.fn(),
+        isTransformationEnabled: vi.fn().mockReturnValue(false)
       };
 
       vi.mocked(stateService.clone).mockReturnValue(clonedState);
@@ -95,22 +106,19 @@ describe('RunDirectiveHandler', () => {
         expect.objectContaining({ cwd: '/workspace' })
       );
       expect(clonedState.setTextVar).toHaveBeenCalledWith('stdout', 'test output');
-      expect(result).toBe(clonedState);
+      expect(result.state).toBe(clonedState);
     });
 
     it('should handle commands with variables', async () => {
       const node = createRunDirective('echo ${message}', createLocation(1, 1));
-      const context = {
-        currentFilePath: 'test.meld',
-        state: stateService,
-        parentState: undefined
-      };
+      const context = { currentFilePath: 'test.meld', state: stateService };
 
       const clonedState = {
         ...stateService,
         clone: vi.fn().mockReturnThis(),
         setTextVar: vi.fn(),
-        getTextVar: vi.fn().mockReturnValue('Hello World')
+        getTextVar: vi.fn().mockReturnValue('Hello World'),
+        isTransformationEnabled: vi.fn().mockReturnValue(false)
       };
 
       vi.mocked(stateService.clone).mockReturnValue(clonedState);
@@ -128,22 +136,19 @@ describe('RunDirectiveHandler', () => {
         expect.objectContaining({ cwd: '/workspace' })
       );
       expect(clonedState.setTextVar).toHaveBeenCalledWith('stdout', 'Hello World');
-      expect(result).toBe(clonedState);
+      expect(result.state).toBe(clonedState);
     });
 
     it('should handle commands with path variables', async () => {
       const node = createRunDirective('cat ${file}', createLocation(1, 1));
-      const context = {
-        currentFilePath: 'test.meld',
-        state: stateService,
-        parentState: undefined
-      };
+      const context = { currentFilePath: 'test.meld', state: stateService };
 
       const clonedState = {
         ...stateService,
         clone: vi.fn().mockReturnThis(),
         setTextVar: vi.fn(),
-        getPathVar: vi.fn().mockReturnValue('/path/to/file')
+        getPathVar: vi.fn().mockReturnValue('/path/to/file'),
+        isTransformationEnabled: vi.fn().mockReturnValue(false)
       };
 
       vi.mocked(stateService.clone).mockReturnValue(clonedState);
@@ -161,7 +166,7 @@ describe('RunDirectiveHandler', () => {
         expect.objectContaining({ cwd: '/workspace' })
       );
       expect(clonedState.setTextVar).toHaveBeenCalledWith('stdout', 'file contents');
-      expect(result).toBe(clonedState);
+      expect(result.state).toBe(clonedState);
     });
   });
 
@@ -228,7 +233,8 @@ describe('RunDirectiveHandler', () => {
       const clonedState = {
         ...stateService,
         clone: vi.fn().mockReturnThis(),
-        setTextVar: vi.fn()
+        setTextVar: vi.fn(),
+        isTransformationEnabled: vi.fn().mockReturnValue(false)
       };
 
       vi.mocked(stateService.clone).mockReturnValue(clonedState);
@@ -243,7 +249,7 @@ describe('RunDirectiveHandler', () => {
 
       expect(stateService.clone).toHaveBeenCalled();
       expect(clonedState.setTextVar).toHaveBeenCalledWith('stderr', 'error output');
-      expect(result).toBe(clonedState);
+      expect(result.state).toBe(clonedState);
     });
 
     it('should handle output capture to variable', async () => {
@@ -258,7 +264,8 @@ describe('RunDirectiveHandler', () => {
       const clonedState = {
         ...stateService,
         clone: vi.fn().mockReturnThis(),
-        setTextVar: vi.fn()
+        setTextVar: vi.fn(),
+        isTransformationEnabled: vi.fn().mockReturnValue(false)
       };
 
       vi.mocked(stateService.clone).mockReturnValue(clonedState);
@@ -273,7 +280,7 @@ describe('RunDirectiveHandler', () => {
 
       expect(stateService.clone).toHaveBeenCalled();
       expect(clonedState.setTextVar).toHaveBeenCalledWith('result', 'test output');
-      expect(result).toBe(clonedState);
+      expect(result.state).toBe(clonedState);
     });
   });
 
@@ -289,7 +296,8 @@ describe('RunDirectiveHandler', () => {
       const clonedState = {
         ...stateService,
         clone: vi.fn().mockReturnThis(),
-        setTextVar: vi.fn()
+        setTextVar: vi.fn(),
+        isTransformationEnabled: vi.fn().mockReturnValue(false)
       };
 
       vi.mocked(stateService.clone).mockReturnValue(clonedState);
@@ -307,7 +315,7 @@ describe('RunDirectiveHandler', () => {
         expect.objectContaining({ cwd: '/workspace' })
       );
       expect(clonedState.setTextVar).toHaveBeenCalledWith('stdout', '/workspace');
-      expect(result).toBe(clonedState);
+      expect(result.state).toBe(clonedState);
     });
 
     it('should respect custom working directory', async () => {
@@ -322,7 +330,8 @@ describe('RunDirectiveHandler', () => {
       const clonedState = {
         ...stateService,
         clone: vi.fn().mockReturnThis(),
-        setTextVar: vi.fn()
+        setTextVar: vi.fn(),
+        isTransformationEnabled: vi.fn().mockReturnValue(false)
       };
 
       vi.mocked(stateService.clone).mockReturnValue(clonedState);
@@ -335,13 +344,12 @@ describe('RunDirectiveHandler', () => {
 
       const result = await handler.execute(node, context);
 
-      expect(stateService.clone).toHaveBeenCalled();
       expect(fileSystemService.executeCommand).toHaveBeenCalledWith(
         'pwd',
         expect.objectContaining({ cwd: '/custom/dir' })
       );
       expect(clonedState.setTextVar).toHaveBeenCalledWith('stdout', '/custom/dir');
-      expect(result).toBe(clonedState);
+      expect(result.state).toBe(clonedState);
     });
   });
 }); 

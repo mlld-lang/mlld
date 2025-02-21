@@ -1,5 +1,5 @@
-import { DirectiveNode } from 'meld-spec';
-import { IDirectiveHandler, DirectiveContext } from '@services/DirectiveService/IDirectiveService.js';
+import { DirectiveNode, MeldNode } from 'meld-spec';
+import { IDirectiveHandler, DirectiveContext, DirectiveResult } from '@services/DirectiveService/IDirectiveService.js';
 import { IValidationService } from '@services/ValidationService/IValidationService.js';
 import { IResolutionService } from '@services/ResolutionService/IResolutionService.js';
 import { IStateService } from '@services/StateService/IStateService.js';
@@ -35,7 +35,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
     private logger: ILogger = embedLogger
   ) {}
 
-  async execute(node: DirectiveNode, context: DirectiveContext): Promise<IStateService> {
+  async execute(node: DirectiveNode, context: DirectiveContext): Promise<DirectiveResult> {
     this.logger.debug('Processing embed directive', {
       location: node.location,
       context
@@ -46,7 +46,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
       await this.validationService.validate(node);
 
       // 2. Get path and section from directive
-      const { path, section, fuzzy } = node.directive;
+      const { path, section, headingLevel, underHeader } = node.directive;
 
       // 3. Process path
       if (!path) {
@@ -109,6 +109,16 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
           );
         }
 
+        // Apply heading level if specified
+        if (headingLevel !== undefined) {
+          processedContent = this.applyHeadingLevel(processedContent, headingLevel);
+        }
+
+        // Apply under header if specified
+        if (underHeader) {
+          processedContent = this.wrapUnderHeader(processedContent, underHeader);
+        }
+
         // Parse content
         const nodes = await this.parserService.parse(processedContent);
 
@@ -131,12 +141,22 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
           location: node.location
         });
 
-        return newState;
+        // If transformation is enabled, return a replacement node
+        if (context.state.isTransformationEnabled?.()) {
+          const replacement: MeldNode = {
+            type: 'Text',
+            content: processedContent,
+            location: node.location
+          };
+          return { state: newState, replacement };
+        }
+
+        return { state: newState };
       } finally {
         // Always end import tracking
         this.circularityService.endImport(resolvedPath);
       }
-    } catch (error: any) {
+    } catch (error) {
       this.logger.error('Failed to process embed directive', {
         location: node.location,
         error

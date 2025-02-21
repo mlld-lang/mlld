@@ -14,6 +14,7 @@ export class StateFactory implements IStateFactory {
       commands: new Map(options?.parentState?.commands ?? []),
       imports: new Set(options?.parentState?.imports ?? []),
       nodes: [...(options?.parentState?.nodes ?? [])],
+      transformedNodes: options?.parentState?.transformedNodes ? [...options.parentState.transformedNodes] : undefined,
       filePath: options?.filePath ?? options?.parentState?.filePath,
       parentState: options?.parentState
     };
@@ -83,6 +84,10 @@ export class StateFactory implements IStateFactory {
       imports: new Set([...parent.imports, ...child.imports]),
       // Preserve node order by appending all child nodes
       nodes: [...parent.nodes, ...child.nodes],
+      // Merge transformed nodes if either parent or child has them
+      transformedNodes: child.transformedNodes !== undefined ? [...child.transformedNodes] :
+                       parent.transformedNodes !== undefined ? [...parent.transformedNodes] :
+                       undefined,
       filePath: child.filePath ?? parent.filePath,
       parentState: parent.parentState
     };
@@ -110,6 +115,7 @@ export class StateFactory implements IStateFactory {
       commands: updates.commands ?? new Map(state.commands),
       imports: new Set(updates.imports ?? state.imports),
       nodes: [...(updates.nodes ?? state.nodes)],
+      transformedNodes: updates.transformedNodes !== undefined ? [...updates.transformedNodes] : state.transformedNodes,
       filePath: updates.filePath ?? state.filePath,
       parentState: updates.parentState ?? state.parentState
     };

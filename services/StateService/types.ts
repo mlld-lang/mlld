@@ -20,6 +20,7 @@ export interface StateNode {
   readonly commands: ReadonlyMap<string, CommandDefinition>;
   readonly imports: ReadonlySet<string>;
   readonly nodes: ReadonlyArray<MeldNode>;
+  readonly transformedNodes?: ReadonlyArray<MeldNode>;
   readonly filePath?: string;
   readonly parentState?: StateNode;
 }

@@ -1,17 +1,5 @@
-// Mock the logger before any imports
-const mockLogger = {
-  debug: vi.fn(),
-  info: vi.fn(),
-  warn: vi.fn(),
-  error: vi.fn()
-};
-
-vi.mock('../../../../core/utils/logger', () => ({
-  embedLogger: mockLogger
-}));
-
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import type { DirectiveNode, DirectiveData } from 'meld-spec';
+import type { DirectiveNode, DirectiveData, MeldNode } from 'meld-spec';
 import { EmbedDirectiveHandler, type ILogger } from './EmbedDirectiveHandler.js';
 import type { IValidationService } from '@services/ValidationService/IValidationService.js';
 import type { IResolutionService } from '@services/ResolutionService/IResolutionService.js';
@@ -23,18 +11,19 @@ import type { IInterpreterService } from '@services/InterpreterService/IInterpre
 import { DirectiveError, DirectiveErrorCode } from '@services/DirectiveService/errors/DirectiveError.js';
 import { createLocation, createEmbedDirective } from '@tests/utils/testFactories.js';
 
-interface EmbedDirective extends DirectiveData {
-  kind: 'embed';
-  path: string;
-  section?: string;
-  headingLevel?: number;
-  underHeader?: string;
-  fuzzy?: number;
-  names?: string[];
-  items?: string[];
-}
+// Mock the logger
+const mockLogger = {
+  debug: vi.fn(),
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn()
+};
 
-describe('EmbedDirectiveHandler', () => {
+vi.mock('../../../../core/utils/logger', () => ({
+  embedLogger: mockLogger
+}));
+
+describe('EmbedDirectiveHandler Transformation', () => {
   let handler: EmbedDirectiveHandler;
   let validationService: IValidationService;
   let resolutionService: IResolutionService;
@@ -58,7 +47,7 @@ describe('EmbedDirectiveHandler', () => {
       setCommand: vi.fn(),
       clone: vi.fn(),
       mergeChildState: vi.fn(),
-      isTransformationEnabled: vi.fn().mockReturnValue(false)
+      isTransformationEnabled: vi.fn().mockReturnValue(true)
     } as unknown as IStateService;
 
     clonedState = {
@@ -69,7 +58,7 @@ describe('EmbedDirectiveHandler', () => {
       createChildState: vi.fn().mockReturnValue(childState),
       mergeChildState: vi.fn(),
       clone: vi.fn(),
-      isTransformationEnabled: vi.fn().mockReturnValue(false)
+      isTransformationEnabled: vi.fn().mockReturnValue(true)
     } as unknown as IStateService;
 
     stateService = {
@@ -79,7 +68,7 @@ describe('EmbedDirectiveHandler', () => {
       setCommand: vi.fn(),
       clone: vi.fn().mockReturnValue(clonedState),
       createChildState: vi.fn().mockReturnValue(childState),
-      isTransformationEnabled: vi.fn().mockReturnValue(false)
+      isTransformationEnabled: vi.fn().mockReturnValue(true)
     } as unknown as IStateService;
 
     resolutionService = {
@@ -120,8 +109,8 @@ describe('EmbedDirectiveHandler', () => {
     );
   });
 
-  describe('basic embed functionality', () => {
-    it('should handle basic embed without modifiers', async () => {
+  describe('transformation behavior', () => {
+    it('should return replacement node with file contents when transformation enabled', async () => {
       const node = createEmbedDirective('doc.md', undefined, createLocation(1, 1));
       node.directive.path = 'doc.md';
       const context = { currentFilePath: 'test.meld', state: stateService };
@@ -133,28 +122,16 @@ describe('EmbedDirectiveHandler', () => {
 
       const result = await handler.execute(node, context);
 
-      expect(validationService.validate).toHaveBeenCalledWith(node);
-      expect(stateService.clone).toHaveBeenCalled();
-      expect(resolutionService.resolveInContext).toHaveBeenCalledWith(
-        'doc.md',
-        expect.any(Object)
-      );
-      expect(fileSystemService.exists).toHaveBeenCalled();
-      expect(fileSystemService.readFile).toHaveBeenCalled();
-      expect(parserService.parse).toHaveBeenCalledWith('Test content');
-      expect(interpreterService.interpret).toHaveBeenCalledWith(
-        [],
-        expect.objectContaining({
-          initialState: childState,
-          filePath: 'doc.md',
-          mergeState: true
-        })
-      );
-      expect(clonedState.mergeChildState).toHaveBeenCalledWith(childState);
+      expect(result.replacement).toBeDefined();
+      expect(result.replacement).toEqual({
+        type: 'Text',
+        content: 'Test content',
+        location: node.location
+      });
       expect(result.state).toBe(clonedState);
     });
 
-    it('should handle embed with section', async () => {
+    it('should handle section extraction in transformation', async () => {
       const node = createEmbedDirective('doc.md', 'Introduction', createLocation(1, 1));
       node.directive.path = 'doc.md';
       const context = { currentFilePath: 'test.meld', state: stateService };
@@ -165,20 +142,18 @@ describe('EmbedDirectiveHandler', () => {
       vi.mocked(fileSystemService.exists).mockResolvedValue(true);
       vi.mocked(fileSystemService.readFile).mockResolvedValue('# Content');
       vi.mocked(resolutionService.extractSection).mockResolvedValue('# Introduction\nContent');
-      vi.mocked(parserService.parse).mockResolvedValue([]);
 
       const result = await handler.execute(node, context);
 
-      expect(stateService.clone).toHaveBeenCalled();
-      expect(resolutionService.extractSection).toHaveBeenCalledWith(
-        '# Content',
-        'Introduction'
-      );
-      expect(clonedState.mergeChildState).toHaveBeenCalledWith(childState);
-      expect(result.state).toBe(clonedState);
+      expect(result.replacement).toBeDefined();
+      expect(result.replacement).toEqual({
+        type: 'Text',
+        content: '# Introduction\nContent',
+        location: node.location
+      });
     });
 
-    it('should handle embed with heading level', async () => {
+    it('should handle heading level in transformation', async () => {
       const node = createEmbedDirective('doc.md', undefined, createLocation(1, 1), {
         headingLevel: 2
       });
@@ -188,16 +163,18 @@ describe('EmbedDirectiveHandler', () => {
       vi.mocked(resolutionService.resolveInContext).mockResolvedValue('doc.md');
       vi.mocked(fileSystemService.exists).mockResolvedValue(true);
       vi.mocked(fileSystemService.readFile).mockResolvedValue('Test content');
-      vi.mocked(parserService.parse).mockResolvedValue([]);
 
       const result = await handler.execute(node, context);
 
-      expect(stateService.clone).toHaveBeenCalled();
-      expect(clonedState.mergeChildState).toHaveBeenCalledWith(childState);
-      expect(result.state).toBe(clonedState);
+      expect(result.replacement).toBeDefined();
+      expect(result.replacement).toEqual({
+        type: 'Text',
+        content: '## Test content',
+        location: node.location
+      });
     });
 
-    it('should handle embed with under header', async () => {
+    it('should handle under header in transformation', async () => {
       const node = createEmbedDirective('doc.md', undefined, createLocation(1, 1), {
         underHeader: 'My Header'
       });
@@ -207,81 +184,64 @@ describe('EmbedDirectiveHandler', () => {
       vi.mocked(resolutionService.resolveInContext).mockResolvedValue('doc.md');
       vi.mocked(fileSystemService.exists).mockResolvedValue(true);
       vi.mocked(fileSystemService.readFile).mockResolvedValue('Test content');
-      vi.mocked(parserService.parse).mockResolvedValue([]);
 
       const result = await handler.execute(node, context);
 
-      expect(stateService.clone).toHaveBeenCalled();
-      expect(clonedState.mergeChildState).toHaveBeenCalledWith(childState);
-      expect(result.state).toBe(clonedState);
-    });
-  });
-
-  describe('error handling', () => {
-    it('should handle file not found', async () => {
-      const node = createEmbedDirective('[missing.meld]', createLocation(1, 1));
-      const context = {
-        currentFilePath: 'test.meld',
-        state: stateService,
-        parentState: undefined
-      };
-
-      vi.mocked(fileSystemService.readFile).mockRejectedValue(new Error('File not found'));
-
-      await expect(handler.execute(node, context)).rejects.toThrow(DirectiveError);
-      expect(circularityService.endImport).toHaveBeenCalled();
-    });
-
-    it('should handle invalid heading level', async () => {
-      const node = createEmbedDirective('[test.meld]', createLocation(1, 1));
-      node.directive.headingLevel = -1;
-      const context = {
-        currentFilePath: 'test.meld',
-        state: stateService,
-        parentState: undefined
-      };
-
-      vi.mocked(validationService.validate).mockImplementation(() => {
-        throw new DirectiveError('Invalid heading level', 'embed', DirectiveErrorCode.VALIDATION_FAILED);
+      expect(result.replacement).toBeDefined();
+      expect(result.replacement).toEqual({
+        type: 'Text',
+        content: 'My Header\n\nTest content',
+        location: node.location
       });
-
-      await expect(handler.execute(node, context)).rejects.toThrow(DirectiveError);
-      expect(circularityService.endImport).not.toHaveBeenCalled();
     });
 
-    it('should handle section extraction errors', async () => {
-      const node = createEmbedDirective('[test.meld#missing]', createLocation(1, 1));
-      const context = {
-        currentFilePath: 'test.meld',
-        state: stateService,
-        parentState: undefined
-      };
-
-      vi.mocked(fileSystemService.readFile).mockResolvedValue('# Section 1\nContent');
-      vi.mocked(parserService.parse).mockResolvedValue([]);
-      vi.mocked(resolutionService.extractSection).mockImplementation(() => {
-        throw new DirectiveError('Section not found', 'embed', DirectiveErrorCode.SECTION_NOT_FOUND);
-      });
-
-      await expect(handler.execute(node, context)).rejects.toThrow(DirectiveError);
-      expect(circularityService.endImport).toHaveBeenCalled();
-    });
-  });
-
-  describe('cleanup', () => {
-    it('should always end import tracking', async () => {
-      const node = createEmbedDirective('content.md', undefined, createLocation(1, 1));
-      node.directive.path = 'content.md';
+    it('should handle variable interpolation in path during transformation', async () => {
+      const node = createEmbedDirective('${filename}.md', undefined, createLocation(1, 1));
+      node.directive.path = '${filename}.md';
       const context = { currentFilePath: 'test.meld', state: stateService };
 
-      vi.mocked(resolutionService.resolveInContext).mockResolvedValue('content.md');
+      vi.mocked(resolutionService.resolveInContext).mockResolvedValue('resolved.md');
       vi.mocked(fileSystemService.exists).mockResolvedValue(true);
-      vi.mocked(fileSystemService.readFile).mockRejectedValue(
-        new Error('Read error')
+      vi.mocked(fileSystemService.readFile).mockResolvedValue('Variable content');
+
+      const result = await handler.execute(node, context);
+
+      expect(result.replacement).toBeDefined();
+      expect(result.replacement).toEqual({
+        type: 'Text',
+        content: 'Variable content',
+        location: node.location
+      });
+      expect(resolutionService.resolveInContext).toHaveBeenCalledWith(
+        '${filename}.md',
+        expect.any(Object)
       );
+    });
+
+    it('should preserve error handling during transformation', async () => {
+      const node = createEmbedDirective('missing.md', undefined, createLocation(1, 1));
+      node.directive.path = 'missing.md';
+      const context = { currentFilePath: 'test.meld', state: stateService };
+
+      vi.mocked(resolutionService.resolveInContext).mockResolvedValue('missing.md');
+      vi.mocked(fileSystemService.exists).mockResolvedValue(false);
 
       await expect(handler.execute(node, context)).rejects.toThrow(DirectiveError);
-      expect(circularityService.endImport).toHaveBeenCalledWith('content.md');
+      expect(circularityService.endImport).toHaveBeenCalled();
+    });
+
+    it('should handle circular imports during transformation', async () => {
+      const node = createEmbedDirective('circular.md', undefined, createLocation(1, 1));
+      node.directive.path = 'circular.md';
+      const context = { currentFilePath: 'test.meld', state: stateService };
+
+      vi.mocked(resolutionService.resolveInContext).mockResolvedValue('circular.md');
+      vi.mocked(fileSystemService.exists).mockResolvedValue(true);
+      vi.mocked(circularityService.beginImport).mockImplementation(() => {
+        throw new DirectiveError('Circular import detected', 'embed', DirectiveErrorCode.CIRCULAR_IMPORT);
+      });
+
+      await expect(handler.execute(node, context)).rejects.toThrow(DirectiveError);
     });
   });
 }); 
