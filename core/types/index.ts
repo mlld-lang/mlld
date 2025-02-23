@@ -36,4 +36,5 @@ export interface Range {
 export interface ProcessOptions {
   fs?: NodeFileSystem;
   format?: OutputFormat;
+  services?: any;
 } 

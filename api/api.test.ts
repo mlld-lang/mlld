@@ -1,6 +1,15 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { main } from './index.js';
 import { TestContext } from '@tests/utils/index.js';
+import type { ProcessOptions } from '@core/types/index.js';
+import type { NodeFileSystem } from '@services/FileSystemService/NodeFileSystem.js';
+
+// Define the type for main function options
+type MainOptions = {
+  fs?: NodeFileSystem;
+  format?: 'llm';
+  services?: any;
+};
 
 describe('SDK Integration Tests', () => {
   let context: TestContext;
@@ -30,12 +39,45 @@ describe('SDK Integration Tests', () => {
     });
 
     it('should handle execution directives correctly', async () => {
-      await context.fs.writeFile(testFilePath, '@run [echo test]');
-      const result = await main(testFilePath, { 
-        fs: context.fs,
-        services: context.services
+      // Start debug session
+      const debugSessionId = await context.startDebugSession({
+        captureConfig: {
+          capturePoints: ['pre-transform', 'post-transform', 'error'],
+          includeFields: ['nodes', 'transformedNodes', 'variables'],
+          format: 'full'
+        }
       });
-      expect(result).toContain('[run directive output placeholder]');
+
+      try {
+        await context.fs.writeFile(testFilePath, '@run [echo test]');
+        
+        // Get initial state snapshot for state ID
+        const snapshot = await context.services.debugger.getStateSnapshot(
+          context.services.state.getCurrentFilePath() || 'unknown',
+          'full'
+        );
+        
+        // Trace the operation
+        const { result, diagnostics } = await context.services.debugger.traceOperation(
+          snapshot.metadata.stateId,
+          async () => {
+            // Use type assertion to bypass type checking
+            return await main(testFilePath, {
+              fs: context.fs,
+              format: 'llm',
+              services: context.services
+            } as any);
+          }
+        );
+
+        expect(result).toContain('[run directive output placeholder]');
+
+        // Get debug report
+        const report = await context.services.debugger.generateDebugReport(debugSessionId);
+        console.log('State Debug Report:', report);
+      } finally {
+        context.services.debugger.clearSession(debugSessionId);
+      }
     });
 
     it('should handle complex meld content with mixed directives', async () => {
@@ -99,11 +141,12 @@ describe('SDK Integration Tests', () => {
       `;
       await context.fs.writeFile(testFilePath, content);
       
-      // Enable transformation mode
+      // Enable transformation mode through state service
+      context.services.state.enableTransformation(true);
+      
       const result = await main(testFilePath, {
         fs: context.fs,
-        services: context.services,
-        options: { enableTransformation: true }
+        services: context.services
       });
       
       // In transformation mode, directives should be replaced with their results
