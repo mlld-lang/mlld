@@ -510,17 +510,15 @@ export class StateService implements IStateService {
     this.currentState = this.stateFactory.updateState(this.currentState, updates);
 
     // Emit transform event for state updates
-    if (source !== 'clone' && source !== 'createChildState') {
-      this.emitEvent({
-        type: 'transform',
-        stateId: this.currentState.stateId || 'unknown',
-        source,
-        timestamp: Date.now(),
-        location: {
-          file: this.getCurrentFilePath() || undefined
-        }
-      });
-    }
+    this.emitEvent({
+      type: 'transform',
+      stateId: this.currentState.stateId || 'unknown',
+      source,
+      timestamp: Date.now(),
+      location: {
+        file: this.getCurrentFilePath() || undefined
+      }
+    });
   }
 
   // Add new methods for state tracking

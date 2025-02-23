@@ -631,6 +631,11 @@ export class DirectiveService implements IDirectiveService {
    * @throws {MeldDirectiveError} If directive processing fails
    */
   public async processDirective(node: DirectiveNode, context: DirectiveContext): Promise<IStateService> {
+    // Add initialization check before any other processing
+    if (!this.initialized) {
+      throw new Error('DirectiveService must be initialized before use');
+    }
+
     try {
       // Get the handler for this directive kind
       const { kind } = node.directive;
