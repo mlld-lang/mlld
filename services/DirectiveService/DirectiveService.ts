@@ -194,10 +194,15 @@ export class DirectiveService implements IDirectiveService {
       };
 
       // Process directive and get the updated state
-      const updatedState = await this.processDirective(node, nodeContext);
+      const result = await this.processDirective(node, nodeContext);
       
-      // Merge the updated state back into the current state
-      currentState.mergeChildState(updatedState);
+      // If transformation is enabled, we don't merge states since the directive
+      // will be replaced with a text node and its state will be handled separately
+      if (!currentState.isTransformationEnabled?.()) {
+        // If the result is a DirectiveResult, use its state for merging
+        const stateToMerge = 'state' in result ? result.state : result;
+        currentState.mergeChildState(stateToMerge);
+      }
     }
 
     return currentState;
