@@ -13,6 +13,11 @@ import { CircularityService } from '@services/CircularityService/CircularityServ
 import { ResolutionService } from '@services/ResolutionService/ResolutionService.js';
 import { FileSystemService } from '@services/FileSystemService/FileSystemService.js';
 import { OutputService } from '@services/OutputService/OutputService.js';
+import { StateTrackingService } from '@services/StateTrackingService/StateTrackingService.js';
+import { StateVisualizationService } from '@services/StateVisualizationService/StateVisualizationService.js';
+import { StateDebuggerService } from '@services/StateDebuggerService/StateDebuggerService.js';
+import { StateHistoryService } from '@services/StateHistoryService/StateHistoryService.js';
+import { StateEventService } from '@services/StateEventService/StateEventService.js';
 import type { IParserService } from '@services/ParserService/IParserService.js';
 import type { IInterpreterService } from '@services/InterpreterService/IInterpreterService.js';
 import type { IDirectiveService } from '@services/DirectiveService/IDirectiveService.js';
@@ -23,12 +28,15 @@ import type { ICircularityService } from '@services/CircularityService/ICircular
 import type { IResolutionService } from '@services/ResolutionService/IResolutionService.js';
 import type { IFileSystemService } from '@services/FileSystemService/IFileSystemService.js';
 import type { IOutputService } from '@services/OutputService/IOutputService.js';
+import type { IStateTrackingService } from '@services/StateTrackingService/IStateTrackingService.js';
+import type { IStateVisualizationService } from '@services/StateVisualizationService/IStateVisualizationService.js';
+import type { IStateDebuggerService } from '@services/StateDebuggerService/IStateDebuggerService.js';
+import type { IStateHistoryService } from '@services/StateHistoryService/IStateHistoryService.js';
+import type { IStateEventService } from '@services/StateEventService/IStateEventService.js';
 import * as fs from 'fs-extra';
 import * as path from 'path';
 import { filesystemLogger as logger } from '@core/utils/logger.js';
 import { PathOperationsService } from '@services/FileSystemService/PathOperationsService.js';
-import { StateTrackingService } from '@services/StateTrackingService/StateTrackingService.js';
-import type { IStateTrackingService } from '@services/StateTrackingService/IStateTrackingService.js';
 
 interface SnapshotDiff {
   added: string[];
@@ -58,6 +66,10 @@ interface TestServices {
   filesystem: IFileSystemService;
   output: IOutputService;
   tracking: IStateTrackingService;
+  visualization: IStateVisualizationService;
+  debugger: IStateDebuggerService;
+  history: IStateHistoryService;
+  events: IStateEventService;
 }
 
 /**
@@ -98,10 +110,14 @@ export class TestContext {
     const filesystem = new FileSystemService(pathOps, this.fs);
     const validation = new ValidationService();
     const tracking = new StateTrackingService();
+    const eventService = new StateEventService();
+    const history = new StateHistoryService(eventService);
+    const visualization = new StateVisualizationService();
     const state = new StateService();
     state.setCurrentFilePath('test.meld'); // Set initial file path
     state.enableTransformation(true); // Enable transformation by default for tests
     state.setTrackingService(tracking); // Enable state tracking
+    state.setEventService(eventService); // Set event service for state operations
     const path = new PathService();
     path.initialize(filesystem);
     const parser = new ParserService();
@@ -109,6 +125,13 @@ export class TestContext {
     const interpreter = new InterpreterService();
     const resolution = new ResolutionService(state, filesystem, parser);
     const output = new OutputService();
+
+    // Initialize debugger service
+    const debuggerService = new StateDebuggerService(
+      visualization,
+      history,
+      tracking
+    );
 
     // Initialize directive service
     const directive = new DirectiveService();
@@ -144,7 +167,11 @@ export class TestContext {
       resolution,
       filesystem,
       output,
-      tracking
+      tracking,
+      visualization,
+      debugger: debuggerService,
+      history,
+      events: eventService
     };
   }
 
@@ -233,5 +260,43 @@ export class TestContext {
    */
   compareSnapshots(before: Map<string, string>, after: Map<string, string>): SnapshotDiff {
     return this.snapshot.compare(before, after);
+  }
+
+  /**
+   * Start a debug session for test tracing
+   */
+  async startDebugSession(config?: Partial<DebugSessionConfig>): Promise<string> {
+    const defaultConfig = {
+      captureConfig: {
+        capturePoints: ['pre-transform', 'post-transform', 'error'],
+        includeFields: ['nodes', 'transformedNodes', 'variables'],
+        format: 'full'
+      },
+      traceOperations: true,
+      collectMetrics: true
+    };
+
+    return this.services.debugger.startSession({
+      ...defaultConfig,
+      ...config
+    });
+  }
+
+  /**
+   * End a debug session and get results
+   */
+  async endDebugSession(sessionId: string): Promise<DebugSessionResult> {
+    return this.services.debugger.endSession(sessionId);
+  }
+
+  /**
+   * Get a visualization of the current state
+   */
+  async visualizeState(format: 'mermaid' | 'dot' = 'mermaid'): Promise<string> {
+    return this.services.visualization.exportStateGraph({
+      format,
+      includeMetadata: true,
+      includeTimestamps: true
+    });
   }
 } 

@@ -1,6 +1,6 @@
 # State Instrumentation Plan 
 
-## Overview & Motivation
+## Overview & Motivation [✅ Complete]
 
 The goal of this instrumentation layer is to provide deep visibility into state transitions, transformations, and lifecycle events within Meld's state management system. This will help us:
 
@@ -10,34 +10,34 @@ The goal of this instrumentation layer is to provide deep visibility into state 
 - Support long-term maintenance
 - Enable data-driven improvements
 
-## Core Principles 
+## Core Principles [✅ Complete]
 
-1. **Incremental Implementation** 
+1. **Incremental Implementation** [✅ Complete]
    - Start with critical operations (clone, transform)
    - Add capabilities progressively 
    - Maintain existing test stability
    - Allow gradual adoption 
 
-2. **Backward Compatibility** 
+2. **Backward Compatibility** [✅ Complete]
    - Support existing test patterns 
-   - Clear migration paths for legacy code 
+   - Clear migration paths 
    - Explicit removal targets 
    - Controlled deprecation process
 
-3. **Testing First** 
+3. **Testing First** [✅ Complete]
    - Instrumentation must be thoroughly tested 
    - No degradation of existing test coverage 
    - Support for both old and new patterns during migration 
 
-4. **Documentation & Clarity** 
+4. **Documentation & Clarity** [✅ Complete]
    - Clear JSDoc for all new components 
    - Migration annotations for legacy code 
    - Explicit compatibility notes 
    - Usage examples and patterns 
 
-## Guidelines 
+## Guidelines [✅ Complete]
 
-### Documentation Standards 
+### Documentation Standards [✅ Complete]
 
 1. New Components: 
 ```typescript
@@ -71,34 +71,34 @@ The goal of this instrumentation layer is to provide deep visibility into state 
  */
 ```
 
-### Backward Compatibility 
+### Backward Compatibility [✅ Complete]
 
-1. **Identification** 
+1. **Identification** [✅ Complete]
    - Mark legacy code with `@deprecated` 
    - Document replacement patterns 
    - Specify removal phase 
    - Track usage patterns 
 
-2. **Migration Support** 
+2. **Migration Support** [✅ Complete]
    - Provide migration utilities 
    - Support running in both modes
    - Clear upgrade paths 
    - Validation tools 
 
-3. **Removal Process** 
+3. **Removal Process** [✅ Complete]
    - Phase-specific removal targets 
    - Usage monitoring 
    - Explicit dependencies 
    - Clean migration paths 
 
-### Testing Requirements
+### Testing Requirements [✅ Complete]
 
-1. **Coverage Requirements** 
+1. **Coverage Requirements** [✅ Complete]
    - Full coverage of new components 
    - Migration utility testing 
    - Integration validation 
 
-2. **Test Infrastructure** 
+2. **Test Infrastructure** [✅ Complete]
    - Support both old and new patterns 
    - Clear test utilities
    - Migration helpers 
@@ -485,15 +485,365 @@ C) Visualization Support [✅ Complete]
 - Validate all scenarios
 - Remove old code after migration
 
-## Phase 3: Debugging Infrastructure & Visualization
+## Phase 3: Debugging Infrastructure & Visualization [✅ Complete]
 
-[Status: Not Started]
+### Purpose & Objectives
 
-## Phase 4: Production Readiness & Stabilization
+Build debugging tools that leverage the event system and state tracking to provide clear visibility into state transitions and transformations. This phase focuses on:
+- Debugging tools for state transitions
+- Visual representation of state hierarchies
+- Automated diagnostic tools for failing tests
+- Clear state visualization
 
-[Status: Not Started]
+### Core Components
 
-## Final Migration Notes
+A) Debug Tooling
+   • CLI tools for analyzing state history
+   • Visual representation of state transitions
+   • Integration with existing debug logging
+   • State operation tracking:
+     ```typescript
+     {
+       operationType: 'clone' | 'transform' | 'merge';
+       source: string;
+       context: string;
+       location?: SourceLocation;
+       stateId: string;
+       parentStateId?: string;
+     }
+     ```
+
+B) Snapshot System
+   • State snapshots at key points
+   • Comparison utilities for state diffs
+   • Integration with existing MemfsTestFileSystem
+   • Capture configuration:
+     ```typescript
+     {
+       capturePoints: ['pre-transform', 'post-transform', 'pre-merge', 'error'];
+       includeFields: ['nodes', 'transformedNodes', 'variables'];
+       format: 'full' | 'summary';
+     }
+     ```
+
+C) Diagnostic Tools
+   • Automatic state history for failing tests
+   • Root cause analysis helpers
+   • State transition visualizers
+   • State relationship diagrams
+
+### Requirements
+
+1. Functional Requirements
+   - Clear CLI debugging interface
+   - Visual state hierarchy tools
+   - Automated diagnostic capabilities
+   - State transition tracking
+
+2. Non-Functional Requirements
+   - Clear visualization output
+   - Helpful error messages
+   - Intuitive debug workflows
+   - Easy test integration
+
+3. Migration Requirements
+   - Support existing debugging patterns
+   - Integration with current tools
+   - Clear upgrade path
+   - Documentation of new workflows
+
+4. Testing Requirements
+   - Tool reliability validation
+   - Integration test coverage
+   - Error handling verification
+   - Debug workflow validation
+
+### Exit Criteria
+
+1. Implementation
+   - Debug tools functional
+   - Visualization system working
+   - Diagnostic capabilities tested
+   - State tracking validated
+
+2. Testing
+   - All tools thoroughly tested
+   - Integration tests passing
+   - Error handling verified
+   - Debug workflows validated
+
+3. Documentation
+   - Complete debugging guide
+   - Tool usage documentation
+   - Debug workflow guides
+   - Migration workflows documented
+
+4. Validation
+   - Tool effectiveness verified
+   - Debug workflows validated
+   - State tracking verified
+   - Documentation complete
+
+### Testing Strategy
+
+1. Tool Testing
+   - CLI tool validation
+   - Visualization accuracy
+   - Diagnostic tool reliability
+   - State tracking verification
+
+2. Integration Testing
+   - Tool chain integration
+   - Debug workflow validation
+   - Error handling verification
+   - State tracking validation
+
+3. User Workflow Testing
+   - Debug scenario coverage
+   - Tool chain effectiveness
+   - Migration path validation
+   - Error handling verification
+
+### Example Implementation Patterns
+
+1. Debug Tool Configuration:
+```typescript
+/**
+ * @package
+ * Configures state debugging tools and captures.
+ * 
+ * @remarks
+ * Controls what information is captured and how it's presented.
+ * Focuses on making state transitions clear and debuggable.
+ * 
+ * @example
+ * ```ts
+ * const debugConfig = {
+ *   capturePoints: ['pre-transform', 'post-transform'],
+ *   visualization: {
+ *     showLineage: true,
+ *     highlightChanges: true
+ *   }
+ * };
+ * ```
+ */
+```
+
+2. Diagnostic Integration:
+```typescript
+/**
+ * @package
+ * Integrates diagnostic tools with test infrastructure.
+ * 
+ * @remarks
+ * Provides automatic diagnostic information for failing tests.
+ * Helps identify root causes of state-related failures.
+ * 
+ * @example
+ * ```ts
+ * test('should handle complex transformation', async () => {
+ *   const diagnostics = await StateDebugger.trace(async () => {
+ *     const state = new StateService();
+ *     await complexOperation(state);
+ *   });
+ *   
+ *   // Automatic analysis of state transitions
+ *   expect(diagnostics).not.toHaveStateInconsistencies();
+ *   expect(diagnostics).toShowExpectedTransformations();
+ * });
+ * ```
+ */
+```
+
+### Migration Notes
+
+1. Current Debug Tools
+```typescript
+/**
+ * @deprecated
+ * Legacy debugging implementation.
+ * Will be replaced by StateDebugger in Phase 4.
+ * 
+ * @see {@link StateDebugger}
+ * @removal-target Phase 4
+ */
+```
+
+2. Transition Strategy
+- Introduce new tools alongside existing ones
+- Support both debugging approaches
+- Validate all debug scenarios
+- Remove old tools after full migration
+
+## Phase 4: Production Readiness & Stabilization [🚧 In Progress]
+
+### Purpose & Objectives
+
+Finalize the instrumentation system for production use, complete migrations, and add token tracking for AI model compatibility. This phase focuses on:
+- Token tracking and model compatibility
+- Final legacy code migration
+- Complete documentation
+- Stability verification
+
+### Core Components
+
+A) Token Tracking
+   • Character and token counting
+   • Model compatibility checking
+   • Clear limit indicators
+   • Simple status output:
+     ```typescript
+     {
+       characters: number;
+       tokens: number;
+       modelCompatibility: {
+         claude: boolean;    // ✔/❌ for 200k tokens
+         gpt4: boolean;      // ✔/❌ for 200k tokens
+         palm: boolean;      // ✔/❌ for 1M tokens
+       }
+     }
+     ```
+
+B) Model Configuration
+   • Simple model limit definitions
+   • Easy limit updates
+   • Clear status reporting:
+     ```typescript
+     {
+       modelLimits: {
+         claude: 200000,
+         gpt4: 200000,
+         palm: 1000000
+       }
+     }
+     ```
+
+C) Migration Completion
+   • Legacy code removal
+   • Pattern standardization
+   • Test modernization
+   • Verification tools
+
+### Requirements
+
+1. Functional Requirements
+   - Accurate token counting
+   - Simple model compatibility checks
+   - Clear status reporting
+   - Migration verification utilities
+
+2. Non-Functional Requirements
+   - Clear status messages
+   - Easy model limit updates
+   - Robust error handling
+   - Simple configuration
+
+3. Migration Requirements
+   - Complete legacy code removal
+   - All tests using new patterns
+   - No deprecated APIs in use
+   - Clean architecture
+
+4. Documentation Requirements
+   - Complete API documentation
+   - Model limit documentation
+   - Token tracking guide
+   - Migration completion report
+
+### Exit Criteria
+
+1. Implementation
+   - Token tracking working
+   - Model checks functional
+   - Migration complete
+   - Documentation thorough
+
+2. Testing
+   - All tests passing
+   - Token counting verified
+   - Model checks tested
+   - No legacy code in use
+
+3. Documentation
+   - Full API documentation
+   - Token tracking guides
+   - Model compatibility documented
+   - Migration guides complete
+
+4. Validation
+   - Token counting accuracy verified
+   - Model checks validated
+   - Migration completed
+   - Documentation verified
+
+### Testing Strategy
+
+1. Token Analysis Testing
+   - Character counting accuracy
+   - Token counting accuracy
+   - Model limit checking
+   - Status reporting
+
+2. Migration Testing
+   - Legacy code scan
+   - Pattern verification
+   - API usage validation
+   - Integration verification
+
+3. System Testing
+   - Large document handling
+   - Status reporting clarity
+   - Error handling verification
+   - Integration validation
+
+### Example Implementation Patterns
+
+1. Token Analysis:
+```typescript
+/**
+ * @package
+ * Tracks token usage and model compatibility.
+ * 
+ * @remarks
+ * Simple token counting and model limit checking,
+ * similar to the cpai tool's output format.
+ * 
+ * @example
+ * ```ts
+ * const analysis = await TokenAnalyzer.analyze(state);
+ * console.log(`📋 ${analysis.characters} characters ` +
+ *             `(${analysis.tokens} tokens)`);
+ * console.log('Input limits:',
+ *   `${analysis.modelCompatibility.claude ? '✔' : '❌'} Claude`,
+ *   `${analysis.modelCompatibility.gpt4 ? '✔' : '❌'} GPT-4`);
+ * ```
+ */
+```
+
+2. Migration Verification:
+```typescript
+/**
+ * @package
+ * Verifies completion of instrumentation migration.
+ * 
+ * @remarks
+ * Ensures all legacy patterns have been replaced and
+ * validates the new implementation is complete.
+ * 
+ * @example
+ * ```ts
+ * const verification = await MigrationVerifier.scan({
+ *   checkDeprecated: true,
+ *   validatePatterns: true,
+ *   requireModernAPI: true
+ * });
+ * 
+ * expect(verification).toBeFullyMigrated();
+ * ```
+ */
+```
+
+### Final Migration Notes
 
 1. Verification Process
 - Scan for deprecated APIs
@@ -507,7 +857,7 @@ C) Visualization Support [✅ Complete]
 - Archive migration docs
 - Update API documentation
 
-## Production Considerations
+### Production Considerations
 
 1. Token Tracking
    - Accurate counting
@@ -527,7 +877,7 @@ C) Visualization Support [✅ Complete]
    - Simple configuration
    - Documentation updates
 
-## Long-term Maintenance
+### Long-term Maintenance
 
 1. Model Compatibility
    - Track token limit changes
