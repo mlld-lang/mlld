@@ -16,6 +16,9 @@ mmeld _meld/audit/detailed/1-*.meld.md && mmeld _meld/audit/detailed/2-*.meld.md
 
 oneshot _meld/audit/detailed/1-*.md --model o1 --effort high --system _meld/audit/partials/auditor.md -o _meld/audit/detailed/1-answer.md && oneshot _meld/audit/detailed/2-*.md --model o1 --effort high --system _meld/audit/partials/auditor.md -o _meld/audit/detailed/2-answer.md && oneshot _meld/audit/detailed/3-*.md --model o1 --effort high --system _meld/audit/partials/auditor.md -o _meld/audit/detailed/3-answer.md
 
+mmeld _meld/audit/solutions/1-*.meld.md && mmeld _meld/audit/solutions/2-*.meld.md && mmeld _meld/audit/solutions/3-*.meld.md && oneshot _meld/audit/solutions/1-*.md --model o1 --effort high --system _meld/audit/partials/auditor.md -o _meld/audit/solutions/1-answer.md && oneshot _meld/audit/solutions/2-*.md --model o1 --effort high --system _meld/audit/partials/auditor.md -o _meld/audit/solutions/2-answer.md && oneshot _meld/audit/solutions/3-*.md --model o1 --effort high --system _meld/audit/partials/auditor.md -o _meld/audit/solutions/3-answer.md
+
+
 oneshot _meld/audit/1-*.md --model o1 --effort high --system _meld/audit/partials/auditor.md -o _meld/audit/1-answer.md
 
 oneshot _meld/audit/2-*.md --model o1 --effort high --system _meld/audit/partials/auditor.md -o _meld/audit/2-answer.md && oneshot _meld/audit/3-*.md --model o1 --effort high --system _meld/audit/partials/auditor.md -o _meld/audit/3-answer.md && oneshot _meld/audit/4-*.md --model o1 --effort high --system _meld/audit/partials/auditor.md -o _meld/audit/4-answer.md && oneshot _meld/audit/5-*.md --model o1 --effort high --system _meld/audit/partials/auditor.md -o _meld/audit/5-answer.md && 

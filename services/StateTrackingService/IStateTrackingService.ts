@@ -32,6 +32,12 @@ export interface IStateTrackingService {
    * @returns Array of state IDs representing all descendants
    */
   getStateDescendants(stateId: string, visited?: Set<string>): string[];
+
+  /**
+   * Get all registered states.
+   * @returns Array of state metadata for all registered states
+   */
+  getAllStates(): StateMetadata[];
 }
 
 /**
