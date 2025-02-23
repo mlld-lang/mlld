@@ -58,12 +58,12 @@ export class RunDirectiveHandler implements IDirectiveHandler {
       // If transformation is enabled, return a replacement node with the command output
       if (clonedState.isTransformationEnabled()) {
         const content = stdout && stderr ? `${stdout}\n${stderr}` : stdout || stderr;
-        const replacement: TextNode = {
+        const replacement: MeldNode = {
           type: 'Text',
           content,
           location: node.location
         };
-        return { state: clonedState, replacementNode: replacement };
+        return { state: clonedState, replacement };
       }
 
       return { state: clonedState };

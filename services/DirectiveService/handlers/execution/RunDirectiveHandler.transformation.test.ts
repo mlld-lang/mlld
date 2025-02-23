@@ -66,8 +66,8 @@ describe('RunDirectiveHandler Transformation', () => {
 
       const result = await handler.execute(node, context);
 
-      expect(result.replacementNode).toBeDefined();
-      expect(result.replacementNode).toEqual({
+      expect(result.replacement).toBeDefined();
+      expect(result.replacement).toEqual({
         type: 'Text',
         content: 'test output',
         location: node.location
@@ -88,8 +88,8 @@ describe('RunDirectiveHandler Transformation', () => {
 
       const result = await handler.execute(node, context);
 
-      expect(result.replacementNode).toBeDefined();
-      expect(result.replacementNode).toEqual({
+      expect(result.replacement).toBeDefined();
+      expect(result.replacement).toEqual({
         type: 'Text',
         content: 'Hello World',
         location: node.location
@@ -110,8 +110,8 @@ describe('RunDirectiveHandler Transformation', () => {
 
       const result = await handler.execute(node, context);
 
-      expect(result.replacementNode).toBeDefined();
-      expect(result.replacementNode).toEqual({
+      expect(result.replacement).toBeDefined();
+      expect(result.replacement).toEqual({
         type: 'Text',
         content: 'error output',
         location: node.location
@@ -132,8 +132,8 @@ describe('RunDirectiveHandler Transformation', () => {
 
       const result = await handler.execute(node, context);
 
-      expect(result.replacementNode).toBeDefined();
-      expect(result.replacementNode).toEqual({
+      expect(result.replacement).toBeDefined();
+      expect(result.replacement).toEqual({
         type: 'Text',
         content: 'test output\nerror output',
         location: node.location
