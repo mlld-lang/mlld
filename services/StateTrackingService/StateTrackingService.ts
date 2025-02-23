@@ -84,7 +84,7 @@ export class StateTrackingService implements IStateTrackingService {
 
       if (sourceState && targetState) {
         if (type === 'merge-source') {
-          // The target becomes a child of the source
+          // Add parent-child relationship if it doesn't exist
           const parentChildRel = relationships.find(rel =>
             rel.targetId === targetId && rel.type === 'parent-child'
           );
@@ -95,9 +95,14 @@ export class StateTrackingService implements IStateTrackingService {
           // Update target's parent ID
           targetState.parentId = sourceId;
           this.states.set(targetId, targetState);
+        } else if (type === 'merge-target') {
+          // Update source's parent ID to be the target's parent
+          const targetParentId = targetState.parentId;
+          if (targetParentId) {
+            sourceState.parentId = targetParentId;
+            this.states.set(sourceId, sourceState);
+          }
         }
-        // For merge-target, we don't create any additional relationships
-        // The source state is being merged into the target state
       }
     }
   }
