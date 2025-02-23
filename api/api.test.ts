@@ -39,29 +39,39 @@ describe('SDK Integration Tests', () => {
     });
 
     it('should handle execution directives correctly', async () => {
-      // Start debug session
+      // Start debug session with enhanced configuration
       const debugSessionId = await context.startDebugSession({
         captureConfig: {
           capturePoints: ['pre-transform', 'post-transform', 'error'],
-          includeFields: ['nodes', 'transformedNodes', 'variables'],
+          includeFields: ['nodes', 'transformedNodes', 'variables', 'metadata'],
           format: 'full'
+        },
+        visualization: {
+          format: 'mermaid',
+          includeMetadata: true,
+          includeTimestamps: true
         }
       });
 
       try {
         await context.fs.writeFile(testFilePath, '@run [echo test]');
         
-        // Get initial state snapshot for state ID
-        const snapshot = await context.services.debugger.getStateSnapshot(
-          context.services.state.getCurrentFilePath() || 'unknown',
-          'full'
-        );
+        // Get initial state ID and visualize it
+        const initialStateId = context.services.state.getStateId() || context.services.state.getCurrentFilePath() || 'unknown';
         
-        // Trace the operation
+        console.log('Initial State Hierarchy:');
+        console.log(await context.services.visualization.generateHierarchyView(initialStateId, {
+          format: 'mermaid',
+          includeMetadata: true
+        }));
+
+        // Trace the operation with enhanced error handling
         const { result, diagnostics } = await context.services.debugger.traceOperation(
-          snapshot.metadata.stateId,
+          initialStateId,
           async () => {
-            // Use type assertion to bypass type checking
+            // Enable transformation mode explicitly
+            context.services.state.enableTransformation(true);
+            
             return await main(testFilePath, {
               fs: context.fs,
               format: 'llm',
@@ -70,13 +80,37 @@ describe('SDK Integration Tests', () => {
           }
         );
 
+        // Log diagnostics and state changes
+        console.log('Operation Diagnostics:', diagnostics);
+
+        // Get final state visualization
+        const finalStateId = context.services.state.getStateId() || initialStateId;
+        
+        console.log('Final State Hierarchy:');
+        console.log(await context.services.visualization.generateHierarchyView(finalStateId, {
+          format: 'mermaid',
+          includeMetadata: true
+        }));
+
+        // Generate transition diagram
+        console.log('State Transitions:');
+        console.log(await context.services.visualization.generateTransitionDiagram(finalStateId, {
+          format: 'mermaid',
+          includeTimestamps: true
+        }));
+
         expect(result).toContain('[run directive output placeholder]');
 
-        // Get debug report
+        // Get and log complete debug report
         const report = await context.services.debugger.generateDebugReport(debugSessionId);
-        console.log('State Debug Report:', report);
+        console.log('Complete Debug Report:', report);
+      } catch (error) {
+        // Log error diagnostics
+        const errorReport = await context.services.debugger.generateDebugReport(debugSessionId);
+        console.error('Error Debug Report:', errorReport);
+        throw error;
       } finally {
-        context.services.debugger.clearSession(debugSessionId);
+        await context.services.debugger.endSession(debugSessionId);
       }
     });
 

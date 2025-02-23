@@ -1,5 +1,7 @@
 # State Visualization System
 
+**** WARNING **** this doc contains hallucinations
+
 ## Overview
 
 The State Visualization System provides comprehensive visualization capabilities for Meld's state management system. It enables developers to:

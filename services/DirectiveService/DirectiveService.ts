@@ -87,6 +87,7 @@ export class DirectiveService implements IDirectiveService {
    * Register all default directive handlers
    */
   public registerDefaultHandlers(): void {
+    this.checkInitialized();
     // Definition handlers
     this.registerHandler(
       new TextDirectiveHandler(
@@ -159,17 +160,10 @@ export class DirectiveService implements IDirectiveService {
   /**
    * Register a new directive handler
    */
-  registerHandler(handler: IDirectiveHandler): void {
-    if (!this.initialized) {
-      throw new Error('DirectiveService must be initialized before registering handlers');
-    }
-
-    if (!handler.kind) {
-      throw new Error('Handler must have a kind property');
-    }
-
-    this.handlers.set(handler.kind, handler);
-    this.logger.debug(`Registered handler for directive: ${handler.kind}`);
+  public registerHandler(handler: IDirectiveHandler): void {
+    this.checkInitialized();
+    const kind = handler.getDirectiveKind();
+    this.handlers.set(kind, handler);
   }
 
   /**
@@ -280,7 +274,7 @@ export class DirectiveService implements IDirectiveService {
     return Array.from(this.handlers.keys());
   }
 
-  private ensureInitialized(): void {
+  private checkInitialized(): void {
     if (!this.initialized) {
       throw new Error('DirectiveService must be initialized before use');
     }

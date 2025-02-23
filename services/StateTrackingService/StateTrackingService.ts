@@ -35,10 +35,11 @@ export class StateTrackingService implements IStateTrackingService {
       // Create new state metadata
       this.states.set(stateId, {
         id: stateId,
-        source: metadata.source || 'unknown',
+        source: metadata.source || 'implicit',
         parentId: metadata.parentId,
         filePath: metadata.filePath,
-        transformationEnabled: metadata.transformationEnabled || false
+        transformationEnabled: metadata.transformationEnabled || false,
+        createdAt: Date.now()
       });
     }
 
@@ -78,24 +79,20 @@ export class StateTrackingService implements IStateTrackingService {
       const sourceState = this.states.get(sourceId);
       const targetState = this.states.get(targetId);
 
-      if (type === 'merge-source') {
+      if (type === 'merge-source' && sourceState && targetState) {
         // The target becomes a child of the source
         this.addRelationship(sourceId, targetId, 'parent-child');
         
         // Update target's parent ID
-        if (sourceState) {
-          targetState.parentId = sourceId;
-          this.states.set(targetId, targetState);
-        }
-      } else { // merge-target
+        targetState.parentId = sourceId;
+        this.states.set(targetId, targetState);
+      } else if (type === 'merge-target' && sourceState && targetState) {
         // The source becomes a child of the target
         this.addRelationship(targetId, sourceId, 'parent-child');
         
         // Update source's parent ID
-        if (targetState) {
-          sourceState.parentId = targetId;
-          this.states.set(sourceId, sourceState);
-        }
+        sourceState.parentId = targetId;
+        this.states.set(sourceId, sourceState);
       }
     }
   }
@@ -140,16 +137,32 @@ export class StateTrackingService implements IStateTrackingService {
     // Get the state's metadata
     const metadata = this.states.get(stateId)!;
     
-    // If no parent, this is a root state
-    if (!metadata.parentId) {
-      return [stateId];
+    // Get parent's lineage first (recursively)
+    const parentLineage = metadata.parentId ? this.getStateLineage(metadata.parentId, visited) : [];
+
+    // Check for merge relationships
+    const relationships = this.relationships.get(stateId) || [];
+    const mergeTargets = relationships
+      .filter(rel => rel.type === 'merge-target')
+      .map(rel => rel.targetId);
+
+    // Get lineage from merge targets
+    const mergeLineages = mergeTargets
+      .map(targetId => this.getStateLineage(targetId, new Set(visited)))
+      .filter(lineage => lineage.length > 0);
+
+    // Combine parent lineage with merge target lineages
+    const combinedLineage = [...parentLineage];
+    for (const mergeLineage of mergeLineages) {
+      for (const id of mergeLineage) {
+        if (!combinedLineage.includes(id)) {
+          combinedLineage.push(id);
+        }
+      }
     }
 
-    // Get parent's lineage first (recursively)
-    const parentLineage = this.getStateLineage(metadata.parentId, visited);
-
     // Return lineage from root to current state
-    return [...parentLineage, stateId];
+    return [...combinedLineage, stateId];
   }
 
   getStateDescendants(stateId: string, visited: Set<string> = new Set()): string[] {

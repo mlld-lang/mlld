@@ -112,7 +112,7 @@ export class TestContext {
     const tracking = new StateTrackingService();
     const eventService = new StateEventService();
     const history = new StateHistoryService(eventService);
-    const visualization = new StateVisualizationService();
+    const visualization = new StateVisualizationService(history, tracking);
     const state = new StateService();
     state.setCurrentFilePath('test.meld'); // Set initial file path
     state.enableTransformation(true); // Enable transformation by default for tests
