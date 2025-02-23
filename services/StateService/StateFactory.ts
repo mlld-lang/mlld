@@ -89,7 +89,10 @@ export class StateFactory implements IStateFactory {
                        parent.transformedNodes !== undefined ? [...parent.transformedNodes] :
                        undefined,
       filePath: child.filePath ?? parent.filePath,
-      parentState: parent.parentState
+      parentState: parent.parentState,
+      // Preserve parent's stateId to maintain identity
+      stateId: parent.stateId,
+      source: 'merge'
     };
 
     this.logOperation({

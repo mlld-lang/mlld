@@ -4,6 +4,9 @@ import type { MeldNode } from 'meld-spec';
 import type { IStateEventService, StateEvent } from '../StateEventService/IStateEventService.js';
 import type { IStateTrackingService } from '../StateTrackingService/IStateTrackingService.js';
 import { StateTrackingService } from '../StateTrackingService/StateTrackingService.js';
+import { StateVisualizationService } from '../StateVisualizationService/StateVisualizationService.js';
+import { StateDebuggerService } from '../StateDebuggerService/StateDebuggerService.js';
+import { StateHistoryService } from '../StateHistoryService/StateHistoryService.js';
 
 class MockStateEventService implements IStateEventService {
   private handlers = new Map<string, Array<{
@@ -336,11 +339,30 @@ describe('StateService', () => {
   describe('State Tracking', () => {
     let service: StateService;
     let trackingService: IStateTrackingService;
+    let eventService: MockStateEventService;
+    let visualizationService: StateVisualizationService;
+    let debuggerService: StateDebuggerService;
+    let historyService: StateHistoryService;
 
     beforeEach(() => {
       service = new StateService();
+      eventService = new MockStateEventService();
       trackingService = new StateTrackingService();
+      historyService = new StateHistoryService(eventService);
+      visualizationService = new StateVisualizationService(historyService, trackingService);
+      debuggerService = new StateDebuggerService(visualizationService, historyService, trackingService);
+      
+      service.setEventService(eventService);
       service.setTrackingService(trackingService);
+      
+      // Add services to the service instance for visualization and debugging
+      (service as any).services = {
+        visualization: visualizationService,
+        debugger: debuggerService,
+        history: historyService,
+        tracking: trackingService,
+        events: eventService
+      };
     });
 
     it('should register state with tracking service', () => {
@@ -400,18 +422,76 @@ describe('StateService', () => {
       expect(trackingService.hasState(child.getStateId()!)).toBe(true);
     });
 
-    it('should track state lineage', () => {
-      const rootId = service.getStateId()!;
-      const child = service.createChildState();
-      const childId = child.getStateId()!;
-      const grandchild = child.createChildState();
-      const grandchildId = grandchild.getStateId()!;
+    it('should track state lineage', async () => {
+      // Start debug session with enhanced configuration
+      const debugSessionId = await debuggerService.startSession({
+        captureConfig: {
+          capturePoints: ['pre-transform', 'post-transform', 'error'],
+          includeFields: ['nodes', 'transformedNodes', 'variables', 'metadata'],
+          format: 'full'
+        },
+        visualization: {
+          format: 'mermaid',
+          includeMetadata: true,
+          includeTimestamps: true
+        }
+      });
 
-      const lineage = trackingService.getStateLineage(grandchildId);
-      expect(lineage).toHaveLength(3); // Root -> Child -> Grandchild
-      expect(lineage[0]).toBe(rootId); // Root first
-      expect(lineage[1]).toBe(childId); // Then child
-      expect(lineage[2]).toBe(grandchildId); // Then grandchild
+      try {
+        // Get initial state ID and visualize it
+        const rootId = service.getStateId()!;
+        console.log('Initial State:');
+        console.log(await visualizationService.generateHierarchyView(rootId, {
+          format: 'mermaid',
+          includeMetadata: true
+        }));
+
+        // Create child state
+        const child = service.createChildState();
+        const childId = child.getStateId()!;
+        console.log('\nAfter Creating Child:');
+        console.log(await visualizationService.generateHierarchyView(rootId, {
+          format: 'mermaid',
+          includeMetadata: true
+        }));
+
+        // Create grandchild state
+        const grandchild = child.createChildState();
+        const grandchildId = grandchild.getStateId()!;
+        console.log('\nAfter Creating Grandchild:');
+        console.log(await visualizationService.generateHierarchyView(rootId, {
+          format: 'mermaid',
+          includeMetadata: true
+        }));
+
+        // Get and verify lineage
+        const lineage = trackingService.getStateLineage(grandchildId);
+        console.log('\nState Lineage:', lineage);
+
+        // Generate transition diagram
+        console.log('\nState Transitions:');
+        console.log(await visualizationService.generateTransitionDiagram(grandchildId, {
+          format: 'mermaid',
+          includeTimestamps: true
+        }));
+
+        // Verify lineage
+        expect(lineage).toHaveLength(3); // Root -> Child -> Grandchild
+        expect(lineage[0]).toBe(rootId); // Root first
+        expect(lineage[1]).toBe(childId); // Then child
+        expect(lineage[2]).toBe(grandchildId); // Then grandchild
+
+        // Get and log complete debug report
+        const report = await debuggerService.generateDebugReport(debugSessionId);
+        console.log('\nComplete Debug Report:', report);
+      } catch (error) {
+        // Log error diagnostics
+        const errorReport = await debuggerService.generateDebugReport(debugSessionId);
+        console.error('Error Debug Report:', errorReport);
+        throw error;
+      } finally {
+        await service.services.debugger.endSession(debugSessionId);
+      }
     });
 
     it('should track state descendants', () => {

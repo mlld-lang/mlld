@@ -1,6 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { StateTrackingService } from './StateTrackingService.js';
 import type { StateMetadata } from './IStateTrackingService.js';
+import { StateVisualizationService } from './StateVisualizationService.js';
+import { StateDebuggerService } from './StateDebuggerService.js';
+import { StateHistoryService } from './StateHistoryService.js';
+import { MockStateEventService } from './MockStateEventService.js';
 
 describe('StateTrackingService', () => {
   let service: StateTrackingService;
@@ -215,6 +219,17 @@ describe('StateTrackingService', () => {
   });
 
   describe('Merge Operations', () => {
+    let visualizationService: StateVisualizationService;
+    let debuggerService: StateDebuggerService;
+    let historyService: IStateHistoryService;
+
+    beforeEach(() => {
+      service = new StateTrackingService();
+      historyService = new StateHistoryService(new MockStateEventService());
+      visualizationService = new StateVisualizationService(historyService, service);
+      debuggerService = new StateDebuggerService(visualizationService, historyService, service);
+    });
+
     it('should handle merge source relationships', () => {
       const sourceId = service.registerState({
         source: 'new',
@@ -232,27 +247,94 @@ describe('StateTrackingService', () => {
       expect(descendants).toContain(targetId);
     });
 
-    it('should handle merge target relationships', () => {
-      const sourceId = service.registerState({
-        source: 'new',
-        transformationEnabled: true
+    it('should handle merge target relationships', async () => {
+      // Start debug session
+      const debugSessionId = await debuggerService.startSession({
+        captureConfig: {
+          capturePoints: ['pre-transform', 'post-transform', 'error'],
+          includeFields: ['nodes', 'transformedNodes', 'variables', 'metadata'],
+          format: 'full'
+        },
+        visualization: {
+          format: 'mermaid',
+          includeMetadata: true,
+          includeTimestamps: true
+        }
       });
 
-      const targetId = service.registerState({
-        source: 'new',
-        transformationEnabled: true
-      });
+      try {
+        const sourceId = service.registerState({
+          source: 'new',
+          transformationEnabled: true
+        });
 
-      const parentId = service.registerState({
-        source: 'new',
-        transformationEnabled: true
-      });
+        // Visualize initial state
+        console.log('Initial State:');
+        console.log(await visualizationService.generateHierarchyView(sourceId, {
+          format: 'mermaid',
+          includeMetadata: true
+        }));
 
-      service.addRelationship(parentId, targetId, 'parent-child');
-      service.addRelationship(sourceId, targetId, 'merge-target');
+        const targetId = service.registerState({
+          source: 'new',
+          transformationEnabled: true
+        });
 
-      const lineage = service.getStateLineage(sourceId);
-      expect(lineage).toContain(parentId);
+        const parentId = service.registerState({
+          source: 'new',
+          transformationEnabled: true
+        });
+
+        // Visualize after creating states
+        console.log('\nAfter Creating States:');
+        console.log(await visualizationService.generateHierarchyView(sourceId, {
+          format: 'mermaid',
+          includeMetadata: true
+        }));
+
+        service.addRelationship(parentId, targetId, 'parent-child');
+        
+        // Visualize after parent-child relationship
+        console.log('\nAfter Parent-Child Relationship:');
+        console.log(await visualizationService.generateHierarchyView(parentId, {
+          format: 'mermaid',
+          includeMetadata: true
+        }));
+
+        service.addRelationship(sourceId, targetId, 'merge-target');
+
+        // Visualize after merge-target relationship
+        console.log('\nAfter Merge-Target Relationship:');
+        console.log(await visualizationService.generateHierarchyView(sourceId, {
+          format: 'mermaid',
+          includeMetadata: true
+        }));
+
+        // Get and verify lineage
+        const lineage = service.getStateLineage(sourceId);
+        console.log('\nState Lineage:', lineage);
+
+        // Generate transition diagram
+        console.log('\nState Transitions:');
+        console.log(await visualizationService.generateTransitionDiagram(sourceId, {
+          format: 'mermaid',
+          includeTimestamps: true
+        }));
+
+        expect(lineage).toContain(parentId);
+
+        // Get and log complete debug report
+        const report = await debuggerService.generateDebugReport(debugSessionId);
+        console.log('\nComplete Debug Report:', report);
+
+      } catch (error) {
+        // Log error diagnostics
+        const errorReport = await debuggerService.generateDebugReport(debugSessionId);
+        console.error('Error Debug Report:', errorReport);
+        throw error;
+      } finally {
+        await debuggerService.endSession(debugSessionId);
+      }
     });
 
     it('should handle complex merge scenarios', () => {

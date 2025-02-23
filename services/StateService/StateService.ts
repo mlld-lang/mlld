@@ -48,13 +48,13 @@ export class StateService implements IStateService {
         transformationEnabled: this._transformationEnabled
       });
 
-      // Add relationship if this is a child state and parent has an ID
+      // Add parent-child relationship if there is a parent
       if (parentId) {
-        try {
-          this.trackingService.addRelationship(parentId, this.currentState.stateId, 'parent-child');
-        } catch (error) {
-          logger.warn('Failed to add child relationship', { error, parentId, childId: this.currentState.stateId });
-        }
+        this.trackingService.addRelationship(
+          parentId,
+          this.currentState.stateId!,
+          'parent-child'
+        );
       }
     }
   }
@@ -349,6 +349,7 @@ export class StateService implements IStateService {
 
     // Add merge relationship if tracking enabled
     if (this.trackingService && child.currentState.stateId) {
+      // Add merge-source relationship without removing the existing parent-child relationship
       this.trackingService.addRelationship(
         this.currentState.stateId!,
         child.currentState.stateId,

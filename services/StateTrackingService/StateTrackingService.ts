@@ -67,14 +67,29 @@ export class StateTrackingService implements IStateTrackingService {
       this.relationships.set(targetId, []);
     }
 
-    // Add the relationship if it doesn't exist
+    // Get the current relationships
     const relationships = this.relationships.get(sourceId)!;
+    logger.debug('Current relationships before adding new one:', {
+      sourceId,
+      targetId,
+      type,
+      existingRelationships: relationships
+    });
+
+    // Check if this exact relationship already exists
     const existingRelationship = relationships.find(rel => 
       rel.targetId === targetId && rel.type === type
     );
 
+    // Add the new relationship if it doesn't exist
     if (!existingRelationship) {
       relationships.push({ targetId, type });
+      logger.debug('Added new relationship:', {
+        sourceId,
+        targetId,
+        type,
+        updatedRelationships: relationships
+      });
     }
 
     // For merge operations, we need to handle both source and target relationships
@@ -84,27 +99,41 @@ export class StateTrackingService implements IStateTrackingService {
 
       if (sourceState && targetState) {
         if (type === 'merge-source') {
-          // Add parent-child relationship if it doesn't exist
-          const parentChildRel = relationships.find(rel =>
-            rel.targetId === targetId && rel.type === 'parent-child'
-          );
-          if (!parentChildRel) {
-            relationships.push({ targetId, type: 'parent-child' });
-          }
-          
-          // Update target's parent ID
+          // For merge-source, ensure the target's parent ID is set correctly
           targetState.parentId = sourceId;
           this.states.set(targetId, targetState);
+
+          // Note: We don't need to add a parent-child relationship here
+          // because it should already exist from when the child was created
         } else if (type === 'merge-target') {
           // Update source's parent ID to be the target's parent
           const targetParentId = targetState.parentId;
           if (targetParentId) {
             sourceState.parentId = targetParentId;
             this.states.set(sourceId, sourceState);
+
+            // Add parent-child relationship between target's parent and source
+            const sourceRelationships = this.relationships.get(sourceId)!;
+            const parentChildRel = sourceRelationships.find(rel =>
+              rel.targetId === targetParentId && rel.type === 'parent-child'
+            );
+            if (!parentChildRel) {
+              sourceRelationships.push({ targetId: targetParentId, type: 'parent-child' });
+              logger.debug('Added parent-child relationship for merge-target:', {
+                sourceId,
+                targetId: targetParentId,
+                updatedRelationships: sourceRelationships
+              });
+            }
           }
         }
       }
     }
+
+    logger.debug('Final relationships after all operations:', {
+      sourceId,
+      relationships: this.relationships.get(sourceId)
+    });
   }
 
   getRelationships(stateId: string): StateRelationship[] {
