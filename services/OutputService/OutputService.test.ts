@@ -61,12 +61,15 @@ class MockStateService implements IStateService {
     return this.transformationEnabled;
   }
 
-  enableTransformation(enable: boolean): void {
+  enableTransformation(enable: boolean = true): void {
     this.transformationEnabled = enable;
   }
 
   getTransformedNodes(): MeldNode[] {
-    return [...this.transformedNodes];
+    if (this.transformationEnabled) {
+      return this.transformedNodes.length > 0 ? [...this.transformedNodes] : [...this.nodes];
+    }
+    return [...this.nodes];
   }
 
   transformNode(original: MeldNode, transformed: MeldNode): void {
