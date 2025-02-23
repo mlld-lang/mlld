@@ -105,4 +105,11 @@ export class StateHistoryService implements IStateHistoryService {
     this.operations = this.operations.filter(op => op.timestamp >= beforeTimestamp);
     this.transformations = this.transformations.filter(t => t.timestamp >= beforeTimestamp);
   }
+
+  public getStateHistory(stateId: string): { operations: StateOperation[]; transformations: StateTransformation[] } {
+    return {
+      operations: this.getOperationHistory(stateId),
+      transformations: this.getTransformationChain(stateId)
+    };
+  }
 } 
