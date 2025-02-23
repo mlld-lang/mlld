@@ -59,12 +59,15 @@ export class StateTrackingService implements IStateTrackingService {
       this.registerState({ id: targetId });
     }
 
-    // Initialize relationships array if it doesn't exist
+    // Initialize relationships arrays if they don't exist
     if (!this.relationships.has(sourceId)) {
       this.relationships.set(sourceId, []);
     }
+    if (!this.relationships.has(targetId)) {
+      this.relationships.set(targetId, []);
+    }
 
-    // Add the relationship
+    // Add the relationship if it doesn't exist
     const relationships = this.relationships.get(sourceId)!;
     const existingRelationship = relationships.find(rel => 
       rel.targetId === targetId && rel.type === type
@@ -82,19 +85,19 @@ export class StateTrackingService implements IStateTrackingService {
       if (sourceState && targetState) {
         if (type === 'merge-source') {
           // The target becomes a child of the source
-          this.addRelationship(sourceId, targetId, 'parent-child');
+          const parentChildRel = relationships.find(rel =>
+            rel.targetId === targetId && rel.type === 'parent-child'
+          );
+          if (!parentChildRel) {
+            relationships.push({ targetId, type: 'parent-child' });
+          }
           
           // Update target's parent ID
           targetState.parentId = sourceId;
           this.states.set(targetId, targetState);
-        } else if (type === 'merge-target') {
-          // The source becomes a child of the target
-          this.addRelationship(targetId, sourceId, 'parent-child');
-          
-          // Update source's parent ID
-          sourceState.parentId = targetId;
-          this.states.set(sourceId, sourceState);
         }
+        // For merge-target, we don't create any additional relationships
+        // The source state is being merged into the target state
       }
     }
   }
