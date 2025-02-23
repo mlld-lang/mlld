@@ -79,20 +79,22 @@ export class StateTrackingService implements IStateTrackingService {
       const sourceState = this.states.get(sourceId);
       const targetState = this.states.get(targetId);
 
-      if (type === 'merge-source' && sourceState && targetState) {
-        // The target becomes a child of the source
-        this.addRelationship(sourceId, targetId, 'parent-child');
-        
-        // Update target's parent ID
-        targetState.parentId = sourceId;
-        this.states.set(targetId, targetState);
-      } else if (type === 'merge-target' && sourceState && targetState) {
-        // The source becomes a child of the target
-        this.addRelationship(targetId, sourceId, 'parent-child');
-        
-        // Update source's parent ID
-        sourceState.parentId = targetId;
-        this.states.set(sourceId, sourceState);
+      if (sourceState && targetState) {
+        if (type === 'merge-source') {
+          // The target becomes a child of the source
+          this.addRelationship(sourceId, targetId, 'parent-child');
+          
+          // Update target's parent ID
+          targetState.parentId = sourceId;
+          this.states.set(targetId, targetState);
+        } else if (type === 'merge-target') {
+          // The source becomes a child of the target
+          this.addRelationship(targetId, sourceId, 'parent-child');
+          
+          // Update source's parent ID
+          sourceState.parentId = targetId;
+          this.states.set(sourceId, sourceState);
+        }
       }
     }
   }
@@ -148,8 +150,12 @@ export class StateTrackingService implements IStateTrackingService {
 
     // Get lineage from merge targets
     const mergeLineages = mergeTargets
-      .map(targetId => this.getStateLineage(targetId, new Set(visited)))
-      .filter(lineage => lineage.length > 0);
+      .map(targetId => {
+        if (visited.has(targetId)) {
+          return [];
+        }
+        return this.getStateLineage(targetId, visited);
+      });
 
     // Combine parent lineage with merge target lineages
     const combinedLineage = [...parentLineage];
@@ -161,8 +167,12 @@ export class StateTrackingService implements IStateTrackingService {
       }
     }
 
-    // Return lineage from root to current state
-    return [...combinedLineage, stateId];
+    // Add current state to the lineage
+    if (!combinedLineage.includes(stateId)) {
+      combinedLineage.push(stateId);
+    }
+
+    return combinedLineage;
   }
 
   getStateDescendants(stateId: string, visited: Set<string> = new Set()): string[] {

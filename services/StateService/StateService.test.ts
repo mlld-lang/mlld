@@ -408,9 +408,10 @@ describe('StateService', () => {
       const grandchildId = grandchild.getStateId()!;
 
       const lineage = trackingService.getStateLineage(grandchildId);
-      expect(lineage).toHaveLength(2);
-      expect(lineage[0]).toBe(childId);
-      expect(lineage[1]).toBe(rootId);
+      expect(lineage).toHaveLength(3); // Root -> Child -> Grandchild
+      expect(lineage[0]).toBe(rootId); // Root first
+      expect(lineage[1]).toBe(childId); // Then child
+      expect(lineage[2]).toBe(grandchildId); // Then grandchild
     });
 
     it('should track state descendants', () => {
