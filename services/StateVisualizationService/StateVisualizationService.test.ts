@@ -477,4 +477,200 @@ describe('StateVisualizationService', () => {
       expect(metrics.averageChildrenPerState).toBe(1); // Each parent has 1 child
     });
   });
+
+  describe('Relationship Graph Generation', () => {
+    beforeEach(() => {
+      // Mock state metadata
+      mockHistoryService.getOperationHistory.mockImplementation((stateId) => {
+        const operations: StateOperation[] = [];
+        if (stateId === 'root') {
+          operations.push({
+            type: 'create',
+            stateId: 'root',
+            source: 'new',
+            timestamp: 1000,
+            metadata: {
+              id: 'root',
+              source: 'new',
+              transformationEnabled: true,
+              createdAt: 1000,
+            },
+          });
+        } else if (stateId === 'child1') {
+          operations.push({
+            type: 'create',
+            stateId: 'child1',
+            source: 'clone',
+            timestamp: 2000,
+            metadata: {
+              id: 'child1',
+              source: 'clone',
+              transformationEnabled: true,
+              createdAt: 2000,
+            },
+          });
+        } else if (stateId === 'merged') {
+          operations.push({
+            type: 'merge',
+            stateId: 'merged',
+            source: 'merge',
+            timestamp: 3000,
+            parentId: 'root',
+            metadata: {
+              id: 'merged',
+              source: 'merge',
+              transformationEnabled: true,
+              createdAt: 3000,
+            },
+          });
+        }
+        return operations;
+      });
+
+      // Mock lineage and descendants
+      mockTrackingService.getStateLineage.mockImplementation((stateId) => {
+        switch (stateId) {
+          case 'root':
+            return ['root'];
+          case 'child1':
+            return ['root', 'child1'];
+          case 'merged':
+            return ['root', 'merged'];
+          default:
+            return [];
+        }
+      });
+
+      mockTrackingService.getStateDescendants.mockImplementation((stateId) => {
+        switch (stateId) {
+          case 'root':
+            return ['child1', 'merged'];
+          default:
+            return [];
+        }
+      });
+    });
+
+    it('generates mermaid format relationship graph', () => {
+      const result = visualizationService.generateRelationshipGraph(['root'], {
+        format: 'mermaid',
+        includeMetadata: true,
+      });
+
+      // Check basic structure
+      expect(result).toContain('graph TD;');
+      
+      // Check nodes
+      expect(result).toContain('root[new]');
+      expect(result).toContain('child1[clone]');
+      expect(result).toContain('merged[merge]');
+      
+      // Check relationships
+      expect(result).toMatch(/root.*-->.*child1/);
+      expect(result).toMatch(/root.*-->.*merged/);
+      
+      // Check styling
+      expect(result).toMatch(/style.*fill:#[0-9A-F]{6}/);
+      expect(result).toMatch(/linkStyle.*stroke:/);
+    });
+
+    it('generates dot format relationship graph', () => {
+      const result = visualizationService.generateRelationshipGraph(['root'], {
+        format: 'dot',
+        includeMetadata: true,
+      });
+
+      // Check basic structure
+      expect(result).toContain('digraph G {');
+      expect(result).toContain('rankdir=TB;');
+      
+      // Check nodes
+      expect(result).toMatch(/"root".*label="root\\nnew"/);
+      expect(result).toMatch(/"child1".*label="child1\\nclone"/);
+      expect(result).toMatch(/"merged".*label="merged\\nmerge"/);
+      
+      // Check relationships
+      expect(result).toMatch(/"root".*->.*"child1"/);
+      expect(result).toMatch(/"root".*->.*"merged"/);
+      
+      // Check styling
+      expect(result).toMatch(/shape="[^"]+"/);
+      expect(result).toMatch(/color="#[0-9A-F]{6}"/);
+      expect(result).toMatch(/style="[^"]+"/);
+    });
+
+    it('generates json format relationship graph', () => {
+      const result = visualizationService.generateRelationshipGraph(['root'], {
+        format: 'json',
+        includeMetadata: true,
+      });
+
+      const parsed = JSON.parse(result);
+      
+      // Check structure
+      expect(parsed).toHaveProperty('nodes');
+      expect(parsed).toHaveProperty('edges');
+      
+      // Check nodes
+      expect(parsed.nodes).toHaveLength(3); // root, child1, merged
+      expect(parsed.nodes.find((n: any) => n.id === 'root')).toBeTruthy();
+      expect(parsed.nodes.find((n: any) => n.id === 'child1')).toBeTruthy();
+      expect(parsed.nodes.find((n: any) => n.id === 'merged')).toBeTruthy();
+      
+      // Check edges
+      expect(parsed.edges).toContainEqual(expect.objectContaining({
+        sourceId: 'root',
+        targetId: 'child1',
+        type: 'parent-child',
+      }));
+      expect(parsed.edges).toContainEqual(expect.objectContaining({
+        sourceId: 'root',
+        targetId: 'merged',
+        type: 'merge-source',
+      }));
+    });
+
+    it('handles cycles in state relationships', () => {
+      // Mock a cyclic relationship
+      mockTrackingService.getStateLineage.mockImplementation((stateId) => {
+        switch (stateId) {
+          case 'state1':
+            return ['state1', 'state2'];
+          case 'state2':
+            return ['state2', 'state1'];
+          default:
+            return [];
+        }
+      });
+
+      const result = visualizationService.generateRelationshipGraph(['state1', 'state2'], {
+        format: 'json',
+        includeMetadata: true,
+      });
+
+      const parsed = JSON.parse(result);
+      expect(parsed.nodes).toBeDefined();
+      expect(parsed.edges).toBeDefined();
+      // Should not enter infinite recursion
+    });
+
+    it('handles empty state set', () => {
+      const result = visualizationService.generateRelationshipGraph([], {
+        format: 'mermaid',
+        includeMetadata: true,
+      });
+
+      expect(result).toContain('graph TD;');
+      expect(result.split('\n')).toHaveLength(1); // Only contains header
+    });
+
+    it('throws error for unsupported format', () => {
+      expect(() => 
+        visualizationService.generateRelationshipGraph(['root'], {
+          format: 'invalid' as any,
+          includeMetadata: true,
+        })
+      ).toThrow('Unsupported format: invalid');
+    });
+  });
 }); 

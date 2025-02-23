@@ -304,8 +304,156 @@ export class StateVisualizationService implements IStateVisualizationService {
   }
 
   public generateRelationshipGraph(stateIds: string[], config: VisualizationConfig): string {
-    // TODO: Implement relationship graph generation
-    return '';
+    if (!['mermaid', 'dot', 'json'].includes(config.format)) {
+      throw new Error(`Unsupported format: ${config.format}`);
+    }
+
+    // Collect all states and their relationships
+    const nodes = new Map<string, StateMetadata>();
+    const edges: StateRelationship[] = [];
+    const processedStates = new Set<string>();
+
+    // Helper to process a state and its relationships
+    const processState = (stateId: string) => {
+      if (processedStates.has(stateId)) return;
+      processedStates.add(stateId);
+
+      // Get state metadata from history
+      const operations = this.historyService.getOperationHistory(stateId);
+      const createOrMergeOp = operations.find(op => op.type === 'create' || op.type === 'merge');
+      if (createOrMergeOp?.metadata) {
+        nodes.set(stateId, createOrMergeOp.metadata);
+      }
+
+      // Get lineage relationships
+      const lineage = this.trackingService.getStateLineage(stateId);
+      if (lineage.length > 1) {
+        for (let i = 1; i < lineage.length; i++) {
+          edges.push({
+            targetId: lineage[i],
+            sourceId: lineage[i - 1],
+            type: 'parent-child',
+          });
+        }
+      }
+
+      // Get merge relationships
+      const mergeOps = operations.filter(op => op.type === 'merge');
+      mergeOps.forEach(op => {
+        if (op.parentId) {
+          edges.push({
+            sourceId: op.parentId,
+            targetId: stateId,
+            type: 'merge-source',
+          });
+          // Also process the parent state if we haven't yet
+          processState(op.parentId);
+        }
+      });
+
+      // Process descendants
+      const descendants = this.trackingService.getStateDescendants(stateId);
+      descendants.forEach(descendantId => processState(descendantId));
+    };
+
+    // Process all requested states
+    stateIds.forEach(stateId => processState(stateId));
+
+    // Generate visualization in requested format
+    switch (config.format) {
+      case 'mermaid':
+        return this.generateMermaidRelationshipGraph(nodes, edges, config);
+      case 'dot':
+        return this.generateDotRelationshipGraph(nodes, edges, config);
+      case 'json':
+        return JSON.stringify({
+          nodes: Array.from(nodes.entries()).map(([id, metadata]) => ({
+            id,
+            ...metadata,
+          })),
+          edges,
+        }, null, 2);
+      default:
+        throw new Error(`Unsupported format: ${config.format}`);
+    }
+  }
+
+  private generateMermaidRelationshipGraph(
+    nodes: Map<string, StateMetadata>,
+    edges: StateRelationship[],
+    config: VisualizationConfig
+  ): string {
+    const lines: string[] = ['graph TD;'];
+    
+    // Add nodes with styling
+    nodes.forEach((metadata, id) => {
+      const style = this.getNodeStyle(metadata, config);
+      const label = config.includeMetadata 
+        ? `${id}[${metadata.source}${metadata.filePath ? `\\n${metadata.filePath}` : ''}]`
+        : `${id}[${metadata.source}]`;
+      lines.push(`    ${label};`);
+      lines.push(`    style ${id} fill:${style.color},stroke:${style.color},stroke-width:2px,${style.shape};`);
+    });
+
+    // Add edges with styling
+    edges.forEach(edge => {
+      const style = this.getEdgeStyle(edge, config);
+      const sourceId = edge.sourceId || 'unknown';
+      const label = config.includeMetadata ? edge.type : '';
+      lines.push(`    ${sourceId} -->|${label}| ${edge.targetId};`);
+      lines.push(`    linkStyle ${lines.length - 2} stroke:${style.color},stroke-width:2px,${style.style};`);
+    });
+
+    return lines.join('\n');
+  }
+
+  private generateDotRelationshipGraph(
+    nodes: Map<string, StateMetadata>,
+    edges: StateRelationship[],
+    config: VisualizationConfig
+  ): string {
+    const lines: string[] = ['digraph G {'];
+    lines.push('    rankdir=TB;'); // Top to bottom layout
+    
+    // Add nodes with styling
+    nodes.forEach((metadata, id) => {
+      const style = this.getNodeStyle(metadata, config);
+      const label = config.includeMetadata
+        ? `${id}\\n${metadata.source}${metadata.filePath ? `\\n${metadata.filePath}` : ''}`
+        : `${id}\\n${metadata.source}`;
+      const attrs = [
+        `label="${label}"`,
+        `shape="${style.shape}"`,
+        `color="${style.color}"`,
+        `style="filled"`,
+        `fillcolor="${style.color}22"`, // Add transparency to fill color
+      ];
+      if (style.tooltip) {
+        attrs.push(`tooltip="${style.tooltip}"`);
+      }
+      lines.push(`    "${id}" [${attrs.join(',')}];`);
+    });
+
+    // Add edges with styling
+    edges.forEach(edge => {
+      const style = this.getEdgeStyle(edge, config);
+      const sourceId = edge.sourceId || 'unknown';
+      const attrs = [
+        `style="${style.style}"`,
+        `color="${style.color}"`,
+        `penwidth=2`,
+      ];
+      if (config.includeMetadata) {
+        attrs.push(`label="${edge.type}"`);
+      }
+      if (style.tooltip) {
+        attrs.push(`tooltip="${style.tooltip}"`);
+      }
+      lines.push(`    "${sourceId}" -> "${edge.targetId}" [${attrs.join(',')}];`);
+    });
+
+    lines.push('}');
+    return lines.join('\n');
   }
 
   public generateTimeline(stateIds: string[], config: VisualizationConfig): string {
