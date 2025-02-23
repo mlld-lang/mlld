@@ -364,9 +364,8 @@ describe('StateService', () => {
 
       const relationships = trackingService.getRelationships(parentId);
       expect(relationships).toHaveLength(1);
-      expect(relationships[0].type).toBe('child');
-      expect(relationships[0].parentId).toBe(parentId);
-      expect(relationships[0].childId).toBe(childId);
+      expect(relationships[0].type).toBe('parent-child');
+      expect(relationships[0].targetId).toBe(childId);
     });
 
     it('should track clone relationships', () => {
@@ -375,8 +374,8 @@ describe('StateService', () => {
       const clonedId = cloned.getStateId()!;
 
       expect(trackingService.getRelationships(originalId)).toHaveLength(1);
-      expect(trackingService.getRelationships(originalId)[0].type).toBe('clone');
-      expect(trackingService.getRelationships(originalId)[0].childId).toBe(clonedId);
+      expect(trackingService.getRelationships(originalId)[0].type).toBe('parent-child');
+      expect(trackingService.getRelationships(originalId)[0].targetId).toBe(clonedId);
     });
 
     it('should track merge relationships', () => {
@@ -387,8 +386,10 @@ describe('StateService', () => {
       service.mergeChildState(child);
 
       const relationships = trackingService.getRelationships(parentId);
-      expect(relationships).toHaveLength(2); // child + merge
-      expect(relationships.some(r => r.type === 'merge')).toBe(true);
+      expect(relationships).toHaveLength(2); // parent-child + merge-source
+      expect(relationships.some(r => r.type === 'merge-source')).toBe(true);
+      expect(relationships.some(r => r.type === 'parent-child')).toBe(true);
+      expect(relationships.find(r => r.type === 'merge-source')?.targetId).toBe(childId);
     });
 
     it('should inherit tracking service from parent', () => {
