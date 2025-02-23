@@ -142,9 +142,13 @@ describe('ImportDirectiveHandler Transformation', () => {
 
       expect(result.replacement).toBeDefined();
       expect(result.replacement).toEqual({
-        type: 'text',
+        type: 'Text',
         content: '',
-        location: node.location
+        location: {
+          start: { line: 1, column: 1 },
+          end: { line: 1, column: 1 },
+          filePath: undefined
+        }
       });
       expect(result.state).toBe(clonedState);
       expect(clonedState.setTextVar).toHaveBeenCalledWith('var1', 'value1');
@@ -173,9 +177,13 @@ describe('ImportDirectiveHandler Transformation', () => {
 
       expect(result.replacement).toBeDefined();
       expect(result.replacement).toEqual({
-        type: 'text',
+        type: 'Text',
         content: '',
-        location: node.location
+        location: {
+          start: { line: 1, column: 1 },
+          end: { line: 1, column: 1 },
+          filePath: undefined
+        }
       });
       expect(result.state).toBe(clonedState);
       expect(clonedState.setTextVar).toHaveBeenCalledWith('myVar', 'value1');
@@ -204,9 +212,13 @@ describe('ImportDirectiveHandler Transformation', () => {
 
       expect(result.replacement).toBeDefined();
       expect(result.replacement).toEqual({
-        type: 'text',
+        type: 'Text',
         content: '',
-        location: node.location
+        location: {
+          start: { line: 1, column: 1 },
+          end: { line: 1, column: 1 },
+          filePath: undefined
+        }
       });
       expect(result.state).toBe(clonedState);
       expect(clonedState.setTextVar).toHaveBeenCalledWith('targetVar', 'value1');

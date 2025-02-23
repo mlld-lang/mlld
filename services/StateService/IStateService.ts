@@ -1,9 +1,14 @@
 import type { MeldNode } from 'meld-spec';
 import type { IStateEventService } from '../StateEventService/IStateEventService.js';
+import type { IStateTrackingService } from '../StateTrackingService/IStateTrackingService.js';
 
 export interface IStateService {
   // Event system
   setEventService(eventService: IStateEventService): void;
+
+  // State tracking
+  setTrackingService(trackingService: IStateTrackingService): void;
+  getStateId(): string | undefined;
 
   // Text variables
   getTextVar(name: string): string | undefined;
@@ -32,7 +37,7 @@ export interface IStateService {
   addNode(node: MeldNode): void;
   appendContent(content: string): void;
 
-  // Node transformation (new)
+  // Node transformation
   getTransformedNodes(): MeldNode[];
   setTransformedNodes(nodes: MeldNode[]): void;
   transformNode(original: MeldNode, transformed: MeldNode): void;

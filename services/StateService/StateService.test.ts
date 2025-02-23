@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { StateService } from './StateService.js';
 import type { MeldNode } from 'meld-spec';
 import type { IStateEventService, StateEvent } from '../StateEventService/IStateEventService.js';
+import type { IStateTrackingService } from '../StateTrackingService/IStateTrackingService.js';
+import { StateTrackingService } from '../StateTrackingService/StateTrackingService.js';
 
 class MockStateEventService implements IStateEventService {
   private handlers = new Map<string, Array<{
@@ -328,6 +330,102 @@ describe('StateService', () => {
     it('should track local changes', () => {
       expect(state.hasLocalChanges()).toBe(true);
       expect(state.getLocalChanges()).toEqual(['state']);
+    });
+  });
+
+  describe('State Tracking', () => {
+    let service: StateService;
+    let trackingService: IStateTrackingService;
+
+    beforeEach(() => {
+      service = new StateService();
+      trackingService = new StateTrackingService();
+      service.setTrackingService(trackingService);
+    });
+
+    it('should register state with tracking service', () => {
+      const stateId = service.getStateId();
+      expect(stateId).toBeDefined();
+      expect(trackingService.hasState(stateId!)).toBe(true);
+
+      const metadata = trackingService.getStateMetadata(stateId!);
+      expect(metadata).toBeDefined();
+      expect(metadata?.source).toBe('new');
+      expect(metadata?.transformationEnabled).toBe(false);
+    });
+
+    it('should track parent-child relationships', () => {
+      const parentId = service.getStateId()!;
+      const child = service.createChildState();
+      const childId = child.getStateId()!;
+
+      expect(trackingService.getParentState(childId)).toBe(parentId);
+      expect(trackingService.getChildStates(parentId)).toContain(childId);
+
+      const relationships = trackingService.getRelationships(parentId);
+      expect(relationships).toHaveLength(1);
+      expect(relationships[0].type).toBe('child');
+      expect(relationships[0].parentId).toBe(parentId);
+      expect(relationships[0].childId).toBe(childId);
+    });
+
+    it('should track clone relationships', () => {
+      const originalId = service.getStateId()!;
+      const cloned = service.clone();
+      const clonedId = cloned.getStateId()!;
+
+      expect(trackingService.getRelationships(originalId)).toHaveLength(1);
+      expect(trackingService.getRelationships(originalId)[0].type).toBe('clone');
+      expect(trackingService.getRelationships(originalId)[0].childId).toBe(clonedId);
+    });
+
+    it('should track merge relationships', () => {
+      const parentId = service.getStateId()!;
+      const child = service.createChildState();
+      const childId = child.getStateId()!;
+
+      service.mergeChildState(child);
+
+      const relationships = trackingService.getRelationships(parentId);
+      expect(relationships).toHaveLength(2); // child + merge
+      expect(relationships.some(r => r.type === 'merge')).toBe(true);
+    });
+
+    it('should inherit tracking service from parent', () => {
+      const parent = service;
+      const child = parent.createChildState();
+
+      expect(child.getStateId()).toBeDefined();
+      expect(trackingService.hasState(child.getStateId()!)).toBe(true);
+    });
+
+    it('should track state lineage', () => {
+      const rootId = service.getStateId()!;
+      const child = service.createChildState();
+      const childId = child.getStateId()!;
+      const grandchild = child.createChildState();
+      const grandchildId = grandchild.getStateId()!;
+
+      const lineage = trackingService.getStateLineage(grandchildId);
+      expect(lineage).toHaveLength(2);
+      expect(lineage[0]).toBe(childId);
+      expect(lineage[1]).toBe(rootId);
+    });
+
+    it('should track state descendants', () => {
+      const rootId = service.getStateId()!;
+      const child1 = service.createChildState();
+      const child1Id = child1.getStateId()!;
+      const child2 = service.createChildState();
+      const child2Id = child2.getStateId()!;
+      const grandchild = child1.createChildState();
+      const grandchildId = grandchild.getStateId()!;
+
+      const descendants = trackingService.getStateDescendants(rootId);
+      expect(descendants).toHaveLength(3);
+      expect(descendants).toContain(child1Id);
+      expect(descendants).toContain(child2Id);
+      expect(descendants).toContain(grandchildId);
     });
   });
 }); 

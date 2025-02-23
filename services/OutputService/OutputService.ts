@@ -208,19 +208,27 @@ export class OutputService implements IOutputService {
           const codeNode = node as CodeFenceNode;
           return `\`\`\`${codeNode.language || ''}\n${codeNode.content}\n\`\`\`\n`;
         case 'Directive':
-          // If we're processing transformed nodes, we shouldn't see any directives
-          // They should have been transformed into Text or CodeFence nodes
-          if (isTransformed) {
-            throw new MeldOutputError('Unexpected directive in transformed nodes', 'markdown');
-          }
-          
-          // In non-transformation mode, return empty string for definition directives
           const directiveNode = node as DirectiveNode;
           const kind = directiveNode.directive.kind;
+          
+          // In transformed mode, directives should be treated as their transformed output
+          if (isTransformed) {
+            // For run directives, show the command output
+            if (kind === 'run') {
+              return directiveNode.directive.command + '\n';
+            }
+            // For embed directives, show the embedded content
+            if (kind === 'embed') {
+              return directiveNode.directive.path + '\n';
+            }
+            // For other directives in transformed mode, return empty string
+            return '';
+          }
+          
+          // In non-transformation mode, handle directives normally
           if (['text', 'data', 'path', 'import', 'define'].includes(kind)) {
             return '';
           }
-          // For non-transformed execution directives, show the command as a placeholder
           if (kind === 'run') {
             const command = directiveNode.directive.command;
             return `${command}\n`;

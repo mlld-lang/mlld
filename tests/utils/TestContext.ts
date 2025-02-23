@@ -27,6 +27,8 @@ import * as fs from 'fs-extra';
 import * as path from 'path';
 import { filesystemLogger as logger } from '@core/utils/logger.js';
 import { PathOperationsService } from '@services/FileSystemService/PathOperationsService.js';
+import { StateTrackingService } from '@services/StateTrackingService/StateTrackingService.js';
+import type { IStateTrackingService } from '@services/StateTrackingService/IStateTrackingService.js';
 
 interface SnapshotDiff {
   added: string[];
@@ -55,6 +57,7 @@ interface TestServices {
   resolution: IResolutionService;
   filesystem: IFileSystemService;
   output: IOutputService;
+  tracking: IStateTrackingService;
 }
 
 /**
@@ -94,9 +97,11 @@ export class TestContext {
     const pathOps = new PathOperationsService();
     const filesystem = new FileSystemService(pathOps, this.fs);
     const validation = new ValidationService();
+    const tracking = new StateTrackingService();
     const state = new StateService();
     state.setCurrentFilePath('test.meld'); // Set initial file path
     state.enableTransformation(true); // Enable transformation by default for tests
+    state.setTrackingService(tracking); // Enable state tracking
     const path = new PathService();
     path.initialize(filesystem);
     const parser = new ParserService();
@@ -138,7 +143,8 @@ export class TestContext {
       circularity,
       resolution,
       filesystem,
-      output
+      output,
+      tracking
     };
   }
 

@@ -4,6 +4,7 @@ import type { IStateService } from './IStateService.js';
 import type { StateNode, CommandDefinition } from './types.js';
 import { StateFactory } from './StateFactory.js';
 import type { IStateEventService, StateEvent } from '../StateEventService/IStateEventService.js';
+import type { IStateTrackingService } from '../StateTrackingService/IStateTrackingService.js';
 
 export class StateService implements IStateService {
   private stateFactory: StateFactory;
@@ -11,17 +12,50 @@ export class StateService implements IStateService {
   private _isImmutable: boolean = false;
   private _transformationEnabled: boolean = false;
   private eventService?: IStateEventService;
+  private trackingService?: IStateTrackingService;
 
   constructor(parentState?: IStateService) {
     this.stateFactory = new StateFactory();
     this.currentState = this.stateFactory.createState({
-      source: 'constructor',
+      source: 'new',
       parentState: parentState ? (parentState as StateService).currentState : undefined
     });
 
-    // If parent has event service, inherit it
-    if (parentState && (parentState as StateService).eventService) {
-      this.eventService = (parentState as StateService).eventService;
+    // If parent has services, inherit them
+    if (parentState) {
+      const parent = parentState as StateService;
+      if (parent.eventService) {
+        this.eventService = parent.eventService;
+      }
+      if (parent.trackingService) {
+        this.trackingService = parent.trackingService;
+      }
+    }
+
+    // Initialize state ID first
+    this.currentState.stateId = crypto.randomUUID();
+
+    // Register state with tracking service if available
+    if (this.trackingService) {
+      const parentId = parentState ? (parentState as StateService).currentState.stateId : undefined;
+      
+      // Register the state with the pre-generated ID
+      this.trackingService.registerState({
+        id: this.currentState.stateId,
+        source: 'new',
+        parentId,
+        filePath: this.currentState.filePath,
+        transformationEnabled: this._transformationEnabled
+      });
+
+      // Add relationship if this is a child state and parent has an ID
+      if (parentId) {
+        try {
+          this.trackingService.addRelationship(parentId, this.currentState.stateId, 'parent-child');
+        } catch (error) {
+          logger.warn('Failed to add child relationship', { error, parentId, childId: this.currentState.stateId });
+        }
+      }
     }
   }
 
@@ -129,7 +163,10 @@ export class StateService implements IStateService {
   }
 
   getTransformedNodes(): MeldNode[] {
-    return this.currentState.transformedNodes ? [...this.currentState.transformedNodes] : [];
+    if (this._transformationEnabled) {
+      return this.currentState.transformedNodes ? [...this.currentState.transformedNodes] : [...this.currentState.nodes];
+    }
+    return [...this.currentState.nodes];
   }
 
   setTransformedNodes(nodes: MeldNode[]): void {
@@ -140,7 +177,10 @@ export class StateService implements IStateService {
   addNode(node: MeldNode): void {
     this.checkMutable();
     const nodes = [...this.currentState.nodes, node];
-    this.updateState({ nodes }, 'addNode');
+    const transformedNodes = this._transformationEnabled ? 
+      (this.currentState.transformedNodes ? [...this.currentState.transformedNodes, node] : [...nodes]) : 
+      undefined;
+    this.updateState({ nodes, transformedNodes }, 'addNode');
   }
 
   transformNode(original: MeldNode, transformed: MeldNode): void {
@@ -149,13 +189,35 @@ export class StateService implements IStateService {
       return;
     }
 
-    const transformedNodes = this.currentState.transformedNodes ? [...this.currentState.transformedNodes] : [];
-    const index = transformedNodes.findIndex(node => node === original);
+    // Initialize transformed nodes if needed
+    let transformedNodes = this.currentState.transformedNodes ? 
+      [...this.currentState.transformedNodes] : 
+      [...this.currentState.nodes];
+    
+    // Find the original node by comparing content and location
+    const index = transformedNodes.findIndex(node => 
+      node.type === original.type && 
+      JSON.stringify(node.location) === JSON.stringify(original.location) &&
+      (node as any).content === (original as any).content
+    );
+
     if (index !== -1) {
       transformedNodes[index] = transformed;
     } else {
+      // If not found, check if it's in the original nodes array
+      const originalIndex = this.currentState.nodes.findIndex(node =>
+        node.type === original.type &&
+        JSON.stringify(node.location) === JSON.stringify(original.location) &&
+        (node as any).content === (original as any).content
+      );
+      
+      if (originalIndex === -1) {
+        throw new Error('Cannot transform node: original node not found');
+      }
+      
       transformedNodes.push(transformed);
     }
+    
     this.updateState({ transformedNodes }, 'transformNode');
   }
 
@@ -165,6 +227,10 @@ export class StateService implements IStateService {
 
   enableTransformation(enable: boolean): void {
     this._transformationEnabled = enable;
+    if (enable && (!this.currentState.transformedNodes || this.currentState.transformedNodes.length === 0)) {
+      // Initialize transformed nodes with current nodes when enabling transformation
+      this.updateState({ transformedNodes: [...this.currentState.nodes] }, 'enableTransformation');
+    }
   }
 
   appendContent(content: string): void {
@@ -254,10 +320,19 @@ export class StateService implements IStateService {
     const child = childState as StateService;
     this.currentState = this.stateFactory.mergeStates(this.currentState, child.currentState);
 
+    // Add merge relationship if tracking enabled
+    if (this.trackingService && child.currentState.stateId) {
+      this.trackingService.addRelationship(
+        this.currentState.stateId!,
+        child.currentState.stateId,
+        'merge-source'
+      );
+    }
+
     // Emit merge event
     this.emitEvent({
       type: 'merge',
-      stateId: this.currentState.filePath || 'unknown',
+      stateId: this.currentState.stateId || 'unknown',
       source: 'mergeChildState',
       timestamp: Date.now(),
       location: {
@@ -292,15 +367,25 @@ export class StateService implements IStateService {
     cloned._isImmutable = this._isImmutable;
     cloned._transformationEnabled = this._transformationEnabled;
 
-    // Copy event service reference
+    // Copy service references
     if (this.eventService) {
       cloned.setEventService(this.eventService);
+    }
+    if (this.trackingService) {
+      cloned.setTrackingService(this.trackingService);
+      
+      // Add clone relationship as parent-child since we don't track clones separately anymore
+      this.trackingService.addRelationship(
+        this.currentState.stateId!,
+        cloned.currentState.stateId!,
+        'parent-child'
+      );
     }
 
     // Emit clone event
     this.emitEvent({
       type: 'clone',
-      stateId: cloned.currentState.filePath || 'unknown',
+      stateId: cloned.currentState.stateId || 'unknown',
       source: 'clone',
       timestamp: Date.now(),
       location: {
@@ -324,7 +409,7 @@ export class StateService implements IStateService {
     if (source !== 'clone' && source !== 'createChildState') {
       this.emitEvent({
         type: 'transform',
-        stateId: this.currentState.filePath || 'unknown',
+        stateId: this.currentState.stateId || 'unknown',
         source,
         timestamp: Date.now(),
         location: {
@@ -332,5 +417,28 @@ export class StateService implements IStateService {
         }
       });
     }
+  }
+
+  // Add new methods for state tracking
+  setTrackingService(trackingService: IStateTrackingService): void {
+    this.trackingService = trackingService;
+    
+    // Register existing state if not already registered
+    if (this.currentState.stateId) {
+      try {
+        this.trackingService.registerState({
+          id: this.currentState.stateId,
+          source: 'implicit',
+          filePath: this.currentState.filePath,
+          transformationEnabled: this._transformationEnabled
+        });
+      } catch (error) {
+        logger.warn('Failed to register existing state with tracking service', { error, stateId: this.currentState.stateId });
+      }
+    }
+  }
+
+  getStateId(): string | undefined {
+    return this.currentState.stateId;
   }
 } 

@@ -9,20 +9,20 @@ export interface CommandDefinition {
 }
 
 /**
- * Represents an immutable state node in the Meld interpreter
+ * Represents a state node in the state tree
  */
 export interface StateNode {
-  readonly variables: {
-    readonly text: ReadonlyMap<string, string>;
-    readonly data: ReadonlyMap<string, unknown>;
-    readonly path: ReadonlyMap<string, string>;
-  };
-  readonly commands: ReadonlyMap<string, CommandDefinition>;
-  readonly imports: ReadonlySet<string>;
-  readonly nodes: ReadonlyArray<MeldNode>;
-  readonly transformedNodes?: ReadonlyArray<MeldNode>;
+  stateId?: string;
   readonly filePath?: string;
-  readonly parentState?: StateNode;
+  readonly variables: {
+    readonly text: Map<string, string>;
+    readonly data: Map<string, unknown>;
+    readonly path: Map<string, string>;
+  };
+  readonly commands: Map<string, CommandDefinition>;
+  readonly nodes: MeldNode[];
+  readonly transformedNodes?: MeldNode[];
+  readonly imports: Set<string>;
 }
 
 /**

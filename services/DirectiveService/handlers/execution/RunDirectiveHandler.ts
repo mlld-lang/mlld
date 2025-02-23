@@ -63,7 +63,7 @@ export class RunDirectiveHandler implements IDirectiveHandler {
           content,
           location: node.location
         };
-        return { state: clonedState, replacement };
+        return { state: clonedState, replacementNode: replacement };
       }
 
       return { state: clonedState };
