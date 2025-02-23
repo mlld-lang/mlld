@@ -351,7 +351,73 @@ export function createMockStateService(): IStateService {
   mockService.isImmutable.mockImplementation(() => false);
   mockService.makeImmutable.mockImplementation(() => {});
   mockService.setImmutable.mockImplementation(() => {});
-  mockService.mergeChildState.mockImplementation(() => {});
+  mockService.mergeChildState.mockImplementation((childState) => {
+    // Get current state
+    const currentTextVars = mockService.getAllTextVars();
+    const currentDataVars = mockService.getAllDataVars();
+    const currentPathVars = mockService.getAllPathVars();
+    const currentCommands = mockService.getAllCommands();
+    const currentNodes = mockService.getNodes();
+    const currentTransformedNodes = mockService.getTransformedNodes();
+    const currentImports = mockService.getImports();
+
+    // Get child state
+    const childTextVars = childState.getAllTextVars();
+    const childDataVars = childState.getAllDataVars();
+    const childPathVars = childState.getAllPathVars();
+    const childCommands = childState.getAllCommands();
+    const childNodes = childState.getNodes();
+    const childTransformedNodes = childState.getTransformedNodes();
+    const childImports = childState.getImports();
+
+    // Merge variables
+    const mergedTextVars = new Map([...currentTextVars, ...childTextVars]);
+    const mergedDataVars = new Map([...currentDataVars, ...childDataVars]);
+    const mergedPathVars = new Map([...currentPathVars, ...childPathVars]);
+    const mergedCommands = new Map([...currentCommands, ...childCommands]);
+    const mergedNodes = [...currentNodes, ...childNodes];
+    const mergedImports = new Set([...currentImports, ...childImports]);
+
+    // Handle transformed nodes
+    let mergedTransformedNodes;
+    if (mockService.isTransformationEnabled()) {
+      if (childTransformedNodes && childTransformedNodes.length > 0) {
+        mergedTransformedNodes = currentTransformedNodes ? 
+          [...currentTransformedNodes, ...childTransformedNodes] :
+          [...childTransformedNodes];
+      } else {
+        mergedTransformedNodes = currentTransformedNodes;
+      }
+    }
+
+    // Update mock implementations with merged state
+    mockService.getAllTextVars.mockImplementation(() => mergedTextVars);
+    mockService.getAllDataVars.mockImplementation(() => mergedDataVars);
+    mockService.getAllPathVars.mockImplementation(() => mergedPathVars);
+    mockService.getAllCommands.mockImplementation(() => mergedCommands);
+    mockService.getNodes.mockImplementation(() => mergedNodes);
+    if (mergedTransformedNodes) {
+      mockService.getTransformedNodes.mockImplementation(() => mergedTransformedNodes);
+    }
+    mockService.getImports.mockImplementation(() => mergedImports);
+
+    // Update individual getters
+    mockService.getTextVar.mockImplementation((name) => mergedTextVars.get(name));
+    mockService.getDataVar.mockImplementation((name) => mergedDataVars.get(name));
+    mockService.getPathVar.mockImplementation((name) => mergedPathVars.get(name));
+    mockService.getCommand.mockImplementation((name) => mergedCommands.get(name));
+    mockService.hasImport.mockImplementation((path) => mergedImports.has(path));
+
+    // If tracking service is available, add merge relationship
+    if (mockService.trackingService && childState.getStateId()) {
+      mockService.trackingService.addRelationship(
+        mockService.getStateId()!,
+        childState.getStateId()!,
+        'merge-source'
+      );
+    }
+  });
+
   mockService.clone.mockImplementation(() => {
     const newMock = createMockStateService();
     
@@ -394,7 +460,47 @@ export function createMockStateService(): IStateService {
   mockService.getNodes.mockImplementation(() => []);
   mockService.addNode.mockImplementation(() => {});
   mockService.getTransformedNodes.mockImplementation(() => []);
-  mockService.transformNode.mockImplementation(() => {});
+
+  // Enhanced transformNode implementation
+  mockService.transformNode.mockImplementation((original, transformed) => {
+    // Check if transformation is enabled
+    if (!mockService.isTransformationEnabled()) {
+      return;
+    }
+
+    // Get current nodes
+    const nodes = mockService.getNodes();
+    const transformedNodes = mockService.getTransformedNodes() || [...nodes];
+
+    // Try to find the node by reference first
+    let index = transformedNodes.findIndex(node => node === original);
+
+    // If not found by reference, try matching by properties
+    if (index === -1) {
+      index = transformedNodes.findIndex(node => 
+        node.type === original.type &&
+        node.content === original.content &&
+        node.location.start.line === original.location.start.line &&
+        node.location.start.column === original.location.start.column &&
+        node.location.end.line === original.location.end.line &&
+        node.location.end.column === original.location.end.column
+      );
+    }
+
+    if (index !== -1) {
+      transformedNodes[index] = transformed;
+      mockService.getTransformedNodes.mockImplementation(() => transformedNodes);
+    } else {
+      // If not found in transformed nodes, check original nodes
+      const originalIndex = nodes.findIndex(node => node === original);
+      if (originalIndex === -1) {
+        throw new Error('Cannot transform node: original node not found');
+      }
+      transformedNodes.push(transformed);
+      mockService.getTransformedNodes.mockImplementation(() => transformedNodes);
+    }
+  });
+
   mockService.isTransformationEnabled.mockImplementation(() => false);
   mockService.enableTransformation.mockImplementation(() => {});
   mockService.addImport.mockImplementation(() => {});

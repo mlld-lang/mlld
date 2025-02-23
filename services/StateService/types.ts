@@ -13,7 +13,8 @@ export interface CommandDefinition {
  */
 export interface StateNode {
   stateId?: string;
-  readonly filePath?: string;
+  source?: 'clone' | 'merge' | 'new' | 'child' | 'implicit';
+  filePath?: string;
   readonly variables: {
     readonly text: Map<string, string>;
     readonly data: Map<string, unknown>;

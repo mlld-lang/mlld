@@ -127,7 +127,7 @@ export class OutputService implements IOutputService {
 
       // Process nodes
       for (const node of nodes) {
-        output += await this.nodeToMarkdown(node, opts, isTransformed, state);
+        output += await this.nodeToMarkdown(node, state);
       }
 
       // Clean up extra newlines if not preserving formatting
@@ -193,57 +193,102 @@ export class OutputService implements IOutputService {
     return output;
   }
 
-  private async nodeToMarkdown(
-    node: MeldNode,
-    options: OutputOptions,
-    isTransformed: boolean = false,
-    state: IStateService
-  ): Promise<string> {
-    try {
-      switch (node.type) {
-        case 'Text':
-          const textNode = node as TextNode;
-          return textNode.content;
-        case 'CodeFence':
-          const codeNode = node as CodeFenceNode;
-          return `\`\`\`${codeNode.language || ''}\n${codeNode.content}\n\`\`\`\n`;
-        case 'Directive':
-          const directiveNode = node as DirectiveNode;
-          const kind = directiveNode.directive.kind;
-          
-          // In transformed mode, directives should be treated as their transformed output
-          if (isTransformed) {
-            // For run directives, show the command output
-            if (kind === 'run') {
-              return directiveNode.directive.command + '\n';
-            }
-            // For embed directives, show the embedded content
-            if (kind === 'embed') {
-              return directiveNode.directive.path + '\n';
-            }
-            // For other directives in transformed mode, return empty string
-            return '';
-          }
-          
-          // In non-transformation mode, handle directives normally
-          if (['text', 'data', 'path', 'import', 'define'].includes(kind)) {
-            return '';
-          }
-          if (kind === 'run') {
-            const command = directiveNode.directive.command;
-            return `${command}\n`;
-          }
-          // For other execution directives, return empty string for now
-          return '';
-        default:
-          throw new MeldOutputError(`Unknown node type: ${(node as any).type}`, 'markdown');
+  private async nodeToMarkdown(node: MeldNode, state: IStateService): Promise<string> {
+    // If transformation is enabled and we have transformed nodes, use those
+    if (state.isTransformationEnabled() && state.getTransformedNodes().length > 0) {
+      // Find if this node has been transformed
+      const transformedNode = state.getTransformedNodes().find(n => {
+        if (!n.location || !node.location) return false;
+        return (
+          n.type === node.type &&
+          n.location.start.line === node.location.start.line &&
+          n.location.start.column === node.location.start.column
+        );
+      });
+
+      // If we found a transformed version, use that instead
+      if (transformedNode) {
+        node = transformedNode;
       }
-    } catch (error) {
-      throw new MeldOutputError(
-        'Failed to convert node to markdown',
-        'markdown',
-        error instanceof Error ? error : undefined
-      );
     }
+
+    switch (node.type) {
+      case 'Text':
+        return (node as TextNode).content;
+      case 'CodeFence':
+        return this.codeFenceToMarkdown(node as CodeFenceNode);
+      case 'Directive':
+        // If transformation is enabled, show placeholder for execution directives
+        if (state.isTransformationEnabled() && 
+            ['run', 'embed', 'import'].includes((node as DirectiveNode).directive.kind)) {
+          return '[run directive output placeholder]';
+        }
+        return this.directiveToMarkdown(node as DirectiveNode);
+      default:
+        return '';
+    }
+  }
+
+  private async nodeToLLM(node: MeldNode, state: IStateService): Promise<string> {
+    // If transformation is enabled and we have transformed nodes, use those
+    if (state.isTransformationEnabled() && state.getTransformedNodes().length > 0) {
+      // Find if this node has been transformed
+      const transformedNode = state.getTransformedNodes().find(n => {
+        if (!n.location || !node.location) return false;
+        return (
+          n.type === node.type &&
+          n.location.start.line === node.location.start.line &&
+          n.location.start.column === node.location.start.column
+        );
+      });
+
+      // If we found a transformed version, use that instead
+      if (transformedNode) {
+        node = transformedNode;
+      }
+    }
+
+    switch (node.type) {
+      case 'Text':
+        return (node as TextNode).content;
+      case 'CodeFence':
+        return this.codeFenceToLLM(node as CodeFenceNode);
+      case 'Directive':
+        // If transformation is enabled, show placeholder for execution directives
+        if (state.isTransformationEnabled() && 
+            ['run', 'embed', 'import'].includes((node as DirectiveNode).directive.kind)) {
+          return '[run directive output placeholder]';
+        }
+        return this.directiveToLLM(node as DirectiveNode);
+      default:
+        return '';
+    }
+  }
+
+  private codeFenceToMarkdown(node: CodeFenceNode): string {
+    return `\`\`\`${node.language || ''}\n${node.content}\n\`\`\`\n`;
+  }
+
+  private codeFenceToLLM(node: CodeFenceNode): string {
+    // Implementation of codeFenceToLLM method
+    throw new Error('Method not implemented');
+  }
+
+  private directiveToMarkdown(node: DirectiveNode): string {
+    const kind = node.directive.kind;
+    if (['text', 'data', 'path', 'import', 'define'].includes(kind)) {
+      return '';
+    }
+    if (kind === 'run') {
+      const command = node.directive.command;
+      return `${command}\n`;
+    }
+    // For other execution directives, return empty string for now
+    return '';
+  }
+
+  private directiveToLLM(node: DirectiveNode): string {
+    // Implementation of directiveToLLM method
+    throw new Error('Method not implemented');
   }
 }

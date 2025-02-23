@@ -199,14 +199,20 @@ export class StateService implements IStateService {
 
     // If not found by reference, try matching by properties
     if (index === -1) {
-      index = transformedNodes.findIndex(node => 
-        node.type === original.type &&
-        node.content === original.content &&
-        node.location.start.line === original.location.start.line &&
-        node.location.start.column === original.location.start.column &&
-        node.location.end.line === original.location.end.line &&
-        node.location.end.column === original.location.end.column
-      );
+      index = transformedNodes.findIndex(node => {
+        // Type guard to ensure we only compare nodes with content
+        if (node.type !== original.type) return false;
+        if (!('content' in node) || !('content' in original)) return false;
+        if (!node.location || !original.location) return false;
+
+        return (
+          (node as TextNode).content === (original as TextNode).content &&
+          node.location.start.line === original.location.start.line &&
+          node.location.start.column === original.location.start.column &&
+          node.location.end.line === original.location.end.line &&
+          node.location.end.column === original.location.end.column
+        );
+      });
     }
 
     if (index !== -1) {
@@ -405,11 +411,11 @@ export class StateService implements IStateService {
         transformationEnabled: cloned._transformationEnabled
       });
 
-      // Add clone relationship
+      // Add clone relationship as parent-child since 'clone' is not a valid relationship type
       this.trackingService.addRelationship(
         this.currentState.stateId!,
         cloned.currentState.stateId!,
-        'clone'
+        'parent-child' // Changed from 'clone' to 'parent-child'
       );
     }
 
@@ -525,7 +531,7 @@ export class StateService implements IStateService {
       try {
         this.trackingService.registerState({
           id: this.currentState.stateId,
-          source: 'implicit',
+          source: this.currentState.source || 'new',  // Use original source or default to 'new'
           filePath: this.currentState.filePath,
           transformationEnabled: this._transformationEnabled
         });

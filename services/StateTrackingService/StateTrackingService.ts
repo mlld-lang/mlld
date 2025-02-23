@@ -75,23 +75,54 @@ export class StateTrackingService implements IStateTrackingService {
 
     // For merge operations, we need to handle both source and target relationships
     if (type === 'merge-source' || type === 'merge-target') {
-      // Get the lineage of both states
-      const sourceLineage = this.getStateLineage(sourceId);
-      const targetLineage = this.getStateLineage(targetId);
-
-      // Update parent-child relationships for merged states
       const sourceState = this.states.get(sourceId)!;
       const targetState = this.states.get(targetId)!;
 
       if (type === 'merge-source') {
         // The target becomes a child of the source's parent
         if (sourceState.parentId) {
+          // Remove any existing parent-child relationships for the target
+          const targetRels = this.relationships.get(targetId) || [];
+          const parentRels = targetRels.filter(r => r.type === 'parent-child');
+          for (const rel of parentRels) {
+            const parentRelationships = this.relationships.get(rel.targetId);
+            if (parentRelationships) {
+              const index = parentRelationships.findIndex(r => r.targetId === targetId && r.type === 'parent-child');
+              if (index !== -1) {
+                parentRelationships.splice(index, 1);
+              }
+            }
+          }
+          
+          // Add new parent-child relationship
           this.addRelationship(sourceState.parentId, targetId, 'parent-child');
+          
+          // Update target's parent ID
+          targetState.parentId = sourceState.parentId;
+          this.states.set(targetId, targetState);
         }
       } else { // merge-target
         // The source becomes a child of the target's parent
         if (targetState.parentId) {
+          // Remove any existing parent-child relationships for the source
+          const sourceRels = this.relationships.get(sourceId) || [];
+          const parentRels = sourceRels.filter(r => r.type === 'parent-child');
+          for (const rel of parentRels) {
+            const parentRelationships = this.relationships.get(rel.targetId);
+            if (parentRelationships) {
+              const index = parentRelationships.findIndex(r => r.targetId === sourceId && r.type === 'parent-child');
+              if (index !== -1) {
+                parentRelationships.splice(index, 1);
+              }
+            }
+          }
+          
+          // Add new parent-child relationship
           this.addRelationship(targetState.parentId, sourceId, 'parent-child');
+          
+          // Update source's parent ID
+          sourceState.parentId = targetState.parentId;
+          this.states.set(sourceId, sourceState);
         }
       }
     }
@@ -109,8 +140,8 @@ export class StateTrackingService implements IStateTrackingService {
   getChildStates(stateId: string): string[] {
     const relationships = this.relationships.get(stateId) || [];
     return relationships
-      .filter(r => r.parentId === stateId)
-      .map(r => r.childId);
+      .filter(r => r.type === 'parent-child' || r.type === 'merge-source')
+      .map(r => r.targetId);
   }
 
   hasState(stateId: string): boolean {
@@ -137,13 +168,35 @@ export class StateTrackingService implements IStateTrackingService {
     // Get the state's metadata
     const metadata = this.states.get(stateId)!;
     
-    // If no parent, this state is the root of its lineage
+    // If no parent, check for merge relationships
     if (!metadata.parentId) {
+      // Check if this state is a merge target
+      const relationships = this.relationships.get(stateId) || [];
+      const mergeSourceRel = relationships.find(r => r.type === 'merge-source');
+      
+      if (mergeSourceRel) {
+        // Get the lineage through the merge source
+        const sourceLineage = this.getStateLineage(mergeSourceRel.targetId, visited);
+        return [...sourceLineage, stateId];
+      }
+      
       return [stateId];
     }
 
     // Get parent's lineage first (recursively)
     const parentLineage = this.getStateLineage(metadata.parentId, visited);
+
+    // Check for merge relationships
+    const relationships = this.relationships.get(stateId) || [];
+    const mergeSourceRel = relationships.find(r => r.type === 'merge-source');
+    
+    if (mergeSourceRel) {
+      // Get the lineage through the merge source
+      const sourceLineage = this.getStateLineage(mergeSourceRel.targetId, visited);
+      // Combine lineages, removing duplicates
+      const combinedLineage = [...new Set([...parentLineage, ...sourceLineage])];
+      return [...combinedLineage, stateId];
+    }
 
     // Return lineage from root to current state
     return [...parentLineage, stateId];
