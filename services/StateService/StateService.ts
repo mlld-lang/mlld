@@ -21,6 +21,9 @@ export class StateService implements IStateService {
       parentState: parentState ? (parentState as StateService).currentState : undefined
     });
 
+    // Initialize state ID first
+    this.currentState.stateId = crypto.randomUUID();
+
     // If parent has services, inherit them
     if (parentState) {
       const parent = parentState as StateService;
@@ -31,9 +34,6 @@ export class StateService implements IStateService {
         this.trackingService = parent.trackingService;
       }
     }
-
-    // Initialize state ID first
-    this.currentState.stateId = crypto.randomUUID();
 
     // Register state with tracking service if available
     if (this.trackingService) {
@@ -282,10 +282,27 @@ export class StateService implements IStateService {
   }
 
   // State management
+  /**
+   * In the immutable state model, any non-empty state is considered to have local changes.
+   * This is a deliberate design choice - each state represents a complete snapshot,
+   * so the entire state is considered "changed" from its creation.
+   * 
+   * @returns Always returns true to indicate the state has changes
+   */
   hasLocalChanges(): boolean {
     return true; // In immutable model, any non-empty state has local changes
   }
 
+  /**
+   * Returns a list of changed elements in the state. In the immutable state model,
+   * the entire state is considered changed from creation, so this always returns
+   * ['state'] to indicate the complete state has changed.
+   * 
+   * This is a deliberate design choice that aligns with the immutable state model
+   * where each state is a complete snapshot.
+   * 
+   * @returns Always returns ['state'] to indicate the entire state has changed
+   */
   getLocalChanges(): string[] {
     return ['state']; // In immutable model, the entire state is considered changed
   }
@@ -354,17 +371,18 @@ export class StateService implements IStateService {
       filePath: this.currentState.filePath
     });
 
-    // Copy all state
+    // Deep clone all state using our helper
     cloned.updateState({
       variables: {
-        text: new Map(this.currentState.variables.text),
-        data: new Map(this.currentState.variables.data),
-        path: new Map(this.currentState.variables.path)
+        text: this.deepCloneValue(this.currentState.variables.text),
+        data: this.deepCloneValue(this.currentState.variables.data),
+        path: this.deepCloneValue(this.currentState.variables.path)
       },
-      commands: new Map(this.currentState.commands),
-      nodes: [...this.currentState.nodes],
-      transformedNodes: this.currentState.transformedNodes ? [...this.currentState.transformedNodes] : undefined,
-      imports: new Set(this.currentState.imports)
+      commands: this.deepCloneValue(this.currentState.commands),
+      nodes: this.deepCloneValue(this.currentState.nodes),
+      transformedNodes: this.currentState.transformedNodes ? 
+        this.deepCloneValue(this.currentState.transformedNodes) : undefined,
+      imports: this.deepCloneValue(this.currentState.imports)
     }, 'clone');
 
     // Copy flags
@@ -378,11 +396,20 @@ export class StateService implements IStateService {
     if (this.trackingService) {
       cloned.setTrackingService(this.trackingService);
       
-      // Add clone relationship as parent-child since we don't track clones separately anymore
+      // Register the cloned state with tracking service
+      this.trackingService.registerState({
+        id: cloned.currentState.stateId!,
+        source: 'clone',
+        parentId: this.currentState.stateId,
+        filePath: cloned.currentState.filePath,
+        transformationEnabled: cloned._transformationEnabled
+      });
+
+      // Add clone relationship
       this.trackingService.addRelationship(
         this.currentState.stateId!,
         cloned.currentState.stateId!,
-        'parent-child'
+        'clone'
       );
     }
 
@@ -404,6 +431,72 @@ export class StateService implements IStateService {
     if (this._isImmutable) {
       throw new Error('Cannot modify immutable state');
     }
+  }
+
+  /**
+   * Deep clones a value, handling objects, arrays, Maps, Sets, and circular references.
+   * @param value The value to clone
+   * @param seen A WeakMap to track circular references
+   * @returns A deep clone of the value
+   */
+  private deepCloneValue<T>(value: T, seen: WeakMap<any, any> = new WeakMap()): T {
+    // Handle null, undefined, and primitive types
+    if (value === null || value === undefined || typeof value !== 'object') {
+      return value;
+    }
+
+    // Handle circular references
+    if (seen.has(value)) {
+      return seen.get(value);
+    }
+
+    // Handle Date objects
+    if (value instanceof Date) {
+      return new Date(value.getTime()) as unknown as T;
+    }
+
+    // Handle Arrays
+    if (Array.isArray(value)) {
+      const clone = [] as unknown as T;
+      seen.set(value, clone);
+      (value as unknown as any[]).forEach((item, index) => {
+        (clone as unknown as any[])[index] = this.deepCloneValue(item, seen);
+      });
+      return clone;
+    }
+
+    // Handle Maps
+    if (value instanceof Map) {
+      const clone = new Map() as unknown as T;
+      seen.set(value, clone);
+      (value as Map<any, any>).forEach((val, key) => {
+        (clone as unknown as Map<any, any>).set(
+          this.deepCloneValue(key, seen),
+          this.deepCloneValue(val, seen)
+        );
+      });
+      return clone;
+    }
+
+    // Handle Sets
+    if (value instanceof Set) {
+      const clone = new Set() as unknown as T;
+      seen.set(value, clone);
+      (value as Set<any>).forEach(item => {
+        (clone as unknown as Set<any>).add(this.deepCloneValue(item, seen));
+      });
+      return clone;
+    }
+
+    // Handle plain objects (including MeldNodes and CommandDefinitions)
+    const clone = Object.create(Object.getPrototypeOf(value));
+    seen.set(value, clone);
+    
+    Object.entries(value as object).forEach(([key, val]) => {
+      clone[key] = this.deepCloneValue(val, seen);
+    });
+    
+    return clone;
   }
 
   private updateState(updates: Partial<StateNode>, source: string): void {

@@ -331,7 +331,8 @@ export function createMockStateService(): IStateService {
     hasLocalChanges: vi.fn(),
     getLocalChanges: vi.fn(),
     setImmutable: vi.fn(),
-    mergeChildState: vi.fn()
+    mergeChildState: vi.fn(),
+    getStateId: vi.fn()
   };
 
   // Set default implementations
@@ -353,6 +354,7 @@ export function createMockStateService(): IStateService {
   mockService.mergeChildState.mockImplementation(() => {});
   mockService.clone.mockImplementation(() => {
     const newMock = createMockStateService();
+    
     // Copy all state
     newMock.getTextVar.mockImplementation(mockService.getTextVar);
     newMock.getDataVar.mockImplementation(mockService.getDataVar);
@@ -369,6 +371,18 @@ export function createMockStateService(): IStateService {
     newMock.hasLocalChanges.mockImplementation(mockService.hasLocalChanges);
     newMock.getLocalChanges.mockImplementation(mockService.getLocalChanges);
     newMock.isImmutable.mockImplementation(mockService.isImmutable);
+    newMock.getImports.mockImplementation(mockService.getImports);
+    newMock.hasImport.mockImplementation(mockService.hasImport);
+    newMock.getStateId.mockImplementation(mockService.getStateId);
+    
+    // Copy service references
+    if (mockService.eventService) {
+      newMock.setEventService(mockService.eventService);
+    }
+    if (mockService.trackingService) {
+      newMock.setTrackingService(mockService.trackingService);
+    }
+    
     return newMock;
   });
 
