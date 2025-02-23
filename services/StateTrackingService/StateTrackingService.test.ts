@@ -1,10 +1,50 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { StateTrackingService } from './StateTrackingService.js';
 import type { StateMetadata } from './IStateTrackingService.js';
-import { StateVisualizationService } from './StateVisualizationService.js';
-import { StateDebuggerService } from './StateDebuggerService.js';
-import { StateHistoryService } from './StateHistoryService.js';
-import { MockStateEventService } from './MockStateEventService.js';
+import { StateVisualizationService } from '../StateVisualizationService/StateVisualizationService.js';
+import { StateDebuggerService } from '../StateDebuggerService/StateDebuggerService.js';
+import { StateHistoryService } from '../StateHistoryService/StateHistoryService.js';
+import type { IStateHistoryService } from '../StateHistoryService/IStateHistoryService.js';
+import type { IStateEventService } from '../StateEventService/IStateEventService.js';
+
+class MockStateEventService implements IStateEventService {
+  private handlers = new Map<string, Array<{
+    handler: (event: any) => void | Promise<void>;
+    options?: { filter?: (event: any) => boolean };
+  }>>();
+
+  constructor() {
+    ['create', 'clone', 'transform', 'merge', 'error'].forEach(type => {
+      this.handlers.set(type, []);
+    });
+  }
+
+  on(type: string, handler: (event: any) => void | Promise<void>, options?: { filter?: (event: any) => boolean }): void {
+    const handlers = this.handlers.get(type);
+    if (handlers) {
+      handlers.push({ handler, options });
+    }
+  }
+
+  off(type: string, handler: (event: any) => void | Promise<void>): void {
+    const handlers = this.handlers.get(type);
+    if (handlers) {
+      const index = handlers.findIndex(h => h.handler === handler);
+      if (index !== -1) {
+        handlers.splice(index, 1);
+      }
+    }
+  }
+
+  async emit(event: any): Promise<void> {
+    const handlers = this.handlers.get(event.type) || [];
+    for (const { handler, options } of handlers) {
+      if (!options?.filter || options.filter(event)) {
+        await Promise.resolve(handler(event));
+      }
+    }
+  }
+}
 
 describe('StateTrackingService', () => {
   let service: StateTrackingService;
@@ -219,15 +259,29 @@ describe('StateTrackingService', () => {
   });
 
   describe('Merge Operations', () => {
+    let service: StateTrackingService;
+    let trackingService: IStateTrackingService;
+    let eventService: MockStateEventService;
     let visualizationService: StateVisualizationService;
     let debuggerService: StateDebuggerService;
-    let historyService: IStateHistoryService;
+    let historyService: StateHistoryService;
 
     beforeEach(() => {
       service = new StateTrackingService();
-      historyService = new StateHistoryService(new MockStateEventService());
-      visualizationService = new StateVisualizationService(historyService, service);
-      debuggerService = new StateDebuggerService(visualizationService, historyService, service);
+      eventService = new MockStateEventService();
+      trackingService = service; // StateTrackingService is itself the tracking service
+      historyService = new StateHistoryService(eventService);
+      visualizationService = new StateVisualizationService(historyService, trackingService);
+      debuggerService = new StateDebuggerService(visualizationService, historyService, trackingService);
+      
+      // Set up bidirectional service connections
+      (service as any).eventService = eventService;
+      (service as any).services = {
+        visualization: visualizationService,
+        debugger: debuggerService,
+        history: historyService,
+        events: eventService
+      };
     });
 
     it('should handle merge source relationships', () => {
@@ -248,11 +302,11 @@ describe('StateTrackingService', () => {
     });
 
     it('should handle merge target relationships', async () => {
-      // Start debug session
+      // Start debug session with enhanced configuration
       const debugSessionId = await debuggerService.startSession({
         captureConfig: {
           capturePoints: ['pre-transform', 'post-transform', 'error'],
-          includeFields: ['nodes', 'transformedNodes', 'variables', 'metadata'],
+          includeFields: ['nodes', 'transformedNodes', 'variables', 'metadata', 'relationships'],
           format: 'full'
         },
         visualization: {
@@ -263,37 +317,52 @@ describe('StateTrackingService', () => {
       });
 
       try {
+        // Create initial states with event emission
         const sourceId = service.registerState({
           source: 'new',
           transformationEnabled: true
         });
-
-        // Visualize initial state
-        console.log('Initial State:');
-        console.log(await visualizationService.generateHierarchyView(sourceId, {
-          format: 'mermaid',
-          includeMetadata: true
-        }));
+        console.log('Created source state:', sourceId);
+        eventService.emit('create', { type: 'create', stateId: sourceId, source: 'registerState' });
 
         const targetId = service.registerState({
           source: 'new',
           transformationEnabled: true
         });
+        console.log('Created target state:', targetId);
+        eventService.emit('create', { type: 'create', stateId: targetId, source: 'registerState' });
 
         const parentId = service.registerState({
           source: 'new',
           transformationEnabled: true
         });
+        console.log('Created parent state:', parentId);
+        eventService.emit('create', { type: 'create', stateId: parentId, source: 'registerState' });
 
-        // Visualize after creating states
-        console.log('\nAfter Creating States:');
+        // Visualize initial states
+        console.log('\nInitial States:');
         console.log(await visualizationService.generateHierarchyView(sourceId, {
           format: 'mermaid',
           includeMetadata: true
         }));
 
+        // Add parent-child relationship
         service.addRelationship(parentId, targetId, 'parent-child');
-        
+        console.log('\nAdded parent-child relationship:', {
+          parent: parentId,
+          child: targetId,
+          parentMetadata: service.getStateMetadata(parentId),
+          childMetadata: service.getStateMetadata(targetId),
+          parentRelationships: service.getRelationships(parentId),
+          childRelationships: service.getRelationships(targetId)
+        });
+        eventService.emit('transform', {
+          type: 'transform',
+          source: 'addRelationship:parent-child',
+          stateId: parentId,
+          targetId: targetId
+        });
+
         // Visualize after parent-child relationship
         console.log('\nAfter Parent-Child Relationship:');
         console.log(await visualizationService.generateHierarchyView(parentId, {
@@ -301,7 +370,22 @@ describe('StateTrackingService', () => {
           includeMetadata: true
         }));
 
+        // Add merge-target relationship
         service.addRelationship(sourceId, targetId, 'merge-target');
+        console.log('\nAdded merge-target relationship:', {
+          source: sourceId,
+          target: targetId,
+          sourceMetadata: service.getStateMetadata(sourceId),
+          targetMetadata: service.getStateMetadata(targetId),
+          sourceRelationships: service.getRelationships(sourceId),
+          targetRelationships: service.getRelationships(targetId)
+        });
+        eventService.emit('transform', {
+          type: 'transform',
+          source: 'addRelationship:merge-target',
+          stateId: sourceId,
+          targetId: targetId
+        });
 
         // Visualize after merge-target relationship
         console.log('\nAfter Merge-Target Relationship:');
@@ -310,10 +394,6 @@ describe('StateTrackingService', () => {
           includeMetadata: true
         }));
 
-        // Get and verify lineage
-        const lineage = service.getStateLineage(sourceId);
-        console.log('\nState Lineage:', lineage);
-
         // Generate transition diagram
         console.log('\nState Transitions:');
         console.log(await visualizationService.generateTransitionDiagram(sourceId, {
@@ -321,12 +401,27 @@ describe('StateTrackingService', () => {
           includeTimestamps: true
         }));
 
+        // Get and verify lineage
+        const lineage = service.getStateLineage(sourceId);
+        console.log('\nState Lineage:', {
+          sourceId,
+          targetId,
+          parentId,
+          lineage,
+          sourceMetadata: service.getStateMetadata(sourceId),
+          targetMetadata: service.getStateMetadata(targetId),
+          parentMetadata: service.getStateMetadata(parentId),
+          sourceRelationships: service.getRelationships(sourceId),
+          targetRelationships: service.getRelationships(targetId),
+          parentRelationships: service.getRelationships(parentId)
+        });
+
+        // Verify lineage includes parent
         expect(lineage).toContain(parentId);
 
         // Get and log complete debug report
         const report = await debuggerService.generateDebugReport(debugSessionId);
         console.log('\nComplete Debug Report:', report);
-
       } catch (error) {
         // Log error diagnostics
         const errorReport = await debuggerService.generateDebugReport(debugSessionId);
