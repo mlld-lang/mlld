@@ -1,5 +1,6 @@
-import { DirectiveNode, MeldNode } from 'meld-spec';
-import type { DirectiveContext, IDirectiveHandler, DirectiveResult } from '@services/DirectiveService/IDirectiveService.js';
+import { DirectiveNode, MeldNode, TextNode } from 'meld-spec';
+import type { DirectiveContext, IDirectiveHandler } from '@services/DirectiveService/IDirectiveService.js';
+import type { DirectiveResult } from '@services/DirectiveService/types.js';
 import { IValidationService } from '@services/ValidationService/IValidationService.js';
 import { IStateService } from '@services/StateService/IStateService.js';
 import { IResolutionService } from '@services/ResolutionService/IResolutionService.js';
@@ -126,8 +127,8 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
 
         // If transformation is enabled, return an empty text node to remove the directive from output
         if (context.state.isTransformationEnabled?.()) {
-          const replacement: MeldNode = {
-            type: 'text',
+          const replacement: TextNode = {
+            type: 'Text',
             content: '',
             location: node.location
           };

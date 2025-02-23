@@ -1,5 +1,6 @@
-import { DirectiveNode, MeldNode } from 'meld-spec';
-import { IDirectiveHandler, DirectiveContext, DirectiveResult } from '@services/DirectiveService/IDirectiveService.js';
+import { DirectiveNode, MeldNode, TextNode } from 'meld-spec';
+import { IDirectiveHandler, DirectiveContext } from '@services/DirectiveService/IDirectiveService.js';
+import { DirectiveResult } from '@services/DirectiveService/types.js';
 import { IValidationService } from '@services/ValidationService/IValidationService.js';
 import { IResolutionService } from '@services/ResolutionService/IResolutionService.js';
 import { IStateService } from '@services/StateService/IStateService.js';
@@ -143,7 +144,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
 
         // If transformation is enabled, return a replacement node
         if (context.state.isTransformationEnabled?.()) {
-          const replacement: MeldNode = {
+          const replacement: TextNode = {
             type: 'Text',
             content: processedContent,
             location: node.location
@@ -167,7 +168,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
         throw error;
       }
       throw new DirectiveError(
-        error?.message || 'Unknown error',
+        error instanceof Error ? error.message : 'Unknown error',
         this.kind,
         DirectiveErrorCode.EXECUTION_FAILED,
         {

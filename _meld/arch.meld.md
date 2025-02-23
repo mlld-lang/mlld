@@ -43,12 +43,12 @@ I am going to provide you with some context:
 
 Consider the plan laid out in your advice. Make improvements to it as you see fit based on deeper reflection on the provided context and goals here.
 
-Deliver a phased plan which includes the following:
+Deliver a phased plan for implementing the plan laid out in your advice which includes the following:
 
-1. relevant context necessary to understand the goals and purpose of the work
+1. include relevant context necessary to understand the goals and purpose of the work
 2. ensure the plan is wholly informed by and complementary to our existing architecture and testing infrastructure
 3. ensure the plan covers changes we need to make to existing code, tests, infra, and docs.
 
-The plan should be phased in an incremental way that ensures current tests will continue to pass.
+The plan should be phased in an incremental way that ensures current tests will continue to pass 
 
 BE SPECIFIC AND DECISIVE. DO NOT PROVIDE ANYTHING HAND-WAVY. YOUR PLAN SHOULD BE BASED SOLELY ON EVIDENCE AND FACTS. DO NOT HALLUCINATE OR GUESS.

@@ -1,11 +1,11 @@
-import type { DirectiveNode, DirectiveContext, MeldNode } from 'meld-spec';
+import type { DirectiveNode, DirectiveContext, MeldNode, TextNode } from 'meld-spec';
 import type { IValidationService } from '@services/ValidationService/IValidationService.js';
 import type { IStateService } from '@services/StateService/IStateService.js';
 import type { IResolutionService } from '@services/ResolutionService/IResolutionService.js';
 import type { IFileSystemService } from '@services/FileSystemService/IFileSystemService.js';
 import { DirectiveError, DirectiveErrorCode } from '@services/DirectiveService/errors/DirectiveError.js';
 import { directiveLogger } from '../../../../core/utils/logger.js';
-import type { DirectiveResult } from '@services/DirectiveService/IDirectiveService.js';
+import type { DirectiveResult } from '@services/DirectiveService/types.js';
 import type { IDirectiveHandler } from '@services/DirectiveService/IDirectiveService.js';
 
 /**
@@ -58,12 +58,12 @@ export class RunDirectiveHandler implements IDirectiveHandler {
       // If transformation is enabled, return a replacement node with the command output
       if (clonedState.isTransformationEnabled()) {
         const content = stdout && stderr ? `${stdout}\n${stderr}` : stdout || stderr;
-        const replacementNode: MeldNode = {
+        const replacement: TextNode = {
           type: 'Text',
           content,
           location: node.location
         };
-        return { state: clonedState, replacementNode };
+        return { state: clonedState, replacement };
       }
 
       return { state: clonedState };

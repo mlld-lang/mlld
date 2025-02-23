@@ -7,6 +7,7 @@ import type { IParserService } from '@services/ParserService/IParserService.js';
 import type { IInterpreterService } from '@services/InterpreterService/IInterpreterService.js';
 import type { ICircularityService } from '@services/CircularityService/ICircularityService.js';
 import type { IResolutionService } from '@services/ResolutionService/IResolutionService.js';
+import type { DirectiveResult } from './types.js';
 
 /**
  * Context for directive execution
@@ -31,12 +32,12 @@ export interface IDirectiveHandler {
 
   /**
    * Execute the directive
-   * @returns The updated state after directive execution
+   * @returns The updated state after directive execution, or a DirectiveResult containing both state and optional replacement node
    */
   execute(
     node: DirectiveNode,
     context: DirectiveContext
-  ): Promise<IStateService>;
+  ): Promise<DirectiveResult | IStateService>;
 }
 
 /**

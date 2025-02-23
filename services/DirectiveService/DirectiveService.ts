@@ -619,34 +619,21 @@ export class DirectiveService implements IDirectiveService {
     }
   }
 
+  /**
+   * Process a directive node, validating and executing it
+   * Values in the directive will already be interpolated by meld-ast
+   * @returns The updated state after directive execution
+   * @throws {MeldDirectiveError} If directive processing fails
+   */
   public async processDirective(node: DirectiveNode, context: DirectiveContext): Promise<IStateService> {
-    this.ensureInitialized();
-
     try {
-      if (!node.directive || !node.directive.kind) {
-        throw new DirectiveError(
-          'Invalid directive format',
-          'unknown',
-          DirectiveErrorCode.VALIDATION_FAILED,
-          { node }
-        );
-      }
-
-      const kind = node.directive.kind.toLowerCase();
+      // Get the handler for this directive kind
+      const { kind } = node.directive;
       const handler = this.handlers.get(kind);
-      
+
       if (!handler) {
         throw new DirectiveError(
-          `Unknown directive kind: ${kind}`,
-          kind,
-          DirectiveErrorCode.HANDLER_NOT_FOUND,
-          { node }
-        );
-      }
-
-      if (typeof handler.execute !== 'function') {
-        throw new DirectiveError(
-          `Invalid handler for directive kind: ${kind}`,
+          `No handler found for directive: ${kind}`,
           kind,
           DirectiveErrorCode.HANDLER_NOT_FOUND,
           { node }
@@ -656,8 +643,16 @@ export class DirectiveService implements IDirectiveService {
       // Validate directive before handling
       await this.validateDirective(node);
 
-      // Execute the directive
-      return await handler.execute(node, context);
+      // Execute the directive and handle both possible return types
+      const result = await handler.execute(node, context);
+      
+      // If result is a DirectiveResult, return its state
+      if ('state' in result) {
+        return result.state;
+      }
+      
+      // Otherwise, result is already an IStateService
+      return result;
     } catch (error) {
       if (error instanceof DirectiveError) {
         throw error;

@@ -3,12 +3,14 @@ import { stateLogger as logger } from '@core/utils/logger.js';
 import type { IStateService } from './IStateService.js';
 import type { StateNode, CommandDefinition } from './types.js';
 import { StateFactory } from './StateFactory.js';
+import type { IStateEventService, StateEvent } from '../StateEventService/IStateEventService.js';
 
 export class StateService implements IStateService {
   private stateFactory: StateFactory;
   private currentState: StateNode;
   private _isImmutable: boolean = false;
   private _transformationEnabled: boolean = false;
+  private eventService?: IStateEventService;
 
   constructor(parentState?: IStateService) {
     this.stateFactory = new StateFactory();
@@ -16,6 +18,21 @@ export class StateService implements IStateService {
       source: 'constructor',
       parentState: parentState ? (parentState as StateService).currentState : undefined
     });
+
+    // If parent has event service, inherit it
+    if (parentState && (parentState as StateService).eventService) {
+      this.eventService = (parentState as StateService).eventService;
+    }
+  }
+
+  setEventService(eventService: IStateEventService): void {
+    this.eventService = eventService;
+  }
+
+  private async emitEvent(event: StateEvent): Promise<void> {
+    if (this.eventService) {
+      await this.eventService.emit(event);
+    }
   }
 
   // Text variables
@@ -90,34 +107,20 @@ export class StateService implements IStateService {
   }
 
   // Commands
-  getCommand(name: string): { command: string; options?: Record<string, unknown> } | undefined {
-    const cmd = this.currentState.commands.get(name);
-    if (!cmd) return undefined;
-    return {
-      command: cmd.command,
-      options: cmd.options ? { ...cmd.options } : undefined
-    };
+  getCommand(name: string): CommandDefinition | undefined {
+    return this.currentState.commands.get(name);
   }
 
-  setCommand(name: string, command: string | { command: string; options?: Record<string, unknown> }): void {
+  setCommand(name: string, command: string | CommandDefinition): void {
     this.checkMutable();
     const commands = new Map(this.currentState.commands);
-    const cmdDef: CommandDefinition = typeof command === 'string' 
-      ? { command } 
-      : { command: command.command, options: command.options };
-    commands.set(name, cmdDef);
+    const commandDef = typeof command === 'string' ? { command } : command;
+    commands.set(name, commandDef);
     this.updateState({ commands }, `setCommand:${name}`);
   }
 
-  getAllCommands(): Map<string, { command: string; options?: Record<string, unknown> }> {
-    const commands = new Map<string, { command: string; options?: Record<string, unknown> }>();
-    for (const [name, cmd] of this.currentState.commands) {
-      commands.set(name, {
-        command: cmd.command,
-        options: cmd.options ? { ...cmd.options } : undefined
-      });
-    }
-    return commands;
+  getAllCommands(): Map<string, CommandDefinition> {
+    return new Map(this.currentState.commands);
   }
 
   // Nodes
@@ -126,28 +129,18 @@ export class StateService implements IStateService {
   }
 
   getTransformedNodes(): MeldNode[] {
-    return this.currentState.transformedNodes ? [...this.currentState.transformedNodes] : [...this.currentState.nodes];
+    return this.currentState.transformedNodes ? [...this.currentState.transformedNodes] : [];
   }
 
   setTransformedNodes(nodes: MeldNode[]): void {
     this.checkMutable();
-    this.updateState({
-      transformedNodes: [...nodes]
-    }, 'setTransformedNodes');
+    this.updateState({ transformedNodes: nodes }, 'setTransformedNodes');
   }
 
   addNode(node: MeldNode): void {
     this.checkMutable();
-    const updates: Partial<StateNode> = {
-      nodes: [...this.currentState.nodes, node]
-    };
-    
-    updates.transformedNodes = [
-      ...(this.currentState.transformedNodes || this.currentState.nodes),
-      node
-    ];
-    
-    this.updateState(updates, 'addNode');
+    const nodes = [...this.currentState.nodes, node];
+    this.updateState({ nodes }, 'addNode');
   }
 
   transformNode(original: MeldNode, transformed: MeldNode): void {
@@ -156,17 +149,14 @@ export class StateService implements IStateService {
       return;
     }
 
-    const transformedNodes = this.currentState.transformedNodes || this.currentState.nodes;
+    const transformedNodes = this.currentState.transformedNodes ? [...this.currentState.transformedNodes] : [];
     const index = transformedNodes.findIndex(node => node === original);
-    if (index === -1) {
-      throw new Error('Cannot transform node: original node not found');
+    if (index !== -1) {
+      transformedNodes[index] = transformed;
+    } else {
+      transformedNodes.push(transformed);
     }
-
-    const updatedNodes = [...transformedNodes];
-    updatedNodes[index] = transformed;
-    this.updateState({
-      transformedNodes: updatedNodes
-    }, 'transformNode');
+    this.updateState({ transformedNodes }, 'transformNode');
   }
 
   isTransformationEnabled(): boolean {
@@ -174,29 +164,18 @@ export class StateService implements IStateService {
   }
 
   enableTransformation(enable: boolean): void {
-    if (this._transformationEnabled === enable) {
-      return;
-    }
     this._transformationEnabled = enable;
-    
-    // Initialize transformed nodes if enabling
-    if (enable) {
-      // Always initialize with a fresh copy of nodes, even if transformedNodes already exists
-      this.updateState({
-        transformedNodes: [...this.currentState.nodes]
-      }, 'enableTransformation');
-    }
   }
 
   appendContent(content: string): void {
     this.checkMutable();
     // Create a text node and add it
-    const node: MeldNode = {
+    const textNode: TextNode = {
       type: 'Text',
-      content: content,
+      content,
       location: { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } }
-    } as TextNode;
-    this.addNode(node);
+    };
+    this.addNode(textNode);
   }
 
   // Imports
@@ -255,6 +234,18 @@ export class StateService implements IStateService {
       parentPath: this.getCurrentFilePath(),
       childPath: child.getCurrentFilePath()
     });
+
+    // Emit create event
+    this.emitEvent({
+      type: 'create',
+      stateId: child.currentState.filePath || 'unknown',
+      source: 'createChildState',
+      timestamp: Date.now(),
+      location: {
+        file: this.getCurrentFilePath() || undefined
+      }
+    });
+
     return child;
   }
 
@@ -262,6 +253,17 @@ export class StateService implements IStateService {
     this.checkMutable();
     const child = childState as StateService;
     this.currentState = this.stateFactory.mergeStates(this.currentState, child.currentState);
+
+    // Emit merge event
+    this.emitEvent({
+      type: 'merge',
+      stateId: this.currentState.filePath || 'unknown',
+      source: 'mergeChildState',
+      timestamp: Date.now(),
+      location: {
+        file: this.getCurrentFilePath() || undefined
+      }
+    });
   }
 
   clone(): IStateService {
@@ -290,6 +292,22 @@ export class StateService implements IStateService {
     cloned._isImmutable = this._isImmutable;
     cloned._transformationEnabled = this._transformationEnabled;
 
+    // Copy event service reference
+    if (this.eventService) {
+      cloned.setEventService(this.eventService);
+    }
+
+    // Emit clone event
+    this.emitEvent({
+      type: 'clone',
+      stateId: cloned.currentState.filePath || 'unknown',
+      source: 'clone',
+      timestamp: Date.now(),
+      location: {
+        file: this.getCurrentFilePath() || undefined
+      }
+    });
+
     return cloned;
   }
 
@@ -301,6 +319,18 @@ export class StateService implements IStateService {
 
   private updateState(updates: Partial<StateNode>, source: string): void {
     this.currentState = this.stateFactory.updateState(this.currentState, updates);
-    logger.debug('Updated state', { source, updates });
+
+    // Emit transform event for state updates
+    if (source !== 'clone' && source !== 'createChildState') {
+      this.emitEvent({
+        type: 'transform',
+        stateId: this.currentState.filePath || 'unknown',
+        source,
+        timestamp: Date.now(),
+        location: {
+          file: this.getCurrentFilePath() || undefined
+        }
+      });
+    }
   }
 } 

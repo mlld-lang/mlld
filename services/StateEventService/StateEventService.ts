@@ -1,0 +1,103 @@
+import { IStateEventService, StateEvent, StateEventType, StateEventHandler, StateEventHandlerOptions } from './IStateEventService.js';
+import { stateLogger as logger } from '@core/utils/logger.js';
+
+/**
+ * @package
+ * Core event system implementation for state tracking.
+ * 
+ * @remarks
+ * Provides event emission and handling for state operations.
+ * Implements filtering and async event handling.
+ */
+export class StateEventService implements IStateEventService {
+  private handlers: Map<StateEventType, Array<{
+    handler: StateEventHandler;
+    options?: StateEventHandlerOptions;
+  }>> = new Map();
+
+  constructor() {
+    // Initialize handler arrays for each event type
+    const eventTypes: StateEventType[] = ['create', 'clone', 'transform', 'merge', 'error'];
+    eventTypes.forEach(type => this.handlers.set(type, []));
+  }
+
+  /**
+   * Register an event handler with optional filtering
+   */
+  on(type: StateEventType, handler: StateEventHandler, options?: StateEventHandlerOptions): void {
+    const handlers = this.handlers.get(type);
+    if (!handlers) {
+      throw new Error(`Invalid event type: ${type}`);
+    }
+
+    handlers.push({ handler, options });
+    logger.debug(`Registered handler for ${type} events`, { 
+      type,
+      hasFilter: !!options?.filter 
+    });
+  }
+
+  /**
+   * Remove an event handler
+   */
+  off(type: StateEventType, handler: StateEventHandler): void {
+    const handlers = this.handlers.get(type);
+    if (!handlers) {
+      throw new Error(`Invalid event type: ${type}`);
+    }
+
+    const index = handlers.findIndex(h => h.handler === handler);
+    if (index !== -1) {
+      handlers.splice(index, 1);
+      logger.debug(`Removed handler for ${type} events`);
+    }
+  }
+
+  /**
+   * Emit a state event
+   */
+  async emit(event: StateEvent): Promise<void> {
+    const handlers = this.handlers.get(event.type);
+    if (!handlers) {
+      throw new Error(`Invalid event type: ${event.type}`);
+    }
+
+    logger.debug(`Emitting ${event.type} event`, { 
+      stateId: event.stateId,
+      source: event.source
+    });
+
+    // Execute handlers in sequence, respecting filters
+    for (const { handler, options } of handlers) {
+      try {
+        // Skip if filter returns false
+        if (options?.filter && !options.filter(event)) {
+          continue;
+        }
+
+        // Execute handler (may be async)
+        await Promise.resolve(handler(event));
+      } catch (error) {
+        // Log error but continue processing other handlers
+        logger.error(`Error in ${event.type} event handler`, {
+          error: error instanceof Error ? error.message : String(error),
+          stateId: event.stateId
+        });
+      }
+    }
+  }
+
+  /**
+   * Get all registered handlers for an event type
+   */
+  getHandlers(type: StateEventType): Array<{
+    handler: StateEventHandler;
+    options?: StateEventHandlerOptions;
+  }> {
+    const handlers = this.handlers.get(type);
+    if (!handlers) {
+      throw new Error(`Invalid event type: ${type}`);
+    }
+    return [...handlers];
+  }
+} 

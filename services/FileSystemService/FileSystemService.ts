@@ -234,7 +234,8 @@ export class FileSystemService implements IFileSystemService {
     const context: FileOperationContext = {
       operation: 'executeCommand',
       command,
-      options
+      options,
+      path: options?.cwd || this.getCwd()
     };
 
     try {
@@ -253,7 +254,7 @@ export class FileSystemService implements IFileSystemService {
       logger.error('Command execution failed', { ...context, error: err });
       throw new MeldError(`Failed to execute command: ${command}`, {
         cause: err,
-        command
+        filePath: options?.cwd || this.getCwd()
       });
     }
   }

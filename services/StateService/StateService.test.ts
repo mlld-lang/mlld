@@ -1,12 +1,62 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { StateService } from './StateService.js';
 import type { MeldNode } from 'meld-spec';
+import type { IStateEventService, StateEvent } from '../StateEventService/IStateEventService.js';
+
+class MockStateEventService implements IStateEventService {
+  private handlers = new Map<string, Array<{
+    handler: (event: StateEvent) => void | Promise<void>;
+    options?: { filter?: (event: StateEvent) => boolean };
+  }>>();
+
+  constructor() {
+    ['create', 'clone', 'transform', 'merge', 'error'].forEach(type => {
+      this.handlers.set(type, []);
+    });
+  }
+
+  on(type: string, handler: (event: StateEvent) => void | Promise<void>, options?: { filter?: (event: StateEvent) => boolean }): void {
+    const handlers = this.handlers.get(type);
+    if (handlers) {
+      handlers.push({ handler, options });
+    }
+  }
+
+  off(type: string, handler: (event: StateEvent) => void | Promise<void>): void {
+    const handlers = this.handlers.get(type);
+    if (handlers) {
+      const index = handlers.findIndex(h => h.handler === handler);
+      if (index !== -1) {
+        handlers.splice(index, 1);
+      }
+    }
+  }
+
+  async emit(event: StateEvent): Promise<void> {
+    const handlers = this.handlers.get(event.type) || [];
+    for (const { handler, options } of handlers) {
+      if (!options?.filter || options.filter(event)) {
+        await Promise.resolve(handler(event));
+      }
+    }
+  }
+
+  getHandlers(type: string): Array<{
+    handler: (event: StateEvent) => void | Promise<void>;
+    options?: { filter?: (event: StateEvent) => boolean };
+  }> {
+    return this.handlers.get(type) || [];
+  }
+}
 
 describe('StateService', () => {
   let state: StateService;
+  let eventService: MockStateEventService;
 
   beforeEach(() => {
+    eventService = new MockStateEventService();
     state = new StateService();
+    state.setEventService(eventService);
   });
 
   describe('text variables', () => {
@@ -156,6 +206,93 @@ describe('StateService', () => {
 
     it('should return null when no file path is set', () => {
       expect(state.getCurrentFilePath()).toBeNull();
+    });
+  });
+
+  describe('event emission', () => {
+    it('should emit create event when creating child state', () => {
+      const handler = vi.fn();
+      eventService.on('create', handler);
+
+      state.setCurrentFilePath('test.meld');
+      const child = state.createChildState();
+
+      expect(handler).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'create',
+        source: 'createChildState',
+        location: {
+          file: 'test.meld'
+        }
+      }));
+    });
+
+    it('should emit clone event when cloning state', () => {
+      const handler = vi.fn();
+      eventService.on('clone', handler);
+
+      state.setCurrentFilePath('test.meld');
+      const cloned = state.clone();
+
+      expect(handler).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'clone',
+        source: 'clone',
+        location: {
+          file: 'test.meld'
+        }
+      }));
+    });
+
+    it('should emit merge event when merging child state', () => {
+      const handler = vi.fn();
+      eventService.on('merge', handler);
+
+      state.setCurrentFilePath('test.meld');
+      const child = state.createChildState();
+      state.mergeChildState(child);
+
+      expect(handler).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'merge',
+        source: 'mergeChildState',
+        location: {
+          file: 'test.meld'
+        }
+      }));
+    });
+
+    it('should emit transform event for state updates', () => {
+      const handler = vi.fn();
+      eventService.on('transform', handler);
+
+      state.setCurrentFilePath('test.meld');
+      state.setTextVar('test', 'value');
+
+      expect(handler).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'transform',
+        source: 'setTextVar:test',
+        location: {
+          file: 'test.meld'
+        }
+      }));
+    });
+
+    it('should inherit event service in child states', () => {
+      const handler = vi.fn();
+      eventService.on('transform', handler);
+
+      const child = state.createChildState();
+      child.setTextVar('test', 'value');
+
+      expect(handler).toHaveBeenCalled();
+    });
+
+    it('should propagate event service to cloned states', () => {
+      const handler = vi.fn();
+      eventService.on('transform', handler);
+
+      const cloned = state.clone();
+      cloned.setTextVar('test', 'value');
+
+      expect(handler).toHaveBeenCalled();
     });
   });
 

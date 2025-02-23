@@ -123,7 +123,7 @@ export class OutputService implements IOutputService {
       }
 
       // Check if we're using transformed nodes
-      const isTransformed = state.isTransformationEnabled() && state.getTransformedNodes();
+      const isTransformed = state.isTransformationEnabled() && state.getTransformedNodes() !== undefined;
 
       // Process nodes
       for (const node of nodes) {

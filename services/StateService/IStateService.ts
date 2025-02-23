@@ -1,6 +1,10 @@
 import type { MeldNode } from 'meld-spec';
+import type { IStateEventService } from '../StateEventService/IStateEventService.js';
 
 export interface IStateService {
+  // Event system
+  setEventService(eventService: IStateEventService): void;
+
   // Text variables
   getTextVar(name: string): string | undefined;
   setTextVar(name: string, value: string): void;
