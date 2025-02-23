@@ -194,22 +194,26 @@ export class StateService implements IStateService {
       [...this.currentState.transformedNodes] : 
       [...this.currentState.nodes];
     
-    // Find the original node by comparing content and location
-    const index = transformedNodes.findIndex(node => 
-      node.type === original.type && 
-      JSON.stringify(node.location) === JSON.stringify(original.location) &&
-      (node as any).content === (original as any).content
-    );
+    // First try direct reference comparison
+    let index = transformedNodes.findIndex(node => node === original);
+
+    // If not found by reference, try matching by properties
+    if (index === -1) {
+      index = transformedNodes.findIndex(node => 
+        node.type === original.type &&
+        node.content === original.content &&
+        node.location.start.line === original.location.start.line &&
+        node.location.start.column === original.location.start.column &&
+        node.location.end.line === original.location.end.line &&
+        node.location.end.column === original.location.end.column
+      );
+    }
 
     if (index !== -1) {
       transformedNodes[index] = transformed;
     } else {
       // If not found, check if it's in the original nodes array
-      const originalIndex = this.currentState.nodes.findIndex(node =>
-        node.type === original.type &&
-        JSON.stringify(node.location) === JSON.stringify(original.location) &&
-        (node as any).content === (original as any).content
-      );
+      const originalIndex = this.currentState.nodes.findIndex(node => node === original);
       
       if (originalIndex === -1) {
         throw new Error('Cannot transform node: original node not found');
@@ -227,7 +231,7 @@ export class StateService implements IStateService {
 
   enableTransformation(enable: boolean): void {
     this._transformationEnabled = enable;
-    if (enable && (!this.currentState.transformedNodes || this.currentState.transformedNodes.length === 0)) {
+    if (enable && !this.currentState.transformedNodes) {
       // Initialize transformed nodes with current nodes when enabling transformation
       this.updateState({ transformedNodes: [...this.currentState.nodes] }, 'enableTransformation');
     }

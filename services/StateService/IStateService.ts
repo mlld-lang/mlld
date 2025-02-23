@@ -17,10 +17,10 @@ export interface IStateService {
   getLocalTextVars(): Map<string, string>;
 
   // Data variables
-  getDataVar(name: string): any;
-  setDataVar(name: string, value: any): void;
-  getAllDataVars(): Map<string, any>;
-  getLocalDataVars(): Map<string, any>;
+  getDataVar(name: string): unknown;
+  setDataVar(name: string, value: unknown): void;
+  getAllDataVars(): Map<string, unknown>;
+  getLocalDataVars(): Map<string, unknown>;
 
   // Path variables
   getPathVar(name: string): string | undefined;
