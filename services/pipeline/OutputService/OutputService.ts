@@ -255,7 +255,7 @@ export class OutputService implements IOutputService {
   }
 
   private async nodeToLLM(node: MeldNode, state: IStateService): Promise<string> {
-    // Use the same logic as markdown for now
+    // Use the same logic as markdown for now since we want consistent behavior
     return this.nodeToMarkdown(node, state);
   }
 
@@ -264,8 +264,8 @@ export class OutputService implements IOutputService {
   }
 
   private codeFenceToLLM(node: CodeFenceNode): string {
-    // Implementation of codeFenceToLLM method
-    throw new Error('Method not implemented');
+    // Use the same logic as markdown for now since we want consistent behavior
+    return this.codeFenceToMarkdown(node);
   }
 
   private directiveToMarkdown(node: DirectiveNode): string {
@@ -274,15 +274,14 @@ export class OutputService implements IOutputService {
       return '';
     }
     if (kind === 'run') {
-      const command = node.directive.command;
-      return `${command}\n`;
+      return '[run directive output placeholder]\n';
     }
     // For other execution directives, return empty string for now
     return '';
   }
 
   private directiveToLLM(node: DirectiveNode): string {
-    // Implementation of directiveToLLM method
-    throw new Error('Method not implemented');
+    // Use the same logic as markdown for now since we want consistent behavior
+    return this.directiveToMarkdown(node);
   }
 }

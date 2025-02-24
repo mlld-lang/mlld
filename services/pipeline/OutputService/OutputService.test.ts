@@ -343,12 +343,21 @@ describe('OutputService', () => {
       let output = await service.convert(defNodes, state, 'llm');
       expect(output).toBe(''); // Definition directives are omitted
 
-      // Execution directive
+      // Execution directive in non-transformation mode
       const execNodes: MeldNode[] = [
         createDirectiveNode('run', { command: 'echo test' }, createLocation(1, 1))
       ];
       output = await service.convert(execNodes, state, 'llm');
-      expect(output).toContain('echo test');
+      expect(output).toContain('[run directive output placeholder]');
+
+      // Execution directive in transformation mode
+      state.enableTransformation();
+      const transformedNodes: MeldNode[] = [
+        createTextNode('test output\n', createLocation(1, 1))
+      ];
+      state.setTransformedNodes(transformedNodes);
+      output = await service.convert(execNodes, state, 'llm');
+      expect(output).toContain('test output');
     });
 
     it('should preserve state variables when requested', async () => {
