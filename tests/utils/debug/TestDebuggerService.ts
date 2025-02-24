@@ -115,7 +115,36 @@ export class TestDebuggerService implements IStateDebuggerService {
     if (this.currentSessionId !== sessionId) {
       return 'No active debug session';
     }
-    const operations = this.operations.map(op => `${op.type}: ${JSON.stringify(op.data)}`).join('\n');
+    const operations = this.operations.map(op => {
+      try {
+        // Handle circular references by only including safe properties
+        const safeData = Object.entries(op.data).reduce((acc, [key, value]) => {
+          // Only include primitive values and simple objects
+          if (
+            value === null ||
+            typeof value === 'undefined' ||
+            typeof value === 'string' ||
+            typeof value === 'number' ||
+            typeof value === 'boolean' ||
+            (typeof value === 'object' && !('constructor' in value))
+          ) {
+            acc[key] = value;
+          } else if (value instanceof Error) {
+            acc[key] = {
+              name: value.name,
+              message: value.message,
+              stack: value.stack
+            };
+          } else {
+            acc[key] = `[${typeof value}]`;
+          }
+          return acc;
+        }, {} as Record<string, any>);
+        return `${op.type}: ${JSON.stringify(safeData)}`;
+      } catch (error) {
+        return `${op.type}: [Error stringifying data: ${error.message}]`;
+      }
+    }).join('\n');
     return `Debug Report for Session ${sessionId}:\n${operations}`;
   }
 
