@@ -155,6 +155,9 @@ export async function main(filePath: string, options: ProcessOptions = {}): Prom
   // Merge with provided services and ensure proper initialization
   const services = options.services ? { ...defaultServices, ...options.services } as Services & RequiredServices : defaultServices;
 
+  // Validate the service pipeline after merging
+  validateServicePipeline(services);
+
   // If directive service was injected, we need to re-initialize it and the interpreter
   if (options.services?.directive) {
     const directive = services.directive;
@@ -177,13 +180,6 @@ export async function main(filePath: string, options: ProcessOptions = {}): Prom
 
     // Register default handlers
     directive.registerDefaultHandlers();
-  }
-
-  // Validate required services
-  const requiredServices = ['filesystem', 'parser', 'interpreter', 'directive', 'state', 'output'] as const;
-  const missingServices = requiredServices.filter(service => !(service in services));
-  if (missingServices.length > 0) {
-    throw new Error(`Missing required services: ${missingServices.join(', ')}`);
   }
 
   try {
