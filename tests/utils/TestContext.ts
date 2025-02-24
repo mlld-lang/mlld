@@ -13,6 +13,7 @@ import { CircularityService } from '@services/resolution/CircularityService/Circ
 import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService.js';
 import { FileSystemService } from '@services/fs/FileSystemService/FileSystemService.js';
 import { OutputService } from '@services/pipeline/OutputService/OutputService.js';
+import { OutputFormat } from '@services/pipeline/OutputService/IOutputService.js';
 import { StateTrackingService } from './debug/StateTrackingService/StateTrackingService.js';
 import { StateVisualizationService } from './debug/StateVisualizationService/StateVisualizationService.js';
 import { StateDebuggerService } from './debug/StateDebuggerService/StateDebuggerService.js';
@@ -38,6 +39,7 @@ import { filesystemLogger as logger } from '@core/utils/logger.js';
 import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService.js';
 import type { IStateEventService } from '@services/state/StateEventService/IStateEventService.js';
 import type { DebugSessionConfig, DebugSessionResult } from './debug/StateDebuggerService/IStateDebuggerService.js';
+import { TestDebuggerService } from './debug/TestDebuggerService.js';
 
 interface SnapshotDiff {
   added: string[];
@@ -66,11 +68,7 @@ interface TestServices {
   resolution: IResolutionService;
   filesystem: IFileSystemService;
   output: IOutputService;
-  tracking: IStateTrackingService;
-  visualization: IStateVisualizationService;
-  debugger: IStateDebuggerService;
-  history: IStateHistoryService;
-  events: IStateEventService;
+  debug: IStateDebuggerService;
 }
 
 /**
@@ -110,33 +108,27 @@ export class TestContext {
     const pathOps = new PathOperationsService();
     const filesystem = new FileSystemService(pathOps, this.fs);
     const validation = new ValidationService();
-    const tracking = new StateTrackingService();
-    const eventService = new StateEventService();
-    const history = new StateHistoryService(eventService);
-    const visualization = new StateVisualizationService(history, tracking);
     const path = new PathService();
     path.initialize(filesystem);
     const parser = new ParserService();
     const circularity = new CircularityService();
     const interpreter = new InterpreterService();
-    const output = new OutputService();
 
     // Initialize state service last, after all other services are ready
     const state = new StateService();
     state.setCurrentFilePath('test.meld'); // Set initial file path
     state.enableTransformation(true); // Enable transformation by default for tests
-    state.setEventService(eventService); // Set event service for state operations
-    state.setTrackingService(tracking); // Enable state tracking
     
     // Initialize resolution service after state is ready
     const resolution = new ResolutionService(state, filesystem, parser);
 
+    // Initialize output service
+    const output = new OutputService();
+    output.initialize(state);
+
     // Initialize debugger service
-    const debuggerService = new StateDebuggerService(
-      visualization,
-      history,
-      tracking
-    );
+    const debuggerService = new TestDebuggerService(state);
+    debuggerService.initialize(state);
 
     // Initialize directive service
     const directive = new DirectiveService();
@@ -148,7 +140,8 @@ export class TestContext {
       parser,
       interpreter,
       circularity,
-      resolution
+      resolution,
+      output
     );
 
     // Initialize interpreter service
@@ -172,11 +165,7 @@ export class TestContext {
       resolution,
       filesystem,
       output,
-      tracking,
-      visualization,
-      debugger: debuggerService,
-      history,
-      events: eventService
+      debug: debuggerService
     };
   }
 
@@ -287,24 +276,87 @@ export class TestContext {
     };
 
     const mergedConfig = { ...defaultConfig, ...config };
-    return await this.services.debugger.startSession(mergedConfig);
+    return await this.services.debug.startSession(mergedConfig);
   }
 
   /**
    * End a debug session and get results
    */
   async endDebugSession(sessionId: string): Promise<DebugSessionResult> {
-    return this.services.debugger.endSession(sessionId);
+    return this.services.debug.endSession(sessionId);
   }
 
   /**
    * Get a visualization of the current state
    */
   async visualizeState(format: 'mermaid' | 'dot' = 'mermaid'): Promise<string> {
-    return this.services.visualization.exportStateGraph({
-      format,
-      includeMetadata: true,
-      includeTimestamps: true
-    });
+    return this.services.debug.visualizeState(format);
+  }
+
+  /**
+   * Enable transformation mode
+   */
+  enableTransformation(): void {
+    this.services.state.enableTransformation(true);
+  }
+
+  /**
+   * Disable transformation mode
+   */
+  disableTransformation(): void {
+    this.services.state.enableTransformation(false);
+  }
+
+  /**
+   * Enable debug mode
+   */
+  enableDebug(): void {
+    // Initialize debug service if not already done
+    if (!this.services.debug) {
+      const debuggerService = new StateDebuggerService(
+        this.services.debug.visualization,
+        this.services.debug.history,
+        this.services.debug.tracking
+      );
+      (this.services as any).debug = debuggerService;
+    }
+  }
+
+  /**
+   * Disable debug mode
+   */
+  disableDebug(): void {
+    if (this.services.debug) {
+      (this.services as any).debug = undefined;
+    }
+  }
+
+  /**
+   * Set output format
+   */
+  setFormat(format: OutputFormat): void {
+    this.services.output.setFormat(format);
+  }
+
+  /**
+   * Reset all services to initial state
+   */
+  reset(): void {
+    // Reset state service
+    this.services.state.reset();
+    
+    // Reset debug service if enabled
+    if (this.services.debug) {
+      this.services.debug.reset();
+    }
+    
+    // Reset tracking service
+    this.services.debug.tracking.reset();
+    
+    // Reset history service
+    this.services.debug.history.reset();
+    
+    // Reset visualization service
+    this.services.debug.visualization.reset();
   }
 } 

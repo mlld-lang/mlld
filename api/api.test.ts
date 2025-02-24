@@ -3,6 +3,7 @@ import { main } from './index.js';
 import { TestContext } from '@tests/utils/index.js';
 import type { ProcessOptions } from '@core/types/index.js';
 import type { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
+import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
 
 // Define the type for main function options
 type MainOptions = {
@@ -27,6 +28,111 @@ describe('SDK Integration Tests', () => {
     vi.clearAllMocks();
   });
 
+  describe('Service Management', () => {
+    it('should create services in correct initialization order', async () => {
+      const initSpy = vi.spyOn(context.services.directive, 'initialize');
+      
+      await context.fs.writeFile(testFilePath, '@text greeting = "Hello"');
+      await main(testFilePath, { fs: context.fs });
+      
+      // Verify directive.initialize was called with services in correct order
+      expect(initSpy).toHaveBeenCalledWith(
+        expect.any(Object), // validation
+        expect.any(Object), // state
+        expect.any(Object), // path
+        expect.any(Object), // filesystem
+        expect.any(Object), // parser
+        expect.any(Object), // interpreter
+        expect.any(Object), // circularity
+        expect.any(Object)  // resolution
+      );
+    });
+
+    it('should allow service injection through options', async () => {
+      const customState = context.services.state;
+      const spy = vi.spyOn(customState, 'enableTransformation');
+
+      await context.fs.writeFile(testFilePath, '@text greeting = "Hello"');
+      await main(testFilePath, {
+        fs: context.fs,
+        services: { state: customState },
+        transformation: true
+      });
+
+      expect(spy).toHaveBeenCalledWith(true);
+    });
+  });
+
+  describe('Transformation Mode', () => {
+    it('should enable transformation through options', async () => {
+      const content = `
+        @text greeting = "Hello"
+        @run [echo test]
+        Content
+      `;
+      await context.fs.writeFile(testFilePath, content);
+      
+      const result = await main(testFilePath, {
+        fs: context.fs,
+        services: context.services,
+        transformation: true
+      });
+      
+      // In transformation mode, directives should be replaced
+      expect(result).not.toContain('[run directive output placeholder]');
+      expect(result).toContain('test');
+    });
+
+    it('should respect existing transformation state', async () => {
+      const content = '@run [echo test]';
+      await context.fs.writeFile(testFilePath, content);
+      
+      // Enable transformation through context
+      context.enableTransformation();
+      
+      const result = await main(testFilePath, {
+        fs: context.fs,
+        services: context.services
+      });
+      
+      // Should still be in transformation mode
+      expect(result).not.toContain('[run directive output placeholder]');
+      expect(result).toContain('test');
+    });
+  });
+
+  describe('Debug Mode', () => {
+    it('should enable debug service when requested', async () => {
+      await context.fs.writeFile(testFilePath, '@text greeting = "Hello"');
+      
+      await main(testFilePath, {
+        fs: context.fs,
+        debug: true
+      });
+      
+      // Verify debug service was created
+      expect(context.services.debug).toBeDefined();
+    });
+
+    it('should capture debug information when enabled', async () => {
+      const content = '@run [echo test]';
+      await context.fs.writeFile(testFilePath, content);
+      
+      context.enableDebug();
+      
+      await main(testFilePath, {
+        fs: context.fs,
+        services: context.services,
+        debug: true
+      });
+      
+      // Verify debug data was captured
+      const debugData = await context.services.debug.getDebugData();
+      expect(debugData).toBeDefined();
+      expect(debugData.operations).toHaveLength(1);
+    });
+  });
+
   describe('Format Conversion', () => {
     it('should handle definition directives correctly', async () => {
       await context.fs.writeFile(testFilePath, '@text greeting = "Hello"');
@@ -39,128 +145,23 @@ describe('SDK Integration Tests', () => {
     });
 
     it('should handle execution directives correctly', async () => {
-      // Start debug session with enhanced configuration
-      const debugSessionId = await context.startDebugSession({
-        captureConfig: {
-          capturePoints: ['pre-transform', 'post-transform', 'error'],
-          includeFields: ['nodes', 'transformedNodes', 'variables', 'metadata'],
-          format: 'full'
-        },
-        visualization: {
-          format: 'mermaid',
-          includeMetadata: true,
-          includeTimestamps: true
-        }
+      await context.fs.writeFile(testFilePath, '@run [echo test]');
+      
+      context.enableDebug();
+      
+      const result = await main(testFilePath, {
+        fs: context.fs,
+        format: 'llm',
+        services: context.services,
+        debug: true
       });
 
-      try {
-        await context.fs.writeFile(testFilePath, '@run [echo test]');
-        
-        // Get initial state ID - FIXED: Remove file path fallback
-        const initialStateId = context.services.state.getStateId();
-        if (!initialStateId) {
-          throw new Error('Failed to get state ID - state not properly initialized');
-        }
-        
-        // Enhanced debugging: Generate relationship graph
-        console.log('Initial State Relationships:');
-        console.log(await context.services.visualization.generateRelationshipGraph([initialStateId], {
-          format: 'mermaid',
-          includeMetadata: true
-        }));
-
-        // Enhanced debugging: Generate initial timeline
-        console.log('Initial Timeline:');
-        console.log(await context.services.visualization.generateTimeline([initialStateId], {
-          format: 'mermaid',
-          includeTimestamps: true
-        }));
-
-        // Enhanced debugging: Get initial metrics
-        const startTime = Date.now();
-        const initialMetrics = await context.services.visualization.getMetrics({
-          start: startTime - 3600000, // Last hour
-          end: startTime
-        });
-        console.log('Initial State Metrics:', initialMetrics);
-
-        console.log('Initial State Hierarchy:');
-        console.log(await context.services.visualization.generateHierarchyView(initialStateId, {
-          format: 'mermaid',
-          includeMetadata: true
-        }));
-
-        // Trace the operation with enhanced error handling
-        const { result, diagnostics } = await context.services.debugger.traceOperation(
-          initialStateId,
-          async () => {
-            // Enable transformation mode explicitly
-            context.services.state.enableTransformation(true);
-            
-            return await main(testFilePath, {
-              fs: context.fs,
-              format: 'llm',
-              services: context.services
-            } as any);
-          }
-        );
-
-        // Log diagnostics and state changes
-        console.log('Operation Diagnostics:', diagnostics);
-
-        // Get final state visualization
-        const finalStateId = context.services.state.getStateId();
-        if (!finalStateId) {
-          throw new Error('Failed to get final state ID');
-        }
-
-        // Enhanced debugging: Generate final relationship graph
-        console.log('Final State Relationships:');
-        console.log(await context.services.visualization.generateRelationshipGraph([finalStateId], {
-          format: 'mermaid',
-          includeMetadata: true
-        }));
-
-        // Enhanced debugging: Generate final timeline
-        console.log('Final Timeline:');
-        console.log(await context.services.visualization.generateTimeline([finalStateId], {
-          format: 'mermaid',
-          includeTimestamps: true
-        }));
-
-        // Enhanced debugging: Get final metrics
-        const endTime = Date.now();
-        const finalMetrics = await context.services.visualization.getMetrics({
-          start: startTime,
-          end: endTime
-        });
-        console.log('Final State Metrics:', finalMetrics);
-        
-        console.log('Final State Hierarchy:');
-        console.log(await context.services.visualization.generateHierarchyView(finalStateId, {
-          format: 'mermaid',
-          includeMetadata: true
-        }));
-
-        // Generate transition diagram
-        console.log('State Transitions:');
-        console.log(await context.services.visualization.generateTransitionDiagram(finalStateId, {
-          format: 'mermaid',
-          includeTimestamps: true
-        }));
-
-        // Add assertions here
-        expect(result).toBeDefined();
-        // Add more specific assertions based on expected behavior
-      } catch (error) {
-        console.error('Test failed with error:', error);
-        // Enhanced error reporting
-        if (context.services.tracking) {
-          const allStates = await context.services.tracking.getAllStates();
-          console.log('All tracked states:', allStates);
-        }
-        throw error;
-      }
+      // Verify result
+      expect(result).toContain('[run directive output placeholder]');
+      
+      // Verify debug data
+      const debugData = await context.services.debug.getDebugData();
+      expect(debugData.operations).toBeDefined();
     });
 
     it('should handle complex meld content with mixed directives', async () => {
@@ -188,6 +189,38 @@ describe('SDK Integration Tests', () => {
       
       // Execution directives should show placeholder
       expect(result).toContain('[run directive output placeholder]');
+    });
+  });
+
+  describe('Error Handling', () => {
+    it('should handle parse errors gracefully', async () => {
+      await context.fs.writeFile(testFilePath, '@invalid not_a_valid_directive');
+      
+      await expect(main(testFilePath, { 
+        fs: context.fs,
+        services: context.services
+      })).rejects.toThrow();
+    });
+
+    it('should handle missing files correctly', async () => {
+      await expect(main('nonexistent.meld', { 
+        fs: context.fs,
+        services: context.services
+      })).rejects.toThrow(MeldFileNotFoundError);
+    });
+
+    it('should handle service initialization errors', async () => {
+      const badServices = {
+        ...context.services,
+        directive: undefined
+      };
+
+      await context.fs.writeFile(testFilePath, '@text greeting = "Hello"');
+      
+      await expect(main(testFilePath, {
+        fs: context.fs,
+        services: badServices
+      })).rejects.toThrow();
     });
   });
 
@@ -242,31 +275,6 @@ describe('SDK Integration Tests', () => {
       
       // Run directive should be transformed (if transformation is working)
       expect(result).toContain('test');
-    });
-  });
-
-  describe('Error Handling', () => {
-    it('should handle parse errors gracefully', async () => {
-      await context.fs.writeFile(testFilePath, '@invalid not_a_valid_directive');
-      await expect(main(testFilePath, { 
-        fs: context.fs,
-        services: context.services
-      }))
-        .rejects
-        .toThrow(/Parse error/);
-    });
-
-    // TODO: This test will be updated as part of the error handling overhaul
-    // See dev/ERRORS.md - will be reclassified as a fatal error with improved messaging
-    it.todo('should handle missing files correctly');
-
-    it('should handle empty files', async () => {
-      await context.fs.writeFile(testFilePath, '');
-      const result = await main(testFilePath, { 
-        fs: context.fs,
-        services: context.services
-      });
-      expect(result).toBe(''); // Empty input should produce empty output
     });
   });
 

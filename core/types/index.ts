@@ -1,5 +1,15 @@
 import type { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
 import type { OutputFormat } from '@services/pipeline/OutputService/IOutputService.js';
+import type { ParserService } from '@services/pipeline/ParserService/ParserService.js';
+import type { InterpreterService } from '@services/pipeline/InterpreterService/InterpreterService.js';
+import type { StateService } from '@services/state/StateService/StateService.js';
+import type { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService.js';
+import type { PathService } from '@services/fs/PathService/PathService.js';
+import type { ValidationService } from '@services/resolution/ValidationService/ValidationService.js';
+import type { CircularityService } from '@services/resolution/CircularityService/CircularityService.js';
+import type { DirectiveService } from '@services/pipeline/DirectiveService/DirectiveService.js';
+import type { OutputService } from '@services/pipeline/OutputService/OutputService.js';
+import type { StateDebuggerService as DebuggerService } from '@tests/utils/debug/StateDebuggerService/StateDebuggerService.js';
 
 /**
  * Represents a position in a file
@@ -33,8 +43,28 @@ export interface Range {
   filePath?: string;
 }
 
+export interface Services {
+  parser: ParserService;
+  interpreter: InterpreterService;
+  state: StateService;
+  resolution: ResolutionService;
+  path: PathService;
+  validation: ValidationService;
+  circularity: CircularityService;
+  directive: DirectiveService;
+  output: OutputService;
+  debug?: DebuggerService;
+}
+
 export interface ProcessOptions {
-  fs?: NodeFileSystem;
+  /** Controls whether directives should be transformed */
+  transformation?: boolean;
+  /** Controls output format */
   format?: OutputFormat;
-  services?: any;
+  /** Enables/disables debugging */
+  debug?: boolean;
+  /** Optional custom filesystem */
+  fs?: NodeFileSystem;
+  /** Optional service overrides */
+  services?: Partial<Services>;
 } 

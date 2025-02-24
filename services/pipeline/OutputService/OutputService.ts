@@ -19,6 +19,7 @@ const DEFAULT_OPTIONS: Required<OutputOptions> = {
 
 export class OutputService implements IOutputService {
   private formatters = new Map<string, FormatConverter>();
+  private state: IStateService | undefined;
 
   constructor() {
     // Register default formatters
@@ -29,6 +30,11 @@ export class OutputService implements IOutputService {
     logger.debug('OutputService initialized with default formatters', {
       formats: Array.from(this.formatters.keys())
     });
+  }
+
+  initialize(state: IStateService): void {
+    this.state = state;
+    logger.debug('OutputService initialized with state service');
   }
 
   async convert(
@@ -42,7 +48,8 @@ export class OutputService implements IOutputService {
     logger.debug('Converting output', {
       format,
       nodeCount: nodes.length,
-      options: opts
+      options: opts,
+      transformationEnabled: state.isTransformationEnabled()
     });
 
     // Use transformed nodes if transformation is enabled
@@ -125,7 +132,28 @@ export class OutputService implements IOutputService {
 
       // Process nodes
       for (const node of nodes) {
-        output += await this.nodeToMarkdown(node, state);
+        // If in transformation mode and we have transformed nodes, try to find a match
+        if (state.isTransformationEnabled()) {
+          const transformedNodes = state.getTransformedNodes();
+          if (transformedNodes) {
+            const transformedNode = transformedNodes.find(n => 
+              n.location?.start.line === node.location?.start.line
+            );
+            if (transformedNode) {
+              const nodeOutput = await this.nodeToMarkdown(transformedNode, state);
+              if (nodeOutput) {
+                output += nodeOutput;
+              }
+              continue;
+            }
+          }
+        }
+
+        // If no transformed node found or not in transformation mode, process normally
+        const nodeOutput = await this.nodeToMarkdown(node, state);
+        if (nodeOutput) {
+          output += nodeOutput;
+        }
       }
 
       // Clean up extra newlines if not preserving formatting
@@ -193,29 +221,34 @@ export class OutputService implements IOutputService {
   private async nodeToMarkdown(node: MeldNode, state: IStateService): Promise<string> {
     switch (node.type) {
       case 'Text':
-        return (node as TextNode).content;
+        return (node as TextNode).content + '\n';
       case 'CodeFence':
         const fence = node as CodeFenceNode;
         return `\`\`\`${fence.language || ''}\n${fence.content}\n\`\`\`\n`;
       case 'Directive':
         const directive = node as DirectiveNode;
-        if (state.isTransformationEnabled()) {
-          // In transformation mode, we should never see directives
-          // They should have been transformed into Text or CodeFence nodes
-          throw new MeldOutputError('Unexpected directive in transformation mode', 'markdown');
-        } else {
-          // In non-transformation mode:
-          // - For run directives, show the command
-          // - For definition directives, return empty string
-          // - For other execution directives, show placeholder
-          if (directive.directive.kind === 'run') {
-            return directive.directive.command + '\n';
-          } else if (['text', 'data', 'path', 'import', 'define'].includes(directive.directive.kind)) {
-            return '';
-          } else if (['embed'].includes(directive.directive.kind)) {
-            return '[directive output placeholder]\n';
-          }
+        const kind = directive.directive.kind;
+
+        // Definition directives always return empty string
+        if (['text', 'data', 'path', 'import', 'define'].includes(kind)) {
+          return '';
         }
+
+        // Handle run directives
+        if (kind === 'run') {
+          if (state.isTransformationEnabled()) {
+            // In transformation mode, return command
+            return directive.directive.command + '\n';
+          }
+          // In non-transformation mode, return placeholder
+          return '[run directive output placeholder]\n';
+        }
+
+        // Handle other execution directives
+        if (['embed'].includes(kind)) {
+          return '[directive output placeholder]\n';
+        }
+
         return '';
       default:
         throw new MeldOutputError(`Unknown node type: ${node.type}`, 'markdown');
@@ -223,35 +256,8 @@ export class OutputService implements IOutputService {
   }
 
   private async nodeToLLM(node: MeldNode, state: IStateService): Promise<string> {
-    switch (node.type) {
-      case 'Text':
-        return (node as TextNode).content;
-      case 'CodeFence':
-        const fence = node as CodeFenceNode;
-        return `\`\`\`${fence.language || ''}\n${fence.content}\n\`\`\`\n`;
-      case 'Directive':
-        const directive = node as DirectiveNode;
-        if (state.isTransformationEnabled()) {
-          // In transformation mode, we should never see directives
-          // They should have been transformed into Text or CodeFence nodes
-          throw new MeldOutputError('Unexpected directive in transformation mode', 'llm');
-        } else {
-          // In non-transformation mode:
-          // - For run directives, show the command
-          // - For definition directives, return empty string
-          // - For other execution directives, show placeholder
-          if (directive.directive.kind === 'run') {
-            return directive.directive.command + '\n';
-          } else if (['text', 'data', 'path', 'import', 'define'].includes(directive.directive.kind)) {
-            return '';
-          } else if (['embed'].includes(directive.directive.kind)) {
-            return '[directive output placeholder]\n';
-          }
-        }
-        return '';
-      default:
-        throw new MeldOutputError(`Unknown node type: ${node.type}`, 'llm');
-    }
+    // Use the same logic as markdown for now
+    return this.nodeToMarkdown(node, state);
   }
 
   private codeFenceToMarkdown(node: CodeFenceNode): string {

@@ -31,111 +31,156 @@ import { PathOperationsService } from '@services/fs/FileSystemService/PathOperat
 import { OutputService } from '@services/pipeline/OutputService/OutputService.js';
 import { CircularityService } from '@services/resolution/CircularityService/CircularityService.js';
 import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
-import { ProcessOptions } from '@core/types/index.js';
+import { DebuggerService } from '@tests/utils/debug/StateDebuggerService/StateDebuggerService.js';
+import { ProcessOptions, Services } from '@core/types/index.js';
+
+// Import debug services
+import { StateTrackingService } from '@tests/utils/debug/StateTrackingService/StateTrackingService.js';
+import { StateVisualizationService } from '@tests/utils/debug/StateVisualizationService/StateVisualizationService.js';
+import { StateHistoryService } from '@tests/utils/debug/StateHistoryService/StateHistoryService.js';
+import { StateEventService } from '@services/state/StateEventService/StateEventService.js';
+import { TestDebuggerService } from '@tests/utils/debug/TestDebuggerService.js';
 
 // Package info
 export { version } from '@core/version.js';
 
-export async function main(filePath: string, options: ProcessOptions & { services?: any } = {}): Promise<string> {
-  // Use services from test context if provided, otherwise create new ones
+function createDefaultServices(options: ProcessOptions): Services {
+  // 1. FileSystemService (base dependency)
   const pathOps = new PathOperationsService();
   const fs = options.fs || new NodeFileSystem();
   const filesystem = new FileSystemService(pathOps, fs);
-  
-  if (options.services) {
-    // Use services from test context
-    const { parser, interpreter, directive, validation, state, path, circularity, resolution, output } = options.services;
-    
-    // Initialize services
-    path.initialize(filesystem);
-    directive.initialize(
-      validation,
-      state,
-      path,
-      filesystem,
-      parser,
-      interpreter,
-      circularity,
-      resolution
-    );
-    interpreter.initialize(directive, state);
-    
-    try {
-      // Read the file
-      const content = await filesystem.readFile(filePath);
-      
-      // Parse the content
-      const ast = await parser.parse(content);
-      
-      // Interpret the AST
-      const resultState = await interpreter.interpret(ast, { filePath, initialState: state });
-      
-      // Convert to desired format using the updated state
-      const converted = await output.convert(ast, resultState, options.format || 'llm');
-      
-      return converted;
-    } catch (error) {
-      // If it's a MeldFileNotFoundError, just throw it as is
-      if (error instanceof MeldFileNotFoundError) {
-        throw error;
-      }
-      // For other Error instances, preserve the error
-      if (error instanceof Error) {
-        throw error;
-      }
-      // For non-Error objects, convert to string
-      throw new Error(String(error));
-    }
-  } else {
-    // Create new services
-    const parser = new ParserService();
-    const interpreter = new InterpreterService();
-    const state = new StateService();
-    const directives = new DirectiveService();
-    const validation = new ValidationService();
-    const circularity = new CircularityService();
-    const resolution = new ResolutionService(state, filesystem, parser);
-    const path = new PathService();
-    const output = new OutputService();
+  filesystem.setFileSystem(fs);
 
-    // Initialize services
-    directives.initialize(
-      validation,
-      state,
-      path,
-      filesystem,
-      parser,
-      interpreter,
-      circularity,
-      resolution
-    );
-    interpreter.initialize(directives, state);
+  // 2. PathService (depends on FS)
+  const path = new PathService();
+  path.initialize(filesystem);
+
+  // 3. StateService (core state)
+  const state = new StateService();
+
+  // 4. ParserService (independent)
+  const parser = new ParserService();
+
+  // 5. ResolutionService (depends on State, FS, Parser)
+  const resolution = new ResolutionService(state, filesystem, parser);
+
+  // 6. ValidationService (depends on Resolution)
+  const validation = new ValidationService();
+
+  // 7. CircularityService (depends on Resolution)
+  const circularity = new CircularityService();
+
+  // 8. OutputService (depends on State)
+  const output = new OutputService();
+  output.initialize(state);
+
+  // 9. DirectiveService (depends on multiple services)
+  const directive = new DirectiveService();
+
+  // 10. InterpreterService (orchestrates others)
+  const interpreter = new InterpreterService();
+
+  // Initialize services in correct order
+  directive.initialize(
+    validation,
+    state,
+    path,
+    filesystem,
+    parser,
+    interpreter,
+    circularity,
+    resolution,
+    output
+  );
+
+  interpreter.initialize(directive, state);
+
+  // Create debug service if requested
+  let debug = undefined;
+  if (options.debug) {
+    debug = new TestDebuggerService(state);
+    debug.initialize(state);
+  }
+
+  // Create services object
+  const services: Services = {
+    filesystem,
+    parser,
+    interpreter,
+    state,
+    resolution,
+    path,
+    validation,
+    circularity,
+    directive,
+    output,
+    debug
+  };
+
+  // Register default handlers
+  directive.registerDefaultHandlers();
+
+  return services;
+}
+
+export async function main(filePath: string, options: ProcessOptions = {}): Promise<string> {
+  // Create default services
+  const defaultServices = createDefaultServices(options);
+
+  // Merge with provided services
+  const services = options.services ? { ...defaultServices, ...options.services } : defaultServices;
+
+  // Validate required services
+  const requiredServices = ['filesystem', 'parser', 'interpreter', 'directive', 'state', 'output'];
+  const missingServices = requiredServices.filter(service => !services[service]);
+  if (missingServices.length > 0) {
+    throw new Error(`Missing required services: ${missingServices.join(', ')}`);
+  }
+
+  // Re-initialize services with merged state to ensure proper dependencies
+  services.output.initialize(services.state);
+  services.directive.initialize(
+    services.validation,
+    services.state,
+    services.path,
+    services.filesystem,
+    services.parser,
+    services.interpreter,
+    services.circularity,
+    services.resolution,
+    services.output
+  );
+  services.interpreter.initialize(services.directive, services.state);
+
+  // Enable transformation if requested
+  if (options.transformation) {
+    services.state.enableTransformation(true);
+  }
+
+  try {
+    // Read the file
+    const content = await services.filesystem.readFile(filePath);
     
-    try {
-      // Read the file
-      const content = await filesystem.readFile(filePath);
-      
-      // Parse the content
-      const ast = await parser.parse(content);
-      
-      // Interpret the AST
-      const resultState = await interpreter.interpret(ast, { filePath, initialState: state });
-      
-      // Convert to desired format using the updated state
-      const converted = await output.convert(ast, resultState, options.format || 'llm');
-      
-      return converted;
-    } catch (error) {
-      // If it's a MeldFileNotFoundError, just throw it as is
-      if (error instanceof MeldFileNotFoundError) {
-        throw error;
-      }
-      // For other Error instances, preserve the error
-      if (error instanceof Error) {
-        throw error;
-      }
-      // For non-Error objects, convert to string
-      throw new Error(String(error));
+    // Parse the content
+    const ast = await services.parser.parse(content);
+    
+    // Interpret the AST
+    const resultState = await services.interpreter.interpret(ast, { filePath, initialState: services.state });
+    
+    // Convert to desired format using the updated state
+    const converted = await services.output.convert(ast, resultState, options.format || 'llm');
+    
+    return converted;
+  } catch (error) {
+    // If it's a MeldFileNotFoundError, just throw it as is
+    if (error instanceof MeldFileNotFoundError) {
+      throw error;
     }
+    // For other Error instances, preserve the error
+    if (error instanceof Error) {
+      throw error;
+    }
+    // For non-Error objects, convert to string
+    throw new Error(String(error));
   }
 }
