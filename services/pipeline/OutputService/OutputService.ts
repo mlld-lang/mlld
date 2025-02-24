@@ -223,11 +223,11 @@ export class OutputService implements IOutputService {
 
         // Handle run directives
         if (kind === 'run') {
-          // In non-transformation mode, return placeholder
+          // In non-transformation mode, return the command
           if (!state.isTransformationEnabled()) {
-            return '[run directive output placeholder]\n';
+            return directive.directive.command + '\n';
           }
-          // In transformation mode, check for transformed node
+          // In transformation mode, return the command output
           const transformedNodes = state.getTransformedNodes();
           if (transformedNodes) {
             const transformed = transformedNodes.find(n => 
@@ -237,8 +237,8 @@ export class OutputService implements IOutputService {
               return (transformed as TextNode).content + '\n';
             }
           }
-          // If no transformed node found, return command
-          return directive.directive.command + '\n';
+          // If no transformed node found, return placeholder
+          return '[run directive output placeholder]\n';
         }
 
         // Handle other execution directives
