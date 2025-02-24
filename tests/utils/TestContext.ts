@@ -30,7 +30,7 @@ import type { IFileSystemService } from '@services/FileSystemService/IFileSystem
 import type { IOutputService } from '@services/OutputService/IOutputService.js';
 import type { IStateTrackingService } from '@services/StateTrackingService/IStateTrackingService.js';
 import type { IStateVisualizationService } from '@services/StateVisualizationService/IStateVisualizationService.js';
-import type { IStateDebuggerService } from '@services/StateDebuggerService/IStateDebuggerService.js';
+import type { IStateDebuggerService, DebugSessionConfig, DebugSessionResult } from '@services/StateDebuggerService/IStateDebuggerService.js';
 import type { IStateHistoryService } from '@services/StateHistoryService/IStateHistoryService.js';
 import type { IStateEventService } from '@services/StateEventService/IStateEventService.js';
 import * as fs from 'fs-extra';
@@ -113,18 +113,22 @@ export class TestContext {
     const eventService = new StateEventService();
     const history = new StateHistoryService(eventService);
     const visualization = new StateVisualizationService(history, tracking);
-    const state = new StateService();
-    state.setCurrentFilePath('test.meld'); // Set initial file path
-    state.enableTransformation(true); // Enable transformation by default for tests
-    state.setTrackingService(tracking); // Enable state tracking
-    state.setEventService(eventService); // Set event service for state operations
     const path = new PathService();
     path.initialize(filesystem);
     const parser = new ParserService();
     const circularity = new CircularityService();
     const interpreter = new InterpreterService();
-    const resolution = new ResolutionService(state, filesystem, parser);
     const output = new OutputService();
+
+    // Initialize state service last, after all other services are ready
+    const state = new StateService();
+    state.setCurrentFilePath('test.meld'); // Set initial file path
+    state.enableTransformation(true); // Enable transformation by default for tests
+    state.setEventService(eventService); // Set event service for state operations
+    state.setTrackingService(tracking); // Enable state tracking
+    
+    // Initialize resolution service after state is ready
+    const resolution = new ResolutionService(state, filesystem, parser);
 
     // Initialize debugger service
     const debuggerService = new StateDebuggerService(
@@ -266,20 +270,23 @@ export class TestContext {
    * Start a debug session for test tracing
    */
   async startDebugSession(config?: Partial<DebugSessionConfig>): Promise<string> {
-    const defaultConfig = {
+    const defaultConfig: DebugSessionConfig = {
       captureConfig: {
-        capturePoints: ['pre-transform', 'post-transform', 'error'],
-        includeFields: ['nodes', 'transformedNodes', 'variables'],
+        capturePoints: ['pre-transform', 'post-transform', 'error'] as const,
+        includeFields: ['nodes', 'transformedNodes', 'variables'] as const,
         format: 'full'
+      },
+      visualization: {
+        format: 'mermaid',
+        includeMetadata: true,
+        includeTimestamps: true
       },
       traceOperations: true,
       collectMetrics: true
     };
 
-    return this.services.debugger.startSession({
-      ...defaultConfig,
-      ...config
-    });
+    const mergedConfig = { ...defaultConfig, ...config };
+    return await this.services.debugger.startSession(mergedConfig);
   }
 
   /**

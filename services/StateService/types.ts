@@ -12,7 +12,7 @@ export interface CommandDefinition {
  * Represents a state node in the state tree
  */
 export interface StateNode {
-  stateId?: string;
+  stateId: string;
   source?: 'clone' | 'merge' | 'new' | 'child' | 'implicit';
   filePath?: string;
   readonly variables: {

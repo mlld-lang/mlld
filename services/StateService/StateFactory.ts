@@ -1,11 +1,13 @@
 import type { StateNode, StateNodeOptions, IStateFactory, StateOperation } from './types.js';
 import { stateLogger as logger } from '@core/utils/logger.js';
+import { randomUUID } from 'crypto';
 
 export class StateFactory implements IStateFactory {
   private operations: StateOperation[] = [];
 
   createState(options?: StateNodeOptions): StateNode {
     const state: StateNode = {
+      stateId: randomUUID(),
       variables: {
         text: new Map(options?.parentState?.variables.text ?? []),
         data: new Map(options?.parentState?.variables.data ?? []),
@@ -110,6 +112,7 @@ export class StateFactory implements IStateFactory {
 
   updateState(state: StateNode, updates: Partial<StateNode>): StateNode {
     const updated: StateNode = {
+      stateId: state.stateId,
       variables: {
         text: updates.variables?.text ?? new Map(state.variables.text),
         data: updates.variables?.data ?? new Map(state.variables.data),

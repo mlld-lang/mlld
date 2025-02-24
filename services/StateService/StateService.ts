@@ -21,9 +21,6 @@ export class StateService implements IStateService {
       parentState: parentState ? (parentState as StateService).currentState : undefined
     });
 
-    // Initialize state ID first
-    this.currentState.stateId = crypto.randomUUID();
-
     // If parent has services, inherit them
     if (parentState) {
       const parent = parentState as StateService;
@@ -531,7 +528,7 @@ export class StateService implements IStateService {
         this.trackingService.registerState({
           id: this.currentState.stateId,
           source: this.currentState.source || 'new',  // Use original source or default to 'new'
-          filePath: this.currentState.filePath,
+          filePath: this.getCurrentFilePath() || undefined,
           transformationEnabled: this._transformationEnabled
         });
       } catch (error) {
