@@ -40,3 +40,6 @@ pids
 /*.md
 _meld/*.md
 !/_/*.meld.md
+
+examples/*.xml
+examples/*.md
