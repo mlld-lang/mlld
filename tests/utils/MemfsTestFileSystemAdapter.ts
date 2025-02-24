@@ -1,4 +1,4 @@
-import { NodeFileSystem } from '@services/FileSystemService/NodeFileSystem.js';
+import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
 import { MemfsTestFileSystem } from './MemfsTestFileSystem.js';
 
 export class MemfsTestFileSystemAdapter extends NodeFileSystem {

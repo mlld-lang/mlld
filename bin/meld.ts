@@ -4,11 +4,11 @@ import { CLIService } from '../services/CLIService/CLIService';
 import { ParserService } from '../services/ParserService/ParserService';
 import { InterpreterService } from '../services/InterpreterService/InterpreterService';
 import { OutputService } from '../services/OutputService/OutputService';
-import { FileSystemService } from '@services/FileSystemService/FileSystemService.js';
+import { FileSystemService } from '@services/fs/FileSystemService/FileSystemService.js';
 import { PathService } from '../services/PathService/PathService';
 import { StateService } from '../services/StateService/StateService';
-import { PathOperationsService } from '@services/FileSystemService/PathOperationsService.js';
-import { NodeFileSystem } from '@services/FileSystemService/NodeFileSystem.js';
+import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService.js';
+import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
 import { cliLogger as logger } from '../core/utils/logger';
 
 // Create services

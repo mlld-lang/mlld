@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { main } from './index.js';
 import { TestContext } from '@tests/utils/index.js';
 import type { ProcessOptions } from '@core/types/index.js';
-import type { NodeFileSystem } from '@services/FileSystemService/NodeFileSystem.js';
+import type { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
 
 // Define the type for main function options
 type MainOptions = {

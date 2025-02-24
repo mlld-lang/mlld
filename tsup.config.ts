@@ -36,6 +36,11 @@ export default defineConfig([
       options.alias = {
         '@core': './core',
         '@services': './services',
+        '@parser': './parser',
+        '@interpreter': './interpreter',
+        '@output': './output',
+        '@cli': './cli',
+        '@sdk': './api',
         '@tests': './tests'
       };
       options.define = {
@@ -77,6 +82,11 @@ export default defineConfig([
       options.alias = {
         '@core': './core',
         '@services': './services',
+        '@parser': './parser',
+        '@interpreter': './interpreter',
+        '@output': './output',
+        '@cli': './cli',
+        '@sdk': './api',
         '@tests': './tests'
       };
       options.define = {

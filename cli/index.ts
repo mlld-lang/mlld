@@ -1,18 +1,18 @@
-import { CLIService } from '@services/CLIService/CLIService.js';
-import { ParserService } from '@services/ParserService/ParserService.js';
-import { InterpreterService } from '@services/InterpreterService/InterpreterService.js';
-import { OutputService } from '@services/OutputService/OutputService.js';
-import { FileSystemService } from '@services/FileSystemService/FileSystemService.js';
-import { PathService } from '@services/PathService/PathService.js';
-import { StateService } from '@services/StateService/StateService.js';
-import { DirectiveService } from '@services/DirectiveService/DirectiveService.js';
-import { PathOperationsService } from '@services/FileSystemService/PathOperationsService.js';
-import { NodeFileSystem } from '@services/FileSystemService/NodeFileSystem.js';
+import { CLIService } from '@services/cli/CLIService/CLIService.js';
+import { ParserService } from '@services/pipeline/ParserService/ParserService.js';
+import { InterpreterService } from '@services/pipeline/InterpreterService/InterpreterService.js';
+import { OutputService } from '@services/pipeline/OutputService/OutputService.js';
+import { FileSystemService } from '@services/fs/FileSystemService/FileSystemService.js';
+import { PathService } from '@services/fs/PathService/PathService.js';
+import { StateService } from '@services/state/StateService/StateService.js';
+import { DirectiveService } from '@services/pipeline/DirectiveService/DirectiveService.js';
+import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService.js';
+import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
 import { cliLogger as logger } from '@core/utils/logger.js';
-import { ValidationService } from '@services/ValidationService/ValidationService.js';
-import { CircularityService } from '@services/CircularityService/CircularityService.js';
-import { ResolutionService } from '@services/ResolutionService/ResolutionService.js';
-import { IFileSystem } from '@services/FileSystemService/IFileSystem.js';
+import { ValidationService } from '@services/resolution/ValidationService/ValidationService.js';
+import { CircularityService } from '@services/resolution/CircularityService/CircularityService.js';
+import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService.js';
+import { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
 import { createInterface } from 'readline';
 
 // Create services

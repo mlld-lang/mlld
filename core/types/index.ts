@@ -1,5 +1,5 @@
-import type { NodeFileSystem } from '@services/FileSystemService/NodeFileSystem.js';
-import type { OutputFormat } from '@services/OutputService/IOutputService.js';
+import type { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
+import type { OutputFormat } from '@services/pipeline/OutputService/IOutputService.js';
 
 /**
  * Represents a position in a file

@@ -2,15 +2,19 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { main } from './index.js';
 import { TestContext } from '@tests/utils/TestContext.js';
 import { MemfsTestFileSystemAdapter } from '@tests/utils/MemfsTestFileSystemAdapter.js';
-import { PathService } from '@services/PathService/PathService.js';
-import { InterpreterService } from '@services/InterpreterService/InterpreterService.js';
-import { DirectiveService } from '@services/DirectiveService/DirectiveService.js';
-import { StateService } from '@services/StateService/StateService.js';
-import { ValidationService } from '@services/ValidationService/ValidationService.js';
-import { CircularityService } from '@services/CircularityService/CircularityService.js';
-import { ResolutionService } from '@services/ResolutionService/ResolutionService.js';
+import { FileSystemService } from '@services/fs/FileSystemService/FileSystemService.js';
+import { PathService } from '@services/fs/PathService/PathService.js';
+import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService.js';
+import { ParserService } from '@services/pipeline/ParserService/ParserService.js';
+import { OutputService } from '@services/pipeline/OutputService/OutputService.js';
+import { InterpreterService } from '@services/pipeline/InterpreterService/InterpreterService.js';
+import { DirectiveService } from '@services/pipeline/DirectiveService/DirectiveService.js';
+import { StateService } from '@services/state/StateService/StateService.js';
+import { ValidationService } from '@services/resolution/ValidationService/ValidationService.js';
+import { CircularityService } from '@services/resolution/CircularityService/CircularityService.js';
+import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService.js';
 import * as readline from 'readline';
-import { IFileSystemService } from '@services/FileSystemService/IFileSystemService.js';
+import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 
 // Add module mock before describe block
 vi.mock('readline', () => ({

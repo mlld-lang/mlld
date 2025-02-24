@@ -1,15 +1,15 @@
 // Core services
-export * from '@services/InterpreterService/InterpreterService.js';
-export * from '@services/ParserService/ParserService.js';
-export * from '@services/StateService/StateService.js';
-export * from '@services/ResolutionService/ResolutionService.js';
-export * from '@services/DirectiveService/DirectiveService.js';
-export * from '@services/ValidationService/ValidationService.js';
-export * from '@services/PathService/PathService.js';
-export * from '@services/FileSystemService/FileSystemService.js';
-export * from '@services/FileSystemService/PathOperationsService.js';
-export * from '@services/OutputService/OutputService.js';
-export * from '@services/CircularityService/CircularityService.js';
+export * from '@services/pipeline/InterpreterService/InterpreterService.js';
+export * from '@services/pipeline/ParserService/ParserService.js';
+export * from '@services/state/StateService/StateService.js';
+export * from '@services/resolution/ResolutionService/ResolutionService.js';
+export * from '@services/pipeline/DirectiveService/DirectiveService.js';
+export * from '@services/resolution/ValidationService/ValidationService.js';
+export * from '@services/fs/PathService/PathService.js';
+export * from '@services/fs/FileSystemService/FileSystemService.js';
+export * from '@services/fs/FileSystemService/PathOperationsService.js';
+export * from '@services/pipeline/OutputService/OutputService.js';
+export * from '@services/resolution/CircularityService/CircularityService.js';
 
 // Core types and errors
 export * from '@core/types/index.js';
@@ -19,18 +19,18 @@ export * from '@core/errors/MeldParseError.js';
 import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
 
 // Import service classes
-import { InterpreterService } from '@services/InterpreterService/InterpreterService.js';
-import { ParserService } from '@services/ParserService/ParserService.js';
-import { StateService } from '@services/StateService/StateService.js';
-import { ResolutionService } from '@services/ResolutionService/ResolutionService.js';
-import { DirectiveService } from '@services/DirectiveService/DirectiveService.js';
-import { ValidationService } from '@services/ValidationService/ValidationService.js';
-import { PathService } from '@services/PathService/PathService.js';
-import { FileSystemService } from '@services/FileSystemService/FileSystemService.js';
-import { PathOperationsService } from '@services/FileSystemService/PathOperationsService.js';
-import { OutputService } from '@services/OutputService/OutputService.js';
-import { CircularityService } from '@services/CircularityService/CircularityService.js';
-import { NodeFileSystem } from '@services/FileSystemService/NodeFileSystem.js';
+import { InterpreterService } from '@services/pipeline/InterpreterService/InterpreterService.js';
+import { ParserService } from '@services/pipeline/ParserService/ParserService.js';
+import { StateService } from '@services/state/StateService/StateService.js';
+import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService.js';
+import { DirectiveService } from '@services/pipeline/DirectiveService/DirectiveService.js';
+import { ValidationService } from '@services/resolution/ValidationService/ValidationService.js';
+import { PathService } from '@services/fs/PathService/PathService.js';
+import { FileSystemService } from '@services/fs/FileSystemService/FileSystemService.js';
+import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService.js';
+import { OutputService } from '@services/pipeline/OutputService/OutputService.js';
+import { CircularityService } from '@services/resolution/CircularityService/CircularityService.js';
+import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
 import { ProcessOptions } from '@core/types/index.js';
 
 // Package info

@@ -6,13 +6,13 @@ import type {
   DirectiveKindString
 } from 'meld-spec';
 import type { Location, Position } from '@core/types.js';
-import type { IValidationService } from '@services/ValidationService/IValidationService.js';
-import type { IResolutionService } from '@services/ResolutionService/IResolutionService.js';
-import type { IStateService } from '@services/StateService/IStateService.js';
-import type { ICircularityService } from '@services/CircularityService/ICircularityService.js';
-import type { IFileSystemService } from '@services/FileSystemService/IFileSystemService.js';
-import type { IParserService } from '@services/ParserService/IParserService.js';
-import type { IInterpreterService } from '@services/InterpreterService/IInterpreterService.js';
+import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
+import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
+import type { IStateService } from '@services/state/StateService/IStateService.js';
+import type { ICircularityService } from '@services/resolution/CircularityService/ICircularityService.js';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
+import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
+import type { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
 import type { IPathService } from '@services/PathService/IPathService.js';
 import { vi, type Mock } from 'vitest';
 import { 
