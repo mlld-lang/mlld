@@ -323,6 +323,15 @@ export class StateService implements IStateService {
 
   createChildState(): IStateService {
     const child = new StateService(this);
+    
+    // Copy transformation state
+    child._transformationEnabled = this._transformationEnabled;
+    if (child._transformationEnabled && !child.currentState.transformedNodes) {
+      child.currentState = this.stateFactory.updateState(child.currentState, {
+        transformedNodes: [...child.currentState.nodes]
+      });
+    }
+
     logger.debug('Created child state', {
       parentPath: this.getCurrentFilePath(),
       childPath: child.getCurrentFilePath()
@@ -395,6 +404,13 @@ export class StateService implements IStateService {
     // Copy flags
     cloned._isImmutable = this._isImmutable;
     cloned._transformationEnabled = this._transformationEnabled;
+
+    // Initialize transformation state if enabled
+    if (cloned._transformationEnabled && !cloned.currentState.transformedNodes) {
+      cloned.currentState = this.stateFactory.updateState(cloned.currentState, {
+        transformedNodes: [...cloned.currentState.nodes]
+      });
+    }
 
     // Copy service references
     if (this.eventService) {
