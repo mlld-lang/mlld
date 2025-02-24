@@ -4,6 +4,7 @@ import { TestContext } from '@tests/utils/index.js';
 import type { ProcessOptions } from '@core/types/index.js';
 import type { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
 import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
+import { DirectiveService } from '@services/pipeline/DirectiveService/DirectiveService.js';
 
 // Define the type for main function options
 type MainOptions = {
@@ -30,10 +31,18 @@ describe('SDK Integration Tests', () => {
 
   describe('Service Management', () => {
     it('should create services in correct initialization order', async () => {
-      const initSpy = vi.spyOn(context.services.directive, 'initialize');
+      // Create a new DirectiveService instance to spy on
+      const directive = new DirectiveService();
+      const initSpy = vi.spyOn(directive, 'initialize');
+      
+      // Create services object with our spied service
+      const services = {
+        ...context.services,
+        directive
+      };
       
       await context.fs.writeFile(testFilePath, '@text greeting = "Hello"');
-      await main(testFilePath, { fs: context.fs });
+      await main(testFilePath, { fs: context.fs, services });
       
       // Verify directive.initialize was called with services in correct order
       expect(initSpy).toHaveBeenCalledWith(

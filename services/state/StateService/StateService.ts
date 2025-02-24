@@ -540,4 +540,18 @@ export class StateService implements IStateService {
   getStateId(): string | undefined {
     return this.currentState.stateId;
   }
+
+  getCommandOutput(command: string): string | undefined {
+    if (!this._transformationEnabled || !this.currentState.transformedNodes) {
+      return undefined;
+    }
+
+    // Find the transformed node that matches this command
+    const transformedNode = this.currentState.transformedNodes.find(node => {
+      if (node.type !== 'Text') return false;
+      return (node as TextNode).content === command;
+    });
+
+    return transformedNode?.type === 'Text' ? (transformedNode as TextNode).content : undefined;
+  }
 } 

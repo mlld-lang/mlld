@@ -43,6 +43,7 @@ export interface IStateService {
   transformNode(original: MeldNode, transformed: MeldNode): void;
   isTransformationEnabled(): boolean;
   enableTransformation(enable: boolean): void;
+  getCommandOutput(command: string): string | undefined;
 
   // Imports
   addImport(path: string): void;

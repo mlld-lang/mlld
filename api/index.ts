@@ -70,30 +70,31 @@ function createDefaultServices(options: ProcessOptions): Services {
   // 7. CircularityService (depends on Resolution)
   const circularity = new CircularityService();
 
-  // 8. OutputService (depends on State)
-  const output = new OutputService();
-  output.initialize(state);
+  // 8. InterpreterService (orchestrates others)
+  const interpreter = new InterpreterService();
 
   // 9. DirectiveService (depends on multiple services)
   const directive = new DirectiveService();
-
-  // 10. InterpreterService (orchestrates others)
-  const interpreter = new InterpreterService();
-
-  // Initialize services in correct order
   directive.initialize(
     validation,
     state,
     path,
     filesystem,
     parser,
-    interpreter,
+    interpreter, // Pass interpreter immediately
     circularity,
-    resolution,
-    output
+    resolution
   );
 
+  // Initialize interpreter with directive
   interpreter.initialize(directive, state);
+
+  // Register default handlers after all services are initialized
+  directive.registerDefaultHandlers();
+
+  // 10. OutputService (depends on State)
+  const output = new OutputService();
+  output.initialize(state);
 
   // Create debug service if requested
   let debug = undefined;
@@ -104,7 +105,6 @@ function createDefaultServices(options: ProcessOptions): Services {
 
   // Create services object
   const services: Services = {
-    filesystem,
     parser,
     interpreter,
     state,
@@ -114,11 +114,9 @@ function createDefaultServices(options: ProcessOptions): Services {
     circularity,
     directive,
     output,
+    filesystem,
     debug
   };
-
-  // Register default handlers
-  directive.registerDefaultHandlers();
 
   return services;
 }
@@ -127,34 +125,38 @@ export async function main(filePath: string, options: ProcessOptions = {}): Prom
   // Create default services
   const defaultServices = createDefaultServices(options);
 
-  // Merge with provided services
+  // Merge with provided services and ensure proper initialization
   const services = options.services ? { ...defaultServices, ...options.services } : defaultServices;
+
+  // If directive service was injected, we need to re-initialize it and the interpreter
+  if (options.services?.directive) {
+    const directive = services.directive;
+    const interpreter = services.interpreter;
+
+    // Re-initialize directive with interpreter
+    directive.initialize(
+      services.validation,
+      services.state,
+      services.path,
+      services.filesystem,
+      services.parser,
+      interpreter, // Pass interpreter immediately
+      services.circularity,
+      services.resolution
+    );
+
+    // Re-initialize interpreter with directive
+    interpreter.initialize(directive, services.state);
+
+    // Register default handlers
+    directive.registerDefaultHandlers();
+  }
 
   // Validate required services
   const requiredServices = ['filesystem', 'parser', 'interpreter', 'directive', 'state', 'output'];
   const missingServices = requiredServices.filter(service => !services[service]);
   if (missingServices.length > 0) {
     throw new Error(`Missing required services: ${missingServices.join(', ')}`);
-  }
-
-  // Re-initialize services with merged state to ensure proper dependencies
-  services.output.initialize(services.state);
-  services.directive.initialize(
-    services.validation,
-    services.state,
-    services.path,
-    services.filesystem,
-    services.parser,
-    services.interpreter,
-    services.circularity,
-    services.resolution,
-    services.output
-  );
-  services.interpreter.initialize(services.directive, services.state);
-
-  // Enable transformation if requested
-  if (options.transformation) {
-    services.state.enableTransformation(true);
   }
 
   try {
@@ -164,11 +166,21 @@ export async function main(filePath: string, options: ProcessOptions = {}): Prom
     // Parse the content
     const ast = await services.parser.parse(content);
     
+    // Enable transformation if requested (do this before interpretation)
+    if (options.transformation) {
+      services.state.enableTransformation(true);
+    }
+    
     // Interpret the AST
     const resultState = await services.interpreter.interpret(ast, { filePath, initialState: services.state });
     
+    // Get transformed nodes if available
+    const nodesToProcess = resultState.isTransformationEnabled() && resultState.getTransformedNodes()
+      ? resultState.getTransformedNodes()
+      : ast;
+    
     // Convert to desired format using the updated state
-    const converted = await services.output.convert(ast, resultState, options.format || 'llm');
+    const converted = await services.output.convert(nodesToProcess, resultState, options.format || 'llm');
     
     return converted;
   } catch (error) {

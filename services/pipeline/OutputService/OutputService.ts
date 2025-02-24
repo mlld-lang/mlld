@@ -52,19 +52,13 @@ export class OutputService implements IOutputService {
       transformationEnabled: state.isTransformationEnabled()
     });
 
-    // Use transformed nodes if transformation is enabled
-    const transformedNodes = state.getTransformedNodes();
-    const nodesToProcess = state.isTransformationEnabled() && transformedNodes !== undefined
-      ? transformedNodes
-      : nodes;
-
     const formatter = this.formatters.get(format);
     if (!formatter) {
       throw new MeldOutputError(`Unsupported format: ${format}`, format);
     }
 
     try {
-      const result = await formatter(nodesToProcess, state, opts);
+      const result = await formatter(nodes, state, opts);
       
       logger.debug('Successfully converted output', {
         format,
@@ -132,24 +126,6 @@ export class OutputService implements IOutputService {
 
       // Process nodes
       for (const node of nodes) {
-        // If in transformation mode and we have transformed nodes, try to find a match
-        if (state.isTransformationEnabled()) {
-          const transformedNodes = state.getTransformedNodes();
-          if (transformedNodes) {
-            const transformedNode = transformedNodes.find(n => 
-              n.location?.start.line === node.location?.start.line
-            );
-            if (transformedNode) {
-              const nodeOutput = await this.nodeToMarkdown(transformedNode, state);
-              if (nodeOutput) {
-                output += nodeOutput;
-              }
-              continue;
-            }
-          }
-        }
-
-        // If no transformed node found or not in transformation mode, process normally
         const nodeOutput = await this.nodeToMarkdown(node, state);
         if (nodeOutput) {
           output += nodeOutput;
@@ -236,11 +212,24 @@ export class OutputService implements IOutputService {
 
         // Handle run directives
         if (kind === 'run') {
+          // In transformation mode, check if this node has been transformed
           if (state.isTransformationEnabled()) {
-            // In transformation mode, return command
-            return directive.directive.command + '\n';
+            // Get transformed nodes
+            const transformedNodes = state.getTransformedNodes();
+            // Find the transformed node that corresponds to this directive
+            const transformedNode = transformedNodes.find(n => 
+              n.type === 'Text' && 
+              n.location && 
+              directive.location &&
+              n.location.start.line === directive.location.start.line &&
+              n.location.start.column === directive.location.start.column
+            );
+            
+            if (transformedNode && transformedNode.type === 'Text') {
+              return (transformedNode as TextNode).content + '\n';
+            }
           }
-          // In non-transformation mode, return placeholder
+          // In non-transformation mode or if no transformed node found, return placeholder
           return '[run directive output placeholder]\n';
         }
 

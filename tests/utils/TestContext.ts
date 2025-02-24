@@ -114,17 +114,13 @@ export class TestContext {
     const circularity = new CircularityService();
     const interpreter = new InterpreterService();
 
-    // Initialize state service last, after all other services are ready
+    // Initialize state service
     const state = new StateService();
     state.setCurrentFilePath('test.meld'); // Set initial file path
     state.enableTransformation(true); // Enable transformation by default for tests
     
-    // Initialize resolution service after state is ready
+    // Initialize resolution service
     const resolution = new ResolutionService(state, filesystem, parser);
-
-    // Initialize output service
-    const output = new OutputService();
-    output.initialize(state);
 
     // Initialize debugger service
     const debuggerService = new TestDebuggerService(state);
@@ -140,18 +136,18 @@ export class TestContext {
       parser,
       interpreter,
       circularity,
-      resolution,
-      output
+      resolution
     );
 
     // Initialize interpreter service
     interpreter.initialize(directive, state);
 
-    // Update directive service with interpreter reference
-    directive.updateInterpreterService(interpreter);
-
     // Register default handlers after all services are initialized
     directive.registerDefaultHandlers();
+
+    // Initialize output service last, after all other services are ready
+    const output = new OutputService();
+    output.initialize(state);
 
     // Expose services
     this.services = {
