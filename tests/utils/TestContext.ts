@@ -69,6 +69,7 @@ interface TestServices {
   filesystem: IFileSystemService;
   output: IOutputService;
   debug: IStateDebuggerService;
+  eventService: IStateEventService;
 }
 
 /**
@@ -114,8 +115,11 @@ export class TestContext {
     const circularity = new CircularityService();
     const interpreter = new InterpreterService();
 
+    // Initialize event service
+    const eventService = new StateEventService();
+
     // Initialize state service
-    const state = new StateService();
+    const state = new StateService(eventService);
     state.setCurrentFilePath('test.meld'); // Set initial file path
     state.enableTransformation(true); // Enable transformation by default for tests
     
@@ -161,7 +165,8 @@ export class TestContext {
       resolution,
       filesystem,
       output,
-      debug: debuggerService
+      debug: debuggerService,
+      eventService
     };
   }
 

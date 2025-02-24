@@ -17,6 +17,9 @@ export class TestDebuggerService implements IStateDebuggerService {
   }> = [];
   private isEnabled = false;
   private currentSessionId: string | null = null;
+  private sessionStartTime: number | null = null;
+  private analyzers: Array<(stateId: string) => Promise<StateDiagnostic[]>> = [];
+  private snapshots = new Map<string, any>();
 
   constructor(private state: IStateService) {}
 
@@ -30,7 +33,8 @@ export class TestDebuggerService implements IStateDebuggerService {
     this.isEnabled = true;
     const sessionId = `session-${Date.now()}`;
     this.currentSessionId = sessionId;
-    this.recordOperation('startSession', { sessionId, config, timestamp: Date.now() });
+    this.sessionStartTime = Date.now();
+    this.recordOperation('startSession', { sessionId, config, timestamp: this.sessionStartTime });
     return sessionId;
   }
 
@@ -38,33 +42,100 @@ export class TestDebuggerService implements IStateDebuggerService {
     if (this.currentSessionId !== sessionId) {
       throw new Error(`Invalid session ID: ${sessionId}`);
     }
-    this.recordOperation('endSession', { sessionId, timestamp: Date.now() });
+    const endTime = Date.now();
+    this.recordOperation('endSession', { sessionId, timestamp: endTime });
     this.isEnabled = false;
-    this.currentSessionId = null;
-    return {
+    const result: DebugSessionResult = {
       sessionId,
-      operations: this.operations,
+      startTime: this.sessionStartTime || endTime,
+      endTime,
+      diagnostics: [],
+      snapshots: this.snapshots,
       metrics: {
-        duration: 0,
+        duration: endTime - (this.sessionStartTime || endTime),
         operationCount: this.operations.length,
         errorCount: 0
       }
     };
+    this.currentSessionId = null;
+    this.sessionStartTime = null;
+    return result;
   }
 
-  analyzeState(config?: StateCaptureConfig): Promise<StateDiagnostic[]> {
-    if (!this.isEnabled) return Promise.resolve([]);
+  async analyzeState(stateId: string): Promise<StateDiagnostic[]> {
+    if (!this.isEnabled) return [];
     const analysis = {
       textVars: Array.from(this.state.getAllTextVars().entries()),
       dataVars: Array.from(this.state.getAllDataVars().entries())
     };
-    this.recordOperation('analyzeState', analysis);
-    return Promise.resolve([{
-      type: 'state_analysis',
-      severity: 'info',
-      message: 'State analysis completed',
-      details: analysis
-    }]);
+    this.recordOperation('analyzeState', { stateId, analysis });
+    
+    // Run all registered analyzers
+    const diagnostics: StateDiagnostic[] = [];
+    for (const analyzer of this.analyzers) {
+      const results = await analyzer(stateId);
+      diagnostics.push(...results);
+    }
+    
+    return diagnostics;
+  }
+
+  async traceOperation<T>(stateId: string, operation: () => Promise<T>): Promise<{ result: T; diagnostics: StateDiagnostic[] }> {
+    if (!this.isEnabled) {
+      const result = await operation();
+      return { result, diagnostics: [] };
+    }
+
+    this.recordOperation('traceStart', { stateId });
+    try {
+      const result = await operation();
+      this.recordOperation('traceEnd', { stateId, success: true });
+      return { result, diagnostics: [] };
+    } catch (error) {
+      this.recordOperation('traceEnd', { stateId, success: false, error });
+      throw error;
+    }
+  }
+
+  async getStateSnapshot(stateId: string, format: 'full' | 'summary'): Promise<any> {
+    if (!this.isEnabled) return null;
+    const snapshot = {
+      stateId,
+      format,
+      timestamp: Date.now(),
+      textVars: Array.from(this.state.getAllTextVars().entries()),
+      dataVars: Array.from(this.state.getAllDataVars().entries())
+    };
+    this.snapshots.set(stateId, snapshot);
+    this.recordOperation('snapshot', { stateId, format });
+    return snapshot;
+  }
+
+  async generateDebugReport(sessionId: string): Promise<string> {
+    if (this.currentSessionId !== sessionId) {
+      return 'No active debug session';
+    }
+    const operations = this.operations.map(op => `${op.type}: ${JSON.stringify(op.data)}`).join('\n');
+    return `Debug Report for Session ${sessionId}:\n${operations}`;
+  }
+
+  registerAnalyzer(analyzer: (stateId: string) => Promise<StateDiagnostic[]>): void {
+    this.analyzers.push(analyzer);
+  }
+
+  clearSession(sessionId: string): void {
+    if (this.currentSessionId === sessionId) {
+      this.operations = [];
+      this.snapshots.clear();
+      this.currentSessionId = null;
+      this.sessionStartTime = null;
+    }
+  }
+
+  async captureState(label: string, data: any): Promise<void> {
+    if (!this.isEnabled) return;
+    this.recordOperation('captureState', { label, data });
+    await this.getStateSnapshot(label, 'full');
   }
 
   traceOperation(operation: string, data: any): void {
@@ -91,6 +162,8 @@ export class TestDebuggerService implements IStateDebuggerService {
     this.operations = [];
     this.isEnabled = false;
     this.currentSessionId = null;
+    this.sessionStartTime = null;
+    this.snapshots.clear();
   }
 
   async visualizeState(format: 'mermaid' | 'dot' = 'mermaid'): Promise<string> {
