@@ -23,7 +23,8 @@ describe('RunDirectiveHandler Transformation', () => {
     clonedState = {
       setTextVar: vi.fn(),
       clone: vi.fn().mockReturnThis(),
-      isTransformationEnabled: vi.fn().mockReturnValue(true)
+      isTransformationEnabled: vi.fn().mockReturnValue(true),
+      transformNode: vi.fn()
     } as unknown as IStateService;
 
     stateService = {
