@@ -65,10 +65,10 @@ export class RunDirectiveHandler implements IDirectiveHandler {
         return { state: clonedState, replacement };
       }
 
-      // In normal mode, return the command as placeholder
+      // In normal mode, return a placeholder node
       const placeholder: TextNode = {
         type: 'Text',
-        content: resolvedCommand,
+        content: '[run directive output placeholder]',
         location: node.location
       };
       return { state: clonedState, replacement: placeholder };
