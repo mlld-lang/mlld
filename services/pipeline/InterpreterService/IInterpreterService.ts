@@ -30,6 +30,12 @@ export interface InterpreterOptions {
 
 export interface IInterpreterService {
   /**
+   * Check if this service can handle transformations
+   * @returns true if transformations are supported
+   */
+  canHandleTransformations(): boolean;
+
+  /**
    * Initialize the InterpreterService with required dependencies
    */
   initialize(

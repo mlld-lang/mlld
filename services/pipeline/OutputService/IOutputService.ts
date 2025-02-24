@@ -24,6 +24,12 @@ export interface OutputOptions {
 
 export interface IOutputService {
   /**
+   * Check if this service can access transformed nodes
+   * @returns true if transformed nodes can be accessed
+   */
+  canAccessTransformedNodes(): boolean;
+
+  /**
    * Convert Meld nodes and state to the specified output format.
    * If state.isTransformationEnabled() is true and state.getTransformedNodes() is available,
    * the transformed nodes will be used instead of the input nodes.

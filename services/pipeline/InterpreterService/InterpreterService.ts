@@ -30,6 +30,10 @@ export class InterpreterService implements IInterpreterService {
   private stateService?: IStateService;
   private initialized = false;
 
+  public canHandleTransformations(): boolean {
+    return true;
+  }
+
   initialize(
     directiveService: IDirectiveService,
     stateService: IStateService

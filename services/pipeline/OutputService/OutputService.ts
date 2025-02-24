@@ -21,6 +21,10 @@ export class OutputService implements IOutputService {
   private formatters = new Map<string, FormatConverter>();
   private state: IStateService | undefined;
 
+  public canAccessTransformedNodes(): boolean {
+    return true;
+  }
+
   constructor() {
     // Register default formatters
     this.registerFormat('markdown', this.convertToMarkdown.bind(this));
