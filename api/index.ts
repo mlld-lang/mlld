@@ -31,7 +31,7 @@ import { PathOperationsService } from '@services/fs/FileSystemService/PathOperat
 import { OutputService } from '@services/pipeline/OutputService/OutputService.js';
 import { CircularityService } from '@services/resolution/CircularityService/CircularityService.js';
 import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
-import { DebuggerService } from '@tests/utils/debug/StateDebuggerService/StateDebuggerService.js';
+import { StateDebuggerService } from '@tests/utils/debug/StateDebuggerService/StateDebuggerService.js';
 import { ProcessOptions, Services } from '@core/types/index.js';
 
 // Import debug services
@@ -46,7 +46,23 @@ export { version } from '@core/version.js';
 
 import { validateServicePipeline } from '@core/utils/serviceValidation.js';
 
-function createDefaultServices(options: ProcessOptions): Services {
+// Define the required services type
+type RequiredServices = {
+  filesystem: FileSystemService;
+  parser: ParserService;
+  interpreter: InterpreterService;
+  directive: DirectiveService;
+  state: StateService;
+  output: OutputService;
+  eventService: StateEventService;
+  path: PathService;
+  validation: ValidationService;
+  circularity: CircularityService;
+  resolution: ResolutionService;
+  debug?: StateDebuggerService & TestDebuggerService;
+};
+
+function createDefaultServices(options: ProcessOptions): Services & RequiredServices {
   // 1. FileSystemService (base dependency)
   const pathOps = new PathOperationsService();
   const fs = options.fs || new NodeFileSystem();
@@ -99,12 +115,12 @@ function createDefaultServices(options: ProcessOptions): Services {
   // Create debug service if requested
   let debug = undefined;
   if (options.debug) {
-    debug = new TestDebuggerService(state);
+    debug = new TestDebuggerService(state) as StateDebuggerService & TestDebuggerService;
     debug.initialize(state);
   }
 
   // Create services object in correct initialization order based on dependencies
-  const services: Services = {
+  const services: Services & RequiredServices = {
     // Base services
     filesystem,
     path,
@@ -137,7 +153,7 @@ export async function main(filePath: string, options: ProcessOptions = {}): Prom
   const defaultServices = createDefaultServices(options);
 
   // Merge with provided services and ensure proper initialization
-  const services = options.services ? { ...defaultServices, ...options.services } : defaultServices;
+  const services = options.services ? { ...defaultServices, ...options.services } as Services & RequiredServices : defaultServices;
 
   // If directive service was injected, we need to re-initialize it and the interpreter
   if (options.services?.directive) {
@@ -164,8 +180,8 @@ export async function main(filePath: string, options: ProcessOptions = {}): Prom
   }
 
   // Validate required services
-  const requiredServices = ['filesystem', 'parser', 'interpreter', 'directive', 'state', 'output'];
-  const missingServices = requiredServices.filter(service => !services[service]);
+  const requiredServices = ['filesystem', 'parser', 'interpreter', 'directive', 'state', 'output'] as const;
+  const missingServices = requiredServices.filter(service => !(service in services));
   if (missingServices.length > 0) {
     throw new Error(`Missing required services: ${missingServices.join(', ')}`);
   }
@@ -184,6 +200,11 @@ export async function main(filePath: string, options: ProcessOptions = {}): Prom
     
     // Interpret the AST
     const resultState = await services.interpreter.interpret(ast, { filePath, initialState: services.state });
+    
+    // Ensure transformation state is preserved from original state service
+    if (services.state.isTransformationEnabled()) {
+      resultState.enableTransformation(true);
+    }
     
     // Get transformed nodes if available
     const nodesToProcess = resultState.isTransformationEnabled() && resultState.getTransformedNodes()

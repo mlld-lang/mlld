@@ -177,6 +177,7 @@ describe('SDK Integration Tests', () => {
       await context.fs.writeFile(testFilePath, '@run [echo test]');
       
       context.enableDebug();
+      context.disableTransformation(); // Explicitly disable transformation
       
       const result = await main(testFilePath, {
         fs: context.fs,
@@ -202,6 +203,7 @@ describe('SDK Integration Tests', () => {
         More text
       `;
       await context.fs.writeFile(testFilePath, content);
+      context.disableTransformation(); // Explicitly disable transformation
       const result = await main(testFilePath, { 
         fs: context.fs,
         services: context.services
@@ -261,6 +263,7 @@ describe('SDK Integration Tests', () => {
         Some content
       `;
       await context.fs.writeFile(testFilePath, content);
+      context.disableTransformation(); // Explicitly disable transformation
       const result = await main(testFilePath, { 
         fs: context.fs,
         services: context.services
