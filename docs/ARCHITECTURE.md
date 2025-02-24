@@ -36,29 +36,37 @@ project-root/
  │   ├─ types/             ← Core type definitions  
  │   └─ utils/             ← Logging and utility modules  
  ├─ services/              ← Core service implementations  
- │   ├─ CLIService/  
- │   ├─ CircularityService/  
- │   ├─ DirectiveService/  
- │   │   ├─ handlers/  
- │   │   │   ├─ definition/   ← Handlers for definition directives  
- │   │   │   └─ execution/    ← Handlers for execution directives  
- │   │   └─ errors/  
- │   ├─ FileSystemService/  
- │   ├─ InterpreterService/  
- │   ├─ OutputService/  
- │   ├─ ParserService/  
- │   ├─ PathService/  
- │   ├─ ResolutionService/  
- │   │   ├─ resolvers/       ← Individual resolution handlers  
- │   │   └─ errors/  
- │   ├─ StateService/  
- │   └─ ValidationService/  
- │       └─ validators/      ← Individual directive validators  
+ │   ├─ pipeline/          ← Main transformation pipeline  
+ │   │   ├─ ParserService/     ← Initial parsing  
+ │   │   ├─ InterpreterService/← Pipeline orchestration  
+ │   │   ├─ DirectiveService/  ← Directive handling  
+ │   │   │   ├─ handlers/  
+ │   │   │   │   ├─ definition/   ← Handlers for definition directives  
+ │   │   │   │   └─ execution/    ← Handlers for execution directives  
+ │   │   │   └─ errors/  
+ │   │   └─ OutputService/    ← Final output generation  
+ │   ├─ state/             ← State management  
+ │   │   ├─ StateService/      ← Core state management  
+ │   │   └─ StateEventService/ ← Core event system  
+ │   ├─ resolution/        ← Resolution and validation  
+ │   │   ├─ ResolutionService/ ← Variable/path resolution  
+ │   │   ├─ ValidationService/ ← Directive validation  
+ │   │   └─ CircularityService/← Circular dependency detection  
+ │   ├─ fs/                ← File system operations  
+ │   │   ├─ FileSystemService/ ← File operations  
+ │   │   ├─ PathService/      ← Path handling  
+ │   │   └─ PathOperationsService/ ← Path utilities  
+ │   └─ cli/               ← Command line interface  
+ │       └─ CLIService/    ← CLI entry point  
  ├─ tests/                  ← Test infrastructure   
  │   ├─ fixtures/          ← Test fixture data  
  │   ├─ mocks/             ← Test mock implementations  
- │   ├─ services/          ← Service-specific tests  
  │   └─ utils/             ← Test utilities and helpers  
+ │       ├─ debug/         ← Test debug utilities  
+ │       │   ├─ StateDebuggerService/  
+ │       │   ├─ StateVisualizationService/  
+ │       │   ├─ StateHistoryService/  
+ │       │   └─ StateTrackingService/  
  │       ├─ FixtureManager.ts  
  │       ├─ MemfsTestFileSystem.ts  
  │       ├─ ProjectBuilder.ts  
@@ -71,9 +79,13 @@ project-root/
  └─ vitest.config.ts  
 
 Key subfolders:  
-• services/: Each service is a self-contained module with its implementation, interface, tests, and any service-specific utilities  
+• services/pipeline/: Core transformation pipeline services (parsing, interpretation, directives, output)  
+• services/state/: State management and event services  
+• services/resolution/: Resolution, validation, and circularity detection services  
+• services/fs/: File system, path handling, and operations services  
+• services/cli/: Command line interface services  
 • core/: Central types, errors, and utilities used throughout the codebase  
-• tests/utils/: Test infrastructure including the memfs implementation, fixture management, and test helpers  
+• tests/utils/: Test infrastructure including debug utilities, memfs implementation, fixture management, and test helpers  
 • api/: High-level public API for using Meld programmatically  
 • cli/: Command line interface for Meld  
 
@@ -259,6 +271,47 @@ Testing Approach:
 • Direct imports from core packages (meld-ast, meld-spec) for types  
 • Factory functions for creating test nodes and data  
 • Snapshots for tracking filesystem changes  
+
+## DEBUGGING INFRASTRUCTURE
+
+The codebase includes specialized debugging services located in `tests/utils/debug/` that help diagnose and troubleshoot state-related issues:
+
+### StateDebuggerService
+   - Provides debug session management and diagnostics
+   - Tracks state operations and transformations
+   - Offers operation tracing and analysis
+   - Helps identify state manipulation issues
+
+### StateVisualizationService
+   - Generates visual representations of state
+   - Creates Mermaid/DOT graphs of state relationships
+   - Visualizes state metrics and transformations
+   - Aids in understanding complex state changes
+
+### StateHistoryService
+   - Records chronological state changes
+   - Maintains operation history
+   - Tracks transformation chains
+   - Enables state change replay and analysis
+
+### StateTrackingService
+   - Monitors state relationships and dependencies
+   - Tracks state lineage and inheritance
+   - Records metadata about state changes
+   - Helps debug scope and inheritance issues
+
+Debugging Approach:
+• Services can be enabled selectively in tests
+• Debug output includes detailed state snapshots
+• Visual representations help understand complex states
+• History tracking enables step-by-step analysis
+
+These debugging services are particularly useful for:
+• Troubleshooting complex state transformations
+• Understanding directive processing chains
+• Analyzing variable resolution paths
+• Debugging scope inheritance issues
+• Visualizing state relationships
 
 ## SERVICE RELATIONSHIPS
 
