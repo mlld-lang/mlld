@@ -67,22 +67,39 @@ export class StateEventService implements IStateEventService {
       source: event.source
     });
 
-    // Execute handlers in sequence, respecting filters
-    for (const { handler, options } of handlers) {
-      try {
-        // Skip if filter returns false
-        if (options?.filter && !options.filter(event)) {
-          continue;
-        }
+    // Group handlers by their filter conditions to prevent duplicate processing
+    const handlerGroups = new Map<string, Array<{ handler: StateEventHandler; options?: StateEventHandlerOptions }>>();
+    
+    for (const handlerEntry of handlers) {
+      // Create a key based on the filter condition
+      const filterKey = handlerEntry.options?.filter ? 
+        `${event.source}-${event.stateId}-${event.location?.file || ''}` : 
+        'no-filter';
+      
+      const group = handlerGroups.get(filterKey) || [];
+      group.push(handlerEntry);
+      handlerGroups.set(filterKey, group);
+    }
 
-        // Execute handler (may be async)
-        await Promise.resolve(handler(event));
-      } catch (error) {
-        // Log error but continue processing other handlers
-        logger.error(`Error in ${event.type} event handler`, {
-          error: error instanceof Error ? error.message : String(error),
-          stateId: event.stateId
-        });
+    // Process each group once
+    for (const [_, groupHandlers] of handlerGroups) {
+      // Only execute if the first handler's filter passes
+      const firstHandler = groupHandlers[0];
+      if (firstHandler.options?.filter && !firstHandler.options.filter(event)) {
+        continue;
+      }
+
+      // Execute all handlers in the group
+      for (const { handler } of groupHandlers) {
+        try {
+          await Promise.resolve(handler(event));
+        } catch (error) {
+          // Log error but continue processing other handlers
+          logger.error(`Error in ${event.type} event handler`, {
+            error: error instanceof Error ? error.message : String(error),
+            stateId: event.stateId
+          });
+        }
       }
     }
   }
