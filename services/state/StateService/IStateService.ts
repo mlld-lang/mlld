@@ -44,6 +44,7 @@ export interface IStateService {
   isTransformationEnabled(): boolean;
   enableTransformation(enable: boolean): void;
   getCommandOutput(command: string): string | undefined;
+  hasTransformationSupport(): boolean;
 
   // Imports
   addImport(path: string): void;

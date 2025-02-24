@@ -44,6 +44,8 @@ import { TestDebuggerService } from '@tests/utils/debug/TestDebuggerService.js';
 // Package info
 export { version } from '@core/version.js';
 
+import { validateServicePipeline } from '@core/utils/serviceValidation.js';
+
 function createDefaultServices(options: ProcessOptions): Services {
   // 1. FileSystemService (base dependency)
   const pathOps = new PathOperationsService();
@@ -51,48 +53,46 @@ function createDefaultServices(options: ProcessOptions): Services {
   const filesystem = new FileSystemService(pathOps, fs);
   filesystem.setFileSystem(fs);
 
-  // 2. PathService (depends on FS)
+  // 2. PathService (depends on filesystem)
   const path = new PathService();
   path.initialize(filesystem);
 
-  // 3. StateService (core state)
+  // 3. State Management Services
+  const eventService = new StateEventService();
   const state = new StateService();
+  state.setEventService(eventService);
 
   // 4. ParserService (independent)
   const parser = new ParserService();
 
-  // 5. ResolutionService (depends on State, FS, Parser)
+  // 5. Resolution Layer Services
   const resolution = new ResolutionService(state, filesystem, parser);
-
-  // 6. ValidationService (depends on Resolution)
   const validation = new ValidationService();
-
-  // 7. CircularityService (depends on Resolution)
   const circularity = new CircularityService();
 
-  // 8. InterpreterService (orchestrates others)
+  // 6. Pipeline Orchestration (handle circular dependency)
+  const directive = new DirectiveService();
   const interpreter = new InterpreterService();
 
-  // 9. DirectiveService (depends on multiple services)
-  const directive = new DirectiveService();
+  // Initialize interpreter with directive and state
+  interpreter.initialize(directive, state);
+
+  // Initialize directive with all dependencies
   directive.initialize(
     validation,
     state,
     path,
     filesystem,
     parser,
-    interpreter, // Pass interpreter immediately
+    interpreter,
     circularity,
     resolution
   );
 
-  // Initialize interpreter with directive
-  interpreter.initialize(directive, state);
-
   // Register default handlers after all services are initialized
   directive.registerDefaultHandlers();
 
-  // 10. OutputService (depends on State)
+  // 7. OutputService (depends on state and interpreter)
   const output = new OutputService();
   output.initialize(state);
 
@@ -103,20 +103,31 @@ function createDefaultServices(options: ProcessOptions): Services {
     debug.initialize(state);
   }
 
-  // Create services object
+  // Create services object in correct initialization order based on dependencies
   const services: Services = {
-    parser,
-    interpreter,
-    state,
-    resolution,
+    // Base services
+    filesystem,
     path,
+    // State management
+    eventService,
+    state,
+    // Core pipeline
+    parser,
+    // Resolution layer
+    resolution,
     validation,
     circularity,
+    // Pipeline orchestration
     directive,
+    interpreter,
+    // Output generation
     output,
-    filesystem,
+    // Optional debug service
     debug
   };
+
+  // Validate the service pipeline
+  validateServicePipeline(services);
 
   return services;
 }

@@ -3,13 +3,13 @@ import * as path from 'path';
 import type { Stats } from 'fs';
 import { filesystemLogger as logger } from '@core/utils/logger.js';
 import { EventEmitter } from 'events';
-import { IFileSystem } from '@core/interfaces/IFileSystem';
+import { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
 
 /**
  * In-memory filesystem for testing using memfs.
  * Provides a clean interface for file operations and ensures proper directory handling.
  */
-export class MemfsTestFileSystem {
+export class MemfsTestFileSystem implements IFileSystem {
   private vol: Volume;
   private root: string = '/';
   private watcher: EventEmitter;
@@ -596,7 +596,18 @@ export class MemfsTestFileSystem {
   }
 
   getCwd(): string {
-    return '/project';
+    return this.root;
+  }
+
+  async executeCommand(command: string, options?: { cwd?: string }): Promise<{ stdout: string; stderr: string }> {
+    // Mock command execution for tests
+    // For now, just handle echo commands
+    const trimmedCommand = command.trim();
+    if (trimmedCommand.startsWith('echo')) {
+      const output = trimmedCommand.slice(5).trim();
+      return { stdout: output, stderr: '' };
+    }
+    return { stdout: '', stderr: 'Command not supported in test environment' };
   }
 
   setFileSystem(fileSystem: IFileSystem): void {

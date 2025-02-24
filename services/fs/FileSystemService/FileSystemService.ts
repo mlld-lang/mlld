@@ -233,28 +233,29 @@ export class FileSystemService implements IFileSystemService {
   async executeCommand(command: string, options?: { cwd?: string }): Promise<{ stdout: string; stderr: string }> {
     const context: FileOperationContext = {
       operation: 'executeCommand',
-      command,
-      options,
-      path: options?.cwd || this.getCwd()
+      path: options?.cwd || this.getCwd(),
+      details: { command }
     };
 
     try {
       logger.debug('Executing command', context);
-      const result = await execAsync(command, {
+      // If the underlying filesystem has executeCommand, use it
+      if ('executeCommand' in this.fs) {
+        return await this.fs.executeCommand(command, options);
+      }
+      // Otherwise, fall back to Node's exec
+      const { stdout, stderr } = await execAsync(command, {
         cwd: options?.cwd || this.getCwd()
       });
-      logger.debug('Command execution successful', {
-        ...context,
-        stdout: result.stdout,
-        stderr: result.stderr
-      });
-      return result;
+      logger.debug('Command executed successfully', { ...context, stdout, stderr });
+      return { stdout, stderr };
     } catch (error) {
       const err = error as Error;
-      logger.error('Command execution failed', { ...context, error: err });
+      logger.error('Failed to execute command', { ...context, error: err });
       throw new MeldError(`Failed to execute command: ${command}`, {
         cause: err,
-        filePath: options?.cwd || this.getCwd()
+        command,
+        cwd: options?.cwd
       });
     }
   }

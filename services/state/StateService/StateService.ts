@@ -194,35 +194,38 @@ export class StateService implements IStateService {
     // First try direct reference comparison
     let index = transformedNodes.findIndex(node => node === original);
 
-    // If not found by reference, try matching by properties
-    if (index === -1) {
-      index = transformedNodes.findIndex(node => {
-        // Type guard to ensure we only compare nodes with content
-        if (node.type !== original.type) return false;
-        if (!('content' in node) || !('content' in original)) return false;
-        if (!node.location || !original.location) return false;
+    // If not found by reference, try matching by location
+    if (index === -1 && original.location && transformed.location) {
+      index = transformedNodes.findIndex(node => 
+        node.location &&
+        node.location.start.line === original.location.start.line &&
+        node.location.start.column === original.location.start.column &&
+        node.location.end.line === original.location.end.line &&
+        node.location.end.column === original.location.end.column
+      );
+    }
 
+    if (index !== -1) {
+      // Replace the node at the found index
+      transformedNodes[index] = transformed;
+    } else {
+      // If not found in transformed nodes, check original nodes
+      const originalIndex = this.currentState.nodes.findIndex(node => {
+        if (!node.location || !original.location) return false;
         return (
-          (node as TextNode).content === (original as TextNode).content &&
           node.location.start.line === original.location.start.line &&
           node.location.start.column === original.location.start.column &&
           node.location.end.line === original.location.end.line &&
           node.location.end.column === original.location.end.column
         );
       });
-    }
-
-    if (index !== -1) {
-      transformedNodes[index] = transformed;
-    } else {
-      // If not found, check if it's in the original nodes array
-      const originalIndex = this.currentState.nodes.findIndex(node => node === original);
       
       if (originalIndex === -1) {
         throw new Error('Cannot transform node: original node not found');
       }
       
-      transformedNodes.push(transformed);
+      // Replace the node at the original index
+      transformedNodes[originalIndex] = transformed;
     }
     
     this.updateState({ transformedNodes }, 'transformNode');
@@ -553,5 +556,9 @@ export class StateService implements IStateService {
     });
 
     return transformedNode?.type === 'Text' ? (transformedNode as TextNode).content : undefined;
+  }
+
+  hasTransformationSupport(): boolean {
+    return true;
   }
 } 

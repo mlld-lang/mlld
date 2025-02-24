@@ -81,11 +81,31 @@ describe('SDK Integration Tests', () => {
       `;
       await context.fs.writeFile(testFilePath, content);
       
+      // Start debug session with visualization
+      const sessionId = await context.startDebugSession({
+        captureConfig: {
+          capturePoints: ['pre-transform', 'post-transform'],
+          includeFields: ['nodes', 'transformedNodes', 'variables'],
+          format: 'full'
+        },
+        visualization: {
+          format: 'mermaid',
+          includeMetadata: true,
+          includeTimestamps: true
+        },
+        traceOperations: true
+      });
+      
       const result = await main(testFilePath, {
         fs: context.fs,
         services: context.services,
         transformation: true
       });
+
+      // Get debug results
+      const debugResult = await context.endDebugSession(sessionId);
+      console.log('State visualization:', await context.visualizeState());
+      console.log('Debug operations:', debugResult.operations);
       
       // In transformation mode, directives should be replaced
       expect(result).not.toContain('[run directive output placeholder]');

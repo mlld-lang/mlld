@@ -49,6 +49,9 @@ export class RunDirectiveHandler implements IDirectiveHandler {
       if (directive.output) {
         clonedState.setTextVar(directive.output, stdout);
       }
+      if (stderr) {
+        clonedState.setTextVar('stderr', stderr);
+      }
 
       // In transformation mode, return a replacement node with the command output
       if (clonedState.isTransformationEnabled()) {
@@ -62,22 +65,31 @@ export class RunDirectiveHandler implements IDirectiveHandler {
         return { state: clonedState, replacement };
       }
 
-      // In normal mode, return a placeholder node
+      // In normal mode, return the command as placeholder
       const placeholder: TextNode = {
         type: 'Text',
-        content: '[run directive output placeholder]',
+        content: resolvedCommand,
         location: node.location
       };
       return { state: clonedState, replacement: placeholder };
     } catch (error) {
       directiveLogger.error('Error executing run directive:', error);
+      
+      // If it's already a DirectiveError, just rethrow it
       if (error instanceof DirectiveError) {
         throw error;
       }
+
+      // Otherwise wrap it with more context
+      const message = error instanceof Error ? 
+        `Failed to execute command: ${error.message}` :
+        'Failed to execute command';
+
       throw new DirectiveError(
-        'Failed to execute command',
+        message,
+        this.kind,
         DirectiveErrorCode.EXECUTION_ERROR,
-        error
+        { node, error }
       );
     }
   }

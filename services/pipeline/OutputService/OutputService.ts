@@ -52,17 +52,24 @@ export class OutputService implements IOutputService {
       transformationEnabled: state.isTransformationEnabled()
     });
 
+    // Use transformed nodes if transformation is enabled
+    const nodesToProcess = state.isTransformationEnabled() 
+      ? state.getTransformedNodes() 
+      : nodes;
+
     const formatter = this.formatters.get(format);
     if (!formatter) {
       throw new MeldOutputError(`Unsupported format: ${format}`, format);
     }
 
     try {
-      const result = await formatter(nodes, state, opts);
+      const result = await formatter(nodesToProcess, state, opts);
       
       logger.debug('Successfully converted output', {
         format,
-        resultLength: result.length
+        resultLength: result.length,
+        transformationEnabled: state.isTransformationEnabled(),
+        transformedNodesCount: state.isTransformationEnabled() ? state.getTransformedNodes().length : 0
       });
 
       return result;
@@ -197,10 +204,14 @@ export class OutputService implements IOutputService {
   private async nodeToMarkdown(node: MeldNode, state: IStateService): Promise<string> {
     switch (node.type) {
       case 'Text':
-        return (node as TextNode).content + '\n';
+        // Only add a newline if the content doesn't already end with one
+        const content = (node as TextNode).content;
+        return content.endsWith('\n') ? content : content + '\n';
       case 'CodeFence':
         const fence = node as CodeFenceNode;
-        return `\`\`\`${fence.language || ''}\n${fence.content}\n\`\`\`\n`;
+        // Ensure consistent newline handling for code fences
+        const fenceContent = fence.content.endsWith('\n') ? fence.content : fence.content + '\n';
+        return `\`\`\`${fence.language || ''}\n${fenceContent}\`\`\`\n`;
       case 'Directive':
         const directive = node as DirectiveNode;
         const kind = directive.directive.kind;
@@ -212,25 +223,13 @@ export class OutputService implements IOutputService {
 
         // Handle run directives
         if (kind === 'run') {
-          // In transformation mode, check if this node has been transformed
-          if (state.isTransformationEnabled()) {
-            // Get transformed nodes
-            const transformedNodes = state.getTransformedNodes();
-            // Find the transformed node that corresponds to this directive
-            const transformedNode = transformedNodes.find(n => 
-              n.type === 'Text' && 
-              n.location && 
-              directive.location &&
-              n.location.start.line === directive.location.start.line &&
-              n.location.start.column === directive.location.start.column
-            );
-            
-            if (transformedNode && transformedNode.type === 'Text') {
-              return (transformedNode as TextNode).content + '\n';
-            }
+          // In non-transformation mode, return placeholder
+          if (!state.isTransformationEnabled()) {
+            return '[run directive output placeholder]\n';
           }
-          // In non-transformation mode or if no transformed node found, return placeholder
-          return '[run directive output placeholder]\n';
+          // In transformation mode, return the command output
+          const output = directive.directive.command;
+          return output.endsWith('\n') ? output : output + '\n';
         }
 
         // Handle other execution directives

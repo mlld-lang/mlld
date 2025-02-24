@@ -15,4 +15,7 @@ export interface IFileSystem {
   
   // File watching
   watch(path: string, options?: { recursive?: boolean }): AsyncIterableIterator<{ filename: string; eventType: string }>;
+
+  // Command execution
+  executeCommand(command: string, options?: { cwd?: string }): Promise<{ stdout: string; stderr: string }>;
 } 
