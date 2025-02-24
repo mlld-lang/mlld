@@ -208,7 +208,8 @@ export class OutputService implements IOutputService {
   private async nodeToMarkdown(node: MeldNode, state: IStateService): Promise<string> {
     switch (node.type) {
       case 'Text':
-        return (node as TextNode).content + '\n';
+        const content = (node as TextNode).content;
+        return content.endsWith('\n') ? content : content + '\n';
       case 'CodeFence':
         const fence = node as CodeFenceNode;
         return `\`\`\`${fence.language || ''}\n${fence.content}\n\`\`\`\n`;
@@ -223,9 +224,9 @@ export class OutputService implements IOutputService {
 
         // Handle run directives
         if (kind === 'run') {
-          // In non-transformation mode, return the command
+          // In non-transformation mode, return placeholder
           if (!state.isTransformationEnabled()) {
-            return directive.directive.command + '\n';
+            return '[run directive output placeholder]\n';
           }
           // In transformation mode, return the command output
           const transformedNodes = state.getTransformedNodes();
@@ -234,7 +235,8 @@ export class OutputService implements IOutputService {
               n.location?.start.line === node.location?.start.line
             );
             if (transformed && transformed.type === 'Text') {
-              return (transformed as TextNode).content + '\n';
+              const content = (transformed as TextNode).content;
+              return content.endsWith('\n') ? content : content + '\n';
             }
           }
           // If no transformed node found, return placeholder

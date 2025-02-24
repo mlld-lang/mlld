@@ -276,7 +276,7 @@ describe('OutputService', () => {
         createDirectiveNode('run', { command: 'echo test' }, createLocation(1, 1))
       ];
       output = await service.convert(execNodes, state, 'markdown');
-      expect(output).toBe('echo test\n');
+      expect(output).toBe('[run directive output placeholder]\n');
     });
 
     it('should include state variables when requested', async () => {
@@ -427,7 +427,7 @@ describe('OutputService', () => {
       ];
 
       const output = await service.convert(nodes, state, 'markdown');
-      expect(output).toBe('Before\necho test\nAfter\n');
+      expect(output).toBe('Before\n[run directive output placeholder]\nAfter\n');
     });
 
     it('should preserve code fences in both modes', async () => {
@@ -454,7 +454,7 @@ describe('OutputService', () => {
       // Non-transformation mode
       let output = await service.convert(originalNodes, state, 'llm');
       expect(output).toContain('Before');
-      expect(output).toContain('echo test');
+      expect(output).toContain('[run directive output placeholder]');
       expect(output).toContain('After');
 
       // Transformation mode
