@@ -208,14 +208,10 @@ export class OutputService implements IOutputService {
   private async nodeToMarkdown(node: MeldNode, state: IStateService): Promise<string> {
     switch (node.type) {
       case 'Text':
-        // Only add a newline if the content doesn't already end with one
-        const content = (node as TextNode).content;
-        return content.endsWith('\n') ? content : content + '\n';
+        return (node as TextNode).content + '\n';
       case 'CodeFence':
         const fence = node as CodeFenceNode;
-        // Ensure consistent newline handling for code fences
-        const fenceContent = fence.content.endsWith('\n') ? fence.content : fence.content + '\n';
-        return `\`\`\`${fence.language || ''}\n${fenceContent}\`\`\`\n`;
+        return `\`\`\`${fence.language || ''}\n${fence.content}\n\`\`\`\n`;
       case 'Directive':
         const directive = node as DirectiveNode;
         const kind = directive.directive.kind;
@@ -231,9 +227,18 @@ export class OutputService implements IOutputService {
           if (!state.isTransformationEnabled()) {
             return '[run directive output placeholder]\n';
           }
-          // In transformation mode, return the command output
-          const output = directive.directive.command;
-          return output.endsWith('\n') ? output : output + '\n';
+          // In transformation mode, check for transformed node
+          const transformedNodes = state.getTransformedNodes();
+          if (transformedNodes) {
+            const transformed = transformedNodes.find(n => 
+              n.location?.start.line === node.location?.start.line
+            );
+            if (transformed && transformed.type === 'Text') {
+              return (transformed as TextNode).content + '\n';
+            }
+          }
+          // If no transformed node found, return command
+          return directive.directive.command + '\n';
         }
 
         // Handle other execution directives
