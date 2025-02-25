@@ -5,9 +5,12 @@ import { IParserService } from '@services/pipeline/ParserService/IParserService.
 import { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
 import { IOutputService } from '@services/pipeline/OutputService/IOutputService.js';
 import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
-import { IPathService } from '@services/PathService/IPathService.js';
+import { IPathService } from '@services/fs/PathService/IPathService.js';
 import { IStateService } from '@services/state/StateService/IStateService.js';
 import * as readline from 'readline';
+import { ErrorCollector } from '@tests/utils/ErrorTestUtils.js';
+import { ErrorSeverity } from '@core/errors/MeldError.js';
+import { cliLogger, type Logger } from '@core/utils/logger.js';
 
 const defaultOptions = {
   input: 'test.meld',
@@ -43,6 +46,7 @@ describe('CLIService', () => {
   let mockPathService: IPathService;
   let mockStateService: IStateService;
   let mockReadline: any;
+  let mockLogger: Logger;
 
   beforeEach(async () => {
     context = new TestContext();
@@ -59,21 +63,23 @@ describe('CLIService', () => {
     mockParserService = {
       parse: vi.fn().mockResolvedValue([]),
       parseWithLocations: vi.fn().mockResolvedValue([])
-    } as IParserService;
+    } as unknown as IParserService;
 
     mockInterpreterService = {
       initialize: vi.fn(),
       interpret: vi.fn().mockResolvedValue(undefined),
       interpretNode: vi.fn(),
-      createChildContext: vi.fn()
-    } as IInterpreterService;
+      createChildContext: vi.fn(),
+      canHandleTransformations: vi.fn().mockReturnValue(true)
+    } as unknown as IInterpreterService;
 
     mockOutputService = {
       convert: vi.fn().mockResolvedValue('test output'),
       registerFormat: vi.fn(),
       supportsFormat: vi.fn(),
-      getSupportedFormats: vi.fn()
-    } as IOutputService;
+      getSupportedFormats: vi.fn(),
+      canAccessTransformedNodes: vi.fn().mockReturnValue(true)
+    } as unknown as IOutputService;
 
     // Use the MemfsTestFileSystem for file operations
     const fs = context.fs;
@@ -98,8 +104,10 @@ describe('CLIService', () => {
       basename: vi.fn(),
       getHomePath: vi.fn().mockReturnValue('/home'),
       getProjectPath: vi.fn().mockReturnValue('/project'),
-      resolveProjectPath: vi.fn().mockResolvedValue('/project')
-    } as IPathService;
+      resolveProjectPath: vi.fn().mockResolvedValue('/project'),
+      setHomePath: vi.fn(),
+      setProjectPath: vi.fn()
+    } as unknown as IPathService;
 
     const mockChildState = {
       setPathVar: vi.fn(),
@@ -122,6 +130,16 @@ describe('CLIService', () => {
 
     // Set up test files
     await context.fs.writeFile('test.meld', '@text greeting = "Hello"');
+
+    // Initialize mock logger
+    mockLogger = {
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+      trace: vi.fn(),
+      level: 'info'
+    };
   });
 
   afterEach(async () => {
@@ -295,19 +313,51 @@ describe('CLIService', () => {
       const args = ['node', 'meld', 'test.meld'];
       await mockFileSystemService.writeFile('test.meld', 'input content');
       await mockFileSystemService.writeFile('test.xml', 'existing content');
-      vi.mocked(readline.createInterface().question).mockImplementationOnce((_, cb) => cb('y'));
+      
+      // Mock the readline interface properly
+      const mockQuestion = vi.fn().mockImplementation((_, cb) => cb('y'));
+      vi.mocked(readline.createInterface).mockReturnValueOnce({
+        question: mockQuestion,
+        close: vi.fn(),
+        // Add required properties to satisfy the Interface type
+        terminal: null,
+        line: '',
+        cursor: 0,
+        getPrompt: vi.fn(),
+        setPrompt: vi.fn(),
+        prompt: vi.fn(),
+        write: vi.fn(),
+        pause: vi.fn(),
+        resume: vi.fn(),
+        on: vi.fn(),
+        once: vi.fn(),
+        off: vi.fn(),
+        removeListener: vi.fn(),
+        addListener: vi.fn(),
+        emit: vi.fn(),
+        eventNames: vi.fn(),
+        getMaxListeners: vi.fn(),
+        listenerCount: vi.fn(),
+        listeners: vi.fn(),
+        prependListener: vi.fn(),
+        prependOnceListener: vi.fn(),
+        rawListeners: vi.fn(),
+        removeAllListeners: vi.fn(),
+        setMaxListeners: vi.fn()
+      } as unknown as readline.Interface);
 
       await service.run(args);
       
-      expect(readline.createInterface().question).toHaveBeenCalledWith(
+      expect(readline.createInterface).toHaveBeenCalled();
+      expect(mockQuestion).toHaveBeenCalledWith(
         'File test.xml already exists. Overwrite? [Y/n] ',
         expect.any(Function)
       );
     });
 
-    it.todo('should handle overwrite cancellation appropriately (pending new error system)');
-
-    it.todo('should handle overwrite confirmation appropriately (pending new error system)');
+    // These tests have been implemented below with the new error system
+    // it.todo('should handle overwrite cancellation appropriately (pending new error system)');
+    // it.todo('should handle overwrite confirmation appropriately (pending new error system)');
     
     it('should handle explicit output paths appropriately', async () => {
       // Create a mock input file path

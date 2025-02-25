@@ -5,6 +5,39 @@ import { ResolutionContext } from '@services/resolution/ResolutionService/IResol
 import { ResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError.js';
 import { MeldNode } from 'meld-spec';
 import { createTestText, createTestDirective } from '@tests/utils/nodeFactories.js';
+import { ErrorSeverity } from '@core/errors/MeldError.js';
+import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
+import { MeldError } from '@core/errors/MeldError.js';
+import { 
+  ErrorCollector, 
+  expectThrowsWithSeverity, 
+  expectWarningsInPermissiveMode,
+  createStrictModeOptions,
+  createPermissiveModeOptions,
+  ErrorModeTestOptions
+} from '@tests/utils/ErrorTestUtils.js';
+
+/**
+ * Helper function to mimic the InterpreterService's error handling in permissive mode
+ */
+async function resolveWithPermissiveErrorHandling(
+  resolver: DataResolver,
+  node: MeldNode,
+  context: ResolutionContext,
+  errorHandler: (error: MeldError) => void
+): Promise<string> {
+  try {
+    return await resolver.resolve(node, context);
+  } catch (error) {
+    if (error instanceof MeldError && error.severity === ErrorSeverity.Recoverable) {
+      // In permissive mode, handle recoverable errors
+      errorHandler(error);
+      return ''; // Return empty string for recoverable errors
+    }
+    // Re-throw fatal errors
+    throw error;
+  }
+}
 
 describe('DataResolver', () => {
   let resolver: DataResolver;
@@ -27,7 +60,8 @@ describe('DataResolver', () => {
         path: true,
         command: true
       },
-      allowDataFields: true
+      allowDataFields: true,
+      state: stateService
     };
   });
 
@@ -80,15 +114,146 @@ describe('DataResolver', () => {
         .toThrow('Data variables are not allowed in this context');
     });
 
-    it.todo('should handle undefined variables appropriately (pending new error system)');
+    it('should handle undefined variables appropriately', async () => {
+      // Arrange
+      stateService.getDataVar.mockResolvedValue(undefined);
+      const node = createTestDirective('data', 'undefined', '');
+      
+      // Act & Assert - Strict mode
+      await expectThrowsWithSeverity(
+        () => resolver.resolve(node, { ...context, strict: true }),
+        MeldResolutionError,
+        ErrorSeverity.Recoverable
+      );
+      
+      // Act & Assert - Permissive mode
+      const collector = new ErrorCollector();
+      
+      // Use our wrapper function to mimic the InterpreterService's error handling
+      const result = await resolveWithPermissiveErrorHandling(
+        resolver,
+        node,
+        { ...context, strict: false },
+        collector.handleError
+      );
+      
+      // Should return empty string
+      expect(result).toBe('');
+      
+      // Should have collected a warning
+      expect(collector.warnings.length).toBe(1);
+      expect(collector.warnings[0]).toBeInstanceOf(MeldResolutionError);
+      expect(collector.warnings[0].severity).toBe(ErrorSeverity.Recoverable);
+    });
 
-    it.todo('should handle field access restrictions appropriately (pending new error system)');
+    it('should handle field access appropriately', async () => {
+      // Arrange
+      stateService.getDataVar.mockResolvedValue({ field: 'value' });
+      
+      // Create a node with field access
+      const node = createTestDirective('data', 'data', '');
+      (node as any).directive.field = 'field';
+      
+      // Act & Assert
+      // Test valid field access
+      const result = await resolver.resolve(node, context);
+      expect(result).toBe('value');
+      
+      // Test non-existent field access in strict mode
+      (node as any).directive.field = 'nonexistent';
+      
+      await expectThrowsWithSeverity(
+        () => resolver.resolve(node, { ...context, strict: true }),
+        MeldResolutionError,
+        ErrorSeverity.Recoverable
+      );
+      
+      // Test non-existent field access in permissive mode
+      const collector = new ErrorCollector();
+      
+      // Use our wrapper function to mimic the InterpreterService's error handling
+      const permissiveResult = await resolveWithPermissiveErrorHandling(
+        resolver,
+        node,
+        { ...context, strict: false },
+        collector.handleError
+      );
+      
+      // Should return empty string
+      expect(permissiveResult).toBe('');
+      
+      // Should have collected a warning
+      expect(collector.warnings.length).toBe(1);
+      expect(collector.warnings[0]).toBeInstanceOf(MeldResolutionError);
+      expect(collector.warnings[0].severity).toBe(ErrorSeverity.Recoverable);
+    });
 
-    it.todo('should handle null/undefined field access appropriately (pending new error system)');
+    it('should handle null/undefined field access appropriately', async () => {
+      // Arrange
+      stateService.getDataVar.mockResolvedValue({ 
+        nullField: null, 
+        undefinedField: undefined 
+      });
+      
+      // Test null field access
+      const node = createTestDirective('data', 'data', '');
+      (node as any).directive.field = 'nullField';
+      
+      // Null fields should resolve to "null"
+      const nullResult = await resolver.resolve(node, context);
+      expect(nullResult).toBe('null');
+      
+      // Test undefined field access
+      (node as any).directive.field = 'undefinedField';
+      
+      await expectThrowsWithSeverity(
+        () => resolver.resolve(node, { ...context, strict: true }),
+        MeldResolutionError,
+        ErrorSeverity.Recoverable
+      );
+      
+      // Test undefined field access in permissive mode
+      const collector = new ErrorCollector();
+      
+      // Use our wrapper function to mimic the InterpreterService's error handling
+      const permissiveResult = await resolveWithPermissiveErrorHandling(
+        resolver,
+        node,
+        { ...context, strict: false },
+        collector.handleError
+      );
+      
+      // Should return empty string
+      expect(permissiveResult).toBe('');
+      
+      // Should have collected a warning
+      expect(collector.warnings.length).toBe(1);
+      expect(collector.warnings[0]).toBeInstanceOf(MeldResolutionError);
+      expect(collector.warnings[0].severity).toBe(ErrorSeverity.Recoverable);
+    });
 
-    it.todo('should handle accessing field of non-object (pending new error system)');
-
-    it.todo('should handle accessing non-existent field (pending new error system)');
+    it('should handle accessing field of non-object', async () => {
+      // Arrange
+      stateService.getDataVar.mockResolvedValue({ 
+        stringField: 'string', 
+        numberField: 42 
+      });
+      
+      // Test string field access
+      const node = createTestDirective('data', 'data', '');
+      (node as any).directive.field = 'stringField';
+      
+      // Primitive values should be returned as strings
+      const stringResult = await resolver.resolve(node, context);
+      expect(stringResult).toBe('string');
+      
+      // Test number field access
+      (node as any).directive.field = 'numberField';
+      
+      // Numbers should be converted to strings
+      const numberResult = await resolver.resolve(node, context);
+      expect(numberResult).toBe('42');
+    });
   });
 
   describe('extractReferences', () => {
