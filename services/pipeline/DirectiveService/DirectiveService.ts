@@ -10,7 +10,8 @@ import { IInterpreterService } from '@services/pipeline/InterpreterService/IInte
 import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
 import { ICircularityService } from '@services/resolution/CircularityService/ICircularityService.js';
 import { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
-import { DirectiveError, DirectiveErrorCode } from './errors/DirectiveError.js';
+import { DirectiveError, DirectiveErrorCode, DirectiveErrorSeverity } from './errors/DirectiveError.js';
+import { ErrorSeverity } from '@core/errors/MeldError.js';
 import type { ILogger } from './handlers/execution/EmbedDirectiveHandler.js';
 
 // Import all handlers
@@ -636,7 +637,11 @@ export class DirectiveService implements IDirectiveService {
   public async processDirective(node: DirectiveNode, context: DirectiveContext): Promise<IStateService> {
     // Add initialization check before any other processing
     if (!this.initialized) {
-      throw new Error('DirectiveService must be initialized before use');
+      throw new MeldDirectiveError(
+        'DirectiveService must be initialized before use',
+        'initialization',
+        { severity: ErrorSeverity.Fatal }
+      );
     }
 
     try {
@@ -667,33 +672,43 @@ export class DirectiveService implements IDirectiveService {
       // Otherwise, result is already an IStateService
       return result;
     } catch (error) {
-      if (error instanceof DirectiveError) {
+      // If it's already a DirectiveError or MeldDirectiveError, just rethrow
+      if (error instanceof DirectiveError || error instanceof MeldDirectiveError) {
         throw error;
       }
 
       // Simplify error messages for common cases
       let message = error instanceof Error ? error.message : String(error);
       let code = DirectiveErrorCode.EXECUTION_FAILED;
+      let severity = ErrorSeverity.Recoverable;
       
       if (message.includes('file not found') || message.includes('no such file')) {
         message = `Referenced file not found: ${node.directive.path || node.directive.value}`;
         code = DirectiveErrorCode.FILE_NOT_FOUND;
+        severity = DirectiveErrorSeverity[code];
       } else if (message.includes('circular import') || message.includes('circular reference')) {
         message = 'Circular import detected';
         code = DirectiveErrorCode.CIRCULAR_REFERENCE;
+        severity = DirectiveErrorSeverity[code];
       } else if (message.includes('parameter count') || message.includes('wrong number of parameters')) {
         message = 'Invalid parameter count';
         code = DirectiveErrorCode.VALIDATION_FAILED;
+        severity = DirectiveErrorSeverity[code];
       } else if (message.includes('invalid path') || message.includes('path validation failed')) {
         message = 'Invalid path';
         code = DirectiveErrorCode.VALIDATION_FAILED;
+        severity = DirectiveErrorSeverity[code];
       }
 
       throw new DirectiveError(
         message,
         node.directive?.kind || 'unknown',
         code,
-        { node, cause: error instanceof Error ? error : undefined }
+        { 
+          node, 
+          context,
+          cause: error instanceof Error ? error : undefined 
+        }
       );
     }
   }

@@ -1,240 +1,200 @@
-# Error Handling Architecture
+# Updated Error Handling Architecture Implementation Plan
 
-## Current Issues
+## Overview
 
-1. Inconsistent error handling across layers
-   - Some modules throw errors that should be warnings
-   - Integration tests expect warnings while unit tests expect errors
-   - No clear distinction between fatal and recoverable errors
+The current issue is that your codebase has two conflicting approaches to error handling:
 
-2. Lack of configurable strictness
-   - Can't switch between strict and permissive modes
-   - No way to customize error handling at different levels
+1. **Service-level tests**: Expect strict error throwing for validation failures
+2. **CLI/Integration tests**: Expect permissive behavior with warnings for recoverable issues
 
-## Proposed Architecture
+I've already implemented the core infrastructure for a configurable error handling system that can operate in both strict and permissive modes. Here's the complete implementation plan with the remaining steps:
 
-### 1. Error Classification
+## Phase 1: Core Error Infrastructure (Completed)
 
-```typescript
-enum ErrorSeverity {
-  // Must halt execution
-  Fatal = 'fatal',    
-  // Can be converted to warning in permissive mode
-  Recoverable = 'recoverable',  
-  // Always just a warning
-  Warning = 'warning'   
-}
-```
+✅ Created `ErrorSeverity` enum with Fatal, Recoverable, and Warning levels  
+✅ Enhanced `MeldError` base class with severity and context support  
+✅ Updated `InterpreterOptions` to include strict mode and error handler  
+✅ Updated `InterpreterService` to handle errors based on severity and mode  
+✅ Updated `CLIService` to use permissive mode by default  
+✅ Updated core error classes to use the new severity system:
+   - ✅ MeldParseError
+   - ✅ MeldDirectiveError
+   - ✅ MeldResolutionError
+   - ✅ MeldInterpreterError
+   - ✅ PathValidationError
+   - ✅ MeldFileNotFoundError
 
-### 2. Enhanced Error Types
+## Phase 2: Service Layer Updates (1-2 days)
 
-```typescript
-class MeldError extends Error {
-  constructor(
-    message: string,
-    public severity: ErrorSeverity,
-    public code: string,
-    public context?: any
-  ) {
-    super(message);
-  }
+### 1. Update Remaining Error Classes
 
-  canBeWarning(): boolean {
-    return this.severity === ErrorSeverity.Recoverable 
-        || this.severity === ErrorSeverity.Warning;
-  }
-}
-```
+- [ ] Update MeldImportError
+- [ ] Update MeldOutputError
+- [ ] Update MeldFileSystemError
 
-### 3. Execution Options
+### 2. Update Resolution Service & Resolvers
 
-```typescript
-interface ExecutionOptions {
-  strict: boolean;  // When true, all errors throw. When false, recoverable errors become warnings
-  errorHandler?: (error: MeldError) => void;  // Custom error handling
-}
+- [ ] Update ResolutionService to handle severity levels
+- [ ] Update DataResolver to use recoverable errors for missing fields
+- [ ] Update TextResolver to use recoverable errors for undefined variables
+- [ ] Update CommandResolver to use appropriate severity for parameter mismatches
+- [ ] Update PathResolver to classify path errors by severity
+- [ ] Update VariableReferenceResolver to handle undefined variables as recoverable
 
-interface IInterpreterService {
-  interpret(nodes: MeldNode[], options: ExecutionOptions): Promise<void>;
-}
-```
+### 3. Update Validation Service
 
-## Implementation Plan
+- [ ] Update ValidationService to classify validation errors by severity
+- [ ] Update validators to use appropriate severity levels
 
-### Phase 1: Core Infrastructure (1-2 days)
+## Phase 3: Handler Updates (1-2 days)
 
-1. Error Types
-   - [ ] Create `ErrorSeverity` enum
-   - [ ] Update base `MeldError` class
-   - [ ] Add execution options interfaces
-   - [ ] Update error utility functions
+### 1. Update Directive Handlers
 
-2. Base Error Classes
-   - [ ] Update `MeldParseError`
-   - [ ] Update `MeldDirectiveError`
-   - [ ] Update `MeldResolutionError`
-   - [ ] Update `MeldInterpreterError`
-   - [ ] Update `MeldFileNotFoundError`
-   - [ ] Update `MeldOutputError`
-   - [ ] Update `PathValidationError`
-   - [ ] Update `ResolutionError`
-   - [ ] Update `DirectiveError`
+- [ ] Update TextDirectiveHandler to use recoverable errors
+- [ ] Update DataDirectiveHandler to use recoverable errors
+- [ ] Update PathDirectiveHandler to use appropriate severity
+- [ ] Update DefineDirectiveHandler to use appropriate severity
+- [ ] Update RunDirectiveHandler to handle command errors appropriately
+- [ ] Update EmbedDirectiveHandler to use recoverable errors for missing files
+- [ ] Update ImportDirectiveHandler to use appropriate severity levels
 
-3. Core Service Updates
-   - [ ] Modify `InterpreterService` to handle error conversion
-   - [ ] Add error handling modes to `CLIService`
-   - [ ] Update service interfaces
+### 2. Update Error Propagation
 
-### Phase 2: Service Layer (2-3 days)
+- [ ] Ensure errors are properly propagated through the service chain
+- [ ] Add context information to errors for better debugging
+- [ ] Implement consistent error handling patterns across handlers
 
-1. Resolution Service & Resolvers
-   - [ ] Update `ResolutionService`
-   - [ ] Update `DataResolver`
-   - [ ] Update `TextResolver`
-   - [ ] Update `CommandResolver`
-   - [ ] Update `PathResolver`
-   - [ ] Update `StringLiteralHandler`
-   - [ ] Update `StringConcatenationHandler`
-   - [ ] Update `VariableReferenceResolver`
+## Phase 4: Test Updates (2-3 days)
 
-2. Directive Service & Handlers
-   - [ ] Update `DirectiveService`
-   - [ ] Update execution handlers
-   - [ ] Update definition handlers
+### 1. Update Unit Tests
 
-3. Other Services
-   - [ ] Update `ParserService`
-   - [ ] Update `FileSystemService`
-   - [ ] Update `PathService`
-   - [ ] Update `ValidationService`
+- [ ] Update resolver tests to verify error severity
+- [ ] Update service tests to test both strict and permissive modes
+- [ ] Update handler tests to verify error classification
+- [ ] Add new tests for error severity classification
 
-### Phase 3: Test Updates (2-3 days)
+### 2. Update Integration Tests
 
-1. Unit Tests
-   - [ ] Update resolver tests
-   - [ ] Update service tests
-   - [ ] Update handler tests
-   - [ ] Add new error handling tests
+- [ ] Enable skipped CLI tests with appropriate expectations
+- [ ] Add tests for strict mode behavior
+- [ ] Add tests for permissive mode behavior
+- [ ] Verify warning generation in permissive mode
 
-2. Integration Tests
-   - [ ] Update CLI tests
-   - [ ] Add strict mode tests
-   - [ ] Add permissive mode tests
+### 3. Add Test Utilities
 
-3. Test Utilities
-   - [ ] Add error assertion helpers
-   - [ ] Add test execution modes
+- [ ] Create error assertion helpers for testing severity
+- [ ] Add test utilities for verifying warning generation
+- [ ] Create test helpers for running in different error modes
 
-## Error Categories
+## Phase 5: Documentation and Cleanup (1 day)
+
+- [ ] Update error handling documentation
+- [ ] Add examples of strict vs. permissive mode usage
+- [ ] Document error severity classification
+- [ ] Clean up any remaining TODOs related to error handling
+
+## Implementation Strategy
+
+### Error Classification Guidelines
 
 Here's how different types of errors should be classified:
 
-### Fatal Errors
-- Syntax errors
-- Circular imports
-- Invalid directive types
-- Missing required fields
-- Type validation failures
-- File system access errors (except not found)
+#### Fatal Errors (Always Throw)
+- Syntax errors (MeldParseError)
+- Circular imports (DirectiveError with CIRCULAR_REFERENCE)
+- Invalid directive types (DirectiveError with HANDLER_NOT_FOUND)
+- Missing required fields in directives (DirectiveError with VALIDATION_FAILED)
+- Type validation failures (PathValidationError with INVALID_PATH)
+- File system access errors (MeldFileSystemError)
+- Service initialization errors (ServiceInitializationError)
 
-### Recoverable Errors (Can be Warnings)
-- Missing data fields
-- Undefined variables
-- Missing environment variables
-- File not found
-- Invalid field access
+#### Recoverable Errors (Warnings in Permissive Mode)
+- Missing data fields (MeldResolutionError)
+- Undefined variables (MeldResolutionError)
+- Missing environment variables (MeldResolutionError)
+- File not found for embed/import (MeldFileNotFoundError)
+- Invalid field access (MeldResolutionError)
+- Command execution failures (MeldInterpreterError)
 
-### Always Warnings
+#### Always Warnings (Never Throw)
 - Deprecated features
 - Performance suggestions
 - Non-critical validation issues
 
-## Migration Strategy
+### Implementation Approach
 
-1. **Preparation**
-   - Add new error types without removing old ones
-   - Add support for both old and new error handling
-   - Update documentation
+1. **Start with Core Services**
+   - Focus on the most critical services first (ResolutionService, ValidationService)
+   - Update error handling in these services to use the new severity system
+   - Ensure backward compatibility with existing tests
 
-2. **Gradual Migration**
-   - Migrate one service at a time
-   - Keep backwards compatibility
-   - Add tests for new behavior before removing old
+2. **Update Handlers Incrementally**
+   - Update one handler at a time, starting with the most commonly used
+   - Add tests for both strict and permissive modes
+   - Verify that existing tests still pass
 
-3. **Cleanup**
-   - Remove old error types
-   - Remove compatibility layer
-   - Update all documentation
+3. **Enable Skipped Tests**
+   - As each component is updated, enable the corresponding skipped tests
+   - Update test expectations to match the new error handling behavior
+   - Add new tests for permissive mode behavior
 
-## Usage Examples
+4. **Maintain Backward Compatibility**
+   - Ensure all existing tests continue to pass
+   - Add new tests without breaking existing ones
+   - Use the strict mode by default in unit tests
 
-### Strict Mode (Unit Tests)
+## Example Implementation for a Resolver
+
+Here's an example of how to update the DataResolver to handle undefined variables as recoverable errors:
+
 ```typescript
-const options: ExecutionOptions = {
-  strict: true
-};
-await interpreter.interpret(nodes, options);  // Throws on any error
+// Before
+if (!dataVar) {
+  throw new MeldResolutionError(`Data variable not found: ${name}`);
+}
+
+// After
+if (!dataVar) {
+  throw new MeldResolutionError(`Data variable not found: ${name}`, {
+    details: {
+      variableName: name,
+      variableType: 'data'
+    },
+    severity: ErrorSeverity.Recoverable,
+    code: 'UNDEFINED_VARIABLE'
+  });
+}
 ```
 
-### Permissive Mode (CLI)
+## Example Test Update
+
+Here's an example of how to update tests to verify both strict and permissive modes:
+
 ```typescript
-const options: ExecutionOptions = {
-  strict: false,
-  errorHandler: (error) => {
-    if (error.canBeWarning()) {
-      console.warn(`Warning: ${error.message}`);
-    }
-  }
-};
-await interpreter.interpret(nodes, options);  // Converts recoverable errors to warnings
-```
+// Before (skipped)
+it.todo('should handle undefined variables appropriately (pending new error system)');
 
-### Custom Error Handling
-```typescript
-const options: ExecutionOptions = {
-  strict: false,
-  errorHandler: (error) => {
-    if (error.severity === ErrorSeverity.Warning) {
-      // Log to file
-    } else if (error.canBeWarning()) {
-      // Show in UI
-    } else {
-      // Halt execution
-    }
-  }
-};
-```
+// After (implemented)
+it('should throw in strict mode for undefined variables', async () => {
+  // Setup test with strict mode
+  const options = { strict: true };
+  
+  await expect(resolver.resolve('#{undefined}', context, options))
+    .rejects.toThrow(MeldResolutionError);
+});
 
-## Testing Guidelines
-
-1. Unit Tests
-   - Always run in strict mode
-   - Test both error throwing and error details
-   - Verify error categorization
-
-2. Integration Tests
-   - Test both strict and permissive modes
-   - Verify warning conversion
-   - Test custom error handlers
-
-3. Error Handling Tests
-   - Verify error propagation
-   - Test error context preservation
-   - Verify warning formatting
-
-## Documentation Updates Needed
-
-1. API Documentation
-   - [ ] Document new error types
-   - [ ] Update service interfaces
-   - [ ] Add error handling examples
-
-2. User Documentation
-   - [ ] Explain strict vs permissive modes
-   - [ ] Document CLI options
-   - [ ] Update troubleshooting guide
-
-3. Developer Documentation
-   - [ ] Error handling guidelines
-   - [ ] Testing requirements
-   - [ ] Migration guide 
+it('should warn in permissive mode for undefined variables', async () => {
+  // Setup test with permissive mode
+  const options = { strict: false };
+  const warnings: MeldError[] = [];
+  const errorHandler = (error: MeldError) => warnings.push(error);
+  
+  // Should not throw
+  await expect(resolver.resolve('#{undefined}', context, { ...options, errorHandler }))
+    .resolves.toBe('');
+  
+  // Should have generated a warning
+  expect(warnings.length).toBe(1);
+  expect(warnings[0]).toBeInstanceOf(MeldResolutionError);
+  expect(warnings[0].severity).toBe(ErrorSeverity.Recoverable);
+});

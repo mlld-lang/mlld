@@ -11,6 +11,7 @@ import { createInterface } from 'readline';
 import { MeldParseError } from '@core/errors/MeldParseError.js';
 import { MeldInterpreterError } from '@core/errors/MeldInterpreterError.js';
 import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
+import { MeldError, ErrorSeverity } from '@core/errors/MeldError.js';
 import { version } from '@core/version.js';
 
 export interface CLIOptions {
@@ -76,7 +77,8 @@ export class CLIService implements ICLIService {
   private parseArgs(args: string[]): CLIOptions {
     const options: CLIOptions = {
       input: '',
-      format: 'llm'
+      format: 'llm',
+      strict: false // Default to permissive mode for CLI
     };
 
     for (let i = 0; i < args.length; i++) {
@@ -101,15 +103,16 @@ export class CLIService implements ICLIService {
           options.verbose = true;
           break;
         case '--strict':
-        case '-s':
           options.strict = true;
+          break;
+        case '--permissive':
+          options.strict = false;
           break;
         case '--config':
         case '-c':
           options.config = args[++i];
           break;
-        case '--home-path':
-        case '-h':
+        case '--home':
           options.homePath = args[++i];
           break;
         case '--watch':
@@ -121,8 +124,7 @@ export class CLIService implements ICLIService {
           options.debug = true;
           break;
         default:
-          // If no flag is specified, treat as input file
-          if (!arg.startsWith('-')) {
+          if (!arg.startsWith('-') && !options.input) {
             options.input = arg;
           } else {
             throw new Error(`Unknown option: ${arg}`);
@@ -130,47 +132,25 @@ export class CLIService implements ICLIService {
       }
     }
 
-    // Don't require input file if version flag is set
     if (!options.input && !options.version) {
-      throw new Error('Input file is required');
+      throw new Error('No input file specified');
     }
 
     return options;
   }
 
-  private isFatalError(error: Error): boolean {
-    // Parse errors are always fatal
-    if (error instanceof MeldParseError) {
-      return true;
-    }
-
-    // Resolution errors for missing fields/env vars are warnings
-    if (error instanceof MeldResolutionError) {
-      if (error.message.includes('UNDEFINED_VARIABLE')) {
-        return false;
-      }
-    }
-
-    // Interpreter errors for missing fields are warnings
-    if (error instanceof MeldInterpreterError) {
-      if (error.message.includes('UNDEFINED_VARIABLE')) {
-        return false;
-      }
-    }
-
-    // All other errors are fatal
-    return true;
-  }
-
-  private handleError(error: Error): void {
-    if (this.isFatalError(error)) {
-      throw error;
-    } else {
-      // Log warning and continue
-      logger.warn('Non-fatal error occurred', {
-        error: error.message
-      });
-    }
+  /**
+   * Custom error handler for the CLI
+   * Logs warnings for recoverable errors
+   */
+  private errorHandler(error: MeldError): void {
+    // Log warning with appropriate context
+    logger.warn(`Warning: ${error.message}`, {
+      code: error.code,
+      filePath: error.filePath,
+      severity: error.severity,
+      context: error.context
+    });
   }
 
   async run(args: string[]): Promise<void> {
@@ -179,39 +159,41 @@ export class CLIService implements ICLIService {
 
       // Handle version flag first, before any logging
       if (options.version) {
-        console.log(`meld version ${version}`);
+        console.log(`Meld version ${version}`);
         return;
       }
 
-      // Set log level based on debug flag for all loggers
-      const logLevel = options.debug ? 'debug' : 'info';
-      this.allLoggers.forEach(logger => {
-        logger.level = logLevel;
+      // Configure logging based on options
+      if (options.verbose) {
+        this.allLoggers.forEach(l => l.level = 'debug');
+      } else if (options.debug) {
+        this.allLoggers.forEach(l => l.level = 'trace');
+      } else {
+        this.allLoggers.forEach(l => l.level = 'info');
+      }
+
+      logger.info('Starting Meld CLI', {
+        version,
+        options
       });
 
-      logger.debug('Starting CLI execution', { args });
-
-      if (options.verbose) {
-        logger.info('Verbose mode enabled');
-      }
-
-      // If watch mode is enabled, delegate to watch method
       if (options.watch) {
         await this.watch(options);
-        return;
-      }
-
-      await this.processFile(options);
-    } catch (error) {
-      if (error instanceof Error) {
-        this.handleError(error);
       } else {
-        // Unknown errors are always fatal
-        logger.error('CLI execution failed', {
-          error: String(error)
-        });
-        throw error;
+        await this.processFile(options);
       }
+    } catch (error) {
+      // For CLI errors, always log and exit with error code
+      logger.error('Error running Meld CLI', {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      
+      // Print user-friendly error message to console
+      console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+      
+      // Exit with error code
+      process.exit(1);
     }
   }
 
@@ -291,7 +273,10 @@ export class CLIService implements ICLIService {
             // If still not found, try relative to current directory
             const cwdRelativePath = await this.pathService.resolvePath(`./${options.input}`);
             if (!await this.fileSystemService.exists(cwdRelativePath)) {
-              throw new Error(`File not found: ${options.input}`);
+              throw new MeldError(`File not found: ${options.input}`, {
+                severity: ErrorSeverity.Fatal,
+                code: 'FILE_NOT_FOUND'
+              });
             }
             inputPath = cwdRelativePath;
           }
@@ -300,14 +285,20 @@ export class CLIService implements ICLIService {
         // If path resolution fails, try as a simple filename
         const simpleFilePath = await this.pathService.resolvePath(options.input);
         if (!await this.fileSystemService.exists(simpleFilePath)) {
-          throw new Error(`File not found: ${options.input}`);
+          throw new MeldError(`File not found: ${options.input}`, {
+            severity: ErrorSeverity.Fatal,
+            code: 'FILE_NOT_FOUND'
+          });
         }
         inputPath = simpleFilePath;
       }
 
       // Verify file extension
       if (!inputPath.endsWith('.meld')) {
-        throw new Error('Invalid file extension: File must have .meld extension');
+        throw new MeldError('Invalid file extension: File must have .meld extension', {
+          severity: ErrorSeverity.Fatal,
+          code: 'INVALID_FILE_EXTENSION'
+        });
       }
 
       // Read input file
@@ -316,20 +307,14 @@ export class CLIService implements ICLIService {
       // Parse content
       const nodes = await this.parserService.parse(content);
 
-      // Interpret nodes
-      try {
-        await this.interpreterService.interpret(nodes, {
-          initialState: state,
-          filePath: inputPath,
-          mergeState: true
-        });
-      } catch (error) {
-        if (error instanceof Error) {
-          this.handleError(error);
-        } else {
-          throw error;
-        }
-      }
+      // Interpret nodes with appropriate error handling
+      await this.interpreterService.interpret(nodes, {
+        initialState: state,
+        filePath: inputPath,
+        mergeState: true,
+        strict: options.strict === true, // Use strict mode if explicitly set to true
+        errorHandler: this.errorHandler.bind(this)
+      });
 
       // Convert to output format
       const output = await this.outputService.convert(
@@ -376,11 +361,21 @@ export class CLIService implements ICLIService {
         logger.info('Successfully wrote output file', { path: outputPath });
       }
     } catch (error) {
-      if (error instanceof Error) {
-        this.handleError(error);
-      } else {
-        throw error;
-      }
+      // Convert to MeldError if needed
+      const meldError = error instanceof MeldError 
+        ? error 
+        : MeldError.wrap(error);
+      
+      // Log the error
+      logger.error('Error processing file', {
+        error: meldError.message,
+        code: meldError.code,
+        filePath: meldError.filePath,
+        severity: meldError.severity
+      });
+      
+      // Rethrow to be caught by the main run method
+      throw meldError;
     }
   }
 } 

@@ -4,11 +4,13 @@ import { IInterpreterService, type InterpreterOptions } from './IInterpreterServ
 import type { IDirectiveService } from '@services/pipeline/DirectiveService/IDirectiveService.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import { MeldInterpreterError, type InterpreterLocation } from '@core/errors/MeldInterpreterError.js';
+import { MeldError, ErrorSeverity } from '@core/errors/MeldError.js';
 
-const DEFAULT_OPTIONS: Required<Omit<InterpreterOptions, 'initialState'>> = {
+const DEFAULT_OPTIONS: Required<Omit<InterpreterOptions, 'initialState' | 'errorHandler'>> = {
   filePath: '',
   mergeState: true,
-  importFilter: []
+  importFilter: [],
+  strict: true
 };
 
 function convertLocation(loc?: SourceLocation): InterpreterLocation | undefined {
@@ -45,6 +47,34 @@ export class InterpreterService implements IInterpreterService {
     logger.debug('InterpreterService initialized');
   }
 
+  /**
+   * Handle errors based on severity and options
+   * In strict mode, all errors throw
+   * In permissive mode, recoverable errors become warnings
+   */
+  private handleError(error: Error, options: Required<Omit<InterpreterOptions, 'initialState' | 'errorHandler'>> & Pick<InterpreterOptions, 'errorHandler'>): void {
+    // If it's not a MeldError, wrap it
+    const meldError = error instanceof MeldError 
+      ? error 
+      : MeldError.wrap(error);
+    
+    // In strict mode, or if it's a fatal error, throw it
+    if (options.strict || !meldError.canBeWarning()) {
+      throw meldError;
+    }
+    
+    // In permissive mode with recoverable errors, use the error handler or log a warning
+    if (options.errorHandler) {
+      options.errorHandler(meldError);
+    } else {
+      logger.warn(`Warning: ${meldError.message}`, {
+        code: meldError.code,
+        filePath: meldError.filePath,
+        severity: meldError.severity
+      });
+    }
+  }
+
   async interpret(
     nodes: MeldNode[],
     options?: InterpreterOptions
@@ -54,14 +84,16 @@ export class InterpreterService implements IInterpreterService {
     if (!nodes) {
       throw new MeldInterpreterError(
         'No nodes provided for interpretation',
-        'interpretation'
+        'interpretation',
+        { severity: ErrorSeverity.Fatal }
       );
     }
 
     if (!Array.isArray(nodes)) {
       throw new MeldInterpreterError(
         'Invalid nodes provided for interpretation: expected array',
-        'interpretation'
+        'interpretation',
+        { severity: ErrorSeverity.Fatal }
       );
     }
 
@@ -86,7 +118,8 @@ export class InterpreterService implements IInterpreterService {
       if (!currentState) {
         throw new MeldInterpreterError(
           'Failed to initialize state for interpretation',
-          'initialization'
+          'initialization',
+          { severity: ErrorSeverity.Fatal }
         );
       }
 
@@ -106,74 +139,31 @@ export class InterpreterService implements IInterpreterService {
 
       for (const node of nodes) {
         try {
-          // Process the node with current state
-          const updatedState = await this.interpretNode(node, currentState);
-          
-          // If successful, update the states
-          currentState = updatedState;
+          currentState = await this.interpretNode(node, currentState, opts);
+          // Update last good state after successful interpretation
           lastGoodState = currentState.clone();
-          
-          // Do not merge back to parent state here - wait until all nodes are processed
         } catch (error) {
-          // Roll back to last good state
-          currentState = lastGoodState.clone();
-          
-          // Preserve MeldInterpreterError or wrap other errors
-          if (error instanceof MeldInterpreterError) {
-            throw error;
-          }
-          throw new MeldInterpreterError(
-            getErrorMessage(error),
-            node.type,
-            convertLocation(node.location),
-            {
-              cause: error instanceof Error ? error : undefined,
-              context: {
-                nodeType: node.type,
-                location: convertLocation(node.location),
-                state: {
-                  filePath: currentState.getCurrentFilePath() ?? undefined
-                }
-              }
+          // Handle errors based on severity and options
+          try {
+            this.handleError(error instanceof Error ? error : new Error(String(error)), opts);
+            // If we get here, the error was handled as a warning
+            // Continue with the last good state
+            currentState = lastGoodState.clone();
+          } catch (fatalError) {
+            // If we get here, the error was fatal and should be propagated
+            // Restore to initial state before rethrowing
+            if (opts.initialState && opts.mergeState) {
+              // Only attempt to merge back if we have a parent and mergeState is true
+              initialSnapshot.mergeInto(opts.initialState);
             }
-          );
+            throw fatalError;
+          }
         }
       }
 
-      // Only merge back to parent state after all nodes are processed successfully
-      if (opts.mergeState && opts.initialState) {
-        try {
-          opts.initialState.mergeChildState(currentState);
-          // Return the parent state after successful merge
-          return opts.initialState;
-        } catch (error) {
-          logger.error('Failed to merge child state', {
-            error,
-            filePath: currentState.getCurrentFilePath()
-          });
-          // Roll back to last good state
-          currentState = lastGoodState.clone();
-          throw new MeldInterpreterError(
-            'Failed to merge child state: ' + getErrorMessage(error),
-            'state_merge',
-            undefined,
-            {
-              cause: error instanceof Error ? error : undefined,
-              context: {
-                filePath: currentState.getCurrentFilePath() ?? undefined,
-                state: {
-                  filePath: currentState.getCurrentFilePath() ?? undefined
-                }
-              }
-            }
-          );
-        }
-      } else {
-        // When mergeState is false, ensure we return a completely isolated state
-        const isolatedState = this.stateService!.createChildState();
-        isolatedState.mergeChildState(currentState);
-        isolatedState.setImmutable(); // Prevent further modifications
-        return isolatedState;
+      // Merge state back to parent if requested
+      if (opts.initialState && opts.mergeState) {
+        currentState.mergeInto(opts.initialState);
       }
 
       logger.debug('Interpretation completed successfully', {
@@ -185,33 +175,23 @@ export class InterpreterService implements IInterpreterService {
 
       return currentState;
     } catch (error) {
-      logger.error('Interpretation failed', {
-        nodeCount: nodes?.length ?? 0,
-        filePath: opts.filePath,
-        error
-      });
-
-      // Preserve MeldInterpreterError or wrap other errors
-      if (error instanceof MeldInterpreterError) {
-        throw error;
-      }
-      throw new MeldInterpreterError(
-        getErrorMessage(error),
-        'interpretation',
-        undefined,
-        {
-          cause: error instanceof Error ? error : undefined,
-          context: {
-            filePath: opts.filePath
-          }
-        }
-      );
+      // Wrap any unexpected errors
+      const wrappedError = error instanceof Error
+        ? error
+        : new MeldInterpreterError(
+            `Unexpected error during interpretation: ${String(error)}`,
+            'interpretation',
+            { severity: ErrorSeverity.Fatal, cause: error instanceof Error ? error : undefined }
+          );
+      
+      throw wrappedError;
     }
   }
 
   async interpretNode(
     node: MeldNode,
-    state: IStateService
+    state: IStateService,
+    options?: InterpreterOptions
   ): Promise<IStateService> {
     if (!node) {
       throw new MeldInterpreterError(
@@ -240,6 +220,8 @@ export class InterpreterService implements IInterpreterService {
       location: node.location,
       filePath: state.getCurrentFilePath()
     });
+
+    const opts = { ...DEFAULT_OPTIONS, ...options };
 
     try {
       // Take a snapshot before processing
@@ -318,7 +300,8 @@ export class InterpreterService implements IInterpreterService {
 
   async createChildContext(
     parentState: IStateService,
-    filePath?: string
+    filePath?: string,
+    options?: InterpreterOptions
   ): Promise<IStateService> {
     this.ensureInitialized();
 

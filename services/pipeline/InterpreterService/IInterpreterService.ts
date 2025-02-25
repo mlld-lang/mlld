@@ -1,6 +1,11 @@
 import type { MeldNode } from 'meld-spec';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IDirectiveService } from '@services/pipeline/DirectiveService/IDirectiveService.js';
+import type { MeldError } from '@core/errors/MeldError.js';
+
+export interface ErrorHandler {
+  (error: MeldError): void;
+}
 
 export interface InterpreterOptions {
   /**
@@ -26,6 +31,21 @@ export interface InterpreterOptions {
    * If empty array, no variables are imported
    */
   importFilter?: string[];
+
+  /**
+   * Whether to run in strict mode
+   * In strict mode, all errors throw
+   * In permissive mode, recoverable errors become warnings
+   * @default true
+   */
+  strict?: boolean;
+
+  /**
+   * Custom error handler
+   * If provided, will be called for all errors
+   * In permissive mode, recoverable errors will be passed to this handler instead of throwing
+   */
+  errorHandler?: ErrorHandler;
 }
 
 export interface IInterpreterService {
@@ -60,7 +80,8 @@ export interface IInterpreterService {
    */
   interpretNode(
     node: MeldNode,
-    state: IStateService
+    state: IStateService,
+    options?: InterpreterOptions
   ): Promise<IStateService>;
 
   /**
@@ -69,6 +90,7 @@ export interface IInterpreterService {
    */
   createChildContext(
     parentState: IStateService,
-    filePath?: string
+    filePath?: string,
+    options?: InterpreterOptions
   ): Promise<IStateService>;
 } 

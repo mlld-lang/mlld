@@ -1,3 +1,5 @@
+import { MeldError, ErrorSeverity } from './MeldError.js';
+
 export interface InterpreterLocation {
   line: number;
   column: number;
@@ -31,54 +33,52 @@ export interface InterpreterErrorContext {
   };
 }
 
-export interface InterpreterErrorOptions {
+export interface MeldInterpreterErrorOptions {
   cause?: Error;
   context?: InterpreterErrorContext;
+  severity?: ErrorSeverity;
+  code?: string;
 }
 
 /**
  * Error thrown during interpretation of Meld content
  */
-export class MeldInterpreterError extends Error {
-  public readonly context?: InterpreterErrorContext;
-  public readonly filePath?: string;
-  private readonly errorCause?: Error;
+export class MeldInterpreterError extends MeldError {
+  public readonly nodeType: string;
+  public readonly location?: InterpreterLocation;
 
   constructor(
     message: string,
-    public readonly nodeType: string,
-    public readonly location?: InterpreterLocation,
-    options: InterpreterErrorOptions = {}
+    nodeType: string,
+    location?: InterpreterLocation,
+    options: MeldInterpreterErrorOptions = {}
   ) {
-    // Create a clean base message without location details
-    const baseMessage = message;
-
-    // Add location details if available
-    const locationStr = location ? ` at line ${location.line}, column ${location.column}` : '';
-    const fullMessage = `${baseMessage}${locationStr}`;
-
-    super(fullMessage);
-
+    // Format message with location if available
+    const locationStr = location 
+      ? ` at line ${location.line}, column ${location.column}${location.filePath ? ` in ${location.filePath}` : ''}`
+      : '';
+    
+    // Interpreter errors are typically recoverable by default, but can be overridden
+    const severity = options.severity || ErrorSeverity.Recoverable;
+    
+    super(`Interpreter error (${nodeType}): ${message}${locationStr}`, {
+      code: options.code || 'INTERPRETATION_FAILED',
+      filePath: location?.filePath || options.context?.filePath,
+      cause: options.cause,
+      severity,
+      context: {
+        ...options.context,
+        nodeType,
+        location
+      }
+    });
+    
     this.name = 'MeldInterpreterError';
-    this.context = options.context;
-    this.filePath = options.context?.filePath;
-    this.errorCause = options.cause;
-
-    // Set cause property for error chaining
-    if (options.cause) {
-      Object.defineProperty(this, 'cause', {
-        value: options.cause,
-        enumerable: true,
-        configurable: true,
-      });
-    }
-
+    this.nodeType = nodeType;
+    this.location = location;
+    
     // Ensure proper prototype chain for instanceof checks
     Object.setPrototypeOf(this, MeldInterpreterError.prototype);
-  }
-
-  get cause(): Error | undefined {
-    return this.errorCause;
   }
 
   /**
@@ -91,8 +91,8 @@ export class MeldInterpreterError extends Error {
       nodeType: this.nodeType,
       location: this.location,
       filePath: this.filePath,
-      cause: this.errorCause?.message,
-      fullCauseMessage: this.errorCause ? this.getFullCauseMessage(this.errorCause) : undefined,
+      cause: this.cause?.message,
+      fullCauseMessage: this.cause ? this.getFullCauseMessage(this.cause) : undefined,
       context: this.context ? {
         filePath: this.context.filePath,
         nodeType: this.context.nodeType,
@@ -102,13 +102,16 @@ export class MeldInterpreterError extends Error {
   }
 
   /**
-   * Helper to get the full cause message chain
+   * Get the full cause message chain
    */
   private getFullCauseMessage(error: Error): string {
+    if (!error) return '';
+    
     let message = error.message;
     if ('cause' in error && error.cause instanceof Error) {
-      message += ` | Caused by: ${this.getFullCauseMessage(error.cause)}`;
+      message += ` -> ${this.getFullCauseMessage(error.cause)}`;
     }
+    
     return message;
   }
 } 

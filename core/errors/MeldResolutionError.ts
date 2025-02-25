@@ -1,22 +1,46 @@
-import { MeldError } from './MeldError.js';
+import { MeldError, ErrorSeverity } from './MeldError.js';
 import { Location } from '@core/types/index.js';
 
 export interface ResolutionErrorDetails {
   value?: string;
   context?: string;
   location?: Location;
+  variableName?: string;
+  variableType?: 'text' | 'data' | 'path' | 'command';
+  fieldPath?: string;
+}
+
+export interface MeldResolutionErrorOptions {
+  details?: ResolutionErrorDetails;
+  code?: string;
+  cause?: Error;
+  severity?: ErrorSeverity;
+  filePath?: string;
 }
 
 /**
  * Error thrown when variable resolution fails
  */
 export class MeldResolutionError extends MeldError {
+  public readonly details?: ResolutionErrorDetails;
+
   constructor(
     message: string,
-    public readonly details?: ResolutionErrorDetails
+    options: MeldResolutionErrorOptions = {}
   ) {
-    super(message);
+    // Resolution errors are typically recoverable by default
+    const severity = options.severity || ErrorSeverity.Recoverable;
+    
+    super(message, {
+      code: options.code || 'RESOLUTION_FAILED',
+      filePath: options.filePath || options.details?.location?.filePath,
+      cause: options.cause,
+      severity,
+      context: options.details
+    });
+    
     this.name = 'MeldResolutionError';
+    this.details = options.details;
   }
 
   /**
@@ -29,6 +53,15 @@ export class MeldResolutionError extends MeldError {
     }
     if (this.details?.context) {
       msg += `\nContext: ${this.details.context}`;
+    }
+    if (this.details?.variableName) {
+      msg += `\nVariable: ${this.details.variableName}`;
+      if (this.details.variableType) {
+        msg += ` (${this.details.variableType})`;
+      }
+    }
+    if (this.details?.fieldPath) {
+      msg += `\nField path: ${this.details.fieldPath}`;
     }
     return msg;
   }

@@ -1,6 +1,8 @@
 import { DirectiveNode } from 'meld-spec';
 import { DirectiveContext } from '@services/pipeline/DirectiveService/IDirectiveService.js';
 import type { Location } from '@core/types/index.js';
+import { MeldDirectiveError, DirectiveLocation, MeldDirectiveErrorOptions } from '@core/errors/MeldDirectiveError.js';
+import { ErrorSeverity } from '@core/errors/MeldError.js';
 
 /**
  * Error codes for directive failures
@@ -17,101 +19,76 @@ export enum DirectiveErrorCode {
   INVALID_CONTEXT = 'INVALID_CONTEXT'
 }
 
-interface SerializedDirectiveError {
-  name: string;
-  message: string;
-  kind: string;
-  code: DirectiveErrorCode;
+/**
+ * Map directive error codes to severity levels
+ */
+export const DirectiveErrorSeverity: Record<DirectiveErrorCode, ErrorSeverity> = {
+  [DirectiveErrorCode.VALIDATION_FAILED]: ErrorSeverity.Recoverable,
+  [DirectiveErrorCode.RESOLUTION_FAILED]: ErrorSeverity.Recoverable,
+  [DirectiveErrorCode.EXECUTION_FAILED]: ErrorSeverity.Recoverable,
+  [DirectiveErrorCode.HANDLER_NOT_FOUND]: ErrorSeverity.Fatal,
+  [DirectiveErrorCode.FILE_NOT_FOUND]: ErrorSeverity.Recoverable,
+  [DirectiveErrorCode.CIRCULAR_REFERENCE]: ErrorSeverity.Fatal,
+  [DirectiveErrorCode.VARIABLE_NOT_FOUND]: ErrorSeverity.Recoverable,
+  [DirectiveErrorCode.STATE_ERROR]: ErrorSeverity.Fatal,
+  [DirectiveErrorCode.INVALID_CONTEXT]: ErrorSeverity.Fatal
+};
+
+export interface DirectiveErrorDetails {
+  node?: DirectiveNode;
+  context?: DirectiveContext;
+  cause?: Error;
   location?: Location;
-  filePath?: string;
-  cause?: string;
-  fullCauseMessage?: string;
+  details?: {
+    node?: DirectiveNode;
+    location?: Location;
+  };
 }
 
 /**
  * Error thrown when directive handling fails
  */
-export class DirectiveError extends Error {
-  public readonly location?: Location;
-  public readonly filePath?: string;
-  private readonly errorCause?: Error;
+export class DirectiveError extends MeldDirectiveError {
+  public readonly code: DirectiveErrorCode;
+  public readonly details?: DirectiveErrorDetails;
 
   constructor(
     message: string,
-    public readonly kind: string,
-    public readonly code: DirectiveErrorCode,
-    public readonly details?: {
-      node?: DirectiveNode;
-      context?: DirectiveContext;
-      cause?: Error;
-      location?: Location;
-      details?: {
-        node?: DirectiveNode;
-        location?: Location;
+    kind: string,
+    code: DirectiveErrorCode,
+    details?: DirectiveErrorDetails
+  ) {
+    // Convert Location to DirectiveLocation if available
+    let directiveLocation: DirectiveLocation | undefined;
+    const loc = details?.location ?? details?.node?.location;
+    
+    if (loc) {
+      directiveLocation = {
+        line: loc.start.line,
+        column: loc.start.column,
+        filePath: details?.context?.currentFilePath
       };
     }
-  ) {
-    // Create message with location if available
-    const loc = details?.location ?? details?.node?.location;
-    const locationStr = loc ? 
-      ` at line ${loc.start.line}, column ${loc.start.column}` : '';
-    const filePathStr = details?.context?.currentFilePath ? 
-      ` in ${details.context.currentFilePath}` : '';
     
-    // Include cause message in the full error message if available
-    const causeStr = details?.cause ? ` | Caused by: ${details.cause.message}` : '';
+    // Determine severity based on error code
+    const severity = DirectiveErrorSeverity[code] || ErrorSeverity.Recoverable;
     
-    super(`Directive error (${kind}): ${message}${locationStr}${filePathStr}${causeStr}`);
+    // Create options for MeldDirectiveError
+    const options: MeldDirectiveErrorOptions = {
+      location: directiveLocation,
+      code,
+      cause: details?.cause,
+      severity,
+      context: details
+    };
+    
+    super(message, kind, options);
+    
     this.name = 'DirectiveError';
+    this.code = code;
+    this.details = details;
     
-    // Store essential properties
-    this.location = details?.location ?? details?.node?.location;
-    this.filePath = details?.context?.currentFilePath;
-    this.errorCause = details?.cause;
-
-    // Set cause property for standard error chaining
-    if (details?.cause) {
-      Object.defineProperty(this, 'cause', {
-        value: details.cause,
-        enumerable: true,
-        configurable: true,
-        writable: false
-      });
-    }
-
     // Ensure proper prototype chain
     Object.setPrototypeOf(this, DirectiveError.prototype);
-  }
-
-  // Add public getter for cause that ensures we always return the full error
-  public get cause(): Error | undefined {
-    return this.errorCause;
-  }
-
-  /**
-   * Custom serialization to avoid circular references and include only essential info
-   */
-  toJSON(): SerializedDirectiveError {
-    return {
-      name: this.name,
-      message: this.message,
-      kind: this.kind,
-      code: this.code,
-      location: this.location,
-      filePath: this.filePath,
-      cause: this.errorCause?.message,
-      fullCauseMessage: this.errorCause ? this.getFullCauseMessage(this.errorCause) : undefined
-    };
-  }
-
-  /**
-   * Helper to get the full cause message chain
-   */
-  private getFullCauseMessage(error: Error): string {
-    let message = error.message;
-    if ('cause' in error && error.cause instanceof Error) {
-      message += ` | Caused by: ${this.getFullCauseMessage(error.cause)}`;
-    }
-    return message;
   }
 } 

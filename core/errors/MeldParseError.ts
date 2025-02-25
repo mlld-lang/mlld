@@ -1,4 +1,5 @@
 import type { Location, Position } from '@core/types/index.js';
+import { MeldError, ErrorSeverity } from './MeldError.js';
 
 interface SerializedParseError {
   name: string;
@@ -6,23 +7,29 @@ interface SerializedParseError {
   location?: Location;
   filePath?: string;
   cause?: string;
+  severity: ErrorSeverity;
+  context?: any;
+}
+
+export interface MeldParseErrorOptions {
+  cause?: Error;
+  severity?: ErrorSeverity;
+  context?: any;
 }
 
 /**
  * Error thrown when parsing Meld content fails
  */
-export class MeldParseError extends Error {
+export class MeldParseError extends MeldError {
   /**
    * Location information for where the error occurred
    */
   public readonly location?: Location;
-  public readonly filePath?: string;
-  private readonly errorCause?: Error;
 
   constructor(
     message: string, 
     position?: Position | Location,
-    cause?: Error
+    options: MeldParseErrorOptions = {}
   ) {
     // Format message with location if available
     const locationStr = position ? 
@@ -31,27 +38,42 @@ export class MeldParseError extends Error {
       (('filePath' in position && position.filePath) ? ` in ${position.filePath}` : '')
       : '';
     
-    super(`Parse error: ${message}${locationStr}`);
-    this.name = 'MeldParseError';
-    this.errorCause = cause;
-
     // Convert Position to Location if needed
+    let location: Location | undefined;
+    let filePath: string | undefined;
+    
     if (position) {
       if ('line' in position) {
         // It's a Position
-        this.location = {
+        location = {
           start: position,
           end: position,
           filePath: undefined
         };
       } else {
         // It's already a Location
-        this.location = position;
+        location = position;
       }
+      
+      // Store filePath separately for easier access
+      filePath = location?.filePath;
     }
-
-    // Store filePath separately for easier access
-    this.filePath = this.location?.filePath;
+    
+    // Parse errors are typically fatal, but can be overridden
+    const severity = options.severity || ErrorSeverity.Fatal;
+    
+    super(`Parse error: ${message}${locationStr}`, {
+      cause: options.cause,
+      filePath,
+      severity,
+      context: {
+        ...options.context,
+        location
+      }
+    });
+    
+    this.name = 'MeldParseError';
+    this.location = location;
 
     // Ensure proper prototype chain for instanceof checks
     Object.setPrototypeOf(this, MeldParseError.prototype);
@@ -62,11 +84,9 @@ export class MeldParseError extends Error {
    */
   toJSON(): SerializedParseError {
     return {
+      ...super.toJSON(),
       name: this.name,
-      message: this.message,
-      location: this.location,
-      filePath: this.filePath,
-      cause: this.errorCause?.message
-    };
+      location: this.location
+    } as SerializedParseError;
   }
 } 
