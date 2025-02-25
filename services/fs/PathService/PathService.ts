@@ -2,6 +2,7 @@ import { IPathService, PathOptions } from './IPathService.js';
 import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import { PathValidationError, PathErrorCode } from './errors/PathValidationError.js';
 import type { Location } from '@core/types/index.js';
+import type { StructuredPath } from 'meld-spec';
 import * as path from 'path';
 
 const PATH_ALIAS_PATTERN = /^\$(\.\/|~\/)/;
@@ -67,9 +68,17 @@ export class PathService implements IPathService {
   /**
    * Validate a path according to Meld's strict path rules
    */
-  private validateMeldPath(filePath: string, location?: Location): void {
+  private validateMeldPath(filePath: string | StructuredPath, location?: Location): void {
+    // If we have a structured path object, use it for validation
+    if (typeof filePath !== 'string' && filePath.structured) {
+      return this.validateStructuredPath(filePath, location);
+    }
+
+    // Fall back to string-based validation for backward compatibility
+    const pathStr = typeof filePath === 'string' ? filePath : filePath.raw;
+
     // Check for dot segments (. or ..)
-    if (CONTAINS_DOT_SEGMENTS.test(filePath)) {
+    if (CONTAINS_DOT_SEGMENTS.test(pathStr)) {
       throw new PathValidationError(
         'Path cannot contain . or .. segments - use $. or $~ to reference project or home directory',
         PathErrorCode.CONTAINS_DOT_SEGMENTS,
@@ -78,7 +87,7 @@ export class PathService implements IPathService {
     }
 
     // If path contains slashes, it must start with a path variable
-    if (CONTAINS_SLASH.test(filePath) && !PATH_ALIAS_PATTERN.test(filePath)) {
+    if (CONTAINS_SLASH.test(pathStr) && !PATH_ALIAS_PATTERN.test(pathStr)) {
       throw new PathValidationError(
         'Paths with slashes must start with $. or $~ - use $. for project-relative paths and $~ for home-relative paths',
         PathErrorCode.INVALID_PATH_FORMAT,
@@ -87,7 +96,7 @@ export class PathService implements IPathService {
     }
 
     // Check for raw absolute paths
-    if (path.isAbsolute(filePath)) {
+    if (path.isAbsolute(pathStr)) {
       throw new PathValidationError(
         'Raw absolute paths are not allowed - use $. for project-relative paths and $~ for home-relative paths',
         PathErrorCode.RAW_ABSOLUTE_PATH,
@@ -97,23 +106,98 @@ export class PathService implements IPathService {
   }
 
   /**
+   * Validate a structured path object
+   */
+  private validateStructuredPath(pathObj: StructuredPath, location?: Location): void {
+    const { structured } = pathObj;
+
+    // Check if this is a simple path with no slashes
+    if (!structured.segments || structured.segments.length === 0) {
+      return; // Simple filename with no path segments is always valid
+    }
+
+    // Check for special variables
+    const hasSpecialVar = structured.variables?.special?.some(
+      v => v === 'HOMEPATH' || v === 'PROJECTPATH'
+    );
+
+    // If path has segments but no special variables, it's invalid
+    if (structured.segments.length > 0 && !hasSpecialVar && !structured.cwd) {
+      throw new PathValidationError(
+        'Paths with segments must start with $. or $~ - use $. for project-relative paths and $~ for home-relative paths',
+        PathErrorCode.INVALID_PATH_FORMAT,
+        location
+      );
+    }
+
+    // Check for dot segments in any part of the path
+    if (structured.segments.some(segment => segment === '.' || segment === '..')) {
+      throw new PathValidationError(
+        'Path cannot contain . or .. segments - use $. or $~ to reference project or home directory',
+        PathErrorCode.CONTAINS_DOT_SEGMENTS,
+        location
+      );
+    }
+  }
+
+  /**
    * Resolve a path to its absolute form, handling special variables
    */
-  resolvePath(filePath: string, baseDir?: string): string {
+  resolvePath(filePath: string | StructuredPath, baseDir?: string): string {
     // First validate the path according to Meld rules
     this.validateMeldPath(filePath);
 
-    // Handle special path variables
-    if (filePath.startsWith('$HOMEPATH/') || filePath.startsWith('$~/')) {
-      return path.normalize(path.join(this.homePath, filePath.substring(filePath.indexOf('/') + 1)));
+    // If we have a structured path object, use it for resolution
+    if (typeof filePath !== 'string' && filePath.structured) {
+      return this.resolveStructuredPath(filePath, baseDir);
     }
-    if (filePath.startsWith('$PROJECTPATH/') || filePath.startsWith('$./')) {
-      return path.normalize(path.join(this.projectPath, filePath.substring(filePath.indexOf('/') + 1)));
+
+    // Fall back to string-based resolution for backward compatibility
+    const pathStr = typeof filePath === 'string' ? filePath : filePath.raw;
+
+    // Handle special path variables
+    if (pathStr.startsWith('$HOMEPATH/') || pathStr.startsWith('$~/')) {
+      return path.normalize(path.join(this.homePath, pathStr.substring(pathStr.indexOf('/') + 1)));
+    }
+    if (pathStr.startsWith('$PROJECTPATH/') || pathStr.startsWith('$./')) {
+      return path.normalize(path.join(this.projectPath, pathStr.substring(pathStr.indexOf('/') + 1)));
     }
 
     // If path contains no slashes, treat as relative to current directory
-    if (!CONTAINS_SLASH.test(filePath)) {
-      return path.normalize(path.join(baseDir || process.cwd(), filePath));
+    if (!CONTAINS_SLASH.test(pathStr)) {
+      return path.normalize(path.join(baseDir || process.cwd(), pathStr));
+    }
+
+    // At this point, any other path format is invalid
+    throw new PathValidationError(
+      'Invalid path format - paths must either be simple filenames or start with $. or $~',
+      PathErrorCode.INVALID_PATH_FORMAT
+    );
+  }
+
+  /**
+   * Resolve a structured path object to an absolute path
+   */
+  private resolveStructuredPath(pathObj: StructuredPath, baseDir?: string): string {
+    const { structured } = pathObj;
+
+    // If there are no segments, it's a simple filename
+    if (!structured.segments || structured.segments.length === 0) {
+      return path.normalize(path.join(baseDir || process.cwd(), pathObj.raw));
+    }
+
+    // Check for special variables
+    if (structured.variables?.special?.includes('HOMEPATH')) {
+      return path.normalize(path.join(this.homePath, ...structured.segments));
+    }
+    
+    if (structured.variables?.special?.includes('PROJECTPATH')) {
+      return path.normalize(path.join(this.projectPath, ...structured.segments));
+    }
+
+    // If it's a current working directory path
+    if (structured.cwd) {
+      return path.normalize(path.join(baseDir || process.cwd(), ...structured.segments));
     }
 
     // At this point, any other path format is invalid
@@ -126,7 +210,7 @@ export class PathService implements IPathService {
   /**
    * Validate a path according to the specified options
    */
-  async validatePath(filePath: string, options: PathOptions = {}): Promise<string> {
+  async validatePath(filePath: string | StructuredPath, options: PathOptions = {}): Promise<string> {
     // Basic validation
     if (!filePath) {
       throw new PathValidationError(
@@ -136,7 +220,8 @@ export class PathService implements IPathService {
       );
     }
 
-    if (filePath.includes('\0')) {
+    const pathStr = typeof filePath === 'string' ? filePath : filePath.raw;
+    if (pathStr.includes('\0')) {
       throw new PathValidationError(
         'Path cannot contain null bytes',
         PathErrorCode.NULL_BYTE,
@@ -146,7 +231,7 @@ export class PathService implements IPathService {
 
     // Skip validation in test mode unless explicitly required
     if (this.testMode && !options.mustExist) {
-      return filePath;
+      return typeof filePath === 'string' ? filePath : filePath.raw;
     }
 
     // Handle special path variables and validate Meld path rules

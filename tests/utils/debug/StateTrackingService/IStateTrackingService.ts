@@ -38,6 +38,13 @@ export interface IStateTrackingService {
    * @returns Array of state metadata for all registered states
    */
   getAllStates(): StateMetadata[];
+
+  /**
+   * Get metadata for a specific state.
+   * @param stateId - The ID of the state to get metadata for
+   * @returns The state metadata or undefined if not found
+   */
+  getStateMetadata(stateId: string): Promise<StateMetadata | undefined>;
 }
 
 /**
@@ -50,6 +57,8 @@ export interface StateMetadata {
   filePath?: string;
   transformationEnabled: boolean;
   createdAt: number;
+  lastModified?: number;
+  childStates?: string[];
 }
 
 /**

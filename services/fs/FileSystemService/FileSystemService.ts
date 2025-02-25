@@ -8,6 +8,7 @@ import { MeldError } from '@core/errors/MeldError.js';
 import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { MeldFileSystemError } from '@core/errors/MeldFileSystemError.js';
 
 const execAsync = promisify(exec);
 
@@ -231,28 +232,21 @@ export class FileSystemService implements IFileSystemService {
   }
 
   async executeCommand(command: string, options?: { cwd?: string }): Promise<{ stdout: string; stderr: string }> {
-    const context: FileOperationContext = {
+    const context = {
       operation: 'executeCommand',
-      path: options?.cwd || this.getCwd(),
-      details: { command }
+      command,
+      cwd: options?.cwd
     };
 
     try {
       logger.debug('Executing command', context);
-      // If the underlying filesystem has executeCommand, use it
-      if ('executeCommand' in this.fs) {
-        return await this.fs.executeCommand(command, options);
-      }
-      // Otherwise, fall back to Node's exec
-      const { stdout, stderr } = await execAsync(command, {
-        cwd: options?.cwd || this.getCwd()
-      });
+      const { stdout, stderr } = await this.fs.executeCommand(command, options);
       logger.debug('Command executed successfully', { ...context, stdout, stderr });
       return { stdout, stderr };
     } catch (error) {
       const err = error as Error;
       logger.error('Failed to execute command', { ...context, error: err });
-      throw new MeldError(`Failed to execute command: ${command}`, {
+      throw new MeldFileSystemError(`Failed to execute command: ${command}`, {
         cause: err,
         command,
         cwd: options?.cwd

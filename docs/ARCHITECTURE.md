@@ -33,8 +33,16 @@ project-root/
  ├─ core/                   ← Core utilities and types  
  │   ├─ config/            ← Configuration (logging, etc.)  
  │   ├─ errors/            ← Error class definitions  
+ │   │   ├─ MeldError.ts
+ │   │   ├─ ServiceInitializationError.ts   ← Service initialization errors
+ │   │   └─ ... other errors
  │   ├─ types/             ← Core type definitions  
+ │   │   ├─ dependencies.ts  ← Service dependency definitions
+ │   │   └─ index.ts
  │   └─ utils/             ← Logging and utility modules  
+ │       ├─ logger.ts
+ │       ├─ serviceValidation.ts  ← Service validation utilities
+ │       └─ simpleLogger.ts
  ├─ services/              ← Core service implementations  
  │   ├─ pipeline/          ← Main transformation pipeline  
  │   │   ├─ ParserService/     ← Initial parsing  
@@ -315,56 +323,34 @@ These debugging services are particularly useful for:
 
 ## SERVICE RELATIONSHIPS
 
-Below is a more expanded ASCII diagram showing services with references:
+Services in Meld follow a strict initialization order and dependency graph:
 
-                                 +---------------------+
-                                 |    CLIService      |
-                                 |   Entry point      |
-                                 +----------+----------+
-                                            |
-                                            v
-                                 +---------------------+
-                                 |    ParserService    |
-                                 | meld-ast parsing    |
-                                 +----------+----------+
-                                            |
-                                            v
- +------------+                 +---------------------+
- | Circularity|  <----------->  |  ResolutionService  |
- |  Service   |                 |   Variable/Path     |
- +------------+                 |    Resolution       |
-      ^                                   |
-      |                                   v
- +------------+  +---------------------+  +-----------+
- | Validation|-> | DirectiveService   |->|StateService|
- |  Service  |   | Node Transformation|  |Original &  |
- +------------+   +---------+-----------+ |Transformed|
-      ^                    |   |         |   Nodes    |
-      |                    v   v         +-----------+
-      |         +---------------+--------------+
-      +---------|   Handler(s): text, data,   |
-                |   embed, import, etc.       |
-                | (with node replacements)    |
-                +---------------+--------------+
-                                   |
-                                   v
-                        +---------------------+
-                        | InterpreterService |
-                        | Transform Pipeline  |
-                        +----------+----------+
-                                   |
-                                   v
-                        +---------------------+
-                        |   OutputService    |
-                        | Clean Output Gen   |
-                        +---------------------+
+1. Base Services:
+   - FileSystemService (no dependencies)
+   - PathService (depends on FS)
 
-Key relationships:
-• InterpreterService orchestrates directive processing and transformation pipeline
-• DirectiveService processes directives and manages node transformations
-• Handlers can provide replacement nodes for transformed output
-• StateService maintains both original and transformed node states
-• OutputService uses transformed nodes for clean output generation
+2. State Management:
+   - StateEventService (no dependencies)
+   - StateService (depends on events)
+
+3. Core Pipeline:
+   - ParserService (independent)
+   - ResolutionService (depends on State, FS)
+   - ValidationService (depends on Resolution)
+   - CircularityService (depends on Resolution)
+
+4. Pipeline Orchestration:
+   - DirectiveService (depends on multiple services)
+   - InterpreterService (orchestrates others)
+
+5. Output Generation:
+   - OutputService (depends on State)
+
+6. Debug Support:
+   - DebuggerService (optional, depends on all)
+
+Service initialization and validation is handled through the core/types/dependencies.ts system,
+which ensures services are created in the correct order and all dependencies are satisfied.
 
 ## EXAMPLE USAGE SCENARIO
 

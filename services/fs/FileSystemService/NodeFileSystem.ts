@@ -64,6 +64,10 @@ export class NodeFileSystem implements IFileSystem {
   }
 
   async executeCommand(command: string, options?: { cwd?: string }): Promise<{ stdout: string; stderr: string }> {
-    return execAsync(command, options);
+    const { stdout, stderr } = await execAsync(command, options);
+    return {
+      stdout: stdout.toString(),
+      stderr: stderr.toString()
+    };
   }
 } 

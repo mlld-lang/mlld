@@ -1,4 +1,4 @@
-import { DirectiveNode, MeldNode, TextNode } from 'meld-spec';
+import { DirectiveNode, MeldNode, TextNode, StructuredPath } from 'meld-spec';
 import type { DirectiveContext, IDirectiveHandler } from '@services/pipeline/DirectiveService/IDirectiveService.js';
 import type { DirectiveResult } from '@services/pipeline/DirectiveService/types.js';
 import { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
@@ -38,7 +38,10 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
 
       // Get path and import list from directive
       const { path, value, identifier, importList } = node.directive;
+      
+      // Handle path - could be a string or a structured path object
       const resolvedPath = path || this.extractPath(value);
+      
       // Only use identifier as import list if it's not 'import' (which is the directive identifier)
       const resolvedImportList = importList || (identifier !== 'import' ? identifier : undefined);
 
@@ -68,7 +71,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
 
       // Resolve the path using the resolution service
       resolvedFullPath = await this.resolutionService.resolveInContext(
-        resolvedPath,
+        typeof resolvedPath === 'string' ? resolvedPath : resolvedPath.raw,
         resolutionContext
       );
 
@@ -88,7 +91,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
         // Check if file exists
         if (!await this.fileSystemService.exists(resolvedFullPath)) {
           throw new DirectiveError(
-            `Import file not found: [${resolvedPath}]`,
+            `Import file not found: [${typeof resolvedPath === 'string' ? resolvedPath : resolvedPath.raw}]`,
             this.kind,
             DirectiveErrorCode.FILE_NOT_FOUND,
             { node, context }
@@ -120,7 +123,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
         }
 
         logger.debug('Import directive processed successfully', {
-          path: resolvedPath,
+          path: typeof resolvedPath === 'string' ? resolvedPath : resolvedPath.raw,
           importList: resolvedImportList,
           location: node.location
         });
@@ -170,10 +173,18 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
     }
   }
 
-  private extractPath(value: string): string | undefined {
+  private extractPath(value: string | StructuredPath): string | StructuredPath | undefined {
     if (!value) return undefined;
+    
+    // If it's already a structured path, return it
+    if (typeof value !== 'string' && value.structured) {
+      return value;
+    }
+    
+    // Otherwise, handle string value
+    const stringValue = typeof value === 'string' ? value : value.raw;
     // Remove brackets if present and trim whitespace
-    return value.replace(/^\[(.*)\]$/, '$1').trim();
+    return stringValue.replace(/^\[(.*)\]$/, '$1').trim();
   }
 
   private parseImportList(importList: string): Array<{ name: string; alias?: string }> {

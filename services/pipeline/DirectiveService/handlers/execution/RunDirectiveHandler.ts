@@ -1,4 +1,4 @@
-import type { DirectiveNode, DirectiveContext, MeldNode, TextNode } from 'meld-spec';
+import type { DirectiveNode, DirectiveContext, MeldNode, TextNode, StructuredPath } from 'meld-spec';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
@@ -33,7 +33,7 @@ export class RunDirectiveHandler implements IDirectiveHandler {
 
       // Resolve the command
       const resolvedCommand = await this.resolutionService.resolveInContext(
-        directive.command,
+        typeof directive.command === 'string' ? directive.command : directive.command.raw,
         context
       );
 

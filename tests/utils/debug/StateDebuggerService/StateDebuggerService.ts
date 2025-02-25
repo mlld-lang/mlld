@@ -3,10 +3,10 @@
  * Implementation of state debugging service.
  */
 
-import { IStateDebuggerService, DebugSessionConfig, DebugSessionResult, StateDiagnostic, StateCaptureConfig } from './IStateDebuggerService';
-import { IStateVisualizationService } from '../StateVisualizationService/IStateVisualizationService';
-import { IStateHistoryService } from '../StateHistoryService/IStateHistoryService';
-import { IStateTrackingService } from '../StateTrackingService/IStateTrackingService';
+import type { IStateDebuggerService, DebugSessionConfig, DebugSessionResult, StateDiagnostic } from './IStateDebuggerService.js';
+import type { IStateVisualizationService } from '../StateVisualizationService/IStateVisualizationService.js';
+import type { IStateHistoryService } from '../StateHistoryService/IStateHistoryService.js';
+import type { IStateTrackingService, StateMetadata } from '../StateTrackingService/IStateTrackingService.js';
 import { v4 as uuidv4 } from 'uuid';
 
 /**
@@ -104,7 +104,7 @@ export class StateDebuggerService implements IStateDebuggerService {
       }
 
       // Check for common issues
-      if (history.transformations?.length > 10) {
+      if ((metadata.childStates?.length ?? 0) > 10) {
         diagnostics.push({
           stateId,
           timestamp: Date.now(),
@@ -114,7 +114,7 @@ export class StateDebuggerService implements IStateDebuggerService {
         });
       }
 
-      if (metadata.childStates?.length > 20) {
+      if ((metadata.childStates?.length ?? 0) > 20) {
         diagnostics.push({
           stateId,
           timestamp: Date.now(),
@@ -175,56 +175,45 @@ export class StateDebuggerService implements IStateDebuggerService {
     }
   }
 
-  public async getStateSnapshot(
-    stateId: string,
-    format: 'full' | 'summary'
-  ): Promise<any> {
-    try {
-      const [metadata, history] = await Promise.all([
-        this.trackingService.getStateMetadata(stateId),
-        this.historyService.getStateHistory(stateId)
-      ]);
+  public async getStateSnapshot(stateId: string, format: 'full' | 'summary'): Promise<any> {
+    const metadata = await this.trackingService.getStateMetadata(stateId);
+    const history = await this.historyService.getStateHistory(stateId);
 
-      if (!metadata || !history) {
-        throw new Error(`Failed to retrieve state data for ID: ${stateId}`);
-      }
-
-      if (format === 'summary') {
-        return {
-          id: stateId,
-          type: metadata.type || 'unknown',
-          childCount: metadata.childStates?.length || 0,
-          transformationCount: history.transformations?.length || 0,
-          lastModified: metadata.lastModified || Date.now()
-        };
-      }
-
-      const children = await Promise.all(
-        (metadata.childStates || []).map(async (id) => {
-          try {
-            return await this.getStateSnapshot(id, 'summary');
-          } catch {
-            return {
-              id,
-              type: 'unknown',
-              childCount: 0,
-              transformationCount: 0,
-              lastModified: Date.now()
-            };
-          }
-        })
-      );
-
-      return {
-        metadata,
-        history,
-        children
-      };
-    } catch (error) {
-      throw new Error(
-        `Failed to get state snapshot: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
+    if (!metadata || !history) {
+      throw new Error(`Failed to retrieve state data for ID: ${stateId}`);
     }
+
+    if (format === 'summary') {
+      return {
+        id: stateId,
+        type: metadata.type,
+        childCount: (metadata.childStates || []).length,
+        transformationCount: history.transformations.length,
+        lastModified: metadata.lastModified || metadata.createdAt
+      };
+    }
+
+    const children = await Promise.all(
+      (metadata.childStates || []).map(async (id: string) => {
+        try {
+          return await this.getStateSnapshot(id, 'summary');
+        } catch {
+          return {
+            id,
+            type: 'unknown',
+            childCount: 0,
+            transformationCount: 0,
+            lastModified: Date.now()
+          };
+        }
+      })
+    );
+
+    return {
+      metadata,
+      history,
+      children
+    };
   }
 
   public async generateDebugReport(sessionId: string): Promise<string> {

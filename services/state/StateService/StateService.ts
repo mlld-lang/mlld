@@ -197,11 +197,10 @@ export class StateService implements IStateService {
     // If not found by reference, try matching by location
     if (index === -1 && original.location && transformed.location) {
       index = transformedNodes.findIndex(node => 
-        node.location &&
-        node.location.start.line === original.location.start.line &&
-        node.location.start.column === original.location.start.column &&
-        node.location.end.line === original.location.end.line &&
-        node.location.end.column === original.location.end.column
+        node.location?.start?.line === original.location?.start?.line &&
+        node.location?.start?.column === original.location?.start?.column &&
+        node.location?.end?.line === original.location?.end?.line &&
+        node.location?.end?.column === original.location?.end?.column
       );
     }
 

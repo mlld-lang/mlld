@@ -2,32 +2,36 @@
 
 ## Overview
 
-The Meld pipeline processes `.meld` files through several stages to produce either `.llm` or `.md` output. Here's a detailed look at how it works:
+The Meld pipeline processes `.meld` files through several stages to produce either `.xml` or `.md` output. Here's a detailed look at how it works:
 
 ```ascii
 ┌─────────────┐     ┌─────────────┐     ┌──────────────┐     ┌──────────────┐
-│  Input      │     │   Parser    │     │ Interpreter  │     │   Output     │
-│ prompt.meld ├────►│   Service   ├────►│   Service    ├────►│   Service    │
+│  Service    │     │   Service   │     │   Pipeline   │     │    Final     │
+│Initialization├────►│ Validation  ├────►│  Execution   ├────►│   Output     │
 └─────────────┘     └─────────────┘     └──────────────┘     └──────────────┘
-                          │                     │                     │
-                          ▼                     ▼                     ▼
-                    ┌─────────────┐     ┌──────────────┐     ┌──────────────┐
-                    │  AST Nodes  │     │    State     │     │ Clean Output │
-                    │             │     │   Service    │     │ (No Directive│
-                    └─────────────┘     │(Original &   │     │ Definitions) │
-                                       │Transformed)   │     └──────────────┘
-                                       └──────────────┘
+      │                    │                    │                    │
+      ▼                    ▼                    ▼                    ▼
+┌─────────────┐     ┌─────────────┐     ┌──────────────┐     ┌──────────────┐
+│Dependencies │     │Validate All │     │Process Input │     │Generate Clean│
+│  Resolved   │     │ Services    │     │   Content    │     │   Output    │
+└─────────────┘     └─────────────┘     └──────────────┘     └──────────────┘
 ```
 
 ## Service Organization
 
-The pipeline is organized into logical service groups:
+The pipeline is organized into logical service groups, with strict initialization order and dependency validation:
 
 ### Pipeline Services (services/pipeline/)
 ```ascii
 ┌─────────────┐     ┌─────────────┐     ┌──────────────┐     ┌──────────────┐
 │   Parser    │     │  Directive  │     │ Interpreter  │     │   Output     │
 │   Service   ├────►│   Service   ├────►│   Service    ├────►│   Service    │
+└─────────────┘     └─────────────┘     └──────────────┘     └──────────────┘
+      │                    │                    │                    │
+      ▼                    ▼                    ▼                    ▼
+┌─────────────┐     ┌─────────────┐     ┌──────────────┐     ┌──────────────┐
+│Initialize & │     │Validate &   │     │Transform &   │     │Format &     │
+│  Validate   │     │Process Dirs │     │Update State  │     │Generate Out │
 └─────────────┘     └─────────────┘     └──────────────┘     └──────────────┘
 ```
 
@@ -59,14 +63,38 @@ The pipeline is organized into logical service groups:
 
 ## Detailed Flow
 
-1. **Input Processing** (`CLIService`)
+1. **Service Initialization** (`core/types/dependencies.ts`)
+   ```ascii
+   ┌─────────────┐
+   │Load Service │
+   │Dependencies │
+   └─────┬───────┘
+         │
+         ▼
+   ┌─────────────┐
+   │Initialize in│
+   │   Order    │
+   └─────┬───────┘
+         │
+         ▼
+   ┌─────────────┐
+   │  Validate   │
+   │  Services   │
+   └─────────────┘
+   ```
+   - Resolves service dependencies
+   - Initializes in correct order
+   - Validates service configuration
+   - Enables transformation if requested
+
+2. **Input Processing** (`CLIService`)
    - User runs `meld prompt.meld`
    - `CLIService` handles command line options
-   - Default output is `.llm` format
+   - Default output is `.xml` format
    - Can specify `--format markdown` for `.md` output
    - Supports `--stdout` for direct console output
 
-2. **Parsing** (`ParserService`)
+3. **Parsing** (`ParserService`)
    ```ascii
    ┌─────────────┐
    │  Raw Text   │
@@ -90,7 +118,7 @@ The pipeline is organized into logical service groups:
    - Identifies directives and text nodes
    - Adds source location information
 
-3. **Interpretation** (`InterpreterService`)
+4. **Interpretation** (`InterpreterService`)
    ```ascii
    ┌─────────────┐     ┌─────────────┐
    │  MeldNode[] │     │  Directive  │
@@ -118,7 +146,7 @@ The pipeline is organized into logical service groups:
    - Resolves variables and references
    - Handles file imports and embedding
 
-4. **Output Generation** (`OutputService`)
+5. **Output Generation** (`OutputService`)
    ```ascii
    ┌─────────────┐     ┌─────────────┐
    │Transformed  │     │   Format    │

@@ -218,8 +218,6 @@ All content within code fences is preserved exactly as written with no interpret
 @embed [path # section_text]
 @embed [path] as ###                    # ### parsed as count of # chars
 @embed [path # section_text] as ###
-@embed { name } from [path]
-@embed { name, name2 } from [path]
 @embed [path] under header_text
 ```
 where:

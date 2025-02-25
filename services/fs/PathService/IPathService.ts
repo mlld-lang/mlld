@@ -1,5 +1,6 @@
 import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import type { Location } from '@core/types/index.js';
+import type { StructuredPath } from 'meld-spec';
 
 /**
  * Options for path validation and operations
@@ -88,21 +89,21 @@ export interface IPathService {
    * - $. paths are resolved relative to project root
    * - $~ paths are resolved relative to home directory
    * 
-   * @param filePath The path to resolve
+   * @param filePath The path to resolve (string or StructuredPath)
    * @param baseDir Optional base directory for simple paths
    * @returns The resolved absolute path
    * @throws PathValidationError if path format is invalid
    */
-  resolvePath(filePath: string, baseDir?: string): string;
+  resolvePath(filePath: string | StructuredPath, baseDir?: string): string;
 
   /**
    * Validate a path according to Meld's rules and the specified options.
    * 
-   * @param filePath The path to validate
+   * @param filePath The path to validate (string or StructuredPath)
    * @param options Options for validation
    * @throws PathValidationError if validation fails
    */
-  validatePath(filePath: string, options?: PathOptions): Promise<string>;
+  validatePath(filePath: string | StructuredPath, options?: PathOptions): Promise<string>;
 
   /**
    * Join multiple path segments together.

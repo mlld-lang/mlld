@@ -41,6 +41,7 @@ export class ParserService implements IParserService {
         validateNodes: true,
         preserveCodeFences: true,
         validateCodeFences: true,
+        structuredPaths: true,
         onError: (error: unknown) => {
           if (isMeldAstError(error)) {
             logger.warn('Parse warning', { error: error.toString() });

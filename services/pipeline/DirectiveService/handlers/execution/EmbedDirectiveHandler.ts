@@ -1,4 +1,4 @@
-import { DirectiveNode, MeldNode, TextNode } from 'meld-spec';
+import { DirectiveNode, MeldNode, TextNode, StructuredPath } from 'meld-spec';
 import { IDirectiveHandler, DirectiveContext } from '@services/pipeline/DirectiveService/IDirectiveService.js';
 import { DirectiveResult } from '@services/pipeline/DirectiveService/types.js';
 import { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
@@ -76,7 +76,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
 
       // Resolve variables in path
       const resolvedPath = await this.resolutionService.resolveInContext(
-        path,
+        typeof path === 'string' ? path : path.raw,
         resolutionContext
       );
 

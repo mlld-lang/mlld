@@ -33,6 +33,7 @@ import { CircularityService } from '@services/resolution/CircularityService/Circ
 import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
 import { StateDebuggerService } from '@tests/utils/debug/StateDebuggerService/StateDebuggerService.js';
 import { ProcessOptions, Services } from '@core/types/index.js';
+import type { IStateDebuggerService } from '@tests/utils/debug/StateDebuggerService/IStateDebuggerService.js';
 
 // Import debug services
 import { StateTrackingService } from '@tests/utils/debug/StateTrackingService/StateTrackingService.js';
@@ -59,7 +60,7 @@ type RequiredServices = {
   validation: ValidationService;
   circularity: CircularityService;
   resolution: ResolutionService;
-  debug?: StateDebuggerService & TestDebuggerService;
+  debug?: StateDebuggerService;
 };
 
 function createDefaultServices(options: ProcessOptions): Services & RequiredServices {
@@ -115,8 +116,9 @@ function createDefaultServices(options: ProcessOptions): Services & RequiredServ
   // Create debug service if requested
   let debug = undefined;
   if (options.debug) {
-    debug = new TestDebuggerService(state) as StateDebuggerService & TestDebuggerService;
-    debug.initialize(state);
+    const debugService = new TestDebuggerService(state);
+    debugService.initialize(state);
+    debug = debugService as unknown as StateDebuggerService;
   }
 
   // Create services object in correct initialization order based on dependencies

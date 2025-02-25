@@ -1,7 +1,7 @@
 >> This is a commment and should be ignored
 >> I can write a couple lines of them if I want.
 
-@import [$./example-import.meld]
+@import [$./examples/example-import.meld]
 
 @data role = {{
     "architect": "You are a senior architect skilled in assessing TypeScript codebases.",

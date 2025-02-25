@@ -8,7 +8,7 @@
  * through history querying capabilities.
  */
 
-import { StateEvent, StateEventType } from '../StateEventService/IStateEventService';
+import { StateEvent, StateEventType } from '../../../../services/state/StateEventService/IStateEventService';
 import { StateMetadata, StateRelationship } from '../StateTrackingService/IStateTrackingService';
 
 /**
@@ -97,4 +97,14 @@ export interface IStateHistoryService {
    * @param beforeTimestamp - Clear history before this timestamp
    */
   clearHistoryBefore(beforeTimestamp: number): void;
+
+  /**
+   * Get the complete state history including operations and transformations
+   * @param stateId - The ID of the state to get history for
+   * @returns Combined history of operations and transformations or undefined if state not found
+   */
+  getStateHistory(stateId: string): Promise<{
+    operations: StateOperation[];
+    transformations: StateTransformation[];
+  } | undefined>;
 } 

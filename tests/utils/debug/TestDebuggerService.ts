@@ -167,7 +167,7 @@ export class TestDebuggerService implements IStateDebuggerService {
     await this.getStateSnapshot(label, 'full');
   }
 
-  traceOperation(operation: string, data: any): void {
+  traceSimpleOperation(operation: string, data: any): void {
     if (!this.isEnabled) return;
     this.recordOperation('trace', { operation, data });
   }

@@ -1,4 +1,4 @@
-import type { MeldNode } from 'meld-spec';
+import type { MeldNode, StructuredPath } from 'meld-spec';
 import { IStateService } from '@services/state/StateService/IStateService.js';
 
 /**
@@ -89,12 +89,12 @@ export interface IResolutionService {
   /**
    * Resolve any value based on the provided context rules
    */
-  resolveInContext(value: string, context: ResolutionContext): Promise<string>;
+  resolveInContext(value: string | StructuredPath, context: ResolutionContext): Promise<string>;
 
   /**
    * Validate that resolution is allowed in the given context
    */
-  validateResolution(value: string, context: ResolutionContext): Promise<void>;
+  validateResolution(value: string | StructuredPath, context: ResolutionContext): Promise<void>;
 
   /**
    * Extract a section from content by its heading

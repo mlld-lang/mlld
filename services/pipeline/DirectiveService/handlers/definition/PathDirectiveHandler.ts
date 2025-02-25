@@ -1,4 +1,4 @@
-import { DirectiveNode, DirectiveData } from 'meld-spec';
+import { DirectiveNode, DirectiveData, StructuredPath } from 'meld-spec';
 import { IDirectiveHandler, DirectiveContext } from '@services/pipeline/DirectiveService/IDirectiveService.js';
 import { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import { IStateService } from '@services/state/StateService/IStateService.js';
@@ -10,7 +10,7 @@ import { directiveLogger as logger } from '@core/utils/logger';
 interface PathDirective extends DirectiveData {
   kind: 'path';
   identifier: string;
-  value: string;
+  value: string | StructuredPath;
 }
 
 /**
@@ -59,7 +59,7 @@ export class PathDirectiveHandler implements IDirectiveHandler {
 
       // Resolve variables in the value
       const resolvedValue = await this.resolutionService.resolveInContext(
-        value,
+        typeof value === 'string' ? value : value.raw,
         resolutionContext
       );
 

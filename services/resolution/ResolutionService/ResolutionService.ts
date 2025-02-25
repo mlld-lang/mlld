@@ -9,7 +9,7 @@ import { ContentResolver } from './resolvers/ContentResolver.js';
 import { resolutionLogger as logger } from '@core/utils/logger.js';
 import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import { IParserService } from '@services/pipeline/ParserService/IParserService.js';
-import type { MeldNode, DirectiveNode, TextNode, DirectiveKind, CodeFenceNode } from 'meld-spec';
+import type { MeldNode, DirectiveNode, TextNode, DirectiveKind, CodeFenceNode, StructuredPath } from 'meld-spec';
 import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
 
 /**
@@ -157,15 +157,18 @@ export class ResolutionService implements IResolutionService {
   /**
    * Resolve any value based on the provided context rules
    */
-  async resolveInContext(value: string, context: ResolutionContext): Promise<string> {
+  async resolveInContext(value: string | StructuredPath, context: ResolutionContext): Promise<string> {
+    // Convert StructuredPath to string if needed
+    const stringValue = typeof value === 'string' ? value : value.raw;
+    
     // 1. Validate resolution is allowed in this context
-    await this.validateResolution(value, context);
+    await this.validateResolution(stringValue, context);
 
     // 2. Initialize resolution tracking
     const resolutionPath: string[] = [];
 
     // 3. First pass: resolve nested variables
-    let result = value;
+    let result = stringValue;
     let hasNested = true;
     let iterations = 0;
     const MAX_ITERATIONS = 100;
@@ -307,9 +310,12 @@ export class ResolutionService implements IResolutionService {
   /**
    * Validate that resolution is allowed in the given context
    */
-  async validateResolution(value: string, context: ResolutionContext): Promise<void> {
+  async validateResolution(value: string | StructuredPath, context: ResolutionContext): Promise<void> {
+    // Convert StructuredPath to string if needed
+    const stringValue = typeof value === 'string' ? value : value.raw;
+    
     // Parse the value to check for variable types
-    const nodes = await this.parseForResolution(value);
+    const nodes = await this.parseForResolution(stringValue);
 
     for (const node of nodes) {
       if (node.type !== 'Directive') continue;

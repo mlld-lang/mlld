@@ -1,7 +1,7 @@
 import { IStateService } from '@services/state/StateService/IStateService.js';
 import { ResolutionContext, ResolutionErrorCode } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { ResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError.js';
-import type { MeldNode, DirectiveNode, TextNode, PathVarNode } from 'meld-spec';
+import type { MeldNode, DirectiveNode, TextNode, PathVarNode, StructuredPath } from 'meld-spec';
 
 /**
  * Handles resolution of path variables ($path)
@@ -107,14 +107,17 @@ export class PathResolver {
   /**
    * Validate a resolved path against context requirements
    */
-  private validatePath(path: string, context: ResolutionContext): string {
+  private validatePath(path: string | StructuredPath, context: ResolutionContext): string {
+    // Convert structured path to string if needed
+    const pathStr = typeof path === 'string' ? path : path.raw;
+    
     if (context.pathValidation) {
       // Check if path is absolute or starts with a special variable
-      if (context.pathValidation.requireAbsolute && !path.startsWith('/')) {
+      if (context.pathValidation.requireAbsolute && !pathStr.startsWith('/')) {
         throw new ResolutionError(
           'Path must be absolute',
           ResolutionErrorCode.INVALID_PATH,
-          { value: path, context }
+          { value: pathStr, context }
         );
       }
 
@@ -123,8 +126,8 @@ export class PathResolver {
         const hasAllowedRoot = context.pathValidation.allowedRoots.some(root => {
           const rootVar = this.stateService.getPathVar(root);
           return rootVar && (
-            path.startsWith(rootVar + '/') || 
-            path === rootVar
+            pathStr.startsWith(rootVar + '/') || 
+            pathStr === rootVar
           );
         });
 
@@ -132,13 +135,13 @@ export class PathResolver {
           throw new ResolutionError(
             `Path must start with one of: ${context.pathValidation.allowedRoots.join(', ')}`,
             ResolutionErrorCode.INVALID_PATH,
-            { value: path, context }
+            { value: pathStr, context }
           );
         }
       }
     }
 
-    return path;
+    return pathStr;
   }
 
   /**
