@@ -14,6 +14,21 @@ import { validatePathDirective } from './validators/PathDirectiveValidator.js';
 import { validateDefineDirective } from './validators/DefineDirectiveValidator.js';
 import { validateRunDirective } from './validators/RunDirectiveValidator.js';
 
+/**
+ * Map of directive error codes to severity levels
+ */
+export const ValidationErrorSeverity: Record<DirectiveErrorCode, ErrorSeverity> = {
+  [DirectiveErrorCode.VALIDATION_FAILED]: ErrorSeverity.Recoverable,
+  [DirectiveErrorCode.RESOLUTION_FAILED]: ErrorSeverity.Recoverable,
+  [DirectiveErrorCode.EXECUTION_FAILED]: ErrorSeverity.Recoverable,
+  [DirectiveErrorCode.HANDLER_NOT_FOUND]: ErrorSeverity.Fatal,
+  [DirectiveErrorCode.FILE_NOT_FOUND]: ErrorSeverity.Recoverable,
+  [DirectiveErrorCode.CIRCULAR_REFERENCE]: ErrorSeverity.Fatal,
+  [DirectiveErrorCode.VARIABLE_NOT_FOUND]: ErrorSeverity.Recoverable,
+  [DirectiveErrorCode.STATE_ERROR]: ErrorSeverity.Fatal,
+  [DirectiveErrorCode.INVALID_CONTEXT]: ErrorSeverity.Fatal
+};
+
 export class ValidationService implements IValidationService {
   private validators = new Map<string, (node: DirectiveNode) => Promise<void>>();
   
@@ -50,7 +65,7 @@ export class ValidationService implements IValidationService {
         {
           location: node.location?.start,
           code: DirectiveErrorCode.HANDLER_NOT_FOUND,
-          severity: ErrorSeverity.Fatal // Unknown directives are fatal errors
+          severity: ValidationErrorSeverity[DirectiveErrorCode.HANDLER_NOT_FOUND]
         }
       );
     }
@@ -63,15 +78,40 @@ export class ValidationService implements IValidationService {
         throw error;
       }
       
+      // Determine the error code and severity
+      let code = DirectiveErrorCode.VALIDATION_FAILED;
+      let severity = ValidationErrorSeverity[code];
+      
+      // Check for specific error messages to classify them
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      
+      if (errorMessage.includes('required') || errorMessage.includes('missing')) {
+        // Missing required fields are recoverable
+        code = DirectiveErrorCode.VALIDATION_FAILED;
+        severity = ValidationErrorSeverity[code];
+      } else if (errorMessage.includes('invalid format') || errorMessage.includes('must be')) {
+        // Format validation errors are recoverable
+        code = DirectiveErrorCode.VALIDATION_FAILED;
+        severity = ValidationErrorSeverity[code];
+      } else if (errorMessage.includes('not found') || errorMessage.includes('does not exist')) {
+        // Not found errors are recoverable
+        code = DirectiveErrorCode.FILE_NOT_FOUND;
+        severity = ValidationErrorSeverity[code];
+      } else if (errorMessage.includes('circular')) {
+        // Circular reference errors are fatal
+        code = DirectiveErrorCode.CIRCULAR_REFERENCE;
+        severity = ValidationErrorSeverity[code];
+      }
+      
       // Otherwise, wrap it in a MeldDirectiveError
       throw new MeldDirectiveError(
-        error instanceof Error ? error.message : String(error),
+        errorMessage,
         node.directive.kind,
         {
           location: node.location?.start,
-          code: DirectiveErrorCode.VALIDATION_FAILED,
+          code,
           cause: error instanceof Error ? error : undefined,
-          severity: ErrorSeverity.Recoverable // Most validation errors are recoverable
+          severity
         }
       );
     }

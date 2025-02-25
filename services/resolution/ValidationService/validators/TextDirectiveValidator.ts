@@ -1,6 +1,7 @@
 import type { DirectiveNode, TextDirective } from 'meld-spec';
 import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
 import { DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
+import { ErrorSeverity } from '@core/errors/MeldError.js';
 
 /**
  * Validates @text directives according to spec
@@ -13,8 +14,11 @@ export function validateTextDirective(node: DirectiveNode): void {
     throw new MeldDirectiveError(
       'Text directive requires an "identifier" property (string)',
       'text',
-      node.location?.start,
-      DirectiveErrorCode.VALIDATION_FAILED
+      {
+        location: node.location?.start,
+        code: DirectiveErrorCode.VALIDATION_FAILED,
+        severity: ErrorSeverity.Recoverable
+      }
     );
   }
   
@@ -23,8 +27,11 @@ export function validateTextDirective(node: DirectiveNode): void {
     throw new MeldDirectiveError(
       'Text directive identifier must be a valid identifier (letters, numbers, underscore, starting with letter/underscore)',
       'text',
-      node.location?.start,
-      DirectiveErrorCode.VALIDATION_FAILED
+      {
+        location: node.location?.start,
+        code: DirectiveErrorCode.VALIDATION_FAILED,
+        severity: ErrorSeverity.Recoverable
+      }
     );
   }
   
@@ -33,8 +40,11 @@ export function validateTextDirective(node: DirectiveNode): void {
     throw new MeldDirectiveError(
       'Text directive requires a non-empty "value" property',
       'text',
-      node.location?.start,
-      DirectiveErrorCode.VALIDATION_FAILED
+      {
+        location: node.location?.start,
+        code: DirectiveErrorCode.VALIDATION_FAILED,
+        severity: ErrorSeverity.Recoverable
+      }
     );
   }
 
@@ -43,8 +53,11 @@ export function validateTextDirective(node: DirectiveNode): void {
     throw new MeldDirectiveError(
       'Text directive "value" property must be a string',
       'text',
-      node.location?.start,
-      DirectiveErrorCode.VALIDATION_FAILED
+      {
+        location: node.location?.start,
+        code: DirectiveErrorCode.VALIDATION_FAILED,
+        severity: ErrorSeverity.Recoverable
+      }
     );
   }
 
@@ -62,7 +75,11 @@ export function validateTextDirective(node: DirectiveNode): void {
         throw new MeldDirectiveError(
           'Text directive string value contains unescaped quotes',
           'text',
-          node.location?.start
+          {
+            location: node.location?.start,
+            code: DirectiveErrorCode.VALIDATION_FAILED,
+            severity: ErrorSeverity.Recoverable
+          }
         );
       }
     }
@@ -72,7 +89,11 @@ export function validateTextDirective(node: DirectiveNode): void {
       throw new MeldDirectiveError(
         'Multiline strings are only allowed in template literals (backtick quotes)',
         'text',
-        node.location?.start
+        {
+          location: node.location?.start,
+          code: DirectiveErrorCode.VALIDATION_FAILED,
+          severity: ErrorSeverity.Recoverable
+        }
       );
     }
   } else {
@@ -84,7 +105,11 @@ export function validateTextDirective(node: DirectiveNode): void {
       throw new MeldDirectiveError(
         'Text directive value starting with @ must be an @embed, @run, or @call directive',
         'text',
-        node.location?.start
+        {
+          location: node.location?.start,
+          code: DirectiveErrorCode.VALIDATION_FAILED,
+          severity: ErrorSeverity.Recoverable
+        }
       );
     }
 
@@ -95,7 +120,11 @@ export function validateTextDirective(node: DirectiveNode): void {
         throw new MeldDirectiveError(
           'Invalid @call format in text directive. Must be "@call api.method [path]"',
           'text',
-          node.location?.start
+          {
+            location: node.location?.start,
+            code: DirectiveErrorCode.VALIDATION_FAILED,
+            severity: ErrorSeverity.Recoverable
+          }
         );
       }
     }
