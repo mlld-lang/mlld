@@ -118,7 +118,7 @@ describe('InterpreterService Integration', () => {
         if (error instanceof MeldInterpreterError) {
           // Verify error details
           expect(error.nodeType).toBe('Directive');
-          expect(error.message).toMatch(/Failed to resolve variables in text directive/i);
+          expect(error.message).toMatch(/Failed to process text directive/i);
           if (error.cause?.message) {
             expect(error.cause.message).toMatch(/Undefined variable: nonexistent/i);
           }
