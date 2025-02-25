@@ -3,7 +3,7 @@ import { PathResolver } from './PathResolver.js';
 import { IStateService } from '@services/state/StateService/IStateService.js';
 import { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { ResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError.js';
-import type { MeldNode, DirectiveNode, TextNode } from 'meld-spec';
+import type { MeldNode, DirectiveNode, TextNode, StructuredPath } from 'meld-spec';
 
 describe('PathResolver', () => {
   let resolver: PathResolver;
@@ -89,6 +89,76 @@ describe('PathResolver', () => {
       expect(result).toBe('/project');
       expect(stateService.getPathVar).toHaveBeenCalledWith('PROJECTPATH');
     });
+
+    it('should handle structured path objects', async () => {
+      const structuredPath: StructuredPath = {
+        raw: '$HOMEPATH/path/to/file.md',
+        normalized: '/home/user/path/to/file.md',
+        structured: {
+          base: 'HOMEPATH',
+          segments: ['path', 'to', 'file.md'],
+          variables: {
+            text: [],
+            special: ['HOMEPATH'],
+            path: []
+          },
+          cwd: false
+        }
+      };
+
+      const node: DirectiveNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'path',
+          identifier: 'testPath'
+        }
+      };
+
+      vi.mocked(stateService.getPathVar).mockImplementation((name) => {
+        if (name === 'HOMEPATH') return '/home/user';
+        if (name === 'PROJECTPATH') return '/project';
+        if (name === 'testPath') return structuredPath;
+        return undefined;
+      });
+      
+      const result = await resolver.resolve(node, context);
+      expect(result).toBe('/home/user/path/to/file.md');
+    });
+
+    it('should handle structured path objects with variables', async () => {
+      const structuredPath: StructuredPath = {
+        raw: '$HOMEPATH/path/to/${file}.md',
+        normalized: '/home/user/path/to/example.md',
+        structured: {
+          base: 'HOMEPATH',
+          segments: ['path', 'to', '${file}.md'],
+          variables: {
+            text: ['file'],
+            special: ['HOMEPATH'],
+            path: []
+          },
+          cwd: false
+        }
+      };
+
+      const node: DirectiveNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'path',
+          identifier: 'complexPath'
+        }
+      };
+
+      vi.mocked(stateService.getPathVar).mockImplementation((name) => {
+        if (name === 'HOMEPATH') return '/home/user';
+        if (name === 'PROJECTPATH') return '/project';
+        if (name === 'complexPath') return structuredPath;
+        return undefined;
+      });
+      
+      const result = await resolver.resolve(node, context);
+      expect(result).toBe('/home/user/path/to/example.md');
+    });
   });
 
   describe('error handling', () => {
@@ -104,7 +174,21 @@ describe('PathResolver', () => {
       await expect(resolver.resolve(node, context)).rejects.toThrow(ResolutionError);
     });
 
-    it.todo('should handle undefined path variables appropriately (pending new error system)');
+    it('should handle undefined path variables appropriately', async () => {
+      const node: DirectiveNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'path',
+          identifier: 'undefinedPath'
+        }
+      };
+      
+      vi.mocked(stateService.getPathVar).mockReturnValue(undefined);
+      
+      await expect(resolver.resolve(node, context))
+        .rejects
+        .toThrow('Undefined path variable: undefinedPath');
+    });
 
     it('should throw when path is not absolute but required', async () => {
       const node: DirectiveNode = {
@@ -115,6 +199,37 @@ describe('PathResolver', () => {
         }
       };
       vi.mocked(stateService.getPathVar).mockReturnValue('relative/path');
+      
+      await expect(resolver.resolve(node, context))
+        .rejects
+        .toThrow('Path must be absolute');
+    });
+
+    it('should throw when structured path is not absolute but required', async () => {
+      const structuredPath: StructuredPath = {
+        raw: 'relative/path',
+        normalized: './relative/path',
+        structured: {
+          base: '.',
+          segments: ['relative', 'path'],
+          variables: {
+            text: [],
+            special: [],
+            path: []
+          },
+          cwd: true
+        }
+      };
+
+      const node: DirectiveNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'path',
+          identifier: 'relativePath'
+        }
+      };
+
+      vi.mocked(stateService.getPathVar).mockReturnValue(structuredPath);
       
       await expect(resolver.resolve(node, context))
         .rejects
@@ -134,6 +249,48 @@ describe('PathResolver', () => {
           if (name === 'HOMEPATH') return '/home/user';
           if (name === 'PROJECTPATH') return '/project';
           if (name === 'path') return '/other/path';
+          return undefined;
+        });
+
+      context.pathValidation = {
+        requireAbsolute: true,
+        allowedRoots: ['HOMEPATH', 'PROJECTPATH']
+      };
+      
+      await expect(resolver.resolve(node, context))
+        .rejects
+        .toThrow('Path must start with one of: HOMEPATH, PROJECTPATH');
+    });
+
+    it('should throw when structured path does not start with allowed root', async () => {
+      const structuredPath: StructuredPath = {
+        raw: '/other/path',
+        normalized: '/other/path',
+        structured: {
+          base: '/',
+          segments: ['other', 'path'],
+          variables: {
+            text: [],
+            special: [],
+            path: []
+          },
+          cwd: false
+        }
+      };
+
+      const node: DirectiveNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'path',
+          identifier: 'otherPath'
+        }
+      };
+
+      vi.mocked(stateService.getPathVar)
+        .mockImplementation((name) => {
+          if (name === 'HOMEPATH') return '/home/user';
+          if (name === 'PROJECTPATH') return '/project';
+          if (name === 'otherPath') return structuredPath;
           return undefined;
         });
 
@@ -237,6 +394,35 @@ describe('PathResolver', () => {
       };
       const refs = resolver.extractReferences(node);
       expect(refs).toEqual([]);
+    });
+
+    it('should extract references from structured path', async () => {
+      const structuredPath: StructuredPath = {
+        raw: '$HOMEPATH/path/to/${file}.md',
+        normalized: '/home/user/path/to/example.md',
+        structured: {
+          base: 'HOMEPATH',
+          segments: ['path', 'to', '${file}.md'],
+          variables: {
+            text: ['file'],
+            special: ['HOMEPATH'],
+            path: []
+          },
+          cwd: false
+        }
+      };
+
+      const node: MeldNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'path',
+          identifier: 'complexPath',
+          value: structuredPath
+        }
+      };
+
+      const refs = resolver.extractReferences(node);
+      expect(refs).toContain('complexPath');
     });
   });
 }); 

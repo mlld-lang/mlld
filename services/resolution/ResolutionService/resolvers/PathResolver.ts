@@ -67,12 +67,25 @@ export class PathResolver {
       );
     }
 
+    // Handle structured path objects
+    if (typeof value === 'object' && 'normalized' in value) {
+      const structuredPath = value as StructuredPath;
+      
+      // Validate path if required
+      if (context.pathValidation) {
+        return this.validatePath(structuredPath, context);
+      }
+      
+      return structuredPath.normalized;
+    }
+
+    // Handle string paths (legacy support)
     // Validate path if required
     if (context.pathValidation) {
       return this.validatePath(value, context);
     }
 
-    return value;
+    return value as string;
   }
 
   /**
@@ -101,6 +114,25 @@ export class PathResolver {
       return ['PROJECTPATH'];
     }
 
+    // Extract references from structured path if available
+    const value = directiveNode.directive.value;
+    if (value && typeof value === 'object' && 'structured' in value) {
+      const structuredPath = value as StructuredPath;
+      const references = [identifier]; // Always include the path variable itself
+      
+      // Add special variables
+      if (structuredPath.structured.variables.special.length > 0) {
+        references.push(...structuredPath.structured.variables.special);
+      }
+      
+      // Add path variables
+      if (structuredPath.structured.variables.path.length > 0) {
+        references.push(...structuredPath.structured.variables.path);
+      }
+      
+      return references;
+    }
+
     return [identifier];
   }
 
@@ -109,7 +141,9 @@ export class PathResolver {
    */
   private validatePath(path: string | StructuredPath, context: ResolutionContext): string {
     // Convert structured path to string if needed
-    const pathStr = typeof path === 'string' ? path : path.raw;
+    const pathStr = typeof path === 'object' && 'normalized' in path 
+      ? path.normalized 
+      : path as string;
     
     if (context.pathValidation) {
       // Check if path is absolute or starts with a special variable
@@ -148,10 +182,34 @@ export class PathResolver {
    * Get all path variables referenced in a node
    */
   getReferencedVariables(node: MeldNode): string[] {
+    // Extract the path variable from the node
     const pathVar = this.getPathVarFromNode(node);
     if (!pathVar || pathVar.isSpecial) {
       return [];
     }
+    
+    // For structured paths, extract all variables
+    if (node.type === 'Directive' && 
+        (node as DirectiveNode).directive.value && 
+        typeof (node as DirectiveNode).directive.value === 'object' &&
+        'structured' in (node as DirectiveNode).directive.value) {
+      
+      const structuredPath = (node as DirectiveNode).directive.value as StructuredPath;
+      const references: string[] = [pathVar.identifier];
+      
+      // Add special variables
+      if (structuredPath.structured.variables.special.length > 0) {
+        references.push(...structuredPath.structured.variables.special);
+      }
+      
+      // Add path variables
+      if (structuredPath.structured.variables.path.length > 0) {
+        references.push(...structuredPath.structured.variables.path);
+      }
+      
+      return references;
+    }
+    
     return [pathVar.identifier];
   }
 
@@ -161,6 +219,22 @@ export class PathResolver {
   private getPathVarFromNode(node: MeldNode): PathVarNode | null {
     if (node.type !== 'Directive' || (node as DirectiveNode).directive.kind !== 'path') {
       return null;
+    }
+
+    // For structured paths, create a synthetic PathVarNode
+    if ((node as DirectiveNode).directive.value && 
+        typeof (node as DirectiveNode).directive.value === 'object' &&
+        'structured' in (node as DirectiveNode).directive.value) {
+      
+      const identifier = (node as DirectiveNode).directive.identifier;
+      if (!identifier) return null;
+      
+      // Create a synthetic PathVarNode
+      return {
+        type: 'PathVar',
+        identifier,
+        isSpecial: false
+      };
     }
 
     const pathVar = (node as DirectiveNode).directive.value as PathVarNode;

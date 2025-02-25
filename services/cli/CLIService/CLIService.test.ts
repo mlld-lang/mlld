@@ -299,10 +299,36 @@ describe('CLIService', () => {
       );
     });
 
-    it.todo('should handle explicit output paths appropriately (pending new error system)');
-
     it.todo('should handle overwrite cancellation appropriately (pending new error system)');
 
     it.todo('should handle overwrite confirmation appropriately (pending new error system)');
+    
+    it('should handle explicit output paths appropriately', async () => {
+      // Create a mock input file path
+      const inputPath = '/project/input.meld';
+      
+      // Mock the exists function to return true for the input path
+      mockFileSystemService.exists = vi.fn().mockImplementation(async (path) => {
+        return path === inputPath;
+      });
+      
+      // Mock the readFile function to return content for the input path
+      mockFileSystemService.readFile = vi.fn().mockResolvedValue('test content');
+      
+      // Mock the writeFile function
+      mockFileSystemService.writeFile = vi.fn().mockResolvedValue(undefined);
+      
+      // Set up the args with an explicit output path
+      const args = ['node', 'meld', inputPath, '--output', 'custom/output.md'];
+      
+      // Run the CLI with the explicit output path
+      await service.run(args);
+      
+      // Verify the output was written to the correct path
+      expect(mockFileSystemService.writeFile).toHaveBeenCalledWith(
+        'custom/output.md',
+        'test output'
+      );
+    });
   });
 }); 

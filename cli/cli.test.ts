@@ -166,11 +166,109 @@ describe.skip('CLI Integration Tests', () => {
   });
 
   describe('@path directive', () => {
-    // TODO: These tests will be updated as part of the error handling overhaul
-    // See dev/ERRORS.md - will be reclassified as fatal validation errors
-    it.todo('should handle special variables');
-    it.todo('should reject invalid path variables');
-    it.todo('should reject paths with directory traversal');
+    // These tests have been updated as part of the path structure integration
+    it('should handle special variables', async () => {
+      const ctx = new TestContext();
+      
+      // Set up the state service with path variables
+      ctx.stateService.setPathVar('PROJECTPATH', '/project');
+      ctx.stateService.setPathVar('HOMEPATH', '/home/user');
+      
+      // Create test file with special path variables
+      await ctx.fs.writeFile('/project/test.meld', `
+        @path homePath = "$HOMEPATH/test.txt"
+        @path projectPath = "$PROJECTPATH/test.txt"
+        @path tildePath = "$~/other.txt"
+        @path dotPath = "$./other.txt"
+      `);
+      
+      // Parse and interpret
+      const nodes = await ctx.parserService.parseWithLocations('/project/test.meld');
+      await ctx.interpreterService.interpret(nodes, {
+        currentFilePath: '/project/test.meld'
+      });
+      
+      // Check if special variables are correctly resolved
+      const homePath = ctx.stateService.getPathVar('homePath');
+      const projectPath = ctx.stateService.getPathVar('projectPath');
+      const tildePath = ctx.stateService.getPathVar('tildePath');
+      const dotPath = ctx.stateService.getPathVar('dotPath');
+      
+      // For structured paths, check the normalized value
+      if (typeof homePath === 'object' && 'normalized' in homePath) {
+        expect(homePath.normalized).toBe('/home/user/test.txt');
+        expect(homePath.structured.base).toBe('HOMEPATH');
+      } else {
+        expect(homePath).toBe('/home/user/test.txt');
+      }
+      
+      if (typeof projectPath === 'object' && 'normalized' in projectPath) {
+        expect(projectPath.normalized).toBe('/project/test.txt');
+        expect(projectPath.structured.base).toBe('PROJECTPATH');
+      } else {
+        expect(projectPath).toBe('/project/test.txt');
+      }
+      
+      if (typeof tildePath === 'object' && 'normalized' in tildePath) {
+        expect(tildePath.normalized).toBe('/home/user/other.txt');
+        expect(tildePath.structured.base).toBe('HOMEPATH');
+      } else {
+        expect(tildePath).toBe('/home/user/other.txt');
+      }
+      
+      if (typeof dotPath === 'object' && 'normalized' in dotPath) {
+        expect(dotPath.normalized).toBe('/project/other.txt');
+        expect(dotPath.structured.base).toBe('PROJECTPATH');
+      } else {
+        expect(dotPath).toBe('/project/other.txt');
+      }
+    });
+    
+    it('should reject invalid path variables', async () => {
+      const ctx = new TestContext();
+      
+      // Set up the state service with path variables
+      ctx.stateService.setPathVar('PROJECTPATH', '/project');
+      ctx.stateService.setPathVar('HOMEPATH', '/home/user');
+      
+      // Create test file with invalid path variable
+      await ctx.fs.writeFile('/project/test.meld', `
+        @path invalidPath = "relative/path"
+      `);
+      
+      // Parse and interpret
+      const nodes = await ctx.parserService.parseWithLocations('/project/test.meld');
+      
+      // Should throw an error for invalid path
+      await expect(
+        ctx.interpreterService.interpret(nodes, {
+          currentFilePath: '/project/test.meld'
+        })
+      ).rejects.toThrow(/path must be absolute/i);
+    });
+    
+    it('should reject paths with directory traversal', async () => {
+      const ctx = new TestContext();
+      
+      // Set up the state service with path variables
+      ctx.stateService.setPathVar('PROJECTPATH', '/project');
+      ctx.stateService.setPathVar('HOMEPATH', '/home/user');
+      
+      // Create test file with directory traversal
+      await ctx.fs.writeFile('/project/test.meld', `
+        @path traversalPath = "$PROJECTPATH/../etc/passwd"
+      `);
+      
+      // Parse and interpret
+      const nodes = await ctx.parserService.parseWithLocations('/project/test.meld');
+      
+      // Should throw an error for directory traversal
+      await expect(
+        ctx.interpreterService.interpret(nodes, {
+          currentFilePath: '/project/test.meld'
+        })
+      ).rejects.toThrow(/path must start with/i);
+    });
   });
 
   describe('Code Fences', () => {
