@@ -41,6 +41,24 @@ function setupCliMocks() {
   };
 }
 
+/**
+ * Helper function to ensure file paths are properly formatted for CLI tests
+ * @param path The file path to format
+ * @returns Properly formatted file path for CLI tests
+ */
+function formatCliPath(path: string): string {
+  // Ensure path starts with $. for project-relative paths
+  if (!path.startsWith('$.') && !path.startsWith('$~')) {
+    // If path starts with /, make it project-relative
+    if (path.startsWith('/')) {
+      return `$.${path}`;
+    }
+    // Otherwise, assume it's already properly formatted
+    return path;
+  }
+  return path;
+}
+
 describe('CLI Integration Tests', () => {
   let context: TestContext;
   let originalArgv: string[];
@@ -243,8 +261,21 @@ describe('CLI Integration Tests', () => {
 
     it('should preserve markdown with md format', async () => {
       await context.fs.writeFile('/project/test.meld', '# Heading\n@text greeting = "Hello"');
-      process.argv = ['node', 'meld', '$./test.meld', '--format', 'md', '--stdout'];
-      await expect(main(fsAdapter)).resolves.not.toThrow();
+      process.argv = ['node', 'meld', formatCliPath('/project/test.meld'), '--format', 'md', '--stdout'];
+      
+      // Set up CLI mocks to capture output
+      const { consoleMocks, restore } = setupCliMocks();
+      
+      try {
+        await expect(main(fsAdapter)).resolves.not.toThrow();
+        
+        // Verify that markdown is preserved
+        expect(consoleMocks.log).toHaveBeenCalled();
+        const output = consoleMocks.log.mock.calls.flat().join('\n');
+        expect(output).toContain('# Heading');
+      } finally {
+        restore();
+      }
     });
   });
 
@@ -267,26 +298,27 @@ Content for section 3
       
       // Create a meld file that embeds a section
       await context.fs.writeFile('/project/test.meld', `
-@embed section = $source.md#Section 2
+@embed section = $./source.md#Section 2
 Embedded content: {{section}}
       `);
       
       // Set up the CLI arguments
-      process.argv = ['node', 'meld', '$./test.meld', '--stdout'];
+      process.argv = ['node', 'meld', formatCliPath('/project/test.meld'), '--stdout'];
       
-      // Mock console.log to capture output
-      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      // Set up CLI mocks to capture output
+      const { consoleMocks, restore } = setupCliMocks();
       
-      // This should not throw even if section extraction has issues
-      await expect(main(fsAdapter)).resolves.not.toThrow();
-      
-      // Verify that the output contains the embedded section
-      expect(consoleSpy).toHaveBeenCalled();
-      const output = consoleSpy.mock.calls.flat().join('\n');
-      expect(output).toContain('Content for section 2');
-      
-      // Restore console.log
-      consoleSpy.mockRestore();
+      try {
+        // This should not throw even if section extraction has issues
+        await expect(main(fsAdapter)).resolves.not.toThrow();
+        
+        // Verify that the output contains the embedded section
+        expect(consoleMocks.log).toHaveBeenCalled();
+        const output = consoleMocks.log.mock.calls.flat().join('\n');
+        expect(output).toContain('Content for section 2');
+      } finally {
+        restore();
+      }
     });
     
     it('should handle header text', async () => {
@@ -301,27 +333,28 @@ Subsection content
       
       // Create a meld file that embeds a header
       await context.fs.writeFile('/project/test.meld', `
-@embed header = $source.md#Section 1
+@embed header = $./source.md#Section 1
 Embedded header: {{header}}
       `);
       
       // Set up the CLI arguments
-      process.argv = ['node', 'meld', '$./test.meld', '--stdout'];
+      process.argv = ['node', 'meld', formatCliPath('/project/test.meld'), '--stdout'];
       
-      // Mock console.log to capture output
-      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      // Set up CLI mocks to capture output
+      const { consoleMocks, restore } = setupCliMocks();
       
-      // This should not throw even if header processing has issues
-      await expect(main(fsAdapter)).resolves.not.toThrow();
-      
-      // Verify that the output contains the embedded header
-      expect(consoleSpy).toHaveBeenCalled();
-      const output = consoleSpy.mock.calls.flat().join('\n');
-      expect(output).toContain('Content for section 1');
-      expect(output).toContain('Subsection 1.1');
-      
-      // Restore console.log
-      consoleSpy.mockRestore();
+      try {
+        // This should not throw even if header processing has issues
+        await expect(main(fsAdapter)).resolves.not.toThrow();
+        
+        // Verify that the output contains the embedded header
+        expect(consoleMocks.log).toHaveBeenCalled();
+        const output = consoleMocks.log.mock.calls.flat().join('\n');
+        expect(output).toContain('Content for section 1');
+        expect(output).toContain('Subsection 1.1');
+      } finally {
+        restore();
+      }
     });
   });
 
@@ -336,16 +369,22 @@ Embedded header: {{header}}
       `);
       
       // Set up the CLI arguments
-      process.argv = ['node', 'meld', '$./test.meld', '--stdout'];
+      process.argv = ['node', 'meld', formatCliPath('/project/test.meld'), '--stdout'];
       
-      // Mock console.log to capture output
-      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      // Set up CLI mocks to capture output
+      const { consoleMocks, restore } = setupCliMocks();
       
-      // This should not throw
-      await expect(main(fsAdapter)).resolves.not.toThrow();
-      
-      // Restore console.log
-      consoleSpy.mockRestore();
+      try {
+        // This should not throw
+        await expect(main(fsAdapter)).resolves.not.toThrow();
+        
+        // Verify output was captured
+        expect(consoleMocks.log).toHaveBeenCalled();
+        const output = consoleMocks.log.mock.calls.flat().join('\n');
+        expect(output).toContain('Hello, World!');
+      } finally {
+        restore();
+      }
     });
     
     it('should handle multiple parameters', async () => {
@@ -356,7 +395,7 @@ Embedded header: {{header}}
       `);
       
       // Set up the CLI arguments
-      process.argv = ['node', 'meld', '$./test.meld', '--stdout'];
+      process.argv = ['node', 'meld', formatCliPath('/project/test.meld'), '--stdout'];
       
       // Set up CLI mocks using our new utilities
       const { consoleMocks, restore } = setupCliMocks();
@@ -367,6 +406,8 @@ Embedded header: {{header}}
         
         // Verify output was captured
         expect(consoleMocks.log).toHaveBeenCalled();
+        const output = consoleMocks.log.mock.calls.flat().join('\n');
+        expect(output).toContain('Mr. Smith');
       } finally {
         // Always restore mocks
         restore();
@@ -381,7 +422,7 @@ Embedded header: {{header}}
       `);
       
       // Set up the CLI arguments
-      process.argv = ['node', 'meld', '$./test.meld', '--stdout'];
+      process.argv = ['node', 'meld', formatCliPath('/project/test.meld'), '--stdout'];
       
       // Set up CLI mocks using our new utilities
       const { exitMock, consoleMocks, restore } = setupCliMocks();
@@ -395,6 +436,8 @@ Embedded header: {{header}}
         
         // Verify that an error message was displayed
         expect(consoleMocks.error).toHaveBeenCalled();
+        const errorOutput = consoleMocks.error.mock.calls.flat().join('\n');
+        expect(errorOutput).toContain('parameter');
       } finally {
         // Always restore mocks
         restore();
@@ -573,13 +616,23 @@ Outer fence continues
       `);
       
       // Set up the CLI arguments
-      process.argv = ['node', 'meld', '$./test.meld', '--stdout'];
+      process.argv = ['node', 'meld', formatCliPath('/project/test.meld'), '--stdout'];
       
-      // This should not throw if nested code fence handling is working correctly
-      await expect(main(fsAdapter)).resolves.not.toThrow();
+      // Set up CLI mocks to capture output
+      const { consoleMocks, restore } = setupCliMocks();
       
-      // In a real implementation, we would check that the output preserves
-      // all the nested code fences exactly as written
+      try {
+        // This should not throw if nested code fence handling is working correctly
+        await expect(main(fsAdapter)).resolves.not.toThrow();
+        
+        // Verify that the output preserves all the nested code fences
+        expect(consoleMocks.log).toHaveBeenCalled();
+        const output = consoleMocks.log.mock.calls.flat().join('\n');
+        expect(output).toContain('```');
+        expect(output).toContain('````');
+      } finally {
+        restore();
+      }
     });
     
     it('should preserve language identifiers', async () => {
@@ -594,21 +647,31 @@ console.log(x);
 x = 1
 print(x)
 \`\`\`
-      `);
-      
-      // Set up the CLI arguments
-      process.argv = ['node', 'meld', '$./test.meld', '--stdout'];
-      
+    `);
+    
+    // Set up the CLI arguments
+    process.argv = ['node', 'meld', formatCliPath('/project/test.meld'), '--stdout'];
+    
+    // Set up CLI mocks to capture output
+    const { consoleMocks, restore } = setupCliMocks();
+    
+    try {
       // This should not throw if language identifier handling is working correctly
       await expect(main(fsAdapter)).resolves.not.toThrow();
       
-      // In a real implementation, we would check that the output preserves
-      // the language identifiers (javascript and python)
-    });
-    
-    it('should preserve whitespace exactly', async () => {
-      // Create a meld file with significant whitespace in code fences
-      await context.fs.writeFile('/project/test.meld', `
+      // Verify that the output preserves the language identifiers
+      expect(consoleMocks.log).toHaveBeenCalled();
+      const output = consoleMocks.log.mock.calls.flat().join('\n');
+      expect(output).toContain('```javascript');
+      expect(output).toContain('```python');
+    } finally {
+      restore();
+    }
+  });
+
+  it('should preserve whitespace exactly', async () => {
+    // Create a meld file with significant whitespace in code fences
+    await context.fs.writeFile('/project/test.meld', `
 \`\`\`
   indented line
     more indented
@@ -616,51 +679,60 @@ print(x)
   
   line after blank line
 \`\`\`
-      `);
-      
-      // Set up the CLI arguments
-      process.argv = ['node', 'meld', '$./test.meld', '--stdout'];
-      
+    `);
+    
+    // Set up the CLI arguments
+    process.argv = ['node', 'meld', formatCliPath('/project/test.meld'), '--stdout'];
+    
+    // Set up CLI mocks to capture output
+    const { consoleMocks, restore } = setupCliMocks();
+    
+    try {
       // This should not throw if whitespace preservation is working correctly
       await expect(main(fsAdapter)).resolves.not.toThrow();
       
-      // In a real implementation, we would check that the output preserves
-      // all whitespace exactly as written
-    });
-    
-    it('should treat directives as literal text inside fences', async () => {
-      // Create a meld file with directives inside code fences
-      await context.fs.writeFile('/project/test.meld', `
+      // Verify that the output preserves whitespace
+      expect(consoleMocks.log).toHaveBeenCalled();
+      const output = consoleMocks.log.mock.calls.flat().join('\n');
+      expect(output).toContain('  indented line');
+      expect(output).toContain('    more indented');
+      expect(output).toContain('\ttab indented');
+    } finally {
+      restore();
+    }
+  });
+
+  it('should treat directives as literal text inside fences', async () => {
+    // Create a meld file with directives inside code fences
+    await context.fs.writeFile('/project/test.meld', `
 \`\`\`
 @text variable = "This should not be interpreted"
 @run [echo "This should not be executed"]
 \`\`\`
-      `);
-      
-      // Set up the CLI arguments
-      process.argv = ['node', 'meld', '$./test.meld', '--stdout'];
-      
+    `);
+    
+    // Set up the CLI arguments
+    process.argv = ['node', 'meld', formatCliPath('/project/test.meld'), '--stdout'];
+    
+    // Set up CLI mocks to capture output
+    const { consoleMocks, restore } = setupCliMocks();
+    
+    try {
       // This should not throw if directive handling in code fences is working correctly
       await expect(main(fsAdapter)).resolves.not.toThrow();
       
-      // In a real implementation, we would check that the output contains
-      // the directives as literal text, not interpreted
-    });
+      // Verify that the output contains the directives as literal text
+      expect(consoleMocks.log).toHaveBeenCalled();
+      const output = consoleMocks.log.mock.calls.flat().join('\n');
+      expect(output).toContain('@text variable');
+      expect(output).toContain('@run [echo');
+    } finally {
+      restore();
+    }
   });
 
-  describe('Variable Types', () => {
-    it('should handle data to text conversion', async () => {
-      await context.fs.writeFile('/project/test.meld', `
-@data config = { "name": "test", "version": 1 }
-@text simple = "Name: #{config.name}"
-@text object = "Config: #{config}"
-      `);
-      process.argv = ['node', 'meld', '$./test.meld', '--stdout'];
-      await expect(main(fsAdapter)).resolves.not.toThrow();
-    });
-
-    it('should handle text variables in data contexts', async () => {
-      await context.fs.writeFile('/project/test.meld', `
+  it('should handle text variables in data contexts', async () => {
+    await context.fs.writeFile('/project/test.meld', `
 @text name = "Alice"
 @text key = "username"
 @data user = {
@@ -669,10 +741,47 @@ print(x)
     "displayName": "#{name}"
   }
 }
-      `);
-      process.argv = ['node', 'meld', '$./test.meld', '--stdout'];
+    `);
+    process.argv = ['node', 'meld', formatCliPath('/project/test.meld'), '--stdout'];
+    
+    // Set up CLI mocks to capture output
+    const { consoleMocks, restore } = setupCliMocks();
+    
+    try {
       await expect(main(fsAdapter)).resolves.not.toThrow();
-    });
+      
+      // Verify output contains the interpolated values
+      expect(consoleMocks.log).toHaveBeenCalled();
+      const output = consoleMocks.log.mock.calls.flat().join('\n');
+      expect(output).toContain('"username": "Alice"');
+    } finally {
+      restore();
+    }
+  });
+});
+
+describe('Variable Types', () => {
+  it('should handle data to text conversion', async () => {
+    await context.fs.writeFile('/project/test.meld', `
+@data config = { "name": "test", "version": 1 }
+@text simple = "Name: #{config.name}"
+@text object = "Config: #{config}"
+    `);
+    process.argv = ['node', 'meld', formatCliPath('/project/test.meld'), '--stdout'];
+    
+    // Set up CLI mocks to capture output
+    const { consoleMocks, restore } = setupCliMocks();
+    
+    try {
+      await expect(main(fsAdapter)).resolves.not.toThrow();
+      
+      // Verify output contains the data
+      expect(consoleMocks.log).toHaveBeenCalled();
+      const output = consoleMocks.log.mock.calls.flat().join('\n');
+      expect(output).toContain('Name: test');
+    } finally {
+      restore();
+    }
   });
 
   describe('Field Access', () => {
@@ -867,6 +976,7 @@ print(x)
       
       // Mock console.warn to capture warnings
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
       
       // This should not throw in permissive mode
       await expect(main(fsAdapter)).resolves.not.toThrow();
@@ -1263,7 +1373,7 @@ print(x)
 
     it('should handle template syntax errors gracefully', async () => {
       // Create a test meld file with a syntax error
-      await context.fs.writeFile('/project/test.meld', 'Hello {{name!');
+      await context.fs.writeFile('/project/test.meld', 'Hello {{name');
       
       // Set up the CLI arguments
       process.argv = ['node', 'meld', '$./test.meld', '--stdout'];
@@ -1828,4 +1938,4 @@ print(x)
       }
     });
   });
-}); 
+});});

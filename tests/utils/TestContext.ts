@@ -425,12 +425,19 @@ export class TestContext {
     
     // Set up file system if needed
     if (options.files && Object.keys(options.files).length > 0) {
-      // Use our existing MemfsTestFileSystem
-      this.useMemoryFileSystem();
-      
       // Add files to the memory file system
-      Object.entries(options.files).forEach(([path, content]) => {
-        this.fs.writeFileSync(path, content);
+      Object.entries(options.files).forEach(([filePath, content]) => {
+        // Ensure the path is absolute
+        const absolutePath = filePath.startsWith('/') ? filePath : `/${filePath}`;
+        
+        // Create parent directories if needed
+        const dirPath = absolutePath.substring(0, absolutePath.lastIndexOf('/'));
+        if (dirPath) {
+          this.fs.mkdirSync(dirPath, { recursive: true });
+        }
+        
+        // Write the file
+        this.fs.writeFileSync(absolutePath, content);
       });
       
       result.fs = this.fs;
@@ -448,9 +455,19 @@ export class TestContext {
     
     // Mock console if needed
     if (options.mockConsoleOutput !== false) {
-      result.consoleMock = this.mockConsole();
+      result.consoleMocks = this.mockConsole();
     }
     
     return result;
+  }
+
+  /**
+   * Use memory file system for testing
+   * This is a no-op since TestContext already uses a memory file system by default
+   * Added for compatibility with setupCliTest
+   */
+  useMemoryFileSystem(): void {
+    // No-op: TestContext already uses MemfsTestFileSystem by default
+    // This method exists for API compatibility with setupCliTest
   }
 } 
