@@ -1,0 +1,242 @@
+# Error Handling in Meld
+
+This document describes the error handling architecture in Meld, including how errors are classified, how they're handled in different modes, and how to work with the error system as a developer.
+
+## Table of Contents
+
+1. [Overview](#overview)
+2. [Error Severity Levels](#error-severity-levels)
+3. [Strict vs. Permissive Mode](#strict-vs-permissive-mode)
+4. [Error Classification Guidelines](#error-classification-guidelines)
+5. [Working with Errors](#working-with-errors)
+   - [Creating Errors](#creating-errors)
+   - [Handling Errors](#handling-errors)
+   - [Testing Errors](#testing-errors)
+6. [Error Types Reference](#error-types-reference)
+7. [Best Practices](#best-practices)
+
+## Overview
+
+Meld's error handling system is designed to support two different modes of operation:
+
+1. **Strict Mode**: All errors are thrown, providing immediate feedback during development and testing.
+2. **Permissive Mode**: Recoverable errors are converted to warnings, allowing processing to continue when possible.
+
+This dual-mode approach allows Meld to be both rigorous during development and forgiving during end-user usage, particularly in the CLI.
+
+## Error Severity Levels
+
+All errors in Meld are classified with one of three severity levels:
+
+- **Fatal**: Errors that always halt execution, regardless of mode.
+- **Recoverable**: Errors that throw in strict mode but become warnings in permissive mode.
+- **Warning**: Issues that never throw and are always treated as warnings.
+
+These severity levels are defined in the `ErrorSeverity` enum:
+
+```typescript
+export enum ErrorSeverity {
+  Fatal = 'fatal',
+  Recoverable = 'recoverable',
+  Warning = 'warning'
+}
+```
+
+## Strict vs. Permissive Mode
+
+### Strict Mode
+
+Strict mode is the default for most services and is used during development and testing. In strict mode:
+
+- All errors (Fatal and Recoverable) are thrown
+- Warnings are logged but don't interrupt execution
+- Provides immediate feedback about issues
+
+Example of enabling strict mode:
+
+```typescript
+const result = await interpreterService.interpret(nodes, {
+  strict: true,
+  // other options...
+});
+```
+
+### Permissive Mode
+
+Permissive mode is used by the CLI and other user-facing interfaces. In permissive mode:
+
+- Only Fatal errors are thrown
+- Recoverable errors are converted to warnings
+- Warnings are logged but don't interrupt execution
+- Processing continues when possible
+
+Example of enabling permissive mode with a custom error handler:
+
+```typescript
+const warnings: MeldError[] = [];
+const errorHandler = (error: MeldError) => {
+  warnings.push(error);
+  console.warn(`Warning: ${error.message}`);
+};
+
+const result = await interpreterService.interpret(nodes, {
+  strict: false,
+  errorHandler,
+  // other options...
+});
+```
+
+## Error Classification Guidelines
+
+Errors in Meld are classified according to these guidelines:
+
+### Fatal Errors (Always Throw)
+- Syntax errors (MeldParseError)
+- Circular imports (DirectiveError with CIRCULAR_REFERENCE)
+- Invalid directive types (DirectiveError with HANDLER_NOT_FOUND)
+- Missing required fields in directives (DirectiveError with VALIDATION_FAILED)
+- Type validation failures (PathValidationError with INVALID_PATH)
+- File system access errors (MeldFileSystemError)
+- Service initialization errors (ServiceInitializationError)
+
+### Recoverable Errors (Warnings in Permissive Mode)
+- Missing data fields (MeldResolutionError)
+- Undefined variables (MeldResolutionError)
+- Missing environment variables (MeldResolutionError)
+- File not found for embed/import (MeldFileNotFoundError)
+- Invalid field access (MeldResolutionError)
+- Command execution failures (MeldInterpreterError)
+
+### Always Warnings (Never Throw)
+- Deprecated features
+- Performance suggestions
+- Non-critical validation issues
+
+## Working with Errors
+
+### Creating Errors
+
+When creating errors, always specify the appropriate severity level:
+
+```typescript
+// Creating a fatal error
+throw new MeldError('Critical failure', {
+  severity: ErrorSeverity.Fatal,
+  code: 'CRITICAL_ERROR',
+  context: { /* additional context */ }
+});
+
+// Creating a recoverable error
+throw new MeldResolutionError('Variable not found', {
+  severity: ErrorSeverity.Recoverable,
+  details: {
+    variableName: 'myVar',
+    variableType: 'text'
+  }
+});
+
+// Creating a warning
+const warning = new MeldError('Performance suggestion', {
+  severity: ErrorSeverity.Warning,
+  code: 'PERF_SUGGESTION'
+});
+logger.warn(warning.message, warning);
+```
+
+### Handling Errors
+
+Services that need to handle errors should respect the strict/permissive mode:
+
+```typescript
+try {
+  // Attempt operation
+} catch (error) {
+  if (error instanceof MeldError) {
+    // Check if we're in permissive mode and the error is recoverable
+    if (!options.strict && error.canBeWarning()) {
+      // Handle as warning
+      if (options.errorHandler) {
+        options.errorHandler(error);
+      } else {
+        logger.warn(`Warning: ${error.message}`, error);
+      }
+      // Continue processing
+      return fallbackValue;
+    }
+  }
+  // Re-throw fatal errors or in strict mode
+  throw error;
+}
+```
+
+### Testing Errors
+
+Meld provides utilities for testing error handling in both strict and permissive modes:
+
+```typescript
+import { 
+  ErrorCollector,
+  expectErrorSeverity,
+  expectThrowsWithSeverity,
+  expectWarningsInPermissiveMode,
+  expectThrowsInStrictButWarnsInPermissive
+} from '@tests/utils';
+
+// Test that a function throws with the correct severity
+await expectThrowsWithSeverity(
+  () => resolver.resolve('${undefined}', context),
+  MeldResolutionError,
+  ErrorSeverity.Recoverable
+);
+
+// Test behavior in both modes
+await expectThrowsInStrictButWarnsInPermissive(
+  (options) => resolver.resolve('${undefined}', context, options),
+  MeldResolutionError
+);
+```
+
+## Error Types Reference
+
+Meld has several specialized error types:
+
+- **MeldError**: Base class for all Meld errors
+- **MeldParseError**: Errors during parsing
+- **MeldDirectiveError**: Base class for directive-related errors
+- **DirectiveError**: Specific directive processing errors
+- **MeldResolutionError**: Variable resolution errors
+- **MeldInterpreterError**: Errors during interpretation
+- **MeldFileSystemError**: File system access errors
+- **MeldFileNotFoundError**: File not found errors
+- **MeldImportError**: Import-related errors
+- **MeldOutputError**: Output generation errors
+- **PathValidationError**: Path validation errors
+
+Each error type includes:
+- A message describing the error
+- A severity level
+- Optional context information
+- Optional error code
+- Optional file path
+
+## Best Practices
+
+1. **Always specify severity**: When creating errors, always specify the appropriate severity level.
+
+2. **Add context**: Include relevant context in errors to help with debugging.
+
+3. **Use specific error types**: Use the most specific error type for the situation.
+
+4. **Respect strict/permissive mode**: Services should respect the strict/permissive mode when handling errors.
+
+5. **Test both modes**: Write tests for both strict and permissive modes.
+
+6. **Use error codes**: Use consistent error codes to help with error identification.
+
+7. **Document error codes**: Document error codes and their meanings.
+
+8. **Provide helpful error messages**: Error messages should be clear and helpful.
+
+9. **Include recovery suggestions**: When possible, include suggestions for how to recover from errors.
+
+10. **Log warnings appropriately**: Use the appropriate logging level for warnings. 
