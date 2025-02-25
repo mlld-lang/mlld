@@ -6,76 +6,6 @@ export class MemfsTestFileSystemAdapter extends NodeFileSystem {
     super();
   }
 
-  // Async methods
-  async readFile(filePath: string): Promise<string> {
-    return this.memfs.readFile(filePath);
-  }
-
-  async writeFile(filePath: string, content: string): Promise<void> {
-    await this.memfs.writeFile(filePath, content);
-  }
-
-  async exists(filePath: string): Promise<boolean> {
-    return this.memfs.exists(filePath);
-  }
-
-  async mkdir(dirPath: string): Promise<void> {
-    await this.memfs.mkdir(dirPath);
-  }
-
-  async readDir(dirPath: string): Promise<string[]> {
-    return this.memfs.readDir(dirPath);
-  }
-
-  async stat(filePath: string): Promise<any> {
-    return this.memfs.stat(filePath);
-  }
-
-  async isDirectory(filePath: string): Promise<boolean> {
-    return this.memfs.isDirectory(filePath);
-  }
-
-  async isFile(filePath: string): Promise<boolean> {
-    return this.memfs.isFile(filePath);
-  }
-
-  async *watch(path: string, options?: { recursive?: boolean }): AsyncIterableIterator<{ filename: string; eventType: string }> {
-    yield* this.memfs.watch(path, options);
-  }
-
-  // Sync methods needed for CLI testing
-  readFileSync(filePath: string): string {
-    return this.memfs.readFileSync(filePath);
-  }
-
-  writeFileSync(filePath: string, content: string): void {
-    this.memfs.writeFileSync(filePath, content);
-  }
-
-  existsSync(filePath: string): boolean {
-    return this.memfs.existsSync(filePath);
-  }
-
-  mkdirSync(dirPath: string, options?: { recursive?: boolean }): void {
-    this.memfs.mkdirSync(dirPath, options);
-  }
-
-  readDirSync(dirPath: string): string[] {
-    return this.memfs.readDirSync(dirPath);
-  }
-
-  statSync(filePath: string): any {
-    return this.memfs.statSync(filePath);
-  }
-
-  isDirectorySync(filePath: string): boolean {
-    return this.memfs.isDirectorySync(filePath);
-  }
-
-  isFileSync(filePath: string): boolean {
-    return this.memfs.isFileSync(filePath);
-  }
-
   // Convenience methods
   resolveSpecialPaths(path: string): string {
     if (path.startsWith('$./') || path.startsWith('$PROJECTPATH/')) {
@@ -85,18 +15,98 @@ export class MemfsTestFileSystemAdapter extends NodeFileSystem {
     }
     return path;
   }
-  
-  // Override read/write methods to automatically resolve special paths
+
+  // Async methods with automatic path resolution
   async readFile(filePath: string): Promise<string> {
-    return super.readFile(this.resolveSpecialPaths(filePath));
+    const resolvedPath = this.resolveSpecialPaths(filePath);
+    return this.memfs.readFile(resolvedPath);
   }
-  
+
   async writeFile(filePath: string, content: string): Promise<void> {
-    await super.writeFile(this.resolveSpecialPaths(filePath), content);
+    const resolvedPath = this.resolveSpecialPaths(filePath);
+    await this.memfs.writeFile(resolvedPath, content);
   }
-  
+
   async exists(filePath: string): Promise<boolean> {
-    return super.exists(this.resolveSpecialPaths(filePath));
+    const resolvedPath = this.resolveSpecialPaths(filePath);
+    return this.memfs.exists(resolvedPath);
+  }
+
+  async mkdir(dirPath: string, options?: { recursive?: boolean }): Promise<void> {
+    const resolvedPath = this.resolveSpecialPaths(dirPath);
+    await this.memfs.mkdir(resolvedPath, options);
+  }
+
+  async readDir(dirPath: string): Promise<string[]> {
+    const resolvedPath = this.resolveSpecialPaths(dirPath);
+    return this.memfs.readDir(resolvedPath);
+  }
+
+  async stat(filePath: string): Promise<any> {
+    const resolvedPath = this.resolveSpecialPaths(filePath);
+    return this.memfs.stat(resolvedPath);
+  }
+
+  async isDirectory(filePath: string): Promise<boolean> {
+    const resolvedPath = this.resolveSpecialPaths(filePath);
+    return this.memfs.isDirectory(resolvedPath);
+  }
+
+  async isFile(filePath: string): Promise<boolean> {
+    const resolvedPath = this.resolveSpecialPaths(filePath);
+    return this.memfs.isFile(resolvedPath);
+  }
+
+  async *watch(path: string, options?: { recursive?: boolean }): AsyncIterableIterator<{ filename: string; eventType: string }> {
+    const resolvedPath = this.resolveSpecialPaths(path);
+    yield* this.memfs.watch(resolvedPath, options);
+  }
+
+  // Sync methods needed for CLI testing with automatic path resolution
+  readFileSync(filePath: string): string {
+    const resolvedPath = this.resolveSpecialPaths(filePath);
+    return this.memfs.readFileSync(resolvedPath);
+  }
+
+  writeFileSync(filePath: string, content: string): void {
+    const resolvedPath = this.resolveSpecialPaths(filePath);
+    this.memfs.writeFileSync(resolvedPath, content);
+  }
+
+  existsSync(filePath: string): boolean {
+    const resolvedPath = this.resolveSpecialPaths(filePath);
+    return this.memfs.existsSync(resolvedPath);
+  }
+
+  mkdirSync(dirPath: string, options?: { recursive?: boolean }): void {
+    const resolvedPath = this.resolveSpecialPaths(dirPath);
+    if (typeof this.memfs.mkdirSync === 'function') {
+      this.memfs.mkdirSync(resolvedPath, options);
+    } else {
+      // Fallback to async version if sync version not available
+      console.log(`mkdirSync fallback for path: ${resolvedPath}`);
+      this.memfs.mkdir(resolvedPath, options);
+    }
+  }
+
+  readDirSync(dirPath: string): string[] {
+    const resolvedPath = this.resolveSpecialPaths(dirPath);
+    return this.memfs.readDirSync(resolvedPath);
+  }
+
+  statSync(filePath: string): any {
+    const resolvedPath = this.resolveSpecialPaths(filePath);
+    return this.memfs.statSync(resolvedPath);
+  }
+
+  isDirectorySync(filePath: string): boolean {
+    const resolvedPath = this.resolveSpecialPaths(filePath);
+    return this.memfs.isDirectorySync(resolvedPath);
+  }
+
+  isFileSync(filePath: string): boolean {
+    const resolvedPath = this.resolveSpecialPaths(filePath);
+    return this.memfs.isFileSync(resolvedPath);
   }
 
   // Additional CLI support methods

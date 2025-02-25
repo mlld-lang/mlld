@@ -13,6 +13,7 @@ import { PathOperationsService } from '@services/fs/FileSystemService/PathOperat
 import { mockProcessExit } from './mockProcessExit.js';
 import { mockConsole } from './mockConsole.js';
 import { ReturnType } from 'vitest';
+import * as path from 'path';
 
 /**
  * Options for setting up a CLI test
@@ -92,25 +93,37 @@ export function setupCliTest(options: CliTestOptions = {}): CliTestResult {
   
   // Create all files in the mock filesystem
   Object.entries(files).forEach(([filePath, content]) => {
-    // Resolve special paths
-    const resolvedPath = fsAdapter.resolveSpecialPaths(filePath);
-    
-    // Ensure directory exists
-    const dirPath = resolvedPath.substring(0, resolvedPath.lastIndexOf('/'));
-    if (dirPath) {
-      try {
-        fsAdapter.mkdirSync(dirPath, { recursive: true });
-      } catch (error) {
-        console.warn(`Failed to create directory: ${dirPath} (original: ${filePath})`, error);
-      }
-    }
-    
-    // Write file
     try {
+      // Fixed path format for CLI tests
+      let testPath = filePath;
+      
+      // Add special path prefix if needed for absolute paths starting with /project/
+      if (filePath.startsWith('/project/') && !filePath.startsWith('$')) {
+        testPath = '$.' + filePath.substring('/project'.length);
+        
+        // Handle special case for just /project
+        if (testPath === '$./') {
+          testPath = '$.';
+        }
+      }
+      
+      console.log(`Setting up test file: ${testPath} (original: ${filePath})`);
+      
+      // Resolve special paths for memfs handling
+      const resolvedPath = fsAdapter.resolveSpecialPaths(filePath);
+      
+      // Ensure parent directory exists
+      const dirPath = path.dirname(resolvedPath);
+      if (dirPath && dirPath !== '.') {
+        console.log(`Creating parent directory: ${dirPath}`);
+        fsAdapter.mkdirSync(dirPath, { recursive: true });
+      }
+      
+      // Write the file
       fsAdapter.writeFileSync(resolvedPath, content);
-      console.log(`Created test file: ${resolvedPath} (from: ${filePath})`);
+      console.log(`Created test file: ${resolvedPath} (from: ${filePath}, test path: ${testPath})`);
     } catch (error) {
-      console.warn(`Failed to write file: ${resolvedPath} (original: ${filePath})`, error);
+      console.warn(`Failed to write file: ${filePath}`, error);
     }
   });
   
@@ -193,4 +206,4 @@ export function setupCliTest(options: CliTestOptions = {}): CliTestResult {
  *   });
  * });
  * ```
- */ 
+ */

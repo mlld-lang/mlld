@@ -80,18 +80,10 @@ export async function main(fsAdapter?: IFileSystem) {
       error: error instanceof Error ? error.message : String(error)
     });
     
-    // In test mode, throw the error for proper test handling
-    if (process.env.NODE_ENV === 'test') {
-      // Preserve the original error message and type
-      if (error instanceof Error) {
-        throw error;
-      } else {
-        throw new Error(String(error));
-      }
-    } else {
-      // In production, exit with error code
-      process.exit(1);
-    }
+    // Consistent behavior for both test and production
+    // For tests, this will be caught at the top level and process.exit will be mocked
+    // For production, this will actually exit the process
+    process.exit(1);
   }
 }
 

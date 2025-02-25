@@ -226,6 +226,28 @@ export class MemfsTestFileSystem implements IFileSystem {
       throw new Error(`Error writing file ${memfsPath}: ${error.message}`);
     }
   }
+  
+  /**
+   * Synchronous file writing for CLI tests
+   */
+  writeFileSync(filePath: string | undefined | null, content: string): void {
+    const memfsPath = this.getMemfsPath(filePath);
+    const dirPath = path.dirname(memfsPath);
+    
+    try {
+      // Create parent directories if they don't exist
+      if (!this.vol.existsSync(dirPath)) {
+        this.vol.mkdirSync(dirPath, { recursive: true });
+      }
+      
+      this.vol.writeFileSync(memfsPath, content, 'utf-8');
+      this.watcher.emit('change', path.basename(memfsPath), 'change');
+      logger.debug('File written successfully (sync)', { path: memfsPath });
+    } catch (error) {
+      logger.error('Error writing file (sync)', { path: memfsPath, error });
+      throw new Error(`Error writing file ${memfsPath}: ${error.message}`);
+    }
+  }
 
   /**
    * Read a file's contents
@@ -379,7 +401,7 @@ export class MemfsTestFileSystem implements IFileSystem {
   /**
    * Create a directory
    */
-  async mkdir(dirPath: string): Promise<void> {
+  async mkdir(dirPath: string, options?: { recursive?: boolean }): Promise<void> {
     logger.debug('Creating directory', { dirPath });
     const memfsPath = this.getMemfsPath(dirPath);
     logger.debug('Resolved memfs path for mkdir', { memfsPath });
@@ -397,7 +419,7 @@ export class MemfsTestFileSystem implements IFileSystem {
       }
 
       // Create directory with recursive option
-      this.vol.mkdirSync(memfsPath, { recursive: true });
+      this.vol.mkdirSync(memfsPath, { recursive: options?.recursive !== false });
       logger.debug('Directory created successfully', { dirPath, memfsPath });
     } catch (error) {
       // If error is already formatted (from our checks above), just rethrow
@@ -406,6 +428,40 @@ export class MemfsTestFileSystem implements IFileSystem {
       }
       // Otherwise wrap in a more descriptive error
       logger.error('Error creating directory', { dirPath, memfsPath, error });
+      throw new Error(`Error creating directory '${dirPath}': ${error.message}`);
+    }
+  }
+  
+  /**
+   * Synchronous version of mkdir
+   */
+  mkdirSync(dirPath: string, options?: { recursive?: boolean }): void {
+    logger.debug('Creating directory (sync)', { dirPath });
+    const memfsPath = this.getMemfsPath(dirPath);
+    logger.debug('Resolved memfs path for mkdirSync', { memfsPath });
+
+    try {
+      // Check if path exists
+      if (this.vol.existsSync(memfsPath)) {
+        const stats = this.vol.statSync(memfsPath);
+        if (stats.isDirectory()) {
+          logger.debug('Directory already exists', { dirPath, memfsPath });
+          return;
+        }
+        logger.error('Path exists but is not a directory', { dirPath, memfsPath });
+        throw new Error(`ENOTDIR: path exists but is not a directory: ${dirPath}`);
+      }
+
+      // Create directory with recursive option
+      this.vol.mkdirSync(memfsPath, { recursive: options?.recursive !== false });
+      logger.debug('Directory created successfully', { dirPath, memfsPath });
+    } catch (error) {
+      // If error is already formatted (from our checks above), just rethrow
+      if (error.message.startsWith('ENOTDIR:')) {
+        throw error;
+      }
+      // Otherwise wrap in a more descriptive error
+      logger.error('Error creating directory (sync)', { dirPath, memfsPath, error });
       throw new Error(`Error creating directory '${dirPath}': ${error.message}`);
     }
   }
