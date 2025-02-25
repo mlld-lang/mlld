@@ -3,10 +3,11 @@ import type { IValidationService } from '@services/resolution/ValidationService/
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
-import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
+import { DirectiveError, DirectiveErrorCode, DirectiveErrorSeverity } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { directiveLogger } from '../../../../../core/utils/logger.js';
 import type { DirectiveResult } from '@services/pipeline/DirectiveService/types.js';
 import type { IDirectiveHandler } from '@services/pipeline/DirectiveService/IDirectiveService.js';
+import { ErrorSeverity } from '@core/errors/MeldError.js';
 
 /**
  * Handler for @run directives
@@ -90,8 +91,12 @@ export class RunDirectiveHandler implements IDirectiveHandler {
       throw new DirectiveError(
         message,
         this.kind,
-        DirectiveErrorCode.EXECUTION_ERROR,
-        { node, error }
+        DirectiveErrorCode.EXECUTION_FAILED,
+        { 
+          node, 
+          error,
+          severity: DirectiveErrorSeverity[DirectiveErrorCode.EXECUTION_FAILED]
+        }
       );
     }
   }

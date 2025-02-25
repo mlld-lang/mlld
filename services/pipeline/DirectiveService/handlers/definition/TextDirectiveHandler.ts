@@ -5,11 +5,12 @@ import { IStateService } from '@services/state/StateService/IStateService.js';
 import { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
 import { directiveLogger as logger } from '@core/utils/logger.js';
-import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
+import { DirectiveError, DirectiveErrorCode, DirectiveErrorSeverity } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { StringLiteralHandler } from '@services/resolution/ResolutionService/resolvers/StringLiteralHandler.js';
 import { StringConcatenationHandler } from '@services/resolution/ResolutionService/resolvers/StringConcatenationHandler.js';
 import { VariableReferenceResolver } from '@services/resolution/ResolutionService/resolvers/VariableReferenceResolver.js';
 import { ResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError.js';
+import { ErrorSeverity } from '@core/errors/MeldError.js';
 
 /**
  * Handler for @text directives
@@ -75,7 +76,11 @@ export class TextDirectiveHandler implements IDirectiveHandler {
             'Invalid directive: missing required fields',
             this.kind,
             DirectiveErrorCode.VALIDATION_FAILED,
-            { node, context }
+            { 
+              node, 
+              context,
+              severity: DirectiveErrorSeverity[DirectiveErrorCode.VALIDATION_FAILED]
+            }
           );
         }
         await this.validationService.validate(node);
@@ -94,7 +99,8 @@ export class TextDirectiveHandler implements IDirectiveHandler {
             node,
             context,
             cause: error instanceof Error ? error : new Error(errorMessage),
-            location: node.location
+            location: node.location,
+            severity: DirectiveErrorSeverity[DirectiveErrorCode.VALIDATION_FAILED]
           }
         );
       }
@@ -131,7 +137,8 @@ export class TextDirectiveHandler implements IDirectiveHandler {
                 node,
                 context,
                 cause: error,
-                location: node.location
+                location: node.location,
+                severity: DirectiveErrorSeverity[DirectiveErrorCode.RESOLUTION_FAILED]
               }
             );
           }
@@ -154,7 +161,8 @@ export class TextDirectiveHandler implements IDirectiveHandler {
                 node,
                 context,
                 cause: error,
-                location: node.location
+                location: node.location,
+                severity: DirectiveErrorSeverity[DirectiveErrorCode.RESOLUTION_FAILED]
               }
             );
           }
@@ -178,7 +186,8 @@ export class TextDirectiveHandler implements IDirectiveHandler {
           node,
           context,
           cause: error instanceof Error ? error : undefined,
-          location: node.location
+          location: node.location,
+          severity: DirectiveErrorSeverity[DirectiveErrorCode.EXECUTION_FAILED]
         }
       );
     }

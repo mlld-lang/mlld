@@ -4,8 +4,9 @@ import { IValidationService } from '@services/resolution/ValidationService/IVali
 import { IStateService } from '@services/state/StateService/IStateService.js';
 import { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
-import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
+import { DirectiveError, DirectiveErrorCode, DirectiveErrorSeverity } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { directiveLogger as logger } from '@core/utils/logger';
+import { ErrorSeverity } from '@core/errors/MeldError.js';
 
 interface PathDirective extends DirectiveData {
   kind: 'path';
@@ -45,7 +46,10 @@ export class PathDirectiveHandler implements IDirectiveHandler {
           'Path directive requires a value',
           this.kind,
           DirectiveErrorCode.VALIDATION_FAILED,
-          { node }
+          { 
+            node,
+            severity: DirectiveErrorSeverity[DirectiveErrorCode.VALIDATION_FAILED]
+          }
         );
       }
 
@@ -90,7 +94,8 @@ export class PathDirectiveHandler implements IDirectiveHandler {
         {
           node,
           context,
-          cause: error instanceof Error ? error : new Error(String(error))
+          cause: error instanceof Error ? error : new Error(String(error)),
+          severity: DirectiveErrorSeverity[DirectiveErrorCode.EXECUTION_FAILED]
         }
       );
     }

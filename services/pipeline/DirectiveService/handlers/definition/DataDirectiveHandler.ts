@@ -8,7 +8,8 @@ import { IStateService } from '@services/state/StateService/IStateService.js';
 import { IResolutionService, ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
 import { directiveLogger as logger } from '@core/utils/logger.js';
-import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
+import { DirectiveError, DirectiveErrorCode, DirectiveErrorSeverity } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
+import { ErrorSeverity } from '@core/errors/MeldError.js';
 
 /**
  * Handler for @data directives
@@ -57,7 +58,11 @@ export class DataDirectiveHandler implements IDirectiveHandler {
               `Invalid JSON in data directive: ${error.message}`,
               'data',
               DirectiveErrorCode.VALIDATION_FAILED,
-              { node, context }
+              { 
+                node, 
+                context,
+                severity: DirectiveErrorSeverity[DirectiveErrorCode.VALIDATION_FAILED]
+              }
             );
           }
           throw error;
@@ -77,7 +82,11 @@ export class DataDirectiveHandler implements IDirectiveHandler {
           `Error processing data directive: ${error.message}`,
           'data',
           DirectiveErrorCode.EXECUTION_FAILED,
-          { node, context }
+          { 
+            node, 
+            context,
+            severity: DirectiveErrorSeverity[DirectiveErrorCode.EXECUTION_FAILED]
+          }
         );
       }
       throw error;
@@ -143,7 +152,10 @@ export class DataDirectiveHandler implements IDirectiveHandler {
           `Schema validation failed: ${error.message}`,
           'data',
           DirectiveErrorCode.VALIDATION_FAILED,
-          { node }
+          { 
+            node,
+            severity: DirectiveErrorSeverity[DirectiveErrorCode.VALIDATION_FAILED]
+          }
         );
       }
       throw error;

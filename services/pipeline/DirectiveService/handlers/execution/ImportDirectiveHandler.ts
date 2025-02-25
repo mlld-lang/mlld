@@ -8,8 +8,9 @@ import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemSe
 import { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 import { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
 import { ICircularityService } from '@services/resolution/CircularityService/ICircularityService.js';
-import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
+import { DirectiveError, DirectiveErrorCode, DirectiveErrorSeverity } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { directiveLogger as logger } from '@core/utils/logger.js';
+import { ErrorSeverity } from '@core/errors/MeldError.js';
 
 /**
  * Handler for @import directives
@@ -50,7 +51,10 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
           'Import directive requires a path',
           this.kind,
           DirectiveErrorCode.VALIDATION_FAILED,
-          { node }
+          { 
+            node,
+            severity: DirectiveErrorSeverity[DirectiveErrorCode.VALIDATION_FAILED]
+          }
         );
       }
 
@@ -82,8 +86,13 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
         throw new DirectiveError(
           error?.message || 'Circular import detected',
           this.kind,
-          DirectiveErrorCode.CIRCULAR_IMPORT,
-          { node, context, cause: error }
+          DirectiveErrorCode.CIRCULAR_REFERENCE,
+          { 
+            node, 
+            context, 
+            cause: error,
+            severity: DirectiveErrorSeverity[DirectiveErrorCode.CIRCULAR_REFERENCE]
+          }
         );
       }
 
@@ -94,7 +103,11 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
             `Import file not found: [${typeof resolvedPath === 'string' ? resolvedPath : resolvedPath.raw}]`,
             this.kind,
             DirectiveErrorCode.FILE_NOT_FOUND,
-            { node, context }
+            { 
+              node, 
+              context,
+              severity: DirectiveErrorSeverity[DirectiveErrorCode.FILE_NOT_FOUND]
+            }
           );
         }
 
@@ -167,7 +180,8 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
         {
           node,
           context,
-          cause: error instanceof Error ? error : new Error(String(error))
+          cause: error instanceof Error ? error : new Error(String(error)),
+          severity: DirectiveErrorSeverity[DirectiveErrorCode.EXECUTION_FAILED]
         }
       );
     }
@@ -268,9 +282,12 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
 
     // If we get here, the variable wasn't found
     throw new DirectiveError(
-      `Variable not found: ${name}`,
+      `Variable not found in imported file: ${name}`,
       this.kind,
-      DirectiveErrorCode.VARIABLE_NOT_FOUND
+      DirectiveErrorCode.VARIABLE_NOT_FOUND,
+      {
+        severity: DirectiveErrorSeverity[DirectiveErrorCode.VARIABLE_NOT_FOUND]
+      }
     );
   }
 } 

@@ -3,8 +3,9 @@ import { IValidationService } from '@services/resolution/ValidationService/IVali
 import { IStateService } from '@services/state/StateService/IStateService.js';
 import { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { DirectiveNode } from 'meld-spec';
-import { DirectiveError, DirectiveErrorCode } from '../../errors/DirectiveError.js';
+import { DirectiveError, DirectiveErrorCode, DirectiveErrorSeverity } from '../../errors/DirectiveError.js';
 import { directiveLogger as logger } from '@core/utils/logger.js';
+import { ErrorSeverity } from '@core/errors/MeldError.js';
 
 interface CommandDefinition {
   parameters: string[];
@@ -58,7 +59,8 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
             error.code,
             {
               ...error.details,
-              location: node.location
+              location: node.location,
+              severity: error.details?.severity || DirectiveErrorSeverity[error.code]
             }
           );
           throw wrappedError;
@@ -75,7 +77,8 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
           node,
           context,
           cause: error instanceof Error ? error : undefined,
-          location: node.location
+          location: node.location,
+          severity: DirectiveErrorSeverity[DirectiveErrorCode.RESOLUTION_FAILED]
         }
       );
 
@@ -92,7 +95,10 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
       throw new DirectiveError(
         'Define directive requires a valid identifier',
         this.kind,
-        DirectiveErrorCode.VALIDATION_FAILED
+        DirectiveErrorCode.VALIDATION_FAILED,
+        {
+          severity: DirectiveErrorSeverity[DirectiveErrorCode.VALIDATION_FAILED]
+        }
       );
     }
 
@@ -106,7 +112,10 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
           throw new DirectiveError(
             'Invalid risk level. Must be high, med, or low',
             this.kind,
-            DirectiveErrorCode.VALIDATION_FAILED
+            DirectiveErrorCode.VALIDATION_FAILED,
+            {
+              severity: DirectiveErrorSeverity[DirectiveErrorCode.VALIDATION_FAILED]
+            }
           );
         }
         return { name, metadata: { risk: metaValue as 'high' | 'med' | 'low' } };
@@ -119,7 +128,10 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
       throw new DirectiveError(
         'Invalid metadata field. Only risk and about are supported',
         this.kind,
-        DirectiveErrorCode.VALIDATION_FAILED
+        DirectiveErrorCode.VALIDATION_FAILED,
+        {
+          severity: DirectiveErrorSeverity[DirectiveErrorCode.VALIDATION_FAILED]
+        }
       );
     }
 
@@ -163,7 +175,10 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
         'Invalid command format. Expected @run directive',
         this.kind,
         DirectiveErrorCode.VALIDATION_FAILED,
-        { node }
+        { 
+          node,
+          severity: DirectiveErrorSeverity[DirectiveErrorCode.VALIDATION_FAILED]
+        }
       );
     }
 
@@ -189,7 +204,10 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
         'Duplicate parameter names are not allowed',
         this.kind,
         DirectiveErrorCode.VALIDATION_FAILED,
-        { node }
+        { 
+          node,
+          severity: DirectiveErrorSeverity[DirectiveErrorCode.VALIDATION_FAILED]
+        }
       );
     }
 
@@ -200,7 +218,10 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
           `Invalid parameter name: ${param}. Must start with letter or underscore and contain only letters, numbers, and underscores`,
           this.kind,
           DirectiveErrorCode.VALIDATION_FAILED,
-          { node }
+          { 
+            node,
+            severity: DirectiveErrorSeverity[DirectiveErrorCode.VALIDATION_FAILED]
+          }
         );
       }
     }
@@ -212,7 +233,10 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
           `Parameter ${ref} is referenced in command but not declared`,
           this.kind,
           DirectiveErrorCode.VALIDATION_FAILED,
-          { node }
+          { 
+            node,
+            severity: DirectiveErrorSeverity[DirectiveErrorCode.VALIDATION_FAILED]
+          }
         );
       }
     }

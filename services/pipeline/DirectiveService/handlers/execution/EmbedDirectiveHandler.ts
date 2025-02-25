@@ -8,8 +8,9 @@ import { ICircularityService } from '@services/resolution/CircularityService/ICi
 import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 import { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
-import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
+import { DirectiveError, DirectiveErrorCode, DirectiveErrorSeverity } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { embedLogger } from '@core/utils/logger.js';
+import { ErrorSeverity } from '@core/errors/MeldError.js';
 
 export interface ILogger {
   debug: (message: string, ...args: any[]) => void;
@@ -55,7 +56,10 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
           'Embed directive requires a path',
           this.kind,
           DirectiveErrorCode.VALIDATION_FAILED,
-          { node }
+          { 
+            node,
+            severity: DirectiveErrorSeverity[DirectiveErrorCode.VALIDATION_FAILED]
+          }
         );
       }
 
@@ -90,7 +94,11 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
             `Embed file not found: ${resolvedPath}`,
             this.kind,
             DirectiveErrorCode.FILE_NOT_FOUND,
-            { node, context }
+            { 
+              node, 
+              context,
+              severity: DirectiveErrorSeverity[DirectiveErrorCode.FILE_NOT_FOUND]
+            }
           );
         }
 
@@ -174,7 +182,8 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
         {
           node,
           context,
-          cause: error instanceof Error ? error : new Error(String(error))
+          cause: error instanceof Error ? error : new Error(String(error)),
+          severity: DirectiveErrorSeverity[DirectiveErrorCode.EXECUTION_FAILED]
         }
       );
     }
@@ -186,7 +195,10 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
       throw new DirectiveError(
         `Invalid heading level: ${level}. Must be between 1 and 6.`,
         this.kind,
-        DirectiveErrorCode.VALIDATION_FAILED
+        DirectiveErrorCode.VALIDATION_FAILED,
+        {
+          severity: DirectiveErrorSeverity[DirectiveErrorCode.VALIDATION_FAILED]
+        }
       );
     }
     

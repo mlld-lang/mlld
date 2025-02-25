@@ -50,13 +50,13 @@ I've already implemented the core infrastructure for a configurable error handli
 
 ### 1. Update Directive Handlers
 
-- [ ] Update TextDirectiveHandler to use recoverable errors
-- [ ] Update DataDirectiveHandler to use recoverable errors
-- [ ] Update PathDirectiveHandler to use appropriate severity
-- [ ] Update DefineDirectiveHandler to use appropriate severity
-- [ ] Update RunDirectiveHandler to handle command errors appropriately
-- [ ] Update EmbedDirectiveHandler to use recoverable errors for missing files
-- [ ] Update ImportDirectiveHandler to use appropriate severity levels
+- ✅ Update TextDirectiveHandler to use recoverable errors
+- ✅ Update DataDirectiveHandler to use recoverable errors
+- ✅ Update PathDirectiveHandler to use appropriate severity
+- ✅ Update DefineDirectiveHandler to use appropriate severity
+- ✅ Update RunDirectiveHandler to handle command errors appropriately
+- ✅ Update EmbedDirectiveHandler to use recoverable errors for missing files
+- ✅ Update ImportDirectiveHandler to use appropriate severity levels
 
 ### 2. Update Error Propagation
 
