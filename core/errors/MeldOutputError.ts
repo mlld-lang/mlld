@@ -1,12 +1,37 @@
-export class MeldOutputError extends Error {
+import { MeldError, ErrorSeverity } from './MeldError.js';
+
+export interface MeldOutputErrorOptions {
+  cause?: Error;
+  severity?: ErrorSeverity;
+  context?: any;
+}
+
+/**
+ * Error thrown when output generation fails
+ */
+export class MeldOutputError extends MeldError {
+  public readonly format: string;
+
   constructor(
     message: string,
-    public readonly format: string,
-    public readonly cause?: Error
+    format: string,
+    options: MeldOutputErrorOptions = {}
   ) {
-    super(`Output error (${format}): ${message}${cause ? ` - ${cause.message}` : ''}`);
+    // Output errors are typically recoverable by default
+    const severity = options.severity || ErrorSeverity.Recoverable;
+    
+    super(`Output error (${format}): ${message}`, {
+      code: 'OUTPUT_GENERATION_FAILED',
+      cause: options.cause,
+      severity,
+      context: {
+        ...options.context,
+        format
+      }
+    });
     
     this.name = 'MeldOutputError';
+    this.format = format;
     
     // Ensure proper prototype chain for instanceof checks
     Object.setPrototypeOf(this, MeldOutputError.prototype);
