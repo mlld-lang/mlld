@@ -3,6 +3,7 @@ import { validationLogger as logger } from '@core/utils/logger.js';
 import { IValidationService } from './IValidationService.js';
 import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
 import { DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
+import { ErrorSeverity } from '@core/errors/MeldError.js';
 
 // Import default validators
 import { validateTextDirective } from './validators/TextDirectiveValidator.js';
@@ -46,27 +47,43 @@ export class ValidationService implements IValidationService {
       throw new MeldDirectiveError(
         `Unknown directive kind: ${node.directive.kind}`,
         node.directive.kind,
-        node.location?.start,
-        DirectiveErrorCode.HANDLER_NOT_FOUND
+        {
+          location: node.location?.start,
+          code: DirectiveErrorCode.HANDLER_NOT_FOUND,
+          severity: ErrorSeverity.Fatal // Unknown directives are fatal errors
+        }
       );
     }
     
     try {
       await validator(node);
-      logger.debug('Directive validation successful', {
-        kind: node.directive.kind,
-        location: node.location
-      });
     } catch (error) {
-      logger.error('Directive validation failed', {
-        kind: node.directive.kind,
-        location: node.location,
-        error
-      });
-      throw error;
+      // If it's already a MeldDirectiveError, just rethrow it
+      if (error instanceof MeldDirectiveError) {
+        throw error;
+      }
+      
+      // Otherwise, wrap it in a MeldDirectiveError
+      throw new MeldDirectiveError(
+        error instanceof Error ? error.message : String(error),
+        node.directive.kind,
+        {
+          location: node.location?.start,
+          code: DirectiveErrorCode.VALIDATION_FAILED,
+          cause: error instanceof Error ? error : undefined,
+          severity: ErrorSeverity.Recoverable // Most validation errors are recoverable
+        }
+      );
     }
+    
+    logger.debug('Directive validation successful', {
+      kind: node.directive.kind
+    });
   }
   
+  /**
+   * Register a validator for a directive kind
+   */
   registerValidator(kind: string, validator: (node: DirectiveNode) => Promise<void>): void {
     if (!kind || typeof kind !== 'string') {
       throw new Error('Validator kind must be a non-empty string');
@@ -75,20 +92,32 @@ export class ValidationService implements IValidationService {
       throw new Error('Validator must be a function');
     }
     
-    this.validators.set(kind, validator);
-    logger.debug('Registered validator', { kind });
-  }
-  
-  removeValidator(kind: string): void {
-    if (this.validators.delete(kind)) {
-      logger.debug('Removed validator', { kind });
+    if (this.validators.has(kind)) {
+      logger.warn(`Overriding existing validator for directive kind: ${kind}`);
     }
+    
+    this.validators.set(kind, validator);
+    logger.debug(`Registered validator for directive kind: ${kind}`);
   }
   
+  /**
+   * Remove a validator for a directive kind
+   */
+  removeValidator(kind: string): void {
+    this.validators.delete(kind);
+    logger.debug(`Removed validator for directive kind: ${kind}`);
+  }
+  
+  /**
+   * Check if a validator exists for a directive kind
+   */
   hasValidator(kind: string): boolean {
     return this.validators.has(kind);
   }
   
+  /**
+   * Get all registered directive kinds
+   */
   getRegisteredDirectiveKinds(): string[] {
     return Array.from(this.validators.keys());
   }

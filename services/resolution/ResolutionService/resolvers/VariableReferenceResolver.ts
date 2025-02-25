@@ -1,7 +1,8 @@
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { ResolutionErrorCode } from '@services/resolution/ResolutionService/IResolutionService.js';
-import { ResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError.js';
+import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
+import { ErrorSeverity } from '@core/errors/MeldError.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 
 /**
@@ -44,10 +45,13 @@ export class VariableReferenceResolver {
     resolutionPath: string[]
   ): Promise<string> {
     if (depth >= this.MAX_RESOLUTION_DEPTH) {
-      throw new ResolutionError(
+      throw new MeldResolutionError(
         'Maximum resolution depth exceeded',
-        ResolutionErrorCode.MAX_DEPTH_EXCEEDED,
-        { value: text, context }
+        {
+          code: ResolutionErrorCode.MAX_DEPTH_EXCEEDED,
+          details: { value: text, context: JSON.stringify(context) },
+          severity: ErrorSeverity.Fatal
+        }
       );
     }
 
@@ -87,10 +91,13 @@ export class VariableReferenceResolver {
           const currentPath = [...resolutionPath, baseVar];
           if (this.hasCircularReference(currentPath)) {
             const pathStr = currentPath.join(' -> ');
-            throw new ResolutionError(
+            throw new MeldResolutionError(
               `Circular reference detected: ${pathStr}`,
-              ResolutionErrorCode.CIRCULAR_REFERENCE,
-              { value: text, context }
+              {
+                code: ResolutionErrorCode.CIRCULAR_REFERENCE,
+                details: { value: text, context: JSON.stringify(context) },
+                severity: ErrorSeverity.Fatal
+              }
             );
           }
 
@@ -110,13 +117,17 @@ export class VariableReferenceResolver {
             );
             hasNested = true;
           } catch (error) {
-            if (error instanceof ResolutionError) {
+            if (error instanceof MeldResolutionError) {
               throw error;
             }
-            throw new ResolutionError(
+            throw new MeldResolutionError(
               'Failed to resolve nested variable',
-              ResolutionErrorCode.RESOLUTION_FAILED,
-              { value: innerVar, context, cause: error }
+              {
+                code: ResolutionErrorCode.RESOLUTION_FAILED,
+                details: { value: innerVar, context: JSON.stringify(context) },
+                cause: error as Error,
+                severity: ErrorSeverity.Fatal
+              }
             );
           }
         }
@@ -124,10 +135,13 @@ export class VariableReferenceResolver {
     }
 
     if (iterations >= this.MAX_ITERATIONS) {
-      throw new ResolutionError(
+      throw new MeldResolutionError(
         'Too many resolution iterations',
-        ResolutionErrorCode.MAX_ITERATIONS_EXCEEDED,
-        { value: text, context }
+        {
+          code: ResolutionErrorCode.MAX_ITERATIONS_EXCEEDED,
+          details: { value: text, context: JSON.stringify(context) },
+          severity: ErrorSeverity.Fatal
+        }
       );
     }
 
@@ -163,10 +177,13 @@ export class VariableReferenceResolver {
       const currentPath = [...resolutionPath, baseVar];
       if (this.hasCircularReference(currentPath)) {
         const pathStr = currentPath.join(' -> ');
-        throw new ResolutionError(
+        throw new MeldResolutionError(
           `Circular reference detected: ${pathStr}`,
-          ResolutionErrorCode.CIRCULAR_REFERENCE,
-          { value: text, context }
+          {
+            code: ResolutionErrorCode.CIRCULAR_REFERENCE,
+            details: { value: text, context: JSON.stringify(context) },
+            severity: ErrorSeverity.Fatal
+          }
         );
       }
 
@@ -182,10 +199,18 @@ export class VariableReferenceResolver {
       if (value === undefined && baseVar.startsWith('ENV_')) {
         const envVar = process.env[baseVar];
         if (envVar === undefined) {
-          throw new ResolutionError(
+          throw new MeldResolutionError(
             'Environment variable not set: ' + baseVar,
-            ResolutionErrorCode.UNDEFINED_VARIABLE,
-            { value: baseVar, context }
+            {
+              code: ResolutionErrorCode.UNDEFINED_VARIABLE,
+              details: { 
+                value: baseVar, 
+                context: JSON.stringify(context),
+                variableName: baseVar,
+                variableType: 'text'
+              },
+              severity: ErrorSeverity.Recoverable
+            }
           );
         }
         return envVar;
@@ -193,10 +218,18 @@ export class VariableReferenceResolver {
 
       // Handle undefined variables
       if (value === undefined) {
-        throw new ResolutionError(
+        throw new MeldResolutionError(
           'Undefined variable: ' + baseVar,
-          ResolutionErrorCode.UNDEFINED_VARIABLE,
-          { value: baseVar, context }
+          {
+            code: ResolutionErrorCode.UNDEFINED_VARIABLE,
+            details: { 
+              value: baseVar, 
+              context: JSON.stringify(context),
+              variableName: baseVar,
+              variableType: 'text'
+            },
+            severity: ErrorSeverity.Recoverable
+          }
         );
       }
 
@@ -213,10 +246,18 @@ export class VariableReferenceResolver {
                 const indexVar = index.slice(2, -1);
                 const indexValue = this.stateService.getTextVar(indexVar);
                 if (indexValue === undefined) {
-                  throw new ResolutionError(
+                  throw new MeldResolutionError(
                     'Undefined index variable: ' + indexVar,
-                    ResolutionErrorCode.UNDEFINED_VARIABLE,
-                    { value: indexVar, context }
+                    {
+                      code: ResolutionErrorCode.UNDEFINED_VARIABLE,
+                      details: { 
+                        value: indexVar, 
+                        context: JSON.stringify(context),
+                        variableName: indexVar,
+                        variableType: 'text'
+                      },
+                      severity: ErrorSeverity.Recoverable
+                    }
                   );
                 }
                 return obj[indexValue];
@@ -226,10 +267,17 @@ export class VariableReferenceResolver {
             return obj[field];
           }, value);
         } catch (error) {
-          throw new ResolutionError(
+          throw new MeldResolutionError(
             'Invalid field access: ' + parts.slice(1).join('.'),
-            ResolutionErrorCode.FIELD_ACCESS_ERROR,
-            { value: varRef, context }
+            {
+              code: ResolutionErrorCode.FIELD_ACCESS_ERROR,
+              details: { 
+                value: varRef, 
+                context: JSON.stringify(context),
+                fieldPath: parts.slice(1).join('.')
+              },
+              severity: ErrorSeverity.Fatal
+            }
           );
         }
       }

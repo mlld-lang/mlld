@@ -154,7 +154,7 @@ export class InterpreterService implements IInterpreterService {
             // Restore to initial state before rethrowing
             if (opts.initialState && opts.mergeState) {
               // Only attempt to merge back if we have a parent and mergeState is true
-              initialSnapshot.mergeInto(opts.initialState);
+              opts.initialState.mergeChildState(initialSnapshot);
             }
             throw fatalError;
           }
@@ -163,7 +163,7 @@ export class InterpreterService implements IInterpreterService {
 
       // Merge state back to parent if requested
       if (opts.initialState && opts.mergeState) {
-        currentState.mergeInto(opts.initialState);
+        opts.initialState.mergeChildState(currentState);
       }
 
       logger.debug('Interpretation completed successfully', {

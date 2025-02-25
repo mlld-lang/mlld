@@ -28,18 +28,18 @@ I've already implemented the core infrastructure for a configurable error handli
 
 ### 1. Update Remaining Error Classes
 
-- [ ] Update MeldImportError
-- [ ] Update MeldOutputError
-- [ ] Update MeldFileSystemError
+- ✅ Update MeldImportError
+- ✅ Update MeldOutputError
+- ✅ Update MeldFileSystemError
 
 ### 2. Update Resolution Service & Resolvers
 
-- [ ] Update ResolutionService to handle severity levels
-- [ ] Update DataResolver to use recoverable errors for missing fields
-- [ ] Update TextResolver to use recoverable errors for undefined variables
-- [ ] Update CommandResolver to use appropriate severity for parameter mismatches
-- [ ] Update PathResolver to classify path errors by severity
-- [ ] Update VariableReferenceResolver to handle undefined variables as recoverable
+- ✅ Update ResolutionService to handle severity levels
+- ✅ Update DataResolver to use recoverable errors for missing fields
+- ✅ Update TextResolver to use recoverable errors for undefined variables
+- ✅ Update CommandResolver to use appropriate severity for parameter mismatches
+- ✅ Update PathResolver to classify path errors by severity
+- ✅ Update VariableReferenceResolver to handle undefined variables as recoverable
 
 ### 3. Update Validation Service
 
@@ -60,7 +60,7 @@ I've already implemented the core infrastructure for a configurable error handli
 
 ### 2. Update Error Propagation
 
-- [ ] Ensure errors are properly propagated through the service chain
+- ✅ Ensure errors are properly propagated through the service chain
 - [ ] Add context information to errors for better debugging
 - [ ] Implement consistent error handling patterns across handlers
 
@@ -75,7 +75,7 @@ I've already implemented the core infrastructure for a configurable error handli
 
 ### 2. Update Integration Tests
 
-- [ ] Enable skipped CLI tests with appropriate expectations
+- ✅ Enable skipped CLI tests with appropriate expectations
 - [ ] Add tests for strict mode behavior
 - [ ] Add tests for permissive mode behavior
 - [ ] Verify warning generation in permissive mode
@@ -198,3 +198,144 @@ it('should warn in permissive mode for undefined variables', async () => {
   expect(warnings[0]).toBeInstanceOf(MeldResolutionError);
   expect(warnings[0].severity).toBe(ErrorSeverity.Recoverable);
 });
+```
+
+## API Details from Error Handling Implementation
+
+### Core Error API
+
+#### ErrorSeverity Enum
+```typescript
+export enum ErrorSeverity {
+  // Must halt execution
+  Fatal = 'fatal',    
+  // Can be converted to warning in permissive mode
+  Recoverable = 'recoverable',  
+  // Always just a warning
+  Warning = 'warning'   
+}
+```
+
+#### MeldError Base Class
+```typescript
+export interface MeldErrorOptions {
+  cause?: Error;
+  code?: string;
+  filePath?: string;
+  severity?: ErrorSeverity;
+  context?: any;
+}
+
+export class MeldError extends Error {
+  public readonly code?: string;
+  public readonly filePath?: string;
+  public readonly severity: ErrorSeverity;
+  public readonly context?: any;
+
+  constructor(message: string, options: MeldErrorOptions = {}) {
+    // ...
+  }
+
+  canBeWarning(): boolean {
+    return this.severity === ErrorSeverity.Recoverable 
+        || this.severity === ErrorSeverity.Warning;
+  }
+
+  static wrap(error: unknown, message?: string, severity: ErrorSeverity = ErrorSeverity.Fatal): MeldError {
+    // ...
+  }
+}
+```
+
+### Interpreter Service API
+
+#### Error Handler Function Type
+```typescript
+export interface ErrorHandler {
+  (error: MeldError): void;
+}
+```
+
+#### InterpreterOptions
+```typescript
+export interface InterpreterOptions {
+  // ... existing options ...
+  
+  /**
+   * Whether to run in strict mode
+   * In strict mode, all errors throw
+   * In permissive mode, recoverable errors become warnings
+   * @default true
+   */
+  strict?: boolean;
+
+  /**
+   * Custom error handler
+   * If provided, will be called for all errors
+   * In permissive mode, recoverable errors will be passed to this handler instead of throwing
+   */
+  errorHandler?: ErrorHandler;
+}
+```
+
+### Error Classification Mapping
+
+The `DirectiveErrorSeverity` mapping shows how different error codes map to severity levels:
+
+```typescript
+export const DirectiveErrorSeverity: Record<DirectiveErrorCode, ErrorSeverity> = {
+  [DirectiveErrorCode.VALIDATION_FAILED]: ErrorSeverity.Recoverable,
+  [DirectiveErrorCode.RESOLUTION_FAILED]: ErrorSeverity.Recoverable,
+  [DirectiveErrorCode.EXECUTION_FAILED]: ErrorSeverity.Recoverable,
+  [DirectiveErrorCode.HANDLER_NOT_FOUND]: ErrorSeverity.Fatal,
+  [DirectiveErrorCode.FILE_NOT_FOUND]: ErrorSeverity.Recoverable,
+  [DirectiveErrorCode.CIRCULAR_REFERENCE]: ErrorSeverity.Fatal,
+  [DirectiveErrorCode.VARIABLE_NOT_FOUND]: ErrorSeverity.Recoverable,
+  [DirectiveErrorCode.STATE_ERROR]: ErrorSeverity.Fatal,
+  [DirectiveErrorCode.INVALID_CONTEXT]: ErrorSeverity.Fatal
+};
+```
+
+### CLI Service Error Handling
+
+The CLI service uses permissive mode by default and provides a custom error handler:
+
+```typescript
+// Default to permissive mode for CLI
+const options: CLIOptions = {
+  input: '',
+  format: 'llm',
+  strict: false
+};
+
+// Custom error handler for the CLI
+private errorHandler(error: MeldError): void {
+  // Log warning with appropriate context
+  logger.warn(`Warning: ${error.message}`, {
+    code: error.code,
+    filePath: error.filePath,
+    severity: error.severity,
+    context: error.context
+  });
+}
+
+// Interpret nodes with appropriate error handling
+await this.interpreterService.interpret(nodes, {
+  initialState: state,
+  filePath: inputPath,
+  mergeState: true,
+  strict: options.strict === true,
+  errorHandler: this.errorHandler.bind(this)
+});
+```
+
+### Error Handling Flow
+
+1. Errors are created with appropriate severity levels
+2. InterpreterService checks if in strict or permissive mode
+3. In strict mode, all errors are thrown
+4. In permissive mode:
+   - Fatal errors are thrown
+   - Recoverable errors are passed to errorHandler if provided
+   - If no errorHandler, recoverable errors are logged as warnings
+5. Warning severity errors are always handled as warnings, never thrown

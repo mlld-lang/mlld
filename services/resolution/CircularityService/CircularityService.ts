@@ -20,8 +20,10 @@ export class CircularityService implements ICircularityService {
 
       throw new MeldImportError(
         `Circular import detected for file: ${filePath}`,
-        'circular_import',
-        { importChain }
+        {
+          code: 'CIRCULAR_IMPORT',
+          details: { importChain }
+        }
       );
     }
 

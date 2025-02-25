@@ -292,7 +292,7 @@ describe('CLIService', () => {
 
   describe('File Overwrite Handling', () => {
     it('should prompt for overwrite when file exists', async () => {
-      const args = ['test.meld'];
+      const args = ['node', 'meld', 'test.meld'];
       await mockFileSystemService.writeFile('test.meld', 'input content');
       await mockFileSystemService.writeFile('test.xml', 'existing content');
       vi.mocked(readline.createInterface().question).mockImplementationOnce((_, cb) => cb('y'));

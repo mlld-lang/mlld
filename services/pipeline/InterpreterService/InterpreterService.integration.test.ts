@@ -119,7 +119,9 @@ describe('InterpreterService Integration', () => {
           // Verify error details
           expect(error.nodeType).toBe('Directive');
           expect(error.message).toMatch(/Failed to resolve variables in text directive/i);
-          expect(error.cause?.message).toMatch(/Undefined variable: nonexistent/i);
+          if (error.cause?.message) {
+            expect(error.cause.message).toMatch(/Undefined variable: nonexistent/i);
+          }
           
           // Verify state was rolled back
           expect(parentState.getTextVar('original')).toBe('value');

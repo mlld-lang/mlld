@@ -81,7 +81,8 @@ export class CLIService implements ICLIService {
       strict: false // Default to permissive mode for CLI
     };
 
-    for (let i = 0; i < args.length; i++) {
+    // Skip the first two arguments (node executable and script name)
+    for (let i = 2; i < args.length; i++) {
       const arg = args[i];
       switch (arg) {
         case '--version':
@@ -113,6 +114,9 @@ export class CLIService implements ICLIService {
           options.config = args[++i];
           break;
         case '--home':
+          options.homePath = args[++i];
+          break;
+        case '--home-path':
           options.homePath = args[++i];
           break;
         case '--watch':
@@ -159,7 +163,7 @@ export class CLIService implements ICLIService {
 
       // Handle version flag first, before any logging
       if (options.version) {
-        console.log(`Meld version ${version}`);
+        console.log(`meld version ${version}`);
         return;
       }
 
@@ -192,8 +196,8 @@ export class CLIService implements ICLIService {
       // Print user-friendly error message to console
       console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
       
-      // Exit with error code
-      process.exit(1);
+      // Rethrow the error instead of exiting
+      throw error;
     }
   }
 

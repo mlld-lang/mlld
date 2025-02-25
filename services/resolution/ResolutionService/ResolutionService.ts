@@ -1,6 +1,5 @@
 import { IStateService } from '@services/state/StateService/IStateService.js';
 import { IResolutionService, ResolutionContext, ResolutionErrorCode } from './IResolutionService.js';
-import { ResolutionError } from './errors/ResolutionError.js';
 import { TextResolver } from './resolvers/TextResolver.js';
 import { DataResolver } from './resolvers/DataResolver.js';
 import { PathResolver } from './resolvers/PathResolver.js';
@@ -11,6 +10,8 @@ import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemSe
 import { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 import type { MeldNode, DirectiveNode, TextNode, DirectiveKind, CodeFenceNode, StructuredPath } from 'meld-spec';
 import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
+import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
+import { ErrorSeverity } from '@core/errors/MeldError.js';
 
 /**
  * Internal type for heading nodes in the ResolutionService
@@ -141,10 +142,13 @@ export class ResolutionService implements IResolutionService {
       // If a string path is provided, read the file
       const path = String(nodes);
       if (!await this.fileSystemService.exists(path)) {
-        throw new ResolutionError(
+        throw new MeldResolutionError(
           `File not found: ${path}`,
-          ResolutionErrorCode.INVALID_PATH,
-          { value: path }
+          {
+            code: ResolutionErrorCode.INVALID_PATH,
+            details: { value: path },
+            severity: ErrorSeverity.Fatal
+          }
         );
       }
       return this.fileSystemService.readFile(path);
@@ -183,10 +187,18 @@ export class ResolutionService implements IResolutionService {
       // Check for circular references
       if (resolutionPath.includes(varName)) {
         const path = [...resolutionPath, varName].join(' -> ');
-        throw new ResolutionError(
+        throw new MeldResolutionError(
           `Circular reference detected: ${path}`,
-          ResolutionErrorCode.CIRCULAR_REFERENCE,
-          { value, context }
+          {
+            code: ResolutionErrorCode.CIRCULAR_REFERENCE,
+            details: { 
+              value: value, 
+              context: JSON.stringify(context),
+              variableName: varName,
+              variableType: 'text'
+            },
+            severity: ErrorSeverity.Fatal
+          }
         );
       }
 
@@ -195,10 +207,18 @@ export class ResolutionService implements IResolutionService {
       try {
         const varValue = context.state.getTextVar(varName);
         if (varValue === undefined) {
-          throw new ResolutionError(
+          throw new MeldResolutionError(
             `Undefined variable: ${varName}`,
-            ResolutionErrorCode.UNDEFINED_VARIABLE,
-            { value: varName, context }
+            {
+              code: ResolutionErrorCode.UNDEFINED_VARIABLE,
+              details: { 
+                value: varName, 
+                context: JSON.stringify(context),
+                variableName: varName,
+                variableType: 'text'
+              },
+              severity: ErrorSeverity.Recoverable
+            }
           );
         }
         result = result.replace(fullMatch, varValue);
@@ -215,10 +235,18 @@ export class ResolutionService implements IResolutionService {
       // Check for circular references
       if (resolutionPath.includes(varName)) {
         const path = [...resolutionPath, varName].join(' -> ');
-        throw new ResolutionError(
+        throw new MeldResolutionError(
           `Circular reference detected: ${path}`,
-          ResolutionErrorCode.CIRCULAR_REFERENCE,
-          { value, context }
+          {
+            code: ResolutionErrorCode.CIRCULAR_REFERENCE,
+            details: { 
+              value: value, 
+              context: JSON.stringify(context),
+              variableName: varName,
+              variableType: 'data'
+            },
+            severity: ErrorSeverity.Fatal
+          }
         );
       }
 
@@ -227,10 +255,18 @@ export class ResolutionService implements IResolutionService {
       try {
         const varValue = context.state.getDataVar(varName);
         if (varValue === undefined) {
-          throw new ResolutionError(
+          throw new MeldResolutionError(
             `Undefined data variable: ${varName}`,
-            ResolutionErrorCode.UNDEFINED_VARIABLE,
-            { value: varName, context }
+            {
+              code: ResolutionErrorCode.UNDEFINED_VARIABLE,
+              details: { 
+                value: varName, 
+                context: JSON.stringify(context),
+                variableName: varName,
+                variableType: 'data'
+              },
+              severity: ErrorSeverity.Recoverable
+            }
           );
         }
         result = result.replace(fullMatch, JSON.stringify(varValue));
@@ -247,10 +283,18 @@ export class ResolutionService implements IResolutionService {
       // Check for circular references
       if (resolutionPath.includes(commandName)) {
         const path = [...resolutionPath, commandName].join(' -> ');
-        throw new ResolutionError(
+        throw new MeldResolutionError(
           `Circular reference detected: ${path}`,
-          ResolutionErrorCode.CIRCULAR_REFERENCE,
-          { value, context }
+          {
+            code: ResolutionErrorCode.CIRCULAR_REFERENCE,
+            details: { 
+              value: value, 
+              context: JSON.stringify(context),
+              variableName: commandName,
+              variableType: 'command'
+            },
+            severity: ErrorSeverity.Fatal
+          }
         );
       }
 
@@ -259,10 +303,18 @@ export class ResolutionService implements IResolutionService {
       try {
         const command = context.state.getCommand(commandName);
         if (command === undefined) {
-          throw new ResolutionError(
+          throw new MeldResolutionError(
             `Undefined command: ${commandName}`,
-            ResolutionErrorCode.UNDEFINED_VARIABLE,
-            { value: commandName, context }
+            {
+              code: ResolutionErrorCode.UNDEFINED_VARIABLE,
+              details: { 
+                value: commandName, 
+                context: JSON.stringify(context),
+                variableName: commandName,
+                variableType: 'command'
+              },
+              severity: ErrorSeverity.Recoverable
+            }
           );
         }
         const args = argsStr.split(',').map(arg => arg.trim());
@@ -280,10 +332,18 @@ export class ResolutionService implements IResolutionService {
       // Check for circular references
       if (resolutionPath.includes(varName)) {
         const path = [...resolutionPath, varName].join(' -> ');
-        throw new ResolutionError(
+        throw new MeldResolutionError(
           `Circular reference detected: ${path}`,
-          ResolutionErrorCode.CIRCULAR_REFERENCE,
-          { value, context }
+          {
+            code: ResolutionErrorCode.CIRCULAR_REFERENCE,
+            details: { 
+              value: value, 
+              context: JSON.stringify(context),
+              variableName: varName,
+              variableType: 'path'
+            },
+            severity: ErrorSeverity.Fatal
+          }
         );
       }
 
@@ -292,10 +352,18 @@ export class ResolutionService implements IResolutionService {
       try {
         const varValue = context.state.getPathVar(varName);
         if (varValue === undefined) {
-          throw new ResolutionError(
+          throw new MeldResolutionError(
             `Undefined path variable: ${varName}`,
-            ResolutionErrorCode.UNDEFINED_VARIABLE,
-            { value: varName, context }
+            {
+              code: ResolutionErrorCode.UNDEFINED_VARIABLE,
+              details: { 
+                value: varName, 
+                context: JSON.stringify(context),
+                variableName: varName,
+                variableType: 'path'
+              },
+              severity: ErrorSeverity.Recoverable
+            }
           );
         }
         result = result.replace(fullMatch, varValue);
@@ -325,40 +393,64 @@ export class ResolutionService implements IResolutionService {
       switch (directiveNode.directive.kind) {
         case 'text':
           if (!context.allowedVariableTypes.text) {
-            throw new ResolutionError(
+            throw new MeldResolutionError(
               'Text variables are not allowed in this context',
-              ResolutionErrorCode.INVALID_CONTEXT,
-              { value, context }
+              {
+                code: ResolutionErrorCode.INVALID_CONTEXT,
+                details: { 
+                  value: value, 
+                  context: JSON.stringify(context)
+                },
+                severity: ErrorSeverity.Fatal
+              }
             );
           }
           break;
 
         case 'data':
           if (!context.allowedVariableTypes.data) {
-            throw new ResolutionError(
+            throw new MeldResolutionError(
               'Data variables are not allowed in this context',
-              ResolutionErrorCode.INVALID_CONTEXT,
-              { value, context }
+              {
+                code: ResolutionErrorCode.INVALID_CONTEXT,
+                details: { 
+                  value: value, 
+                  context: JSON.stringify(context)
+                },
+                severity: ErrorSeverity.Fatal
+              }
             );
           }
           break;
 
         case 'path':
           if (!context.allowedVariableTypes.path) {
-            throw new ResolutionError(
+            throw new MeldResolutionError(
               'Path variables are not allowed in this context',
-              ResolutionErrorCode.INVALID_CONTEXT,
-              { value, context }
+              {
+                code: ResolutionErrorCode.INVALID_CONTEXT,
+                details: { 
+                  value: value, 
+                  context: JSON.stringify(context)
+                },
+                severity: ErrorSeverity.Fatal
+              }
             );
           }
           break;
 
         case 'run':
           if (!context.allowedVariableTypes.command) {
-            throw new ResolutionError(
+            throw new MeldResolutionError(
               'Command references are not allowed in this context',
-              ResolutionErrorCode.INVALID_CONTEXT,
-              { value, context }
+              {
+                code: ResolutionErrorCode.INVALID_CONTEXT,
+                details: { 
+                  value: value, 
+                  context: JSON.stringify(context)
+                },
+                severity: ErrorSeverity.Fatal
+              }
             );
           }
           break;
@@ -377,10 +469,13 @@ export class ResolutionService implements IResolutionService {
       // Parse the text to get variable references
       const nodes = await this.parseForResolution(text);
       if (!nodes || !Array.isArray(nodes)) {
-        throw new ResolutionError(
+        throw new MeldResolutionError(
           'Invalid parse result',
-          ResolutionErrorCode.SYNTAX_ERROR,
-          { value: text }
+          {
+            code: ResolutionErrorCode.SYNTAX_ERROR,
+            details: { value: text },
+            severity: ErrorSeverity.Fatal
+          }
         );
       }
 
@@ -396,10 +491,16 @@ export class ResolutionService implements IResolutionService {
 
         if (stack.has(ref)) {
           const path = Array.from(stack).join(' -> ');
-          throw new ResolutionError(
+          throw new MeldResolutionError(
             `Circular reference detected: ${path} -> ${ref}`,
-            ResolutionErrorCode.CIRCULAR_REFERENCE,
-            { value: text }
+            {
+              code: ResolutionErrorCode.CIRCULAR_REFERENCE,
+              details: { 
+                value: text,
+                variableName: ref
+              },
+              severity: ErrorSeverity.Fatal
+            }
           );
         }
 
@@ -462,20 +563,28 @@ export class ResolutionService implements IResolutionService {
       });
       
       if (!section) {
-        throw new ResolutionError(
+        throw new MeldResolutionError(
           'Section not found: ' + heading,
-          ResolutionErrorCode.SECTION_NOT_FOUND
+          {
+            code: ResolutionErrorCode.SECTION_NOT_FOUND,
+            details: { value: heading },
+            severity: ErrorSeverity.Recoverable
+          }
         );
       }
       
       return section;
     } catch (error) {
-      if (error instanceof ResolutionError) {
+      if (error instanceof MeldResolutionError) {
         throw error;
       }
-      throw new ResolutionError(
+      throw new MeldResolutionError(
         'Section not found: ' + heading,
-        ResolutionErrorCode.SECTION_NOT_FOUND
+        {
+          code: ResolutionErrorCode.SECTION_NOT_FOUND,
+          details: { value: heading },
+          severity: ErrorSeverity.Recoverable
+        }
       );
     }
   }
