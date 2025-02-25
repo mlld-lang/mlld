@@ -5,10 +5,13 @@
  * for comprehensive CLI testing.
  */
 
-import { mockProcessExit } from './mockProcessExit';
-import { mockConsole } from './mockConsole';
-import { mockFileSystem } from '../fs/mockFileSystem';
-import { mockEnv } from '../env/mockEnv';
+import { TestContext } from '@tests/utils/TestContext.js';
+import { MemfsTestFileSystemAdapter } from '@tests/utils/MemfsTestFileSystemAdapter.js';
+import { FileSystemService } from '@services/fs/FileSystemService/FileSystemService.js';
+import { PathService } from '@services/fs/PathService/PathService.js';
+import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService.js';
+import { mockProcessExit } from './mockProcessExit.js';
+import { mockConsole } from './mockConsole.js';
 import { ReturnType } from 'vitest';
 
 /**
@@ -20,21 +23,31 @@ interface CliTestOptions {
   /** Environment variables to set */
   env?: Record<string, string>;
   /** Whether to mock process.exit */
-  mockExit?: boolean;
+  mockProcessExit?: boolean;
   /** Whether to mock console output */
-  mockConsoleOutput?: boolean;
+  mockConsole?: boolean;
+  /** Whether to create default test file */
+  createDefaultTestFile?: boolean;
+  /** Project root path (defaults to /project) */
+  projectRoot?: string;
 }
 
 /**
  * Result of setupCliTest call
  */
 interface CliTestResult {
+  /** The TestContext instance */
+  context: TestContext;
+  /** The filesystem adapter for the test */
+  fsAdapter: MemfsTestFileSystemAdapter;
+  /** The FileSystemService instance */
+  fileSystemService: FileSystemService;
+  /** The PathService instance */
+  pathService: PathService;
   /** Mock function for process.exit */
   exitMock?: ReturnType<typeof mockProcessExit>['mockExit'];
   /** Mock functions for console methods */
-  consoleMock?: ReturnType<typeof mockConsole>['mocks'];
-  /** The memfs volume for direct manipulation */
-  vol?: ReturnType<typeof mockFileSystem>['vol'];
+  consoleMocks?: ReturnType<typeof mockConsole>['mocks'];
   /** Function to clean up all mocks */
   cleanup: () => void;
 }
@@ -45,44 +58,99 @@ interface CliTestResult {
  * @returns Object containing mock functions and a cleanup function
  */
 export function setupCliTest(options: CliTestOptions = {}): CliTestResult {
-  const {
-    files = {},
-    env = {},
-    mockExit = true,
-    mockConsoleOutput = true
-  } = options;
+  const context = new TestContext();
+  const fsAdapter = new MemfsTestFileSystemAdapter(context.fs);
+  const pathOps = new PathOperationsService();
+  const fileSystemService = new FileSystemService(pathOps, fsAdapter);
+  const pathService = new PathService();
   
-  const cleanups: Array<() => void> = [];
-  const result: CliTestResult = {
+  // Initialize services
+  pathService.initialize(fileSystemService);
+  pathService.enableTestMode();
+  
+  const projectRoot = options.projectRoot || '/project';
+  
+  // Create project directory
+  fsAdapter.mkdirSync(projectRoot, { recursive: true });
+  
+  // Set up mock file system
+  const files = options.files || {};
+  
+  // Create default test files if needed
+  if (options.createDefaultTestFile || Object.keys(files).length === 0) {
+    // Create the default test file at /project/test.meld if not already specified
+    const defaultTestPath = `${projectRoot}/test.meld`;
+    if (!files[defaultTestPath]) {
+      files[defaultTestPath] = '# Default test file';
+    }
+    
+    // Create the test file at ./test.meld for $./test.meld path format
+    if (!files['./test.meld']) {
+      files['./test.meld'] = '# Default test file';
+    }
+  }
+  
+  // Create all files in the mock filesystem
+  Object.entries(files).forEach(([filePath, content]) => {
+    // Resolve special paths
+    const resolvedPath = fsAdapter.resolveSpecialPaths(filePath);
+    
+    // Ensure directory exists
+    const dirPath = resolvedPath.substring(0, resolvedPath.lastIndexOf('/'));
+    if (dirPath) {
+      try {
+        fsAdapter.mkdirSync(dirPath, { recursive: true });
+      } catch (error) {
+        console.warn(`Failed to create directory: ${dirPath} (original: ${filePath})`, error);
+      }
+    }
+    
+    // Write file
+    try {
+      fsAdapter.writeFileSync(resolvedPath, content);
+      console.log(`Created test file: ${resolvedPath} (from: ${filePath})`);
+    } catch (error) {
+      console.warn(`Failed to write file: ${resolvedPath} (original: ${filePath})`, error);
+    }
+  });
+  
+  // Set up environment variables
+  if (options.env) {
+    const originalEnv = { ...process.env };
+    Object.entries(options.env).forEach(([key, value]) => {
+      process.env[key] = value;
+    });
+  }
+  
+  // Set up process.exit mock if requested
+  const exitMock = options.mockProcessExit !== false ? mockProcessExit() : null;
+  
+  // Set up console mocks if requested
+  const consoleMocks = options.mockConsole !== false ? mockConsole() : null;
+  
+  return {
+    context,
+    fsAdapter,
+    fileSystemService,
+    pathService,
+    exitMock: exitMock?.mockExit,
+    consoleMocks: consoleMocks?.mocks,
     cleanup: () => {
-      cleanups.forEach(cleanup => cleanup());
+      // Restore mocks
+      exitMock?.restore();
+      consoleMocks?.restore();
+      
+      // Restore environment variables
+      if (options.env) {
+        Object.keys(options.env).forEach((key) => {
+          delete process.env[key];
+        });
+      }
+      
+      // Cleanup the context
+      context.cleanup();
     }
   };
-  
-  if (mockExit) {
-    const exitMock = mockProcessExit();
-    result.exitMock = exitMock.mockExit;
-    cleanups.push(exitMock.restore);
-  }
-  
-  if (mockConsoleOutput) {
-    const consoleMock = mockConsole();
-    result.consoleMock = consoleMock.mocks;
-    cleanups.push(consoleMock.restore);
-  }
-  
-  if (Object.keys(files).length > 0) {
-    const fsMock = mockFileSystem(files);
-    result.vol = fsMock.vol;
-    cleanups.push(fsMock.restore);
-  }
-  
-  if (Object.keys(env).length > 0) {
-    const envMock = mockEnv(env);
-    cleanups.push(envMock.restore);
-  }
-  
-  return result;
 }
 
 /**

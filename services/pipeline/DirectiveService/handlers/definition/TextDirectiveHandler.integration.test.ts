@@ -155,7 +155,7 @@ describe('TextDirectiveHandler Integration', () => {
       };
 
       // Mock validation service to throw a DirectiveError
-      vi.mocked(validationService.validateDirective).mockImplementation(() => {
+      validationService.validateDirective = vi.fn().mockImplementation(() => {
         throw new DirectiveError('Invalid text directive value', {
           node,
           context: { filePath: 'test.meld', line: 5 }
@@ -170,18 +170,18 @@ describe('TextDirectiveHandler Integration', () => {
         try {
           await handler.execute(node, context);
         } catch (error) {
-          errorCollector.collect(error);
+          errorCollector.handleError(error);
           throw error;
         }
       }).rejects.toThrow(DirectiveError);
       
       // Verify error was collected with correct severity
-      expect(errorCollector.errors).toHaveLength(1);
-      expect(errorCollector.errors[0].severity).toBe(ErrorSeverity.Fatal);
-      expect(errorCollector.errors[0].message).toContain('Invalid text directive value');
+      expect(errorCollector.getAllErrors()).toHaveLength(1);
+      expect(errorCollector.getAllErrors()[0].severity).toBe(ErrorSeverity.Fatal);
+      expect(errorCollector.getAllErrors()[0].message).toContain('Invalid text directive value');
       
       // Verify error contains location information
-      const error = errorCollector.errors[0];
+      const error = errorCollector.getAllErrors()[0];
       expect(error.context).toBeDefined();
       expect(error.context.filePath).toBe('test.meld');
       expect(error.context.line).toBe(5);

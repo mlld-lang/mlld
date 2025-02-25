@@ -40,8 +40,8 @@ import { PathOperationsService } from '@services/fs/FileSystemService/PathOperat
 import type { IStateEventService } from '@services/state/StateEventService/IStateEventService.js';
 import type { DebugSessionConfig, DebugSessionResult } from './debug/StateDebuggerService/IStateDebuggerService.js';
 import { TestDebuggerService } from './debug/TestDebuggerService.js';
-import { mockProcessExit } from './cli/mockProcessExit';
-import { mockConsole } from './cli/mockConsole';
+import { mockProcessExit } from './cli/mockProcessExit.js';
+import { mockConsole } from './cli/mockConsole.js';
 
 interface SnapshotDiff {
   added: string[];
@@ -85,6 +85,7 @@ export class TestContext {
   public factory: typeof testFactories;
   public readonly services: TestServices;
   private fixturesDir: string;
+  private cleanupFunctions: Array<() => void> = [];
 
   constructor(fixturesDir: string = 'tests/fixtures') {
     this.fs = new MemfsTestFileSystem();
@@ -190,6 +191,8 @@ export class TestContext {
    */
   async cleanup(): Promise<void> {
     this.fs.cleanup();
+    this.cleanupFunctions.forEach(fn => fn());
+    this.cleanupFunctions = [];
   }
 
   /**
@@ -364,29 +367,23 @@ export class TestContext {
   }
 
   /**
-   * Mock process.exit for CLI testing
-   * @returns Mock function for process.exit
+   * Mock process.exit to prevent tests from exiting the process
+   * @returns Object with exit code and exit was called flag
    */
   mockProcessExit() {
-    const { mockExit, restore } = mockProcessExit();
-    
-    // Register cleanup
-    this.registerCleanup(restore);
-    
-    return mockExit;
+    const result = mockProcessExit();
+    this.registerCleanup(result.restore);
+    return result;
   }
 
   /**
-   * Mock console methods for CLI testing
-   * @returns Mock functions for console methods
+   * Mock console methods (log, error, warn) to capture output
+   * @returns Object with captured output and restore function
    */
   mockConsole() {
-    const { mocks, restore } = mockConsole();
-    
-    // Register cleanup
-    this.registerCleanup(restore);
-    
-    return mocks;
+    const result = mockConsole();
+    this.registerCleanup(result.restore);
+    return result;
   }
 
   /**
@@ -415,30 +412,42 @@ export class TestContext {
    * @param options - Options for setting up the CLI test environment
    * @returns Object containing mock functions and file system
    */
-  setupCliTest(options: {
+  async setupCliTest(options: {
     files?: Record<string, string>;
     env?: Record<string, string>;
     mockExit?: boolean;
     mockConsoleOutput?: boolean;
+    projectRoot?: string;
   } = {}) {
-    const result: any = {};
+    const result: Record<string, any> = {};
+    
+    // Create project directory structure first
+    const projectRoot = options.projectRoot || '/project';
+    await this.fs.mkdir(projectRoot, { recursive: true });
     
     // Set up file system if needed
     if (options.files && Object.keys(options.files).length > 0) {
       // Add files to the memory file system
-      Object.entries(options.files).forEach(([filePath, content]) => {
-        // Ensure the path is absolute
-        const absolutePath = filePath.startsWith('/') ? filePath : `/${filePath}`;
-        
-        // Create parent directories if needed
-        const dirPath = absolutePath.substring(0, absolutePath.lastIndexOf('/'));
-        if (dirPath) {
-          this.fs.mkdirSync(dirPath, { recursive: true });
+      for (const [filePath, content] of Object.entries(options.files)) {
+        try {
+          // Ensure the path is absolute
+          const absolutePath = filePath.startsWith('/') ? filePath : `/${filePath}`;
+          
+          // Handle special paths like $./file.txt
+          const resolvedPath = this.resolveSpecialPath(absolutePath, projectRoot);
+          
+          // Create parent directories if needed
+          const dirPath = resolvedPath.substring(0, resolvedPath.lastIndexOf('/'));
+          if (dirPath) {
+            await this.fs.mkdir(dirPath, { recursive: true });
+          }
+          
+          // Write the file
+          await this.fs.writeFile(resolvedPath, content);
+        } catch (error) {
+          console.warn(`Failed to create file ${filePath}:`, error);
         }
-        
-        // Write the file
-        this.fs.writeFileSync(absolutePath, content);
-      });
+      }
       
       result.fs = this.fs;
     }
@@ -460,6 +469,21 @@ export class TestContext {
     
     return result;
   }
+  
+  /**
+   * Resolve special path syntax ($./file.txt, $~/file.txt)
+   * @param path The path to resolve
+   * @param projectRoot The project root directory
+   * @returns Resolved absolute path
+   */
+  private resolveSpecialPath(path: string, projectRoot: string): string {
+    if (path.includes('$./') || path.includes('$PROJECTPATH/')) {
+      return path.replace(/\$\.\//g, `${projectRoot}/`).replace(/\$PROJECTPATH\//g, `${projectRoot}/`);
+    } else if (path.includes('$~/') || path.includes('$HOMEPATH/')) {
+      return path.replace(/\$~\//g, '/home/user/').replace(/\$HOMEPATH\//g, '/home/user/');
+    }
+    return path;
+  }
 
   /**
    * Use memory file system for testing
@@ -469,5 +493,13 @@ export class TestContext {
   useMemoryFileSystem(): void {
     // No-op: TestContext already uses MemfsTestFileSystem by default
     // This method exists for API compatibility with setupCliTest
+  }
+
+  /**
+   * Register a cleanup function
+   * @param fn - Cleanup function to register
+   */
+  registerCleanup(fn: () => void) {
+    this.cleanupFunctions.push(fn);
   }
 } 

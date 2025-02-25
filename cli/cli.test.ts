@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi, beforeAll, afterAll } from 'vitest';
 import { main } from './index.js';
 import { TestContext } from '@tests/utils/TestContext.js';
 import { MemfsTestFileSystemAdapter } from '@tests/utils/MemfsTestFileSystemAdapter.js';
@@ -17,11 +17,28 @@ import * as readline from 'readline';
 import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import { mockProcessExit } from '@tests/utils/cli/mockProcessExit.js';
 import { mockConsole } from '@tests/utils/cli/mockConsole.js';
+import { setupCliTest } from '@tests/utils/cli/cliTestHelper.js';
 
 // Add module mock before describe block
 vi.mock('readline', () => ({
   createInterface: vi.fn()
 }));
+
+// Ensure process.exit is mocked globally for all CLI tests
+let originalExit: typeof process.exit;
+let mockExit: ReturnType<typeof vi.fn>;
+
+beforeAll(() => {
+  originalExit = process.exit;
+  mockExit = vi.fn().mockImplementation((code) => {
+    throw new Error(`process.exit called with code: ${code}`);
+  });
+  process.exit = mockExit as any;
+});
+
+afterAll(() => {
+  process.exit = originalExit;
+});
 
 /**
  * Helper function to set up console and process.exit mocks for CLI tests
@@ -47,90 +64,32 @@ function setupCliMocks() {
  * @returns Properly formatted file path for CLI tests
  */
 function formatCliPath(path: string): string {
-  // Ensure path starts with $. for project-relative paths
-  if (!path.startsWith('$.') && !path.startsWith('$~')) {
-    // If path starts with /, make it project-relative
-    if (path.startsWith('/')) {
-      return `$.${path}`;
-    }
-    // Otherwise, assume it's already properly formatted
-    return path;
-  }
+  console.log(`formatCliPath called with: ${path}`);
   return path;
 }
 
-describe('CLI Integration Tests', () => {
+// Main CLI test suite
+describe('CLI', () => {
   let context: TestContext;
-  let originalArgv: string[];
-  let originalNodeEnv: string | undefined;
   let fsAdapter: MemfsTestFileSystemAdapter;
-  let pathService: PathService;
-  let mockFileSystemService: IFileSystemService;
-
+  
+  // Set up test context before each test
   beforeEach(async () => {
     context = new TestContext();
     await context.initialize();
-    originalArgv = process.argv;
-    originalNodeEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'test';
     fsAdapter = new MemfsTestFileSystemAdapter(context.fs);
     
-    // Set up PathService for testing
-    pathService = new PathService();
-    pathService.enableTestMode();
-    pathService.setProjectPath('/project');
+    // Create test directory structure
+    await context.fs.mkdir('/project');
+    await context.fs.mkdir('/project/src');
     
-    // Set up mock filesystem service
-    const fs = context.fs;
-    mockFileSystemService = {
-      readFile: fs.readFile.bind(fs),
-      writeFile: fs.writeFile.bind(fs),
-      exists: fs.exists.bind(fs),
-      watch: fs.watch.bind(fs),
-      executeCommand: vi.fn().mockResolvedValue({ stdout: '', stderr: '' }),
-      setFileSystem: vi.fn(),
-      ensureDir: vi.fn(),
-      getCwd: () => '/project'
-    } as unknown as IFileSystemService;
-
-    pathService.initialize(mockFileSystemService);
-
-    // Create test files
-    await context.fs.writeFile('/project/test.meld', '@text greeting = "Hello"');
-    
-    // Set up process.argv for most tests
-    process.argv = ['node', 'meld', '$./test.meld', '--stdout'];
-
-    // Initialize services
-    const interpreterService = new InterpreterService();
-    const directiveService = new DirectiveService();
-    const stateService = new StateService();
-    const validationService = new ValidationService();
-    const circularityService = new CircularityService();
-    const resolutionService = new ResolutionService(stateService, mockFileSystemService, context.services.parser);
-
-    // Initialize directive service
-    directiveService.initialize(
-      validationService,
-      stateService,
-      pathService,
-      mockFileSystemService,
-      context.services.parser,
-      interpreterService,
-      circularityService,
-      resolutionService
-    );
-
-    // Initialize interpreter service
-    interpreterService.initialize(directiveService, stateService);
+    // Create a basic test file
+    await context.fs.writeFile('/project/test.meld', '# Test file');
   });
-
+  
+  // Clean up after each test
   afterEach(async () => {
     await context.cleanup();
-    process.argv = originalArgv;
-    process.env.NODE_ENV = originalNodeEnv;
-    vi.resetModules();
-    vi.clearAllMocks();
   });
 
   describe('Fatal Errors', () => {
@@ -443,6 +402,36 @@ Embedded header: {{header}}
         restore();
       }
     });
+
+    it('should handle @define directive with command parameters', async () => {
+      // Create a meld file with a command definition that uses parameters
+      await context.fs.writeFile('/project/test.meld', `
+@define greet(name) = @run [echo "Hello, \${name}!"]
+@run [$greet("World")]
+      `);
+      
+      // Set up the CLI arguments - use the formatCliPath function to ensure consistency
+      process.argv = ['node', 'meld', formatCliPath('/project/test.meld'), '--stdout'];
+      console.log('Test: process.argv set to:', process.argv);
+      
+      // Set up CLI mocks to capture output
+      const { consoleMocks, restore } = setupCliMocks();
+      
+      try {
+        // Log process.argv right before calling main
+        console.log('Test: process.argv before main():', process.argv);
+        
+        // This should not throw
+        await expect(main(fsAdapter)).resolves.not.toThrow();
+        
+        // Verify output was captured
+        expect(consoleMocks.log).toHaveBeenCalled();
+        const output = consoleMocks.log.mock.calls.flat().join('\n');
+        expect(output).toContain('Hello, World!');
+      } finally {
+        restore();
+      }
+    });
   });
 
   describe('@path directive', () => {
@@ -635,37 +624,47 @@ Outer fence continues
       }
     });
     
-    it('should preserve language identifiers', async () => {
-      // Create a meld file with language-specific code fences
+    it('should handle language identifiers in code fences', async () => {
+      // Create a meld file with language identifiers in code fences
       await context.fs.writeFile('/project/test.meld', `
 \`\`\`javascript
-const x = 1;
-console.log(x);
+console.log('Hello from JavaScript');
 \`\`\`
 
 \`\`\`python
-x = 1
-print(x)
+print("Hello from Python")
 \`\`\`
     `);
     
     // Set up the CLI arguments
     process.argv = ['node', 'meld', formatCliPath('/project/test.meld'), '--stdout'];
     
-    // Set up CLI mocks to capture output
-    const { consoleMocks, restore } = setupCliMocks();
+    // Set up CLI test environment
+    const { consoleMock, cleanup } = setupCliTest({
+      files: {
+        '/project/test.meld': `
+\`\`\`javascript
+console.log('Hello from JavaScript');
+\`\`\`
+
+\`\`\`python
+print("Hello from Python")
+\`\`\`
+        `
+      }
+    });
     
     try {
       // This should not throw if language identifier handling is working correctly
       await expect(main(fsAdapter)).resolves.not.toThrow();
       
       // Verify that the output preserves the language identifiers
-      expect(consoleMocks.log).toHaveBeenCalled();
-      const output = consoleMocks.log.mock.calls.flat().join('\n');
+      expect(consoleMock.log).toHaveBeenCalled();
+      const output = consoleMock.log.mock.calls.flat().join('\n');
       expect(output).toContain('```javascript');
       expect(output).toContain('```python');
     } finally {
-      restore();
+      cleanup();
     }
   });
 
@@ -684,21 +683,33 @@ print(x)
     // Set up the CLI arguments
     process.argv = ['node', 'meld', formatCliPath('/project/test.meld'), '--stdout'];
     
-    // Set up CLI mocks to capture output
-    const { consoleMocks, restore } = setupCliMocks();
+    // Set up CLI test environment
+    const { consoleMock, cleanup } = setupCliTest({
+      files: {
+        '/project/test.meld': `
+\`\`\`
+  indented line
+    more indented
+	tab indented
+  
+  line after blank line
+\`\`\`
+        `
+      }
+    });
     
     try {
       // This should not throw if whitespace preservation is working correctly
       await expect(main(fsAdapter)).resolves.not.toThrow();
       
       // Verify that the output preserves whitespace
-      expect(consoleMocks.log).toHaveBeenCalled();
-      const output = consoleMocks.log.mock.calls.flat().join('\n');
+      expect(consoleMock.log).toHaveBeenCalled();
+      const output = consoleMock.log.mock.calls.flat().join('\n');
       expect(output).toContain('  indented line');
       expect(output).toContain('    more indented');
       expect(output).toContain('\ttab indented');
     } finally {
-      restore();
+      cleanup();
     }
   });
 
@@ -756,6 +767,70 @@ print(x)
       expect(output).toContain('"username": "Alice"');
     } finally {
       restore();
+    }
+  });
+
+  it('should handle directives in code fences', async () => {
+    // Set up CLI test environment
+    const { consoleMock, cleanup } = setupCliTest({
+      files: {
+        '/project/test.meld': `
+\`\`\`
+@text greeting = "Hello"
+@text name = "World"
+\`\`\`
+
+\`\`\`
+#{greeting}, #{name}!
+\`\`\`
+        `
+      }
+    });
+    
+    // Set up the CLI arguments
+    process.argv = ['node', 'meld', formatCliPath('/project/test.meld'), '--stdout'];
+    
+    try {
+      // This should not throw if directive handling in code fences is working correctly
+      await expect(main(fsAdapter)).resolves.not.toThrow();
+      
+      // Verify that the output contains the interpolated values
+      expect(consoleMock.log).toHaveBeenCalled();
+      const output = consoleMock.log.mock.calls.flat().join('\n');
+      expect(output).toContain('Hello, World!');
+    } finally {
+      cleanup();
+    }
+  });
+
+  it('should handle variables in code fences', async () => {
+    // Set up CLI test environment
+    const { consoleMock, cleanup } = setupCliTest({
+      files: {
+        '/project/test.meld': `
+@text greeting = "Hello"
+@text name = "World"
+
+\`\`\`
+#{greeting}, #{name}!
+\`\`\`
+        `
+      }
+    });
+    
+    // Set up the CLI arguments
+    process.argv = ['node', 'meld', formatCliPath('/project/test.meld'), '--stdout'];
+    
+    try {
+      // This should not throw if variable interpolation in code fences is working correctly
+      await expect(main(fsAdapter)).resolves.not.toThrow();
+      
+      // Verify that the output contains the interpolated values
+      expect(consoleMock.log).toHaveBeenCalled();
+      const output = consoleMock.log.mock.calls.flat().join('\n');
+      expect(output).toContain('Hello, World!');
+    } finally {
+      cleanup();
     }
   });
 });
@@ -1850,7 +1925,7 @@ describe('Variable Types', () => {
       
       try {
         // Set up CLI test environment with files and mocks
-        const { exitMock, consoleMocks } = testContext.setupCliTest({
+        const { exitMock, consoleMocks } = await testContext.setupCliTest({
           files: {
             '/project/test.meld': `
 @text greeting = "Hello #{undefined}"
@@ -1903,7 +1978,7 @@ describe('Variable Types', () => {
       
       try {
         // Set up CLI test environment with files, environment variables, and mocks
-        const { exitMock, consoleMocks } = testContext.setupCliTest({
+        const { exitMock, consoleMocks } = await testContext.setupCliTest({
           files: {
             '/project/test.meld': `
 @text greeting = "Hello #{env.USER}"
@@ -1911,8 +1986,8 @@ describe('Variable Types', () => {
             `
           },
           env: {
-            'USER': 'TestUser',
-            'APP_NAME': 'Meld'
+            USER: 'TestUser',
+            APP_NAME: 'MeldApp'
           }
         });
         
@@ -1931,11 +2006,11 @@ describe('Variable Types', () => {
         // Verify that the output contains the environment variable values
         const output = consoleMocks.log.mock.calls.flat().join('\n');
         expect(output).toContain('Hello TestUser');
-        expect(output).toContain('Welcome to Meld');
+        expect(output).toContain('Welcome to MeldApp');
       } finally {
         // Clean up
         await testContext.cleanup();
       }
     });
   });
-});});
+})});

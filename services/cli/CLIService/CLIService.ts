@@ -75,17 +75,27 @@ export class CLIService implements ICLIService {
   }
 
   private parseArgs(args: string[]): CLIOptions {
+    console.log('CLIService.parseArgs called with args:', args);
+    
     const options: CLIOptions = {
       input: '',
       format: 'llm',
       strict: false // Default to permissive mode for CLI
     };
 
-    // Skip the first two arguments (node executable and script name)
-    for (let i = 2; i < args.length; i++) {
+    // Process all arguments (args is already sliced in main function)
+    for (let i = 0; i < args.length; i++) {
       const arg = args[i];
+      console.log(`Processing arg[${i}]:`, arg);
+      
+      // Skip 'node' and 'meld' executable names if present
+      if ((i === 0 && arg === 'node') || (i === 1 && arg === 'meld')) {
+        continue;
+      }
+      
       switch (arg) {
         case '--version':
+        case '-V':
           options.version = true;
           break;
         case '--output':
@@ -127,6 +137,26 @@ export class CLIService implements ICLIService {
         case '-d':
           options.debug = true;
           break;
+        case '--help':
+        case '-h':
+          options.version = true; // Show version along with help
+          console.log(`
+Usage: meld [options] <input-file>
+
+Options:
+  -f, --format <format>  Output format (md, markdown, llm) [default: llm]
+  -o, --output <path>    Output file path [default: input filename with new extension]
+  --stdout               Print to stdout instead of file
+  --strict               Enable strict mode (fail on all errors)
+  --permissive           Enable permissive mode (ignore recoverable errors) [default]
+  --home-path <path>     Set custom home path for $~/ and $HOMEPATH
+  -w, --watch            Watch for file changes
+  -v, --verbose          Enable verbose output
+  -d, --debug            Enable debug output
+  -h, --help             Display this help message
+  -V, --version          Display version information
+          `);
+          break;
         default:
           if (!arg.startsWith('-') && !options.input) {
             options.input = arg;
@@ -137,6 +167,7 @@ export class CLIService implements ICLIService {
     }
 
     if (!options.input && !options.version) {
+      console.log('No input file specified. options:', options);
       throw new Error('No input file specified');
     }
 
@@ -251,6 +282,7 @@ export class CLIService implements ICLIService {
       // Securely resolve project path
       const projectPath = await this.pathService.resolveProjectPath();
       logger.debug('Resolved project path', { projectPath });
+      console.log('Resolved project path:', projectPath);
       
       // Set project path variables
       state.setPathVar('PROJECTPATH', projectPath);
@@ -263,20 +295,35 @@ export class CLIService implements ICLIService {
       
       // Resolve input path
       let inputPath = options.input;
+      console.log('Input path before resolution:', inputPath);
       
       try {
         // First try to resolve as a path with variables
         inputPath = await this.pathService.resolvePath(inputPath);
+        console.log('Resolved input path:', inputPath);
         
         // If file doesn't exist at resolved path, try relative to project path
-        if (!await this.fileSystemService.exists(inputPath)) {
+        const exists = await this.fileSystemService.exists(inputPath);
+        console.log('File exists at resolved path:', exists);
+        
+        if (!exists) {
           const projectRelativePath = await this.pathService.resolvePath(`$PROJECTPATH/${options.input}`);
-          if (await this.fileSystemService.exists(projectRelativePath)) {
+          console.log('Project relative path:', projectRelativePath);
+          
+          const projectRelativeExists = await this.fileSystemService.exists(projectRelativePath);
+          console.log('File exists at project relative path:', projectRelativeExists);
+          
+          if (projectRelativeExists) {
             inputPath = projectRelativePath;
           } else {
             // If still not found, try relative to current directory
             const cwdRelativePath = await this.pathService.resolvePath(`./${options.input}`);
-            if (!await this.fileSystemService.exists(cwdRelativePath)) {
+            console.log('CWD relative path:', cwdRelativePath);
+            
+            const cwdRelativeExists = await this.fileSystemService.exists(cwdRelativePath);
+            console.log('File exists at CWD relative path:', cwdRelativeExists);
+            
+            if (!cwdRelativeExists) {
               throw new MeldError(`File not found: ${options.input}`, {
                 severity: ErrorSeverity.Fatal,
                 code: 'FILE_NOT_FOUND'
@@ -288,7 +335,12 @@ export class CLIService implements ICLIService {
       } catch (e) {
         // If path resolution fails, try as a simple filename
         const simpleFilePath = await this.pathService.resolvePath(options.input);
-        if (!await this.fileSystemService.exists(simpleFilePath)) {
+        console.log('Simple file path:', simpleFilePath);
+        
+        const simpleFileExists = await this.fileSystemService.exists(simpleFilePath);
+        console.log('File exists at simple file path:', simpleFileExists);
+        
+        if (!simpleFileExists) {
           throw new MeldError(`File not found: ${options.input}`, {
             severity: ErrorSeverity.Fatal,
             code: 'FILE_NOT_FOUND'

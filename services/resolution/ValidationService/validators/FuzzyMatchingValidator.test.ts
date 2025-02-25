@@ -66,11 +66,11 @@ describe('FuzzyMatchingValidator', () => {
       try {
         validateFuzzyThreshold(nodeBelowZero);
       } catch (error) {
-        collectorBelowZero.collect(error);
+        collectorBelowZero.handleError(error as MeldError);
       }
       
-      expect(collectorBelowZero.errors.length).toBe(1);
-      expect(collectorBelowZero.errors[0].message).toContain('must be between 0 and 1');
+      expect(collectorBelowZero.getAllErrors().length).toBe(1);
+      expect(collectorBelowZero.getAllErrors()[0].message).toContain('must be between 0 and 1');
       
       // Test for above 1
       const nodeAboveOne = createEmbedDirective('test.md', 'section', createLocation(1, 1));
@@ -80,11 +80,11 @@ describe('FuzzyMatchingValidator', () => {
       try {
         validateFuzzyThreshold(nodeAboveOne);
       } catch (error) {
-        collectorAboveOne.collect(error);
+        collectorAboveOne.handleError(error as MeldError);
       }
       
-      expect(collectorAboveOne.errors.length).toBe(1);
-      expect(collectorAboveOne.errors[0].message).toContain('must be between 0 and 1');
+      expect(collectorAboveOne.getAllErrors().length).toBe(1);
+      expect(collectorAboveOne.getAllErrors()[0].message).toContain('must be between 0 and 1');
       
       // Test for non-numeric
       const nodeNonNumeric = createEmbedDirective('test.md', 'section', createLocation(1, 1));
@@ -95,11 +95,11 @@ describe('FuzzyMatchingValidator', () => {
       try {
         validateFuzzyThreshold(nodeNonNumeric);
       } catch (error) {
-        collectorNonNumeric.collect(error);
+        collectorNonNumeric.handleError(error as MeldError);
       }
       
-      expect(collectorNonNumeric.errors.length).toBe(1);
-      expect(collectorNonNumeric.errors[0].message).toContain('must be a number');
+      expect(collectorNonNumeric.getAllErrors().length).toBe(1);
+      expect(collectorNonNumeric.getAllErrors()[0].message).toContain('must be a number');
     });
   });
 }); 
