@@ -2,6 +2,8 @@ import { IStateService } from '@services/state/StateService/IStateService.js';
 import { ResolutionContext, ResolutionErrorCode } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { ResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError.js';
 import type { MeldNode, DirectiveNode, TextNode, PathVarNode, StructuredPath } from 'meld-spec';
+import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
+import { ErrorSeverity } from '@core/errors/MeldError.js';
 
 /**
  * Handles resolution of path variables ($path)
@@ -22,29 +24,45 @@ export class PathResolver {
 
     // Validate path variables are allowed
     if (!context.allowedVariableTypes.path) {
-      throw new ResolutionError(
+      throw new MeldResolutionError(
         'Path variables are not allowed in this context',
-        ResolutionErrorCode.INVALID_CONTEXT,
-        { value: directiveNode.directive.value, context }
+        {
+          code: ResolutionErrorCode.INVALID_CONTEXT,
+          severity: ErrorSeverity.Fatal,
+          details: { 
+            value: directiveNode.directive.value,
+            context: JSON.stringify(context)
+          }
+        }
       );
     }
 
     // Validate node type
     if (directiveNode.directive.kind !== 'path') {
-      throw new ResolutionError(
+      throw new MeldResolutionError(
         'Invalid node type for path resolution',
-        ResolutionErrorCode.INVALID_NODE_TYPE,
-        { value: directiveNode.directive.kind }
+        {
+          code: ResolutionErrorCode.INVALID_NODE_TYPE,
+          severity: ErrorSeverity.Fatal,
+          details: { 
+            value: directiveNode.directive.kind
+          }
+        }
       );
     }
 
     // Get the variable identifier
     const identifier = directiveNode.directive.identifier;
     if (!identifier) {
-      throw new ResolutionError(
+      throw new MeldResolutionError(
         'Path variable identifier is required',
-        ResolutionErrorCode.SYNTAX_ERROR,
-        { value: JSON.stringify(directiveNode.directive) }
+        {
+          code: ResolutionErrorCode.SYNTAX_ERROR,
+          severity: ErrorSeverity.Fatal,
+          details: { 
+            value: JSON.stringify(directiveNode.directive)
+          }
+        }
       );
     }
 
@@ -60,10 +78,16 @@ export class PathResolver {
     const value = this.stateService.getPathVar(identifier);
 
     if (value === undefined) {
-      throw new ResolutionError(
+      throw new MeldResolutionError(
         `Undefined path variable: ${identifier}`,
-        ResolutionErrorCode.UNDEFINED_VARIABLE,
-        { value: identifier }
+        {
+          code: ResolutionErrorCode.UNDEFINED_VARIABLE,
+          severity: ErrorSeverity.Recoverable,
+          details: { 
+            variableName: identifier,
+            variableType: 'path'
+          }
+        }
       );
     }
 
@@ -148,10 +172,16 @@ export class PathResolver {
     if (context.pathValidation) {
       // Check if path is absolute or starts with a special variable
       if (context.pathValidation.requireAbsolute && !pathStr.startsWith('/')) {
-        throw new ResolutionError(
+        throw new MeldResolutionError(
           'Path must be absolute',
-          ResolutionErrorCode.INVALID_PATH,
-          { value: pathStr, context }
+          {
+            code: ResolutionErrorCode.INVALID_PATH,
+            severity: ErrorSeverity.Fatal,
+            details: { 
+              value: pathStr, 
+              context: JSON.stringify(context.pathValidation)
+            }
+          }
         );
       }
 
@@ -166,10 +196,16 @@ export class PathResolver {
         });
 
         if (!hasAllowedRoot) {
-          throw new ResolutionError(
+          throw new MeldResolutionError(
             `Path must start with one of: ${context.pathValidation.allowedRoots.join(', ')}`,
-            ResolutionErrorCode.INVALID_PATH,
-            { value: pathStr, context }
+            {
+              code: ResolutionErrorCode.INVALID_PATH,
+              severity: ErrorSeverity.Fatal,
+              details: { 
+                value: pathStr, 
+                context: JSON.stringify(context.pathValidation)
+              }
+            }
           );
         }
       }

@@ -2,6 +2,8 @@ import { MeldNode, DirectiveNode, TextNode } from 'meld-spec';
 import { IStateService } from '@services/state/StateService/IStateService.js';
 import { ResolutionContext, ResolutionErrorCode } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { ResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError.js';
+import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
+import { ErrorSeverity } from '@core/errors/MeldError.js';
 
 /**
  * Handles resolution of data variables ($data)
@@ -20,36 +22,62 @@ export class DataResolver {
 
     // Validate node type
     if (node.type !== 'Directive' || (node as DirectiveNode).directive.kind !== 'data') {
-      throw new ResolutionError(
+      throw new MeldResolutionError(
         'Invalid node type for data resolution',
-        ResolutionErrorCode.INVALID_NODE_TYPE,
-        { value: node.type }
+        {
+          code: ResolutionErrorCode.INVALID_NODE_TYPE,
+          severity: ErrorSeverity.Fatal,
+          details: { 
+            value: node.type,
+            context: JSON.stringify(context)
+          }
+        }
       );
     }
 
     const directiveNode = node as DirectiveNode;
 
     if (!context.allowedVariableTypes.data) {
-      throw new ResolutionError(
+      throw new MeldResolutionError(
         'Data variables are not allowed in this context',
-        ResolutionErrorCode.INVALID_VARIABLE_TYPE,
-        { value: directiveNode.directive.value, context }
+        {
+          code: ResolutionErrorCode.INVALID_VARIABLE_TYPE,
+          severity: ErrorSeverity.Fatal,
+          details: { 
+            value: directiveNode.directive.value,
+            context: JSON.stringify(context)
+          }
+        }
       );
     }
 
     const identifier = directiveNode.directive.identifier;
     if (!identifier) {
-      throw new ResolutionError(
+      throw new MeldResolutionError(
         'Data variable identifier is required',
-        ResolutionErrorCode.SYNTAX_ERROR,
-        { value: JSON.stringify(directiveNode) }
+        {
+          code: ResolutionErrorCode.SYNTAX_ERROR,
+          severity: ErrorSeverity.Fatal,
+          details: { 
+            value: JSON.stringify(directiveNode)
+          }
+        }
       );
     }
 
     const value = await this.stateService.getDataVar(identifier);
     if (value === undefined) {
-      console.warn(`Warning: Data variable '${identifier}' not found`);
-      return '';
+      throw new MeldResolutionError(
+        `Data variable '${identifier}' not found`,
+        {
+          code: ResolutionErrorCode.UNDEFINED_VARIABLE,
+          severity: ErrorSeverity.Recoverable,
+          details: { 
+            variableName: identifier,
+            variableType: 'data'
+          }
+        }
+      );
     }
 
     // Handle field access
@@ -57,8 +85,18 @@ export class DataResolver {
       const field = directiveNode.directive.field;
       const fieldValue = value[field];
       if (fieldValue === undefined) {
-        console.warn(`Warning: Field '${field}' not found in data variable '${identifier}'`);
-        return '';
+        throw new MeldResolutionError(
+          `Field '${field}' not found in data variable '${identifier}'`,
+          {
+            code: ResolutionErrorCode.UNDEFINED_FIELD,
+            severity: ErrorSeverity.Recoverable,
+            details: { 
+              variableName: identifier,
+              variableType: 'data',
+              fieldPath: field
+            }
+          }
+        );
       }
       return this.stringifyValue(fieldValue);
     }

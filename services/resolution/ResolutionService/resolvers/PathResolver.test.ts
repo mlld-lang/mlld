@@ -4,6 +4,7 @@ import { IStateService } from '@services/state/StateService/IStateService.js';
 import { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { ResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError.js';
 import type { MeldNode, DirectiveNode, TextNode, StructuredPath } from 'meld-spec';
+import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
 
 describe('PathResolver', () => {
   let resolver: PathResolver;
@@ -171,7 +172,7 @@ describe('PathResolver', () => {
           identifier: 'test'
         }
       };
-      await expect(resolver.resolve(node, context)).rejects.toThrow(ResolutionError);
+      await expect(resolver.resolve(node, context)).rejects.toThrow(MeldResolutionError);
     });
 
     it('should handle undefined path variables appropriately', async () => {

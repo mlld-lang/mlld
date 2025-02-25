@@ -2,6 +2,8 @@ import { IStateService } from '@services/state/StateService/IStateService.js';
 import { ResolutionContext, ResolutionErrorCode } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { ResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError.js';
 import type { MeldNode, DirectiveNode, TextNode } from 'meld-spec';
+import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
+import { ErrorSeverity } from '@core/errors/MeldError.js';
 
 /**
  * Handles resolution of command references ($run)
@@ -22,48 +24,75 @@ export class CommandResolver {
 
     // Validate command type first
     if (directiveNode.directive.kind !== 'run') {
-      throw new ResolutionError(
+      throw new MeldResolutionError(
         'Invalid node type for command resolution',
-        ResolutionErrorCode.SYNTAX_ERROR,
-        { value: JSON.stringify(node) }
+        {
+          code: ResolutionErrorCode.SYNTAX_ERROR,
+          severity: ErrorSeverity.Fatal,
+          details: { 
+            value: JSON.stringify(node)
+          }
+        }
       );
     }
 
     // Validate commands are allowed
     if (!context.allowedVariableTypes.command) {
-      throw new ResolutionError(
+      throw new MeldResolutionError(
         'Command references are not allowed in this context',
-        ResolutionErrorCode.INVALID_CONTEXT,
-        { value: directiveNode.directive.value, context }
+        {
+          code: ResolutionErrorCode.INVALID_CONTEXT,
+          severity: ErrorSeverity.Fatal,
+          details: { 
+            value: directiveNode.directive.value,
+            context: JSON.stringify(context)
+          }
+        }
       );
     }
 
     // Validate command identifier
     if (!directiveNode.directive.identifier) {
-      throw new ResolutionError(
+      throw new MeldResolutionError(
         'Command identifier is required',
-        ResolutionErrorCode.SYNTAX_ERROR,
-        { value: JSON.stringify(node) }
+        {
+          code: ResolutionErrorCode.SYNTAX_ERROR,
+          severity: ErrorSeverity.Fatal,
+          details: { 
+            value: JSON.stringify(node)
+          }
+        }
       );
     }
 
     // Get command definition
     const command = this.stateService.getCommand(directiveNode.directive.identifier);
     if (!command) {
-      throw new ResolutionError(
+      throw new MeldResolutionError(
         `Undefined command: ${directiveNode.directive.identifier}`,
-        ResolutionErrorCode.UNDEFINED_VARIABLE,
-        { value: directiveNode.directive.identifier, context }
+        {
+          code: ResolutionErrorCode.UNDEFINED_VARIABLE,
+          severity: ErrorSeverity.Recoverable,
+          details: { 
+            variableName: directiveNode.directive.identifier,
+            variableType: 'command'
+          }
+        }
       );
     }
 
     // Extract the actual command from the @run format
     const match = command.command.match(/^@run\s*\[(.*)\]$/);
     if (!match) {
-      throw new ResolutionError(
+      throw new MeldResolutionError(
         'Invalid command definition: must start with @run [',
-        ResolutionErrorCode.INVALID_COMMAND,
-        { value: command.command }
+        {
+          code: ResolutionErrorCode.INVALID_COMMAND,
+          severity: ErrorSeverity.Fatal,
+          details: { 
+            value: command.command
+          }
+        }
       );
     }
 
@@ -74,10 +103,17 @@ export class CommandResolver {
     // Count required parameters in template
     const paramCount = (template.match(/\${[^}]+}/g) || []).length;
     if (args.length !== paramCount) {
-      throw new ResolutionError(
+      throw new MeldResolutionError(
         `Command ${directiveNode.directive.identifier} expects ${paramCount} parameters but got ${args.length}`,
-        ResolutionErrorCode.SYNTAX_ERROR,
-        { value: directiveNode.directive.identifier }
+        {
+          code: ResolutionErrorCode.PARAMETER_MISMATCH,
+          severity: ErrorSeverity.Fatal, // Parameter mismatches are fatal as they indicate a syntax error
+          details: { 
+            variableName: directiveNode.directive.identifier,
+            variableType: 'command',
+            context: `Expected ${paramCount} parameters, got ${args.length}`
+          }
+        }
       );
     }
 
