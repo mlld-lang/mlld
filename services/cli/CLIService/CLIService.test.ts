@@ -355,10 +355,6 @@ describe('CLIService', () => {
       );
     });
 
-    // These tests have been implemented below with the new error system
-    // it.todo('should handle overwrite cancellation appropriately (pending new error system)');
-    // it.todo('should handle overwrite confirmation appropriately (pending new error system)');
-    
     it('should handle explicit output paths appropriately', async () => {
       // Create a mock input file path
       const inputPath = '/project/input.meld';

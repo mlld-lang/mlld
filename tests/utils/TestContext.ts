@@ -40,6 +40,8 @@ import { PathOperationsService } from '@services/fs/FileSystemService/PathOperat
 import type { IStateEventService } from '@services/state/StateEventService/IStateEventService.js';
 import type { DebugSessionConfig, DebugSessionResult } from './debug/StateDebuggerService/IStateDebuggerService.js';
 import { TestDebuggerService } from './debug/TestDebuggerService.js';
+import { mockProcessExit } from './cli/mockProcessExit';
+import { mockConsole } from './cli/mockConsole';
 
 interface SnapshotDiff {
   added: string[];
@@ -359,5 +361,96 @@ export class TestContext {
     
     // Reset visualization service
     this.services.debug.visualization.reset();
+  }
+
+  /**
+   * Mock process.exit for CLI testing
+   * @returns Mock function for process.exit
+   */
+  mockProcessExit() {
+    const { mockExit, restore } = mockProcessExit();
+    
+    // Register cleanup
+    this.registerCleanup(restore);
+    
+    return mockExit;
+  }
+
+  /**
+   * Mock console methods for CLI testing
+   * @returns Mock functions for console methods
+   */
+  mockConsole() {
+    const { mocks, restore } = mockConsole();
+    
+    // Register cleanup
+    this.registerCleanup(restore);
+    
+    return mocks;
+  }
+
+  /**
+   * Set up environment variables for testing
+   * @param envVars - Environment variables to set
+   * @returns This TestContext instance for chaining
+   */
+  withEnvironment(envVars: Record<string, string>) {
+    const originalEnv = { ...process.env };
+    
+    // Set environment variables
+    Object.entries(envVars).forEach(([key, value]) => {
+      process.env[key] = value;
+    });
+    
+    // Register cleanup
+    this.registerCleanup(() => {
+      process.env = originalEnv;
+    });
+    
+    return this;
+  }
+
+  /**
+   * Set up a complete CLI test environment
+   * @param options - Options for setting up the CLI test environment
+   * @returns Object containing mock functions and file system
+   */
+  setupCliTest(options: {
+    files?: Record<string, string>;
+    env?: Record<string, string>;
+    mockExit?: boolean;
+    mockConsoleOutput?: boolean;
+  } = {}) {
+    const result: any = {};
+    
+    // Set up file system if needed
+    if (options.files && Object.keys(options.files).length > 0) {
+      // Use our existing MemfsTestFileSystem
+      this.useMemoryFileSystem();
+      
+      // Add files to the memory file system
+      Object.entries(options.files).forEach(([path, content]) => {
+        this.fs.writeFileSync(path, content);
+      });
+      
+      result.fs = this.fs;
+    }
+    
+    // Set up environment variables if needed
+    if (options.env && Object.keys(options.env).length > 0) {
+      this.withEnvironment(options.env);
+    }
+    
+    // Mock process.exit if needed
+    if (options.mockExit !== false) {
+      result.exitMock = this.mockProcessExit();
+    }
+    
+    // Mock console if needed
+    if (options.mockConsoleOutput !== false) {
+      result.consoleMock = this.mockConsole();
+    }
+    
+    return result;
   }
 } 

@@ -6,6 +6,8 @@ import { ResolutionError } from '@services/resolution/ResolutionService/errors/R
 import { ResolutionErrorCode } from '@services/resolution/ResolutionService/IResolutionService.js';
 import type { DirectiveNode } from 'meld-spec';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
+import { ErrorCollector } from '@tests/utils/ErrorTestUtils.js';
+import { ErrorSeverity } from '@core/errors/MeldError.js';
 
 describe('TextDirectiveHandler Integration', () => {
   let handler: TextDirectiveHandler;
@@ -132,7 +134,58 @@ describe('TextDirectiveHandler Integration', () => {
 
     it.todo('should handle error propagation through the stack - Complex error propagation deferred for V1');
 
-    it.todo('should handle validation errors with proper context');
+    it('should handle validation errors with proper context', async () => {
+      const node: DirectiveNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'text',
+          identifier: 'invalid',
+          value: null // Invalid value - should be a string
+        },
+        location: {
+          start: { line: 5, column: 1 },
+          end: { line: 5, column: 25 },
+          source: 'test.meld'
+        }
+      };
+
+      const context = {
+        state: stateService,
+        currentFilePath: 'test.meld'
+      };
+
+      // Mock validation service to throw a DirectiveError
+      vi.mocked(validationService.validateDirective).mockImplementation(() => {
+        throw new DirectiveError('Invalid text directive value', {
+          node,
+          context: { filePath: 'test.meld', line: 5 }
+        });
+      });
+
+      // Use ErrorCollector to test both strict and permissive modes
+      const errorCollector = new ErrorCollector();
+      
+      // Test strict mode (should throw)
+      await expect(async () => {
+        try {
+          await handler.execute(node, context);
+        } catch (error) {
+          errorCollector.collect(error);
+          throw error;
+        }
+      }).rejects.toThrow(DirectiveError);
+      
+      // Verify error was collected with correct severity
+      expect(errorCollector.errors).toHaveLength(1);
+      expect(errorCollector.errors[0].severity).toBe(ErrorSeverity.Fatal);
+      expect(errorCollector.errors[0].message).toContain('Invalid text directive value');
+      
+      // Verify error contains location information
+      const error = errorCollector.errors[0];
+      expect(error.context).toBeDefined();
+      expect(error.context.filePath).toBe('test.meld');
+      expect(error.context.line).toBe(5);
+    });
 
     it.todo('should handle mixed directive types - Complex directive interaction deferred for V1');
   });

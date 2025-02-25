@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { validateFuzzyThreshold } from './FuzzyMatchingValidator.js';
 import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
 import { createEmbedDirective, createLocation } from '@tests/utils/testFactories.js';
+import { ErrorCollector, expectThrowsInStrictButWarnsInPermissive } from '@tests/utils/ErrorTestUtils.js';
+import { ErrorSeverity } from '@core/errors/MeldError.js';
 
 describe('FuzzyMatchingValidator', () => {
   describe('Fuzzy threshold validation', () => {
@@ -15,11 +17,39 @@ describe('FuzzyMatchingValidator', () => {
       }
     });
 
-    it.todo('should reject fuzzy thresholds below 0 - Edge case validation deferred for V1');
+    it('should reject fuzzy thresholds below 0 - Edge case validation deferred for V1', async () => {
+      const node = createEmbedDirective('test.md', 'section', createLocation(1, 1));
+      node.directive.fuzzy = -0.5; // Invalid negative threshold
+      
+      await expectThrowsInStrictButWarnsInPermissive(
+        async () => validateFuzzyThreshold(node),
+        MeldDirectiveError,
+        ErrorSeverity.Recoverable
+      );
+    });
 
-    it.todo('should reject fuzzy thresholds above 1 - Edge case validation deferred for V1');
+    it('should reject fuzzy thresholds above 1 - Edge case validation deferred for V1', async () => {
+      const node = createEmbedDirective('test.md', 'section', createLocation(1, 1));
+      node.directive.fuzzy = 1.5; // Invalid threshold above 1
+      
+      await expectThrowsInStrictButWarnsInPermissive(
+        async () => validateFuzzyThreshold(node),
+        MeldDirectiveError,
+        ErrorSeverity.Recoverable
+      );
+    });
 
-    it.todo('should reject non-numeric fuzzy thresholds - Edge case validation deferred for V1');
+    it('should reject non-numeric fuzzy thresholds - Edge case validation deferred for V1', async () => {
+      const node = createEmbedDirective('test.md', 'section', createLocation(1, 1));
+      // @ts-ignore - Intentionally setting an invalid type for testing
+      node.directive.fuzzy = "not-a-number";
+      
+      await expectThrowsInStrictButWarnsInPermissive(
+        async () => validateFuzzyThreshold(node),
+        MeldDirectiveError,
+        ErrorSeverity.Recoverable
+      );
+    });
 
     it('should handle missing fuzzy threshold (undefined is valid)', () => {
       const node = createEmbedDirective('test.md', 'section', createLocation(1, 1));
@@ -27,6 +57,49 @@ describe('FuzzyMatchingValidator', () => {
       expect(() => validateFuzzyThreshold(node)).not.toThrow();
     });
 
-    it.todo('should provide helpful error messages - Detailed error messaging deferred for V1');
+    it('should provide helpful error messages - Detailed error messaging deferred for V1', async () => {
+      // Test for below 0
+      const nodeBelowZero = createEmbedDirective('test.md', 'section', createLocation(1, 1));
+      nodeBelowZero.directive.fuzzy = -0.5;
+      
+      const collectorBelowZero = new ErrorCollector();
+      try {
+        validateFuzzyThreshold(nodeBelowZero);
+      } catch (error) {
+        collectorBelowZero.collect(error);
+      }
+      
+      expect(collectorBelowZero.errors.length).toBe(1);
+      expect(collectorBelowZero.errors[0].message).toContain('must be between 0 and 1');
+      
+      // Test for above 1
+      const nodeAboveOne = createEmbedDirective('test.md', 'section', createLocation(1, 1));
+      nodeAboveOne.directive.fuzzy = 1.5;
+      
+      const collectorAboveOne = new ErrorCollector();
+      try {
+        validateFuzzyThreshold(nodeAboveOne);
+      } catch (error) {
+        collectorAboveOne.collect(error);
+      }
+      
+      expect(collectorAboveOne.errors.length).toBe(1);
+      expect(collectorAboveOne.errors[0].message).toContain('must be between 0 and 1');
+      
+      // Test for non-numeric
+      const nodeNonNumeric = createEmbedDirective('test.md', 'section', createLocation(1, 1));
+      // @ts-ignore - Intentionally setting an invalid type for testing
+      nodeNonNumeric.directive.fuzzy = "not-a-number";
+      
+      const collectorNonNumeric = new ErrorCollector();
+      try {
+        validateFuzzyThreshold(nodeNonNumeric);
+      } catch (error) {
+        collectorNonNumeric.collect(error);
+      }
+      
+      expect(collectorNonNumeric.errors.length).toBe(1);
+      expect(collectorNonNumeric.errors[0].message).toContain('must be a number');
+    });
   });
 }); 
