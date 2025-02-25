@@ -84,6 +84,35 @@ export interface IPathService {
   isTestMode(): boolean;
 
   /**
+   * Set the home path for testing.
+   */
+  setHomePath(path: string): void;
+
+  /**
+   * Set the project path for testing.
+   */
+  setProjectPath(path: string): void;
+
+  /**
+   * Get the home path.
+   */
+  getHomePath(): string;
+
+  /**
+   * Get the project path.
+   */
+  getProjectPath(): string;
+
+  /**
+   * Resolve the project path using auto-detection or configuration.
+   * This method will:
+   * 1. Look for meld.json and use its projectRoot setting if valid
+   * 2. Auto-detect using common project markers
+   * 3. Fall back to current directory
+   */
+  resolveProjectPath(): Promise<string>;
+
+  /**
    * Resolve a path to its absolute form according to Meld's path rules:
    * - Simple paths are resolved relative to baseDir or cwd
    * - $. paths are resolved relative to project root

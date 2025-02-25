@@ -95,7 +95,10 @@ describe('CLIService', () => {
       isAbsolute: vi.fn(),
       join: vi.fn(),
       dirname: vi.fn(),
-      basename: vi.fn()
+      basename: vi.fn(),
+      getHomePath: vi.fn().mockReturnValue('/home'),
+      getProjectPath: vi.fn().mockReturnValue('/project'),
+      resolveProjectPath: vi.fn().mockResolvedValue('/project')
     } as IPathService;
 
     const mockChildState = {
@@ -192,8 +195,11 @@ describe('CLIService', () => {
     });
 
     it('should handle project path option', async () => {
-      const args = ['node', 'meld', 'test.meld', '--project-path', '/project'];
+      // We no longer support --project-path option for security reasons
+      // Instead, we test that the project path is resolved correctly
+      const args = ['node', 'meld', 'test.meld'];
       await service.run(args);
+      expect(mockPathService.resolveProjectPath).toHaveBeenCalled();
       const state = mockStateService.createChildState();
       expect(state.setPathVar).toHaveBeenCalledWith('PROJECTPATH', '/project');
       expect(state.setPathVar).toHaveBeenCalledWith('.', '/project');

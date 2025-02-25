@@ -21,7 +21,6 @@ export interface CLIOptions {
   verbose?: boolean;
   strict?: boolean;
   config?: string;
-  projectPath?: string;
   homePath?: string;
   watch?: boolean;
   version?: boolean;
@@ -108,10 +107,6 @@ export class CLIService implements ICLIService {
         case '--config':
         case '-c':
           options.config = args[++i];
-          break;
-        case '--project-path':
-        case '-p':
-          options.projectPath = args[++i];
           break;
         case '--home-path':
         case '-h':
@@ -263,30 +258,51 @@ export class CLIService implements ICLIService {
   }
 
   private async processFile(options: CLIOptions): Promise<void> {
-    // If project path is set, make input path relative to it
-    let inputPath = options.input;
-    
     try {
-      // First try to resolve as an absolute path
-      inputPath = await this.pathService.resolvePath(inputPath);
+      // Create initial state
+      const state = this.stateService.createChildState();
       
-      // If file doesn't exist at absolute path, try relative to project path
-      if (!await this.fileSystemService.exists(inputPath)) {
-        if (options.projectPath) {
-          const projectPath = `${options.projectPath}/${options.input}`;
-          if (await this.fileSystemService.exists(projectPath)) {
-            inputPath = projectPath;
-          }
-        }
+      // Securely resolve project path
+      const projectPath = await this.pathService.resolveProjectPath();
+      logger.debug('Resolved project path', { projectPath });
+      
+      // Set project path variables
+      state.setPathVar('PROJECTPATH', projectPath);
+      state.setPathVar('.', projectPath);
+      
+      // Set home path
+      const homePath = options.homePath || this.pathService.getHomePath();
+      state.setPathVar('HOMEPATH', homePath);
+      state.setPathVar('~', homePath);
+      
+      // Resolve input path
+      let inputPath = options.input;
+      
+      try {
+        // First try to resolve as a path with variables
+        inputPath = await this.pathService.resolvePath(inputPath);
         
-        // If still not found, try relative to current directory
+        // If file doesn't exist at resolved path, try relative to project path
         if (!await this.fileSystemService.exists(inputPath)) {
-          const relativePath = await this.pathService.resolvePath(`./${options.input}`);
-          if (!await this.fileSystemService.exists(relativePath)) {
-            throw new Error(`File not found: ${options.input}`);
+          const projectRelativePath = await this.pathService.resolvePath(`$PROJECTPATH/${options.input}`);
+          if (await this.fileSystemService.exists(projectRelativePath)) {
+            inputPath = projectRelativePath;
+          } else {
+            // If still not found, try relative to current directory
+            const cwdRelativePath = await this.pathService.resolvePath(`./${options.input}`);
+            if (!await this.fileSystemService.exists(cwdRelativePath)) {
+              throw new Error(`File not found: ${options.input}`);
+            }
+            inputPath = cwdRelativePath;
           }
-          inputPath = relativePath;
         }
+      } catch (e) {
+        // If path resolution fails, try as a simple filename
+        const simpleFilePath = await this.pathService.resolvePath(options.input);
+        if (!await this.fileSystemService.exists(simpleFilePath)) {
+          throw new Error(`File not found: ${options.input}`);
+        }
+        inputPath = simpleFilePath;
       }
 
       // Verify file extension
@@ -299,17 +315,6 @@ export class CLIService implements ICLIService {
 
       // Parse content
       const nodes = await this.parserService.parse(content);
-
-      // Create initial state with project and home paths if provided
-      const state = this.stateService.createChildState();
-      if (options.projectPath) {
-        state.setPathVar('PROJECTPATH', options.projectPath);
-        state.setPathVar('.', options.projectPath);
-      }
-      if (options.homePath) {
-        state.setPathVar('HOMEPATH', options.homePath);
-        state.setPathVar('~', options.homePath);
-      }
 
       // Interpret nodes
       try {
@@ -355,10 +360,7 @@ export class CLIService implements ICLIService {
           outputPath += this.getOutputExtension(options.format || 'llm');
         }
         
-        // If project path is set, make output path relative to it
-        if (options.projectPath) {
-          outputPath = `${options.projectPath}/${outputPath}`;
-        }
+        // Resolve output path
         outputPath = await this.pathService.resolvePath(outputPath);
 
         // Check for file overwrite

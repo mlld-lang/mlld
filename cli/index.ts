@@ -14,6 +14,7 @@ import { CircularityService } from '@services/resolution/CircularityService/Circ
 import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService.js';
 import { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
 import { createInterface } from 'readline';
+import { initCommand } from './commands/init.js';
 
 // Create services
 const parserService = new ParserService();
@@ -65,7 +66,15 @@ export async function main(fsAdapter?: IFileSystem) {
     // Initialize path service
     pathService.initialize(fileSystemService);
 
-    await cliService.run(process.argv);
+    // Handle commands
+    const args = process.argv.slice(2);
+    if (args[0] === 'init') {
+      await initCommand();
+      return;
+    }
+
+    // Default to run command
+    await cliService.run(args);
   } catch (error) {
     logger.error('CLI execution failed', {
       error: error instanceof Error ? error.message : String(error)

@@ -1,9 +1,11 @@
 import { IPathService, PathOptions } from './IPathService.js';
 import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import { PathValidationError, PathErrorCode } from './errors/PathValidationError.js';
+import { ProjectPathResolver } from '../ProjectPathResolver.js';
 import type { Location } from '@core/types/index.js';
 import type { StructuredPath } from 'meld-spec';
 import * as path from 'path';
+import * as os from 'os';
 
 const PATH_ALIAS_PATTERN = /^\$(\.\/|~\/)/;
 const CONTAINS_SLASH = /\//;
@@ -17,10 +19,17 @@ export class PathService implements IPathService {
   private testMode: boolean = false;
   private homePath: string;
   private projectPath: string;
+  private projectPathResolver: ProjectPathResolver;
+  private projectPathResolved: boolean = false;
 
   constructor() {
-    this.homePath = process.env.HOME || process.env.USERPROFILE || '/';
+    const homeEnv = process.env.HOME || process.env.USERPROFILE;
+    if (!homeEnv && !this.testMode) {
+      throw new Error('Unable to determine home directory: HOME or USERPROFILE environment variables are not set');
+    }
+    this.homePath = homeEnv || '';
     this.projectPath = process.cwd();
+    this.projectPathResolver = new ProjectPathResolver();
   }
 
   /**
@@ -35,6 +44,10 @@ export class PathService implements IPathService {
    */
   enableTestMode(): void {
     this.testMode = true;
+    // Set a default test home path if none is set
+    if (!this.homePath) {
+      this.homePath = '/home/test';
+    }
   }
 
   /**
@@ -55,6 +68,9 @@ export class PathService implements IPathService {
    * Set home path for testing
    */
   setHomePath(path: string): void {
+    if (!path) {
+      throw new Error('Home path cannot be empty');
+    }
     this.homePath = path;
   }
 
@@ -63,6 +79,39 @@ export class PathService implements IPathService {
    */
   setProjectPath(path: string): void {
     this.projectPath = path;
+    this.projectPathResolved = true;
+  }
+
+  /**
+   * Get the home path
+   */
+  getHomePath(): string {
+    return this.homePath;
+  }
+
+  /**
+   * Get the project path
+   */
+  getProjectPath(): string {
+    return this.projectPath;
+  }
+
+  /**
+   * Resolve the project path using the ProjectPathResolver
+   */
+  async resolveProjectPath(): Promise<string> {
+    // If we're in test mode or the path has already been set, use the current value
+    if (this.testMode || this.projectPathResolved) {
+      return this.projectPath;
+    }
+
+    // Use the resolver to find the project path
+    const cwd = this.fs ? this.fs.getCwd() : process.cwd();
+    const resolvedPath = await this.projectPathResolver.resolveProjectRoot(cwd);
+    this.projectPath = resolvedPath;
+    this.projectPathResolved = true;
+    
+    return this.projectPath;
   }
 
   /**
