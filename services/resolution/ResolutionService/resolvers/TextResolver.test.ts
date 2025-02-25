@@ -4,6 +4,14 @@ import { IStateService } from '@services/state/StateService/IStateService.js';
 import { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { ResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError.js';
 import { MeldNode } from 'meld-spec';
+import { ErrorSeverity } from '@core/errors/MeldError.js';
+import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
+import { 
+  expectThrowsWithSeverity, 
+  expectWarningsInPermissiveMode,
+  ErrorCollector,
+  createPermissiveModeOptions
+} from '@tests/utils/ErrorTestUtils.js';
 
 describe('TextResolver', () => {
   let resolver: TextResolver;
@@ -70,7 +78,78 @@ describe('TextResolver', () => {
       expect(stateService.getTextVar).toHaveBeenCalledWith('test');
     });
 
-    it.todo('should handle environment variables appropriately (pending new error system)');
+    it('should handle environment variables appropriately', async () => {
+      // Arrange
+      const originalEnv = process.env;
+      process.env = { ...process.env, TEST_ENV_VAR: 'test-value' };
+      
+      // Act & Assert
+      // Test that it resolves correctly when env var exists
+      vi.mocked(stateService.getTextVar).mockImplementation((name) => {
+        if (name === 'ENV_TEST_ENV_VAR') return 'test-value';
+        return undefined;
+      });
+      
+      const node: MeldNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'text',
+          identifier: 'ENV_TEST_ENV_VAR',
+          value: ''
+        }
+      };
+      
+      const result = await resolver.resolve(node, context);
+      expect(result).toBe('test-value');
+      
+      // Test behavior for missing env vars
+      const missingNode: MeldNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'text',
+          identifier: 'ENV_MISSING_VAR',
+          value: ''
+        }
+      };
+      
+      // Should throw with Recoverable severity
+      try {
+        await resolver.resolve(missingNode, context);
+        fail('Expected to throw but did not');
+      } catch (error) {
+        expect(error).toBeInstanceOf(MeldResolutionError);
+        expect((error as MeldResolutionError).severity).toBe(ErrorSeverity.Recoverable);
+        expect((error as MeldResolutionError).message).toContain('Environment variable not set');
+      }
+      
+      // Cleanup
+      process.env = originalEnv;
+    });
+
+    it('should handle undefined variables', async () => {
+      // Arrange
+      vi.mocked(stateService.getTextVar).mockReturnValue(undefined);
+      
+      const node: MeldNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'text',
+          identifier: 'undefined',
+          value: ''
+        }
+      };
+      
+      // Act & Assert
+      // Should throw with Recoverable severity
+      try {
+        await resolver.resolve(node, context);
+        fail('Expected to throw but did not');
+      } catch (error) {
+        expect(error).toBeInstanceOf(MeldResolutionError);
+        expect((error as MeldResolutionError).severity).toBe(ErrorSeverity.Recoverable);
+        expect((error as MeldResolutionError).message).toContain('Undefined text variable');
+      }
+    });
   });
 
   describe('error handling', () => {
@@ -89,8 +168,6 @@ describe('TextResolver', () => {
         .rejects
         .toThrow('Text variables are not allowed in this context');
     });
-
-    it.todo('should handle undefined variables (pending new error system)');
 
     it('should throw on invalid node type', async () => {
       const node: MeldNode = {

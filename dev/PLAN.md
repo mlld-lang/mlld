@@ -1,245 +1,625 @@
+# Migration Plan for Error Handling System
 
-Below is a clarified, evidence-driven plan for methodically resolving the transformation issues, state management bugs, and mismatches between real and mock services—all while preserving passing tests as we proceed. It incorporates the high-level advice of instrumenting each step, auditing our interfaces, and aligning mocks with real services. It is broken into phases to ensure incremental progress without regressions.
+## Overview
 
-────────────────────────────────────────────────────────────────────
-PHASE 0: CONTEXT & GOALS
-────────────────────────────────────────────────────────────────────
+The new error handling system has been implemented with the following key features:
+- `ErrorSeverity` enum with `Fatal`, `Recoverable`, and `Warning` levels
+- Enhanced `MeldError` base class with severity and context support
+- Updated `InterpreterOptions` to include strict mode and error handler
+- Updated `InterpreterService` to handle errors based on severity and mode
+- Error testing utilities for testing both strict and permissive modes
 
-Before making any changes, we must align on what we are trying to accomplish and how it fits into our existing Meld architecture and testing approach.
+## Migration Strategy
 
-1. Context:
-   • Meld interprets directive-based text into an AST, processes directives (possibly transforming or removing them), and generates output (Markdown, XML, etc.).  
-   • "StateService" manages variables, transformations, and can clone its internal state for nested or repeated directive processing.  
-   • "DirectiveService" and its handlers produce results that may replace directives in the final AST (transformation mode).  
-   • The "OutputService" consumes nodes: if in transformation mode, it should see only text/code nodes and never see directive definitions.  
-   • Mocks in tests sometimes omit partial implementations (like "clone()"), leading to runtime errors in integration or API tests.
+1. **Categorize Tests**: Group skipped/todo tests by component and error type ✅
+2. **Verify Implementation**: Check if the error handling is already implemented for each component ✅
+3. **Update Tests**: Implement tests using the new error testing utilities ✅ (in progress)
+4. **Verify Coverage**: Ensure all error scenarios are covered
 
-2. Key Goals:
-   1) Eliminate errors around missing or incorrect state methods (e.g. "currentState.clone is not a function").  
-   2) Ensure transformation mode consistently replaces directives with their processed output, so the final output shows "test output" instead of raw directives like "@run [echo test]."  
-   3) Maintain high test coverage and pass existing tests (unless a test's expectation is flatly incorrect).
+## 1. Resolver Tests
 
-3. High-Level Purpose:
-   This plan ensures a stable approach to directive transformation—replacing directives with textual or code content—while retaining a well-defined "StateService" interface and consistent test mocks. By the end of these phases, "run" directives, "embed" directives, and others should yield correct transformed nodes, and all code paths (API, integration, unit) should rely on consistent service initializations.
+### TextResolver Tests
 
-4. Critical Dependencies:
-   • Service Initialization Order:
-     - Proper initialization sequence (as shown in cli/index.ts)
-     - Handling of circular dependencies between services
-     - Transformation mode initialization timing
-   • State Management:
-     - StateService clone operation must preserve transformation state
-     - Child states must inherit transformation settings
-     - State merging must handle transformed nodes correctly
-   • Handler Flow:
-     - Handlers must check transformation mode before replacing nodes
-     - Node replacement must preserve source locations
-     - Error handling must work in both modes
-   • Test Infrastructure:
-     - TestContext initialization must support both modes
-     - Mock services must implement full interfaces
-     - Integration tests must use consistent service setup
+**Todo Tests:**
+- `should handle environment variables appropriately (pending new error system)` ✅
+- `should handle undefined variables (pending new error system)` ✅
 
-5. Key Architectural Decisions Required:
-   1. Transformation Mode Scope:
-      - Global vs per-directive setting
-      - Inheritance rules for nested states
-      - Default behavior and configuration
-   2. Transformation Completeness:
-      - All-or-nothing vs partial transformation support
-      - Mixing transformed and untransformed content
-      - Backward compatibility requirements
-   3. Error Handling Strategy:
-      - Location preservation in transformed nodes
-      - Error reporting in transformation mode
-      - Recovery options for partial failures
+**Implementation Plan:**
+```typescript
+// services/resolution/ResolutionService/resolvers/TextResolver.test.ts
 
-────────────────────────────────────────────────────────────────────
-PHASE 1: AUDIT & ALIGNMENT (COMPLETE)
-────────────────────────────────────────────────────────────────────
+it('should handle environment variables appropriately', async () => {
+  // Arrange
+  const originalEnv = process.env;
+  process.env = { ...process.env, TEST_ENV_VAR: 'test-value' };
+  
+  // Act & Assert
+  // Test that it resolves correctly when env var exists
+  const result = await resolver.resolve('${ENV_TEST_ENV_VAR}', context);
+  expect(result).toBe('test-value');
+  
+  // Test strict mode behavior for missing env vars
+  await expectThrowsWithSeverity(
+    () => resolver.resolve('${ENV_MISSING_VAR}', context, createStrictModeOptions()),
+    MeldResolutionError,
+    ErrorSeverity.Recoverable
+  );
+  
+  // Test permissive mode behavior for missing env vars
+  await expectWarningsInPermissiveMode(
+    (options) => resolver.resolve('${ENV_MISSING_VAR}', context, options),
+    MeldResolutionError
+  );
+  
+  // Cleanup
+  process.env = originalEnv;
+});
 
-Objective: Rigorously align our service interfaces, the real implementations, and our test mocks before modifying any production code paths for transformation. This prevents repeated "ping-pong" fixes later.
+it('should handle undefined variables', async () => {
+  // Arrange
+  stateService.getVariable.mockReturnValue(undefined);
+  
+  // Act & Assert
+  // Test that it throws in strict mode
+  await expectThrowsWithSeverity(
+    () => resolver.resolve('${undefined}', context, createStrictModeOptions()),
+    MeldResolutionError,
+    ErrorSeverity.Recoverable
+  );
+  
+  // Test that it warns in permissive mode
+  await expectWarningsInPermissiveMode(
+    (options) => resolver.resolve('${undefined}', context, options),
+    MeldResolutionError
+  );
+  
+  // Test that it returns empty string in permissive mode
+  const collector = new ErrorCollector();
+  const result = await resolver.resolve('${undefined}', context, createPermissiveModeOptions(collector));
+  expect(result).toBe('');
+  expect(collector.warnings).toHaveLength(1);
+});
+```
 
-1. Interface & Implementation Audit (IStateService):
-   • Compare the real "StateService" methods to "IStateService."  
-   • Confirm that "clone()", "getTransformedNodes,", "isTransformationEnabled," etc. are declared exactly in both.  
-   • Check that every method used in production code is actually typed in the interface.  
-   • If any method is missing or partially typed, update "IStateService" accordingly.
+### CommandResolver Tests
 
-2. Mock Services Audit:
-   • For each critical mock (especially the StateService mock), confirm it either implements all "IStateService" methods or explicitly extends a real instance.  
-   • In a single doc or table, list each method (clone, addNode, transformNode, etc.), whether it is implemented in the real code, and whether it is implemented in the mock.  
-   • Add missing methods to the mocks where needed.  
-   • Validate that the mock returns data types consistent with the real service (e.g. "clone" returns a new valid mock, not a plain object).
+**Todo Tests:**
+- `should handle undefined commands appropriately (pending new error system)` ✅
+- `should handle parameter count mismatches appropriately (pending new error system)` ✅
 
-3. Test-by-Test Check for Partial Mocks:
-   • In the failing API integration tests and OutputService transformation tests, examine exactly how "StateService" (or its mocks) is created.  
-   • If any tests pass in one file but fail in another, note differences in mock usage so we can unify them later.
-   • Do not change any production code yet—only refine or unify the mock definitions if they are incomplete.
+**Implementation Plan:**
+```typescript
+// services/resolution/ResolutionService/resolvers/CommandResolver.test.ts
 
-4. Deliverables & Exit Criteria:
-   • A short "Interface vs. Implementation" mapping document (even a simple table).  
-   • Updated "IStateService" that matches real usage in code.  
-   • Updated StateService mock(s) ensuring "clone" and "transformation" methods are properly defined.  
-   • All existing tests should still pass—this step is purely aligning definitions without changing production logic.
+it('should handle undefined commands appropriately', async () => {
+  // Arrange
+  stateService.getCommand.mockReturnValue(undefined);
+  
+  // Act & Assert
+  // Test strict mode
+  await expectThrowsWithSeverity(
+    () => resolver.resolve('$undefined(${param})', context, createStrictModeOptions()),
+    MeldResolutionError,
+    ErrorSeverity.Recoverable
+  );
+  
+  // Test permissive mode
+  await expectWarningsInPermissiveMode(
+    (options) => resolver.resolve('$undefined(${param})', context, options),
+    MeldResolutionError
+  );
+});
 
-Success Criteria:
-• All service interfaces are fully documented
-• Implementation gaps are identified
-• Mock implementations are validated
-• No production code changes
-• All existing tests remain passing
+it('should handle parameter count mismatches appropriately', async () => {
+  // Arrange
+  const command = {
+    parameters: ['param1', 'param2'],
+    body: '@run [echo ${param1} ${param2}]'
+  };
+  stateService.getCommand.mockReturnValue(command);
+  
+  // Act & Assert
+  // Test too few parameters in strict mode
+  await expectThrowsWithSeverity(
+    () => resolver.resolve('$command(${param1})', context, createStrictModeOptions()),
+    MeldResolutionError,
+    ErrorSeverity.Recoverable
+  );
+  
+  // Test too many parameters in strict mode
+  await expectThrowsWithSeverity(
+    () => resolver.resolve('$command(${param1}, ${param2}, ${param3})', context, createStrictModeOptions()),
+    MeldResolutionError,
+    ErrorSeverity.Recoverable
+  );
+  
+  // Test parameter mismatch in permissive mode
+  await expectWarningsInPermissiveMode(
+    (options) => resolver.resolve('$command(${param1})', context, options),
+    MeldResolutionError
+  );
+});
+```
 
-Evidence Required:
-• Interface analysis documentation
-• Mock implementation audit
-• Test coverage analysis
-• Service interaction map
+### DataResolver Tests
 
-────────────────────────────────────────────────────────────────────
-PHASE 2: EVIDENCE COLLECTION
-────────────────────────────────────────────────────────────────────
+**Todo Tests:**
+- `should handle undefined variables appropriately (pending new error system)`
+- `should handle field access restrictions appropriately (pending new error system)`
+- `should handle null/undefined field access appropriately (pending new error system)`
+- `should handle accessing field of non-object (pending new error system)`
+- `should handle accessing non-existent field (pending new error system)`
 
-Objective: Build small, targeted test suites to verify that the newly aligned real services and mocks behave as expected in isolation. This clarifies where transformation fails or where a "clone" method might be returning incomplete objects.
+**Implementation Plan:**
+```typescript
+// services/resolution/ResolutionService/resolvers/DataResolver.test.ts
 
-1. "StateService.clone.test.ts":
-   • Create a minimal test file that:  
-     (a) Instantiates the real StateService.  
-     (b) Populates it with text/data variables, a small list of nodes, or a mock directive node.  
-     (c) Calls "clone()" and verifies each field (variables, commands, original nodes, transformed nodes) is copied properly.  
-   • Confirm any transformation flags are copied if they exist.  
-   • Confirm that the cloned state is not referencing the same arrays as the original.
+it('should handle undefined variables appropriately', async () => {
+  // Arrange
+  stateService.getDataVariable.mockReturnValue(undefined);
+  
+  // Act & Assert
+  await expectThrowsInStrictButWarnsInPermissive(
+    (options) => resolver.resolve('#{undefined}', context, options),
+    MeldResolutionError
+  );
+});
 
-2. "TransformationMode.test.ts" (Optional if not already present):
-   • A minimal test that uses the real "DirectiveService," real or partial "RunDirectiveHandler," and real "StateService."  
-   • Creates a single directive node ("@run [echo test]") with transformation enabled.  
-   • Checks that after processing, "StateService.getTransformedNodes()" has replaced the directive node with the output ("test\n" or whatever is produced).  
-   • Confirms no directives remain in the "transformedNodes" array.
+it('should handle field access restrictions appropriately', async () => {
+  // Arrange
+  stateService.getDataVariable.mockReturnValue({ field: 'value' });
+  
+  // Act & Assert
+  // Test valid field access
+  const result = await resolver.resolve('#{data.field}', context);
+  expect(result).toBe('value');
+  
+  // Test field access on restricted types
+  await expectThrowsInStrictButWarnsInPermissive(
+    (options) => resolver.resolve('#{data.field.subfield}', context, options),
+    MeldResolutionError
+  );
+});
 
-3. Basic Logging / Instrumentation:
-   • In these mini tests, add a few console.logs or debug logs to confirm what "clone()" returns and that "transformedNodes" is updated.  
-   • This ensures our isolation environment lines up with real production expectations.
+it('should handle null/undefined field access appropriately', async () => {
+  // Arrange
+  stateService.getDataVariable.mockReturnValue({ nullField: null, undefinedField: undefined });
+  
+  // Act & Assert
+  await expectThrowsInStrictButWarnsInPermissive(
+    (options) => resolver.resolve('#{data.nullField.subfield}', context, options),
+    MeldResolutionError
+  );
+  
+  await expectThrowsInStrictButWarnsInPermissive(
+    (options) => resolver.resolve('#{data.undefinedField.subfield}', context, options),
+    MeldResolutionError
+  );
+});
 
-4. Deliverables & Exit Criteria:
-   • Dedicated, passing isolation tests for "clone" and transformation.  
-   • Confidence that the real "StateService" does indeed replicate behavior we expect.  
-   • If these mini-tests fail, fix them before moving on.  
-   • Again, no major production code changes (besides possibly small fixes to "clone" if needed). All existing production tests should still pass.
+it('should handle accessing field of non-object', async () => {
+  // Arrange
+  stateService.getDataVariable.mockReturnValue({ stringField: 'string', numberField: 42 });
+  
+  // Act & Assert
+  await expectThrowsInStrictButWarnsInPermissive(
+    (options) => resolver.resolve('#{data.stringField.subfield}', context, options),
+    MeldResolutionError
+  );
+  
+  await expectThrowsInStrictButWarnsInPermissive(
+    (options) => resolver.resolve('#{data.numberField.subfield}', context, options),
+    MeldResolutionError
+  );
+});
 
+it('should handle accessing non-existent field', async () => {
+  // Arrange
+  stateService.getDataVariable.mockReturnValue({ field: 'value' });
+  
+  // Act & Assert
+  await expectThrowsInStrictButWarnsInPermissive(
+    (options) => resolver.resolve('#{data.nonexistent}', context, options),
+    MeldResolutionError
+  );
+});
+```
 
-────────────────────────────────────────────────────────────────────
-PHASE 3: INSTRUMENT FAILING INTEGRATION TESTS
-────────────────────────────────────────────────────────────────────
+## 2. Directive Handler Tests
 
-Objective: Now that we trust the "StateService" and mock setups, locate precisely where the failing large-scope tests (API integration, OutputService transformation) diverge from the proven mini-tests.
+### TextDirectiveHandler Integration Tests
 
-1. Identify All Failing Tests:
-   • The user's context indicates 7 failing tests:
-     (a) 4 in "api/api.test.ts" around "currentState.clone is not a function."  
-     (b) 3 in OutputService transformation mode.  
+**Todo Tests:**
+- `should handle circular reference detection - Complex error handling deferred for V1`
+- `should handle error propagation through the stack - Complex error propagation deferred for V1`
+- `should handle validation errors with proper context`
+- `should handle mixed directive types - Complex directive interaction deferred for V1`
 
-2. Add Debug Logs:
-   • For each failing test, inject logs that show:  
-     • The exact type of "currentState" or "state" object being passed around (e.g. use "console.log(state.constructor.name)").  
-     • The presence or absence of "clone()" in that object or whether transformation is enabled.  
-     • The final array in "state.getTransformedNodes()" if we are in transformation mode.  
-   • This yields evidence: does the test accidentally inject some partial object? Does "getTransformedNodes()" come back empty?
+**Implementation Plan:**
+```typescript
+// services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler.integration.test.ts
 
-3. Compare with Passing Tests:
-   • If there is a closely related passing test (e.g. a simpler run directive test in OutputService), do a side-by-side to see how it configures the test harness vs. the failing test:  
-     (a) Does the passing test set "enableTransformation(true)" but the failing test does not?  
-     (b) Does the passing test create a real "StateService" while the failing test uses a stub?
+it('should handle validation errors with proper context', async () => {
+  // Arrange
+  const node = createDirectiveNode('text', 'invalid', { 
+    location: { start: { line: 1, column: 1 }, end: { line: 1, column: 10 } }
+  });
+  
+  // Act & Assert
+  await expectThrowsWithSeverity(
+    () => handler.execute(node, context),
+    DirectiveError,
+    ErrorSeverity.Recoverable
+  );
+  
+  try {
+    await handler.execute(node, context);
+  } catch (error) {
+    expectDirectiveErrorWithCode(error, DirectiveErrorCode.VALIDATION_FAILED, ErrorSeverity.Recoverable);
+    expect(error.context).toMatchObject({
+      directiveKind: 'text',
+      location: { line: 1, column: 1 }
+    });
+  }
+});
+```
 
-4. Deliverables & Exit Criteria:
-   • A short log output or debug capture for each failing test.  
-   • A clear note explaining which object or method is missing or incorrectly set up.  
-   • No code changes beyond inserting logs and debugging statements. At this point, we want the raw evidence.
+## 3. CLI Service Tests
 
+**Todo Tests:**
+- `should handle overwrite cancellation appropriately (pending new error system)`
+- `should handle overwrite confirmation appropriately (pending new error system)`
 
-────────────────────────────────────────────────────────────────────
-PHASE 4: RESOLVE MISMATCHES AND ENSURE PRODUCTION-LIKE SETUP
-────────────────────────────────────────────────────────────────────
+**Implementation Plan:**
+```typescript
+// services/cli/CLIService/CLIService.test.ts
 
-Objective: Now that we see precisely which mocks or service initializations differ from production, we systematically fix them so the big tests pass.
+it('should handle overwrite cancellation appropriately', async () => {
+  // Arrange
+  const cliService = new CLIService(/* dependencies */);
+  const options = { input: 'test.meld', output: 'existing.md' };
+  fileSystemService.fileExists.mockResolvedValue(true);
+  promptService.confirm.mockResolvedValue(false); // User cancels overwrite
+  
+  // Act & Assert
+  const collector = new ErrorCollector();
+  await cliService.run(options, collector.handleError);
+  
+  // Should have a warning about cancelled operation
+  expect(collector.warnings).toHaveLength(1);
+  expect(collector.warnings[0].message).toContain('Operation cancelled');
+  
+  // Should not have written the file
+  expect(fileSystemService.writeFile).not.toHaveBeenCalled();
+});
 
-1. Fix "StateService" Injection in Tests:
-   • If logs show that "api/api.test.ts" uses a "fakeState" that lacks "clone," replace it with either (a) a proper mock that includes "clone()" or (b) the real "StateService" if we want a full integration test.  
-   • Ensure each test that needs transformation mode is actually enabling transformation the same way production code does (e.g. "context.state.enableTransformation(true)").
+it('should handle overwrite confirmation appropriately', async () => {
+  // Arrange
+  const cliService = new CLIService(/* dependencies */);
+  const options = { input: 'test.meld', output: 'existing.md' };
+  fileSystemService.fileExists.mockResolvedValue(true);
+  promptService.confirm.mockResolvedValue(true); // User confirms overwrite
+  
+  // Act
+  await cliService.run(options);
+  
+  // Assert
+  // Should have written the file
+  expect(fileSystemService.writeFile).toHaveBeenCalledWith('existing.md', expect.any(String));
+});
+```
 
-2. Confirm DirectiveService -> StateService Flow:
-   • In the "api/api.test.ts," check that "DirectiveService" is truly returning a new state object that also has "clone()."  
-   • If a partial mock is returned, unify it (likely remove partial mocks for full integration tests, or fully implement them so they match production).
+## 4. FuzzyMatchingValidator Tests
 
-3. OutputService Node Flow:
-   • For the 3 failing OutputService tests, confirm that by the time "OutputService.convert" is called, "state.getTransformedNodes()" actually has the directive replaced.  
-   • If not, check "RunDirectiveHandler.execute" or "EmbedDirectiveHandler.execute" calls to see if they store the replacement node.  
-   • Correct the logic or the test setup as needed. This might mean ensuring we call "interpreterService.interpret([...], { transformation: true })" in the test.  
+**Todo Tests:**
+- `should reject fuzzy thresholds below 0 - Edge case validation deferred for V1`
+- `should reject fuzzy thresholds above 1 - Edge case validation deferred for V1`
+- `should reject non-numeric fuzzy thresholds - Edge case validation deferred for V1`
+- `should provide helpful error messages - Detailed error messaging deferred for V1`
 
-4. Deliverables & Exit Criteria:
-   • All 7 failing tests now pass (unless a test's expectation is truly incorrect). If the test's logic contradicts real architecture decisions, correct the test description or remove it.  
-   • No directive definitions or raw commands appear in the final output for transformation-based tests.  
-   • Feature parity with the mini-tests from Phase 2.  
+**Implementation Plan:**
+```typescript
+// services/resolution/ValidationService/validators/FuzzyMatchingValidator.test.ts
 
-By the end of this phase, the fundamental clones and transformation flows in integration tests will match what we already proved in isolation.
+it('should reject fuzzy thresholds below 0', async () => {
+  // Arrange
+  const validator = new FuzzyMatchingValidator();
+  const value = { fuzzyThreshold: -0.1 };
+  
+  // Act & Assert
+  await expectThrowsWithSeverity(
+    () => validator.validate(value),
+    ValidationError,
+    ErrorSeverity.Recoverable
+  );
+  
+  try {
+    await validator.validate(value);
+  } catch (error) {
+    expect(error.message).toContain('Fuzzy threshold must be between 0 and 1');
+  }
+});
 
+it('should reject fuzzy thresholds above 1', async () => {
+  // Arrange
+  const validator = new FuzzyMatchingValidator();
+  const value = { fuzzyThreshold: 1.1 };
+  
+  // Act & Assert
+  await expectThrowsWithSeverity(
+    () => validator.validate(value),
+    ValidationError,
+    ErrorSeverity.Recoverable
+  );
+});
 
-────────────────────────────────────────────────────────────────────
-PHASE 5: DIRECTIVE & OUTPUT CONSISTENCY RULES
-────────────────────────────────────────────────────────────────────
+it('should reject non-numeric fuzzy thresholds', async () => {
+  // Arrange
+  const validator = new FuzzyMatchingValidator();
+  const value = { fuzzyThreshold: 'not-a-number' };
+  
+  // Act & Assert
+  await expectThrowsWithSeverity(
+    () => validator.validate(value),
+    ValidationError,
+    ErrorSeverity.Recoverable
+  );
+});
 
-Objective: Confirm that the entire codebase has a unified rule on how directives should appear (or not appear) in output, plus handle any special edge cases (e.g., a directive intentionally kept).
+it('should provide helpful error messages', async () => {
+  // Arrange
+  const validator = new FuzzyMatchingValidator();
+  
+  // Act & Assert
+  try {
+    await validator.validate({ fuzzyThreshold: -0.1 });
+  } catch (error) {
+    expect(error.message).toContain('Fuzzy threshold must be between 0 and 1');
+  }
+  
+  try {
+    await validator.validate({ fuzzyThreshold: 1.1 });
+  } catch (error) {
+    expect(error.message).toContain('Fuzzy threshold must be between 0 and 1');
+  }
+  
+  try {
+    await validator.validate({ fuzzyThreshold: 'not-a-number' });
+  } catch (error) {
+    expect(error.message).toContain('Fuzzy threshold must be a number');
+  }
+});
+```
 
-1. Unify the Directive Transformation Rule:
-   • Decide, once and for all, if seeing a "DirectiveNode" in transformation mode is a valid scenario or an error.  
-   • If it's always invalid, ensure each directive handler replaces itself with text/code.  
-   • If some directives are allowed, confirm which, under which conditions, and ensure all relevant handlers exhibit consistent logic.
+## 5. CLI Tests
 
-2. Update Documentation & Comments:
-   • In "docs/ARCHITECTURE.md" or a relevant doc, clarify that in transformation mode, all directive nodes are replaced by text/code nodes, or removed if they produce no user-visible output.  
-   • Document how test authors can expect "StateService" to store final, transformed nodes.
+**Todo Tests:**
+- `should handle missing data fields appropriately (pending new error system)`
+- `should handle missing env vars appropriately (pending new error system)`
+- `should not warn on expected stderr from commands`
+- `should handle type coercion silently`
 
-3. Adjust or Add Tests if Needed:
-   • If we discover any contradictory test scenario (one expects a directive to remain, another demands it vanish), either unify the expectation or split them into two test modes with explicit rationales.  
-   • Add new coverage for corner cases:  
-     (a) A directive that has no output (like a pure definition).  
-     (b) A directive that partially modifies the text but remains.  
-     (c) Edge cases around error handling (e.g., directive fails to transform properly).
+**Implementation Plan:**
+```typescript
+// cli/cli.test.ts
 
-4. Deliverables & Exit Criteria:
-   • A clear-coded "transformation contract" that every directive handler follows.  
-   • Documentation in the code (JSDoc or doc comments) plus test coverage verifying this rule.  
-   • No contradictions or confusion in the test suite about whether "@define," "@import," etc. should appear in final output.
+it('should handle missing data fields appropriately', async () => {
+  // Arrange
+  const content = '@data config = { "field": "value" }\n#{config.nonexistent}';
+  fs.writeFileSync('test.meld', content);
+  
+  // Act
+  const { stdout, stderr } = await execCLI('test.meld --stdout');
+  
+  // Assert
+  // In permissive mode (CLI default), should warn but continue
+  expect(stderr).toContain('Warning: Field not found: nonexistent');
+  // Should output empty string for missing field
+  expect(stdout).toBe('');
+});
 
+it('should handle missing env vars appropriately', async () => {
+  // Arrange
+  const content = '${ENV_NONEXISTENT_VAR}';
+  fs.writeFileSync('test.meld', content);
+  
+  // Act
+  const { stdout, stderr } = await execCLI('test.meld --stdout');
+  
+  // Assert
+  // In permissive mode (CLI default), should warn but continue
+  expect(stderr).toContain('Warning: Environment variable not found: NONEXISTENT_VAR');
+  // Should output empty string for missing env var
+  expect(stdout).toBe('');
+});
 
-────────────────────────────────────────────────────────────────────
-PHASE 6: CLEANUP & LONG-TERM MAINTENANCE
-────────────────────────────────────────────────────────────────────
+it('should not warn on expected stderr from commands', async () => {
+  // Arrange
+  const content = '@run [echo "Error message" >&2]';
+  fs.writeFileSync('test.meld', content);
+  
+  // Act
+  const { stdout, stderr } = await execCLI('test.meld --stdout');
+  
+  // Assert
+  // Command stderr should be in stderr output
+  expect(stderr).toContain('Error message');
+  // But should not contain a warning about it
+  expect(stderr).not.toContain('Warning: Command produced stderr output');
+});
 
-Objective: With all tests passing and consistent transformation rules in place, remove any debugging artifacts, unify leftover flags, and ensure we have robust instructions for future maintainers.
+it('should handle type coercion silently', async () => {
+  // Arrange
+  const content = '@data num = 42\n${num}';
+  fs.writeFileSync('test.meld', content);
+  
+  // Act
+  const { stdout, stderr } = await execCLI('test.meld --stdout');
+  
+  // Assert
+  // Should coerce number to string without warning
+  expect(stdout).toBe('42');
+  expect(stderr).not.toContain('Warning: Type coercion');
+});
+```
 
-1. Remove or Convert Debug Logs:
-   • If you inserted "console.log" or "debugger" statements in integration tests, strip them out or convert them to a more permanent debugging facility (stop spamming test outputs).
+## 6. Init Command Tests
 
-2. Finalize Docs & Architecture Overviews:
-   • Incorporate diagrams or bullet references in "docs/ARCHITECTURE.md," "docs/TESTS.md," or "services/StateService/README.md" explaining the transformation pipeline.  
-   • Summarize the "mini-tests" approach, so future devs can replicate it quickly when diagnosing new issues.
+**Skipped Tests:**
+- `should exit if meld.json already exists`
 
-3. Ensure Ongoing Test Consistency:
-   • Double-check that no new partial mocks slip in.  
-   • Possibly add a lint or code check that mocks must implement the entire "IStateService" if they claim to do so.
+**Implementation Plan:**
+```typescript
+// cli/commands/init.test.ts
 
-4. Deliverables & Exit Criteria:
-   • A final, stable codebase with no transformation or state-management failures.  
-   • Thorough documentation for new devs to quickly see how we handle directive-to-text transformations.  
-   • All 484 tests passing consistently, plus the new mini-tests and any updated coverage.
+it('should exit if meld.json already exists', async () => {
+  // Arrange
+  fs.writeFileSync('meld.json', JSON.stringify({ projectRoot: '.' }));
+  
+  // Act & Assert
+  await expect(initCommand()).rejects.toThrow('meld.json already exists');
+  
+  // Clean up
+  fs.unlinkSync('meld.json');
+});
+```
 
+## 7. API Tests
 
-────────────────────────────────────────────────────────────────────
-SUMMARY OF HOW THIS IS INCREMENTAL
-────────────────────────────────────────────────────────────────────
+**Skipped Tests:**
+- `should handle large files efficiently`
+- `should handle deeply nested imports`
 
-• Phases 1–2 do not alter any core business logic; they simply align interfaces and confirm they function in isolation, ensuring no existing tests break.  
-• Phases 3–4 systematically address the failing integration tests by matching them to real-world usage (no partial mocks, correct transformation toggles). We expect to fix the 7 known failing tests here without breaking the other 400+ passing tests.  
-• Phases 5–6 unify directive transformation rules in all docs/tests, then clean up leftover logs or toggles. This final step ensures a fully coherent design that new team members can easily follow.
+**Implementation Plan:**
+```typescript
+// api/api.test.ts
 
-By following this plan in order—always focusing first on proven alignment before changing bigger test code—we avoid partial fixes that re-break existing functionality. This methodical approach uses evidence at each stage, verifying that "transformation mode" and "clone()" work as intended in isolation and in real integration flows.
+it('should handle large files efficiently', async () => {
+  // Arrange
+  const largeContent = '@text var = "value"\n'.repeat(1000);
+  fs.writeFileSync('large.meld', largeContent);
+  
+  // Act
+  const startTime = Date.now();
+  const result = await meld.processFile('large.meld');
+  const endTime = Date.now();
+  
+  // Assert
+  expect(result).toBeDefined();
+  // Should process in a reasonable time (adjust threshold as needed)
+  expect(endTime - startTime).toBeLessThan(1000);
+});
+
+it('should handle deeply nested imports', async () => {
+  // Arrange
+  fs.writeFileSync('level1.meld', '@text var1 = "level1"\n@import [level2.meld]');
+  fs.writeFileSync('level2.meld', '@text var2 = "level2"\n@import [level3.meld]');
+  fs.writeFileSync('level3.meld', '@text var3 = "level3"\n@import [level4.meld]');
+  fs.writeFileSync('level4.meld', '@text var4 = "level4"\n@import [level5.meld]');
+  fs.writeFileSync('level5.meld', '@text var5 = "level5"');
+  
+  // Act
+  const result = await meld.processFile('level1.meld');
+  
+  // Assert
+  expect(result).toContain('level1');
+  expect(result).toContain('level2');
+  expect(result).toContain('level3');
+  expect(result).toContain('level4');
+  expect(result).toContain('level5');
+});
+```
+
+## 8. InterpreterService Integration Tests
+
+**Todo Tests:**
+- `handles nested imports with state inheritance`
+- `maintains correct state after successful imports`
+- `handles nested directive values correctly`
+
+**Implementation Plan:**
+```typescript
+// services/pipeline/InterpreterService/InterpreterService.integration.test.ts
+
+it('handles nested imports with state inheritance', async () => {
+  // Arrange
+  const parentContent = '@text parent = "parent"\n@import [child.meld]';
+  const childContent = '@text child = "child"\n${parent}';
+  
+  fileSystem.writeFile('parent.meld', parentContent);
+  fileSystem.writeFile('child.meld', childContent);
+  
+  // Act
+  const nodes = await parser.parse(parentContent);
+  const state = await interpreter.interpret(nodes, { filePath: 'parent.meld' });
+  
+  // Assert
+  expect(state.getVariable('parent')).toBe('parent');
+  expect(state.getVariable('child')).toBe('child');
+});
+
+it('maintains correct state after successful imports', async () => {
+  // Arrange
+  const mainContent = '@text before = "before"\n@import [imported.meld]\n@text after = "after"';
+  const importedContent = '@text imported = "imported"';
+  
+  fileSystem.writeFile('main.meld', mainContent);
+  fileSystem.writeFile('imported.meld', importedContent);
+  
+  // Act
+  const nodes = await parser.parse(mainContent);
+  const state = await interpreter.interpret(nodes, { filePath: 'main.meld' });
+  
+  // Assert
+  expect(state.getVariable('before')).toBe('before');
+  expect(state.getVariable('imported')).toBe('imported');
+  expect(state.getVariable('after')).toBe('after');
+});
+
+it('handles nested directive values correctly', async () => {
+  // Arrange
+  const content = '@text inner = "inner"\n@text outer = @embed [${inner}.md]';
+  fileSystem.writeFile('inner.md', 'Content from inner');
+  
+  // Act
+  const nodes = await parser.parse(content);
+  const state = await interpreter.interpret(nodes);
+  
+  // Assert
+  expect(state.getVariable('inner')).toBe('inner');
+  expect(state.getVariable('outer')).toBe('Content from inner');
+});
+```
+
+## Implementation Timeline
+
+1. **Week 1: Core Resolver Tests**
+   - Implement TextResolver tests ✅
+   - Implement CommandResolver tests ✅
+   - Implement DataResolver tests
+
+2. **Week 2: Directive Handler Tests**
+   - Implement TextDirectiveHandler integration tests
+   - Implement other directive handler tests as needed
+
+3. **Week 3: CLI and Validation Tests**
+   - Implement CLI Service tests
+   - Implement FuzzyMatchingValidator tests
+   - Implement CLI tests
+
+4. **Week 4: API and Integration Tests**
+   - Implement API tests
+   - Implement InterpreterService integration tests
+   - Final verification and cleanup
+
+## Verification Process
+
+For each implemented test:
+1. Run the test to verify it passes
+2. Check code coverage to ensure the error handling code is exercised
+3. Verify that both strict and permissive modes are tested
+4. Update any related documentation
+
+## Conclusion
+
+This migration plan provides a comprehensive approach to updating the skipped and todo tests to use the new error handling system. By following this plan, we can ensure that all error scenarios are properly tested in both strict and permissive modes, providing a robust foundation for the Meld language interpreter.

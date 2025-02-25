@@ -5,6 +5,8 @@ import { ResolutionContext, ResolutionErrorCode } from '@services/resolution/Res
 import { ResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError.js';
 import { TestContext } from '@tests/utils/TestContext.js';
 import { MeldNode, DirectiveNode, TextNode } from 'meld-spec';
+import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
+import { ErrorSeverity } from '@core/errors/MeldError.js';
 
 describe('CommandResolver', () => {
   let resolver: CommandResolver;
@@ -116,7 +118,27 @@ describe('CommandResolver', () => {
         .toThrow('Command references are not allowed in this context');
     });
 
-    it.todo('should handle undefined commands appropriately (pending new error system)');
+    it('should handle undefined commands appropriately', async () => {
+      vi.mocked(stateService.getCommand).mockReturnValue(undefined);
+      
+      const node: DirectiveNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'run',
+          identifier: 'undefined',
+          args: []
+        }
+      };
+      
+      try {
+        await resolver.resolve(node, context);
+        fail('Expected to throw but did not');
+      } catch (error) {
+        expect(error).toBeInstanceOf(MeldResolutionError);
+        expect((error as MeldResolutionError).severity).toBe(ErrorSeverity.Recoverable);
+        expect((error as MeldResolutionError).message).toContain('Undefined command');
+      }
+    });
 
     it('should throw on invalid command format', async () => {
       const node: DirectiveNode = {
@@ -136,7 +158,52 @@ describe('CommandResolver', () => {
         .toThrow('Invalid command definition: must start with @run [');
     });
 
-    it.todo('should handle parameter count mismatches appropriately (pending new error system)');
+    it('should handle parameter count mismatches appropriately', async () => {
+      // Arrange
+      const command = {
+        command: '@run [echo ${param1} ${param2}]'
+      };
+      vi.mocked(stateService.getCommand).mockReturnValue(command);
+      
+      // Act & Assert
+      // Test too few parameters
+      const tooFewNode: DirectiveNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'run',
+          identifier: 'command',
+          args: ['param1']
+        }
+      };
+      
+      try {
+        await resolver.resolve(tooFewNode, context);
+        fail('Expected to throw but did not');
+      } catch (error) {
+        expect(error).toBeInstanceOf(MeldResolutionError);
+        expect((error as MeldResolutionError).severity).toBe(ErrorSeverity.Fatal);
+        expect((error as MeldResolutionError).message).toContain('expects 2 parameters but got 1');
+      }
+      
+      // Test too many parameters
+      const tooManyNode: DirectiveNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'run',
+          identifier: 'command',
+          args: ['param1', 'param2', 'param3']
+        }
+      };
+      
+      try {
+        await resolver.resolve(tooManyNode, context);
+        fail('Expected to throw but did not');
+      } catch (error) {
+        expect(error).toBeInstanceOf(MeldResolutionError);
+        expect((error as MeldResolutionError).severity).toBe(ErrorSeverity.Fatal);
+        expect((error as MeldResolutionError).message).toContain('expects 2 parameters but got 3');
+      }
+    });
   });
 
   describe('extractReferences', () => {

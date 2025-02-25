@@ -10,6 +10,15 @@ import type { IInterpreterService } from '@services/pipeline/InterpreterService/
 import type { ICircularityService } from '@services/resolution/CircularityService/ICircularityService.js';
 import type { DirectiveNode } from 'meld-spec';
 import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
+import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
+import { MeldResolutionError, ResolutionErrorDetails } from '@core/errors/MeldResolutionError.js';
+import { ErrorSeverity } from '@core/errors/MeldError.js';
+import { 
+  expectThrowsWithSeverity, 
+  expectThrowsInStrictButWarnsInPermissive,
+  expectDirectiveErrorWithCode,
+  ErrorCollector
+} from '@tests/utils';
 
 describe('ImportDirectiveHandler', () => {
   let handler: ImportDirectiveHandler;
@@ -294,9 +303,44 @@ describe('ImportDirectiveHandler', () => {
       await expect(handler.execute(node, context)).rejects.toThrow(DirectiveError);
     });
 
-    it.todo('should handle variable not found appropriately (pending new error system)');
+    it('should handle variable not found appropriately', async () => {
+      // Arrange
+      const node = createImportDirective('${nonexistent}');
+      const context = { filePath: '/some/path', state: stateService };
+      
+      // Mock resolution service to throw a resolution error
+      vi.mocked(resolutionService.resolveInContext).mockRejectedValueOnce(
+        new MeldResolutionError('Variable not found: nonexistent', {
+          severity: ErrorSeverity.Recoverable,
+          details: {
+            variableName: 'nonexistent',
+            variableType: 'text'
+          }
+        })
+      );
 
-    it.todo('should handle file not found appropriately (pending new error system)');
+      // Act & Assert - Should throw in strict mode
+      await expect(
+        handler.execute(node, { ...context, strict: true })
+      ).rejects.toThrow(DirectiveError);
+    });
+
+    it('should handle file not found appropriately', async () => {
+      // Arrange
+      const node = createImportDirective('missing.meld');
+      const context = { filePath: '/some/path', state: stateService };
+      
+      // Mock resolution service to return the file path
+      vi.mocked(resolutionService.resolveInContext).mockResolvedValueOnce('missing.meld');
+      
+      // Mock file system service to return false for exists check
+      vi.mocked(fileSystemService.exists).mockResolvedValueOnce(false);
+
+      // Act & Assert - Should throw in strict mode
+      await expect(
+        handler.execute(node, { ...context, strict: true })
+      ).rejects.toThrow(DirectiveError);
+    });
 
     it('should handle circular imports', async () => {
       const node = createImportDirective('[circular.meld]', createLocation(1, 1));
