@@ -8,60 +8,53 @@ import { DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/D
 export function validateDefineDirective(node: DirectiveNode): void {
   const directive = node.directive as DefineDirective;
   
-  // Validate identifier
-  if (!directive.identifier || typeof directive.identifier !== 'string') {
+  // Validate name
+  if (!directive.name || typeof directive.name !== 'string') {
     throw new MeldDirectiveError(
-      'Define directive requires an "identifier" property (string)',
+      'Define directive requires a "name" property (string)',
       'define',
       node.location?.start,
       DirectiveErrorCode.VALIDATION_FAILED
     );
   }
   
-  // Validate identifier format
-  if (!/^[a-zA-Z_][a-zA-Z0-9_]*(?:\.(risk|about)(?:\.(high|med|low))?)?$/.test(directive.identifier)) {
+  // Validate name format
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*(?:\.(risk|about)(?:\.(high|med|low))?)?$/.test(directive.name)) {
     throw new MeldDirectiveError(
-      'Invalid define directive identifier format',
+      'Invalid define directive name format',
       'define',
       node.location?.start,
       DirectiveErrorCode.VALIDATION_FAILED
     );
   }
 
-  // Validate value exists
-  if (!directive.value || typeof directive.value !== 'string') {
+  // Validate command exists
+  if (!directive.command || typeof directive.command !== 'object') {
     throw new MeldDirectiveError(
-      'Define directive requires a "value" property (string)',
+      'Define directive requires a "command" property (object)',
       'define',
       node.location?.start,
       DirectiveErrorCode.VALIDATION_FAILED
     );
   }
 
-  // Try to parse as JSON first
-  try {
-    const parsed = JSON.parse(directive.value);
-    if (parsed.command?.kind === 'run' && typeof parsed.command.command === 'string') {
-      // For JSON format, validate command is not empty
-      if (!parsed.command.command.trim()) {
-        throw new MeldDirectiveError(
-          'Command cannot be empty',
-          'define',
-          node.location?.start,
-          DirectiveErrorCode.VALIDATION_FAILED
-        );
-      }
-      return;
-    }
-  } catch (e) {
-    // Not JSON, validate raw command is not empty
-    if (!directive.value.trim()) {
-      throw new MeldDirectiveError(
-        'Command cannot be empty',
-        'define',
-        node.location?.start,
-        DirectiveErrorCode.VALIDATION_FAILED
-      );
-    }
+  // Validate command structure
+  if (directive.command.kind !== 'run' || typeof directive.command.command !== 'string') {
+    throw new MeldDirectiveError(
+      'Define directive command must have a kind="run" and a command string',
+      'define',
+      node.location?.start,
+      DirectiveErrorCode.VALIDATION_FAILED
+    );
+  }
+
+  // Validate command is not empty
+  if (!directive.command.command.trim()) {
+    throw new MeldDirectiveError(
+      'Command cannot be empty',
+      'define',
+      node.location?.start,
+      DirectiveErrorCode.VALIDATION_FAILED
+    );
   }
 } 

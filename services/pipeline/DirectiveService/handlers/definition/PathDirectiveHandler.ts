@@ -1,4 +1,4 @@
-import { DirectiveNode, DirectiveData, StructuredPath } from 'meld-spec';
+import { DirectiveNode, DirectiveData } from 'meld-spec';
 import { IDirectiveHandler, DirectiveContext } from '@services/pipeline/DirectiveService/IDirectiveService.js';
 import { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import { IStateService } from '@services/state/StateService/IStateService.js';
@@ -10,8 +10,8 @@ import { ErrorSeverity } from '@core/errors/MeldError.js';
 
 interface PathDirective extends DirectiveData {
   kind: 'path';
-  identifier: string;
-  value: string | StructuredPath;
+  id: string;
+  path: string | { raw: string; structured: any; normalized: string };
 }
 
 /**
@@ -34,45 +34,96 @@ export class PathDirectiveHandler implements IDirectiveHandler {
     });
 
     try {
+      // Log state service information
+      logger.debug('State service details', {
+        stateExists: !!context.state,
+        stateMethods: context.state ? Object.keys(context.state) : 'undefined'
+      });
+
+      // Create a new state for modifications
+      const newState = context.state.clone();
+      
+      // Initialize special path variables if not already set
+      if (newState.getPathVar('PROJECTPATH') === undefined) {
+        const projectPath = this.stateService.getPathVar('PROJECTPATH') || process.cwd();
+        logger.debug('Setting PROJECTPATH', { projectPath });
+        newState.setPathVar('PROJECTPATH', projectPath);
+      }
+      
+      if (newState.getPathVar('HOMEPATH') === undefined) {
+        const homePath = this.stateService.getPathVar('HOMEPATH') || 
+                        (process.env.HOME || process.env.USERPROFILE || '/home');
+        logger.debug('Setting HOMEPATH', { homePath });
+        newState.setPathVar('HOMEPATH', homePath);
+      }
+
       // 1. Validate directive structure
       await this.validationService.validate(node);
 
       // 2. Get identifier and value from directive
-      const { identifier, value } = node.directive;
+      const { directive } = node;
+      const identifier = directive.identifier;
+      const path = directive.path;
+
+      // Log path information
+      logger.debug('Path directive details', {
+        identifier,
+        path,
+        pathType: typeof path,
+        nodeType: node.type,
+        directiveKind: directive.kind
+      });
 
       // 3. Process value based on type
-      if (!value) {
+      if (!path) {
         throw new DirectiveError(
           'Path directive requires a value',
           this.kind,
           DirectiveErrorCode.VALIDATION_FAILED,
           { 
             node,
-            severity: DirectiveErrorSeverity[DirectiveErrorCode.VALIDATION_FAILED]
+            context
           }
         );
       }
 
-      // Create a new state for modifications
-      const newState = context.state.clone();
-
       // Create resolution context
       const resolutionContext = ResolutionContextFactory.forPathDirective(
-        context.currentFilePath
+        context.currentFilePath,
+        newState
       );
+
+      // Get the raw path value to resolve
+      const rawPath = typeof path === 'string' ? path : path.raw;
+
+      // Log the resolution context that was created
+      logger.debug('Created resolution context for path directive', {
+        currentFilePath: resolutionContext.currentFilePath,
+        allowedVariableTypes: resolutionContext.allowedVariableTypes,
+        pathValidation: resolutionContext.pathValidation,
+        stateIsPresent: !!resolutionContext.state,
+        specialPathVars: {
+          PROJECTPATH: resolutionContext.state?.getPathVar('PROJECTPATH'),
+          HOMEPATH: resolutionContext.state?.getPathVar('HOMEPATH')
+        }
+      });
 
       // Resolve variables in the value
       const resolvedValue = await this.resolutionService.resolveInContext(
-        typeof value === 'string' ? value : value.raw,
+        rawPath,
         resolutionContext
       );
 
       // 4. Store in state
       newState.setPathVar(identifier, resolvedValue);
+      
+      // Also set a corresponding text variable with the same name so it can be accessed
+      // in text directives using ${identifier} syntax
+      newState.setTextVar(identifier, resolvedValue);
 
       logger.debug('Path directive processed successfully', {
         identifier,
-        value: resolvedValue,
+        path: resolvedValue,
         location: node.location
       });
 
@@ -94,8 +145,7 @@ export class PathDirectiveHandler implements IDirectiveHandler {
         {
           node,
           context,
-          cause: error instanceof Error ? error : new Error(String(error)),
-          severity: DirectiveErrorSeverity[DirectiveErrorCode.EXECUTION_FAILED]
+          cause: error instanceof Error ? error : new Error(String(error))
         }
       );
     }

@@ -30,10 +30,10 @@ export function validatePathDirective(node: DirectiveNode): void {
     );
   }
   
-  // Validate value exists
-  if (!directive.value || typeof directive.value !== 'string') {
+  // Validate path exists
+  if (!directive.path || !directive.path.raw || typeof directive.path.raw !== 'string') {
     throw new MeldDirectiveError(
-      'Path directive requires a "value" property (string)',
+      'Path directive requires a "path" property with a raw string value',
       'path',
       node.location?.start,
       DirectiveErrorCode.VALIDATION_FAILED
@@ -42,7 +42,7 @@ export function validatePathDirective(node: DirectiveNode): void {
 
   // The AST will have already validated and normalized the path format
   // We just need to ensure it's not empty
-  if (directive.value.trim() === '') {
+  if (directive.path.raw.trim() === '') {
     throw new MeldDirectiveError(
       'Path value cannot be empty',
       'path',

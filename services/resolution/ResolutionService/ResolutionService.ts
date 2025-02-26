@@ -162,6 +162,18 @@ export class ResolutionService implements IResolutionService {
    * Resolve any value based on the provided context rules
    */
   async resolveInContext(value: string | StructuredPath, context: ResolutionContext): Promise<string> {
+    // Add debug logging for debugging path handling issues
+    console.log('*** ResolutionService.resolveInContext', {
+      value: typeof value === 'string' ? value : value.raw,
+      allowedVariableTypes: context.allowedVariableTypes,
+      pathValidation: context.pathValidation,
+      stateExists: !!context.state,
+      specialPathVars: context.state ? {
+        PROJECTPATH: context.state.getPathVar('PROJECTPATH'),
+        HOMEPATH: context.state.getPathVar('HOMEPATH')
+      } : 'state not available'
+    });
+    
     // Convert StructuredPath to string if needed
     const stringValue = typeof value === 'string' ? value : value.raw;
     
@@ -183,6 +195,14 @@ export class ResolutionService implements IResolutionService {
     
     while ((match = textVarRegex.exec(result)) !== null) {
       const [fullMatch, varName] = match;
+      
+      // Add debug logging for text variables
+      console.log('*** Resolving text variable', {
+        fullMatch,
+        varName,
+        variableExists: context.state.getTextVar(varName) !== undefined,
+        resolutionPath
+      });
       
       // Check for circular references
       if (resolutionPath.includes(varName)) {
@@ -230,7 +250,11 @@ export class ResolutionService implements IResolutionService {
     // Handle data variables (#{...})
     const dataVarRegex = /#{([^}]+)}/g;
     while ((match = dataVarRegex.exec(result)) !== null) {
-      const [fullMatch, varName] = match;
+      const [fullMatch, fieldRef] = match;
+      
+      // Handle field access (e.g., user.name)
+      const parts = fieldRef.split('.');
+      const varName = parts[0];
       
       // Check for circular references
       if (resolutionPath.includes(varName)) {
@@ -242,10 +266,11 @@ export class ResolutionService implements IResolutionService {
             details: { 
               value: value, 
               context: JSON.stringify(context),
+              fieldPath: parts.slice(1).join('.'),
               variableName: varName,
               variableType: 'data'
             },
-            severity: ErrorSeverity.Fatal
+            severity: ErrorSeverity.Recoverable
           }
         );
       }
@@ -253,8 +278,8 @@ export class ResolutionService implements IResolutionService {
       resolutionPath.push(varName);
 
       try {
-        const varValue = context.state.getDataVar(varName);
-        if (varValue === undefined) {
+        const dataVar = context.state.getDataVar(varName);
+        if (dataVar === undefined) {
           throw new MeldResolutionError(
             `Undefined data variable: ${varName}`,
             {
@@ -269,7 +294,43 @@ export class ResolutionService implements IResolutionService {
             }
           );
         }
-        result = result.replace(fullMatch, JSON.stringify(varValue));
+        
+        // Access nested fields if they exist
+        let fieldValue = dataVar;
+        
+        // Follow the field path
+        if (parts.length > 1) {
+          try {
+            fieldValue = parts.slice(1).reduce((obj: any, field) => {
+              if (obj === undefined || obj === null) {
+                throw new Error(`Cannot access field ${field} on undefined or null value`);
+              }
+              return obj[field];
+            }, dataVar);
+          } catch (e) {
+            throw new MeldResolutionError(
+              `Error accessing field '${parts.slice(1).join('.')}' in data variable '${varName}'`,
+              {
+                code: ResolutionErrorCode.FIELD_ACCESS_ERROR,
+                details: { 
+                  value: fieldRef, 
+                  context: JSON.stringify(context),
+                  fieldPath: parts.slice(1).join('.'),
+                  variableName: varName,
+                  variableType: 'data'
+                },
+                severity: ErrorSeverity.Recoverable
+              }
+            );
+          }
+        }
+        
+        // Convert to string if necessary
+        const stringValue = typeof fieldValue === 'object' 
+          ? (Array.isArray(fieldValue) ? fieldValue.join(',') : JSON.stringify(fieldValue))
+          : String(fieldValue);
+        
+        result = result.replace(fullMatch, stringValue);
       } finally {
         resolutionPath.pop();
       }
@@ -325,13 +386,43 @@ export class ResolutionService implements IResolutionService {
     }
 
     // Handle path variables ($path)
-    const pathVarRegex = /\$([A-Za-z0-9_]+)/g;
+    // Before using regex, check if value is already a structured path object
+    if (typeof result === 'object' && result !== null && 'structured' in result) {
+      // Value is already a structured path object, use as is
+      logger.debug('Using structured path object directly', {
+        rawPath: result.raw,
+        normalizedPath: result.normalized
+      });
+      return result.normalized;
+    }
+
+    // If value is not a structured path, process with regex as before
+    const pathVarRegex = /\$(PROJECTPATH|HOMEPATH|\.\/|~\/|[A-Za-z0-9_]+)(\/?[^$\s]*)/g;
     while ((match = pathVarRegex.exec(result)) !== null) {
-      const [fullMatch, varName] = match;
+      const [fullMatch, varName, pathRemainder] = match;
+      
+      // Add debug logging for path variables
+      console.log('*** Resolving path variable', {
+        fullMatch,
+        varName,
+        pathRemainder,
+        resolutionPath
+      });
+      
+      // Handle special path variables
+      let varValue;
+      let actualVarName = varName;
+      
+      // Handle aliases and special path variables
+      if (varName === 'PROJECTPATH' || varName.startsWith('./')) {
+        actualVarName = 'PROJECTPATH';
+      } else if (varName === 'HOMEPATH' || varName.startsWith('~/')) {
+        actualVarName = 'HOMEPATH';
+      }
       
       // Check for circular references
-      if (resolutionPath.includes(varName)) {
-        const path = [...resolutionPath, varName].join(' -> ');
+      if (resolutionPath.includes(actualVarName)) {
+        const path = [...resolutionPath, actualVarName].join(' -> ');
         throw new MeldResolutionError(
           `Circular reference detected: ${path}`,
           {
@@ -339,7 +430,7 @@ export class ResolutionService implements IResolutionService {
             details: { 
               value: value, 
               context: JSON.stringify(context),
-              variableName: varName,
+              variableName: actualVarName,
               variableType: 'path'
             },
             severity: ErrorSeverity.Fatal
@@ -347,25 +438,53 @@ export class ResolutionService implements IResolutionService {
         );
       }
 
-      resolutionPath.push(varName);
+      resolutionPath.push(actualVarName);
 
       try {
-        const varValue = context.state.getPathVar(varName);
+        varValue = context.state.getPathVar(actualVarName);
         if (varValue === undefined) {
           throw new MeldResolutionError(
-            `Undefined path variable: ${varName}`,
+            `Undefined path variable: ${actualVarName}`,
             {
               code: ResolutionErrorCode.UNDEFINED_VARIABLE,
               details: { 
                 value: varName, 
                 context: JSON.stringify(context),
-                variableName: varName,
+                variableName: actualVarName,
                 variableType: 'path'
               },
               severity: ErrorSeverity.Recoverable
             }
           );
         }
+
+        // Handle structured path objects
+        if (typeof varValue === 'object' && varValue !== null) {
+          if ('normalized' in varValue) {
+            varValue = varValue.normalized;
+          } else if ('raw' in varValue) {
+            varValue = varValue.raw;
+          }
+        }
+
+        // Handle path segments for special variables
+        if (varName.startsWith('./') && varName.length > 2) {
+          // Extract the path segment after $./
+          const segment = varName.substring(2);  
+          varValue = path.join(varValue, segment);
+        } else if (varName.startsWith('~/') && varName.length > 2) {
+          // Extract the path segment after $~/
+          const segment = varName.substring(2);
+          varValue = path.join(varValue, segment);
+        }
+
+        // Join the base path with any remaining path parts
+        if (pathRemainder && pathRemainder.length > 0) {
+          // Remove leading slash if present to avoid double slashes
+          const cleanRemainder = pathRemainder.startsWith('/') ? pathRemainder.substring(1) : pathRemainder;
+          varValue = path.join(varValue, cleanRemainder);
+        }
+
         result = result.replace(fullMatch, varValue);
       } finally {
         resolutionPath.pop();

@@ -31,20 +31,21 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
       // 1. Validate directive structure
       await this.validationService.validate(node);
 
-      // 2. Extract and validate identifier parts
-      const { identifier, value } = node.directive;
-      const { name, metadata } = this.parseIdentifier(identifier);
+      // 2. Extract name and command from directive
+      const { name, command } = node.directive;
+      // Parse any metadata from the name
+      const nameMetadata = this.parseIdentifier(name);
 
-      // 3. Process command value
-      const commandDef = await this.processCommand(value, node);
+      // 3. Process command
+      const commandDef = await this.processCommand(command, node);
 
       // 4. Create new state for modifications
       const newState = context.state.clone();
 
       // 5. Store command with metadata
-      newState.setCommand(name, {
+      newState.setCommand(nameMetadata.name, {
         ...commandDef,
-        ...(metadata && { metadata })
+        ...(nameMetadata.metadata && { metadata: nameMetadata.metadata })
       });
 
       return newState;
@@ -138,110 +139,75 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
     return { name };
   }
 
-  private async processCommand(value: string, node: DirectiveNode): Promise<Omit<CommandDefinition, 'metadata'>> {
-    // For empty commands, just return empty string
-    if (!value) {
-      return {
-        parameters: [],
-        command: ''
-      };
-    }
-
-    // Extract parameters from command value
-    const paramRefs = this.extractParameterReferences(value);
-
-    // Try to parse as JSON first (for test factory format)
+  private async processCommand(commandData: any, node: DirectiveNode): Promise<Omit<CommandDefinition, 'metadata'>> {
     try {
-      const parsed = JSON.parse(value);
-      if (parsed.command?.kind === 'run' && typeof parsed.command.command === 'string') {
-        // Validate parameters before processing command
-        const parameters = this.validateParameters(parsed.parameters || [], paramRefs, node);
-
-        // Store the raw command
-        const command = parsed.command.command.trim();
+      // Check if we already have a structured command
+      if (typeof commandData === 'object' && commandData.kind === 'run' && typeof commandData.command === 'string') {
+        const commandStr = commandData.command.trim();
+        
+        // Extract parameter references
+        const referencedParams = this.extractParameterReferences(commandStr);
+        
         return {
-          parameters,
-          command
+          parameters: referencedParams,
+          command: commandStr
         };
       }
-    } catch (e) {
-      // Not JSON, treat as raw command
-    }
-
-    // Extract command from directive value
-    const commandMatch = value.match(/=\s*@run\s*\[(.*?)\]/);
-    if (!commandMatch) {
+      
+      // For backwards compatibility, handle string value that might be JSON
+      if (typeof commandData === 'string') {
+        try {
+          // Try to parse as JSON
+          const parsed = JSON.parse(commandData);
+          if (parsed.command?.kind === 'run' && typeof parsed.command.command === 'string') {
+            const commandStr = parsed.command.command.trim();
+            
+            // Extract parameter references
+            const referencedParams = this.extractParameterReferences(commandStr);
+            
+            return {
+              parameters: referencedParams,
+              command: commandStr
+            };
+          }
+        } catch (e) {
+          // Not valid JSON, treat as raw command string
+          const commandStr = commandData.trim();
+          
+          // Extract parameter references
+          const referencedParams = this.extractParameterReferences(commandStr);
+          
+          return {
+            parameters: referencedParams,
+            command: commandStr
+          };
+        }
+      }
+      
       throw new DirectiveError(
-        'Invalid command format. Expected @run directive',
+        'Invalid command format',
         this.kind,
         DirectiveErrorCode.VALIDATION_FAILED,
-        { 
+        {
           node,
           severity: DirectiveErrorSeverity[DirectiveErrorCode.VALIDATION_FAILED]
         }
       );
-    }
-
-    // Extract parameters from the command definition
-    const paramMatch = value.match(/^(\w+)(?:\((.*?)\))?/);
-    const declaredParams = paramMatch?.[2]?.split(',').map(p => p.trim()).filter(Boolean) || [];
-
-    // Validate parameters after ensuring command format
-    const parameters = this.validateParameters(declaredParams, paramRefs, node);
-
-    // Store just the command portion
-    return {
-      parameters,
-      command: commandMatch[1].trim()
-    };
-  }
-
-  private validateParameters(declaredParams: string[], referencedParams: string[], node: DirectiveNode): string[] {
-    // Check for duplicates first
-    const uniqueParams = new Set(declaredParams);
-    if (uniqueParams.size !== declaredParams.length) {
+    } catch (error) {
+      if (error instanceof DirectiveError) {
+        throw error;
+      }
       throw new DirectiveError(
-        'Duplicate parameter names are not allowed',
+        error instanceof Error ? error.message : 'Error processing command',
         this.kind,
         DirectiveErrorCode.VALIDATION_FAILED,
-        { 
+        {
           node,
+          cause: error instanceof Error ? error : undefined,
           severity: DirectiveErrorSeverity[DirectiveErrorCode.VALIDATION_FAILED]
         }
       );
     }
-
-    // Validate parameter names
-    for (const param of declaredParams) {
-      if (!/^[a-zA-Z_]\w*$/.test(param)) {
-        throw new DirectiveError(
-          `Invalid parameter name: ${param}. Must start with letter or underscore and contain only letters, numbers, and underscores`,
-          this.kind,
-          DirectiveErrorCode.VALIDATION_FAILED,
-          { 
-            node,
-            severity: DirectiveErrorSeverity[DirectiveErrorCode.VALIDATION_FAILED]
-          }
-        );
-      }
-    }
-
-    // Validate that all referenced parameters are declared
-    for (const ref of referencedParams) {
-      if (!uniqueParams.has(ref)) {
-        throw new DirectiveError(
-          `Parameter ${ref} is referenced in command but not declared`,
-          this.kind,
-          DirectiveErrorCode.VALIDATION_FAILED,
-          { 
-            node,
-            severity: DirectiveErrorSeverity[DirectiveErrorCode.VALIDATION_FAILED]
-          }
-        );
-      }
-    }
-
-    return Array.from(uniqueParams);
   }
 
   private extractParameterReferences(command: string): string[] {

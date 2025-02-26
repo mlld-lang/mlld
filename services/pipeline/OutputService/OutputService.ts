@@ -127,6 +127,12 @@ export class OutputService implements IOutputService {
     try {
       let output = '';
 
+      // Debug: Log node types
+      logger.debug('Converting nodes to markdown', {
+        nodeCount: nodes.length,
+        nodeTypes: nodes.map(n => n.type)
+      });
+
       // Add state variables if requested
       if (opts.includeState) {
         output += this.formatStateVariables(state);
@@ -137,9 +143,19 @@ export class OutputService implements IOutputService {
 
       // Process nodes
       for (const node of nodes) {
-        const nodeOutput = await this.nodeToMarkdown(node, state);
-        if (nodeOutput) {
-          output += nodeOutput;
+        try {
+          const nodeOutput = await this.nodeToMarkdown(node, state);
+          if (nodeOutput) {
+            output += nodeOutput;
+          }
+        } catch (nodeError) {
+          // Log detailed error for the specific node
+          logger.error('Error converting node to markdown', {
+            nodeType: node.type,
+            location: node.location,
+            error: nodeError
+          });
+          throw nodeError;
         }
       }
 
@@ -206,10 +222,346 @@ export class OutputService implements IOutputService {
   }
 
   private async nodeToMarkdown(node: MeldNode, state: IStateService): Promise<string> {
+    // Debug: Log full node structure
+    logger.debug('Processing node in nodeToMarkdown', {
+      nodeType: node.type,
+      nodeStructure: Object.keys(node),
+      fullNode: JSON.stringify(node, null, 2),
+      location: node.location
+    });
+
     switch (node.type) {
       case 'Text':
         const content = (node as TextNode).content;
         return content.endsWith('\n') ? content : content + '\n';
+      case 'TextVar':
+        // Handle TextVar nodes
+        try {
+          logger.debug('TextVar node detailed view', {
+            hasId: 'id' in node,
+            idValue: 'id' in node ? node.id : 'undefined',
+            hasIdentifier: 'identifier' in node,
+            identifierValue: 'identifier' in node ? node.identifier : 'undefined',
+            hasText: 'text' in node,
+            textValue: 'text' in node ? node.text : 'undefined',
+            hasValue: 'value' in node,
+            valueValue: 'value' in node ? node.value : 'undefined',
+            hasContent: 'content' in node,
+            contentValue: 'content' in node ? (node as any).content : 'undefined',
+            nodeStr: JSON.stringify(node, null, 2)
+          });
+          
+          // Try various possible property names and resolve from state
+          let textVarContent = '';
+          if ('id' in node) {
+            // Try to resolve from state using id
+            const id = node.id as string;
+            textVarContent = state.getTextVar(id) || '';
+            logger.debug(`Trying to resolve TextVar with id ${id}`, {
+              resolved: textVarContent || 'NOT RESOLVED'
+            });
+          } else if ('identifier' in node) {
+            // Try to resolve from state using identifier
+            const identifier = node.identifier as string;
+            textVarContent = state.getTextVar(identifier) || '';
+            logger.debug(`Trying to resolve TextVar with identifier ${identifier}`, {
+              resolved: textVarContent || 'NOT RESOLVED'
+            });
+          } else if ('text' in node && node.text) {
+            textVarContent = node.text;
+          } else if ('value' in node && node.value) {
+            textVarContent = node.value;
+          } else if ('content' in node && (node as any).content) {
+            textVarContent = (node as any).content;
+          }
+          
+          // Process template variables in the content if it's a string
+          if (typeof textVarContent === 'string') {
+            try {
+              // First, handle text variable references (${varName})
+              if (textVarContent.includes('${')) {
+                const textVarPattern = /\${([^}]+)}/g;
+                let match;
+                let processedContent = textVarContent;
+                
+                logger.debug('Processing text variables in template', {
+                  originalContent: textVarContent
+                });
+                
+                // Replace all text variable references with their values
+                while ((match = textVarPattern.exec(textVarContent)) !== null) {
+                  const varName = match[1].trim();
+                  const varValue = state.getTextVar(varName);
+                  
+                  logger.debug(`Resolving text variable ${varName}`, {
+                    value: varValue ?? 'undefined'
+                  });
+                  
+                  if (varValue !== undefined) {
+                    processedContent = processedContent.replace(`\${${varName}}`, varValue);
+                  }
+                }
+                
+                textVarContent = processedContent;
+              }
+              
+              // Then, handle data field references (#{data.field})
+              if (textVarContent.includes('#{')) {
+                const dataVarPattern = /#{([^}]+)}/g;
+                let match;
+                let processedContent = textVarContent;
+                
+                logger.debug('Processing data field references in template', {
+                  originalContent: textVarContent
+                });
+                
+                // Replace all data field references with their values
+                while ((match = dataVarPattern.exec(textVarContent)) !== null) {
+                  const fieldRef = match[1].trim();
+                  
+                  // Handle field access (e.g., user.name)
+                  const parts = fieldRef.split('.');
+                  const varName = parts[0];
+                  
+                  // Get the data variable
+                  const dataVar = state.getDataVar(varName);
+                  
+                  logger.debug(`Resolving data variable ${varName}`, {
+                    hasValue: dataVar !== undefined,
+                    dataVarValue: dataVar ? JSON.stringify(dataVar) : 'undefined'
+                  });
+                  
+                  if (dataVar !== undefined) {
+                    // Access nested fields if they exist
+                    let fieldValue = dataVar;
+                    let fieldAccessError = false;
+                    
+                    // Follow the field path
+                    if (parts.length > 1) {
+                      try {
+                        fieldValue = parts.slice(1).reduce((obj: any, field) => {
+                          if (obj === undefined || obj === null) {
+                            fieldAccessError = true;
+                            return undefined;
+                          }
+                          return obj[field];
+                        }, dataVar);
+                        
+                        logger.debug(`Accessed field '${parts.slice(1).join('.')}' from data var '${varName}'`, {
+                          fieldValue: fieldValue !== undefined ? JSON.stringify(fieldValue) : 'undefined'
+                        });
+                      } catch (e) {
+                        fieldAccessError = true;
+                        logger.error(`Error accessing field '${parts.slice(1).join('.')}' in data var '${varName}'`, {
+                          error: e
+                        });
+                      }
+                    }
+                    
+                    if (!fieldAccessError && fieldValue !== undefined) {
+                      // Convert to string if necessary
+                      const stringValue = typeof fieldValue === 'object' 
+                        ? (Array.isArray(fieldValue) ? fieldValue.join(',') : JSON.stringify(fieldValue))
+                        : String(fieldValue);
+                      
+                      processedContent = processedContent.replace(`#{${fieldRef}}`, stringValue);
+                    }
+                  }
+                }
+                
+                textVarContent = processedContent;
+              }
+              
+              logger.debug('Processed all template variables', {
+                finalContent: textVarContent
+              });
+            } catch (templateError) {
+              logger.error('Error processing template variables', {
+                content: textVarContent,
+                error: templateError
+              });
+            }
+          }
+          
+          logger.debug('TextVar resolved content', {
+            content: textVarContent,
+            type: typeof textVarContent
+          });
+          
+          return typeof textVarContent === 'string' 
+            ? (textVarContent.endsWith('\n') ? textVarContent : textVarContent + '\n') 
+            : String(textVarContent) + '\n';
+        } catch (e) {
+          logger.error('Error processing TextVar node', {
+            node: JSON.stringify(node),
+            error: e
+          });
+          throw e;
+        }
+      case 'DataVar':
+        // Handle DataVar nodes
+        try {
+          logger.debug('DataVar node detailed view', {
+            hasId: 'id' in node,
+            idValue: 'id' in node ? node.id : 'undefined',
+            hasIdentifier: 'identifier' in node,
+            identifierValue: 'identifier' in node ? node.identifier : 'undefined',
+            hasData: 'data' in node,
+            dataValue: 'data' in node ? JSON.stringify(node.data) : 'undefined',
+            hasValue: 'value' in node,
+            valueValue: 'value' in node ? JSON.stringify(node.value) : 'undefined',
+            hasContent: 'content' in node,
+            contentValue: 'content' in node ? JSON.stringify((node as any).content) : 'undefined',
+            nodeStr: JSON.stringify(node, null, 2)
+          });
+          
+          // Try various possible property names and resolve from state
+          let dataVarContent: any = '';
+          if ('id' in node) {
+            // Try to resolve from state using id
+            const id = node.id as string;
+            dataVarContent = state.getDataVar(id);
+            logger.debug(`Trying to resolve DataVar with id ${id}`, {
+              resolved: dataVarContent ? JSON.stringify(dataVarContent) : 'NOT RESOLVED'
+            });
+          } else if ('identifier' in node) {
+            // Try to resolve from state using identifier
+            const identifier = node.identifier as string;
+            dataVarContent = state.getDataVar(identifier);
+            logger.debug(`Trying to resolve DataVar with identifier ${identifier}`, {
+              resolved: dataVarContent ? JSON.stringify(dataVarContent) : 'NOT RESOLVED'
+            });
+          } else if ('data' in node && node.data) {
+            dataVarContent = node.data;
+          } else if ('value' in node && node.value) {
+            dataVarContent = node.value;
+          } else if ('content' in node && (node as any).content) {
+            dataVarContent = (node as any).content;
+          }
+          
+          // Process template variables for string values
+          if (typeof dataVarContent === 'string') {
+            try {
+              // First, handle text variable references (${varName})
+              if (dataVarContent.includes('${')) {
+                const textVarPattern = /\${([^}]+)}/g;
+                let match;
+                let processedContent = dataVarContent;
+                
+                logger.debug('Processing text variables in DataVar template', {
+                  originalContent: dataVarContent
+                });
+                
+                // Replace all text variable references with their values
+                while ((match = textVarPattern.exec(dataVarContent)) !== null) {
+                  const varName = match[1].trim();
+                  const varValue = state.getTextVar(varName);
+                  
+                  logger.debug(`Resolving text variable ${varName} in DataVar`, {
+                    value: varValue ?? 'undefined'
+                  });
+                  
+                  if (varValue !== undefined) {
+                    processedContent = processedContent.replace(`\${${varName}}`, varValue);
+                  }
+                }
+                
+                dataVarContent = processedContent;
+              }
+              
+              // Then, handle data field references (#{data.field})
+              if (dataVarContent.includes('#{')) {
+                const dataVarPattern = /#{([^}]+)}/g;
+                let match;
+                let processedContent = dataVarContent;
+                
+                logger.debug('Processing data field references in DataVar template', {
+                  originalContent: dataVarContent
+                });
+                
+                // Replace all data field references with their values
+                while ((match = dataVarPattern.exec(dataVarContent)) !== null) {
+                  const fieldRef = match[1].trim();
+                  
+                  // Handle field access (e.g., user.name)
+                  const parts = fieldRef.split('.');
+                  const varName = parts[0];
+                  
+                  // Get the data variable
+                  const dataVar = state.getDataVar(varName);
+                  
+                  logger.debug(`Resolving data variable ${varName} in DataVar template`, {
+                    hasValue: dataVar !== undefined,
+                    dataVarValue: dataVar ? JSON.stringify(dataVar) : 'undefined'
+                  });
+                  
+                  if (dataVar !== undefined) {
+                    // Access nested fields if they exist
+                    let fieldValue = dataVar;
+                    let fieldAccessError = false;
+                    
+                    // Follow the field path
+                    if (parts.length > 1) {
+                      try {
+                        fieldValue = parts.slice(1).reduce((obj: any, field) => {
+                          if (obj === undefined || obj === null) {
+                            fieldAccessError = true;
+                            return undefined;
+                          }
+                          return obj[field];
+                        }, dataVar);
+                        
+                        logger.debug(`Accessed field '${parts.slice(1).join('.')}' from data var '${varName}' in DataVar template`, {
+                          fieldValue: fieldValue !== undefined ? JSON.stringify(fieldValue) : 'undefined'
+                        });
+                      } catch (e) {
+                        fieldAccessError = true;
+                        logger.error(`Error accessing field '${parts.slice(1).join('.')}' in data var '${varName}' in DataVar template`, {
+                          error: e
+                        });
+                      }
+                    }
+                    
+                    if (!fieldAccessError && fieldValue !== undefined) {
+                      // Convert to string if necessary
+                      const stringValue = typeof fieldValue === 'object' 
+                        ? (Array.isArray(fieldValue) ? fieldValue.join(',') : JSON.stringify(fieldValue))
+                        : String(fieldValue);
+                      
+                      processedContent = processedContent.replace(`#{${fieldRef}}`, stringValue);
+                    }
+                  }
+                }
+                
+                dataVarContent = processedContent;
+              }
+              
+              logger.debug('Processed all template variables in DataVar', {
+                finalContent: dataVarContent
+              });
+            } catch (templateError) {
+              logger.error('Error processing template variables in DataVar', {
+                content: dataVarContent,
+                error: templateError
+              });
+            }
+          }
+          
+          logger.debug('DataVar resolved content', {
+            content: dataVarContent ? JSON.stringify(dataVarContent) : 'undefined',
+            type: typeof dataVarContent
+          });
+          
+          return typeof dataVarContent === 'string' 
+            ? (dataVarContent.endsWith('\n') ? dataVarContent : dataVarContent + '\n')
+            : JSON.stringify(dataVarContent) + '\n';
+        } catch (e) {
+          logger.error('Error processing DataVar node', {
+            node: JSON.stringify(node),
+            error: e
+          });
+          throw e;
+        }
       case 'CodeFence':
         const fence = node as CodeFenceNode;
         return `\`\`\`${fence.language || ''}\n${fence.content}\n\`\`\`\n`;

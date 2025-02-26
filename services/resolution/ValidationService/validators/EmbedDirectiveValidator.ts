@@ -5,18 +5,26 @@ import { DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/D
 export function validateEmbedDirective(node: DirectiveNode): void {
   const directive = node.directive as EmbedDirective;
   
-  // Check required fields from meld-spec
-  if (!directive.path || typeof directive.path !== 'string') {
+  // Check path is present in the appropriate format (string or path object)
+  // Handle both string paths and structured path objects
+  if (!directive.path || 
+      (typeof directive.path !== 'string' && 
+       (!directive.path.raw || typeof directive.path.raw !== 'string'))) {
     throw new MeldDirectiveError(
-      'Embed directive requires a "path" property (string)',
+      'Embed directive requires a valid path',
       'embed',
       node.location?.start,
       DirectiveErrorCode.VALIDATION_FAILED
     );
   }
   
+  // Get the path value for validation
+  const pathValue = typeof directive.path === 'string' 
+    ? directive.path 
+    : directive.path.raw;
+  
   // Path cannot be empty
-  if (directive.path.trim() === '') {
+  if (pathValue.trim() === '') {
     throw new MeldDirectiveError(
       'Embed directive path cannot be empty',
       'embed',

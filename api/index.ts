@@ -78,6 +78,10 @@ function createDefaultServices(options: ProcessOptions): Services & RequiredServ
   const eventService = new StateEventService();
   const state = new StateService();
   state.setEventService(eventService);
+  
+  // Initialize special path variables
+  state.setPathVar('PROJECTPATH', process.cwd());
+  state.setPathVar('HOMEPATH', process.env.HOME || process.env.USERPROFILE || '/home');
 
   // 4. ParserService (independent)
   const parser = new ParserService();

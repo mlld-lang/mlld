@@ -56,6 +56,7 @@ export function createTestDirective(
   value: string,
   location: Location = DEFAULT_LOCATION
 ): DirectiveNode {
+  // For other directives, use the standard property structure
   return {
     type: 'Directive',
     directive: {

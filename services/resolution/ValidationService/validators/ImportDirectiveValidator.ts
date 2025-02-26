@@ -9,11 +9,24 @@ export function validateImportDirective(node: DirectiveNode): void {
   const directive = node.directive as ImportDirective;
   
   // Handle both old format (value) and new format (path)
-  const value = directive.value || directive.path;
+  // Properly handle the path object or string
+  let pathValue: string | null = null;
   
-  if (!value) {
+  if (directive.value && typeof directive.value === 'string') {
+    pathValue = directive.value;
+  } else if (directive.path) {
+    if (typeof directive.path === 'string') {
+      pathValue = directive.path;
+    } else if (directive.path.raw && typeof directive.path.raw === 'string') {
+      pathValue = directive.path.raw;
+    } else if (directive.path.normalized && typeof directive.path.normalized === 'string') {
+      pathValue = directive.path.normalized;
+    }
+  }
+  
+  if (!pathValue) {
     throw new MeldDirectiveError(
-      'Import directive requires a path',
+      'Import directive requires a valid path',
       'import',
       node.location,
       DirectiveErrorCode.VALIDATION_FAILED
@@ -22,7 +35,7 @@ export function validateImportDirective(node: DirectiveNode): void {
 
   // Try new format: @import [x,y,z] from [file.md] or @import [file.md]
   // Now also handles path variables like [$./file.md]
-  const newFormatMatch = value.match(/^\s*\[([^\]]+)\](?:\s+from\s+\[([^\]]+)\])?\s*$/);
+  const newFormatMatch = pathValue.match(/^\s*\[([^\]]+)\](?:\s+from\s+\[([^\]]+)\])?\s*$/);
   if (newFormatMatch) {
     const [, importsOrPath, fromPath] = newFormatMatch;
     const path = fromPath || importsOrPath;
@@ -38,7 +51,7 @@ export function validateImportDirective(node: DirectiveNode): void {
   }
 
   // Try old format with path parameter
-  const pathMatch = value.match(/path\s*=\s*["']([^"']+)["']/);
+  const pathMatch = pathValue.match(/path\s*=\s*["']([^"']+)["']/);
   if (!pathMatch) {
     throw new MeldDirectiveError(
       'Invalid import syntax. Expected either @import [file.md] or @import [x,y,z] from [file.md]',
@@ -52,7 +65,7 @@ export function validateImportDirective(node: DirectiveNode): void {
   validatePath(path, node);
 
   // Check for import list in old format
-  const importListMatch = value.match(/imports\s*=\s*\[(.*?)\]/);
+  const importListMatch = pathValue.match(/imports\s*=\s*\[(.*?)\]/);
   if (importListMatch) {
     const importList = importListMatch[1].trim();
     if (importList) {

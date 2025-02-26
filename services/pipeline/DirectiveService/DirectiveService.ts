@@ -187,11 +187,12 @@ export class DirectiveService implements IDirectiveService {
     let currentState = parentContext?.state?.clone() || this.stateService!.createChildState();
 
     for (const node of nodes) {
-      // Create a new context with the current state as parent and a new child state
+      // Create a new context with the current state as both parent and state
+      // This ensures that subsequent directives can see variables defined by previous directives
       const nodeContext = {
         currentFilePath: parentContext?.currentFilePath || '',
         parentState: currentState,
-        state: currentState.createChildState()
+        state: currentState.clone()
       };
 
       // Process directive and get the updated state
@@ -200,8 +201,15 @@ export class DirectiveService implements IDirectiveService {
       // If transformation is enabled, we don't merge states since the directive
       // will be replaced with a text node and its state will be handled separately
       if (!currentState.isTransformationEnabled?.()) {
-        // result is always an IStateService from processDirective
-        currentState.mergeChildState(result);
+        // Update currentState directly with the result so next directives have access to it
+        currentState = result;
+      } else {
+        // Even if transformation is enabled, we need to make sure variables defined in one directive
+        // are available to subsequent directives
+        if (result !== nodeContext.state) {
+          // Only apply the new state if it actually changed (as a result of directive execution)
+          currentState = result;
+        }
       }
     }
 

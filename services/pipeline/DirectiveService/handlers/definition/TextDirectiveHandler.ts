@@ -65,6 +65,16 @@ export class TextDirectiveHandler implements IDirectiveHandler {
   }
 
   public async execute(node: DirectiveNode, context: DirectiveContext): Promise<IStateService> {
+    logger.debug('Processing text directive', {
+      location: node.location,
+      context: {
+        currentFilePath: context.currentFilePath,
+        stateExists: !!context.state,
+        stateMethods: context.state ? Object.keys(context.state) : 'undefined'
+      },
+      directive: node.directive
+    });
+    
     try {
       // 1. Create a new state for modifications
       const newState = context.state.clone();
@@ -111,17 +121,20 @@ export class TextDirectiveHandler implements IDirectiveHandler {
       // 4. Handle the value based on its type
       let resolvedValue: string;
 
-      // Create a resolution context that includes the original state
-      const resolutionContext = {
-        currentFilePath: context.currentFilePath,
-        allowedVariableTypes: {
-          text: true,
-          data: true,
-          path: true,
-          command: true
-        },
-        state: context.state
-      };
+      // Create a resolution context that includes the parent state to access variables from previous directives
+      const resolutionContext = ResolutionContextFactory.forTextDirective(
+        context.currentFilePath,
+        context.parentState || newState
+      );
+
+      // Log the resolution context
+      logger.debug('Created resolution context for text directive', {
+        currentFilePath: resolutionContext.currentFilePath,
+        allowedVariableTypes: resolutionContext.allowedVariableTypes,
+        stateIsPresent: !!resolutionContext.state,
+        parentStateExists: !!context.parentState,
+        value: value
+      });
 
       // Check for string concatenation first
       if (this.stringConcatenationHandler.hasConcatenation(value)) {

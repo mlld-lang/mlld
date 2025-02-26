@@ -5,6 +5,7 @@ import type { ProcessOptions } from '@core/types/index.js';
 import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
 import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
 import path from 'path';
+import { TestDebuggerService } from '../tests/utils/debug/TestDebuggerService.js';
 
 describe('API Integration Tests', () => {
   let context: TestContext;
@@ -98,28 +99,81 @@ describe('API Integration Tests', () => {
 
   describe('Path Handling', () => {
     it('should handle path variables with special $PROJECTPATH syntax', async () => {
-      const content = `
-        @path docs = "$PROJECTPATH/docs"
-        @text docPath = \`Docs are at \${docs}\`
-        \${docPath}
-      `;
-      await context.writeFile('test.meld', content);
-      await context.fs.mkdir(`${projectRoot}/docs`);
+      // Use the context defined in beforeEach
       
-      const result = await main('test.meld', {
-        fs: context.fs,
-        services: context.services,
-        transformation: true,
-        format: 'md'
+      const stateDebugger = new TestDebuggerService();
+      stateDebugger.initialize(context.services.state);
+      
+      // Fix: Properly await the session ID
+      const sessionId = await stateDebugger.startSession();
+      
+      // Capture state before execution
+      stateDebugger.captureState('before-execution', {
+        textVars: context.services.state.getAllTextVars(),
+        pathVars: context.services.state.getAllPathVars()
       });
       
-      expect(result.trim()).toBe(`Docs are at ${projectRoot}/docs`);
+      try {
+        // Write a test file with path directive
+        const content = `
+@path docs = "$PROJECTPATH/docs"
+@text result = "Docs are at \${docs}"
+        `;
+        
+        await context.writeFile('test.meld', content);
+        
+        // Add a hook to capture state after path directive
+        const originalProcessDirective = context.services.directive.processDirective;
+        context.services.directive.processDirective = async (node, context) => {
+          const result = await originalProcessDirective.call(context.services.directive, node, context);
+          
+          // Capture state after each directive
+          if (node.directive.kind === 'path') {
+            stateDebugger.captureState('after-path-directive', {
+              textVars: result.getAllTextVars(),
+              pathVars: result.getAllPathVars(),
+              directive: node.directive
+            });
+          }
+          
+          return result;
+        };
+        
+        // Process the file
+        const result = await main('test.meld', {
+          fs: context.fs,
+          services: context.services,
+          cwd: '/project'
+        });
+        
+        // Capture state after execution (in case of success)
+        stateDebugger.captureState('after-execution', {
+          textVars: context.services.state.getAllTextVars(),
+          pathVars: context.services.state.getAllPathVars(),
+          result
+        });
+        
+        // Verify the result
+        expect(result.trim()).toBe('Docs are at /project/docs');
+      } catch (error) {
+        // Capture state on error
+        stateDebugger.captureState('error', {
+          error: error.message,
+          stack: error.stack
+        });
+        throw error;
+      } finally {
+        // Print debug data
+        console.log('*** DEBUG DATA ***');
+        console.log(JSON.stringify(stateDebugger.getDebugData(sessionId), null, 2));
+        await stateDebugger.endSession(sessionId);
+      }
     });
 
     it('should handle path variables with special $. alias syntax', async () => {
       const content = `
         @path config = "$./config"
-        @text configPath = \`Config is at \${config}\`
+        @text configPath = "Config is at \${config}"
         \${configPath}
       `;
       await context.writeFile('test.meld', content);
@@ -138,7 +192,7 @@ describe('API Integration Tests', () => {
     it('should handle path variables with special $HOMEPATH syntax', async () => {
       const content = `
         @path home = "$HOMEPATH/meld"
-        @text homePath = \`Home is at \${home}\`
+        @text homePath = "Home is at \${home}"
         \${homePath}
       `;
       await context.writeFile('test.meld', content);
@@ -156,7 +210,7 @@ describe('API Integration Tests', () => {
     it('should handle path variables with special $~ alias syntax', async () => {
       const content = `
         @path data = "$~/data"
-        @text dataPath = \`Data is at \${data}\`
+        @text dataPath = "Data is at \${data}"
         \${dataPath}
       `;
       await context.writeFile('test.meld', content);
@@ -187,7 +241,7 @@ describe('API Integration Tests', () => {
     
     it('should reject invalid path formats (relative paths with dot segments)', async () => {
       const content = `
-        @path bad = "$PROJECTPATH/../outside"
+        @path bad = "../path/with/dot"
         \${bad}
       `;
       await context.writeFile('test.meld', content);

@@ -12,6 +12,12 @@ import { DirectiveError, DirectiveErrorCode, DirectiveErrorSeverity } from '@ser
 import { directiveLogger as logger } from '@core/utils/logger.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 
+interface PathObject {
+  raw: string;
+  normalized?: string;
+  structured?: any;
+}
+
 /**
  * Handler for @import directives
  * Imports variables from other files
@@ -40,18 +46,30 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
       // Get path and import list from directive
       const { path, value, identifier, importList } = node.directive;
       
-      // Handle path - could be a string or a structured path object
-      const resolvedPath = path || this.extractPath(value);
+      // Handle path - could be a string, a structured path object, or in the value property (backward compatibility)
+      let pathValue: string | undefined;
+      
+      if (path) {
+        if (typeof path === 'string') {
+          pathValue = path;
+        } else if (typeof path === 'object' && path && 'raw' in path) {
+          pathValue = path.raw;
+        } else if (typeof path === 'object' && path && 'normalized' in path) {
+          pathValue = path.normalized as string;
+        }
+      } else if (value) {
+        pathValue = this.extractPath(value);
+      }
       
       // Only use identifier as import list if it's not 'import' (which is the directive identifier)
       const resolvedImportList = importList || (identifier !== 'import' ? identifier : undefined);
 
-      if (!resolvedPath) {
+      if (!pathValue) {
         throw new DirectiveError(
           'Import directive requires a path',
           this.kind,
           DirectiveErrorCode.VALIDATION_FAILED,
-          { 
+          {
             node,
             severity: DirectiveErrorSeverity[DirectiveErrorCode.VALIDATION_FAILED]
           }
@@ -75,7 +93,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
 
       // Resolve the path using the resolution service
       resolvedFullPath = await this.resolutionService.resolveInContext(
-        typeof resolvedPath === 'string' ? resolvedPath : resolvedPath.raw,
+        typeof pathValue === 'string' ? pathValue : pathValue.raw,
         resolutionContext
       );
 
@@ -100,7 +118,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
         // Check if file exists
         if (!await this.fileSystemService.exists(resolvedFullPath)) {
           throw new DirectiveError(
-            `Import file not found: [${typeof resolvedPath === 'string' ? resolvedPath : resolvedPath.raw}]`,
+            `Import file not found: [${typeof pathValue === 'string' ? pathValue : pathValue.raw}]`,
             this.kind,
             DirectiveErrorCode.FILE_NOT_FOUND,
             { 
@@ -136,7 +154,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
         }
 
         logger.debug('Import directive processed successfully', {
-          path: typeof resolvedPath === 'string' ? resolvedPath : resolvedPath.raw,
+          path: typeof pathValue === 'string' ? pathValue : pathValue.raw,
           importList: resolvedImportList,
           location: node.location
         });
@@ -187,18 +205,19 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
     }
   }
 
-  private extractPath(value: string | StructuredPath): string | StructuredPath | undefined {
-    if (!value) return undefined;
-    
-    // If it's already a structured path, return it
-    if (typeof value !== 'string' && value.structured) {
-      return value;
+  private extractPath(value: string | any): string | undefined {
+    if (typeof value === 'string') {
+      const pathMatch = value.match(/path\s*=\s*["']([^"']+)["']/);
+      return pathMatch?.[1];
+    } else if (value && typeof value === 'object') {
+      // Handle structured path object
+      if ('raw' in value && typeof value.raw === 'string') {
+        return value.raw;
+      } else if ('normalized' in value && typeof value.normalized === 'string') {
+        return value.normalized;
+      }
     }
-    
-    // Otherwise, handle string value
-    const stringValue = typeof value === 'string' ? value : value.raw;
-    // Remove brackets if present and trim whitespace
-    return stringValue.replace(/^\[(.*)\]$/, '$1').trim();
+    return undefined;
   }
 
   private parseImportList(importList: string): Array<{ name: string; alias?: string }> {

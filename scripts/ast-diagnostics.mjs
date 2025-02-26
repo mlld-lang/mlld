@@ -13,7 +13,8 @@ async function runDiagnostics() {
     data: '@data config = { "value": 123, "other": "test", "nested": { "key": "value" } }\n',
     import: '@import [$PROJECTPATH/other.meld]\n',
     define: '@define command = @run [echo hello]\n',
-    embed: '@embed [$PROJECTPATH/docs/somefile.md]\n'
+    embed: '@embed [$PROJECTPATH/docs/somefile.md]\n',
+    embed: '@text test = "test" \n\n @embed [${test}]\n'
   };
 
   // Options for the parser

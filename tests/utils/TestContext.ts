@@ -132,7 +132,11 @@ export class TestContext {
     // Initialize state service
     const state = new StateService(eventService);
     state.setCurrentFilePath('test.meld'); // Set initial file path
-    state.enableTransformation(true); // Enable transformation by default for tests
+    state.enableTransformation(true);
+    
+    // Initialize special path variables
+    state.setPathVar('PROJECTPATH', '/project');
+    state.setPathVar('HOMEPATH', '/home/user');
     
     // Initialize resolution service
     const resolution = new ResolutionService(state, filesystem, parser);

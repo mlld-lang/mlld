@@ -237,6 +237,20 @@ export class InterpreterService implements IInterpreterService {
           currentState = textState;
           break;
 
+        case 'TextVar':
+          // Handle TextVar nodes similar to Text nodes
+          const textVarState = currentState.clone();
+          textVarState.addNode(node);
+          currentState = textVarState;
+          break;
+
+        case 'DataVar':
+          // Handle DataVar nodes similar to Text/TextVar nodes
+          const dataVarState = currentState.clone();
+          dataVarState.addNode(node);
+          currentState = dataVarState;
+          break;
+
         case 'Comment':
           // Comments are ignored during interpretation
           break;
@@ -262,6 +276,7 @@ export class InterpreterService implements IInterpreterService {
           const directiveNode = node as DirectiveNode;
           currentState = await this.directiveService.processDirective(directiveNode, {
             state: directiveState,
+            parentState: currentState,
             currentFilePath: state.getCurrentFilePath() ?? undefined
           });
           break;
