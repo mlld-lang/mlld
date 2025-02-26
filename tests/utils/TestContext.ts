@@ -139,7 +139,7 @@ export class TestContext {
     state.setPathVar('HOMEPATH', '/home/user');
     
     // Initialize resolution service
-    const resolution = new ResolutionService(state, filesystem, parser);
+    const resolution = new ResolutionService(state, filesystem, parser, path);
 
     // Initialize debugger service
     const debuggerService = new TestDebuggerService(state);
