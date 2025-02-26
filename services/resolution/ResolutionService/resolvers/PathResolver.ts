@@ -29,7 +29,7 @@ export class PathResolver {
         {
           code: ResolutionErrorCode.INVALID_CONTEXT,
           severity: ErrorSeverity.Fatal,
-          details: { 
+          details: {
             value: directiveNode.directive.value,
             context: JSON.stringify(context)
           }
@@ -44,7 +44,7 @@ export class PathResolver {
         {
           code: ResolutionErrorCode.INVALID_NODE_TYPE,
           severity: ErrorSeverity.Fatal,
-          details: { 
+          details: {
             value: directiveNode.directive.kind
           }
         }
@@ -59,7 +59,7 @@ export class PathResolver {
         {
           code: ResolutionErrorCode.SYNTAX_ERROR,
           severity: ErrorSeverity.Fatal,
-          details: { 
+          details: {
             value: JSON.stringify(directiveNode.directive)
           }
         }
@@ -83,7 +83,7 @@ export class PathResolver {
         {
           code: ResolutionErrorCode.UNDEFINED_VARIABLE,
           severity: ErrorSeverity.Recoverable,
-          details: { 
+          details: {
             variableName: identifier,
             variableType: 'path'
           }
@@ -92,21 +92,22 @@ export class PathResolver {
     }
 
     // Handle structured path objects
-    if (typeof value === 'object' && 'normalized' in value) {
+    if (typeof value === 'object' && value !== null && 'raw' in value) {
       const structuredPath = value as StructuredPath;
-      
+
       // Validate path if required
       if (context.pathValidation) {
         return this.validatePath(structuredPath, context);
       }
-      
-      return structuredPath.normalized;
+
+      // Use normalized path if available, otherwise use raw
+      return structuredPath.normalized || structuredPath.raw;
     }
 
     // Handle string paths (legacy support)
     // Validate path if required
     if (context.pathValidation) {
-      return this.validatePath(value, context);
+      return this.validatePath(value as string, context);
     }
 
     return value as string;
@@ -165,10 +166,10 @@ export class PathResolver {
    */
   private validatePath(path: string | StructuredPath, context: ResolutionContext): string {
     // Convert structured path to string if needed
-    const pathStr = typeof path === 'object' && 'normalized' in path 
-      ? path.normalized 
+    const pathStr = typeof path === 'object' && 'normalized' in path
+      ? (path.normalized || path.raw)
       : path as string;
-    
+
     if (context.pathValidation) {
       // Check if path is absolute or starts with a special variable
       if (context.pathValidation.requireAbsolute && !pathStr.startsWith('/')) {
@@ -177,8 +178,8 @@ export class PathResolver {
           {
             code: ResolutionErrorCode.INVALID_PATH,
             severity: ErrorSeverity.Fatal,
-            details: { 
-              value: pathStr, 
+            details: {
+              value: pathStr,
               context: JSON.stringify(context.pathValidation)
             }
           }
@@ -190,7 +191,7 @@ export class PathResolver {
         const hasAllowedRoot = context.pathValidation.allowedRoots.some(root => {
           const rootVar = this.stateService.getPathVar(root);
           return rootVar && (
-            pathStr.startsWith(rootVar + '/') || 
+            pathStr.startsWith(rootVar + '/') ||
             pathStr === rootVar
           );
         });
@@ -201,8 +202,8 @@ export class PathResolver {
             {
               code: ResolutionErrorCode.INVALID_PATH,
               severity: ErrorSeverity.Fatal,
-              details: { 
-                value: pathStr, 
+              details: {
+                value: pathStr,
                 context: JSON.stringify(context.pathValidation)
               }
             }

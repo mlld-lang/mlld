@@ -57,7 +57,9 @@ export async function validatePathDirective(node: DirectiveNode, context?: Resol
   if (!pathObject) {
     // If path is missing, check for value property as fallback
     if (directive.value) {
-      pathRaw = directive.value;
+      pathRaw = typeof directive.value === 'string' 
+        ? directive.value
+        : directive.value.raw || '';
     } else {
       throw new MeldDirectiveError(
         'Path directive requires a path value',

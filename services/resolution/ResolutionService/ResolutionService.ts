@@ -10,7 +10,8 @@ import { VariableReferenceResolver } from './resolvers/VariableReferenceResolver
 import { resolutionLogger as logger } from '@core/utils/logger.js';
 import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import { IParserService } from '@services/pipeline/ParserService/IParserService.js';
-import type { MeldNode, DirectiveNode, TextNode, DirectiveKind, CodeFenceNode, StructuredPath } from 'meld-spec';
+import type { MeldNode, DirectiveNode, TextNode, DirectiveKind, CodeFenceNode } from 'meld-spec';
+import type { StructuredPath } from 'meld-spec/dist/types';
 import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
 import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
@@ -182,7 +183,7 @@ export class ResolutionService implements IResolutionService {
    */
   async resolveInContext(value: string | StructuredPath, context: ResolutionContext): Promise<string> {
     // Add debug logging for debugging path handling issues
-    console.log('*** ResolutionService.resolveInContext', {
+    logger.debug('ResolutionService.resolveInContext', {
       value: typeof value === 'string' ? value : value.raw,
       allowedVariableTypes: context.allowedVariableTypes,
       pathValidation: context.pathValidation,
@@ -192,15 +193,15 @@ export class ResolutionService implements IResolutionService {
         HOMEPATH: context.state.getPathVar('HOMEPATH')
       } : 'state not available'
     });
-    
+
     // Handle StructuredPath objects directly
     if (typeof value === 'object' && value !== null && 'raw' in value) {
       // Extract the structured path information
       const { raw, structured } = value;
-      
+
       // For special path variables - handle them directly
-      if (structured?.variables?.special?.includes('PROJECTPATH') || 
-          structured?.base === '$PROJECTPATH' || 
+      if (structured?.variables?.special?.includes('PROJECTPATH') ||
+          structured?.base === '$PROJECTPATH' ||
           structured?.base === '$.') {
         // Get the base path from state
         const basePath = context.state?.getPathVar('PROJECTPATH');
@@ -214,7 +215,7 @@ export class ResolutionService implements IResolutionService {
             }
           );
         }
-        
+
         // Join with segments
         let result = basePath;
         if (structured.segments && structured.segments.length > 0) {
@@ -224,10 +225,10 @@ export class ResolutionService implements IResolutionService {
         }
         return result;
       }
-      
+
       // For home path special variables
-      if (structured?.variables?.special?.includes('HOMEPATH') || 
-          structured?.base === '$HOMEPATH' || 
+      if (structured?.variables?.special?.includes('HOMEPATH') ||
+          structured?.base === '$HOMEPATH' ||
           structured?.base === '$~') {
         // Get the home path from state
         const homePath = context.state?.getPathVar('HOMEPATH');
@@ -241,7 +242,7 @@ export class ResolutionService implements IResolutionService {
             }
           );
         }
-        
+
         // Join with segments
         let result = homePath;
         if (structured.segments && structured.segments.length > 0) {
@@ -251,12 +252,12 @@ export class ResolutionService implements IResolutionService {
         }
         return result;
       }
-      
+
       // For path variables
       if (structured?.variables?.path && structured.variables.path.length > 0) {
         // Clone raw path for replacement
         let tempPath = raw;
-        
+
         // Process each path variable
         for (const pathVar of structured.variables.path) {
           // Get variable value from state
@@ -271,18 +272,18 @@ export class ResolutionService implements IResolutionService {
               }
             );
           }
-          
+
           // Replace in path
           tempPath = tempPath.replace(`$${pathVar}`, pathValue);
         }
-        
+
         return tempPath;
       }
-      
+
       // For all other structured paths, fall back to resolving the raw value
       return this.resolveVariables(raw, context);
     }
-    
+
     // Handle string values
     return this.resolveVariables(value as string, context);
   }
