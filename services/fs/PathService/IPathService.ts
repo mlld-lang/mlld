@@ -1,7 +1,22 @@
 import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import type { Location } from '@core/types/index.js';
-import type { StructuredPath } from 'meld-spec';
+// Define StructuredPath locally instead of importing
+// import type { StructuredPath } from 'meld-spec';
 import { IParserService } from '@services/pipeline/ParserService/IParserService.js';
+
+// Use a local interface that matches the expected structure
+export interface StructuredPath {
+  raw: string;
+  structured: {
+    segments: string[];
+    variables?: {
+      special?: string[];
+      path?: string[];
+    };
+    cwd?: boolean;
+  };
+  normalized?: string;
+}
 
 /**
  * Options for path validation and operations

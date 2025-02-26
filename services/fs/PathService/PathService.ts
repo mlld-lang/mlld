@@ -3,10 +3,23 @@ import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemSe
 import { PathValidationError, PathErrorCode } from './errors/PathValidationError.js';
 import { ProjectPathResolver } from '../ProjectPathResolver.js';
 import type { Location } from '@core/types/index.js';
-import type { StructuredPath } from 'meld-spec';
 import * as path from 'path';
 import * as os from 'os';
 import { IParserService } from '@services/pipeline/ParserService/IParserService.js';
+
+// Use a local interface that matches the expected structure
+interface StructuredPath {
+  raw: string;
+  structured: {
+    segments: string[];
+    variables?: {
+      special?: string[];
+      path?: string[];
+    };
+    cwd?: boolean;
+  };
+  normalized?: string;
+}
 
 /**
  * Service for validating and normalizing paths
@@ -200,7 +213,7 @@ export class PathService implements IPathService {
 
     // Check for special variables
     const hasSpecialVar = structured.variables?.special?.some(
-      v => v === 'HOMEPATH' || v === 'PROJECTPATH'
+      (v: string) => v === 'HOMEPATH' || v === 'PROJECTPATH'
     );
 
     // Check for path with slashes
@@ -216,7 +229,7 @@ export class PathService implements IPathService {
     }
 
     // Check for dot segments in any part of the path
-    if (structured.segments.some(segment => segment === '.' || segment === '..')) {
+    if (structured.segments.some((segment: string) => segment === '.' || segment === '..')) {
       throw new PathValidationError(
         'Path cannot contain . or .. segments - use $. or $~ to reference project or home directory',
         PathErrorCode.CONTAINS_DOT_SEGMENTS,
@@ -257,9 +270,9 @@ export class PathService implements IPathService {
       
       // Handle special path variables for string paths
       if (filePath.startsWith('$HOMEPATH/') || filePath.startsWith('$~/')) {
-        structuredPath.structured.variables.special = ['HOMEPATH'];
+        structuredPath.structured.variables!.special = ['HOMEPATH'];
       } else if (filePath.startsWith('$PROJECTPATH/') || filePath.startsWith('$./')) {
-        structuredPath.structured.variables.special = ['PROJECTPATH'];
+        structuredPath.structured.variables!.special = ['PROJECTPATH'];
       }
     } else {
       structuredPath = filePath;
@@ -285,7 +298,7 @@ export class PathService implements IPathService {
 
     // Check for special variables
     const hasSpecialVar = structured.variables?.special?.some(
-      v => v === 'HOMEPATH' || v === 'PROJECTPATH'
+      (v: string) => v === 'HOMEPATH' || v === 'PROJECTPATH'
     );
 
     // Check for path with slashes
@@ -301,7 +314,7 @@ export class PathService implements IPathService {
     }
 
     // Check for dot segments in any part of the path
-    if (structured.segments.some(segment => segment === '.' || segment === '..')) {
+    if (structured.segments.some((segment: string) => segment === '.' || segment === '..')) {
       throw new PathValidationError(
         'Path cannot contain . or .. segments - use $. or $~ to reference project or home directory',
         PathErrorCode.CONTAINS_DOT_SEGMENTS,
@@ -408,8 +421,47 @@ export class PathService implements IPathService {
       return typeof filePath === 'string' ? filePath : filePath.raw;
     }
 
-    // Handle special path variables and validate Meld path rules
-    let resolvedPath = await this.resolvePathAsync(filePath, options.baseDir);
+    // Check if fs service is initialized
+    if (!this.fs) {
+      throw new Error('FileSystemService not initialized. Call initialize() first.');
+    }
+
+    // Convert string path to structured path if needed
+    let structuredPath: StructuredPath;
+    if (typeof filePath === 'string') {
+      // Always use the parser service if available
+      if (this.parser) {
+        structuredPath = await this.getStructuredPath(filePath);
+      } else {
+        // Fall back to manual structured path creation if no parser
+        structuredPath = {
+          raw: filePath,
+          structured: {
+            segments: filePath.split('/').filter(Boolean),
+            variables: {
+              special: [],
+              path: []
+            },
+            cwd: !filePath.startsWith('$')
+          }
+        };
+        
+        // Handle special path variables for string paths
+        if (filePath.startsWith('$HOMEPATH/') || filePath.startsWith('$~/')) {
+          structuredPath.structured.variables!.special = ['HOMEPATH'];
+        } else if (filePath.startsWith('$PROJECTPATH/') || filePath.startsWith('$./')) {
+          structuredPath.structured.variables!.special = ['PROJECTPATH'];
+        }
+      }
+    } else {
+      structuredPath = filePath;
+    }
+
+    // Validate the structured path
+    await this.validateStructuredPath(structuredPath, options.location);
+    
+    // Resolve to absolute path
+    const resolvedPath = this.resolveStructuredPath(structuredPath, options.baseDir);
 
     // Check if path is within base directory when required
     if (options.allowOutsideBaseDir === false) {

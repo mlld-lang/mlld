@@ -4,6 +4,7 @@ import { PathService } from './PathService.js';
 import { PathValidationError, PathErrorCode } from './errors/PathValidationError.js';
 import type { Location } from '@core/types/index.js';
 import type { MeldNode } from 'meld-spec';
+import { StructuredPath } from './IPathService.js';
 
 // Mock ParserService implementation
 const createMockParserService = () => ({
