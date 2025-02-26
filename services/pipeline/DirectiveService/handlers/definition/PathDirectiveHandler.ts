@@ -8,10 +8,11 @@ import { DirectiveError, DirectiveErrorCode, DirectiveErrorSeverity } from '@ser
 import { directiveLogger as logger } from '@core/utils/logger';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 
+// Updated to match meld-ast 1.6.1 structure
 interface PathDirective extends DirectiveData {
   kind: 'path';
-  id: string;
-  path: string | { raw: string; structured: any; normalized: string };
+  identifier: string;
+  value: string;
 }
 
 /**
@@ -63,19 +64,19 @@ export class PathDirectiveHandler implements IDirectiveHandler {
       // 2. Get identifier and value from directive
       const { directive } = node;
       const identifier = directive.identifier;
-      const path = directive.path;
+      const value = directive.value;
 
       // Log path information
       logger.debug('Path directive details', {
         identifier,
-        path,
-        pathType: typeof path,
+        value,
+        valueType: typeof value,
         nodeType: node.type,
         directiveKind: directive.kind
       });
 
       // 3. Process value based on type
-      if (!path) {
+      if (!value) {
         throw new DirectiveError(
           'Path directive requires a value',
           this.kind,
@@ -94,7 +95,7 @@ export class PathDirectiveHandler implements IDirectiveHandler {
       );
 
       // Get the raw path value to resolve
-      const rawPath = typeof path === 'string' ? path : path.raw;
+      const rawPath = value;
 
       // Log the resolution context that was created
       logger.debug('Created resolution context for path directive', {

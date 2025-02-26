@@ -50,7 +50,7 @@
     "glob": "^11.0.1",
     "llmxml": "^1.2.0",
     "marked": "^4.0.12",
-    "meld-ast": "^1.6.0",
+    "meld-ast": "^1.6.1",
     "meld-spec": "^0.4.1",
     "minimatch": "^3.0.4",
     "peggy": "^4.2.0",

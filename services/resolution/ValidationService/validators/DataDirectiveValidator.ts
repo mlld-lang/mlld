@@ -1,4 +1,4 @@
-import { DirectiveNode, DataDirective } from 'meld-spec';
+import { DirectiveNode, DataDirectiveData } from 'meld-spec';
 import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
 import { DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 
@@ -6,7 +6,7 @@ import { DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/D
  * Validates @data directives
  */
 export function validateDataDirective(node: DirectiveNode): void {
-  const directive = node.directive as DataDirective;
+  const directive = node.directive as DataDirectiveData;
   
   // Validate identifier
   if (!directive.identifier || typeof directive.identifier !== 'string') {

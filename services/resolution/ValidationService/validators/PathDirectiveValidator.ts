@@ -1,4 +1,4 @@
-import { DirectiveNode, PathDirective } from 'meld-spec';
+import { DirectiveNode, PathDirectiveData } from 'meld-spec';
 import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
 import { DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 
@@ -8,15 +8,14 @@ import { DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/D
  * The AST will have already parsed and normalized the path variables
  */
 export function validatePathDirective(node: DirectiveNode): void {
-  const directive = node.directive as PathDirective;
+  const directive = node.directive as PathDirectiveData;
   
   // Validate identifier
   if (!directive.identifier || typeof directive.identifier !== 'string') {
     throw new MeldDirectiveError(
       'Path directive requires an "identifier" property (string)',
       'path',
-      node.location?.start,
-      DirectiveErrorCode.VALIDATION_FAILED
+      node.location?.start
     );
   }
   
@@ -25,29 +24,26 @@ export function validatePathDirective(node: DirectiveNode): void {
     throw new MeldDirectiveError(
       'Path identifier must be a valid identifier (letters, numbers, underscore, starting with letter/underscore)',
       'path',
-      node.location?.start,
-      DirectiveErrorCode.VALIDATION_FAILED
+      node.location?.start
     );
   }
   
-  // Validate path exists
-  if (!directive.path || !directive.path.raw || typeof directive.path.raw !== 'string') {
+  // Validate value exists
+  if (!directive.value || typeof directive.value !== 'string') {
     throw new MeldDirectiveError(
-      'Path directive requires a "path" property with a raw string value',
+      'Path directive requires a "value" property (string)',
       'path',
-      node.location?.start,
-      DirectiveErrorCode.VALIDATION_FAILED
+      node.location?.start
     );
   }
 
   // The AST will have already validated and normalized the path format
   // We just need to ensure it's not empty
-  if (directive.path.raw.trim() === '') {
+  if (directive.value.trim() === '') {
     throw new MeldDirectiveError(
       'Path value cannot be empty',
       'path',
-      node.location?.start,
-      DirectiveErrorCode.VALIDATION_FAILED
+      node.location?.start
     );
   }
 } 

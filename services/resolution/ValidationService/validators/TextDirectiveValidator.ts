@@ -1,4 +1,4 @@
-import type { DirectiveNode, TextDirective } from 'meld-spec';
+import type { DirectiveNode } from 'meld-spec';
 import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
 import { DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
@@ -7,7 +7,7 @@ import { ErrorSeverity } from '@core/errors/MeldError.js';
  * Validates @text directives according to spec
  */
 export function validateTextDirective(node: DirectiveNode): void {
-  const directive = node.directive as TextDirective;
+  const directive = node.directive;
   
   // Validate identifier
   if (!directive.identifier || typeof directive.identifier !== 'string') {

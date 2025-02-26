@@ -1,9 +1,9 @@
-import type { DirectiveNode, EmbedDirective } from 'meld-spec';
+import type { DirectiveNode, EmbedDirectiveData } from 'meld-spec';
 import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
 import { DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 
 export function validateEmbedDirective(node: DirectiveNode): void {
-  const directive = node.directive as EmbedDirective;
+  const directive = node.directive as EmbedDirectiveData;
   
   // Check path is present in the appropriate format (string or path object)
   // Handle both string paths and structured path objects

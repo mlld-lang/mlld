@@ -1,4 +1,4 @@
-import { DirectiveNode, ImportDirective } from 'meld-spec';
+import { DirectiveNode, ImportDirectiveData } from 'meld-spec';
 import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
 import { DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 
@@ -6,7 +6,7 @@ import { DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/D
  * Validates @import directives
  */
 export function validateImportDirective(node: DirectiveNode): void {
-  const directive = node.directive as ImportDirective;
+  const directive = node.directive as ImportDirectiveData;
   
   // Handle both old format (value) and new format (path)
   // Properly handle the path object or string
