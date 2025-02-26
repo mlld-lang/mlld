@@ -1,3 +1,5 @@
+import '@core/di-config.js';
+
 // Core services
 export * from '@services/pipeline/InterpreterService/InterpreterService.js';
 export * from '@services/pipeline/ParserService/ParserService.js';

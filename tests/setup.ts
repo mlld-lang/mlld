@@ -1,3 +1,4 @@
+import 'reflect-metadata';
 import { beforeEach, afterEach, vi } from 'vitest';
 import { TestContext } from '@tests/utils/index.js';
 
@@ -18,4 +19,4 @@ declare global {
 }
 
 // Initialize test context
-globalThis.testContext = new TestContext(); 
+globalThis.testContext = new TestContext();

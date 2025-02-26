@@ -26,6 +26,7 @@ import {
 import { ICommandService } from '../../command/ICommandService';
 import { Command, ParameterResolutionMap } from '../../command/Command';
 import { CommandParameter } from '../../../types';
+import { IPathService } from '@services/fs/PathService/IPathService.js';
 
 /**
  * Internal type for heading nodes in the ResolutionService
@@ -61,6 +62,7 @@ function isHeadingTextNode(node: MeldNode): node is TextNode {
 /**
  * Service responsible for resolving variables, commands, and paths in different contexts
  */
+@singleton()
 export class ResolutionService implements IResolutionService {
   private textResolver: TextResolver;
   private dataResolver: DataResolver;
@@ -72,14 +74,14 @@ export class ResolutionService implements IResolutionService {
   constructor(
     private stateService: IStateService,
     private fileSystemService: IFileSystemService,
-    private parserService: IParserService
+    private parserService: IParserService,
+    private pathService: IPathService
   ) {
     this.textResolver = new TextResolver(stateService);
     this.dataResolver = new DataResolver(stateService);
     this.pathResolver = new PathResolver(stateService);
     this.commandResolver = new CommandResolver(stateService);
     this.contentResolver = new ContentResolver(stateService);
-    // Create the variable reference resolver with the parser
     this.variableReferenceResolver = new VariableReferenceResolver(
       stateService,
       this,
@@ -194,116 +196,20 @@ export class ResolutionService implements IResolutionService {
       } : 'state not available'
     });
 
-    // Handle structured path objects directly
+    // Handle structured path objects by delegating to the dedicated method
     if (typeof value === 'object' && value !== null && 'raw' in value) {
-      const { raw, structured } = value;
-      
-      // Log structured path for debugging
-      logger.debug('Processing structured path', { raw, structured });
-
-      // For special path variables - handle them directly
-      if (structured?.variables?.special?.includes('PROJECTPATH') ||
-          structured?.base === '$PROJECTPATH' ||
-          structured?.base === '$.') {
-        // Get the base path from state
-        const basePath = context.state?.getPathVar('PROJECTPATH') || 
-                         this.stateService.getPathVar('PROJECTPATH');
-        if (!basePath) {
-          throw new MeldResolutionError(
-            'PROJECTPATH is not defined',
-            {
-              code: ResolutionErrorCode.UNDEFINED_VARIABLE,
-              details: { value: raw },
-              severity: ErrorSeverity.Recoverable
-            }
-          );
-        }
-
-        // Join with segments
-        let result = basePath;
-        if (structured.segments && structured.segments.length > 0) {
-          result = structured.segments.reduce((p: string, segment: string) => {
-            return path.join(p, segment);
-          }, result);
-        }
-        return result;
-      }
-
-      // For home path special variables
-      if (structured?.variables?.special?.includes('HOMEPATH') ||
-          structured?.base === '$HOMEPATH' ||
-          structured?.base === '$~') {
-        // Get the home path from state
-        const homePath = context.state?.getPathVar('HOMEPATH') || 
-                         this.stateService.getPathVar('HOMEPATH');
-        if (!homePath) {
-          throw new MeldResolutionError(
-            'HOMEPATH is not defined',
-            {
-              code: ResolutionErrorCode.UNDEFINED_VARIABLE,
-              details: { value: raw },
-              severity: ErrorSeverity.Recoverable
-            }
-          );
-        }
-
-        // Join with segments
-        let result = homePath;
-        if (structured.segments && structured.segments.length > 0) {
-          result = structured.segments.reduce((p: string, segment: string) => {
-            return path.join(p, segment);
-          }, result);
-        }
-        return result;
-      }
-
-      // For path variables
-      if (structured?.variables?.path && structured.variables.path.length > 0) {
-        // Clone raw path for replacement
-        let tempPath = raw;
-
-        // Process each path variable
-        for (const pathVar of structured.variables.path) {
-          // Get variable value from state
-          const pathValue = context.state?.getPathVar(pathVar) || 
-                           this.stateService.getPathVar(pathVar);
-          if (pathValue === undefined) {
-            throw new MeldResolutionError(
-              `Path variable not defined: ${pathVar}`,
-              {
-                code: ResolutionErrorCode.UNDEFINED_VARIABLE,
-                details: { value: pathVar },
-                severity: ErrorSeverity.Recoverable
-              }
-            );
-          }
-
-          // Replace in path
-          tempPath = tempPath.replace(`$${pathVar}`, pathValue);
-        }
-
-        return tempPath;
-      }
-
-      // For structured paths with no special handling, return the normalized path if available
-      if (structured.normalized) {
-        return structured.normalized;
-      }
-      
-      // If no normalized path is available, return the raw value 
-      // after resolving any variables within it
-      return this.resolveVariables(raw, context);
+      return this.resolveStructuredPath(value, context);
     }
 
-    // Handle special path variable formats ($HOMEPATH, $PROJECTPATH) for string inputs
+    // Handle string values
     if (typeof value === 'string') {
       // Check for special direct path variable references
-      if (value === '$HOMEPATH') {
+      if (value === '$HOMEPATH' || value === '$~') {
         const homePath = context.state?.getPathVar('HOMEPATH') || this.stateService.getPathVar('HOMEPATH');
         return homePath || '';
       }
       
-      if (value === '$PROJECTPATH') {
+      if (value === '$PROJECTPATH' || value === '$.') {
         const projectPath = context.state?.getPathVar('PROJECTPATH') || this.stateService.getPathVar('PROJECTPATH');
         return projectPath || '';
       }
@@ -331,7 +237,7 @@ export class ResolutionService implements IResolutionService {
       // Try to parse the string as a path using the parser service
       try {
         // Only attempt parsing if the string contains path variable indicators
-        if (value.includes('$.') || value.includes('$~') || value.includes('$/')) {
+        if (value.includes('$.') || value.includes('$~') || value.includes('$/') || value.includes('$')) {
           const nodes = await this.parseForResolution(value);
           const pathNode = nodes.find(node => 
             node.type === 'PathVar' || 
@@ -345,7 +251,7 @@ export class ResolutionService implements IResolutionService {
             if (pathNode.type === 'PathVar' && (pathNode as any).value) {
               structPath = (pathNode as any).value as StructuredPath;
               // Recursive call with the structured path
-              return this.resolveInContext(structPath, context);
+              return this.resolveStructuredPath(structPath, context);
             } else if (pathNode.type === 'Directive') {
               const directiveNode = pathNode as any;
               if (directiveNode.directive.value && 
@@ -353,7 +259,7 @@ export class ResolutionService implements IResolutionService {
                   'raw' in directiveNode.directive.value) {
                 structPath = directiveNode.directive.value as StructuredPath;
                 // Recursive call with the structured path
-                return this.resolveInContext(structPath, context);
+                return this.resolveStructuredPath(structPath, context);
               }
             }
           }
@@ -661,5 +567,32 @@ export class ResolutionService implements IResolutionService {
           return '';
       }
     }).join('\n');
+  }
+
+  /**
+   * Resolve a structured path to an absolute path
+   * @private
+   */
+  private async resolveStructuredPath(path: StructuredPath, context: ResolutionContext): Promise<string> {
+    const { structured, raw } = path;
+    
+    // Get base directory from context if available (use currentFilePath if available)
+    const baseDir = context.currentFilePath ? this.pathService.dirname(context.currentFilePath) : process.cwd();
+    
+    try {
+      // Use the PathService to resolve the structured path
+      // This handles all special variables and path normalization
+      return this.pathService.resolvePath(path, baseDir);
+    } catch (error) {
+      // Handle error based on severity
+      throw new MeldResolutionError(
+        `Failed to resolve path: ${(error as Error).message}`,
+        {
+          code: ResolutionErrorCode.INVALID_PATH,
+          details: { value: raw },
+          severity: ErrorSeverity.Recoverable
+        }
+      );
+    }
   }
 } 

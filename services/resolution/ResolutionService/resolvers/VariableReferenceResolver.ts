@@ -121,6 +121,7 @@ export class VariableReferenceResolver {
           
           // Use the resolutionService to resolve the structured path
           try {
+            // We'll let the ResolutionService handle the structured path
             pathValue = await this.resolutionService.resolveInContext(structPath, context);
             console.log('*** Resolved structured path:', {
               raw: structPath.raw,
@@ -139,35 +140,54 @@ export class VariableReferenceResolver {
           // For simple path variables
           const identifier = pathVarNode.identifier || pathVarNode.name;
           
-          // Check for special path variables
-          if (identifier === 'HOMEPATH' || identifier === '~') {
-            pathValue = context.state?.getPathVar('HOMEPATH') || 
-                        this.stateService.getPathVar('HOMEPATH') || '';
-          } else if (identifier === 'PROJECTPATH' || identifier === '.') {
-            pathValue = context.state?.getPathVar('PROJECTPATH') || 
-                        this.stateService.getPathVar('PROJECTPATH') || '';
-          } else {
-            // For regular path variables
-            pathValue = context.state?.getPathVar(identifier) || 
-                        this.stateService.getPathVar(identifier);
+          // Let the ResolutionService handle path variable resolution
+          try {
+            // Create a simple path structure for resolution
+            const pathStr = `$${identifier}`;
+            
+            // Parse this through the parser to get a structured path
+            const nodes = await this.parserService.parse(pathStr);
+            const parsedPathNode = nodes.find(n => n.type === 'PathVar');
+            
+            if (parsedPathNode && (parsedPathNode as any).value) {
+              // Get the structured path from the parsed node
+              const structPath = (parsedPathNode as any).value;
               
-            if (pathValue === undefined) {
-              // If the path variable is undefined, throw or warn based on context
-              if (context.strict) {
-                throw new MeldResolutionError(
-                  `Undefined path variable: ${identifier}`,
-                  {
-                    code: ResolutionErrorCode.UNDEFINED_VARIABLE,
-                    details: { variableName: identifier, variableType: 'path' },
-                    severity: ErrorSeverity.Recoverable
-                  }
-                );
+              // Let ResolutionService resolve it
+              pathValue = await this.resolutionService.resolveInContext(structPath, context);
+            } else {
+              // Fallback to direct state access if parsing fails
+              if (identifier === 'HOMEPATH' || identifier === '~') {
+                pathValue = context.state?.getPathVar('HOMEPATH') || 
+                          this.stateService.getPathVar('HOMEPATH') || '';
+              } else if (identifier === 'PROJECTPATH' || identifier === '.') {
+                pathValue = context.state?.getPathVar('PROJECTPATH') || 
+                          this.stateService.getPathVar('PROJECTPATH') || '';
               } else {
-                // In permissive mode, return the raw variable reference
-                console.warn(`Undefined path variable: ${identifier}`);
-                pathValue = `$${identifier}`;
+                // For regular path variables
+                pathValue = context.state?.getPathVar(identifier) || 
+                          this.stateService.getPathVar(identifier);
+                  
+                if (pathValue === undefined) {
+                  throw new MeldResolutionError(
+                    `Undefined path variable: ${identifier}`,
+                    {
+                      code: ResolutionErrorCode.UNDEFINED_VARIABLE,
+                      details: { variableName: identifier, variableType: 'path' },
+                      severity: ErrorSeverity.Recoverable
+                    }
+                  );
+                }
               }
             }
+          } catch (error) {
+            console.error('*** Failed to resolve path variable:', {
+              identifier,
+              error: (error as Error).message
+            });
+            
+            // For recoverable errors, return the unresolved reference
+            pathValue = `$${identifier}`;
           }
         }
         

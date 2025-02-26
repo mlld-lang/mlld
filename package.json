@@ -55,6 +55,8 @@
     "meld-spec": "^0.4.1",
     "minimatch": "^3.0.4",
     "peggy": "^4.2.0",
+    "reflect-metadata": "^0.2.2",
+    "tsyringe": "^4.8.0",
     "uuid": "^11.1.0",
     "winston": "^3.17.0",
     "xmldom": "^0.6.0",

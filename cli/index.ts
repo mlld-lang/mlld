@@ -1,3 +1,5 @@
+import '@core/di-config.js';
+
 import { CLIService } from '@services/cli/CLIService/CLIService.js';
 import { ParserService } from '@services/pipeline/ParserService/ParserService.js';
 import { InterpreterService } from '@services/pipeline/InterpreterService/InterpreterService.js';
