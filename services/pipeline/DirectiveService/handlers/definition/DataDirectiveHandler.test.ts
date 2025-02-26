@@ -142,7 +142,7 @@ describe('DataDirectiveHandler', () => {
     it('should handle resolution errors', async () => {
       const node = createDirectiveNode('data', {
         identifier: 'error',
-        value: '${missing}'
+        value: '{{missing}}'
       }, createLocation(1, 1, 1, 15, '/test.meld'));
 
       const directiveContext = {
@@ -193,11 +193,11 @@ describe('DataDirectiveHandler', () => {
         identifier: 'config',
         value: JSON.stringify({
           user: {
-            name: '${userName}',
-            role: '${userRole}',
+            name: '{{userName}}',
+            role: '{{userRole}}',
             settings: {
-              theme: '${theme}',
-              items: ['${item1}', '${item2}']
+              theme: '{{theme}}',
+              items: ['{{item1}}', '{{item2}}']
             }
           }
         })
@@ -211,7 +211,7 @@ describe('DataDirectiveHandler', () => {
       // Mock resolveInContext to handle variables within strings
       vi.mocked(resolutionService.resolveInContext)
         .mockImplementation(async (value: string) => {
-          return value.replace(/\${([^}]+)}/g, (match, varName) => {
+          return value.replace(/\{\{([^}]+)\}\}/g, (match, varName) => {
             const vars: Record<string, string> = {
               userName: 'Alice',
               userRole: 'admin',
@@ -240,7 +240,7 @@ describe('DataDirectiveHandler', () => {
     it('should handle JSON strings containing variable references', async () => {
       const node = createDirectiveNode('data', {
         identifier: 'message',
-        value: '{"text": "Hello ${user}!"}'
+        value: '{"text": "Hello {{user}}!"}'
       }, createLocation(1, 1, 1, 30, '/test.meld'));
 
       const directiveContext = {
@@ -251,7 +251,7 @@ describe('DataDirectiveHandler', () => {
       // Mock resolveInContext to handle variables within strings
       vi.mocked(resolutionService.resolveInContext)
         .mockImplementation(async (value: string) => {
-          return value.replace(/\${([^}]+)}/g, (match, varName) => {
+          return value.replace(/\{\{([^}]+)\}\}/g, (match, varName) => {
             const vars: Record<string, string> = {
               user: 'Alice'
             };
@@ -269,7 +269,7 @@ describe('DataDirectiveHandler', () => {
     it('should preserve JSON structure when resolving variables', async () => {
       const node = createDirectiveNode('data', {
         identifier: 'data',
-        value: '{"array": [1, "${var}", 3], "object": {"key": "${var}"}}'
+        value: '{"array": [1, "{{var}}", 3], "object": {"key": "{{var}}"}}'
       }, createLocation(1, 1, 1, 40, '/test.meld'));
 
       const directiveContext = {
@@ -279,7 +279,7 @@ describe('DataDirectiveHandler', () => {
 
       vi.mocked(resolutionService.resolveInContext)
         .mockImplementation(async (value: string) => {
-          return value.replace(/\${([^}]+)}/g, (match, varName) => {
+          return value.replace(/\{\{([^}]+)\}\}/g, (match, varName) => {
             const vars: Record<string, string> = {
               var: '2'
             };

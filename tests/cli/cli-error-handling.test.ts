@@ -30,7 +30,7 @@ describe('CLI Error Handling', () => {
   describe('Using standalone utilities', () => {
     it('should handle permissive mode for missing variables', async () => {
       // Create a test file with reference to undefined variable
-      await context.fs.writeFile('/project/test.meld', '@text greeting = "Hello #{undefined}"');
+      await context.fs.writeFile('/project/test.meld', '@text greeting = "Hello {{undefined}}"');
       
       // Mock process.exit and console output
       const exitMock = context.mockProcessExit();
@@ -52,7 +52,7 @@ describe('CLI Error Handling', () => {
     
     it('should throw errors in strict mode', async () => {
       // Create a test file with reference to undefined variable
-      await context.fs.writeFile('/project/test.meld', '@text greeting = "Hello #{undefined}"');
+      await context.fs.writeFile('/project/test.meld', '@text greeting = "Hello {{undefined}}"');
       
       // Mock process.exit and console output
       const exitMock = context.mockProcessExit();
@@ -77,7 +77,7 @@ describe('CLI Error Handling', () => {
       // Setup CLI test environment
       const { exitMock, consoleMocks } = await context.setupCliTest({
         files: {
-          '/project/test.meld': '@text greeting = "Hello #{undefined}"\n@text farewell = "Goodbye #{nonexistent}"'
+          '/project/test.meld': '@text greeting = "Hello {{undefined}}"\n@text farewell = "Goodbye {{nonexistent}}"'
         }
       });
       

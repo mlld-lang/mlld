@@ -60,9 +60,9 @@ Lines that begin with `>> ` (two greater-than signs followed by a space) are tre
 ### Command Definitions
 ```
 @define command = @run [content]
-@define command(param1, param2) = @run [content ${param1} ${param2}]
+@define command(param1, param2) = @run [content {{param1}} {{param2}}]
 @run [$command]
-@run [$command(${textvar1}, ${textvar2})]
+@run [$command({{textvar1}}, {{textvar2}})]
 ```
 - Command names must be valid identifiers
 - Parameters are optional
@@ -88,18 +88,12 @@ Path Variables:
 - No field access or formatting
 - Special variables $HOMEPATH/$~ and $PROJECTPATH/$. can be used with path separators
 
-Text Variables:
-- Syntax: ${identifier} (e.g., ${message}, ${description})
-- Store unstructured text
-- No field access (text is atomic)
+Text and Data Variables:
+- Syntax: {{identifier}} (e.g., {{message}}, {{description}}, {{config}}, {{response}})
+- Store unstructured text (text variables) or structured data (data variables)
+- Support field access for data variables ({{config.name}})
 - Can be formatted with >>
-- Environment variables (${ENV_*}) are a special case of text variables
-
-Data Variables:
-- Syntax: #{identifier} (e.g., #{config}, #{response})
-- Store structured data
-- Support field access (#{config.name})
-- Can be formatted with >>
+- Environment variables ({{ENV_*}}) are a special case of text variables
 
 ### Variable Type Conversion
 
@@ -115,9 +109,9 @@ Examples:
 @data config = {{ name: "test", version: 1 }}
 @data nested = {{ user: { name: "Alice" } }}
 
-@text simple = `Name: #{config.name}`          # Outputs: Name: test
-@text object = `Config: #{config}`             # Outputs: Config: {"name":"test","version":1}
-@text deep = `User: #{nested.user}`            # Outputs: User: {"name":"Alice"}
+@text simple = `Name: {{config.name}}`          # Outputs: Name: test
+@text object = `Config: {{config}}`             # Outputs: Config: {"name":"test","version":1}
+@text deep = `User: {{nested.user}}`            # Outputs: User: {"name":"Alice"}
 ```
 
 Text in Data Contexts:
@@ -131,10 +125,10 @@ Examples:
 @text key = "username"
 
 @data user = {{
-  ${key}: ${name},              # Dynamic key from text
-  id: ${userId},                # Text value in data structure
+  {{key}}: {{name}},              # Dynamic key from text
+  id: {{userId}},                # Text value in data structure
   settings: {
-    displayName: ${name}        # Nested text value
+    displayName: {{name}}        # Nested text value
   }
 }}
 ```
@@ -143,12 +137,11 @@ Examples:
 
 Variable references in different contexts:
 ```
-${textvar}                     Text variable reference
-${textvar>>(format)}          Formatted text variable
-#{datavar}                    Data variable reference
-#{datavar.field}             Data variable field access
-#{datavar.field>>(format)}   Formatted data field access
-$command(${param1}, ${param2}) Command reference with parameters
+{{variable}}                   Variable reference
+{{variable>>(format)}}        Formatted variable
+{{datavar.field}}            Data variable field access
+{{datavar.field>>(format)}}  Formatted data field access
+$command({{param1}}, {{param2}}) Command reference with parameters
 $path                         Path variable reference
 $HOMEPATH or $~               Special path variable (equivalent)
 $PROJECTPATH or $.            Special path variable (equivalent)
@@ -167,8 +160,8 @@ They are NOT allowed in:
 
 Rules for specific variable types:
 - Path variables ($path) only allowed in path contexts
-- Text variables (${text}) allowed in all interpolation contexts
-- Data variables (#{data}) allowed in all interpolation contexts except command parameters
+- Variables ({{variable}}) allowed in all interpolation contexts
+- Data field access ({{data.field}}) allowed in all interpolation contexts except command parameters
 
 ### Code Fences
 
@@ -232,13 +225,13 @@ where:
 ```
 @run [command_text]
 @run [command_text] under header_text
-@run [$command(${textvar1}, ${textvar2})]
+@run [$command({{textvar1}}, {{textvar2}})]
 ```
 where:
 - command_text cannot be empty
 - command_text can contain spaces and quotes (', ", `)
 - command_text can contain:
-  - Standard variables (${textvar})
+  - Variables ({{variable}})
   - Path variables ($path)
   - Special path variables ($HOMEPATH/$~, $PROJECTPATH/$.)
 - command_text can contain nested brackets (treated as text)
@@ -255,7 +248,7 @@ where:
 ### @define
 ```
 @define identifier = @run [content]
-@define command(param1, param2) = @run [content ${param1} ${param2}]
+@define command(param1, param2) = @run [content {{param1}} {{param2}}]
 ```
 where:
 - content follows @run patterns
@@ -341,7 +334,7 @@ Examples:
 @api github = {{
   baseUrl: "https://api.github.com",
   headers: {
-    Authorization: "Bearer ${ENV_TOKEN}"
+    Authorization: "Bearer {{ENV_TOKEN}}"
   }
 }}
 
@@ -445,45 +438,45 @@ ${textvar.field1} # textvars do not have fields
 ### Command References
 Inside [] brackets ONLY:
 ```
-$command(${param1}, ${param2})     Command with parameters
+$command({{param1}}, {{param2}})     Command with parameters
 ```
 Rules:
 - Must be defined via @define
 - Must include parameters
-- Parameters must be text variables (${param})
+- Parameters must be text variables ({{param}})
 - No whitespace in command name
 - Spaces allowed after commas
 
 ### Variable Interpolation
 Inside [...] and {{...}} contexts only:
 ```
-${textvar}                    Text variable reference
-${textvar>>(format)}         Formatted text variable
-#{datavar}                   Data variable reference
-#{datavar.field}            Data field access
-#{datavar.field>>(format)}  Formatted data field
+{{textvar}}                    Text variable reference
+{{textvar>>(format)}}         Formatted text variable
+{{datavar}}                   Data variable reference
+{{datavar.field}}            Data field access
+{{datavar.field>>(format)}}  Formatted data field
 $path                       Path variable reference
 $HOMEPATH or $~             Special path variable (equivalent)
 $PROJECTPATH or $.          Special path variable (equivalent)
 ```
 Rules:
 - Path variables ($path) only allowed in path contexts
-- Text variables (${text}) allowed in all interpolation contexts
-- Data variables (#{data}) allowed in all interpolation contexts except command parameters
+- Variables ({{variable}}) allowed in all interpolation contexts
+- Data field access ({{data.field}}) allowed in all interpolation contexts except command parameters
 - @path-defined variables must occur after `[` or ` ` (whitespace) and must be followed by `/`
-- No nested interpolation (${textvar${inner}} or #{datavar#{inner}})
+- No nested interpolation ({{textvar{{inner}}}} or {{datavar{{inner}}}})
 - No whitespace around >> operator
 - Format must be last operation
 - Only one format allowed per variable
-- Formatting only allowed inside ${} and #{} 
+- Formatting only allowed inside {{}} 
 - Path variables cannot use field access or formats
 
 Invalid patterns:
 ```
-"text with ${textvar}"            # No variables in regular strings
-Text with ${textvar}              # No variables in plain text
-${textvar${inner}}               # No nested text variables
-#{data#{inner}}                 # No nested data variables
+"text with {{textvar}}"            # No variables in regular strings
+Text with {{textvar}}              # No variables in plain text
+{{textvar{{inner}}}}              # No nested text variables
+{{data{{inner}}}}                # No nested data variables
 $path.field                     # No field access on path vars
 $path>>(format)                 # No format on path vars
 ```
@@ -491,13 +484,13 @@ $path>>(format)                 # No format on path vars
 ### Format Specifications
 Format operators must be inside the variable braces:
 ```
-${textvar>>(format)}           Text variable format
-#{datavar>>(format)}           Data variable format
-#{datavar.field>>(format)}     Data field format
+{{textvar>>(format)}}           Text variable format
+{{datavar>>(format)}}           Data variable format
+{{datavar.field>>(format)}}     Data field format
 ```
 
 Rules:
-- Format operator must be inside ${} or #{} braces
+- Format operator must be inside {{}} braces
 - No whitespace around >>
 - No format chaining (only one format per variable)
 - Format must be the last operation in the variable reference
@@ -505,11 +498,11 @@ Rules:
 
 Invalid patterns:
 ```
-$var>>(format)                     # Must be inside ${} or #{}
-${textvar}>>(format)               # Format must be inside braces
-${textvar>>(format1)>>(format2)}   # No format chaining
-#{datavar>>(format).field}         # Format must be last operation
-${textvar >> (format)}             # No whitespace around >>
+$var>>(format)                     # Must be inside {{}}
+{{textvar}}>>(format)               # Format must be inside braces
+{{textvar>>(format1)>>(format2)}}   # No format chaining
+{{datavar>>(format).field}}         # Format must be last operation
+{{textvar >> (format)}}             # No whitespace around >>
 ```
 
 ### String Concatenation
@@ -517,24 +510,24 @@ ${textvar >> (format)}             # No whitespace around >>
 - Can concatenate:
   - String literals
   - Template literals
-  - Text variables (${text})
+  - Variables ({{variable}})
   - Result of @embed directives
 - Cannot concatenate:
   - Arrays or objects
-  - Data variables (use template literals instead)
+  - Complex data structures (use template literals instead)
 - Must be single line (use template literals for multi-line)
 
 Examples:
 ```meld
 @text greeting = "Hello" ++ " " ++ "World"
-@text message = ${intro} ++ ${body}
+@text message = {{intro}} ++ {{body}}
 @text doc = @embed [header.md] ++ @embed [content.md]
 ```
 
 Invalid patterns:
 ```meld
 @text bad = "no"++"spaces"        # Missing spaces around ++
-@text bad = #{data} ++ "text"     # Cannot concat data variables
+@text bad = {{data}} ++ "text"     # Cannot concat complex data variables
 @text bad = "multi" ++            # Cannot split across lines
   "line"
 ```

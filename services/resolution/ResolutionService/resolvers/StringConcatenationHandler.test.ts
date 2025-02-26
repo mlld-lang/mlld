@@ -31,7 +31,7 @@ describe('StringConcatenationHandler', () => {
   describe('hasConcatenation', () => {
     it('should detect valid concatenation operators', () => {
       expect(handler.hasConcatenation('"hello" ++ "world"')).toBe(true);
-      expect(handler.hasConcatenation('${var1} ++ ${var2}')).toBe(true);
+      expect(handler.hasConcatenation('{{var1}} ++ {{var2}}')).toBe(true);
       expect(handler.hasConcatenation('"prefix" ++ @embed [file.md]')).toBe(true);
     });
 
@@ -50,12 +50,12 @@ describe('StringConcatenationHandler', () => {
 
     it('should handle variables through resolution service', async () => {
       vi.mocked(mockResolutionService.resolveInContext).mockImplementation(async (value) => {
-        if (value === '${var1}') return 'hello';
-        if (value === '${var2}') return 'world';
+        if (value === '{{var1}}') return 'hello';
+        if (value === '{{var2}}') return 'world';
         return value;
       });
 
-      const result = await handler.resolveConcatenation('${var1} ++ " " ++ ${var2}', context);
+      const result = await handler.resolveConcatenation('{{var1}} ++ " " ++ {{var2}}', context);
       expect(result).toBe('hello world');
     });
 
@@ -71,11 +71,11 @@ describe('StringConcatenationHandler', () => {
 
     it('should handle mixed string literals and variables', async () => {
       vi.mocked(mockResolutionService.resolveInContext).mockImplementation(async (value) => {
-        if (value === '${name}') return 'world';
+        if (value === '{{name}}') return 'world';
         return value;
       });
 
-      const result = await handler.resolveConcatenation('"hello " ++ ${name}', context);
+      const result = await handler.resolveConcatenation('"hello " ++ {{name}}', context);
       expect(result).toBe('hello world');
     });
 
@@ -87,10 +87,10 @@ describe('StringConcatenationHandler', () => {
 
     it('should handle resolution errors', async () => {
       vi.mocked(mockResolutionService.resolveInContext).mockRejectedValue(
-        new ResolutionError('Variable not found', { value: '${missing}' })
+        new ResolutionError('Variable not found', { value: '{{missing}}' })
       );
 
-      await expect(handler.resolveConcatenation('"hello" ++ ${missing}', context))
+      await expect(handler.resolveConcatenation('"hello" ++ {{missing}}', context))
         .rejects
         .toThrow(ResolutionError);
     });

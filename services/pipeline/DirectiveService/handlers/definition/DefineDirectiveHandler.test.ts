@@ -60,7 +60,7 @@ describe('DefineDirectiveHandler', () => {
     it('should handle command definition with parameters', async () => {
       const node = createDefineDirective(
         'greet',
-        'echo "Hello ${name}"',
+        'echo "Hello {{name}}"',
         ['name'],
         createLocation(1, 1, 1, 30)
       );
@@ -73,14 +73,14 @@ describe('DefineDirectiveHandler', () => {
       const result = await handler.execute(node, context);
       expect(clonedState.setCommand).toHaveBeenCalledWith('greet', {
         parameters: ['name'],
-        command: 'echo "Hello ${name}"'
+        command: 'echo "Hello {{name}}"'
       });
     });
 
     it('should handle command definition with multiple parameters', async () => {
       const node = createDefineDirective(
         'greet',
-        'echo "Hello ${first} ${last}"',
+        'echo "Hello {{first}} {{last}}"',
         ['first', 'last'],
         createLocation(1, 1, 1, 40)
       );
@@ -93,7 +93,7 @@ describe('DefineDirectiveHandler', () => {
       const result = await handler.execute(node, context);
       expect(clonedState.setCommand).toHaveBeenCalledWith('greet', {
         parameters: ['first', 'last'],
-        command: 'echo "Hello ${first} ${last}"'
+        command: 'echo "Hello {{first}} {{last}}"'
       });
     });
   });
@@ -189,7 +189,7 @@ describe('DefineDirectiveHandler', () => {
     it('should reject missing parameters referenced in command', async () => {
       const node = createDefineDirective(
         'greet',
-        'echo "Hello ${name}"',
+        'echo "Hello {{name}}"',
         [],
         createLocation(1, 1, 1, 30)
       );
@@ -211,7 +211,7 @@ describe('DefineDirectiveHandler', () => {
     it('should reject invalid parameter names', async () => {
       const node = createDefineDirective(
         'greet',
-        'echo "Hello ${123invalid}"',
+        'echo "Hello {{123invalid}}"',
         ['123invalid'],
         createLocation(1, 1, 1, 35)
       );
@@ -233,7 +233,7 @@ describe('DefineDirectiveHandler', () => {
     it('should reject duplicate parameter names', async () => {
       const node = createDefineDirective(
         'greet',
-        'echo "Hello ${name}"',
+        'echo "Hello {{name}}"',
         ['name', 'name'],
         createLocation(1, 1, 1, 30)
       );
@@ -340,7 +340,7 @@ describe('DefineDirectiveHandler', () => {
     it('should handle resolution errors', async () => {
       const node = createDefineDirective(
         'cmd',
-        'echo "${undefined}"',
+        'echo "{{undefined}}"',
         [],
         createLocation(1, 1, 1, 25)
       );

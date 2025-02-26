@@ -8,11 +8,25 @@ import { DirectiveError, DirectiveErrorCode, DirectiveErrorSeverity } from '@ser
 import { directiveLogger as logger } from '@core/utils/logger';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 
-// Updated to match meld-ast 1.6.1 structure
+// Updated to match meld-ast 1.6.1 structure exactly
+interface StructuredPath {
+  raw: string;
+  normalized?: string;
+  structured: {
+    base: string;
+    segments: string[];
+    variables?: {
+      text?: string[];
+      path?: string[];
+      special?: string[];
+    };
+  };
+}
+
 interface PathDirective extends DirectiveData {
   kind: 'path';
   identifier: string;
-  value: string;
+  path: StructuredPath;
 }
 
 /**
@@ -61,24 +75,52 @@ export class PathDirectiveHandler implements IDirectiveHandler {
       // 1. Validate directive structure
       await this.validationService.validate(node);
 
-      // 2. Get identifier and value from directive
+      // 2. Get identifier and path from directive
       const { directive } = node;
-      const identifier = directive.identifier;
-      const value = directive.value;
+      
+      // Debug the actual properties available on the directive
+      console.log('*** DIRECTIVE PROPERTIES ***');
+      console.log('Properties:', Object.keys(directive));
+      console.log('Full directive:', JSON.stringify(directive, null, 2));
+      
+      const directivePath = directive as PathDirective;
+      
+      // Check if we have identifier and path before accessing them
+      console.log('*** DIRECTIVE CASTING RESULT ***');
+      console.log('directivePath has identifier?', 'identifier' in directivePath);
+      console.log('directivePath has path?', 'path' in directivePath);
+      
+      // Support both 'identifier' and 'id' field names for backward compatibility
+      const identifier = directivePath.identifier || (directivePath as any).id;
+      const path = directivePath.path;
 
       // Log path information
       logger.debug('Path directive details', {
         identifier,
-        value,
-        valueType: typeof value,
+        path,
+        directiveProperties: Object.keys(directive),
+        hasPath: !!path,
+        pathType: path ? typeof path : 'undefined',
         nodeType: node.type,
         directiveKind: directive.kind
       });
 
-      // 3. Process value based on type
-      if (!value) {
+      // 3. Check for required fields 
+      if (!identifier || typeof identifier !== 'string' || identifier.trim() === '') {
         throw new DirectiveError(
-          'Path directive requires a value',
+          'Path directive requires a valid identifier',
+          this.kind,
+          DirectiveErrorCode.VALIDATION_FAILED,
+          { 
+            node,
+            context
+          }
+        );
+      }
+
+      if (!path || !path.raw) {
+        throw new DirectiveError(
+          'Path directive requires a path value',
           this.kind,
           DirectiveErrorCode.VALIDATION_FAILED,
           { 
@@ -94,33 +136,41 @@ export class PathDirectiveHandler implements IDirectiveHandler {
         newState
       );
 
-      // Get the raw path value to resolve
-      const rawPath = value;
-
-      // Log the resolution context that was created
-      logger.debug('Created resolution context for path directive', {
-        currentFilePath: resolutionContext.currentFilePath,
+      // Log the resolution context and inputs
+      console.log('*** ResolutionService.resolveInContext', {
+        value: path.raw,
         allowedVariableTypes: resolutionContext.allowedVariableTypes,
         pathValidation: resolutionContext.pathValidation,
-        stateIsPresent: !!resolutionContext.state,
+        stateExists: !!resolutionContext.state,
         specialPathVars: {
-          PROJECTPATH: resolutionContext.state?.getPathVar('PROJECTPATH'),
-          HOMEPATH: resolutionContext.state?.getPathVar('HOMEPATH')
+          PROJECTPATH: newState.getPathVar('PROJECTPATH'),
+          HOMEPATH: newState.getPathVar('HOMEPATH')
         }
       });
 
-      // Resolve variables in the value
+      // Resolve the path using the resolution service
+      // Pass the entire StructuredPath object, not just the raw value
       const resolvedValue = await this.resolutionService.resolveInContext(
-        rawPath,
+        path,
         resolutionContext
       );
 
-      // 4. Store in state
+      console.log('*** Resolved path value:', resolvedValue);
+
+      // 4. Store in state as both path variable and text variable
       newState.setPathVar(identifier, resolvedValue);
       
-      // Also set a corresponding text variable with the same name so it can be accessed
-      // in text directives using ${identifier} syntax
+      // It's critical to also set the text variable with the same name,
+      // this allows it to be accessed as {{identifier}} in text directives
       newState.setTextVar(identifier, resolvedValue);
+
+      // Log the final state of the path variable
+      logger.debug('Stored path variable', {
+        identifier,
+        resolvedValue,
+        storedPathVar: newState.getPathVar(identifier),
+        storedTextVar: newState.getTextVar(identifier)
+      });
 
       logger.debug('Path directive processed successfully', {
         identifier,

@@ -305,7 +305,7 @@ describe('ImportDirectiveHandler', () => {
 
     it('should handle variable not found appropriately', async () => {
       // Arrange
-      const node = createImportDirective('${nonexistent}');
+      const node = createImportDirective('{{nonexistent}}');
       const context = { filePath: '/some/path', state: stateService };
       
       // Mock resolution service to throw a resolution error

@@ -29,10 +29,10 @@ export class TextDirectiveHandler implements IDirectiveHandler {
   ) {
     this.stringLiteralHandler = new StringLiteralHandler();
     this.stringConcatenationHandler = new StringConcatenationHandler(resolutionService);
-    this.variableReferenceResolver = new VariableReferenceResolver(
-      stateService,
-      resolutionService
-    );
+    
+    // Note: We'll rely on ResolutionService.ts for variable resolution rather than initializing a separate resolver
+    // The ResolutionService has its own VariableReferenceResolver
+    this.variableReferenceResolver = null as any; // We won't use this directly
   }
 
   /**

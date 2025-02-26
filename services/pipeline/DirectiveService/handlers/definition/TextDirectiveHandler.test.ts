@@ -116,7 +116,7 @@ describe('TextDirectiveHandler', () => {
         directive: {
           kind: 'text',
           identifier: 'message',
-          value: 'Hello ${name}!'
+          value: 'Hello {{name}}!'
         }
       };
 
@@ -137,7 +137,7 @@ describe('TextDirectiveHandler', () => {
         directive: {
           kind: 'text',
           identifier: 'greeting',
-          value: 'Hello ${user.name}!'
+          value: 'Hello {{user.name}}!'
         }
       };
 
@@ -158,7 +158,7 @@ describe('TextDirectiveHandler', () => {
         directive: {
           kind: 'text',
           identifier: 'path',
-          value: '${ENV_HOME}/project'
+          value: '{{ENV_HOME}}/project'
         }
       };
 
@@ -219,7 +219,7 @@ describe('TextDirectiveHandler', () => {
         directive: {
           kind: 'text',
           identifier: 'greeting',
-          value: 'Hello ${missing}!'
+          value: 'Hello {{missing}}!'
         }
       };
 
@@ -263,7 +263,7 @@ describe('TextDirectiveHandler', () => {
         directive: {
           kind: 'text',
           identifier: 'message',
-          value: '"Hello" ++ " " ++ ${name}'
+          value: '"Hello" ++ " " ++ {{name}}'
         }
       };
 

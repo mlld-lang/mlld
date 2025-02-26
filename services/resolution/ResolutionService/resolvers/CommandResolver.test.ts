@@ -74,7 +74,7 @@ describe('CommandResolver', () => {
         }
       };
       vi.mocked(stateService.getCommand).mockReturnValue({
-        command: '@run [echo ${param1} ${param2}]'
+        command: '@run [echo {{param1}} {{param2}}]'
       });
 
       const result = await resolver.resolve(node, context);
@@ -92,7 +92,7 @@ describe('CommandResolver', () => {
         }
       };
       vi.mocked(stateService.getCommand).mockReturnValue({
-        command: '@run [echo ${text}]',
+        command: '@run [echo {{text}}]',
         options: { background: true }
       });
 
@@ -161,7 +161,7 @@ describe('CommandResolver', () => {
     it('should handle parameter count mismatches appropriately', async () => {
       // Arrange
       const command = {
-        command: '@run [echo ${param1} ${param2}]'
+        command: '@run [echo {{param1}} {{param2}}]'
       };
       vi.mocked(stateService.getCommand).mockReturnValue(command);
       

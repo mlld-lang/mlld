@@ -77,7 +77,7 @@ describe('RunDirectiveHandler Transformation', () => {
     });
 
     it('should handle variable interpolation in command during transformation', async () => {
-      const node = createRunDirective('echo ${message}', createLocation(1, 1));
+      const node = createRunDirective('echo {{message}}', createLocation(1, 1));
       const context = { currentFilePath: 'test.meld', state: stateService };
 
       vi.mocked(validationService.validate).mockResolvedValue(undefined);

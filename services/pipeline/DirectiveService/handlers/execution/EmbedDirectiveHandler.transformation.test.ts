@@ -196,8 +196,8 @@ describe('EmbedDirectiveHandler Transformation', () => {
     });
 
     it('should handle variable interpolation in path during transformation', async () => {
-      const node = createEmbedDirective('${filename}.md', undefined, createLocation(1, 1));
-      node.directive.path = '${filename}.md';
+      const node = createEmbedDirective('{{filename}}.md', undefined, createLocation(1, 1));
+      node.directive.path = '{{filename}}.md';
       const context = { currentFilePath: 'test.meld', state: stateService };
 
       vi.mocked(resolutionService.resolveInContext).mockResolvedValue('resolved.md');
@@ -213,7 +213,7 @@ describe('EmbedDirectiveHandler Transformation', () => {
         location: node.location
       });
       expect(resolutionService.resolveInContext).toHaveBeenCalledWith(
-        '${filename}.md',
+        '{{filename}}.md',
         expect.any(Object)
       );
     });

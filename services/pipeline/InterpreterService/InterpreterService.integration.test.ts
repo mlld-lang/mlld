@@ -101,7 +101,7 @@ describe('InterpreterService Integration', () => {
 
     it('handles state rollback on merge errors', async () => {
       // Create a directive that will cause a resolution error
-      const node = context.factory.createTextDirective('error', '${nonexistent}', context.factory.createLocation(1, 1));
+      const node = context.factory.createTextDirective('error', '{{nonexistent}}', context.factory.createLocation(1, 1));
       
       // Create parent state with initial value
       const parentState = context.services.state.createChildState();
@@ -161,8 +161,8 @@ describe('InterpreterService Integration', () => {
 
     it('provides location information in errors', async () => {
       // Create a directive that will cause an error
-      const node = context.factory.createTextDirective('error', '${nonexistent}', context.factory.createLocation(1, 1));
-      node.directive.value = '${nonexistent}';
+      const node = context.factory.createTextDirective('error', '{{nonexistent}}', context.factory.createLocation(1, 1));
+      node.directive.value = '{{nonexistent}}';
 
       try {
         await context.services.interpreter.interpret([node], { filePath: 'test.meld' });
@@ -187,7 +187,7 @@ describe('InterpreterService Integration', () => {
       // Create nodes - one valid, one invalid
       const nodes = [
         context.factory.createTextDirective('valid', 'value', context.factory.createLocation(1, 1)),
-        context.factory.createTextDirective('error', '${nonexistent}', context.factory.createLocation(2, 1))
+        context.factory.createTextDirective('error', '{{nonexistent}}', context.factory.createLocation(2, 1))
       ];
 
       try {
@@ -210,8 +210,8 @@ describe('InterpreterService Integration', () => {
 
     it('includes state context in interpreter errors', async () => {
       // Create a directive that will cause an error
-      const node = context.factory.createTextDirective('error', '${nonexistent}', context.factory.createLocation(1, 1));
-      node.directive.value = '${nonexistent}';
+      const node = context.factory.createTextDirective('error', '{{nonexistent}}', context.factory.createLocation(1, 1));
+      node.directive.value = '{{nonexistent}}';
 
       try {
         await context.services.interpreter.interpret([node], { filePath: 'test.meld' });
@@ -238,7 +238,7 @@ describe('InterpreterService Integration', () => {
       // Create nodes that will cause an error
       const nodes = [
         context.factory.createTextDirective('before', 'valid', context.factory.createLocation(1, 1)),
-        context.factory.createTextDirective('error', '${nonexistent}', context.factory.createLocation(2, 1)),
+        context.factory.createTextDirective('error', '{{nonexistent}}', context.factory.createLocation(2, 1)),
         context.factory.createTextDirective('after', 'valid', context.factory.createLocation(3, 1))
       ];
 

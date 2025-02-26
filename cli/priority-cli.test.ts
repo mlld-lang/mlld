@@ -53,7 +53,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 //     it('should handle command line arguments correctly', async () => {
 //       const { fsAdapter, exitMock, consoleMocks, cleanup } = setupCliTest({
 //         files: {
-//           '/project/test.meld': '@text greeting = "Hello World"\n#{greeting}'
+//           '/project/test.meld': '@text greeting = "Hello World"\n{{greeting}}'
 //         }
 //       });
       
@@ -73,7 +73,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 //     it('should handle file I/O correctly', async () => {
 //       const { fsAdapter, cleanup } = setupCliTest({
 //         files: {
-//           '/project/input.meld': '@text greeting = "Hello World"\n#{greeting}'
+//           '/project/input.meld': '@text greeting = "Hello World"\n{{greeting}}'
 //         }
 //       });
       
@@ -132,7 +132,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 //     it('should respect the strict flag for error handling', async () => {
 //       const { fsAdapter, exitMock, consoleMocks, cleanup } = setupCliTest({
 //         files: {
-//           '/project/test.meld': '@text greeting = "Hello #{undefined}"\n#{greeting}'
+//           '/project/test.meld': '@text greeting = "Hello {{undefined}}"\n{{greeting}}'
 //         }
 //       });
       
@@ -152,7 +152,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 //     it('should respect output format options', async () => {
 //       const { fsAdapter, exitMock, cleanup } = setupCliTest({
 //         files: {
-//           '/project/test.meld': '@text greeting = "Hello World"\n#{greeting}'
+//           '/project/test.meld': '@text greeting = "Hello World"\n{{greeting}}'
 //         }
 //       });
       
@@ -177,7 +177,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 //     it('should handle stdout option correctly', async () => {
 //       const { fsAdapter, exitMock, consoleMocks, cleanup } = setupCliTest({
 //         files: {
-//           '/project/test.meld': '@text greeting = "Hello World"\n#{greeting}'
+//           '/project/test.meld': '@text greeting = "Hello World"\n{{greeting}}'
 //         }
 //       });
       
@@ -197,7 +197,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 //     it('should handle PROJECTPATH special variables correctly', async () => {
 //       const { fsAdapter, exitMock, consoleMocks, cleanup } = setupCliTest({
 //         files: {
-//           '/project/test.meld': '@path testPath = "$PROJECTPATH/test.txt"\n#{testPath}'
+//           '/project/test.meld': '@path testPath = "$PROJECTPATH/test.txt"\n{{testPath}}'
 //         }
 //       });
       
@@ -217,7 +217,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 //     it('should handle HOMEPATH special variables correctly', async () => {
 //       const { fsAdapter, exitMock, consoleMocks, cleanup } = setupCliTest({
 //         files: {
-//           '/project/test.meld': '@path testPath = "$HOMEPATH/test.txt"\n#{testPath}'
+//           '/project/test.meld': '@path testPath = "$HOMEPATH/test.txt"\n{{testPath}}'
 //         }
 //       });
       
@@ -240,7 +240,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 //     it('should handle text variable interpolation correctly', async () => {
 //       const { fsAdapter, exitMock, consoleMocks, cleanup } = setupCliTest({
 //         files: {
-//           '/project/test.meld': '@text name = "World"\nHello #{name}!'
+//           '/project/test.meld': '@text name = "World"\nHello {{name}}!'
 //         }
 //       });
       
@@ -260,7 +260,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 //     it('should handle nested variable interpolation correctly', async () => {
 //       const { fsAdapter, exitMock, consoleMocks, cleanup } = setupCliTest({
 //         files: {
-//           '/project/test.meld': '@text firstname = "John"\n@text lastname = "Doe"\n@text fullname = "#{firstname} #{lastname}"\nHello #{fullname}!'
+//           '/project/test.meld': '@text firstname = "John"\n@text lastname = "Doe"\n@text fullname = "{{firstname}} {{lastname}}"\nHello {{fullname}}!'
 //         }
 //       });
       

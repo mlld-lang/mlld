@@ -33,8 +33,8 @@ describe('API Integration Tests', () => {
       const content = `
         @text greeting = "Hello"
         @text subject = "World"
-        @text message = \`\${greeting}, \${subject}!\`
-        \${message}
+        @text message = \`{{greeting}}, {{subject}}!\`
+        {{message}}
       `;
       await context.writeFile('test.meld', content);
       
@@ -53,8 +53,8 @@ describe('API Integration Tests', () => {
     it('should handle data variable definitions and field access', async () => {
       const content = `
         @data user = { "name": "Alice", "id": 123 }
-        @text greeting = \`Hello, #{user.name}! Your ID is #{user.id}.\`
-        \${greeting}
+        @text greeting = \`Hello, {{user.name}}! Your ID is {{user.id}}.\`
+        {{greeting}}
       `;
       await context.writeFile('test.meld', content);
       
@@ -78,10 +78,10 @@ describe('API Integration Tests', () => {
           },
           "env": "test"
         }
-        @text appInfo = \`#{config.app.name} v#{config.app.version}\`
-        @text features = \`Features: #{config.app.features}\`
-        \${appInfo}
-        \${features}
+        @text appInfo = \`{{config.app.name}} v{{config.app.version}}\`
+        @text features = \`Features: {{config.app.features}}\`
+        {{appInfo}}
+        {{features}}
       `;
       await context.writeFile('test.meld', content);
       
@@ -99,82 +99,48 @@ describe('API Integration Tests', () => {
 
   describe('Path Handling', () => {
     it('should handle path variables with special $PROJECTPATH syntax', async () => {
-      // Use the context defined in beforeEach
+      const content = `
+@path docs = "$PROJECTPATH/docs"
+@text result = "Docs are at {{docs}}"
+      `;
       
-      const stateDebugger = new TestDebuggerService();
-      stateDebugger.initialize(context.services.state);
+      await context.writeFile('test.meld', content);
       
-      // Fix: Properly await the session ID
-      const sessionId = await stateDebugger.startSession();
+      // Add a hook to log the actual AST
+      const originalProcessFile = context.services.interpreter.interpretWithContext;
+      context.services.interpreter.interpretWithContext = async (filePath, opts) => {
+        const result = await originalProcessFile.call(context.services.interpreter, filePath, opts);
+        
+        // Capture a sample node for debugging
+        const parse = await context.services.parser.parseWithLocations(
+          await context.fs.readFile(filePath, 'utf-8'), 
+          { filePath }
+        );
+        
+        // Log the actual AST structure for debugging
+        console.log('*** DEBUG AST STRUCTURE ***');
+        if (parse.length > 0 && parse[0].type === 'Directive') {
+          console.log(JSON.stringify(parse[0], null, 2));
+        }
+        
+        return result;
+      };
       
-      // Capture state before execution
-      stateDebugger.captureState('before-execution', {
-        textVars: context.services.state.getAllTextVars(),
-        pathVars: context.services.state.getAllPathVars()
+      // Process the file
+      const result = await main('test.meld', {
+        fs: context.fs,
+        services: context.services,
+        cwd: '/project'
       });
       
-      try {
-        // Write a test file with path directive
-        const content = `
-@path docs = "$PROJECTPATH/docs"
-@text result = "Docs are at \${docs}"
-        `;
-        
-        await context.writeFile('test.meld', content);
-        
-        // Add a hook to capture state after path directive
-        const originalProcessDirective = context.services.directive.processDirective;
-        context.services.directive.processDirective = async (node, context) => {
-          const result = await originalProcessDirective.call(context.services.directive, node, context);
-          
-          // Capture state after each directive
-          if (node.directive.kind === 'path') {
-            stateDebugger.captureState('after-path-directive', {
-              textVars: result.getAllTextVars(),
-              pathVars: result.getAllPathVars(),
-              directive: node.directive
-            });
-          }
-          
-          return result;
-        };
-        
-        // Process the file
-        const result = await main('test.meld', {
-          fs: context.fs,
-          services: context.services,
-          cwd: '/project'
-        });
-        
-        // Capture state after execution (in case of success)
-        stateDebugger.captureState('after-execution', {
-          textVars: context.services.state.getAllTextVars(),
-          pathVars: context.services.state.getAllPathVars(),
-          result
-        });
-        
-        // Verify the result
-        expect(result.trim()).toBe('Docs are at /project/docs');
-      } catch (error) {
-        // Capture state on error
-        stateDebugger.captureState('error', {
-          error: error.message,
-          stack: error.stack
-        });
-        throw error;
-      } finally {
-        // Print debug data
-        console.log('*** DEBUG DATA ***');
-        console.log(JSON.stringify(stateDebugger.getDebugData(sessionId), null, 2));
-        await stateDebugger.endSession(sessionId);
-      }
+      expect(result.trim()).toBe('Docs are at /project/docs');
     });
 
     it('should handle path variables with special $. alias syntax', async () => {
       const content = `
         @path config = "$./config"
-        @text configPath = "Config is at \${config}"
-        \${configPath}
+        @text configPath = "Config is at {{config}}"
+        {{configPath}}
       `;
       await context.writeFile('test.meld', content);
       await context.fs.mkdir(`${projectRoot}/config`);
@@ -192,8 +158,8 @@ describe('API Integration Tests', () => {
     it('should handle path variables with special $HOMEPATH syntax', async () => {
       const content = `
         @path home = "$HOMEPATH/meld"
-        @text homePath = "Home is at \${home}"
-        \${homePath}
+        @text homePath = "Home is at {{home}}"
+        {{homePath}}
       `;
       await context.writeFile('test.meld', content);
       
@@ -210,8 +176,8 @@ describe('API Integration Tests', () => {
     it('should handle path variables with special $~ alias syntax', async () => {
       const content = `
         @path data = "$~/data"
-        @text dataPath = "Data is at \${data}"
-        \${dataPath}
+        @text dataPath = "Data is at {{data}}"
+        {{dataPath}}
       `;
       await context.writeFile('test.meld', content);
       
@@ -228,7 +194,7 @@ describe('API Integration Tests', () => {
     it('should reject invalid path formats (raw absolute paths)', async () => {
       const content = `
         @path bad = "/absolute/path"
-        \${bad}
+        {{bad}}
       `;
       await context.writeFile('test.meld', content);
       
@@ -242,7 +208,7 @@ describe('API Integration Tests', () => {
     it('should reject invalid path formats (relative paths with dot segments)', async () => {
       const content = `
         @path bad = "../path/with/dot"
-        \${bad}
+        {{bad}}
       `;
       await context.writeFile('test.meld', content);
       
@@ -259,7 +225,7 @@ describe('API Integration Tests', () => {
       // Create imported file
       const importedContent = `
         @text imported = "This content was imported"
-        \${imported}
+        {{imported}}
       `;
       await context.writeFile('imported.meld', importedContent);
       
@@ -285,25 +251,25 @@ describe('API Integration Tests', () => {
       // Create deeply nested import structure
       await context.writeFile('level3.meld', `
         @text deep = "Level 3 imported"
-        \${deep}
+        {{deep}}
       `);
       
       await context.writeFile('level2.meld', `
         @text mid = "Level 2 imported"
         @import [level3.meld]
-        \${mid}
+        {{mid}}
       `);
       
       await context.writeFile('level1.meld', `
         @text top = "Level 1 imported"
         @import [level2.meld]
-        \${top}
+        {{top}}
       `);
       
       await context.writeFile('test.meld', `
         @import [level1.meld]
         @text main = "Main file"
-        \${main}
+        {{main}}
       `);
       
       const result = await main('test.meld', {
@@ -376,9 +342,9 @@ describe('API Integration Tests', () => {
 
     it('should handle commands with parameters', async () => {
       const content = `
-        @define greet(name) = @run [echo "Hello, \${name}!"]
+        @define greet(name) = @run [echo "Hello, {{name}}!"]
         @text user = "Alice"
-        @run [$greet(\${user})]
+        @run [$greet({{user}})]
       `;
       await context.writeFile('test.meld', content);
       
@@ -533,7 +499,7 @@ describe('API Integration Tests', () => {
         
         @text greeting = "Hello"
         
-        \${greeting}, World!
+        {{greeting}}, World!
         
         - List item 1
         - List item 2
@@ -559,7 +525,7 @@ describe('API Integration Tests', () => {
         
         @text greeting = "Hello"
         
-        \${greeting}, World!
+        {{greeting}}, World!
         
         - List item 1
         - List item 2
@@ -588,8 +554,8 @@ describe('API Integration Tests', () => {
         @data config = { "value": 123 }
         @run [echo "Run result"]
         
-        \${first} \${second}
-        Value: #{config.value}
+        {{first}} {{second}}
+        Value: {{config.value}}
       `;
       await context.writeFile('test.meld', content);
       
@@ -627,12 +593,12 @@ describe('API Integration Tests', () => {
       // Create two different files
       await context.writeFile('file1.meld', `
         @text var1 = "Value 1"
-        \${var1}
+        {{var1}}
       `);
       
       await context.writeFile('file2.meld', `
         @text var2 = "Value 2"
-        \${var2}
+        {{var2}}
       `);
       
       // Process file1
@@ -697,18 +663,18 @@ describe('API Integration Tests', () => {
       // Create main file that imports other files
       await context.writeFile(`${projectRoot}/main.meld`, `
         @path templates = "$PROJECTPATH/templates"
-        @import [\${templates}/variables.meld]
+        @import [{{templates}}/variables.meld]
         
-        @embed [\${templates}/header.md]
+        @embed [{{templates}}/header.md]
         
-        ## \${projectName} v\${version}
+        ## {{projectName}} v{{version}}
         
-        Created by: #{meta.author}
-        Date: #{meta.created}
+        Created by: {{meta.author}}
+        Date: {{meta.created}}
         
         This is the main content.
         
-        @embed [\${templates}/footer.md]
+        @embed [{{templates}}/footer.md]
       `);
       
       const result = await main(`${projectRoot}/main.meld`, {

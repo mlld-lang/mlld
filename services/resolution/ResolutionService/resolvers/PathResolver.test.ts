@@ -128,11 +128,11 @@ describe('PathResolver', () => {
 
     it('should handle structured path objects with variables', async () => {
       const structuredPath: StructuredPath = {
-        raw: '$HOMEPATH/path/to/${file}.md',
+        raw: '$HOMEPATH/path/to/{{file}}.md',
         normalized: '/home/user/path/to/example.md',
         structured: {
           base: 'HOMEPATH',
-          segments: ['path', 'to', '${file}.md'],
+          segments: ['path', 'to', '{{file}}.md'],
           variables: {
             text: ['file'],
             special: ['HOMEPATH'],
@@ -399,11 +399,11 @@ describe('PathResolver', () => {
 
     it('should extract references from structured path', async () => {
       const structuredPath: StructuredPath = {
-        raw: '$HOMEPATH/path/to/${file}.md',
+        raw: '$HOMEPATH/path/to/{{file}}.md',
         normalized: '/home/user/path/to/example.md',
         structured: {
           base: 'HOMEPATH',
-          segments: ['path', 'to', '${file}.md'],
+          segments: ['path', 'to', '{{file}}.md'],
           variables: {
             text: ['file'],
             special: ['HOMEPATH'],

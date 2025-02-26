@@ -60,7 +60,7 @@ describe('PathDirectiveHandler', () => {
     });
 
     it('should handle paths with variables', async () => {
-      const node = createPathDirective('configPath', '${basePath}/config', createLocation(1, 1));
+      const node = createPathDirective('configPath', '{{basePath}}/config', createLocation(1, 1));
       const context = { currentFilePath: 'test.meld', state: stateService };
 
       vi.mocked(resolutionService.resolveInContext).mockResolvedValueOnce('/base/path/config');
@@ -99,7 +99,7 @@ describe('PathDirectiveHandler', () => {
     });
 
     it('should handle resolution errors', async () => {
-      const node = createPathDirective('errorPath', '${undefined}', createLocation(1, 1));
+      const node = createPathDirective('errorPath', '{{undefined}}', createLocation(1, 1));
       const context = { currentFilePath: 'test.meld', state: stateService };
 
       vi.mocked(resolutionService.resolveInContext).mockRejectedValueOnce(

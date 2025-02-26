@@ -1,3 +1,4 @@
+import * as path from 'path';
 import { IStateService } from '@services/state/StateService/IStateService.js';
 import { IResolutionService, ResolutionContext, ResolutionErrorCode } from './IResolutionService.js';
 import { TextResolver } from './resolvers/TextResolver.js';
@@ -5,6 +6,7 @@ import { DataResolver } from './resolvers/DataResolver.js';
 import { PathResolver } from './resolvers/PathResolver.js';
 import { CommandResolver } from './resolvers/CommandResolver.js';
 import { ContentResolver } from './resolvers/ContentResolver.js';
+import { VariableReferenceResolver } from './resolvers/VariableReferenceResolver.js';
 import { resolutionLogger as logger } from '@core/utils/logger.js';
 import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import { IParserService } from '@services/pipeline/ParserService/IParserService.js';
@@ -12,6 +14,17 @@ import type { MeldNode, DirectiveNode, TextNode, DirectiveKind, CodeFenceNode, S
 import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
 import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
+import { inject, singleton } from 'tsyringe';
+import { CommandContextService } from '../../command/CommandContextService';
+import { MeldInterpreterError } from '../../../errors';
+import {
+  ResolutionContext as DeprecatedContext,
+  CommandParameterResolutionContext,
+  NestedResolution
+} from '../ResolutionContextFactory';
+import { ICommandService } from '../../command/ICommandService';
+import { Command, ParameterResolutionMap } from '../../command/Command';
+import { CommandParameter } from '../../../types';
 
 /**
  * Internal type for heading nodes in the ResolutionService
@@ -53,7 +66,7 @@ export class ResolutionService implements IResolutionService {
   private pathResolver: PathResolver;
   private commandResolver: CommandResolver;
   private contentResolver: ContentResolver;
-  private readonly variablePattern = /\${([^}]+)}/g;
+  private variableReferenceResolver: VariableReferenceResolver;
 
   constructor(
     private stateService: IStateService,
@@ -65,6 +78,12 @@ export class ResolutionService implements IResolutionService {
     this.pathResolver = new PathResolver(stateService);
     this.commandResolver = new CommandResolver(stateService);
     this.contentResolver = new ContentResolver(stateService);
+    // Create the variable reference resolver with the parser
+    this.variableReferenceResolver = new VariableReferenceResolver(
+      stateService,
+      this,
+      parserService
+    );
   }
 
   /**
@@ -174,324 +193,114 @@ export class ResolutionService implements IResolutionService {
       } : 'state not available'
     });
     
-    // Convert StructuredPath to string if needed
-    const stringValue = typeof value === 'string' ? value : value.raw;
-    
-    // 1. Validate resolution is allowed in this context
-    await this.validateResolution(stringValue, context);
-
-    // 2. Initialize resolution tracking
-    const resolutionPath: string[] = [];
-
-    // 3. First pass: resolve nested variables
-    let result = stringValue;
-    let hasNested = true;
-    let iterations = 0;
-    const MAX_ITERATIONS = 100;
-
-    // Handle text variables (${...}) first since they may contain other variable types
-    const textVarRegex = /\${([^}]+)}/g;
-    let match: RegExpExecArray | null;
-    
-    while ((match = textVarRegex.exec(result)) !== null) {
-      const [fullMatch, varName] = match;
+    // Handle StructuredPath objects directly
+    if (typeof value === 'object' && value !== null && 'raw' in value) {
+      // Extract the structured path information
+      const { raw, structured } = value;
       
-      // Add debug logging for text variables
-      console.log('*** Resolving text variable', {
-        fullMatch,
-        varName,
-        variableExists: context.state.getTextVar(varName) !== undefined,
-        resolutionPath
-      });
-      
-      // Check for circular references
-      if (resolutionPath.includes(varName)) {
-        const path = [...resolutionPath, varName].join(' -> ');
-        throw new MeldResolutionError(
-          `Circular reference detected: ${path}`,
-          {
-            code: ResolutionErrorCode.CIRCULAR_REFERENCE,
-            details: { 
-              value: value, 
-              context: JSON.stringify(context),
-              variableName: varName,
-              variableType: 'text'
-            },
-            severity: ErrorSeverity.Fatal
-          }
-        );
-      }
-
-      resolutionPath.push(varName);
-
-      try {
-        const varValue = context.state.getTextVar(varName);
-        if (varValue === undefined) {
+      // For special path variables - handle them directly
+      if (structured?.variables?.special?.includes('PROJECTPATH') || 
+          structured?.base === '$PROJECTPATH' || 
+          structured?.base === '$.') {
+        // Get the base path from state
+        const basePath = context.state?.getPathVar('PROJECTPATH');
+        if (!basePath) {
           throw new MeldResolutionError(
-            `Undefined variable: ${varName}`,
+            'PROJECTPATH is not defined',
             {
               code: ResolutionErrorCode.UNDEFINED_VARIABLE,
-              details: { 
-                value: varName, 
-                context: JSON.stringify(context),
-                variableName: varName,
-                variableType: 'text'
-              },
-              severity: ErrorSeverity.Recoverable
-            }
-          );
-        }
-        result = result.replace(fullMatch, varValue);
-      } finally {
-        resolutionPath.pop();
-      }
-    }
-
-    // Handle data variables (#{...})
-    const dataVarRegex = /#{([^}]+)}/g;
-    while ((match = dataVarRegex.exec(result)) !== null) {
-      const [fullMatch, fieldRef] = match;
-      
-      // Handle field access (e.g., user.name)
-      const parts = fieldRef.split('.');
-      const varName = parts[0];
-      
-      // Check for circular references
-      if (resolutionPath.includes(varName)) {
-        const path = [...resolutionPath, varName].join(' -> ');
-        throw new MeldResolutionError(
-          `Circular reference detected: ${path}`,
-          {
-            code: ResolutionErrorCode.CIRCULAR_REFERENCE,
-            details: { 
-              value: value, 
-              context: JSON.stringify(context),
-              fieldPath: parts.slice(1).join('.'),
-              variableName: varName,
-              variableType: 'data'
-            },
-            severity: ErrorSeverity.Recoverable
-          }
-        );
-      }
-
-      resolutionPath.push(varName);
-
-      try {
-        const dataVar = context.state.getDataVar(varName);
-        if (dataVar === undefined) {
-          throw new MeldResolutionError(
-            `Undefined data variable: ${varName}`,
-            {
-              code: ResolutionErrorCode.UNDEFINED_VARIABLE,
-              details: { 
-                value: varName, 
-                context: JSON.stringify(context),
-                variableName: varName,
-                variableType: 'data'
-              },
+              details: { value: raw },
               severity: ErrorSeverity.Recoverable
             }
           );
         }
         
-        // Access nested fields if they exist
-        let fieldValue = dataVar;
+        // Join with segments
+        let result = basePath;
+        if (structured.segments && structured.segments.length > 0) {
+          result = structured.segments.reduce((p, segment) => {
+            return path.join(p, segment);
+          }, result);
+        }
+        return result;
+      }
+      
+      // For home path special variables
+      if (structured?.variables?.special?.includes('HOMEPATH') || 
+          structured?.base === '$HOMEPATH' || 
+          structured?.base === '$~') {
+        // Get the home path from state
+        const homePath = context.state?.getPathVar('HOMEPATH');
+        if (!homePath) {
+          throw new MeldResolutionError(
+            'HOMEPATH is not defined',
+            {
+              code: ResolutionErrorCode.UNDEFINED_VARIABLE,
+              details: { value: raw },
+              severity: ErrorSeverity.Recoverable
+            }
+          );
+        }
         
-        // Follow the field path
-        if (parts.length > 1) {
-          try {
-            fieldValue = parts.slice(1).reduce((obj: any, field) => {
-              if (obj === undefined || obj === null) {
-                throw new Error(`Cannot access field ${field} on undefined or null value`);
-              }
-              return obj[field];
-            }, dataVar);
-          } catch (e) {
+        // Join with segments
+        let result = homePath;
+        if (structured.segments && structured.segments.length > 0) {
+          result = structured.segments.reduce((p, segment) => {
+            return path.join(p, segment);
+          }, result);
+        }
+        return result;
+      }
+      
+      // For path variables
+      if (structured?.variables?.path && structured.variables.path.length > 0) {
+        // Clone raw path for replacement
+        let tempPath = raw;
+        
+        // Process each path variable
+        for (const pathVar of structured.variables.path) {
+          // Get variable value from state
+          const pathValue = context.state?.getPathVar(pathVar);
+          if (pathValue === undefined) {
             throw new MeldResolutionError(
-              `Error accessing field '${parts.slice(1).join('.')}' in data variable '${varName}'`,
+              `Path variable not defined: ${pathVar}`,
               {
-                code: ResolutionErrorCode.FIELD_ACCESS_ERROR,
-                details: { 
-                  value: fieldRef, 
-                  context: JSON.stringify(context),
-                  fieldPath: parts.slice(1).join('.'),
-                  variableName: varName,
-                  variableType: 'data'
-                },
+                code: ResolutionErrorCode.UNDEFINED_VARIABLE,
+                details: { value: pathVar },
                 severity: ErrorSeverity.Recoverable
               }
             );
           }
+          
+          // Replace in path
+          tempPath = tempPath.replace(`$${pathVar}`, pathValue);
         }
         
-        // Convert to string if necessary
-        const stringValue = typeof fieldValue === 'object' 
-          ? (Array.isArray(fieldValue) ? fieldValue.join(',') : JSON.stringify(fieldValue))
-          : String(fieldValue);
-        
-        result = result.replace(fullMatch, stringValue);
-      } finally {
-        resolutionPath.pop();
+        return tempPath;
       }
+      
+      // For all other structured paths, fall back to resolving the raw value
+      return this.resolveVariables(raw, context);
     }
-
-    // Handle command references ($command(args)) first
-    const commandVarRegex = /\$([A-Za-z0-9_]+)\((.*?)\)/g;
-    while ((match = commandVarRegex.exec(result)) !== null) {
-      const [fullMatch, commandName, argsStr] = match;
+    
+    // Handle string values
+    return this.resolveVariables(value as string, context);
+  }
+  
+  /**
+   * Resolve variables within a string value
+   * @internal Used by resolveInContext
+   */
+  private async resolveVariables(value: string, context: ResolutionContext): Promise<string> {
+    // Check if the string contains variable references
+    if (value.includes('{{') || value.includes('$')) {
+      console.log('*** Resolving variables in:', value);
       
-      // Check for circular references
-      if (resolutionPath.includes(commandName)) {
-        const path = [...resolutionPath, commandName].join(' -> ');
-        throw new MeldResolutionError(
-          `Circular reference detected: ${path}`,
-          {
-            code: ResolutionErrorCode.CIRCULAR_REFERENCE,
-            details: { 
-              value: value, 
-              context: JSON.stringify(context),
-              variableName: commandName,
-              variableType: 'command'
-            },
-            severity: ErrorSeverity.Fatal
-          }
-        );
-      }
-
-      resolutionPath.push(commandName);
-
-      try {
-        const command = context.state.getCommand(commandName);
-        if (command === undefined) {
-          throw new MeldResolutionError(
-            `Undefined command: ${commandName}`,
-            {
-              code: ResolutionErrorCode.UNDEFINED_VARIABLE,
-              details: { 
-                value: commandName, 
-                context: JSON.stringify(context),
-                variableName: commandName,
-                variableType: 'command'
-              },
-              severity: ErrorSeverity.Recoverable
-            }
-          );
-        }
-        const args = argsStr.split(',').map(arg => arg.trim());
-        result = result.replace(fullMatch, await this.resolveCommand(commandName, args, context));
-      } finally {
-        resolutionPath.pop();
-      }
+      // Pass to VariableReferenceResolver for both {{var}} syntax and $pathvar syntax
+      return this.variableReferenceResolver.resolve(value, context);
     }
-
-    // Handle path variables ($path)
-    // Before using regex, check if value is already a structured path object
-    if (typeof result === 'object' && result !== null && 'structured' in result) {
-      // Value is already a structured path object, use as is
-      logger.debug('Using structured path object directly', {
-        rawPath: result.raw,
-        normalizedPath: result.normalized
-      });
-      return result.normalized;
-    }
-
-    // If value is not a structured path, process with regex as before
-    const pathVarRegex = /\$(PROJECTPATH|HOMEPATH|\.\/|~\/|[A-Za-z0-9_]+)(\/?[^$\s]*)/g;
-    while ((match = pathVarRegex.exec(result)) !== null) {
-      const [fullMatch, varName, pathRemainder] = match;
-      
-      // Add debug logging for path variables
-      console.log('*** Resolving path variable', {
-        fullMatch,
-        varName,
-        pathRemainder,
-        resolutionPath
-      });
-      
-      // Handle special path variables
-      let varValue;
-      let actualVarName = varName;
-      
-      // Handle aliases and special path variables
-      if (varName === 'PROJECTPATH' || varName.startsWith('./')) {
-        actualVarName = 'PROJECTPATH';
-      } else if (varName === 'HOMEPATH' || varName.startsWith('~/')) {
-        actualVarName = 'HOMEPATH';
-      }
-      
-      // Check for circular references
-      if (resolutionPath.includes(actualVarName)) {
-        const path = [...resolutionPath, actualVarName].join(' -> ');
-        throw new MeldResolutionError(
-          `Circular reference detected: ${path}`,
-          {
-            code: ResolutionErrorCode.CIRCULAR_REFERENCE,
-            details: { 
-              value: value, 
-              context: JSON.stringify(context),
-              variableName: actualVarName,
-              variableType: 'path'
-            },
-            severity: ErrorSeverity.Fatal
-          }
-        );
-      }
-
-      resolutionPath.push(actualVarName);
-
-      try {
-        varValue = context.state.getPathVar(actualVarName);
-        if (varValue === undefined) {
-          throw new MeldResolutionError(
-            `Undefined path variable: ${actualVarName}`,
-            {
-              code: ResolutionErrorCode.UNDEFINED_VARIABLE,
-              details: { 
-                value: varName, 
-                context: JSON.stringify(context),
-                variableName: actualVarName,
-                variableType: 'path'
-              },
-              severity: ErrorSeverity.Recoverable
-            }
-          );
-        }
-
-        // Handle structured path objects
-        if (typeof varValue === 'object' && varValue !== null) {
-          if ('normalized' in varValue) {
-            varValue = varValue.normalized;
-          } else if ('raw' in varValue) {
-            varValue = varValue.raw;
-          }
-        }
-
-        // Handle path segments for special variables
-        if (varName.startsWith('./') && varName.length > 2) {
-          // Extract the path segment after $./
-          const segment = varName.substring(2);  
-          varValue = path.join(varValue, segment);
-        } else if (varName.startsWith('~/') && varName.length > 2) {
-          // Extract the path segment after $~/
-          const segment = varName.substring(2);
-          varValue = path.join(varValue, segment);
-        }
-
-        // Join the base path with any remaining path parts
-        if (pathRemainder && pathRemainder.length > 0) {
-          // Remove leading slash if present to avoid double slashes
-          const cleanRemainder = pathRemainder.startsWith('/') ? pathRemainder.substring(1) : pathRemainder;
-          varValue = path.join(varValue, cleanRemainder);
-        }
-
-        result = result.replace(fullMatch, varValue);
-      } finally {
-        resolutionPath.pop();
-      }
-    }
-
-    return result;
+    
+    return value;
   }
 
   /**

@@ -203,8 +203,7 @@ Below are the key "services" in the codebase. Each follows the single responsibi
 
 ### ResolutionService  
    - Handles all variable interpolation:
-       • Text variables ("${var}")  
-       • Data references ("#{data.field}")  
+       • Variables ("{{var}}", "{{data.field}}")
        • Path expansions ("$HOMEPATH/path")  
        • Command references  
    - Context-aware resolution  

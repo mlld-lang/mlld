@@ -83,7 +83,7 @@ describe('ResolutionService', () => {
       vi.mocked(parserService.parse).mockResolvedValue([node]);
       vi.mocked(stateService.getTextVar).mockReturnValue('Hello World');
 
-      const result = await service.resolveInContext('${greeting}', context);
+      const result = await service.resolveInContext('{{greeting}}', context);
       expect(result).toBe('Hello World');
     });
 
@@ -99,7 +99,7 @@ describe('ResolutionService', () => {
       vi.mocked(parserService.parse).mockResolvedValue([node]);
       vi.mocked(stateService.getDataVar).mockReturnValue({ key: 'value' });
 
-      const result = await service.resolveInContext('#{config}', context);
+      const result = await service.resolveInContext('{{config}}', context);
       expect(result).toBe('{"key":"value"}');
     });
 
@@ -162,7 +162,7 @@ describe('ResolutionService', () => {
       vi.mocked(parserService.parse).mockResolvedValue(nodes);
       vi.mocked(stateService.getTextVar).mockReturnValue('World');
 
-      const result = await service.resolveInContext('Hello ${name}', context);
+      const result = await service.resolveInContext('Hello {{name}}', context);
       expect(result).toBe('Hello World');
     });
   });
@@ -239,7 +239,7 @@ Content 2`;
       };
       vi.mocked(parserService.parse).mockResolvedValue([node]);
 
-      await expect(service.validateResolution('${var}', context))
+      await expect(service.validateResolution('{{var}}', context))
         .rejects
         .toThrow('Text variables are not allowed in this context');
     });
@@ -256,7 +256,7 @@ Content 2`;
       };
       vi.mocked(parserService.parse).mockResolvedValue([node]);
 
-      await expect(service.validateResolution('#{var}', context))
+      await expect(service.validateResolution('{{var}}', context))
         .rejects
         .toThrow('Data variables are not allowed in this context');
     });
@@ -303,7 +303,7 @@ Content 2`;
         directive: {
           kind: 'text',
           identifier: 'a',
-          value: '${b}'
+          value: '{{b}}'
         }
       };
       const nodeB: DirectiveNode = {
@@ -311,25 +311,25 @@ Content 2`;
         directive: {
           kind: 'text',
           identifier: 'b',
-          value: '${a}'
+          value: '{{a}}'
         }
       };
 
       vi.mocked(parserService.parse)
         .mockImplementation((text) => {
-          if (text === '${a}') return [nodeA];
-          if (text === '${b}') return [nodeB];
+          if (text === '{{a}}') return [nodeA];
+          if (text === '{{b}}') return [nodeB];
           return [];
         });
 
       vi.mocked(stateService.getTextVar)
         .mockImplementation((name) => {
-          if (name === 'a') return '${b}';
-          if (name === 'b') return '${a}';
+          if (name === 'a') return '{{b}}';
+          if (name === 'b') return '{{a}}';
           return undefined;
         });
 
-      await expect(service.detectCircularReferences('${a}'))
+      await expect(service.detectCircularReferences('{{a}}'))
         .rejects
         .toThrow('Circular reference detected: a -> b -> a');
     });
@@ -340,7 +340,7 @@ Content 2`;
         directive: {
           kind: 'text',
           identifier: 'greeting',
-          value: 'Hello ${name}'
+          value: 'Hello {{name}}'
         }
       };
       vi.mocked(parserService.parse).mockResolvedValue([node]);
@@ -348,7 +348,7 @@ Content 2`;
         .mockReturnValueOnce('Hello ${name}')
         .mockReturnValueOnce('World');
 
-      await expect(service.detectCircularReferences('${greeting}'))
+      await expect(service.detectCircularReferences('{{greeting}}'))
         .resolves
         .not.toThrow();
     });

@@ -43,7 +43,7 @@ describe('TextDirectiveHandler Integration', () => {
         directive: {
           kind: 'text',
           identifier: 'greeting',
-          value: 'Hello ${user.${type}.name}!'
+          value: 'Hello {{user.{{type}}.name}}!'
         }
       };
 
@@ -65,7 +65,7 @@ describe('TextDirectiveHandler Integration', () => {
         directive: {
           kind: 'text',
           identifier: 'message',
-          value: '${prefix} "quoted ${name}" ${suffix}'
+          value: '{{prefix}} "quoted {{name}}" {{suffix}}'
         }
       };
 
@@ -87,7 +87,7 @@ describe('TextDirectiveHandler Integration', () => {
         directive: {
           kind: 'text',
           identifier: 'userInfo',
-          value: '${user.contacts[${index}].email}'
+          value: '{{user.contacts[{{index}}].email}}'
         }
       };
 
@@ -109,7 +109,7 @@ describe('TextDirectiveHandler Integration', () => {
         directive: {
           kind: 'text',
           identifier: 'config',
-          value: '${ENV_HOST:-localhost}:${ENV_PORT:-3000}'
+          value: '{{ENV_HOST:-localhost}}:{{ENV_PORT:-3000}}'
         }
       };
 
