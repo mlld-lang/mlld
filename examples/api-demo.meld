@@ -1,0 +1,150 @@
+@text title = "Meld API Demo"
+@text author = "Meld Team"
+@text date = "2025-02-25"
+@data metadata = {{
+  "version": "1.0.0",
+  "description": "A comprehensive demonstration of Meld capabilities",
+  "tags": ["demo", "api", "documentation"]
+}}
+
+# ${title}
+
+**Author:** ${author}  
+**Date:** ${date}  
+**Version:** #{metadata.version}
+
+## Introduction
+
+This document demonstrates the core capabilities of Meld, a directive-based scripting language for embedding small "@directives" inside plain text documents.
+
+## Text Variables
+
+@text greeting = "Hello"
+@text name = "World"
+@text message = `${greeting}, ${name}!`
+
+Text variables can be defined and referenced:
+- Greeting: ${greeting}
+- Name: ${name}
+- Combined: ${message}
+
+## Data Variables
+
+@data config = {{
+  "app": {
+    "name": "Meld Demo",
+    "version": "1.0.0",
+    "features": ["text", "data", "path", "import", "embed", "run"]
+  },
+  "env": "production"
+}}
+
+Data variables store structured data:
+- App name: #{config.app.name}
+- Version: #{config.app.version}
+- Environment: #{config.env}
+- Features: #{config.app.features}
+
+## Path Variables
+
+@path docs = "$PROJECTPATH/docs"
+@path config = "$PROJECTPATH/config"
+@path home = "$HOMEPATH/meld"
+
+Path variables must use special variables:
+- Documentation path: ${docs}
+- Configuration path: ${config}
+- Home path: ${home}
+
+## Command Execution
+
+@run [echo "This is output from a shell command"]
+
+@define greet = @run [echo "Hello from a defined command"]
+@run [$greet]
+
+@define greet_user(username) = @run [echo "Hello, ${username}!"]
+@text user = "Alice"
+@run [$greet_user(${user})]
+
+## File Embedding
+
+Here's an embedded file:
+
+@embed [example-import.meld]
+
+## Code Fences
+
+Code fences preserve content exactly as written:
+
+```python
+# This is a Python code block
+def hello():
+    # @text not_a_directive = "This is not interpreted"
+    print("Hello, World!")
+    # ${greeting} is not replaced
+```
+
+```javascript
+// This is a JavaScript code block
+function greet() {
+  // Directives inside code fences are preserved as-is
+  // @data config = { "key": "value" }
+  console.log("Hello!");
+}
+```
+
+## Nested Code Fences
+
+````
+Outer fence
+```
+Inner fence with ${greeting} (not replaced)
+```
+Still in outer fence
+````
+
+## Complex Example
+
+@text section = "Complex Example"
+@data items = [
+  { "name": "Item 1", "value": 100 },
+  { "name": "Item 2", "value": 200 },
+  { "name": "Item 3", "value": 300 }
+]
+
+### ${section} with Data Iteration
+
+Here's how you might represent data:
+
+| Item | Value |
+|------|-------|
+| #{items[0].name} | #{items[0].value} |
+| #{items[1].name} | #{items[1].value} |
+| #{items[2].name} | #{items[2].value} |
+
+Total value: #{items[0].value + items[1].value + items[2].value}
+
+## Templating with Backticks
+
+@text template = `
+This is a multi-line
+template with variable
+interpolation: ${greeting}, ${name}!
+
+Data reference: #{config.app.name}
+`
+
+Template result:
+${template}
+
+## Conclusion
+
+This demo shows the core capabilities of Meld:
+- Variable definitions (@text, @data, @path)
+- Command execution (@run, @define)
+- File embedding (@embed)
+- Code fences for literal content
+- Variable interpolation (${var}, #{data.field})
+
+All of these features are available through the Meld API.
