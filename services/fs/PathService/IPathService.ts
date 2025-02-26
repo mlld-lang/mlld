@@ -1,6 +1,7 @@
 import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import type { Location } from '@core/types/index.js';
 import type { StructuredPath } from 'meld-spec';
+import { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 
 /**
  * Options for path validation and operations
@@ -63,9 +64,10 @@ export interface PathOptions {
 export interface IPathService {
   /**
    * Initialize the path service with a file system service.
+   * Optionally initialize with a parser service for AST-based path handling.
    * Must be called before using any other methods.
    */
-  initialize(fileSystem: IFileSystemService): void;
+  initialize(fileSystem: IFileSystemService, parser?: IParserService): void;
 
   /**
    * Enable test mode for path operations.
