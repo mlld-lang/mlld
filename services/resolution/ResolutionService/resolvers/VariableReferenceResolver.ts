@@ -453,170 +453,141 @@ export class VariableReferenceResolver {
   }
   
   /**
-   * Fallback method for resolving variables when parsing fails
+   * Handles the resolution of standard text variables using a simpler approach
+   * @param text Text containing variable references
+   * @param context Resolution context
+   * @returns Text with variables resolved
    */
-  private resolveSimpleVariables(
-    text: string,
-    context: ResolutionContext
-  ): string {
+  private resolveSimpleVariables(text: string, context: ResolutionContext): string {
     console.log('*** SimpleVariables: Starting resolution on:', text);
     
     // Choose state service - prefer context.state if available
     const stateToUse = context.state || this.stateService;
     
-    // Log all variables in state
     console.log('*** SimpleVariables: Available state variables:', {
-      textVars: Object.keys(stateToUse.getAllTextVars() || {}),
-      dataVars: Object.keys(stateToUse.getAllDataVars() || {})
+      textVars: stateToUse?.getAllTextVars ? Object.keys(stateToUse.getAllTextVars() || {}) : [],
+      dataVars: stateToUse?.getAllDataVars ? Object.keys(stateToUse.getAllDataVars() || {}) : []
     });
+
+    // Extract all variable references
+    const matches: Array<{
+      fullMatch: string;
+      varRef: string;
+      matchIndex: number;
+    }> = [];
+
+    // Note variables and their locations in the original string
+    const variablePattern = /\{\{([^{}]+?)\}\}/g;
+    let match;
     
-    // Using the new unified {{variable}} pattern
-    const variablePattern = /\{\{([^}]+)\}\}/g;
+    // Capture all matches first
+    while ((match = variablePattern.exec(text)) !== null) {
+      matches.push({
+        fullMatch: match[0],
+        varRef: match[1],
+        matchIndex: match.index
+      });
+    }
     
+    // Sort matches by index to process from left to right
+    matches.sort((a, b) => a.matchIndex - b.matchIndex);
+    
+    console.log('*** SimpleVariables: Iteration 1');
+    
+    // Process each variable reference
     let result = text;
-    let iterations = 0;
-    
-    // Handle all variable references in the text, with max iterations to prevent infinite loops
-    while (result.includes('{{') && iterations < this.MAX_ITERATIONS) {
-      iterations++;
+    for (const match of matches) {
+      console.log('*** SimpleVariables: Processing variable:', match);
+
+      // Split the variable reference by dots to handle field access
+      const parts = match.varRef.split('.');
+      const baseVar = parts[0];
+      console.log('*** SimpleVariables: Variable parts:', { parts, baseVar });
+
+      // Look up the variable value
+      let value;
+
+      // First, try to find the variable in the text variables
+      value = stateToUse?.getTextVar(baseVar);
+      console.log('*** SimpleVariables: Text variable lookup:', { variable: baseVar, value });
+
+      // If not found in text variables, try data variables
+      if (value === undefined) {
+        value = stateToUse?.getDataVar(baseVar);
+        console.log('*** SimpleVariables: Data variable lookup:', { variable: baseVar, value });
+      }
       
-      // Create a fresh match for each iteration to avoid regex lastIndex issues
-      const matches = [...result.matchAll(new RegExp(variablePattern, 'g'))];
+      // If it's still undefined and it's an environment variable, throw error
+      if (value === undefined && baseVar.startsWith('ENV_')) {
+        console.log('*** SimpleVariables: Environment variable not set:', baseVar);
+        throw new MeldResolutionError(
+          `Environment variable not set: ${baseVar}`,
+          {
+            code: ResolutionErrorCode.UNDEFINED_VARIABLE,
+            details: { 
+              variableName: baseVar,
+              variableType: 'environment'
+            },
+            severity: ErrorSeverity.Recoverable
+          }
+        );
+      }
       
-      // If no more matches, we're done
-      if (matches.length === 0) break;
-      
-      // Process all matches in this iteration
-      for (const match of matches) {
-        const [fullMatch, varRef] = match;
-        const matchIndex = match.index ?? 0;
-        
-        console.log('*** SimpleVariables: Processing variable:', {
-          fullMatch,
-          varRef,
-          matchIndex,
-          iteration: iterations
-        });
-        
+      // If still undefined, it's a missing variable
+      if (value === undefined) {
+        console.log('*** SimpleVariables: Undefined variable:', baseVar);
+        throw new MeldResolutionError(
+          `Undefined variable: ${baseVar}`,
+          {
+            code: ResolutionErrorCode.UNDEFINED_VARIABLE,
+            details: { 
+              variableName: baseVar,
+              variableType: 'text'
+            },
+            severity: ErrorSeverity.Recoverable
+          }
+        );
+      }
+
+      // Handle field access for object values
+      if (parts.length > 1 && typeof value === 'object' && value !== null) {
         try {
-          // Handle field access (e.g., data.user.name)
-          const parts = varRef.split('.');
-          const baseVar = parts[0];
-          
-          console.log('*** SimpleVariables: Variable parts:', {
-            parts,
-            baseVar
-          });
-          
-          // Try text variable first
-          let value = stateToUse.getTextVar(baseVar);
-          console.log('*** SimpleVariables: Text variable lookup:', {
-            variable: baseVar,
-            value: value
-          });
-          
-          // If not found in text vars, try data vars
-          if (value === undefined && context.allowedVariableTypes.data) {
-            value = stateToUse.getDataVar(baseVar);
-            console.log('*** SimpleVariables: Data variable lookup:', {
-              variable: baseVar,
-              value: value
-            });
-          }
-          
-          // If not found, try path vars (critical for paths to work in text contexts)
-          if (value === undefined && context.allowedVariableTypes.path) {
-            value = stateToUse.getPathVar(baseVar);
-            console.log('*** SimpleVariables: Path variable lookup:', {
-              variable: baseVar,
-              value: value
-            });
-          }
-          
-          // Handle environment variables
-          if (value === undefined && baseVar.startsWith('ENV_')) {
-            value = process.env[baseVar];
-            console.log('*** SimpleVariables: Environment variable lookup:', {
-              variable: baseVar,
-              value: value
-            });
-          }
-          
-          // Handle undefined variables (continue with the loop)
-          if (value === undefined) {
-            console.log('*** SimpleVariables: Variable not found:', baseVar);
-            // Throw an error for undefined variables
-            throw new MeldResolutionError(
-              'Undefined variable: ' + baseVar,
-              {
-                code: ResolutionErrorCode.UNDEFINED_VARIABLE,
-                details: { 
-                  variableName: baseVar,
-                  variableType: 'text'
-                },
-                severity: ErrorSeverity.Recoverable
-              }
-            );
-          }
-          
-          // Handle field access
-          if (parts.length > 1 && typeof value === 'object') {
-            try {
-              value = this.resolveFieldAccess(value, parts.slice(1), context);
-              console.log('*** SimpleVariables: Field access result:', value);
-            } catch (error) {
-              console.log('*** SimpleVariables: Field access error:', String(error));
-              // Throw the error instead of skipping
-              throw new MeldResolutionError(
-                'Invalid field access: ' + parts.slice(1).join('.'),
-                {
-                  code: ResolutionErrorCode.FIELD_ACCESS_ERROR,
-                  details: { 
-                    fieldPath: parts.slice(1).join('.')
-                  },
-                  severity: ErrorSeverity.Recoverable
-                }
-              );
+          // Access nested fields
+          for (let i = 1; i < parts.length; i++) {
+            if (value === undefined || value === null) {
+              throw new Error(`Invalid field access: ${parts.slice(0, i).join('.')} is undefined`);
             }
+            value = value[parts[i]];
           }
-          
-          // Replace in the result - using substring approach to avoid regex issues
-          const prefix = result.substring(0, matchIndex);
-          const suffix = result.substring(matchIndex + fullMatch.length);
-          const resolvedValue = String(value);
-          
-          result = prefix + resolvedValue + suffix;
-          
-          console.log('*** SimpleVariables: Result after replacement:', {
-            before: text,
-            after: result
-          });
-        } catch (error) {
-          // Rethrow MeldResolutionError instances
-          if (error instanceof MeldResolutionError) {
-            throw error;
-          }
-          
-          // Log error and create a new error for other exceptions
-          console.log('*** SimpleVariables: Error processing variable:', {
-            variable: varRef,
-            error: String(error)
-          });
-          
+          console.log('*** SimpleVariables: Field access result:', value);
+        } catch (e) {
           throw new MeldResolutionError(
-            `Error resolving variable ${varRef}: ${String(error)}`,
+            `Error accessing field in variable ${match.varRef}: ${e.message}`,
             {
-              code: ResolutionErrorCode.RESOLUTION_ERROR,
+              code: ResolutionErrorCode.FIELD_ACCESS_ERROR,
               details: { 
-                variableName: varRef
+                fieldPath: parts.slice(1).join('.')
               },
               severity: ErrorSeverity.Recoverable
             }
           );
         }
       }
+
+      // Convert value to string for replacement
+      const valueStr = value?.toString() || '';
+      
+      // Replace the variable in the result string
+      result = result.replace(match.fullMatch, valueStr);
+      
+      console.log('*** SimpleVariables: Result after replacement:', {
+        before: text,
+        currentMatch: match.fullMatch,
+        resolvedValue: valueStr,
+        after: result
+      });
     }
-    
+
     console.log('*** SimpleVariables: Final result:', result);
     return result;
   }
@@ -637,8 +608,28 @@ export class VariableReferenceResolver {
 
   /**
    * Extract all variable references from input text
+   * Note: This method is synchronous to match the interface expected by tests
    */
-  async extractReferences(text: string): Promise<string[]> {
+  extractReferences(text: string): string[] {
+    if (!text) {
+      return [];
+    }
+
+    try {
+      // Try AST-based extraction first
+      return this.extractReferencesAst(text);
+    } catch (error) {
+      console.log('Error in AST reference extraction, falling back to regex:', error);
+      // Fall back to regex-based extraction
+      return this.extractReferencesRegex(text);
+    }
+  }
+  
+  /**
+   * Helper method to asynchronously extract references using AST parsing
+   * @internal
+   */
+  private async extractReferencesAsync(text: string): Promise<string[]> {
     try {
       // Use AST-based extraction
       const nodes = await this.parserService.parse(text);
@@ -721,6 +712,47 @@ export class VariableReferenceResolver {
       const varRef = match[1];
       const baseVar = varRef.split('.')[0];
       references.add(baseVar);
+    }
+    
+    return Array.from(references);
+  }
+
+  /**
+   * Extract references using regex pattern matching
+   * @param text The text to search for references
+   * @returns Array of unique variable names
+   */
+  private extractReferencesRegex(text: string): string[] {
+    const references = new Set<string>();
+    const pattern = /\{\{([^{}]+?)\}\}/g;
+    let match;
+    
+    while ((match = pattern.exec(text)) !== null) {
+      const varRef = match[1];
+      const baseVar = varRef.split('.')[0];
+      references.add(baseVar);
+    }
+    
+    return Array.from(references);
+  }
+
+  /**
+   * Extract references using AST parser
+   * @param text The text to parse for references
+   * @returns Array of unique variable names
+   */
+  private extractReferencesAst(text: string): string[] {
+    const references = new Set<string>();
+    
+    // Use the parser to get AST nodes
+    const nodes = this.parserService.parse(text);
+    
+    // Extract variable names from nodes
+    for (const node of nodes) {
+      if (node.type === 'TextVar' || node.type === 'PathVar' || node.type === 'DataVar') {
+        const varName = node.value.split('.')[0];
+        references.add(varName);
+      }
     }
     
     return Array.from(references);
