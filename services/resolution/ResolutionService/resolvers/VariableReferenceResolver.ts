@@ -100,143 +100,209 @@ export class VariableReferenceResolver {
           varRef = `${varNode.identifier}.${varNode.fields.join('.')}`;
         }
         
-        console.log('*** Processing variable node:', {
-          nodeType: node.type,
+        // Resolve the variable reference
+        const resolvedValue = await this.resolveVariable(varRef, context);
+        console.log('*** Resolved variable node:', {
           varRef,
-          identifier: varNode.identifier,
-          fields: varNode.fields,
-          details: JSON.stringify(varNode, null, 2)
+          resolvedValue
         });
-        
-        if (varRef) {
-          // Split to get base variable and access path
-          const parts = varRef.split('.');
-          const baseVar = parts[0];
-          
-          console.log('*** Variable parts:', {
-            parts,
-            baseVar
-          });
-          
-          // Check for circular references
-          if (resolutionPath.includes(baseVar)) {
-            const path = [...resolutionPath, baseVar].join(' -> ');
-            throw new MeldResolutionError(
-              `Circular reference detected: ${path}`,
-              {
-                code: ResolutionErrorCode.CIRCULAR_REFERENCE,
-                details: { variableName: baseVar },
-                severity: ErrorSeverity.Fatal
-              }
-            );
-          }
-          
-          resolutionPath.push(baseVar);
-          
-          try {
-            // Resolve variable value
-            console.log('*** Resolving variable:', varRef);
-            const resolved = await this.resolveVariable(varRef, context);
-            console.log('*** Variable resolved to:', resolved);
-            result += resolved;
-          } finally {
-            resolutionPath.pop();
-          }
-        }
+        result += resolvedValue;
       } else if (node.type === 'PathVar') {
-        // Handle path variable nodes (e.g. $path)
+        // Handle path variable nodes
         const pathVarNode = node as any;
-        const pathVar = pathVarNode.identifier;
         
-        console.log('*** Processing path variable node:', {
-          identifier: pathVar,
-          isSpecial: pathVarNode.isSpecial,
-          details: JSON.stringify(pathVarNode, null, 2)
-        });
+        // Get the path variable value
+        let pathValue: string | unknown;
         
-        if (pathVar) {
-          // Choose state service - prefer context.state if available
-          const stateToUse = context.state || this.stateService;
+        // First check if it's a structured path
+        if (pathVarNode.value && typeof pathVarNode.value === 'object' && 'raw' in pathVarNode.value) {
+          // Get the structured path
+          const structPath = pathVarNode.value;
           
-          // Handle special path variables
-          let pathValue;
-          if (pathVar === 'PROJECTPATH' || pathVar === '.') {
-            pathValue = stateToUse.getPathVar('PROJECTPATH');
-          } else if (pathVar === 'HOMEPATH' || pathVar === '~') {
-            pathValue = stateToUse.getPathVar('HOMEPATH');
+          // Use the resolutionService to resolve the structured path
+          try {
+            pathValue = await this.resolutionService.resolveInContext(structPath, context);
+            console.log('*** Resolved structured path:', {
+              raw: structPath.raw,
+              resolved: pathValue
+            });
+          } catch (error) {
+            console.error('*** Failed to resolve structured path:', {
+              raw: structPath.raw,
+              error: (error as Error).message
+            });
+            
+            // For recoverable errors, use the raw path
+            pathValue = structPath.raw;
+          }
+        } else {
+          // For simple path variables
+          const identifier = pathVarNode.identifier || pathVarNode.name;
+          
+          // Check for special path variables
+          if (identifier === 'HOMEPATH' || identifier === '~') {
+            pathValue = context.state?.getPathVar('HOMEPATH') || 
+                        this.stateService.getPathVar('HOMEPATH') || '';
+          } else if (identifier === 'PROJECTPATH' || identifier === '.') {
+            pathValue = context.state?.getPathVar('PROJECTPATH') || 
+                        this.stateService.getPathVar('PROJECTPATH') || '';
           } else {
-            // Regular path variable
-            pathValue = stateToUse.getPathVar(pathVar);
-          }
-          
-          if (pathValue === undefined) {
-            throw new MeldResolutionError(
-              `Undefined path variable: ${pathVar}`,
-              {
-                code: ResolutionErrorCode.UNDEFINED_VARIABLE,
-                details: { 
-                  variableName: pathVar,
-                  variableType: 'path'
-                },
-                severity: ErrorSeverity.Recoverable
-              }
-            );
-          }
-          
-          console.log('*** Path variable resolved to:', pathValue);
-          result += pathValue;
-        }
-      } else if (node.type === 'Directive') {
-        // For directive nodes, need to handle each kind differently
-        const directiveNode = node as DirectiveNode;
-        
-        switch (directiveNode.directive.kind) {
-          case 'text':
-          case 'data':
-            // For text and data directives, get their values from state
-            const id = directiveNode.directive.identifier;
-            if (id) {
-              let value;
-              if (directiveNode.directive.kind === 'text') {
-                value = context.state?.getTextVar(id) || this.stateService.getTextVar(id);
-              } else {
-                value = context.state?.getDataVar(id) || this.stateService.getDataVar(id);
-              }
+            // For regular path variables
+            pathValue = context.state?.getPathVar(identifier) || 
+                        this.stateService.getPathVar(identifier);
               
-              if (value !== undefined) {
-                result += typeof value === 'object' ? JSON.stringify(value) : String(value);
-              } else {
-                // If value not found, use the directive value itself as fallback
-                result += directiveNode.directive.value ? String(directiveNode.directive.value) : '';
-              }
-            }
-            break;
-            
-          case 'run':
-            // For run directives, try to execute the command
-            if (directiveNode.directive.identifier) {
-              try {
-                // Try to resolve the command
-                const cmdResult = await this.resolutionService.resolveCommand(
-                  directiveNode.directive.identifier,
-                  directiveNode.directive.args || [],
-                  context
+            if (pathValue === undefined) {
+              // If the path variable is undefined, throw or warn based on context
+              if (context.strict) {
+                throw new MeldResolutionError(
+                  `Undefined path variable: ${identifier}`,
+                  {
+                    code: ResolutionErrorCode.UNDEFINED_VARIABLE,
+                    details: { variableName: identifier, variableType: 'path' },
+                    severity: ErrorSeverity.Recoverable
+                  }
                 );
-                result += cmdResult;
-              } catch (error) {
-                console.log('*** Error executing command:', error);
-                // Fall back to a simple representation if command fails
-                result += directiveNode.directive.identifier;
-                if (directiveNode.directive.args?.length) {
-                  result += ' ' + directiveNode.directive.args.join(' ');
-                }
+              } else {
+                // In permissive mode, return the raw variable reference
+                console.warn(`Undefined path variable: ${identifier}`);
+                pathValue = `$${identifier}`;
               }
             }
-            break;
+          }
+        }
+        
+        // Add the resolved path value to the result
+        result += pathValue;
+      } else if (node.type === 'Directive') {
+        // Handle directive nodes (including run, path)
+        const directiveNode = node as any;
+        
+        // For 'path' directives, handle path resolution
+        if (directiveNode.directive.kind === 'path') {
+          try {
+            // Use the resolutionService's pathResolver
+            const pathValue = await this.resolutionService.resolvePath(
+              directiveNode.directive.value || directiveNode.directive.identifier,
+              context
+            );
+            console.log('*** Resolved path directive:', {
+              original: directiveNode.directive.value || directiveNode.directive.identifier,
+              resolved: pathValue
+            });
+            result += pathValue;
+          } catch (error) {
+            console.error('*** Failed to resolve path directive:', {
+              error: (error as Error).message
+            });
             
-          default:
-            // For other directive types, just add the identifier
-            result += directiveNode.directive.identifier || '';
+            // In permissive mode, use the original value
+            if (!context.strict) {
+              result += directiveNode.directive.value || directiveNode.directive.identifier;
+            } else {
+              // In strict mode, rethrow the error
+              throw error;
+            }
+          }
+        } else if (directiveNode.directive.kind === 'run') {
+          // For 'run' directives, use commandResolver
+          try {
+            // Build args array
+            const args = directiveNode.directive.args || [];
+            
+            // Use the resolutionService's commandResolver
+            const cmdResult = await this.resolutionService.resolveCommand(
+              directiveNode.directive.identifier,
+              args,
+              context
+            );
+            console.log('*** Resolved command directive:', {
+              command: directiveNode.directive.identifier,
+              args,
+              result: cmdResult
+            });
+            result += cmdResult;
+          } catch (error) {
+            console.error('*** Failed to resolve command directive:', {
+              error: (error as Error).message
+            });
+            
+            // In permissive mode, return a placeholder
+            if (!context.strict) {
+              result += `[command ${directiveNode.directive.identifier} failed]`;
+            } else {
+              // In strict mode, rethrow the error
+              throw error;
+            }
+          }
+        } else if (directiveNode.directive.kind === 'text') {
+          // Handle text directives
+          const id = directiveNode.directive.identifier;
+          
+          if (id) {
+            // Get the value from state
+            const value = context.state?.getTextVar(id) || 
+                        this.stateService.getTextVar(id);
+            
+            if (value !== undefined) {
+              console.log('*** Resolved text directive:', {
+                identifier: id,
+                value
+              });
+              result += value;
+            } else {
+              // If not found in state, use the value from the directive
+              const directiveValue = directiveNode.directive.value;
+              console.log('*** Text variable not found in state, using directive value:', {
+                identifier: id,
+                directiveValue
+              });
+              result += directiveValue !== undefined ? String(directiveValue) : '';
+            }
+          }
+        } else if (directiveNode.directive.kind === 'data') {
+          // Handle data directives
+          const id = directiveNode.directive.identifier;
+          
+          if (id) {
+            // Get the value from state
+            const value = context.state?.getDataVar(id) || 
+                       this.stateService.getDataVar(id);
+            
+            if (value !== undefined) {
+              console.log('*** Resolved data directive:', {
+                identifier: id,
+                value
+              });
+              
+              // Convert to string representation
+              result += typeof value === 'object' ? JSON.stringify(value) : String(value);
+            } else {
+              // If not found in state, use the value from the directive
+              const directiveValue = directiveNode.directive.value;
+              console.log('*** Data variable not found in state, using directive value:', {
+                identifier: id,
+                directiveValue
+              });
+              
+              try {
+                // Try to parse if it's a JSON string
+                if (typeof directiveValue === 'string' && 
+                    (directiveValue.startsWith('{') || directiveValue.startsWith('['))) {
+                  const parsed = JSON.parse(directiveValue);
+                  result += JSON.stringify(parsed);
+                } else {
+                  result += directiveValue !== undefined ? String(directiveValue) : '';
+                }
+              } catch (error) {
+                // If parsing fails, use the raw value
+                result += directiveValue !== undefined ? String(directiveValue) : '';
+              }
+            }
+          }
+        } else {
+          // For other directive types, use the default node toString
+          console.warn('*** Unhandled directive type:', directiveNode.directive.kind);
+          result += this.nodeToString(node);
         }
       } else {
         // For other node types, convert to string but avoid directive syntax

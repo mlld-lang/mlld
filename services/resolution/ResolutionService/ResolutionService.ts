@@ -194,51 +194,20 @@ export class ResolutionService implements IResolutionService {
       } : 'state not available'
     });
 
-    // Handle special path variable formats ($HOMEPATH, $PROJECTPATH)
-    if (typeof value === 'string') {
-      // Check for special direct path variable references
-      if (value === '$HOMEPATH') {
-        const homePath = context.state?.getPathVar('HOMEPATH') || this.stateService.getPathVar('HOMEPATH');
-        return homePath || '';
-      }
-      
-      if (value === '$PROJECTPATH') {
-        const projectPath = context.state?.getPathVar('PROJECTPATH') || this.stateService.getPathVar('PROJECTPATH');
-        return projectPath || '';
-      }
-      
-      // TODO: Replace regex-based command reference parsing with AST parser for more robust handling
-      // Check for command references in the format $command(args)
-      const commandRegex = /^\$(\w+)\(([^)]*)\)$/;
-      const commandMatch = typeof value === 'string' ? value.match(commandRegex) : null;
-      
-      if (commandMatch) {
-        const [, cmdName, argsStr] = commandMatch;
-        // Parse args, splitting by comma but respecting quoted strings
-        const args = argsStr.split(',').map(arg => arg.trim());
-        
-        try {
-          const result = await this.resolveCommand(cmdName, args, context);
-          return result;
-        } catch (error) {
-          logger.warn('Command execution failed', { cmdName, args, error });
-          // Fall back to the command name and args, joining with spaces
-          return `${cmdName} ${args.join(' ')}`;
-        }
-      }
-    }
-
-    // Handle StructuredPath objects directly
+    // Handle structured path objects directly
     if (typeof value === 'object' && value !== null && 'raw' in value) {
-      // Extract the structured path information
       const { raw, structured } = value;
+      
+      // Log structured path for debugging
+      logger.debug('Processing structured path', { raw, structured });
 
       // For special path variables - handle them directly
       if (structured?.variables?.special?.includes('PROJECTPATH') ||
           structured?.base === '$PROJECTPATH' ||
           structured?.base === '$.') {
         // Get the base path from state
-        const basePath = context.state?.getPathVar('PROJECTPATH');
+        const basePath = context.state?.getPathVar('PROJECTPATH') || 
+                         this.stateService.getPathVar('PROJECTPATH');
         if (!basePath) {
           throw new MeldResolutionError(
             'PROJECTPATH is not defined',
@@ -265,7 +234,8 @@ export class ResolutionService implements IResolutionService {
           structured?.base === '$HOMEPATH' ||
           structured?.base === '$~') {
         // Get the home path from state
-        const homePath = context.state?.getPathVar('HOMEPATH');
+        const homePath = context.state?.getPathVar('HOMEPATH') || 
+                         this.stateService.getPathVar('HOMEPATH');
         if (!homePath) {
           throw new MeldResolutionError(
             'HOMEPATH is not defined',
@@ -295,7 +265,8 @@ export class ResolutionService implements IResolutionService {
         // Process each path variable
         for (const pathVar of structured.variables.path) {
           // Get variable value from state
-          const pathValue = context.state?.getPathVar(pathVar);
+          const pathValue = context.state?.getPathVar(pathVar) || 
+                           this.stateService.getPathVar(pathVar);
           if (pathValue === undefined) {
             throw new MeldResolutionError(
               `Path variable not defined: ${pathVar}`,
@@ -314,8 +285,85 @@ export class ResolutionService implements IResolutionService {
         return tempPath;
       }
 
-      // For all other structured paths, fall back to resolving the raw value
+      // For structured paths with no special handling, return the normalized path if available
+      if (structured.normalized) {
+        return structured.normalized;
+      }
+      
+      // If no normalized path is available, return the raw value 
+      // after resolving any variables within it
       return this.resolveVariables(raw, context);
+    }
+
+    // Handle special path variable formats ($HOMEPATH, $PROJECTPATH) for string inputs
+    if (typeof value === 'string') {
+      // Check for special direct path variable references
+      if (value === '$HOMEPATH') {
+        const homePath = context.state?.getPathVar('HOMEPATH') || this.stateService.getPathVar('HOMEPATH');
+        return homePath || '';
+      }
+      
+      if (value === '$PROJECTPATH') {
+        const projectPath = context.state?.getPathVar('PROJECTPATH') || this.stateService.getPathVar('PROJECTPATH');
+        return projectPath || '';
+      }
+      
+      // Check for command references in the format $command(args)
+      const commandRegex = /^\$(\w+)\(([^)]*)\)$/;
+      const commandMatch = value.match(commandRegex);
+      
+      if (commandMatch) {
+        const [, cmdName, argsStr] = commandMatch;
+        // Parse args, splitting by comma but respecting quoted strings
+        const args = argsStr.split(',').map(arg => arg.trim());
+        
+        try {
+          logger.debug('Resolving command reference', { cmdName, args });
+          const result = await this.resolveCommand(cmdName, args, context);
+          return result;
+        } catch (error) {
+          logger.warn('Command execution failed', { cmdName, args, error });
+          // Fall back to the command name and args, joining with spaces
+          return `${cmdName} ${args.join(' ')}`;
+        }
+      }
+      
+      // Try to parse the string as a path using the parser service
+      try {
+        // Only attempt parsing if the string contains path variable indicators
+        if (value.includes('$.') || value.includes('$~') || value.includes('$/')) {
+          const nodes = await this.parseForResolution(value);
+          const pathNode = nodes.find(node => 
+            node.type === 'PathVar' || 
+            (node.type === 'Directive' && (node as any).directive?.kind === 'path')
+          );
+          
+          if (pathNode) {
+            // Extract the structured path from the node
+            let structPath: StructuredPath;
+            
+            if (pathNode.type === 'PathVar' && (pathNode as any).value) {
+              structPath = (pathNode as any).value as StructuredPath;
+              // Recursive call with the structured path
+              return this.resolveInContext(structPath, context);
+            } else if (pathNode.type === 'Directive') {
+              const directiveNode = pathNode as any;
+              if (directiveNode.directive.value && 
+                  typeof directiveNode.directive.value === 'object' && 
+                  'raw' in directiveNode.directive.value) {
+                structPath = directiveNode.directive.value as StructuredPath;
+                // Recursive call with the structured path
+                return this.resolveInContext(structPath, context);
+              }
+            }
+          }
+        }
+      } catch (error) {
+        // If parsing fails, fall back to variable resolution
+        logger.debug('Path parsing failed, falling back to variable resolution', { 
+          error: (error as Error).message
+        });
+      }
     }
 
     // Handle string values
@@ -328,8 +376,8 @@ export class ResolutionService implements IResolutionService {
    */
   private async resolveVariables(value: string, context: ResolutionContext): Promise<string> {
     // Check if the string contains variable references
-    if (value.includes('{{') || value.includes('$')) {
-      console.log('*** Resolving variables in:', value);
+    if (value.includes('{{') || value.includes('${') || value.includes('$')) {
+      logger.debug('Resolving variables in string:', { value });
       
       // Pass to VariableReferenceResolver for both {{var}} syntax and $pathvar syntax
       return this.variableReferenceResolver.resolve(value, context);

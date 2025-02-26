@@ -156,7 +156,7 @@ export class PathService implements IPathService {
   }
 
   /**
-   * Validate a path according to Meld's path rules
+   * Validate a structured path according to Meld's path rules
    * @private
    */
   private async validateStructuredPath(pathObj: StructuredPath, location?: Location): Promise<void> {
@@ -179,7 +179,7 @@ export class PathService implements IPathService {
     // If path has slashes but no special variables, it's invalid
     if (hasSlashes && !hasSpecialVar && !structured.cwd) {
       throw new PathValidationError(
-        'Paths with slashes must start with $. or $~ - use $. for project-relative paths and $~ for home-relative paths',
+        'Paths with segments must start with $. or $~ - use $. for project-relative paths and $~ for home-relative paths',
         PathErrorCode.INVALID_PATH_FORMAT,
         location
       );
@@ -278,7 +278,7 @@ export class PathService implements IPathService {
         // For paths with slashes that don't have special prefixes, 
         // this is invalid in Meld's path rules
         throw new PathValidationError(
-          'Paths with slashes must start with $. or $~ - use $. for project-relative paths and $~ for home-relative paths',
+          'Paths with segments must start with $. or $~ - use $. for project-relative paths and $~ for home-relative paths',
           PathErrorCode.INVALID_PATH_FORMAT
         );
       }
@@ -329,7 +329,7 @@ export class PathService implements IPathService {
     // If path has slashes but no special variables, it's invalid
     if (hasSlashes && !hasSpecialVar && !structured.cwd) {
       throw new PathValidationError(
-        'Paths with slashes must start with $. or $~ - use $. for project-relative paths and $~ for home-relative paths',
+        'Paths with segments must start with $. or $~ - use $. for project-relative paths and $~ for home-relative paths',
         PathErrorCode.INVALID_PATH_FORMAT,
         location
       );
@@ -540,5 +540,30 @@ export class PathService implements IPathService {
    */
   basename(pathStr: string): string {
     return path.basename(pathStr);
+  }
+
+  /**
+   * Validate a path string that follows Meld path syntax rules
+   * This is a convenience method that passes the location information to validatePath
+   */
+  validateMeldPath(path: string, location?: Location): void {
+    // Call the resolvePath method to validate the path
+    // This will throw a PathValidationError if the path is invalid
+    try {
+      this.resolvePath(path);
+    } catch (error) {
+      // If the error is a PathValidationError, add location information
+      if (error instanceof PathValidationError) {
+        error.location = location;
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Normalize a path string (replace backslashes with forward slashes)
+   */
+  normalizePathString(path: string): string {
+    return path.normalize(path);
   }
 } 

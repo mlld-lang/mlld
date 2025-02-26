@@ -193,7 +193,7 @@ describe('PathService Temporary Path Rules', () => {
       // so the error code is INVALID_PATH_FORMAT instead of RAW_ABSOLUTE_PATH
       expect(() => service.resolvePath('/absolute/path/file.meld'))
         .toThrow(new PathValidationError(
-          'Paths with slashes must start with $. or $~ - use $. for project-relative paths and $~ for home-relative paths',
+          'Paths with segments must start with $. or $~ - use $. for project-relative paths and $~ for home-relative paths',
           PathErrorCode.INVALID_PATH_FORMAT
         ));
         
@@ -215,7 +215,7 @@ describe('PathService Temporary Path Rules', () => {
     it('should reject paths with slashes but no path variable', () => {
       expect(() => service.resolvePath('path/to/file.meld'))
         .toThrow(new PathValidationError(
-          'Paths with slashes must start with $. or $~ - use $. for project-relative paths and $~ for home-relative paths',
+          'Paths with segments must start with $. or $~ - use $. for project-relative paths and $~ for home-relative paths',
           PathErrorCode.INVALID_PATH_FORMAT
         ));
         
