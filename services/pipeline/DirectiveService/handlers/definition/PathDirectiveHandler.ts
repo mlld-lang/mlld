@@ -92,15 +92,30 @@ export class PathDirectiveHandler implements IDirectiveHandler {
       
       // Support both 'identifier' and 'id' field names for backward compatibility
       const identifier = directivePath.identifier || (directivePath as any).id;
-      const path = directivePath.path;
+      
+      // Handle both structured paths and raw string paths for compatibility
+      // Check for both 'path' and 'value' properties to handle different formats
+      let pathValue: string | undefined;
+      
+      if ('path' in directivePath && directivePath.path) {
+        // Handle structured path object
+        if (typeof directivePath.path === 'object' && 'raw' in directivePath.path) {
+          pathValue = directivePath.path.raw;
+        } else {
+          // Handle direct value
+          pathValue = String(directivePath.path);
+        }
+      } else if ('value' in directive) {
+        // Handle legacy path value
+        pathValue = String(directive.value);
+      }
 
       // Log path information
       logger.debug('Path directive details', {
         identifier,
-        path,
+        pathValue,
         directiveProperties: Object.keys(directive),
-        hasPath: !!path,
-        pathType: path ? typeof path : 'undefined',
+        pathType: typeof pathValue,
         nodeType: node.type,
         directiveKind: directive.kind
       });
@@ -118,7 +133,7 @@ export class PathDirectiveHandler implements IDirectiveHandler {
         );
       }
 
-      if (!path || !path.raw) {
+      if (!pathValue) {
         throw new DirectiveError(
           'Path directive requires a path value',
           this.kind,
@@ -138,7 +153,7 @@ export class PathDirectiveHandler implements IDirectiveHandler {
 
       // Log the resolution context and inputs
       console.log('*** ResolutionService.resolveInContext', {
-        value: path.raw,
+        value: pathValue,
         allowedVariableTypes: resolutionContext.allowedVariableTypes,
         pathValidation: resolutionContext.pathValidation,
         stateExists: !!resolutionContext.state,
@@ -148,55 +163,41 @@ export class PathDirectiveHandler implements IDirectiveHandler {
         }
       });
 
-      // Resolve the path using the resolution service
-      // Pass the entire StructuredPath object, not just the raw value
+      // Resolve the path value
       const resolvedValue = await this.resolutionService.resolveInContext(
-        path,
+        pathValue,
         resolutionContext
       );
 
-      console.log('*** Resolved path value:', resolvedValue);
-
-      // 4. Store in state as both path variable and text variable
+      // Store the path value
       newState.setPathVar(identifier, resolvedValue);
       
-      // It's critical to also set the text variable with the same name,
-      // this allows it to be accessed as {{identifier}} in text directives
-      newState.setTextVar(identifier, resolvedValue);
-
-      // Log the final state of the path variable
-      logger.debug('Stored path variable', {
-        identifier,
-        resolvedValue,
-        storedPathVar: newState.getPathVar(identifier),
-        storedTextVar: newState.getTextVar(identifier)
-      });
+      // CRITICAL: Path variables should NOT be mirrored as text variables
+      // This ensures proper separation between variable types for security purposes
+      // Path variables should only be accessible via $path syntax, not {{path}} syntax
 
       logger.debug('Path directive processed successfully', {
         identifier,
-        path: resolvedValue,
+        resolvedValue,
         location: node.location
       });
 
       return newState;
-    } catch (error: any) {
-      logger.error('Failed to process path directive', {
-        location: node.location,
-        error
-      });
-
-      // Wrap in DirectiveError if needed
+    } catch (error) {
+      // Handle errors
       if (error instanceof DirectiveError) {
         throw error;
       }
+      
+      const message = error instanceof Error ? error.message : 'Unknown error processing path directive';
       throw new DirectiveError(
-        error?.message || 'Unknown error',
+        message,
         this.kind,
         DirectiveErrorCode.EXECUTION_FAILED,
         {
           node,
           context,
-          cause: error instanceof Error ? error : new Error(String(error))
+          cause: error instanceof Error ? error : undefined
         }
       );
     }
