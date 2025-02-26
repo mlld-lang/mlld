@@ -45,6 +45,9 @@ directiveService.initialize(
 // Initialize interpreter service
 interpreterService.initialize(directiveService, stateService);
 
+// Initialize output service with state and resolution service
+outputService.initialize(stateService, resolutionService);
+
 // Create CLI service
 const cliService = new CLIService(
   parserService,

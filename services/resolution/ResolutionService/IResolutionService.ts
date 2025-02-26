@@ -10,8 +10,8 @@ export interface ResolutionContext {
   
   /** What types of variables are allowed in this context */
   allowedVariableTypes: {
-    text: boolean;    // ${var}
-    data: boolean;    // #{data}
+    text: boolean;    // {{var}} (formerly ${var})
+    data: boolean;    // {{data}} (formerly #{data})
     path: boolean;    // $path
     command: boolean; // $command
   };
@@ -56,7 +56,8 @@ export enum ResolutionErrorCode {
  */
 export interface IResolutionService {
   /**
-   * Resolve text variables (${var}) in a string
+   * Resolve text variables ({{var}}) in a string
+   * Formerly used ${var} syntax, now unified with data variables to use {{var}}
    */
   resolveText(text: string, context: ResolutionContext): Promise<string>;
 

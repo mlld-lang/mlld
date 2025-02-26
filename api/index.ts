@@ -113,9 +113,9 @@ function createDefaultServices(options: ProcessOptions): Services & RequiredServ
   // Register default handlers after all services are initialized
   directive.registerDefaultHandlers();
 
-  // 7. OutputService (depends on state and interpreter)
+  // 7. OutputService (depends on state and resolution)
   const output = new OutputService();
-  output.initialize(state);
+  output.initialize(state, resolution);
 
   // Create debug service if requested
   let debug = undefined;

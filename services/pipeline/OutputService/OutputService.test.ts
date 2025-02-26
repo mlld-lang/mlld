@@ -226,7 +226,8 @@ describe('OutputService', () => {
   beforeEach(() => {
     state = new MockStateService();
     resolutionService = new MockResolutionService();
-    service = new OutputService(resolutionService);
+    service = new OutputService();
+    service.initialize(state, resolutionService);
   });
 
   describe('Format Registration', () => {

@@ -166,7 +166,7 @@ export class TestContext {
 
     // Initialize output service last, after all other services are ready
     const output = new OutputService();
-    output.initialize(state);
+    output.initialize(state, resolution);
 
     // Expose services
     this.services = {

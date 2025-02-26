@@ -1,9 +1,10 @@
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import { IOutputService, type OutputFormat, type OutputOptions } from './IOutputService.js';
-import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
+import type { IResolutionService, ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
 import type { MeldNode, TextNode, CodeFenceNode, DirectiveNode } from 'meld-spec';
 import { outputLogger as logger } from '@core/utils/logger.js';
 import { MeldOutputError } from '@core/errors/MeldOutputError.js';
+import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
 
 type FormatConverter = (
   nodes: MeldNode[],
@@ -20,6 +21,7 @@ const DEFAULT_OPTIONS: Required<OutputOptions> = {
 export class OutputService implements IOutputService {
   private formatters = new Map<string, FormatConverter>();
   private state: IStateService | undefined;
+  private resolutionService: IResolutionService | undefined;
 
   public canAccessTransformedNodes(): boolean {
     return true;
@@ -36,9 +38,12 @@ export class OutputService implements IOutputService {
     });
   }
 
-  initialize(state: IStateService): void {
+  initialize(state: IStateService, resolutionService?: IResolutionService): void {
     this.state = state;
-    logger.debug('OutputService initialized with state service');
+    this.resolutionService = resolutionService;
+    logger.debug('OutputService initialized with state service', {
+      hasResolutionService: !!resolutionService
+    });
   }
 
   async convert(
@@ -222,11 +227,10 @@ export class OutputService implements IOutputService {
   }
 
   private async nodeToMarkdown(node: MeldNode, state: IStateService): Promise<string> {
-    // Debug: Log full node structure
+    // Debug: Log node structure
     logger.debug('Processing node in nodeToMarkdown', {
       nodeType: node.type,
       nodeStructure: Object.keys(node),
-      fullNode: JSON.stringify(node, null, 2),
       location: node.location
     });
 
@@ -276,109 +280,24 @@ export class OutputService implements IOutputService {
           }
           
           // Process template variables in the content if it's a string
-          if (typeof textVarContent === 'string') {
+          if (typeof textVarContent === 'string' && this.resolutionService) {
             try {
-              // First, handle text variable references (${varName})
-              if (textVarContent.includes('${')) {
-                const textVarPattern = /\${([^}]+)}/g;
-                let match;
-                let processedContent = textVarContent;
-                
-                logger.debug('Processing text variables in template', {
-                  originalContent: textVarContent
-                });
-                
-                // Replace all text variable references with their values
-                while ((match = textVarPattern.exec(textVarContent)) !== null) {
-                  const varName = match[1].trim();
-                  const varValue = state.getTextVar(varName);
-                  
-                  logger.debug(`Resolving text variable ${varName}`, {
-                    value: varValue ?? 'undefined'
-                  });
-                  
-                  if (varValue !== undefined) {
-                    processedContent = processedContent.replace(`\${${varName}}`, varValue);
-                  }
-                }
-                
-                textVarContent = processedContent;
-              }
+              // Create appropriate resolution context for text variables
+              const context: ResolutionContext = ResolutionContextFactory.forTextDirective(
+                undefined, // current file path not needed here
+                state // state service to use
+              );
               
-              // Then, handle data field references (#{data.field})
-              if (textVarContent.includes('#{')) {
-                const dataVarPattern = /#{([^}]+)}/g;
-                let match;
-                let processedContent = textVarContent;
-                
-                logger.debug('Processing data field references in template', {
-                  originalContent: textVarContent
-                });
-                
-                // Replace all data field references with their values
-                while ((match = dataVarPattern.exec(textVarContent)) !== null) {
-                  const fieldRef = match[1].trim();
-                  
-                  // Handle field access (e.g., user.name)
-                  const parts = fieldRef.split('.');
-                  const varName = parts[0];
-                  
-                  // Get the data variable
-                  const dataVar = state.getDataVar(varName);
-                  
-                  logger.debug(`Resolving data variable ${varName}`, {
-                    hasValue: dataVar !== undefined,
-                    dataVarValue: dataVar ? JSON.stringify(dataVar) : 'undefined'
-                  });
-                  
-                  if (dataVar !== undefined) {
-                    // Access nested fields if they exist
-                    let fieldValue = dataVar;
-                    let fieldAccessError = false;
-                    
-                    // Follow the field path
-                    if (parts.length > 1) {
-                      try {
-                        fieldValue = parts.slice(1).reduce((obj: any, field) => {
-                          if (obj === undefined || obj === null) {
-                            fieldAccessError = true;
-                            return undefined;
-                          }
-                          return obj[field];
-                        }, dataVar);
-                        
-                        logger.debug(`Accessed field '${parts.slice(1).join('.')}' from data var '${varName}'`, {
-                          fieldValue: fieldValue !== undefined ? JSON.stringify(fieldValue) : 'undefined'
-                        });
-                      } catch (e) {
-                        fieldAccessError = true;
-                        logger.error(`Error accessing field '${parts.slice(1).join('.')}' in data var '${varName}'`, {
-                          error: e
-                        });
-                      }
-                    }
-                    
-                    if (!fieldAccessError && fieldValue !== undefined) {
-                      // Convert to string if necessary
-                      const stringValue = typeof fieldValue === 'object' 
-                        ? (Array.isArray(fieldValue) ? fieldValue.join(',') : JSON.stringify(fieldValue))
-                        : String(fieldValue);
-                      
-                      processedContent = processedContent.replace(`#{${fieldRef}}`, stringValue);
-                    }
-                  }
-                }
-                
-                textVarContent = processedContent;
-              }
+              // Use ResolutionService to resolve variables in text
+              textVarContent = await this.resolutionService.resolveText(textVarContent, context);
               
-              logger.debug('Processed all template variables', {
+              logger.debug('Processed all template variables using ResolutionService', {
                 finalContent: textVarContent
               });
-            } catch (templateError) {
-              logger.error('Error processing template variables', {
+            } catch (resolutionError) {
+              logger.error('Error resolving template variables with ResolutionService', {
                 content: textVarContent,
-                error: templateError
+                error: resolutionError
               });
             }
           }
@@ -440,109 +359,24 @@ export class OutputService implements IOutputService {
           }
           
           // Process template variables for string values
-          if (typeof dataVarContent === 'string') {
+          if (typeof dataVarContent === 'string' && this.resolutionService) {
             try {
-              // First, handle text variable references (${varName})
-              if (dataVarContent.includes('${')) {
-                const textVarPattern = /\${([^}]+)}/g;
-                let match;
-                let processedContent = dataVarContent;
-                
-                logger.debug('Processing text variables in DataVar template', {
-                  originalContent: dataVarContent
-                });
-                
-                // Replace all text variable references with their values
-                while ((match = textVarPattern.exec(dataVarContent)) !== null) {
-                  const varName = match[1].trim();
-                  const varValue = state.getTextVar(varName);
-                  
-                  logger.debug(`Resolving text variable ${varName} in DataVar`, {
-                    value: varValue ?? 'undefined'
-                  });
-                  
-                  if (varValue !== undefined) {
-                    processedContent = processedContent.replace(`\${${varName}}`, varValue);
-                  }
-                }
-                
-                dataVarContent = processedContent;
-              }
+              // Create appropriate resolution context for data variables
+              const context: ResolutionContext = ResolutionContextFactory.forTextDirective(
+                undefined, // current file path not needed here
+                state // state service to use
+              );
               
-              // Then, handle data field references (#{data.field})
-              if (dataVarContent.includes('#{')) {
-                const dataVarPattern = /#{([^}]+)}/g;
-                let match;
-                let processedContent = dataVarContent;
-                
-                logger.debug('Processing data field references in DataVar template', {
-                  originalContent: dataVarContent
-                });
-                
-                // Replace all data field references with their values
-                while ((match = dataVarPattern.exec(dataVarContent)) !== null) {
-                  const fieldRef = match[1].trim();
-                  
-                  // Handle field access (e.g., user.name)
-                  const parts = fieldRef.split('.');
-                  const varName = parts[0];
-                  
-                  // Get the data variable
-                  const dataVar = state.getDataVar(varName);
-                  
-                  logger.debug(`Resolving data variable ${varName} in DataVar template`, {
-                    hasValue: dataVar !== undefined,
-                    dataVarValue: dataVar ? JSON.stringify(dataVar) : 'undefined'
-                  });
-                  
-                  if (dataVar !== undefined) {
-                    // Access nested fields if they exist
-                    let fieldValue = dataVar;
-                    let fieldAccessError = false;
-                    
-                    // Follow the field path
-                    if (parts.length > 1) {
-                      try {
-                        fieldValue = parts.slice(1).reduce((obj: any, field) => {
-                          if (obj === undefined || obj === null) {
-                            fieldAccessError = true;
-                            return undefined;
-                          }
-                          return obj[field];
-                        }, dataVar);
-                        
-                        logger.debug(`Accessed field '${parts.slice(1).join('.')}' from data var '${varName}' in DataVar template`, {
-                          fieldValue: fieldValue !== undefined ? JSON.stringify(fieldValue) : 'undefined'
-                        });
-                      } catch (e) {
-                        fieldAccessError = true;
-                        logger.error(`Error accessing field '${parts.slice(1).join('.')}' in data var '${varName}' in DataVar template`, {
-                          error: e
-                        });
-                      }
-                    }
-                    
-                    if (!fieldAccessError && fieldValue !== undefined) {
-                      // Convert to string if necessary
-                      const stringValue = typeof fieldValue === 'object' 
-                        ? (Array.isArray(fieldValue) ? fieldValue.join(',') : JSON.stringify(fieldValue))
-                        : String(fieldValue);
-                      
-                      processedContent = processedContent.replace(`#{${fieldRef}}`, stringValue);
-                    }
-                  }
-                }
-                
-                dataVarContent = processedContent;
-              }
+              // Use ResolutionService to resolve variables in text
+              dataVarContent = await this.resolutionService.resolveText(dataVarContent, context);
               
-              logger.debug('Processed all template variables in DataVar', {
+              logger.debug('Processed all template variables in DataVar using ResolutionService', {
                 finalContent: dataVarContent
               });
-            } catch (templateError) {
-              logger.error('Error processing template variables in DataVar', {
+            } catch (resolutionError) {
+              logger.error('Error resolving template variables in DataVar with ResolutionService', {
                 content: dataVarContent,
-                error: templateError
+                error: resolutionError
               });
             }
           }

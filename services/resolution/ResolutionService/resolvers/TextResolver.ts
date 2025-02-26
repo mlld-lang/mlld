@@ -6,7 +6,8 @@ import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 
 /**
- * Handles resolution of text variables (${var})
+ * Handles resolution of text variables ({{var}})
+ * Previously used ${var} syntax, now unified with data variables to use {{var}}
  */
 export class TextResolver {
   constructor(private stateService: IStateService) {}
