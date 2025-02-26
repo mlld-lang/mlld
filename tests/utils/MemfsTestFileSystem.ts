@@ -85,12 +85,35 @@ export class MemfsTestFileSystem implements IFileSystem {
       .replace(/\/+/g, '/') // Remove duplicate slashes
       .replace(/^\.\//, '') // Remove leading ./
       .replace(/\/$/, ''); // Remove trailing slash
+    
     logger.debug('Normalized path', { normalized });
     
     // Handle root path specially
     if (normalized === '/' || normalized === '' || normalized === '.') {
       const result = forMemfs ? '.' : this.root;
       logger.debug('Root path detected', { result });
+      return result;
+    }
+    
+    // Handle absolute system paths by detecting and removing the real system path prefix
+    // This is needed when we receive paths from PathService that have been resolved to
+    // absolute system paths like /Users/username/project/file.txt
+    const cwd = process.cwd();
+    if (normalized.startsWith(cwd)) {
+      // Strip the real system path prefix and treat the remainder as a project-relative path
+      const relativePath = normalized.substring(cwd.length).replace(/^\//, '');
+      logger.debug('Converted absolute system path to project-relative', { 
+        original: normalized, 
+        relativePath
+      });
+      
+      // Use the project path in the virtual filesystem
+      const projectPath = '/project';
+      const result = forMemfs 
+        ? path.join(projectPath.slice(1), relativePath)
+        : path.join(projectPath, relativePath);
+        
+      logger.debug('Mapped system path to virtual path', { result });
       return result;
     }
     

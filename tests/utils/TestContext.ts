@@ -113,7 +113,15 @@ export class TestContext {
     const filesystem = new FileSystemService(pathOps, this.fs);
     const validation = new ValidationService();
     const path = new PathService();
+    
+    // Initialize PathService first
     path.initialize(filesystem);
+    path.enableTestMode();
+    path.setProjectPath('/project');
+    
+    // Make FileSystemService use PathService for path resolution
+    filesystem.setPathService(path);
+    
     const parser = new ParserService();
     const circularity = new CircularityService();
     const interpreter = new InterpreterService();
@@ -196,29 +204,40 @@ export class TestContext {
   }
 
   /**
-   * Write a file to the test filesystem
+   * Write a file in the test context
+   * This method will automatically create parent directories if needed
    */
   async writeFile(relativePath: string, content: string): Promise<void> {
     logger.debug('Writing file in test context', { relativePath });
     
-    // Normalize the path to use forward slashes
-    const normalizedPath = relativePath.replace(/\\/g, '/');
+    // Use the PathService to properly resolve the path
+    let resolvedPath;
     
-    // Ensure the path is absolute
-    const absolutePath = normalizedPath.startsWith('/') ? normalizedPath : `/${normalizedPath}`;
-    
-    // Get the directory path
-    const dirPath = path.dirname(absolutePath);
-    
-    // Ensure parent directory exists
-    if (dirPath !== '/') {
-      logger.debug('Creating parent directory', { dirPath });
-      await this.fs.mkdir(dirPath);
+    try {
+      // If path contains slashes, we should prefix it with a path variable
+      // to ensure it's correctly resolved according to Meld's path rules
+      if (relativePath.includes('/') && !relativePath.startsWith('$')) {
+        // Prefix with project path variable
+        resolvedPath = this.services.path.resolvePath(`$PROJECTPATH/${relativePath}`);
+      } else {
+        resolvedPath = this.services.path.resolvePath(relativePath);
+      }
+      
+      logger.debug('Resolved path for writing', { relativePath, resolvedPath });
+    } catch (error) {
+      // If PathService validation fails, fall back to the original behavior
+      // Normalize the path to use forward slashes
+      const normalizedPath = relativePath.replace(/\\/g, '/');
+      
+      // Ensure the path is absolute
+      resolvedPath = normalizedPath.startsWith('/') ? normalizedPath : `/${normalizedPath}`;
+      
+      logger.debug('Using fallback path resolution', { relativePath, resolvedPath });
     }
     
     // Write the file
-    logger.debug('Writing file', { absolutePath });
-    await this.fs.writeFile(absolutePath, content);
+    logger.debug('Writing file', { resolvedPath });
+    await this.fs.writeFile(resolvedPath, content);
   }
 
   /**

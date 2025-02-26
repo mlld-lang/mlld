@@ -4,11 +4,18 @@
 
 This document outlines our plan to complete the Meld implementation using an API-first approach. We will:
 
-1. Delete the current CLI implementation and tests
-2. Focus solely on completing and strengthening the API
-3. Build a new CLI as a thin wrapper on top of the completed API
+1. Focus solely on completing and strengthening the API
+2. Build a new CLI as a thin wrapper on top of the completed API
 
 This approach will result in a cleaner architecture with less duplication, and the CLI will benefit from the well-tested API underneath.
+
+## Progress Update
+
+As of our latest milestone, we have:
+
+1. Completed Phase 2.1 (API Surface Refinement)
+2. Identified issues with API integration tests that need to be addressed
+3. Created a detailed plan for fixing these tests before proceeding with CLI implementation
 
 ## Existing Infrastructure Assessment
 
@@ -51,6 +58,8 @@ After careful review, we have identified that we already have substantial infras
 
 **Goal**: Create a robust test suite that exercises all Meld functionality through the API.
 
+**Status**: Tests created, but many are failing due to parser/validator mismatches
+
 **Tasks**:
 - Create `api/integration.test.ts` with complex Meld scripts that test:
   - Variable definitions and references (text, data, path)
@@ -72,6 +81,8 @@ After careful review, we have identified that we already have substantial infras
 ### 1.2 Path Handling Integration
 
 **Goal**: Ensure robust path handling in all contexts, especially in the test environment.
+
+**Status**: Partially complete; some path-related tests passing
 
 **Tasks**:
 - Consolidate existing path handling capabilities
@@ -121,23 +132,85 @@ After careful review, we have identified that we already have substantial infras
 - Verify state isolation between imports
 - Test circular reference detection
 
+### 1.5 API Integration Test Fixes (NEW)
+
+**Goal**: Fix the failing API integration tests to ensure a stable foundation for the CLI implementation.
+
+**Current Status**: 19 failing tests out of 27 total in API integration tests
+
+**Issues Identified**:
+- Mismatches between parser AST node structure and validator/handler expectations
+- Property name inconsistencies (e.g., `id` vs `identifier`, `path.raw` vs `value`)
+- Node type handling issues (e.g., "Unknown node type: TextVar")
+- Code fence parsing issues
+
+**Tasks**:
+1. **Continue Path Directive Fixes**:
+   - [x] Update `PathDirectiveValidator` to accept both `id` and `identifier`
+   - [x] Update `PathDirectiveValidator` to extract path from `path.raw`
+   - [x] Update `PathDirectiveHandler` to handle both property formats
+   - [ ] Fix remaining `getPathVar` issue in `PathResolver.ts`
+
+2. **Fix Import Directive Handling**:
+   - [ ] Create debug tests to analyze AST structure
+   - [ ] Update `ImportDirectiveValidator` to handle various formats
+   - [ ] Update `ImportDirectiveHandler` for path extraction
+   - [ ] Fix test expectations
+
+3. **Fix Define Directive Handling**:
+   - [ ] Analyze Define directive AST structure
+   - [ ] Update `DefineDirectiveValidator` for property flexibility
+   - [ ] Update `DefineDirectiveHandler` for value extraction
+   - [ ] Fix command execution tests
+
+4. **Fix Embed Directive Handling**:
+   - [ ] Analyze Embed directive AST structure
+   - [ ] Update validators and handlers for various formats
+   - [ ] Fix test fixtures for embed tests
+
+5. **Fix TextVar Node Processing**:
+   - [ ] Analyze TextVar node structure
+   - [ ] Add support in interpreter for TextVar nodes
+   - [ ] Fix transformation pipeline for variable references
+
+6. **Fix Code Fence Tests**:
+   - [ ] Update code fence test fixtures with proper escaping
+   - [ ] Fix nested code fence expected outputs
+   - [ ] Ensure proper code fence block creation
+
+**Implementation Details**:
+- Create debug helper to analyze node structures from parser
+- Fix one directive type at a time, verifying tests pass
+- Use direct fixes to validators/handlers first, then refactor if needed
+- Document each AST node format as issues are fixed
+
+**Completion Criteria**:
+- All 27 API integration tests passing
+- Robust validator and handler implementations
+- Improved code documentation for AST structures
+
 ## Phase 2: API Cleanup and Documentation (2-3 days)
 
 ### 2.1 API Surface Refinement
 
 **Goal**: Ensure the API has a clean, consistent, and well-documented surface.
 
-**Tasks**:
-- Review and refine public API methods
-- Ensure consistent naming and parameter patterns
-- Document all public methods and types
-- Create usage examples
+**Status**: COMPLETED ✅
 
-**Implementation Details**:
-- Focus on `api/index.ts` exports
-- Ensure proper TypeScript typing
-- Add JSDoc comments to all public methods
-- Create example usage patterns
+**Accomplishments**:
+- Added JSDoc comments to all public methods in `api/index.ts`
+- Ensured consistent naming patterns across all API methods
+- Added proper TypeScript typing to all exports
+- Exported all necessary error types for API users
+- Created `examples/api-example.ts` to demonstrate proper usage
+- Created comprehensive API documentation in `docs/API.md`
+- Added documentation about error types and handling
+
+**Benefits**:
+- Improved developer experience with proper documentation
+- Type safety with proper TypeScript typing
+- Better error handling with exported error types
+- Clear examples for API usage
 
 ### 2.2 Performance Optimization
 
@@ -307,6 +380,33 @@ After careful review, we have identified that we already have substantial infras
 - Draft release notes with migration guide
 - Create support plan for post-release issues
 
+## Revised Timeline
+
+- **Phase 1.5: Fix API Integration Tests** (2-3 days)
+  - Session 1: Complete path directive fixes and start import fixes (4 hours)
+  - Session 2: Complete import and define directive fixes (4 hours)
+  - Session 3: Complete embed directive and TextVar node fixes (4 hours)
+  - Session 4: Complete code fence tests and cleanup (4 hours)
+
+- **Phase 2.2-2.4: Complete API Refinement** (2 days)
+  - API demo script creation (4 hours)
+  - Final documentation updates (4 hours)
+
+- **Phase 3: CLI Implementation** (3 days)
+  - CLI core implementation (1 day)
+  - CLI-specific features (1 day)
+  - CLI error handling (1 day)
+
+- **Phase 4: CLI Testing** (2 days)
+  - CLI-specific tests (1 day)
+  - End-to-end tests (1 day)
+
+- **Phase 5: Migration Strategy** (1 day)
+  - Deprecation plan (4 hours)
+  - Release strategy (4 hours)
+
+**Total Revised Estimate**: 10-11 days
+
 ## Implementation Guidelines
 
 Throughout all phases, adhere to these guidelines:
@@ -339,7 +439,7 @@ Throughout all phases, adhere to these guidelines:
 
 The implementation will be considered successful when:
 
-1. All API tests pass, including new integration tests
+1. All API tests pass, including the previously failing integration tests
 2. Path handling works correctly in all contexts, including user-defined path variables
 3. Service validation prevents invalid configurations
 4. The API is well-documented with examples and tutorials
@@ -347,32 +447,6 @@ The implementation will be considered successful when:
 6. All CLI tests pass
 7. Documentation is complete and accurate
 8. A migration path is provided for existing users
-
-## Timeline
-
-- **Session 1**: API Integration Tests (1 hour)
-  - Create comprehensive API integration tests
-  - Test path handling and variable resolution
-  - Leverage existing TestContext infrastructure
-
-- **Session 2**: API Refinement and Demo (1 hour)
-  - Clean up API surface
-  - Create API demo script
-  - Document key API methods
-
-- **Session 3**: CLI Implementation (1 hour)
-  - Create CLI wrapper around API
-  - Implement command-line argument parsing
-  - Map CLI options to API options
-
-- **Session 4**: CLI Testing and Documentation (1 hour)
-  - Create CLI tests
-  - Document migration path
-  - Finalize documentation
-
-**Total Estimated Time**: 4 hours of Claude-assisted development
-
-This timeline reflects the power of AI-assisted development with Claude when working with someone who knows the codebase well. Most of the infrastructure already exists, and Claude can rapidly implement the remaining pieces with proper guidance.
 
 ## Reference
 
