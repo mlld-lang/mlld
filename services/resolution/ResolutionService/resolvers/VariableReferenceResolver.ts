@@ -466,7 +466,7 @@ export class VariableReferenceResolver {
     
     // Log all variables in state
     console.log('*** SimpleVariables: Available state variables:', {
-      textVars: Object.fromEntries(stateToUse.getAllTextVars() || []),
+      textVars: Object.keys(stateToUse.getAllTextVars() || {}),
       dataVars: Object.keys(stateToUse.getAllDataVars() || {})
     });
     
@@ -545,7 +545,18 @@ export class VariableReferenceResolver {
           // Handle undefined variables (continue with the loop)
           if (value === undefined) {
             console.log('*** SimpleVariables: Variable not found:', baseVar);
-            continue;
+            // Throw an error for undefined variables
+            throw new MeldResolutionError(
+              'Undefined variable: ' + baseVar,
+              {
+                code: ResolutionErrorCode.UNDEFINED_VARIABLE,
+                details: { 
+                  variableName: baseVar,
+                  variableType: 'text'
+                },
+                severity: ErrorSeverity.Recoverable
+              }
+            );
           }
           
           // Handle field access
@@ -555,8 +566,17 @@ export class VariableReferenceResolver {
               console.log('*** SimpleVariables: Field access result:', value);
             } catch (error) {
               console.log('*** SimpleVariables: Field access error:', String(error));
-              // Skip this variable if field access fails
-              continue;
+              // Throw the error instead of skipping
+              throw new MeldResolutionError(
+                'Invalid field access: ' + parts.slice(1).join('.'),
+                {
+                  code: ResolutionErrorCode.FIELD_ACCESS_ERROR,
+                  details: { 
+                    fieldPath: parts.slice(1).join('.')
+                  },
+                  severity: ErrorSeverity.Recoverable
+                }
+              );
             }
           }
           
@@ -572,11 +592,27 @@ export class VariableReferenceResolver {
             after: result
           });
         } catch (error) {
-          // Log error but continue processing other variables
+          // Rethrow MeldResolutionError instances
+          if (error instanceof MeldResolutionError) {
+            throw error;
+          }
+          
+          // Log error and create a new error for other exceptions
           console.log('*** SimpleVariables: Error processing variable:', {
             variable: varRef,
             error: String(error)
           });
+          
+          throw new MeldResolutionError(
+            `Error resolving variable ${varRef}: ${String(error)}`,
+            {
+              code: ResolutionErrorCode.RESOLUTION_ERROR,
+              details: { 
+                variableName: varRef
+              },
+              severity: ErrorSeverity.Recoverable
+            }
+          );
         }
       }
     }
@@ -629,7 +665,7 @@ export class VariableReferenceResolver {
         const textNode = node as TextNode;
         const extracted = this.extractReferencesFromText(textNode.content);
         extracted.forEach(ref => references.add(ref));
-      } else if (node.type === 'TextVar' || node.type === 'DataVar') {
+      } else if (node.type === 'TextVar' || node.type === 'DataVar' || node.type === 'PathVar') {
         // Extract from variable nodes
         const varNode = node as any;
         const varName = varNode.identifier || varNode.variable;

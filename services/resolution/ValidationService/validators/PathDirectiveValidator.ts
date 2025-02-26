@@ -29,7 +29,7 @@ export async function validatePathDirective(node: DirectiveNode, context?: Resol
   const directive = node.directive as PathDirectiveData;
   
   // Fix for different field names: AST can use either 'id' or 'identifier'
-  const identifier = directive.identifier || directive.id;
+  const identifier = directive.identifier || (directive as any).id;
   
   // Check for required fields
   if (!identifier || typeof identifier !== 'string' || identifier.trim() === '') {
