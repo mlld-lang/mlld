@@ -143,10 +143,105 @@ export class VariableReferenceResolver {
             resolutionPath.pop();
           }
         }
+      } else if (node.type === 'PathVar') {
+        // Handle path variable nodes (e.g. $path)
+        const pathVarNode = node as any;
+        const pathVar = pathVarNode.identifier;
+        
+        console.log('*** Processing path variable node:', {
+          identifier: pathVar,
+          isSpecial: pathVarNode.isSpecial,
+          details: JSON.stringify(pathVarNode, null, 2)
+        });
+        
+        if (pathVar) {
+          // Choose state service - prefer context.state if available
+          const stateToUse = context.state || this.stateService;
+          
+          // Handle special path variables
+          let pathValue;
+          if (pathVar === 'PROJECTPATH' || pathVar === '.') {
+            pathValue = stateToUse.getPathVar('PROJECTPATH');
+          } else if (pathVar === 'HOMEPATH' || pathVar === '~') {
+            pathValue = stateToUse.getPathVar('HOMEPATH');
+          } else {
+            // Regular path variable
+            pathValue = stateToUse.getPathVar(pathVar);
+          }
+          
+          if (pathValue === undefined) {
+            throw new MeldResolutionError(
+              `Undefined path variable: ${pathVar}`,
+              {
+                code: ResolutionErrorCode.UNDEFINED_VARIABLE,
+                details: { 
+                  variableName: pathVar,
+                  variableType: 'path'
+                },
+                severity: ErrorSeverity.Recoverable
+              }
+            );
+          }
+          
+          console.log('*** Path variable resolved to:', pathValue);
+          result += pathValue;
+        }
+      } else if (node.type === 'Directive') {
+        // For directive nodes, need to handle each kind differently
+        const directiveNode = node as DirectiveNode;
+        
+        switch (directiveNode.directive.kind) {
+          case 'text':
+          case 'data':
+            // For text and data directives, get their values from state
+            const id = directiveNode.directive.identifier;
+            if (id) {
+              let value;
+              if (directiveNode.directive.kind === 'text') {
+                value = context.state?.getTextVar(id) || this.stateService.getTextVar(id);
+              } else {
+                value = context.state?.getDataVar(id) || this.stateService.getDataVar(id);
+              }
+              
+              if (value !== undefined) {
+                result += typeof value === 'object' ? JSON.stringify(value) : String(value);
+              } else {
+                // If value not found, use the directive value itself as fallback
+                result += directiveNode.directive.value ? String(directiveNode.directive.value) : '';
+              }
+            }
+            break;
+            
+          case 'run':
+            // For run directives, try to execute the command
+            if (directiveNode.directive.identifier) {
+              try {
+                // Try to resolve the command
+                const cmdResult = await this.resolutionService.resolveCommand(
+                  directiveNode.directive.identifier,
+                  directiveNode.directive.args || [],
+                  context
+                );
+                result += cmdResult;
+              } catch (error) {
+                console.log('*** Error executing command:', error);
+                // Fall back to a simple representation if command fails
+                result += directiveNode.directive.identifier;
+                if (directiveNode.directive.args?.length) {
+                  result += ' ' + directiveNode.directive.args.join(' ');
+                }
+              }
+            }
+            break;
+            
+          default:
+            // For other directive types, just add the identifier
+            result += directiveNode.directive.identifier || '';
+        }
       } else {
-        // For other node types, convert to string
+        // For other node types, convert to string but avoid directive syntax
         console.log('*** Converting other node type to string:', node.type);
-        const str = this.nodeToString(node);
+        const str = this.getNodeValue(node, context);
         console.log('*** Converted to:', str);
         result += str;
       }
@@ -157,7 +252,56 @@ export class VariableReferenceResolver {
   }
   
   /**
+   * Extract the actual value from a node, not just its string representation
+   */
+  private getNodeValue(node: MeldNode, context: ResolutionContext): string {
+    // Different handling based on node type
+    switch (node.type) {
+      case 'Text':
+        return (node as TextNode).content;
+        
+      case 'TextVar':
+        const textVarNode = node as any;
+        const textVar = textVarNode.identifier;
+        const value = context.state?.getTextVar(textVar) || this.stateService.getTextVar(textVar);
+        return value !== undefined ? String(value) : '';
+        
+      case 'DataVar':
+        const dataVarNode = node as any;
+        const dataVar = dataVarNode.identifier;
+        const dataValue = context.state?.getDataVar(dataVar) || this.stateService.getDataVar(dataVar);
+        // For data variables, return JSON string for objects
+        return dataValue !== undefined 
+          ? (typeof dataValue === 'object' ? JSON.stringify(dataValue) : String(dataValue))
+          : '';
+          
+      case 'PathVar':
+        const pathVarNode = node as any;
+        const pathVar = pathVarNode.identifier;
+        const stateToUse = context.state || this.stateService;
+        
+        // Handle special path variables
+        if (pathVar === 'PROJECTPATH' || pathVar === '.') {
+          return stateToUse.getPathVar('PROJECTPATH') || '';
+        } else if (pathVar === 'HOMEPATH' || pathVar === '~') {
+          return stateToUse.getPathVar('HOMEPATH') || '';
+        } 
+        // Regular path variable
+        return stateToUse.getPathVar(pathVar) || '';
+        
+      case 'CodeFence':
+        const codeFence = node as any;
+        return codeFence.content || '';
+        
+      default:
+        // For unsupported node types, return empty string
+        return '';
+    }
+  }
+  
+  /**
    * Convert a node to string representation
+   * @deprecated Use getNodeValue instead for actual variable values
    */
   private nodeToString(node: MeldNode): string {
     switch (node.type) {

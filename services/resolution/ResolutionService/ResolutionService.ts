@@ -194,6 +194,40 @@ export class ResolutionService implements IResolutionService {
       } : 'state not available'
     });
 
+    // Handle special path variable formats ($HOMEPATH, $PROJECTPATH)
+    if (typeof value === 'string') {
+      // Check for special direct path variable references
+      if (value === '$HOMEPATH') {
+        const homePath = context.state?.getPathVar('HOMEPATH') || this.stateService.getPathVar('HOMEPATH');
+        return homePath || '';
+      }
+      
+      if (value === '$PROJECTPATH') {
+        const projectPath = context.state?.getPathVar('PROJECTPATH') || this.stateService.getPathVar('PROJECTPATH');
+        return projectPath || '';
+      }
+      
+      // TODO: Replace regex-based command reference parsing with AST parser for more robust handling
+      // Check for command references in the format $command(args)
+      const commandRegex = /^\$(\w+)\(([^)]*)\)$/;
+      const commandMatch = typeof value === 'string' ? value.match(commandRegex) : null;
+      
+      if (commandMatch) {
+        const [, cmdName, argsStr] = commandMatch;
+        // Parse args, splitting by comma but respecting quoted strings
+        const args = argsStr.split(',').map(arg => arg.trim());
+        
+        try {
+          const result = await this.resolveCommand(cmdName, args, context);
+          return result;
+        } catch (error) {
+          logger.warn('Command execution failed', { cmdName, args, error });
+          // Fall back to the command name and args, joining with spaces
+          return `${cmdName} ${args.join(' ')}`;
+        }
+      }
+    }
+
     // Handle StructuredPath objects directly
     if (typeof value === 'object' && value !== null && 'raw' in value) {
       // Extract the structured path information
@@ -219,7 +253,7 @@ export class ResolutionService implements IResolutionService {
         // Join with segments
         let result = basePath;
         if (structured.segments && structured.segments.length > 0) {
-          result = structured.segments.reduce((p, segment) => {
+          result = structured.segments.reduce((p: string, segment: string) => {
             return path.join(p, segment);
           }, result);
         }
@@ -246,7 +280,7 @@ export class ResolutionService implements IResolutionService {
         // Join with segments
         let result = homePath;
         if (structured.segments && structured.segments.length > 0) {
-          result = structured.segments.reduce((p, segment) => {
+          result = structured.segments.reduce((p: string, segment: string) => {
             return path.join(p, segment);
           }, result);
         }
