@@ -506,6 +506,7 @@ export class ResolutionService implements IResolutionService {
     }
   }
 
+  // TODO: This isn't really necessary as llmxml has built-in 
   private calculateSimilarity(str1: string, str2: string): number {
     // Convert strings to lowercase for case-insensitive comparison
     const s1 = str1.toLowerCase();

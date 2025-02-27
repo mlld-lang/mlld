@@ -211,7 +211,7 @@ describe('API Integration Tests', () => {
         fs: context.fs,
         services: context.services,
         transformation: true
-      })).rejects.toThrow(/Raw absolute paths are not allowed/);
+      })).rejects.toThrow(/Path directive must use a special path variable/);
     });
     
     it('should reject invalid path formats (relative paths with dot segments)', async () => {
@@ -225,7 +225,7 @@ describe('API Integration Tests', () => {
         fs: context.fs,
         services: context.services,
         transformation: true
-      })).rejects.toThrow(/Path cannot contain \. or \.\. segments/);
+      })).rejects.toThrow(/Path cannot contain relative segments/);
     });
   });
 
