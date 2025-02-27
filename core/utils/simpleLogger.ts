@@ -24,19 +24,22 @@ class Logger {
   }
 
   private log(level: LogLevel, message: string, context: LogContext): void {
-    // In test mode, we might want to suppress logs or redirect them
-    if (process.env.NODE_ENV === 'test') {
+    // In test mode, suppress all logs except errors
+    if (process.env.NODE_ENV === 'test' && level !== 'error') {
       return;
     }
 
-    const timestamp = new Date().toISOString();
-    console.log(JSON.stringify({
-      timestamp,
-      level,
-      namespace: this.namespace,
-      message,
-      ...context
-    }));
+    // Only output to console when not in test mode
+    if (process.env.NODE_ENV !== 'test') {
+      const timestamp = new Date().toISOString();
+      console.log(JSON.stringify({
+        timestamp,
+        level,
+        namespace: this.namespace,
+        message,
+        ...context
+      }));
+    }
   }
 }
 

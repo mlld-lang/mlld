@@ -104,8 +104,11 @@ describe('SDK Integration Tests', () => {
 
       // Get debug results
       const debugResult = await context.endDebugSession(sessionId);
-      console.log('State visualization:', await context.visualizeState());
-      console.log('Debug operations:', debugResult.operations);
+      
+      // Verify debugging data
+      expect(debugResult).toBeDefined();
+      expect(debugResult.metrics).toBeDefined();
+      expect(debugResult.startTime).toBeLessThan(debugResult.endTime);
       
       // In transformation mode, directives should be replaced
       expect(result).not.toContain('[run directive output placeholder]');

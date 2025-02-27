@@ -107,25 +107,7 @@ describe('API Integration Tests', () => {
       
       await context.writeFile('test.meld', content);
       
-      // Add a hook to log the actual AST
-      const originalProcessFile = context.services.interpreter.interpretWithContext;
-      context.services.interpreter.interpretWithContext = async (filePath, opts) => {
-        const result = await originalProcessFile.call(context.services.interpreter, filePath, opts);
-        
-        // Capture a sample node for debugging
-        const parse = await context.services.parser.parseWithLocations(
-          await context.fs.readFile(filePath, 'utf-8'), 
-          { filePath }
-        );
-        
-        // Log the actual AST structure for debugging
-        console.log('*** DEBUG AST STRUCTURE ***');
-        if (parse.length > 0 && parse[0].type === 'Directive') {
-          console.log(JSON.stringify(parse[0], null, 2));
-        }
-        
-        return result;
-      };
+      // No need to log the AST
       
       // Process the file
       const result = await main('test.meld', {

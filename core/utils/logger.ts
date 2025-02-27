@@ -25,13 +25,15 @@ const fileFormat = winston.format.combine(
 
 // Create the logger instance
 export const logger = winston.createLogger({
-  level: process.env.LOG_LEVEL || loggingConfig.defaultLevel,
+  level: process.env.LOG_LEVEL || (process.env.NODE_ENV === 'test' ? 'error' : loggingConfig.defaultLevel),
   levels: loggingConfig.levels,
   transports: [
-    // Console transport
-    new winston.transports.Console({
-      format: consoleFormat
-    }),
+    // Console transport (but not during test)
+    ...(process.env.NODE_ENV === 'test' ? [] : [
+      new winston.transports.Console({
+        format: consoleFormat
+      })
+    ]),
     // File transport for all logs
     new winston.transports.File({
       filename: path.join(loggingConfig.files.directory, loggingConfig.files.mainLog),
@@ -67,17 +69,20 @@ export function createServiceLogger(serviceName: keyof typeof loggingConfig.serv
   const serviceConfig = loggingConfig.services[serviceName];
   
   const logger = winston.createLogger({
-    level: serviceConfig.level,
+    level: process.env.NODE_ENV === 'test' ? 'error' : serviceConfig.level,
     format: winston.format.combine(
       winston.format.timestamp(),
       winston.format.json()
     ),
     defaultMeta: { service: serviceName },
     transports: [
-      new winston.transports.Console({
-        format: consoleFormat,
-        level: serviceConfig.level
-      })
+      // Only use console transport outside of tests
+      ...(process.env.NODE_ENV === 'test' ? [] : [
+        new winston.transports.Console({
+          format: consoleFormat,
+          level: serviceConfig.level
+        })
+      ])
     ]
   });
 

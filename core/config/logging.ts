@@ -30,54 +30,54 @@ export const loggingConfig = {
   // Service-specific settings
   services: {
     state: {
-      level: 'info',
+      level: 'error',
       includeMetadata: true
     },
     parser: {
-      level: 'info',
+      level: 'error',
       includeMetadata: true
     },
     interpreter: {
-      level: 'info',
+      level: 'error',
       includeMetadata: true
     },
     filesystem: {
-      level: 'info',
+      level: 'error',
       includeMetadata: true
     },
     validation: {
-      level: 'info',
+      level: 'error',
       includeMetadata: true
     },
     output: {
-      level: 'info',
+      level: 'error',
       includeMetadata: true
     },
     path: {
-      level: 'info',
+      level: 'error',
       includeMetadata: true
     },
     directive: {
-      level: 'info',
+      level: 'error',
       includeMetadata: true
     },
     circularity: {
-      level: 'info',
+      level: 'error',
       includeMetadata: true
     },
     resolution: {
-      level: 'info',
+      level: 'error',
       includeMetadata: true
     },
     import: {
-      level: 'info',
+      level: 'error',
       includeMetadata: true
     },
     cli: {
-      level: 'info'
+      level: 'error'
     },
     embed: {
-      level: 'info',
+      level: 'error',
       includeMetadata: true
     }
   }

@@ -92,6 +92,10 @@ export class TestContext {
     this.fs.initialize();
     this.builder = new ProjectBuilder(this.fs);
     this.fixturesDir = fixturesDir;
+    
+    // Setup console mocking to suppress output during tests
+    const { restore } = mockConsole();
+    this.cleanupFunctions.push(restore);
 
     // Initialize fixtures
     this.fixtures = {
@@ -481,7 +485,7 @@ export class TestContext {
           // Write the file
           await this.fs.writeFile(resolvedPath, content);
         } catch (error) {
-          console.warn(`Failed to create file ${filePath}:`, error);
+          // Silently fail to prevent console output during tests
         }
       }
       
