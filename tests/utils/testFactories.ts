@@ -174,8 +174,20 @@ export function createDataDirective(
   value: any,
   location?: Location
 ): DirectiveNode {
-  const stringValue = typeof value === 'string' ? value : JSON.stringify(value);
-  return createTestDirective('data', identifier, stringValue, location);
+  // Determine if this is a literal or reference source
+  const source = 'literal';
+  
+  // Return a directive node with the proper structure matching the AST
+  return {
+    type: 'Directive',
+    directive: {
+      kind: 'data',
+      identifier,
+      source,
+      value
+    },
+    location: location || DEFAULT_LOCATION
+  };
 }
 
 // Create a path directive node for testing

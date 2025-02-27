@@ -15,8 +15,11 @@ export async function validatePathDirective(node: DirectiveNode, context?: Resol
   if (!node.directive) {
     throw new MeldDirectiveError(
       'Path directive is missing required fields',
-      DirectiveErrorCode.VALIDATION_FAILED,
-      { location: node.location?.start }
+      'path',
+      {
+        location: node.location?.start,
+        code: DirectiveErrorCode.VALIDATION_FAILED
+      }
     );
   }
   
@@ -35,12 +38,25 @@ export async function validatePathDirective(node: DirectiveNode, context?: Resol
   if (!identifier || typeof identifier !== 'string' || identifier.trim() === '') {
     throw new MeldDirectiveError(
       'Path directive requires a valid identifier',
-      DirectiveErrorCode.VALIDATION_FAILED,
-      { location: node.location?.start }
+      'path',
+      {
+        location: node.location?.start,
+        code: DirectiveErrorCode.VALIDATION_FAILED
+      }
     );
   }
   
-  // The AST has already validated the identifier format
+  // Validate identifier format - must start with letter or underscore and contain only letters, numbers, and underscores
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(identifier)) {
+    throw new MeldDirectiveError(
+      'Path identifier must be a valid identifier (letters, numbers, underscore, starting with letter/underscore)',
+      'path',
+      {
+        location: node.location?.start,
+        code: DirectiveErrorCode.VALIDATION_FAILED
+      }
+    );
+  }
   
   // Handle both direct string value and path object
   let pathObject = directive.path;
@@ -55,8 +71,11 @@ export async function validatePathDirective(node: DirectiveNode, context?: Resol
     } else {
       throw new MeldDirectiveError(
         'Path directive requires a path value',
-        DirectiveErrorCode.VALIDATION_FAILED,
-        { location: node.location?.start }
+        'path',
+        {
+          location: node.location?.start,
+          code: DirectiveErrorCode.VALIDATION_FAILED
+        }
       );
     }
   } else if (typeof pathObject === 'string') {
@@ -67,16 +86,22 @@ export async function validatePathDirective(node: DirectiveNode, context?: Resol
     if (!pathObject.raw || typeof pathObject.raw !== 'string' || pathObject.raw.trim() === '') {
       throw new MeldDirectiveError(
         'Path directive requires a non-empty path value',
-        DirectiveErrorCode.VALIDATION_FAILED,
-        { location: node.location?.start }
+        'path',
+        {
+          location: node.location?.start,
+          code: DirectiveErrorCode.VALIDATION_FAILED
+        }
       );
     }
     pathRaw = pathObject.raw;
   } else {
     throw new MeldDirectiveError(
       'Path directive requires a valid path',
-      DirectiveErrorCode.VALIDATION_FAILED,
-      { location: node.location?.start }
+      'path',
+      {
+        location: node.location?.start,
+        code: DirectiveErrorCode.VALIDATION_FAILED
+      }
     );
   }
   
@@ -84,8 +109,11 @@ export async function validatePathDirective(node: DirectiveNode, context?: Resol
   if (!pathRaw || pathRaw.trim() === '') {
     throw new MeldDirectiveError(
       'Path directive requires a non-empty path value',
-      DirectiveErrorCode.VALIDATION_FAILED,
-      { location: node.location?.start }
+      'path',
+      {
+        location: node.location?.start,
+        code: DirectiveErrorCode.VALIDATION_FAILED
+      }
     );
   }
   
