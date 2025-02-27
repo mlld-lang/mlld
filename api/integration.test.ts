@@ -267,20 +267,20 @@ describe('API Integration Tests', () => {
       const level2Content = `
         @import [level3.meld]
         @text level2 = "Level 2 imported"
-        {{level2}}
+        {{level2}} and {{level3}}
       `;
       await context.writeFile('level2.meld', level2Content);
       
       const level1Content = `
         @import [level2.meld]
         @text level1 = "Level 1 imported"
-        {{level1}}
+        {{level1}}, {{level2}}, and {{level3}}
       `;
       await context.writeFile('level1.meld', level1Content);
       
       const mainContent = `
         @import [level1.meld]
-        Main file
+        Main file with {{level1}}, {{level2}}, and {{level3}}
       `;
       await context.writeFile('test.meld', mainContent);
       
@@ -291,8 +291,12 @@ describe('API Integration Tests', () => {
         format: 'md'
       });
       
-      // Just verify the main file content is there since imports might not be working properly
-      expect(result).toContain('Main file');
+      // Verify that variables from all levels of imports are accessible
+      // The exact format may have whitespace and newlines, so check for individual parts
+      expect(result).toContain('Main file with');
+      expect(result).toContain('Level 1 imported');
+      expect(result).toContain('Level 2 imported');
+      expect(result).toContain('Level 3 imported');
     });
     
     it('should detect circular imports', async () => {
