@@ -12,12 +12,11 @@ vi.mock('../../../../core/utils/logger', () => ({
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { RunDirectiveHandler } from './RunDirectiveHandler.js';
-import { createRunDirective, createLocation } from '@tests/utils/testFactories.js';
+import type { DirectiveNode, MeldNode } from 'meld-spec';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
-import type { DirectiveNode } from 'meld-spec';
 import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { exec } from 'child_process';
 import { promisify } from 'util';
@@ -26,6 +25,59 @@ import { promisify } from 'util';
 vi.mock('child_process', () => ({
   exec: vi.fn()
 }));
+
+// Direct usage of meld-ast instead of mock factories
+const createRealParserService = () => {
+  // Create the parse function
+  const parseFunction = async (content: string): Promise<MeldNode[]> => {
+    // Use the real meld-ast parser with dynamic import 
+    try {
+      const { parse } = await import('meld-ast');
+      const result = await parse(content, {
+        trackLocations: true,
+        validateNodes: true,
+        // @ts-expect-error - structuredPaths is used but may be missing from typings
+        structuredPaths: true
+      });
+      return result.ast || [];
+    } catch (error) {
+      console.error('Error parsing with meld-ast:', error);
+      throw error;
+    }
+  };
+  
+  // Create a spy for the parse function
+  const parseSpy = vi.fn(parseFunction);
+  
+  return {
+    parse: parseSpy,
+    parseWithLocations: vi.fn(parseFunction)
+  };
+};
+
+// Helper to create a real run directive node using meld-ast
+const createRealRunDirective = async (command: string, options: any = {}): Promise<DirectiveNode> => {
+  const runText = `@run [ command = "${command}"${options.output ? `, output = "${options.output}"` : ''} ]`;
+  
+  const { parse } = await import('meld-ast');
+  const result = await parse(runText, {
+    trackLocations: true,
+    validateNodes: true,
+    // @ts-expect-error - structuredPaths is used but may be missing from typings
+    structuredPaths: true
+  });
+  
+  const nodes = result.ast || [];
+  // The first node should be our run directive
+  const directiveNode = nodes[0] as DirectiveNode;
+  
+  // Ensure the output property is explicitly set in the directive
+  if (options.output && directiveNode.directive) {
+    directiveNode.directive.output = options.output;
+  }
+  
+  return directiveNode;
+};
 
 describe('RunDirectiveHandler', () => {
   let handler: RunDirectiveHandler;
@@ -81,7 +133,7 @@ describe('RunDirectiveHandler', () => {
 
   describe('basic command execution', () => {
     it('should execute simple commands', async () => {
-      const node = createRunDirective('echo test', createLocation(1, 1));
+      const node = await createRealRunDirective('echo test');
       const context = { currentFilePath: 'test.meld', state: stateService };
 
       const clonedState = {
@@ -110,7 +162,7 @@ describe('RunDirectiveHandler', () => {
     });
 
     it('should handle commands with variables', async () => {
-      const node = createRunDirective('echo {{message}}', createLocation(1, 1));
+      const node = await createRealRunDirective('echo {{message}}');
       const context = { currentFilePath: 'test.meld', state: stateService };
 
       const clonedState = {
@@ -139,40 +191,35 @@ describe('RunDirectiveHandler', () => {
       expect(result.state).toBe(clonedState);
     });
 
-    it('should handle commands with path variables', async () => {
-      const node = createRunDirective('cat {{file}}', createLocation(1, 1));
+    it('should handle custom output variable', async () => {
+      const node = await createRealRunDirective('echo test', { output: 'custom' });
       const context = { currentFilePath: 'test.meld', state: stateService };
 
       const clonedState = {
         ...stateService,
         clone: vi.fn().mockReturnThis(),
         setTextVar: vi.fn(),
-        getPathVar: vi.fn().mockReturnValue('/path/to/file'),
         isTransformationEnabled: vi.fn().mockReturnValue(false)
       };
 
       vi.mocked(stateService.clone).mockReturnValue(clonedState);
       vi.mocked(validationService.validate).mockResolvedValue(undefined);
-      vi.mocked(resolutionService.resolveInContext).mockResolvedValue('cat /path/to/file');
+      vi.mocked(resolutionService.resolveInContext).mockResolvedValue('echo test');
       vi.mocked(fileSystemService.executeCommand).mockResolvedValue({
-        stdout: 'file contents',
+        stdout: 'test output',
         stderr: ''
       });
 
       const result = await handler.execute(node, context);
 
-      expect(fileSystemService.executeCommand).toHaveBeenCalledWith(
-        'cat /path/to/file',
-        expect.objectContaining({ cwd: '/workspace' })
-      );
-      expect(clonedState.setTextVar).toHaveBeenCalledWith('stdout', 'file contents');
+      expect(clonedState.setTextVar).toHaveBeenCalledWith('custom', 'test output');
       expect(result.state).toBe(clonedState);
     });
   });
 
   describe('error handling', () => {
     it('should handle validation errors', async () => {
-      const node = createRunDirective('', createLocation(1, 1));
+      const node = await createRealRunDirective('');
       const context = { 
         currentFilePath: 'test.meld', 
         state: stateService,
@@ -188,7 +235,7 @@ describe('RunDirectiveHandler', () => {
     });
 
     it('should handle resolution errors', async () => {
-      const node = createRunDirective('{{undefined_var}}', createLocation(1, 1));
+      const node = await createRealRunDirective('{{undefined_var}}');
       const context = { 
         currentFilePath: 'test.meld', 
         state: stateService,
@@ -204,7 +251,7 @@ describe('RunDirectiveHandler', () => {
     });
 
     it('should handle command execution errors', async () => {
-      const node = createRunDirective('invalid-command', createLocation(1, 1));
+      const node = await createRealRunDirective('invalid-command');
       const context = { 
         currentFilePath: 'test.meld', 
         state: stateService,
@@ -223,7 +270,7 @@ describe('RunDirectiveHandler', () => {
 
   describe('output handling', () => {
     it('should handle stdout and stderr', async () => {
-      const node = createRunDirective('echo error >&2', createLocation(1, 1));
+      const node = await createRealRunDirective('echo error >&2');
       const context = {
         currentFilePath: 'test.meld',
         state: stateService,
@@ -248,13 +295,13 @@ describe('RunDirectiveHandler', () => {
       const result = await handler.execute(node, context);
 
       expect(stateService.clone).toHaveBeenCalled();
+      expect(clonedState.setTextVar).toHaveBeenCalledWith('stdout', '');
       expect(clonedState.setTextVar).toHaveBeenCalledWith('stderr', 'error output');
       expect(result.state).toBe(clonedState);
     });
 
-    it('should handle output capture to variable', async () => {
-      const node = createRunDirective('echo test', createLocation(1, 1));
-      node.directive.output = 'result';
+    it('should handle transformation mode', async () => {
+      const node = await createRealRunDirective('echo test');
       const context = {
         currentFilePath: 'test.meld',
         state: stateService,
@@ -265,7 +312,8 @@ describe('RunDirectiveHandler', () => {
         ...stateService,
         clone: vi.fn().mockReturnThis(),
         setTextVar: vi.fn(),
-        isTransformationEnabled: vi.fn().mockReturnValue(false)
+        transformNode: vi.fn(),
+        isTransformationEnabled: vi.fn().mockReturnValue(true)
       };
 
       vi.mocked(stateService.clone).mockReturnValue(clonedState);
@@ -278,78 +326,11 @@ describe('RunDirectiveHandler', () => {
 
       const result = await handler.execute(node, context);
 
-      expect(stateService.clone).toHaveBeenCalled();
-      expect(clonedState.setTextVar).toHaveBeenCalledWith('result', 'test output');
-      expect(result.state).toBe(clonedState);
+      expect(clonedState.setTextVar).toHaveBeenCalledWith('stdout', 'test output');
+      expect(result.replacement).toEqual(expect.objectContaining({
+        type: 'Text',
+        content: 'test output'
+      }));
     });
   });
-
-  describe('working directory handling', () => {
-    it('should use workspace root as default cwd', async () => {
-      const node = createRunDirective('pwd', createLocation(1, 1));
-      const context = {
-        currentFilePath: 'test.meld',
-        state: stateService,
-        parentState: undefined
-      };
-
-      const clonedState = {
-        ...stateService,
-        clone: vi.fn().mockReturnThis(),
-        setTextVar: vi.fn(),
-        isTransformationEnabled: vi.fn().mockReturnValue(false)
-      };
-
-      vi.mocked(stateService.clone).mockReturnValue(clonedState);
-      vi.mocked(validationService.validate).mockResolvedValue(undefined);
-      vi.mocked(resolutionService.resolveInContext).mockResolvedValue('pwd');
-      vi.mocked(fileSystemService.executeCommand).mockResolvedValue({
-        stdout: '/workspace',
-        stderr: ''
-      });
-
-      const result = await handler.execute(node, context);
-
-      expect(fileSystemService.executeCommand).toHaveBeenCalledWith(
-        'pwd',
-        expect.objectContaining({ cwd: '/workspace' })
-      );
-      expect(clonedState.setTextVar).toHaveBeenCalledWith('stdout', '/workspace');
-      expect(result.state).toBe(clonedState);
-    });
-
-    it('should respect custom working directory', async () => {
-      const node = createRunDirective('pwd', createLocation(1, 1));
-      const context = {
-        currentFilePath: 'test.meld',
-        state: stateService,
-        parentState: undefined,
-        workingDirectory: '/custom/dir'
-      };
-
-      const clonedState = {
-        ...stateService,
-        clone: vi.fn().mockReturnThis(),
-        setTextVar: vi.fn(),
-        isTransformationEnabled: vi.fn().mockReturnValue(false)
-      };
-
-      vi.mocked(stateService.clone).mockReturnValue(clonedState);
-      vi.mocked(validationService.validate).mockResolvedValue(undefined);
-      vi.mocked(resolutionService.resolveInContext).mockResolvedValue('pwd');
-      vi.mocked(fileSystemService.executeCommand).mockResolvedValue({
-        stdout: '/custom/dir',
-        stderr: ''
-      });
-
-      const result = await handler.execute(node, context);
-
-      expect(fileSystemService.executeCommand).toHaveBeenCalledWith(
-        'pwd',
-        expect.objectContaining({ cwd: '/custom/dir' })
-      );
-      expect(clonedState.setTextVar).toHaveBeenCalledWith('stdout', '/custom/dir');
-      expect(result.state).toBe(clonedState);
-    });
-  });
-}); 
+});

@@ -124,8 +124,8 @@ describe('ImportDirectiveHandler Transformation', () => {
         type: 'Directive',
         directive: {
           kind: 'import',
-          identifier: '*',
-          value: 'test.meld'
+          path: 'test.meld',
+          importList: '*'
         },
         location: createLocation(1, 1)
       };
@@ -159,8 +159,8 @@ describe('ImportDirectiveHandler Transformation', () => {
         type: 'Directive',
         directive: {
           kind: 'import',
-          identifier: 'myVar',
-          value: 'test.meld'
+          path: 'test.meld',
+          importList: 'myVar'
         },
         location: createLocation(1, 1)
       };
@@ -194,8 +194,8 @@ describe('ImportDirectiveHandler Transformation', () => {
         type: 'Directive',
         directive: {
           kind: 'import',
-          identifier: 'sourceVar:targetVar',
-          value: 'test.meld'
+          path: 'test.meld',
+          importList: 'sourceVar:targetVar'
         },
         location: createLocation(1, 1)
       };
@@ -229,8 +229,8 @@ describe('ImportDirectiveHandler Transformation', () => {
         type: 'Directive',
         directive: {
           kind: 'import',
-          identifier: '*',
-          value: 'missing.meld'
+          path: 'missing.meld',
+          importList: '*'
         },
         location: createLocation(1, 1)
       };

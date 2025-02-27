@@ -78,9 +78,10 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
         }
       };
 
-      // Resolve variables in path
+      // Resolve variables in path - properly handle structured path objects
+      const rawPath = typeof path === 'string' ? path : path.raw;
       const resolvedPath = await this.resolutionService.resolveInContext(
-        typeof path === 'string' ? path : path.raw,
+        rawPath,
         resolutionContext
       );
 
@@ -112,14 +113,38 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
             section,
             resolutionContext
           );
-          processedContent = await this.resolutionService.extractSection(
-            content,
-            resolvedSection
-          );
+          try {
+            processedContent = await this.resolutionService.extractSection(
+              content,
+              resolvedSection
+            );
+          } catch (error) {
+            throw new DirectiveError(
+              `Failed to extract section '${resolvedSection}': ${error instanceof Error ? error.message : String(error)}`,
+              this.kind,
+              DirectiveErrorCode.SECTION_NOT_FOUND,
+              { 
+                node,
+                severity: DirectiveErrorSeverity[DirectiveErrorCode.SECTION_NOT_FOUND]
+              }
+            );
+          }
         }
 
         // Apply heading level if specified
         if (headingLevel !== undefined) {
+          // Validate heading level
+          if (headingLevel < 1 || headingLevel > 6) {
+            throw new DirectiveError(
+              `Invalid heading level: ${headingLevel}. Must be between 1 and 6.`,
+              this.kind,
+              DirectiveErrorCode.VALIDATION_FAILED,
+              { 
+                node,
+                severity: DirectiveErrorSeverity[DirectiveErrorCode.VALIDATION_FAILED]
+              }
+            );
+          }
           processedContent = this.applyHeadingLevel(processedContent, headingLevel);
         }
 

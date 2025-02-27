@@ -1,11 +1,22 @@
 import { DirectiveNode, PathDirectiveData } from 'meld-spec';
-import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
+import { MeldDirectiveError, DirectiveLocation } from '@core/errors/MeldDirectiveError.js';
 import { DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 import { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
 
 /**
- * Validates path directives based on the latest meld-ast 1.6.1 structure
+ * Converts AST SourceLocation to DirectiveLocation
+ */
+function convertLocation(location: any): DirectiveLocation {
+  if (!location) return { line: 0, column: 0 };
+  return {
+    line: location.line,
+    column: location.column
+  };
+}
+
+/**
+ * Validates path directives based on the latest meld-ast structure
  */
 export async function validatePathDirective(node: DirectiveNode, context?: ResolutionContext): Promise<void> {
   // Debug: Log the node structure
@@ -17,8 +28,9 @@ export async function validatePathDirective(node: DirectiveNode, context?: Resol
       'Path directive is missing required fields',
       'path',
       {
-        location: node.location?.start,
-        code: DirectiveErrorCode.VALIDATION_FAILED
+        location: convertLocation(node.location?.start),
+        code: DirectiveErrorCode.VALIDATION_FAILED,
+        severity: ErrorSeverity.Recoverable
       }
     );
   }
@@ -40,8 +52,9 @@ export async function validatePathDirective(node: DirectiveNode, context?: Resol
       'Path directive requires a valid identifier',
       'path',
       {
-        location: node.location?.start,
-        code: DirectiveErrorCode.VALIDATION_FAILED
+        location: convertLocation(node.location?.start),
+        code: DirectiveErrorCode.VALIDATION_FAILED,
+        severity: ErrorSeverity.Recoverable
       }
     );
   }
@@ -52,29 +65,31 @@ export async function validatePathDirective(node: DirectiveNode, context?: Resol
       'Path identifier must be a valid identifier (letters, numbers, underscore, starting with letter/underscore)',
       'path',
       {
-        location: node.location?.start,
-        code: DirectiveErrorCode.VALIDATION_FAILED
+        location: convertLocation(node.location?.start),
+        code: DirectiveErrorCode.VALIDATION_FAILED,
+        severity: ErrorSeverity.Recoverable
       }
     );
   }
   
   // Handle both direct string value and path object
   let pathObject = directive.path;
-  let pathRaw: string;
+  let pathRaw: string | undefined;
   
   if (!pathObject) {
     // If path is missing, check for value property as fallback
     if (directive.value) {
       pathRaw = typeof directive.value === 'string' 
         ? directive.value
-        : directive.value.raw || '';
+        : (directive.value as any).raw || '';
     } else {
       throw new MeldDirectiveError(
         'Path directive requires a path value',
         'path',
         {
-          location: node.location?.start,
-          code: DirectiveErrorCode.VALIDATION_FAILED
+          location: convertLocation(node.location?.start),
+          code: DirectiveErrorCode.VALIDATION_FAILED,
+          severity: ErrorSeverity.Recoverable
         }
       );
     }
@@ -88,8 +103,9 @@ export async function validatePathDirective(node: DirectiveNode, context?: Resol
         'Path directive requires a non-empty path value',
         'path',
         {
-          location: node.location?.start,
-          code: DirectiveErrorCode.VALIDATION_FAILED
+          location: convertLocation(node.location?.start),
+          code: DirectiveErrorCode.VALIDATION_FAILED,
+          severity: ErrorSeverity.Recoverable
         }
       );
     }
@@ -99,8 +115,9 @@ export async function validatePathDirective(node: DirectiveNode, context?: Resol
       'Path directive requires a valid path',
       'path',
       {
-        location: node.location?.start,
-        code: DirectiveErrorCode.VALIDATION_FAILED
+        location: convertLocation(node.location?.start),
+        code: DirectiveErrorCode.VALIDATION_FAILED,
+        severity: ErrorSeverity.Recoverable
       }
     );
   }
@@ -111,8 +128,9 @@ export async function validatePathDirective(node: DirectiveNode, context?: Resol
       'Path directive requires a non-empty path value',
       'path',
       {
-        location: node.location?.start,
-        code: DirectiveErrorCode.VALIDATION_FAILED
+        location: convertLocation(node.location?.start),
+        code: DirectiveErrorCode.VALIDATION_FAILED,
+        severity: ErrorSeverity.Recoverable
       }
     );
   }

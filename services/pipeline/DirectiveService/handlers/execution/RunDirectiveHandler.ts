@@ -32,9 +32,14 @@ export class RunDirectiveHandler implements IDirectiveHandler {
       // Validate the directive
       await this.validationService.validate(node);
 
+      // Properly handle both string commands and command objects from AST
+      const rawCommand = typeof directive.command === 'string' 
+        ? directive.command 
+        : directive.command.raw;
+
       // Resolve the command
       const resolvedCommand = await this.resolutionService.resolveInContext(
-        typeof directive.command === 'string' ? directive.command : directive.command.raw,
+        rawCommand,
         context
       );
 
@@ -47,8 +52,8 @@ export class RunDirectiveHandler implements IDirectiveHandler {
       );
 
       // Store the output in state variables
-      if (directive.output) {
-        clonedState.setTextVar(directive.output, stdout);
+      if (node.directive.output) {
+        clonedState.setTextVar(node.directive.output, stdout);
       } else {
         clonedState.setTextVar('stdout', stdout);
       }

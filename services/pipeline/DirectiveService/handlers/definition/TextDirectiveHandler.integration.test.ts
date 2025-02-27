@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { TextDirectiveHandler } from './TextDirectiveHandler.js';
 import { createMockStateService, createMockValidationService, createMockResolutionService } from '@tests/utils/testFactories.js';
-import { DirectiveError } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
+import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { ResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError.js';
 import { ResolutionErrorCode } from '@services/resolution/ResolutionService/IResolutionService.js';
 import type { DirectiveNode } from 'meld-spec';
@@ -144,8 +144,7 @@ describe('TextDirectiveHandler Integration', () => {
         },
         location: {
           start: { line: 5, column: 1 },
-          end: { line: 5, column: 25 },
-          source: 'test.meld'
+          end: { line: 5, column: 25 }
         }
       };
 
@@ -155,11 +154,34 @@ describe('TextDirectiveHandler Integration', () => {
       };
 
       // Mock validation service to throw a DirectiveError
-      validationService.validateDirective = vi.fn().mockImplementation(() => {
-        throw new DirectiveError('Invalid text directive value', {
-          node,
-          context: { filePath: 'test.meld', line: 5 }
-        });
+      validationService.validate = vi.fn().mockImplementation(() => {
+        // Create an error with location and other properties set correctly
+        const error = new DirectiveError(
+          'Invalid text directive value',
+          'text',
+          DirectiveErrorCode.VALIDATION_FAILED,
+          {
+            node,
+            context: {
+              ...context,
+              filePath: 'test.meld'
+            },
+            location: {
+              ...node.location,
+              start: {
+                ...node.location.start,
+                line: 5,
+                column: 1
+              }
+            }
+          }
+        );
+        
+        // Set the severity property directly on the error
+        // @ts-ignore - We know this will work
+        error.severity = ErrorSeverity.Fatal;
+        
+        throw error;
       });
 
       // Use ErrorCollector to test both strict and permissive modes
@@ -170,7 +192,10 @@ describe('TextDirectiveHandler Integration', () => {
         try {
           await handler.execute(node, context);
         } catch (error) {
-          errorCollector.handleError(error);
+          // Ensure we're passing an appropriate error to the handler
+          if (error instanceof DirectiveError) {
+            errorCollector.handleError(error);
+          }
           throw error;
         }
       }).rejects.toThrow(DirectiveError);
@@ -183,8 +208,14 @@ describe('TextDirectiveHandler Integration', () => {
       // Verify error contains location information
       const error = errorCollector.getAllErrors()[0];
       expect(error.context).toBeDefined();
-      expect(error.context.filePath).toBe('test.meld');
-      expect(error.context.line).toBe(5);
+      
+      // With the refactored code, the location is now in a different structure
+      // The DirectiveError wraps the location in the context.node.location
+      expect(error.context.node).toBeDefined();
+      expect(error.context.node.location).toBeDefined();
+      expect(error.context.node.location.start.line).toBe(5);
+      expect(error.context.context).toBeDefined();
+      expect(error.context.context.currentFilePath).toBe('test.meld');
     });
 
     it.todo('should handle mixed directive types - Complex directive interaction deferred for V1');

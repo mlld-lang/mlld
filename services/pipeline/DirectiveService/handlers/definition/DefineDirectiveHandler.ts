@@ -2,7 +2,7 @@ import { IDirectiveHandler, DirectiveContext } from '../../IDirectiveService.js'
 import { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import { IStateService } from '@services/state/StateService/IStateService.js';
 import { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
-import { DirectiveNode } from 'meld-spec';
+import { DirectiveNode, DefineDirectiveData } from 'meld-spec';
 import { DirectiveError, DirectiveErrorCode, DirectiveErrorSeverity } from '../../errors/DirectiveError.js';
 import { directiveLogger as logger } from '@core/utils/logger.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
@@ -31,13 +31,18 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
       // 1. Validate directive structure
       await this.validationService.validate(node);
 
-      // 2. Extract name and command from directive
-      const { name, command } = node.directive;
+      // 2. Extract name, parameters, and command from directive
+      const directive = node.directive as DefineDirectiveData;
+      const { name, parameters, command } = directive;
+      
       // Parse any metadata from the name
       const nameMetadata = this.parseIdentifier(name);
 
-      // 3. Process command
-      const commandDef = await this.processCommand(command, node);
+      // 3. Create command definition
+      const commandDef: Omit<CommandDefinition, 'metadata'> = {
+        parameters: parameters || [],
+        command: command.kind === 'run' ? command.command : ''
+      };
 
       // 4. Create new state for modifications
       const newState = context.state.clone();
@@ -139,77 +144,10 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
     return { name };
   }
 
-  private async processCommand(commandData: any, node: DirectiveNode): Promise<Omit<CommandDefinition, 'metadata'>> {
-    try {
-      // Check if we already have a structured command
-      if (typeof commandData === 'object' && commandData.kind === 'run' && typeof commandData.command === 'string') {
-        const commandStr = commandData.command.trim();
-        
-        // Extract parameter references
-        const referencedParams = this.extractParameterReferences(commandStr);
-        
-        return {
-          parameters: referencedParams,
-          command: commandStr
-        };
-      }
-      
-      // For backwards compatibility, handle string value that might be JSON
-      if (typeof commandData === 'string') {
-        try {
-          // Try to parse as JSON
-          const parsed = JSON.parse(commandData);
-          if (parsed.command?.kind === 'run' && typeof parsed.command.command === 'string') {
-            const commandStr = parsed.command.command.trim();
-            
-            // Extract parameter references
-            const referencedParams = this.extractParameterReferences(commandStr);
-            
-            return {
-              parameters: referencedParams,
-              command: commandStr
-            };
-          }
-        } catch (e) {
-          // Not valid JSON, treat as raw command string
-          const commandStr = commandData.trim();
-          
-          // Extract parameter references
-          const referencedParams = this.extractParameterReferences(commandStr);
-          
-          return {
-            parameters: referencedParams,
-            command: commandStr
-          };
-        }
-      }
-      
-      throw new DirectiveError(
-        'Invalid command format',
-        this.kind,
-        DirectiveErrorCode.VALIDATION_FAILED,
-        {
-          node,
-          severity: DirectiveErrorSeverity[DirectiveErrorCode.VALIDATION_FAILED]
-        }
-      );
-    } catch (error) {
-      if (error instanceof DirectiveError) {
-        throw error;
-      }
-      throw new DirectiveError(
-        error instanceof Error ? error.message : 'Error processing command',
-        this.kind,
-        DirectiveErrorCode.VALIDATION_FAILED,
-        {
-          node,
-          cause: error instanceof Error ? error : undefined,
-          severity: DirectiveErrorSeverity[DirectiveErrorCode.VALIDATION_FAILED]
-        }
-      );
-    }
-  }
-
+  /**
+   * Extract parameter references from a command string
+   * This method is kept for backward compatibility with tests
+   */
   private extractParameterReferences(command: string): string[] {
     const paramPattern = /\${(\w+)}/g;
     const params = new Set<string>();

@@ -13,8 +13,10 @@ export function validateEmbedDirective(node: DirectiveNode): void {
     throw new MeldDirectiveError(
       'Embed directive requires a valid path',
       'embed',
-      node.location?.start,
-      DirectiveErrorCode.VALIDATION_FAILED
+      { 
+        location: node.location?.start,
+        code: DirectiveErrorCode.VALIDATION_FAILED
+      }
     );
   }
   
@@ -28,8 +30,10 @@ export function validateEmbedDirective(node: DirectiveNode): void {
     throw new MeldDirectiveError(
       'Embed directive path cannot be empty',
       'embed',
-      node.location?.start,
-      DirectiveErrorCode.VALIDATION_FAILED
+      {
+        location: node.location?.start,
+        code: DirectiveErrorCode.VALIDATION_FAILED
+      }
     );
   }
   
@@ -38,8 +42,10 @@ export function validateEmbedDirective(node: DirectiveNode): void {
     throw new MeldDirectiveError(
       'Embed directive "section" property must be a string if provided',
       'embed',
-      node.location?.start,
-      DirectiveErrorCode.VALIDATION_FAILED
+      {
+        location: node.location?.start,
+        code: DirectiveErrorCode.VALIDATION_FAILED
+      }
     );
   }
   
@@ -48,8 +54,10 @@ export function validateEmbedDirective(node: DirectiveNode): void {
       throw new MeldDirectiveError(
         'Embed directive "fuzzy" property must be a number between 0 and 1 if provided',
         'embed',
-        node.location?.start,
-        DirectiveErrorCode.VALIDATION_FAILED
+        {
+          location: node.location?.start,
+          code: DirectiveErrorCode.VALIDATION_FAILED
+        }
       );
     }
   }
@@ -58,8 +66,10 @@ export function validateEmbedDirective(node: DirectiveNode): void {
     throw new MeldDirectiveError(
       'Embed directive "format" property must be a string if provided',
       'embed',
-      node.location?.start,
-      DirectiveErrorCode.VALIDATION_FAILED
+      {
+        location: node.location?.start,
+        code: DirectiveErrorCode.VALIDATION_FAILED
+      }
     );
   }
 } 
