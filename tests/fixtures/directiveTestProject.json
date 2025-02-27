@@ -5,9 +5,9 @@
   ],
   "files": {
     "test.meld": "@text greeting = \"Hello\"",
-    "test-interpolation.meld": "@text greeting = \"Hello ${name}\"",
+    "test-interpolation.meld": "@text greeting = \"Hello {{name}}\"",
     "test-data.meld": "@data config = { \"key\": \"value\" }",
-    "test-data-interpolation.meld": "@data config = { \"greeting\": \"Hello ${user}\" }",
+    "test-data-interpolation.meld": "@data config = { \"greeting\": \"Hello {{user}}\" }",
     "module.meld": "@text greeting = \"Hello\"",
     "main.meld": "@import [module.meld]",
     "inner.meld": "@text greeting = \"Hello\"",

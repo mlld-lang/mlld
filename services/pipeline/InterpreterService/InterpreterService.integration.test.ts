@@ -118,7 +118,7 @@ describe('InterpreterService Integration', () => {
         if (error instanceof MeldInterpreterError) {
           // Verify error details
           expect(error.nodeType).toBe('Directive');
-          expect(error.message).toMatch(/Failed to process text directive/i);
+          expect(error.message).toMatch(/Directive error \(text\)/i);
           if (error.cause?.message) {
             expect(error.cause.message).toMatch(/Undefined variable: nonexistent/i);
           }
@@ -135,14 +135,14 @@ describe('InterpreterService Integration', () => {
 
   describe('Error handling', () => {
     it('handles circular imports', async () => {
-      // Create two files that import each other
-      await context.writeFile('project/src/circular1.meld', '@import [project/src/circular2.meld]');
-      await context.writeFile('project/src/circular2.meld', '@import [project/src/circular1.meld]');
+      // Create two files that import each other with proper path format
+      await context.writeFile('project/src/circular1.meld', '@import path = "$.project/src/circular2.meld"');
+      await context.writeFile('project/src/circular2.meld', '@import path = "$.project/src/circular1.meld"');
 
-      // Create import node for circular1
-      const node = context.factory.createImportDirective('project/src/circular1.meld', context.factory.createLocation(1, 1));
-      node.directive.path = 'project/src/circular1.meld';
-      node.directive.value = '[project/src/circular1.meld]';
+      // Create import node for circular1 with proper path format
+      const node = context.factory.createImportDirective('$.project/src/circular1.meld', context.factory.createLocation(1, 1));
+      node.directive.path = '$.project/src/circular1.meld';
+      node.directive.value = 'path = "$.project/src/circular1.meld" importList = "*"';
 
       try {
         await context.services.interpreter.interpret([node], {
@@ -262,14 +262,14 @@ describe('InterpreterService Integration', () => {
     });
 
     it('handles cleanup on circular imports', async () => {
-      // Create two files that import each other
-      await context.writeFile('project/src/circular1.meld', '@import [project/src/circular2.meld]');
-      await context.writeFile('project/src/circular2.meld', '@import [project/src/circular1.meld]');
+      // Create two files that import each other with proper path format
+      await context.writeFile('project/src/circular1.meld', '@import path = "$.project/src/circular2.meld"');
+      await context.writeFile('project/src/circular2.meld', '@import path = "$.project/src/circular1.meld"');
 
-      // Create import node for circular1
-      const node = context.factory.createImportDirective('project/src/circular1.meld', context.factory.createLocation(1, 1));
-      node.directive.path = 'project/src/circular1.meld';
-      node.directive.value = '[project/src/circular1.meld]';
+      // Create import node for circular1 with proper path format
+      const node = context.factory.createImportDirective('$.project/src/circular1.meld', context.factory.createLocation(1, 1));
+      node.directive.path = '$.project/src/circular1.meld';
+      node.directive.value = 'path = "$.project/src/circular1.meld" importList = "*"';
 
       try {
         await context.services.interpreter.interpret([node], {

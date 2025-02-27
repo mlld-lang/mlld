@@ -140,7 +140,7 @@ describe('FileSystemService', () => {
       const after = await context.snapshot.takeSnapshot();
       const diff = context.snapshot.compare(before, after);
 
-      expect(diff.modified).toContain('project/test.txt');
+      expect(diff.modified).toContain('/project/test.txt');
     });
 
     it('detects new files', async () => {
@@ -149,7 +149,7 @@ describe('FileSystemService', () => {
       const after = await context.snapshot.takeSnapshot();
       const diff = context.snapshot.compare(before, after);
 
-      expect(diff.added).toContain('project/new-file.txt');
+      expect(diff.added).toContain('/project/new-file.txt');
     });
 
     it('detects removed files', async () => {
