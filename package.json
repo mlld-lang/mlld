@@ -21,6 +21,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "test:summary": "oneshot --run 'npm test api/integration.test.ts' --task _meld/summarize-tests.md --system 'You read test results and output JSON' --model o3-mini",
     "lint": "eslint . --ext .ts",
     "clean": "rimraf dist",
     "prepublishOnly": "npm run clean && npm run build",
