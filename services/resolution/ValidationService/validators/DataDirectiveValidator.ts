@@ -1,40 +1,40 @@
-import { DirectiveNode, DirectiveData } from 'meld-spec';
+import { DirectiveNode, DataDirectiveData } from 'meld-spec';
 import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
 import { DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
-import { ErrorSeverity } from '@core/errors/MeldError.js';
 
 /**
  * Validates @data directives
  */
 export function validateDataDirective(node: DirectiveNode): void {
-  const directive = node.directive as DirectiveData;
+  const directive = node.directive as DataDirectiveData;
   
   // Validate identifier
   if (!directive.identifier || typeof directive.identifier !== 'string') {
     throw new MeldDirectiveError(
       'Data directive requires an "identifier" property (string)',
       'data',
-      {
-        location: node.location?.start,
-        code: DirectiveErrorCode.VALIDATION_FAILED,
-        severity: ErrorSeverity.Recoverable
-      }
+      node.location?.start,
+      DirectiveErrorCode.VALIDATION_FAILED
     );
   }
   
-  // NOTE: AST parser already validates the identifier format, so we don't need regex here
-  // If the identifier made it to the AST, it's already in the correct format
+  // Validate identifier format
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(directive.identifier)) {
+    throw new MeldDirectiveError(
+      'Data identifier must be a valid identifier (letters, numbers, underscore, starting with letter/underscore)',
+      'data',
+      node.location?.start,
+      DirectiveErrorCode.VALIDATION_FAILED
+    );
+  }
   
   // Validate value
   if (directive.value === undefined) {
     throw new MeldDirectiveError(
       'Data directive requires a value',
       'data',
-      {
-        location: node.location?.start,
-        code: DirectiveErrorCode.VALIDATION_FAILED,
-        severity: ErrorSeverity.Recoverable
-      }
+      node.location?.start,
+      DirectiveErrorCode.VALIDATION_FAILED
     );
   }
   
@@ -46,11 +46,8 @@ export function validateDataDirective(node: DirectiveNode): void {
       throw new MeldDirectiveError(
         'Invalid JSON string in data directive',
         'data',
-        {
-          location: node.location?.start,
-          code: DirectiveErrorCode.VALIDATION_FAILED,
-          severity: ErrorSeverity.Recoverable
-        }
+        node.location?.start,
+        DirectiveErrorCode.VALIDATION_FAILED
       );
     }
   }
@@ -62,11 +59,8 @@ export function validateDataDirective(node: DirectiveNode): void {
     throw new MeldDirectiveError(
       'Data value must be JSON-serializable',
       'data',
-      {
-        location: node.location?.start,
-        code: DirectiveErrorCode.VALIDATION_FAILED,
-        severity: ErrorSeverity.Recoverable
-      }
+      node.location?.start,
+      DirectiveErrorCode.VALIDATION_FAILED
     );
   }
 } 

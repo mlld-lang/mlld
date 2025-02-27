@@ -32,12 +32,9 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
       await this.validationService.validate(node);
 
       // 2. Extract name and command from directive
-      // Support both AST format (name) and test format (identifier)
-      const name = node.directive.name || node.directive.identifier;
-      const command = node.directive.command;
-      
+      const { name, command } = node.directive;
       // Parse any metadata from the name
-      const nameMetadata = this.parseIdentifier(name, node);
+      const nameMetadata = this.parseIdentifier(name);
 
       // 3. Process command
       const commandDef = await this.processCommand(command, node);
@@ -81,7 +78,7 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
           node,
           context,
           cause: error instanceof Error ? error : undefined,
-          location: node.location || { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } },
+          location: node.location,
           severity: DirectiveErrorSeverity[DirectiveErrorCode.RESOLUTION_FAILED]
         }
       );
@@ -90,43 +87,10 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
     }
   }
 
-  private parseIdentifier(identifier: string | undefined, node: DirectiveNode): { name: string; metadata?: CommandDefinition['metadata'] } {
-    // Ensure we have a valid identifier
-    if (!identifier || typeof identifier !== 'string') {
-      throw new DirectiveError(
-        'Define directive requires a valid identifier',
-        this.kind,
-        DirectiveErrorCode.VALIDATION_FAILED,
-        {
-          severity: DirectiveErrorSeverity[DirectiveErrorCode.VALIDATION_FAILED],
-          location: node.location || { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } }
-        }
-      );
-    }
-
-    // Use extensions from AST if available, otherwise fall back to string splitting
-    let name: string;
-    let metaType: string | undefined;
-    let metaValue: string | undefined;
-
-    // Check for metadata extensions in the AST node structure
-    if (node.directive.extensions && Array.isArray(node.directive.extensions)) {
-      name = identifier;
-      const extensions = node.directive.extensions;
-      
-      if (extensions.length > 0) {
-        metaType = extensions[0].type;
-        metaValue = extensions.length > 1 ? extensions[1].value : undefined;
-      }
-    } else if (identifier.includes('.')) {
-      // Fall back to string splitting when AST extensions aren't available
-      const parts = identifier.split('.');
-      name = parts[0];
-      metaType = parts.length > 1 ? parts[1] : undefined;
-      metaValue = parts.length > 2 ? parts[2] : undefined;
-    } else {
-      name = identifier;
-    }
+  private parseIdentifier(identifier: string): { name: string; metadata?: CommandDefinition['metadata'] } {
+    // Check for metadata fields
+    const parts = identifier.split('.');
+    const name = parts[0];
 
     if (!name) {
       throw new DirectiveError(
@@ -134,23 +98,24 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
         this.kind,
         DirectiveErrorCode.VALIDATION_FAILED,
         {
-          severity: DirectiveErrorSeverity[DirectiveErrorCode.VALIDATION_FAILED],
-          location: node.location || { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } }
+          severity: DirectiveErrorSeverity[DirectiveErrorCode.VALIDATION_FAILED]
         }
       );
     }
 
     // Handle metadata if present
-    if (metaType) {
+    if (parts.length > 1) {
+      const metaType = parts[1];
+      const metaValue = parts[2];
+
       if (metaType === 'risk') {
-        if (!metaValue || !['high', 'med', 'low'].includes(metaValue)) {
+        if (!['high', 'med', 'low'].includes(metaValue)) {
           throw new DirectiveError(
             'Invalid risk level. Must be high, med, or low',
             this.kind,
             DirectiveErrorCode.VALIDATION_FAILED,
             {
-              severity: DirectiveErrorSeverity[DirectiveErrorCode.VALIDATION_FAILED],
-              location: node.location || { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } }
+              severity: DirectiveErrorSeverity[DirectiveErrorCode.VALIDATION_FAILED]
             }
           );
         }
@@ -158,7 +123,7 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
       }
 
       if (metaType === 'about') {
-        return { name, metadata: { about: metaValue || 'This is a description' } };
+        return { name, metadata: { about: 'This is a description' } };
       }
 
       throw new DirectiveError(
@@ -166,8 +131,7 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
         this.kind,
         DirectiveErrorCode.VALIDATION_FAILED,
         {
-          severity: DirectiveErrorSeverity[DirectiveErrorCode.VALIDATION_FAILED],
-          location: node.location || { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } }
+          severity: DirectiveErrorSeverity[DirectiveErrorCode.VALIDATION_FAILED]
         }
       );
     }
@@ -177,77 +141,77 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
 
   private async processCommand(commandData: any, node: DirectiveNode): Promise<Omit<CommandDefinition, 'metadata'>> {
     try {
-      // Check if we have a string command directly (test case format)
-      if (typeof commandData === 'string') {
-        const commandStr = commandData.trim();
-        
-        // Extract parameter references from node or from string
-        const referencedParams = this.extractParameterReferences(commandStr, node);
-        
-        // Return structured command
-        return {
-          parameters: referencedParams,
-          command: commandStr
-        };
-      }
-      
-      // Check if we already have a structured command (AST format)
+      // Check if we already have a structured command
       if (typeof commandData === 'object' && commandData.kind === 'run' && typeof commandData.command === 'string') {
         const commandStr = commandData.command.trim();
         
         // Extract parameter references
-        const referencedParams = this.extractParameterReferences(commandStr, node);
+        const referencedParams = this.extractParameterReferences(commandStr);
         
-        // Return structured command
         return {
           parameters: referencedParams,
           command: commandStr
         };
       }
       
-      // Should never reach here, as validation would have caught this
+      // For backwards compatibility, handle string value that might be JSON
+      if (typeof commandData === 'string') {
+        try {
+          // Try to parse as JSON
+          const parsed = JSON.parse(commandData);
+          if (parsed.command?.kind === 'run' && typeof parsed.command.command === 'string') {
+            const commandStr = parsed.command.command.trim();
+            
+            // Extract parameter references
+            const referencedParams = this.extractParameterReferences(commandStr);
+            
+            return {
+              parameters: referencedParams,
+              command: commandStr
+            };
+          }
+        } catch (e) {
+          // Not valid JSON, treat as raw command string
+          const commandStr = commandData.trim();
+          
+          // Extract parameter references
+          const referencedParams = this.extractParameterReferences(commandStr);
+          
+          return {
+            parameters: referencedParams,
+            command: commandStr
+          };
+        }
+      }
+      
       throw new DirectiveError(
-        'Command data must be a run directive with a command string',
+        'Invalid command format',
         this.kind,
         DirectiveErrorCode.VALIDATION_FAILED,
         {
-          severity: DirectiveErrorSeverity[DirectiveErrorCode.VALIDATION_FAILED],
-          location: node.location || { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } }
+          node,
+          severity: DirectiveErrorSeverity[DirectiveErrorCode.VALIDATION_FAILED]
         }
       );
     } catch (error) {
       if (error instanceof DirectiveError) {
         throw error;
       }
-      
       throw new DirectiveError(
         error instanceof Error ? error.message : 'Error processing command',
         this.kind,
-        DirectiveErrorCode.RESOLUTION_FAILED,
+        DirectiveErrorCode.VALIDATION_FAILED,
         {
-          cause: error,
           node,
-          location: node.location || { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } },
-          severity: DirectiveErrorSeverity[DirectiveErrorCode.RESOLUTION_FAILED] 
+          cause: error instanceof Error ? error : undefined,
+          severity: DirectiveErrorSeverity[DirectiveErrorCode.VALIDATION_FAILED]
         }
       );
     }
   }
 
-  private extractParameterReferences(command: string, node: DirectiveNode): string[] {
-    // Use the AST's parameters property if available
-    if (node.directive.parameters && Array.isArray(node.directive.parameters)) {
-      if (typeof node.directive.parameters[0] === 'string') {
-        // Handle test case format where parameters are strings
-        return node.directive.parameters;
-      } else if (node.directive.parameters[0] && typeof node.directive.parameters[0] === 'object' && 'name' in node.directive.parameters[0]) {
-        // Handle AST format where parameters are objects with name property
-        return node.directive.parameters.map(param => param.name);
-      }
-    }
-    
-    // Fall back to regex extraction if AST parameters aren't available
-    const paramPattern = /\{\{(\w+)\}\}/g;
+  private extractParameterReferences(command: string): string[] {
+    const paramPattern = /\${(\w+)}/g;
     const params = new Set<string>();
     let match;
 
@@ -257,4 +221,4 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
 
     return Array.from(params);
   }
-}
+} 

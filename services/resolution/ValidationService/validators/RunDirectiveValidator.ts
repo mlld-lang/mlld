@@ -1,7 +1,6 @@
 import { DirectiveNode } from 'meld-spec';
 import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
 import { DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
-import { ErrorSeverity } from '@core/errors/MeldError.js';
 
 /**
  * Validates @run directives
@@ -9,25 +8,26 @@ import { ErrorSeverity } from '@core/errors/MeldError.js';
 export async function validateRunDirective(node: DirectiveNode): Promise<void> {
   const directive = node.directive;
   
-  // Extract command from the command property directly
-  // The AST parser should have already extracted the command from any [command] format
-  let command: string | undefined = directive.command;
+  // Extract command from either the command property or the value property
+  let command: string | undefined;
   
-  // As a fallback, try to use value if command is not available
-  if (!command && typeof directive.value === 'string') {
-    command = directive.value;
+  if (directive.command && typeof directive.command === 'string') {
+    command = directive.command;
+  } else if (typeof directive.value === 'string') {
+    // Check for [command] format
+    const match = directive.value.match(/^\[(.*)\]$/);
+    if (match) {
+      command = match[1];
+    }
   }
   
   // Validate command exists and is not empty
   if (!command) {
     throw new MeldDirectiveError(
-      'Run directive requires a command',
+      'Run directive requires a command (either as a property or in [command] format)',
       'run',
-      {
-        location: node.location?.start,
-        code: DirectiveErrorCode.VALIDATION_FAILED,
-        severity: ErrorSeverity.Recoverable
-      }
+      node.location?.start,
+      DirectiveErrorCode.VALIDATION_FAILED
     );
   }
   
@@ -35,11 +35,8 @@ export async function validateRunDirective(node: DirectiveNode): Promise<void> {
     throw new MeldDirectiveError(
       'Run directive command cannot be empty',
       'run',
-      {
-        location: node.location?.start,
-        code: DirectiveErrorCode.VALIDATION_FAILED,
-        severity: ErrorSeverity.Recoverable
-      }
+      node.location?.start,
+      DirectiveErrorCode.VALIDATION_FAILED
     );
   }
   
