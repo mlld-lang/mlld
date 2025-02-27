@@ -9,67 +9,16 @@
    - Added fallback manual extraction when llmxml fails
    - Added detailed logging and error messages
 
-3. **Command Execution Mocking** (Next)
+3. ✅ **Command Execution Mocking** (Fixed)
    - Implement proper mock command executor for tests
 
-4. **TestDebuggerService** (Medium)
+4. ✅ **TestDebuggerService** (Medium)
    - Fix state capture and null-checking
 
 5. **Path Validation in Tests** (Low)
    - Update fixtures to use proper path variables
 
-## Completed
-
-### Import Handling ✅
-**Issue:** Variables from imported files were not accessible in parent scope
-**Fix:** Modified ImportDirectiveHandler to use parent state directly instead of cloning
-**Validation:** Tests verify variables from nested imports are accessible in parent scope
-
-### Section Extraction ✅
-**Issue:** llmxml library failing to extract markdown sections properly
-**Fix:** Added manual section extraction fallback with better error reporting
-**Validation:** All embed tests passing with reliable section extraction
-
 ## Issues Requiring Investigation
-
-### Command Execution
-- Commands are not executing as expected
-- Seeing "Command not supported in test environment"
-- Need to implement a mock command executor for tests
-- Might need to adjust CommandResolver implementation for test environment
-
-**Investigation Results:**
-- The CommandResolver.ts has hardcoded fallbacks for test cases (lines 95-118) that return "Command not supported in test environment" instead of actually executing commands.
-- The test expectations were updated to match this behavior (expect the error message).
-- In production, commands would be executed by a real shell, but the tests need proper mocking.
-
-**Root Cause:** No proper command executor mock exists for the test environment, so commands return a placeholder message instead of simulated output.
-
-**Solution:** Implement a proper mock command executor for tests that can provide predefined responses for specific commands. This mock should be injected into the CommandResolver during test initialization to make tests more accurate and valuable.
-
-**Certainty:** 95% - The issue is clearly visible in the CommandResolver implementation and the test adjustments.
-
-### Embed Handling
-- Embeds aren't working correctly
-- Shows placeholder or fails to find sections
-- EmbedDirectiveHandler needs fixing for proper section extraction
-
-**Investigation Results:**
-- The EmbedDirectiveHandler implementation is sound but the section extraction functionality is failing.
-- The tests now expect a "Section not found" error when attempting to extract sections.
-- The ResolutionService.extractSection method (lines 520-561) relies on the llmxml library for section extraction.
-
-**Root Cause:** The section extraction in ResolutionService using llmxml is failing. This could be due to:
-1. Issues with the llmxml library integration
-2. Incompatible section format in test fixtures
-3. Incorrect parameters being passed to llmxml.getSection
-
-**Solution:** Debug the llmxml section extraction method call and fix the implementation to properly extract sections. Either:
-1. Update the llmxml usage to match its expected API
-2. Modify test section formats to match what llmxml expects
-3. Implement a fallback section extraction method using manual markdown heading detection
-
-**Certainty:** 90% - The issue is clearly in the section extraction functionality, but without detailed error logs from llmxml, it's difficult to pinpoint the exact cause.
 
 ### Format Transformation
 - Output formatting differs from expected
@@ -95,26 +44,6 @@
 
 **Certainty:** 85% - The tests clearly show output format discrepancies, but examining the actual vs. expected output would provide more certainty.
 
-### State Management
-- Debug capture system not working correctly
-- TypeError when accessing properties of undefined
-- File resolution issues
-
-**Investigation Results:**
-- The debug capture system test is now skipped with a comment about it being broken
-- The TestDebuggerService implementation appears complete but may not be properly connected to the state events
-- The test previously used context.startDebugSession/endDebugSession to track state changes
-- The TestDebuggerService is trying to capture textVars and dataVars from the state, but may not be capturing transformedNodes
-
-**Root Cause:** The TestDebuggerService likely isn't receiving proper state update notifications or isn't capturing all the required state properties, particularly transformedNodes. The service may also have structural incompatibilities with the current StateService implementation.
-
-**Solution:** 
-1. Ensure TestDebuggerService is properly integrated with StateEventService/StateService
-2. Add explicit capture of transformedNodes in TestDebuggerService.getStateSnapshot
-3. Check for any null/undefined values before accessing properties
-4. Add better error handling around the debug session API
-
-**Certainty:** 75% - The TestDebuggerService implementation shows it's capturing only textVars and dataVars but not transformedNodes or other properties that might be needed.
 
 ### Multi-file Projects Test Strategy
 - Current tests failing with path validation errors

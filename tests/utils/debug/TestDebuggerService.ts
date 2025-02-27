@@ -66,7 +66,9 @@ export class TestDebuggerService implements IStateDebuggerService {
     if (!this.isEnabled) return [];
     const analysis = {
       textVars: Array.from(this.state.getAllTextVars().entries()),
-      dataVars: Array.from(this.state.getAllDataVars().entries())
+      dataVars: Array.from(this.state.getAllDataVars().entries()),
+      nodes: this.state.getNodes(),
+      transformedNodes: this.state.getTransformedNodes()
     };
     this.recordOperation('analyzeState', { stateId, analysis });
     
@@ -104,7 +106,9 @@ export class TestDebuggerService implements IStateDebuggerService {
       format,
       timestamp: Date.now(),
       textVars: Array.from(this.state.getAllTextVars().entries()),
-      dataVars: Array.from(this.state.getAllDataVars().entries())
+      dataVars: Array.from(this.state.getAllDataVars().entries()),
+      nodes: this.state.getNodes(),
+      transformedNodes: this.state.getTransformedNodes()
     };
     this.snapshots.set(stateId, snapshot);
     this.recordOperation('snapshot', { stateId, format });
@@ -163,8 +167,18 @@ export class TestDebuggerService implements IStateDebuggerService {
 
   async captureState(label: string, data: any): Promise<void> {
     if (!this.isEnabled) return;
+    
+    // Capture data and operation
     this.recordOperation('captureState', { label, data });
-    await this.getStateSnapshot(label, 'full');
+    
+    // Take a snapshot but also include the provided data in it
+    const snapshot = await this.getStateSnapshot(label, 'full');
+    
+    // Merge the provided data with the snapshot
+    if (snapshot) {
+      const updatedSnapshot = { ...snapshot, capturedData: data };
+      this.snapshots.set(label, updatedSnapshot);
+    }
   }
 
   traceSimpleOperation(operation: string, data: any): void {
@@ -199,11 +213,13 @@ export class TestDebuggerService implements IStateDebuggerService {
     if (!this.isEnabled) return '';
     const stateData = {
       textVars: Array.from(this.state.getAllTextVars().entries()),
-      dataVars: Array.from(this.state.getAllDataVars().entries())
+      dataVars: Array.from(this.state.getAllDataVars().entries()),
+      nodes: this.state.getNodes(),
+      transformedNodes: this.state.getTransformedNodes()
     };
     this.recordOperation('visualizeState', { format, stateData });
     return format === 'mermaid' ? 
-      'graph TD\n  A[State] --> B[Variables]\n' :
-      'digraph { A [label="State"]; B [label="Variables"]; A -> B; }';
+      'graph TD\n  A[State] --> B[Variables]\n  A --> C[Nodes]\n  A --> D[TransformedNodes]\n' :
+      'digraph { A [label="State"]; B [label="Variables"]; C [label="Nodes"]; D [label="TransformedNodes"]; A -> B; A -> C; A -> D; }';
   }
 } 
