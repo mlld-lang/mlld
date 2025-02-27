@@ -20,6 +20,31 @@ import {
   ErrorCollector
 } from '@tests/utils';
 
+/**
+ * Create an Import directive node that matches the structure expected by the handler
+ */
+function createImportDirectiveNode(options: {
+  path: string;
+  importList?: string;
+  location?: ReturnType<typeof createLocation>;
+}): DirectiveNode {
+  const { path, importList = '*', location = createLocation(1, 1) } = options;
+  
+  // Format the directive structure as expected by the handler
+  return {
+    type: 'Directive',
+    directive: {
+      kind: 'import',
+      // For backward compatibility, we set both path and identifier/value
+      path,
+      importList,
+      identifier: 'import',
+      value: importList ? `path = "${path}" importList = "${importList}"` : `path = "${path}"`
+    },
+    location
+  } as DirectiveNode;
+}
+
 describe('ImportDirectiveHandler', () => {
   let handler: ImportDirectiveHandler;
   let validationService: IValidationService;
@@ -123,17 +148,19 @@ describe('ImportDirectiveHandler', () => {
       });
       
       // Mock file system for resolved paths
-      fileSystemService.exists.mockResolvedValue(true);
-      fileSystemService.readFile.mockResolvedValue('mock content');
-      parserService.parse.mockReturnValue([]);
-      interpreterService.interpret.mockResolvedValue(childState);
+      (fileSystemService.exists as unknown as { mockResolvedValue: Function }).mockResolvedValue(true);
+      (fileSystemService.readFile as unknown as { mockResolvedValue: Function }).mockResolvedValue('mock content');
+      (parserService.parse as unknown as { mockReturnValue: Function }).mockReturnValue([]);
+      (interpreterService.interpret as unknown as { mockResolvedValue: Function }).mockResolvedValue(childState);
     });
 
     it('should handle $. alias for project path', async () => {
-      const node = createImportDirective('*', createLocation(1, 1));
-      node.directive.path = '$./test.meld';
-      node.directive.importList = '*';
-      const context = { filePath: '/some/path', state: stateService };
+      const node = createImportDirectiveNode({
+        path: '$./test.meld',
+        importList: '*'
+      });
+      
+      const context = { currentFilePath: '/some/path', state: stateService };
 
       await handler.execute(node, context);
 
@@ -145,10 +172,12 @@ describe('ImportDirectiveHandler', () => {
     });
 
     it('should handle $PROJECTPATH for project path', async () => {
-      const node = createImportDirective('*', createLocation(1, 1));
-      node.directive.path = '$PROJECTPATH/test.meld';
-      node.directive.importList = '*';
-      const context = { filePath: '/some/path', state: stateService };
+      const node = createImportDirectiveNode({
+        path: '$PROJECTPATH/test.meld',
+        importList: '*'
+      });
+      
+      const context = { currentFilePath: '/some/path', state: stateService };
 
       await handler.execute(node, context);
 
@@ -160,10 +189,12 @@ describe('ImportDirectiveHandler', () => {
     });
 
     it('should handle $~ alias for home path', async () => {
-      const node = createImportDirective('*', createLocation(1, 1));
-      node.directive.path = '$~/test.meld';
-      node.directive.importList = '*';
-      const context = { filePath: '/some/path', state: stateService };
+      const node = createImportDirectiveNode({
+        path: '$~/test.meld',
+        importList: '*'
+      });
+      
+      const context = { currentFilePath: '/some/path', state: stateService };
 
       await handler.execute(node, context);
 
@@ -175,10 +206,12 @@ describe('ImportDirectiveHandler', () => {
     });
 
     it('should handle $HOMEPATH for home path', async () => {
-      const node = createImportDirective('*', createLocation(1, 1));
-      node.directive.path = '$HOMEPATH/test.meld';
-      node.directive.importList = '*';
-      const context = { filePath: '/some/path', state: stateService };
+      const node = createImportDirectiveNode({
+        path: '$HOMEPATH/test.meld',
+        importList: '*'
+      });
+      
+      const context = { currentFilePath: '/some/path', state: stateService };
 
       await handler.execute(node, context);
 
@@ -190,11 +223,14 @@ describe('ImportDirectiveHandler', () => {
     });
 
     it('should throw error if resolved path does not exist', async () => {
-      fileSystemService.exists.mockResolvedValue(false);
-      const node = createImportDirective('*', createLocation(1, 1));
-      node.directive.path = '$./nonexistent.meld';
-      node.directive.importList = '*';
-      const context = { filePath: '/some/path', state: stateService };
+      (fileSystemService.exists as unknown as { mockResolvedValue: Function }).mockResolvedValue(false);
+      
+      const node = createImportDirectiveNode({
+        path: '$./nonexistent.meld',
+        importList: '*'
+      });
+      
+      const context = { currentFilePath: '/some/path', state: stateService };
 
       await expect(handler.execute(node, context))
         .rejects
@@ -204,9 +240,11 @@ describe('ImportDirectiveHandler', () => {
 
   describe('basic importing', () => {
     it('should import all variables with *', async () => {
-      const node = createImportDirective('vars.meld', createLocation(1, 1));
-      node.directive.path = 'vars.meld';
-      node.directive.importList = '*';
+      const node = createImportDirectiveNode({
+        path: 'vars.meld',
+        importList: '*'
+      });
+      
       const context = { currentFilePath: 'test.meld', state: stateService };
 
       vi.mocked(resolutionService.resolveInContext).mockResolvedValueOnce('vars.meld');
@@ -236,29 +274,23 @@ describe('ImportDirectiveHandler', () => {
     });
 
     it('should import specific variables', async () => {
-      const node = createImportDirective('vars.meld', createLocation(1, 1));
-      node.directive.path = 'vars.meld';
-      node.directive.importList = 'var1, var2 as alias2';
+      const node = createImportDirectiveNode({
+        path: 'vars.meld',
+        importList: 'var1, var2 as alias2'
+      });
+      
       const context = { currentFilePath: 'test.meld', state: stateService };
 
       vi.mocked(resolutionService.resolveInContext).mockResolvedValueOnce('vars.meld');
       vi.mocked(fileSystemService.exists).mockResolvedValueOnce(true);
       vi.mocked(fileSystemService.readFile).mockResolvedValueOnce('# Variables');
       
-      // Mock parsing the import list
-      vi.mocked(parserService.parse)
-        .mockResolvedValueOnce([]) // For file content
-        .mockResolvedValueOnce([{
-          type: 'Directive',
-          directive: {
-            kind: 'import',
-            imports: [
-              { name: 'var1' },
-              { name: 'var2', alias: 'alias2' }
-            ]
-          }
-        }]); // For import list parsing
-
+      // Mock parseImportList behavior
+      vi.spyOn(handler as any, 'parseImportList').mockReturnValueOnce([
+        { name: 'var1' },
+        { name: 'var2', alias: 'alias2' }
+      ]);
+      
       vi.mocked(interpreterService.interpret).mockResolvedValueOnce(childState);
 
       // Mock variables in the child state
@@ -274,17 +306,21 @@ describe('ImportDirectiveHandler', () => {
     });
 
     it('should handle invalid import list syntax', async () => {
-      const node = createImportDirective('vars.meld', createLocation(1, 1));
-      node.directive.path = 'vars.meld';
-      node.directive.importList = 'invalid syntax';
+      const node = createImportDirectiveNode({
+        path: 'vars.meld',
+        importList: 'invalid syntax'
+      });
+      
       const context = { currentFilePath: 'test.meld', state: stateService };
 
       vi.mocked(resolutionService.resolveInContext).mockResolvedValueOnce('vars.meld');
       vi.mocked(fileSystemService.exists).mockResolvedValueOnce(true);
       vi.mocked(fileSystemService.readFile).mockResolvedValueOnce('# Variables');
-      vi.mocked(parserService.parse)
-        .mockResolvedValueOnce([]) // For file content
-        .mockRejectedValueOnce(new Error('Parse error')); // For import list parsing
+      
+      // Mock parseImportList to throw error
+      vi.spyOn(handler as any, 'parseImportList').mockImplementationOnce(() => {
+        throw new Error('Parse error');
+      });
 
       await expect(handler.execute(node, context)).rejects.toThrow(DirectiveError);
       expect(circularityService.endImport).toHaveBeenCalled();
@@ -293,11 +329,16 @@ describe('ImportDirectiveHandler', () => {
 
   describe('error handling', () => {
     it('should handle validation errors', async () => {
-      const node = createImportDirective('', createLocation(1, 1));
+      const node = createImportDirectiveNode({
+        path: '',
+      });
+      
       const context = { currentFilePath: 'test.meld', state: stateService };
 
       vi.mocked(validationService.validate).mockImplementationOnce(() => {
-        throw new DirectiveError('Invalid import', 'import');
+        throw new DirectiveError('Invalid import', 'import', DirectiveErrorCode.VALIDATION_FAILED, {
+          node
+        });
       });
 
       await expect(handler.execute(node, context)).rejects.toThrow(DirectiveError);
@@ -305,8 +346,11 @@ describe('ImportDirectiveHandler', () => {
 
     it('should handle variable not found appropriately', async () => {
       // Arrange
-      const node = createImportDirective('{{nonexistent}}');
-      const context = { filePath: '/some/path', state: stateService };
+      const node = createImportDirectiveNode({
+        path: '{{nonexistent}}'
+      });
+      
+      const context = { currentFilePath: '/some/path', state: stateService };
       
       // Mock resolution service to throw a resolution error
       vi.mocked(resolutionService.resolveInContext).mockRejectedValueOnce(
@@ -321,29 +365,35 @@ describe('ImportDirectiveHandler', () => {
 
       // Act & Assert - Should throw in strict mode
       await expect(
-        handler.execute(node, { ...context, strict: true })
+        handler.execute(node, { ...context, strict: true } as any)
       ).rejects.toThrow(DirectiveError);
     });
 
     it('should handle file not found appropriately', async () => {
       // Arrange
-      const node = createImportDirective('missing.meld');
-      const context = { filePath: '/some/path', state: stateService };
+      const node = createImportDirectiveNode({
+        path: 'missing.meld'
+      });
+      
+      const context = { currentFilePath: '/some/path', state: stateService };
       
       // Mock resolution service to return the file path
       vi.mocked(resolutionService.resolveInContext).mockResolvedValueOnce('missing.meld');
       
       // Mock file system service to return false for exists check
-      vi.mocked(fileSystemService.exists).mockResolvedValueOnce(false);
+      (fileSystemService.exists as unknown as { mockResolvedValueOnce: Function }).mockResolvedValueOnce(false);
 
       // Act & Assert - Should throw in strict mode
       await expect(
-        handler.execute(node, { ...context, strict: true })
+        handler.execute(node, { ...context, strict: true } as any)
       ).rejects.toThrow(DirectiveError);
     });
 
     it('should handle circular imports', async () => {
-      const node = createImportDirective('[circular.meld]', createLocation(1, 1));
+      const node = createImportDirectiveNode({
+        path: 'circular.meld'
+      });
+      
       const context = {
         currentFilePath: 'test.meld',
         state: stateService,
@@ -351,20 +401,30 @@ describe('ImportDirectiveHandler', () => {
       };
 
       vi.mocked(circularityService.beginImport).mockImplementation(() => {
-        throw new DirectiveError('Circular import detected', 'import', DirectiveErrorCode.CIRCULAR_REFERENCE);
+        throw new DirectiveError(
+          'Circular import detected', 
+          'import', 
+          DirectiveErrorCode.CIRCULAR_REFERENCE,
+          { node, context }
+        );
       });
 
       await expect(handler.execute(node, context)).rejects.toThrow(DirectiveError);
     });
 
     it('should handle parse errors', async () => {
-      const node = createImportDirective('[invalid.meld]', createLocation(1, 1));
+      const node = createImportDirectiveNode({
+        path: 'invalid.meld'
+      });
+      
       const context = {
         currentFilePath: 'test.meld',
         state: stateService,
         parentState: undefined
       };
 
+      vi.mocked(resolutionService.resolveInContext).mockResolvedValueOnce('invalid.meld');
+      vi.mocked(fileSystemService.exists).mockResolvedValueOnce(true);
       vi.mocked(fileSystemService.readFile).mockResolvedValue('invalid content');
       vi.mocked(parserService.parse).mockRejectedValue(new Error('Parse error'));
 
@@ -372,13 +432,18 @@ describe('ImportDirectiveHandler', () => {
     });
 
     it('should handle interpretation errors', async () => {
-      const node = createImportDirective('[error.meld]', createLocation(1, 1));
+      const node = createImportDirectiveNode({
+        path: 'error.meld'
+      });
+      
       const context = {
         currentFilePath: 'test.meld',
         state: stateService,
         parentState: undefined
       };
 
+      vi.mocked(resolutionService.resolveInContext).mockResolvedValueOnce('error.meld');
+      vi.mocked(fileSystemService.exists).mockResolvedValueOnce(true);
       vi.mocked(fileSystemService.readFile).mockResolvedValue('content');
       vi.mocked(parserService.parse).mockResolvedValue([]);
       vi.mocked(interpreterService.interpret).mockRejectedValue(new Error('Interpretation error'));
@@ -389,8 +454,10 @@ describe('ImportDirectiveHandler', () => {
 
   describe('cleanup', () => {
     it('should always end import tracking', async () => {
-      const node = createImportDirective('error.meld', createLocation(1, 1));
-      node.directive.path = 'error.meld';
+      const node = createImportDirectiveNode({
+        path: 'error.meld'
+      });
+      
       const context = { currentFilePath: 'test.meld', state: stateService };
 
       vi.mocked(resolutionService.resolveInContext).mockResolvedValueOnce('error.meld');
