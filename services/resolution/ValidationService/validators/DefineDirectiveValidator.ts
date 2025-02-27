@@ -1,7 +1,7 @@
 import { DirectiveNode } from 'meld-spec';
 import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
 import { DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
-import { isValidFunctionName } from '../utils/IdentifierValidator.js';
+import { ErrorSeverity } from '@core/errors/MeldError.js';
 
 /**
  * Validates @define directives
@@ -16,62 +16,57 @@ export function validateDefineDirective(node: DirectiveNode): void {
       'define',
       { 
         location: node.location?.start,
-        code: DirectiveErrorCode.VALIDATION_FAILED 
+        code: DirectiveErrorCode.VALIDATION_FAILED,
+        severity: ErrorSeverity.Recoverable
       }
     );
   }
   
-  // Check if it's a basic name or a name with risk annotation
-  const nameParts = directive.name.split('.');
-  
-  // Basic validation for the function name part
-  if (!isValidFunctionName(nameParts[0])) {
-    throw new MeldDirectiveError(
-      'Invalid define directive name format',
-      'define',
-      { 
-        location: node.location?.start,
-        code: DirectiveErrorCode.VALIDATION_FAILED 
+  // Check if it has risk or about annotations
+  // The AST should provide extensions directly if possible, but if not available:
+  if (directive.name.includes('.')) {
+    const nameParts = directive.name.split('.');
+    
+    // If there are extensions (like risk annotations), validate them
+    if (nameParts.length > 1) {
+      // First extension must be 'risk' or 'about'
+      if (nameParts[1] !== 'risk' && nameParts[1] !== 'about') {
+        throw new MeldDirectiveError(
+          'Define directive name extension must be "risk" or "about"',
+          'define',
+          { 
+            location: node.location?.start,
+            code: DirectiveErrorCode.VALIDATION_FAILED,
+            severity: ErrorSeverity.Recoverable
+          }
+        );
       }
-    );
-  }
-  
-  // If there are extensions (like risk annotations), validate them
-  if (nameParts.length > 1) {
-    // First extension must be 'risk' or 'about'
-    if (nameParts[1] !== 'risk' && nameParts[1] !== 'about') {
-      throw new MeldDirectiveError(
-        'Define directive name extension must be "risk" or "about"',
-        'define',
-        { 
-          location: node.location?.start,
-          code: DirectiveErrorCode.VALIDATION_FAILED 
-        }
-      );
-    }
-    
-    // If there's a third part (risk level), it must be high, med, or low
-    if (nameParts.length > 2 && !['high', 'med', 'low'].includes(nameParts[2])) {
-      throw new MeldDirectiveError(
-        'Risk level must be "high", "med", or "low"',
-        'define',
-        { 
-          location: node.location?.start,
-          code: DirectiveErrorCode.VALIDATION_FAILED 
-        }
-      );
-    }
-    
-    // No more than 3 parts allowed
-    if (nameParts.length > 3) {
-      throw new MeldDirectiveError(
-        'Define directive name cannot have more than 3 parts',
-        'define',
-        { 
-          location: node.location?.start,
-          code: DirectiveErrorCode.VALIDATION_FAILED 
-        }
-      );
+      
+      // If there's a third part (risk level), it must be high, med, or low
+      if (nameParts.length > 2 && !['high', 'med', 'low'].includes(nameParts[2])) {
+        throw new MeldDirectiveError(
+          'Risk level must be "high", "med", or "low"',
+          'define',
+          { 
+            location: node.location?.start,
+            code: DirectiveErrorCode.VALIDATION_FAILED,
+            severity: ErrorSeverity.Recoverable
+          }
+        );
+      }
+      
+      // No more than 3 parts allowed
+      if (nameParts.length > 3) {
+        throw new MeldDirectiveError(
+          'Define directive name cannot have more than 3 parts',
+          'define',
+          { 
+            location: node.location?.start,
+            code: DirectiveErrorCode.VALIDATION_FAILED,
+            severity: ErrorSeverity.Recoverable
+          }
+        );
+      }
     }
   }
 
@@ -82,7 +77,8 @@ export function validateDefineDirective(node: DirectiveNode): void {
       'define',
       { 
         location: node.location?.start,
-        code: DirectiveErrorCode.VALIDATION_FAILED 
+        code: DirectiveErrorCode.VALIDATION_FAILED,
+        severity: ErrorSeverity.Recoverable
       }
     );
   }
@@ -94,7 +90,8 @@ export function validateDefineDirective(node: DirectiveNode): void {
       'define',
       { 
         location: node.location?.start,
-        code: DirectiveErrorCode.VALIDATION_FAILED 
+        code: DirectiveErrorCode.VALIDATION_FAILED,
+        severity: ErrorSeverity.Recoverable
       }
     );
   }
@@ -106,7 +103,8 @@ export function validateDefineDirective(node: DirectiveNode): void {
       'define',
       { 
         location: node.location?.start,
-        code: DirectiveErrorCode.VALIDATION_FAILED 
+        code: DirectiveErrorCode.VALIDATION_FAILED,
+        severity: ErrorSeverity.Recoverable
       }
     );
   }

@@ -16,8 +16,9 @@ async function runDiagnostics() {
     define: '@define command = @run [echo hello]\n',
     embed: '@embed [$PROJECTPATH/docs/somefile.md]\n',
     embed: '@text test = "test" \n\n @embed [${test}]\n',
-    codefence: `${backtickFence}\nsomecode\n${backtickFence}\n`,
-    textcontent: `this is just a regular line of text`
+    define: `@define command = @run [npm run test {{var1}}, {{var2}}]`,
+    codefence: `${backtickFence}javascript\nsomecode() {\n  console.log("Hello, world!")\n}\n}\n${backtickFence}\n`,
+    textcontent: `this is just a regular line of content text\n\nand another\n\nand another just for good measure!`
   };
 
   // Options for the parser

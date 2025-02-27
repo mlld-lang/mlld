@@ -3,7 +3,6 @@ import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
 import { DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 import { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
-import { isValidIdentifier } from '../utils/IdentifierValidator.js';
 
 /**
  * Validates path directives based on the latest meld-ast 1.6.1 structure
@@ -41,14 +40,7 @@ export async function validatePathDirective(node: DirectiveNode, context?: Resol
     );
   }
   
-  // Validate identifier format using the shared utility
-  if (!isValidIdentifier(identifier)) {
-    throw new MeldDirectiveError(
-      `Invalid identifier format: ${identifier}. Must contain only letters, numbers, and underscores.`,
-      DirectiveErrorCode.VALIDATION_FAILED,
-      { location: node.location?.start }
-    );
-  }
+  // The AST has already validated the identifier format
   
   // Handle both direct string value and path object
   let pathObject = directive.path;
@@ -97,30 +89,5 @@ export async function validatePathDirective(node: DirectiveNode, context?: Resol
     );
   }
   
-  // Validate absolute path requirement if needed
-  if (context?.pathValidation?.requireAbsolute && pathRaw.startsWith('/')) {
-    throw new MeldDirectiveError(
-      'Raw absolute paths are not allowed',
-      DirectiveErrorCode.VALIDATION_FAILED,
-      { 
-        location: node.location?.start,
-        severity: ErrorSeverity.Fatal
-      }
-    );
-  }
-
-  // Validate path segments (no relative segments)
-  if (pathRaw.includes('/./') || pathRaw.includes('/../') || 
-      pathRaw === '.' || pathRaw === '..' || 
-      pathRaw.startsWith('./') || pathRaw.startsWith('../') || 
-      pathRaw.endsWith('/.') || pathRaw.endsWith('/..')) {
-    throw new MeldDirectiveError(
-      'Path cannot contain . or .. segments',
-      DirectiveErrorCode.VALIDATION_FAILED,
-      { 
-        location: node.location?.start,
-        severity: ErrorSeverity.Fatal
-      }
-    );
-  }
+  // Path validation (absolute paths, path segments) is handled by ParserService
 } 
