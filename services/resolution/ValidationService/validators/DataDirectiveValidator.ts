@@ -1,6 +1,7 @@
 import { DirectiveNode } from 'meld-spec';
 import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
 import { DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
+import { ErrorSeverity } from '@core/errors/MeldError.js';
 
 // Define interface matching the meld-ast structure for data directives
 interface DataDirectiveData {
@@ -11,7 +12,7 @@ interface DataDirectiveData {
 }
 
 /**
- * Validates @data directives
+ * Validates @data directives using AST-based approaches
  */
 export function validateDataDirective(node: DirectiveNode): void {
   const directive = node.directive as DataDirectiveData;
@@ -23,19 +24,23 @@ export function validateDataDirective(node: DirectiveNode): void {
       'data',
       {
         location: node.location?.start,
-        code: DirectiveErrorCode.VALIDATION_FAILED
+        code: DirectiveErrorCode.VALIDATION_FAILED,
+        severity: ErrorSeverity.Fatal
       }
     );
   }
   
-  // Validate identifier format
-  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(directive.identifier)) {
+  // Validate identifier format using character-by-character validation
+  // instead of regex
+  const isValid = isValidIdentifier(directive.identifier);
+  if (!isValid) {
     throw new MeldDirectiveError(
       'Data identifier must be a valid identifier (letters, numbers, underscore, starting with letter/underscore)',
       'data',
       {
         location: node.location?.start,
-        code: DirectiveErrorCode.VALIDATION_FAILED
+        code: DirectiveErrorCode.VALIDATION_FAILED,
+        severity: ErrorSeverity.Fatal
       }
     );
   }
@@ -47,7 +52,8 @@ export function validateDataDirective(node: DirectiveNode): void {
       'data',
       {
         location: node.location?.start,
-        code: DirectiveErrorCode.VALIDATION_FAILED
+        code: DirectiveErrorCode.VALIDATION_FAILED,
+        severity: ErrorSeverity.Fatal
       }
     );
   }
@@ -59,7 +65,8 @@ export function validateDataDirective(node: DirectiveNode): void {
       'data',
       {
         location: node.location?.start,
-        code: DirectiveErrorCode.VALIDATION_FAILED
+        code: DirectiveErrorCode.VALIDATION_FAILED,
+        severity: ErrorSeverity.Fatal
       }
     );
   }
@@ -75,7 +82,8 @@ export function validateDataDirective(node: DirectiveNode): void {
         'data',
         {
           location: node.location?.start,
-          code: DirectiveErrorCode.VALIDATION_FAILED
+          code: DirectiveErrorCode.VALIDATION_FAILED,
+          severity: ErrorSeverity.Fatal
         }
       );
     }
@@ -90,8 +98,33 @@ export function validateDataDirective(node: DirectiveNode): void {
       'data',
       {
         location: node.location?.start,
-        code: DirectiveErrorCode.VALIDATION_FAILED
+        code: DirectiveErrorCode.VALIDATION_FAILED,
+        severity: ErrorSeverity.Fatal
       }
     );
   }
+}
+
+/**
+ * Helper function to validate identifier format without regex
+ */
+function isValidIdentifier(str: string): boolean {
+  if (!str || str.length === 0) return false;
+  
+  // First character must be letter or underscore
+  const firstChar = str.charAt(0);
+  if (!(firstChar === '_' || (firstChar >= 'a' && firstChar <= 'z') || (firstChar >= 'A' && firstChar <= 'Z'))) {
+    return false;
+  }
+  
+  // Rest of characters must be letters, numbers, or underscore
+  for (let i = 1; i < str.length; i++) {
+    const char = str.charAt(i);
+    if (!((char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') || 
+          (char >= '0' && char <= '9') || char === '_')) {
+      return false;
+    }
+  }
+  
+  return true;
 } 

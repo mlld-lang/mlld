@@ -3,7 +3,7 @@ import { MeldError, ErrorSeverity } from '@core/errors/MeldError.js';
 import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
 import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
 import { MeldInterpreterError } from '@core/errors/MeldInterpreterError.js';
-import { DirectiveError } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
+import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 
 /**
  * Error handler that collects errors for testing
@@ -182,5 +182,175 @@ export function expectResolutionErrorWithDetails(
   // Check that all expected details are present
   for (const [key, value] of Object.entries(details)) {
     expect(resolutionError.details?.[key]).toEqual(value);
+  }
+}
+
+/**
+ * Error testing configuration options
+ */
+export interface ErrorTestOptions {
+  /**
+   * The expected error type (class name)
+   */
+  type?: string;
+  
+  /**
+   * The expected error code
+   */
+  code?: string;
+  
+  /**
+   * The expected error severity
+   */
+  severity?: ErrorSeverity;
+  
+  /**
+   * Whether the error message should contain this substring
+   */
+  messageContains?: string;
+  
+  /**
+   * The exact error message to match
+   */
+  exactMessage?: string;
+  
+  /**
+   * The directive kind for MeldDirectiveError
+   */
+  directiveKind?: string;
+  
+  /**
+   * Whether the error should have a location
+   */
+  hasLocation?: boolean;
+}
+
+/**
+ * Checks if an error matches the expected configuration
+ * This provides more resilient error testing by focusing on properties
+ * rather than exact message strings
+ * 
+ * @param error The error to check
+ * @param options The expected error configuration
+ * @returns void
+ * @throws Test assertion error if the error doesn't match expectations
+ */
+export function checkError(error: unknown, options: ErrorTestOptions): void {
+  // Verify the error is an object
+  expect(error).toBeInstanceOf(Object);
+  
+  // Check error type
+  if (options.type) {
+    expect(error.constructor.name).toBe(options.type);
+  }
+  
+  // Handle MeldError specific checks
+  if (error instanceof MeldError) {
+    if (options.code) {
+      expect(error.code).toBe(options.code);
+    }
+    
+    if (options.severity) {
+      expect(error.severity).toBe(options.severity);
+    }
+    
+    if (options.messageContains) {
+      expect(error.message).toContain(options.messageContains);
+    }
+    
+    if (options.exactMessage) {
+      expect(error.message).toBe(options.exactMessage);
+    }
+  }
+  
+  // Handle MeldDirectiveError specific checks
+  if (error instanceof MeldDirectiveError) {
+    if (options.directiveKind) {
+      expect(error.directiveKind).toBe(options.directiveKind);
+    }
+    
+    if (options.hasLocation) {
+      expect(error.location).toBeDefined();
+      expect(error.location?.line).toBeGreaterThanOrEqual(0);
+      expect(error.location?.column).toBeGreaterThanOrEqual(0);
+    }
+  }
+}
+
+/**
+ * Convenience function to check if an error is a validation error
+ */
+export function expectValidationError(error: unknown): void {
+  checkError(error, {
+    type: 'MeldDirectiveError',
+    code: DirectiveErrorCode.VALIDATION_FAILED,
+    severity: ErrorSeverity.Fatal
+  });
+}
+
+/**
+ * Helper to easily assert a specific directive validation error
+ */
+export function expectDirectiveValidationError(
+  error: unknown, 
+  directiveKind: string, 
+  messageContains?: string
+): void {
+  checkError(error, {
+    type: 'MeldDirectiveError',
+    code: DirectiveErrorCode.VALIDATION_FAILED,
+    severity: ErrorSeverity.Fatal,
+    directiveKind,
+    messageContains,
+    hasLocation: true
+  });
+}
+
+/**
+ * Async wrapper to test functions that should throw errors
+ * This makes tests more readable than try/catch blocks
+ * 
+ * @param fn Function that should throw an error
+ * @param options Options to verify the thrown error
+ * @returns Promise that resolves when the test passes
+ */
+export async function expectToThrowWithConfig(
+  fn: () => Promise<any>, 
+  options: ErrorTestOptions
+): Promise<void> {
+  try {
+    await fn();
+    // If we get here, the function didn't throw
+    expect.fail('Expected function to throw an error');
+  } catch (error) {
+    // Check if this is an assertion error from expect.fail
+    if (error.name === 'AssertionError') {
+      throw error;
+    }
+    
+    // Otherwise check the actual error
+    checkError(error, options);
+  }
+}
+
+/**
+ * Sync version of expectToThrowWithConfig
+ */
+export function expectToThrowWithConfigSync(
+  fn: () => any, 
+  options: ErrorTestOptions
+): void {
+  try {
+    fn();
+    // If we get here, the function didn't throw
+    expect.fail('Expected function to throw an error');
+  } catch (error) {
+    // Check if this is an assertion error from expect.fail
+    if (error.name === 'AssertionError') {
+      throw error;
+    }
+    
+    // Otherwise check the actual error
+    checkError(error, options);
   }
 } 

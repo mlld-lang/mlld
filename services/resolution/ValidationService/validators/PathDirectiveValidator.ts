@@ -17,12 +17,9 @@ function convertLocation(location: any): DirectiveLocation {
 
 /**
  * Validates path directives based on the latest meld-ast structure
+ * Uses AST-based validation instead of regex
  */
 export async function validatePathDirective(node: DirectiveNode, context?: ResolutionContext): Promise<void> {
-  // Debug: Log the node structure
-  console.log('*** VALIDATOR: DIRECTIVE NODE STRUCTURE ***');
-  console.log(JSON.stringify(node, null, 2));
-  
   if (!node.directive) {
     throw new MeldDirectiveError(
       'Path directive is missing required fields',
@@ -30,15 +27,10 @@ export async function validatePathDirective(node: DirectiveNode, context?: Resol
       {
         location: convertLocation(node.location?.start),
         code: DirectiveErrorCode.VALIDATION_FAILED,
-        severity: ErrorSeverity.Recoverable
+        severity: ErrorSeverity.Fatal
       }
     );
   }
-  
-  // Log the directive properties for debugging
-  console.log('*** VALIDATOR: DIRECTIVE PROPERTIES ***');
-  console.log('Properties:', Object.keys(node.directive));
-  console.log('Full directive:', JSON.stringify(node.directive, null, 2));
   
   // Cast to PathDirectiveData to access typed properties
   const directive = node.directive as PathDirectiveData;
@@ -54,20 +46,21 @@ export async function validatePathDirective(node: DirectiveNode, context?: Resol
       {
         location: convertLocation(node.location?.start),
         code: DirectiveErrorCode.VALIDATION_FAILED,
-        severity: ErrorSeverity.Recoverable
+        severity: ErrorSeverity.Fatal
       }
     );
   }
   
-  // Validate identifier format - must start with letter or underscore and contain only letters, numbers, and underscores
-  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(identifier)) {
+  // Validate identifier format using character-by-character validation
+  // instead of regex
+  if (!isValidIdentifier(identifier)) {
     throw new MeldDirectiveError(
       'Path identifier must be a valid identifier (letters, numbers, underscore, starting with letter/underscore)',
       'path',
       {
         location: convertLocation(node.location?.start),
         code: DirectiveErrorCode.VALIDATION_FAILED,
-        severity: ErrorSeverity.Recoverable
+        severity: ErrorSeverity.Fatal
       }
     );
   }
@@ -89,7 +82,7 @@ export async function validatePathDirective(node: DirectiveNode, context?: Resol
         {
           location: convertLocation(node.location?.start),
           code: DirectiveErrorCode.VALIDATION_FAILED,
-          severity: ErrorSeverity.Recoverable
+          severity: ErrorSeverity.Fatal
         }
       );
     }
@@ -105,7 +98,7 @@ export async function validatePathDirective(node: DirectiveNode, context?: Resol
         {
           location: convertLocation(node.location?.start),
           code: DirectiveErrorCode.VALIDATION_FAILED,
-          severity: ErrorSeverity.Recoverable
+          severity: ErrorSeverity.Fatal
         }
       );
     }
@@ -117,7 +110,7 @@ export async function validatePathDirective(node: DirectiveNode, context?: Resol
       {
         location: convertLocation(node.location?.start),
         code: DirectiveErrorCode.VALIDATION_FAILED,
-        severity: ErrorSeverity.Recoverable
+        severity: ErrorSeverity.Fatal
       }
     );
   }
@@ -130,10 +123,34 @@ export async function validatePathDirective(node: DirectiveNode, context?: Resol
       {
         location: convertLocation(node.location?.start),
         code: DirectiveErrorCode.VALIDATION_FAILED,
-        severity: ErrorSeverity.Recoverable
+        severity: ErrorSeverity.Fatal
       }
     );
   }
   
   // Path validation (absolute paths, path segments) is handled by ParserService
+}
+
+/**
+ * Helper function to validate identifier format without regex
+ */
+function isValidIdentifier(str: string): boolean {
+  if (!str || str.length === 0) return false;
+  
+  // First character must be letter or underscore
+  const firstChar = str.charAt(0);
+  if (!(firstChar === '_' || (firstChar >= 'a' && firstChar <= 'z') || (firstChar >= 'A' && firstChar <= 'Z'))) {
+    return false;
+  }
+  
+  // Rest of characters must be letters, numbers, or underscore
+  for (let i = 1; i < str.length; i++) {
+    const char = str.charAt(i);
+    if (!((char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') || 
+          (char >= '0' && char <= '9') || char === '_')) {
+      return false;
+    }
+  }
+  
+  return true;
 } 

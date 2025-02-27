@@ -12,6 +12,11 @@ import {
 } from '@tests/utils/testFactories.js';
 import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
 import { ErrorSeverity, MeldError } from '@core/errors/MeldError.js';
+import { 
+  expectDirectiveValidationError, 
+  expectToThrowWithConfig,
+  expectValidationError
+} from '@tests/utils/errorTestUtils.js';
 
 describe('ValidationService', () => {
   let service: ValidationService;
@@ -59,49 +64,49 @@ describe('ValidationService', () => {
       await expect(service.validate(node)).resolves.not.toThrow();
     });
     
-    it('should throw on missing name with recoverable severity', async () => {
+    it('should throw on missing name with Fatal severity', async () => {
       const node = createTextDirective('', 'Hello', createLocation(1, 1));
       
-      try {
-        await service.validate(node);
-        // Should not reach here
-        expect(true).toBe(false);
-      } catch (error) {
-        expect(error).toBeInstanceOf(MeldDirectiveError);
-        const directiveError = error as MeldDirectiveError;
-        expect(directiveError.code).toBe(DirectiveErrorCode.VALIDATION_FAILED);
-        expect(directiveError.severity).toBe(ErrorSeverity.Recoverable);
-      }
+      await expectToThrowWithConfig(
+        async () => service.validate(node),
+        {
+          type: 'MeldDirectiveError',
+          code: DirectiveErrorCode.VALIDATION_FAILED,
+          severity: ErrorSeverity.Fatal,
+          directiveKind: 'text',
+          messageContains: 'identifier'
+        }
+      );
     });
     
-    it('should throw on missing value with recoverable severity', async () => {
+    it('should throw on missing value with Fatal severity', async () => {
       const node = createTextDirective('greeting', '', createLocation(1, 1));
       
-      try {
-        await service.validate(node);
-        // Should not reach here
-        expect(true).toBe(false);
-      } catch (error) {
-        expect(error).toBeInstanceOf(MeldDirectiveError);
-        const directiveError = error as MeldDirectiveError;
-        expect(directiveError.code).toBe(DirectiveErrorCode.VALIDATION_FAILED);
-        expect(directiveError.severity).toBe(ErrorSeverity.Recoverable);
-      }
+      await expectToThrowWithConfig(
+        async () => service.validate(node),
+        {
+          type: 'MeldDirectiveError',
+          code: DirectiveErrorCode.VALIDATION_FAILED,
+          severity: ErrorSeverity.Fatal,
+          directiveKind: 'text',
+          messageContains: 'value'
+        }
+      );
     });
     
-    it('should throw on invalid name format with recoverable severity', async () => {
+    it('should throw on invalid name format with Fatal severity', async () => {
       const node = createTextDirective('123invalid', 'Hello', createLocation(1, 1));
       
-      try {
-        await service.validate(node);
-        // Should not reach here
-        expect(true).toBe(false);
-      } catch (error) {
-        expect(error).toBeInstanceOf(MeldDirectiveError);
-        const directiveError = error as MeldDirectiveError;
-        expect(directiveError.code).toBe(DirectiveErrorCode.VALIDATION_FAILED);
-        expect(directiveError.severity).toBe(ErrorSeverity.Recoverable);
-      }
+      await expectToThrowWithConfig(
+        async () => service.validate(node),
+        {
+          type: 'MeldDirectiveError',
+          code: DirectiveErrorCode.VALIDATION_FAILED,
+          severity: ErrorSeverity.Fatal,
+          directiveKind: 'text',
+          messageContains: 'identifier'
+        }
+      );
     });
   });
   
@@ -116,49 +121,49 @@ describe('ValidationService', () => {
       await expect(service.validate(node)).resolves.not.toThrow();
     });
     
-    it('should throw on invalid JSON string with recoverable severity', async () => {
+    it('should throw on invalid JSON string with Fatal severity', async () => {
       const node = createDataDirective('config', '{invalid json}', createLocation(1, 1));
       
-      try {
-        await service.validate(node);
-        // Should not reach here
-        expect(true).toBe(false);
-      } catch (error) {
-        expect(error).toBeInstanceOf(MeldDirectiveError);
-        const directiveError = error as MeldDirectiveError;
-        expect(directiveError.code).toBe(DirectiveErrorCode.VALIDATION_FAILED);
-        expect(directiveError.severity).toBe(ErrorSeverity.Recoverable);
-      }
+      await expectToThrowWithConfig(
+        async () => service.validate(node),
+        {
+          type: 'MeldDirectiveError',
+          code: DirectiveErrorCode.VALIDATION_FAILED,
+          severity: ErrorSeverity.Fatal,
+          directiveKind: 'data',
+          messageContains: 'JSON'
+        }
+      );
     });
     
-    it('should throw on missing name with recoverable severity', async () => {
+    it('should throw on missing name with Fatal severity', async () => {
       const node = createDataDirective('', { key: 'value' }, createLocation(1, 1));
       
-      try {
-        await service.validate(node);
-        // Should not reach here
-        expect(true).toBe(false);
-      } catch (error) {
-        expect(error).toBeInstanceOf(MeldDirectiveError);
-        const directiveError = error as MeldDirectiveError;
-        expect(directiveError.code).toBe(DirectiveErrorCode.VALIDATION_FAILED);
-        expect(directiveError.severity).toBe(ErrorSeverity.Recoverable);
-      }
+      await expectToThrowWithConfig(
+        async () => service.validate(node),
+        {
+          type: 'MeldDirectiveError',
+          code: DirectiveErrorCode.VALIDATION_FAILED,
+          severity: ErrorSeverity.Fatal,
+          directiveKind: 'data',
+          messageContains: 'identifier'
+        }
+      );
     });
     
-    it('should throw on invalid name format with recoverable severity', async () => {
+    it('should throw on invalid name format with Fatal severity', async () => {
       const node = createDataDirective('123invalid', { key: 'value' }, createLocation(1, 1));
       
-      try {
-        await service.validate(node);
-        // Should not reach here
-        expect(true).toBe(false);
-      } catch (error) {
-        expect(error).toBeInstanceOf(MeldDirectiveError);
-        const directiveError = error as MeldDirectiveError;
-        expect(directiveError.code).toBe(DirectiveErrorCode.VALIDATION_FAILED);
-        expect(directiveError.severity).toBe(ErrorSeverity.Recoverable);
-      }
+      await expectToThrowWithConfig(
+        async () => service.validate(node),
+        {
+          type: 'MeldDirectiveError',
+          code: DirectiveErrorCode.VALIDATION_FAILED,
+          severity: ErrorSeverity.Fatal,
+          directiveKind: 'data',
+          messageContains: 'identifier'
+        }
+      );
     });
   });
   
@@ -183,64 +188,64 @@ describe('ValidationService', () => {
       await expect(service.validate(node)).resolves.not.toThrow();
     });
 
-    it('should throw on missing identifier with recoverable severity', async () => {
+    it('should throw on missing identifier with Fatal severity', async () => {
       const node = createPathDirective('', '$HOMEPATH/docs', createLocation(1, 1));
       
-      try {
-        await service.validate(node);
-        // Should not reach here
-        expect(true).toBe(false);
-      } catch (error) {
-        expect(error).toBeInstanceOf(MeldDirectiveError);
-        const directiveError = error as MeldDirectiveError;
-        expect(directiveError.code).toBe(DirectiveErrorCode.VALIDATION_FAILED);
-        expect(directiveError.severity).toBe(ErrorSeverity.Recoverable);
-      }
+      await expectToThrowWithConfig(
+        async () => service.validate(node),
+        {
+          type: 'MeldDirectiveError',
+          code: DirectiveErrorCode.VALIDATION_FAILED,
+          severity: ErrorSeverity.Fatal,
+          directiveKind: 'path',
+          messageContains: 'identifier'
+        }
+      );
     });
 
-    it('should throw on invalid identifier format with recoverable severity', async () => {
+    it('should throw on invalid identifier format with Fatal severity', async () => {
       const node = createPathDirective('123invalid', '$HOMEPATH/docs', createLocation(1, 1));
       
-      try {
-        await service.validate(node);
-        // Should not reach here
-        expect(true).toBe(false);
-      } catch (error) {
-        expect(error).toBeInstanceOf(MeldDirectiveError);
-        const directiveError = error as MeldDirectiveError;
-        expect(directiveError.code).toBe(DirectiveErrorCode.VALIDATION_FAILED);
-        expect(directiveError.severity).toBe(ErrorSeverity.Recoverable);
-      }
+      await expectToThrowWithConfig(
+        async () => service.validate(node),
+        {
+          type: 'MeldDirectiveError',
+          code: DirectiveErrorCode.VALIDATION_FAILED,
+          severity: ErrorSeverity.Fatal,
+          directiveKind: 'path',
+          messageContains: 'identifier'
+        }
+      );
     });
 
-    it('should throw on missing value with recoverable severity', async () => {
+    it('should throw on missing value with Fatal severity', async () => {
       const node = createPathDirective('docs', '', createLocation(1, 1));
       
-      try {
-        await service.validate(node);
-        // Should not reach here
-        expect(true).toBe(false);
-      } catch (error) {
-        expect(error).toBeInstanceOf(MeldDirectiveError);
-        const directiveError = error as MeldDirectiveError;
-        expect(directiveError.code).toBe(DirectiveErrorCode.VALIDATION_FAILED);
-        expect(directiveError.severity).toBe(ErrorSeverity.Recoverable);
-      }
+      await expectToThrowWithConfig(
+        async () => service.validate(node),
+        {
+          type: 'MeldDirectiveError',
+          code: DirectiveErrorCode.VALIDATION_FAILED,
+          severity: ErrorSeverity.Fatal,
+          directiveKind: 'path',
+          messageContains: 'path'
+        }
+      );
     });
 
-    it('should throw on empty path value with recoverable severity', async () => {
+    it('should throw on empty path value with Fatal severity', async () => {
       const node = createPathDirective('docs', '   ', createLocation(1, 1));
       
-      try {
-        await service.validate(node);
-        // Should not reach here
-        expect(true).toBe(false);
-      } catch (error) {
-        expect(error).toBeInstanceOf(MeldDirectiveError);
-        const directiveError = error as MeldDirectiveError;
-        expect(directiveError.code).toBe(DirectiveErrorCode.VALIDATION_FAILED);
-        expect(directiveError.severity).toBe(ErrorSeverity.Recoverable);
-      }
+      await expectToThrowWithConfig(
+        async () => service.validate(node),
+        {
+          type: 'MeldDirectiveError',
+          code: DirectiveErrorCode.VALIDATION_FAILED,
+          severity: ErrorSeverity.Fatal,
+          directiveKind: 'path',
+          messageContains: 'path'
+        }
+      );
     });
   });
   
@@ -250,19 +255,19 @@ describe('ValidationService', () => {
       await expect(service.validate(node)).resolves.not.toThrow();
     });
     
-    it('should throw on missing path with recoverable severity', async () => {
+    it('should throw on missing path with Fatal severity', async () => {
       const node = createImportDirective('', createLocation(1, 1));
       
-      try {
-        await service.validate(node);
-        // Should not reach here
-        expect(true).toBe(false);
-      } catch (error) {
-        expect(error).toBeInstanceOf(MeldDirectiveError);
-        const directiveError = error as MeldDirectiveError;
-        expect(directiveError.code).toBe(DirectiveErrorCode.VALIDATION_FAILED);
-        expect(directiveError.severity).toBe(ErrorSeverity.Recoverable);
-      }
+      await expectToThrowWithConfig(
+        async () => service.validate(node),
+        {
+          type: 'MeldDirectiveError',
+          code: DirectiveErrorCode.VALIDATION_FAILED,
+          severity: ErrorSeverity.Fatal,
+          directiveKind: 'import',
+          messageContains: 'path'
+        }
+      );
     });
   });
   
@@ -277,19 +282,19 @@ describe('ValidationService', () => {
       await expect(service.validate(node)).resolves.not.toThrow();
     });
     
-    it('should throw on missing path with recoverable severity', async () => {
+    it('should throw on missing path with Fatal severity', async () => {
       const node = createEmbedDirective('', undefined, createLocation(1, 1));
       
-      try {
-        await service.validate(node);
-        // Should not reach here
-        expect(true).toBe(false);
-      } catch (error) {
-        expect(error).toBeInstanceOf(MeldDirectiveError);
-        const directiveError = error as MeldDirectiveError;
-        expect(directiveError.code).toBe(DirectiveErrorCode.VALIDATION_FAILED);
-        expect(directiveError.severity).toBe(ErrorSeverity.Recoverable);
-      }
+      await expectToThrowWithConfig(
+        async () => service.validate(node),
+        {
+          type: 'MeldDirectiveError',
+          code: DirectiveErrorCode.VALIDATION_FAILED,
+          severity: ErrorSeverity.Fatal,
+          directiveKind: 'embed',
+          messageContains: 'path'
+        }
+      );
     });
     
     it('should validate fuzzy matching threshold', async () => {
@@ -298,41 +303,41 @@ describe('ValidationService', () => {
       await expect(service.validate(node)).resolves.not.toThrow();
     });
     
-    it('should throw on invalid fuzzy threshold (below 0) with recoverable severity', async () => {
+    it('should throw on invalid fuzzy threshold (below 0) with Fatal severity', async () => {
       const node = createEmbedDirective('test.md', 'section', createLocation(1, 1));
       node.directive.fuzzy = -0.1;
       
-      try {
-        await service.validate(node);
-        // Should not reach here
-        expect(true).toBe(false);
-      } catch (error) {
-        expect(error).toBeInstanceOf(MeldDirectiveError);
-        const directiveError = error as MeldDirectiveError;
-        expect(directiveError.code).toBe(DirectiveErrorCode.VALIDATION_FAILED);
-        expect(directiveError.severity).toBe(ErrorSeverity.Recoverable);
-      }
+      await expectToThrowWithConfig(
+        async () => service.validate(node),
+        {
+          type: 'MeldDirectiveError',
+          code: DirectiveErrorCode.VALIDATION_FAILED,
+          severity: ErrorSeverity.Fatal,
+          directiveKind: 'embed',
+          messageContains: 'fuzzy'
+        }
+      );
     });
     
-    it('should throw on invalid fuzzy threshold (above 1) with recoverable severity', async () => {
+    it('should throw on invalid fuzzy threshold (above 1) with Fatal severity', async () => {
       const node = createEmbedDirective('test.md', 'section', createLocation(1, 1));
       node.directive.fuzzy = 1.1;
       
-      try {
-        await service.validate(node);
-        // Should not reach here
-        expect(true).toBe(false);
-      } catch (error) {
-        expect(error).toBeInstanceOf(MeldDirectiveError);
-        const directiveError = error as MeldDirectiveError;
-        expect(directiveError.code).toBe(DirectiveErrorCode.VALIDATION_FAILED);
-        expect(directiveError.severity).toBe(ErrorSeverity.Recoverable);
-      }
+      await expectToThrowWithConfig(
+        async () => service.validate(node),
+        {
+          type: 'MeldDirectiveError',
+          code: DirectiveErrorCode.VALIDATION_FAILED,
+          severity: ErrorSeverity.Fatal,
+          directiveKind: 'embed',
+          messageContains: 'fuzzy'
+        }
+      );
     });
   });
   
   describe('Unknown directive handling', () => {
-    it('should throw on unknown directive kind with fatal severity', async () => {
+    it('should throw on unknown directive kind with Fatal severity', async () => {
       const node: DirectiveNode = {
         type: 'Directive',
         directive: {
@@ -341,16 +346,16 @@ describe('ValidationService', () => {
         location: createLocation(1, 1)
       };
       
-      try {
-        await service.validate(node);
-        // Should not reach here
-        expect(true).toBe(false);
-      } catch (error) {
-        expect(error).toBeInstanceOf(MeldDirectiveError);
-        const directiveError = error as MeldDirectiveError;
-        expect(directiveError.code).toBe(DirectiveErrorCode.HANDLER_NOT_FOUND);
-        expect(directiveError.severity).toBe(ErrorSeverity.Fatal);
-      }
+      await expectToThrowWithConfig(
+        async () => service.validate(node),
+        {
+          type: 'MeldDirectiveError',
+          code: DirectiveErrorCode.HANDLER_NOT_FOUND,
+          severity: ErrorSeverity.Fatal,
+          directiveKind: 'unknown',
+          messageContains: 'kind'
+        }
+      );
     });
   });
   
@@ -363,7 +368,7 @@ describe('ValidationService', () => {
       } catch (error) {
         expect(error).toBeInstanceOf(MeldError);
         const meldError = error as MeldError;
-        expect(meldError.canBeWarning()).toBe(true);
+        expect(meldError.canBeWarning()).toBe(false);
       }
     });
     

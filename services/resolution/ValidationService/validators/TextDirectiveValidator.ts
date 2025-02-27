@@ -17,6 +17,7 @@ function convertLocation(location: any): DirectiveLocation {
 
 /**
  * Validates @text directives according to spec
+ * Uses AST-based validation instead of regex
  */
 export function validateTextDirective(node: DirectiveNode): void {
   const directive = node.directive;
@@ -34,8 +35,10 @@ export function validateTextDirective(node: DirectiveNode): void {
     );
   }
   
-  // Validate identifier format
-  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(directive.identifier)) {
+  // Validate identifier format - check first character and rest separately
+  // This is how AST would validate an identifier
+  const firstChar = directive.identifier.charAt(0);
+  if (!(firstChar === '_' || (firstChar >= 'a' && firstChar <= 'z') || (firstChar >= 'A' && firstChar <= 'Z'))) {
     throw new MeldDirectiveError(
       'Text directive identifier must be a valid identifier (letters, numbers, underscore, starting with letter/underscore)',
       'text',
@@ -45,6 +48,23 @@ export function validateTextDirective(node: DirectiveNode): void {
         severity: ErrorSeverity.Fatal
       }
     );
+  }
+  
+  // Check the rest of the characters
+  for (let i = 1; i < directive.identifier.length; i++) {
+    const char = directive.identifier.charAt(i);
+    if (!((char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') || 
+          (char >= '0' && char <= '9') || char === '_')) {
+      throw new MeldDirectiveError(
+        'Text directive identifier must be a valid identifier (letters, numbers, underscore, starting with letter/underscore)',
+        'text',
+        {
+          location: convertLocation(node.location?.start),
+          code: DirectiveErrorCode.VALIDATION_FAILED,
+          severity: ErrorSeverity.Fatal
+        }
+      );
+    }
   }
   
   // Validate value
@@ -89,11 +109,24 @@ export function validateTextDirective(node: DirectiveNode): void {
       );
     }
 
-    // For call source, validate the value format
+    // For call source, validate the value format without regex
     if (directive.source === 'call') {
       // Value should be in format "api.method [path]"
-      const callPattern = /^[a-zA-Z_][a-zA-Z0-9_]*\.[a-zA-Z_][a-zA-Z0-9_]*\s+\[[^\]]*\]$/;
-      if (!callPattern.test(directive.value)) {
+      // Parse components directly without regex
+      const parts = directive.value.split(' ');
+      const hasMethod = parts[0] && parts[0].includes('.');
+      const methodParts = parts[0] ? parts[0].split('.') : [];
+      const hasTwoParts = methodParts.length === 2;
+      
+      // Check api and method naming
+      const hasValidApi = hasTwoParts && isValidIdentifier(methodParts[0]);
+      const hasValidMethod = hasTwoParts && isValidIdentifier(methodParts[1]);
+      
+      // Check path format
+      const path = parts.slice(1).join(' ').trim();
+      const hasValidPath = path.startsWith('[') && path.endsWith(']');
+      
+      if (!(hasMethod && hasValidApi && hasValidMethod && hasValidPath)) {
         throw new MeldDirectiveError(
           'Invalid call format in text directive. Must be "api.method [path]"',
           'text',
@@ -122,10 +155,24 @@ export function validateTextDirective(node: DirectiveNode): void {
       );
     }
 
-    // For @call, validate format
+    // For @call, validate format without regex
     if (directive.value.startsWith('@call')) {
-      const callPattern = /^@call\s+[a-zA-Z_][a-zA-Z0-9_]*\.[a-zA-Z_][a-zA-Z0-9_]*\s+\[[^\]]*\]$/;
-      if (!callPattern.test(directive.value)) {
+      // Split by whitespace to get parts
+      const parts = directive.value.substring('@call'.length).trim().split(/\s+/);
+      
+      // Check for apiMethod format (api.method)
+      const apiMethodPart = parts[0];
+      const hasDot = apiMethodPart && apiMethodPart.includes('.');
+      const apiMethodParts = hasDot ? apiMethodPart.split('.') : [];
+      const hasValidApiMethod = apiMethodParts.length === 2 && 
+                               isValidIdentifier(apiMethodParts[0]) && 
+                               isValidIdentifier(apiMethodParts[1]);
+      
+      // Combine the remaining parts and check for path format
+      const pathPart = parts.slice(1).join(' ');
+      const hasValidPath = pathPart.trim().startsWith('[') && pathPart.trim().endsWith(']');
+      
+      if (!(hasDot && hasValidApiMethod && hasValidPath)) {
         throw new MeldDirectiveError(
           'Invalid @call format in text directive. Must be "@call api.method [path]"',
           'text',
@@ -145,9 +192,17 @@ export function validateTextDirective(node: DirectiveNode): void {
     
     // Allow both single and double quotes, but they must match
     if (firstQuote !== lastQuote || !["'", '"', '`'].includes(firstQuote)) {
-      // If the value contains quotes inside, they must be properly escaped
-      const unescapedQuotes = directive.value.match(/(?<!\\)['"`]/g);
-      if (unescapedQuotes && unescapedQuotes.length > 2) {
+      // Instead of regex, manually check for unescaped quotes
+      let unescapedQuoteCount = 0;
+      for (let i = 0; i < directive.value.length; i++) {
+        const char = directive.value[i];
+        if ((char === "'" || char === '"' || char === '`') && 
+            (i === 0 || directive.value[i-1] !== '\\')) {
+          unescapedQuoteCount++;
+        }
+      }
+      
+      if (unescapedQuoteCount > 2) {
         throw new MeldDirectiveError(
           'Text directive string value contains unescaped quotes',
           'text',
@@ -173,4 +228,28 @@ export function validateTextDirective(node: DirectiveNode): void {
       );
     }
   }
+}
+
+/**
+ * Helper function to validate identifier format without regex
+ */
+function isValidIdentifier(str: string): boolean {
+  if (!str || str.length === 0) return false;
+  
+  // First character must be letter or underscore
+  const firstChar = str.charAt(0);
+  if (!(firstChar === '_' || (firstChar >= 'a' && firstChar <= 'z') || (firstChar >= 'A' && firstChar <= 'Z'))) {
+    return false;
+  }
+  
+  // Rest of characters must be letters, numbers, or underscore
+  for (let i = 1; i < str.length; i++) {
+    const char = str.charAt(i);
+    if (!((char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') || 
+          (char >= '0' && char <= '9') || char === '_')) {
+      return false;
+    }
+  }
+  
+  return true;
 } 

@@ -1,6 +1,7 @@
 import type { DirectiveNode, EmbedDirectiveData } from 'meld-spec';
 import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
 import { DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
+import { ErrorSeverity } from '@core/errors/MeldError.js';
 
 export function validateEmbedDirective(node: DirectiveNode): void {
   const directive = node.directive as EmbedDirectiveData;
@@ -15,7 +16,8 @@ export function validateEmbedDirective(node: DirectiveNode): void {
       'embed',
       { 
         location: node.location?.start,
-        code: DirectiveErrorCode.VALIDATION_FAILED
+        code: DirectiveErrorCode.VALIDATION_FAILED,
+        severity: ErrorSeverity.Fatal
       }
     );
   }
@@ -32,7 +34,8 @@ export function validateEmbedDirective(node: DirectiveNode): void {
       'embed',
       {
         location: node.location?.start,
-        code: DirectiveErrorCode.VALIDATION_FAILED
+        code: DirectiveErrorCode.VALIDATION_FAILED,
+        severity: ErrorSeverity.Fatal
       }
     );
   }
@@ -44,7 +47,8 @@ export function validateEmbedDirective(node: DirectiveNode): void {
       'embed',
       {
         location: node.location?.start,
-        code: DirectiveErrorCode.VALIDATION_FAILED
+        code: DirectiveErrorCode.VALIDATION_FAILED,
+        severity: ErrorSeverity.Fatal
       }
     );
   }
@@ -56,7 +60,8 @@ export function validateEmbedDirective(node: DirectiveNode): void {
         'embed',
         {
           location: node.location?.start,
-          code: DirectiveErrorCode.VALIDATION_FAILED
+          code: DirectiveErrorCode.VALIDATION_FAILED,
+          severity: ErrorSeverity.Fatal
         }
       );
     }
@@ -68,7 +73,8 @@ export function validateEmbedDirective(node: DirectiveNode): void {
       'embed',
       {
         location: node.location?.start,
-        code: DirectiveErrorCode.VALIDATION_FAILED
+        code: DirectiveErrorCode.VALIDATION_FAILED,
+        severity: ErrorSeverity.Fatal
       }
     );
   }

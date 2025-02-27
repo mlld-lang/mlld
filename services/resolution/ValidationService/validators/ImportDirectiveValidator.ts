@@ -44,7 +44,7 @@ export function validateImportDirective(node: DirectiveNode): void {
       {
         location: convertLocation(node.location),
         code: DirectiveErrorCode.VALIDATION_FAILED,
-        severity: ErrorSeverity.Recoverable
+        severity: ErrorSeverity.Fatal
       }
     );
   }

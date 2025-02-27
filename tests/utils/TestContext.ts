@@ -218,26 +218,39 @@ export class TestContext {
     let resolvedPath;
     
     try {
-      // If path contains slashes, we should prefix it with a path variable
-      // to ensure it's correctly resolved according to Meld's path rules
-      if (relativePath.includes('/') && !relativePath.startsWith('$')) {
-        // Prefix with project path variable
-        resolvedPath = this.services.path.resolvePath(`$PROJECTPATH/${relativePath}`);
+      // Ensure path format compliance with new path rules
+      if (relativePath.includes('/')) {
+        // If path contains slashes and doesn't have a special prefix, add project path variable
+        if (!relativePath.startsWith('$./') && !relativePath.startsWith('$~/') && 
+            !relativePath.startsWith('$PROJECTPATH/') && !relativePath.startsWith('$HOMEPATH/')) {
+          // Prefix with project path variable
+          resolvedPath = this.services.path.resolvePath(`$PROJECTPATH/${relativePath}`);
+        } else {
+          // Path already has a special prefix
+          resolvedPath = this.services.path.resolvePath(relativePath);
+        }
       } else {
+        // Simple filename with no slashes
         resolvedPath = this.services.path.resolvePath(relativePath);
       }
       
       logger.debug('Resolved path for writing', { relativePath, resolvedPath });
     } catch (error) {
-      // If PathService validation fails, fall back to the original behavior
-      // Normalize the path to use forward slashes
+      logger.error('Path resolution error', { relativePath, error });
+      
+      // If PathService validation fails, use a standardized absolute path format
+      // First ensure the path is normalized with forward slashes
       const normalizedPath = relativePath.replace(/\\/g, '/');
       
-      // Ensure the path is absolute
+      // Use a direct absolute path for tests
       resolvedPath = normalizedPath.startsWith('/') ? normalizedPath : `/${normalizedPath}`;
       
-      logger.debug('Using fallback path resolution', { relativePath, resolvedPath });
+      logger.debug('Using direct path', { relativePath, resolvedPath });
     }
+    
+    // Create parent directories if needed
+    const dirPath = this.services.path.dirname(resolvedPath);
+    await this.fs.mkdir(dirPath, { recursive: true });
     
     // Write the file
     logger.debug('Writing file', { resolvedPath });
