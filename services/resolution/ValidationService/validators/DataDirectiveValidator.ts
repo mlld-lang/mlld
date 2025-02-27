@@ -1,6 +1,14 @@
-import { DirectiveNode, DataDirectiveData } from 'meld-spec';
+import { DirectiveNode } from 'meld-spec';
 import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
 import { DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
+
+// Define interface matching the meld-ast structure for data directives
+interface DataDirectiveData {
+  kind: 'data';
+  identifier: string;
+  source: 'literal' | 'reference';
+  value: any;
+}
 
 /**
  * Validates @data directives
@@ -13,8 +21,10 @@ export function validateDataDirective(node: DirectiveNode): void {
     throw new MeldDirectiveError(
       'Data directive requires an "identifier" property (string)',
       'data',
-      node.location?.start,
-      DirectiveErrorCode.VALIDATION_FAILED
+      {
+        location: node.location?.start,
+        code: DirectiveErrorCode.VALIDATION_FAILED
+      }
     );
   }
   
@@ -23,8 +33,10 @@ export function validateDataDirective(node: DirectiveNode): void {
     throw new MeldDirectiveError(
       'Data identifier must be a valid identifier (letters, numbers, underscore, starting with letter/underscore)',
       'data',
-      node.location?.start,
-      DirectiveErrorCode.VALIDATION_FAILED
+      {
+        location: node.location?.start,
+        code: DirectiveErrorCode.VALIDATION_FAILED
+      }
     );
   }
   
@@ -33,21 +45,38 @@ export function validateDataDirective(node: DirectiveNode): void {
     throw new MeldDirectiveError(
       'Data directive requires a value',
       'data',
-      node.location?.start,
-      DirectiveErrorCode.VALIDATION_FAILED
+      {
+        location: node.location?.start,
+        code: DirectiveErrorCode.VALIDATION_FAILED
+      }
     );
   }
   
-  // If value is a string, try to parse it as JSON
-  if (typeof directive.value === 'string') {
+  // Validate source type if present
+  if (directive.source && !['literal', 'reference'].includes(directive.source)) {
+    throw new MeldDirectiveError(
+      `Invalid source type "${directive.source}" for data directive, must be "literal" or "reference"`,
+      'data',
+      {
+        location: node.location?.start,
+        code: DirectiveErrorCode.VALIDATION_FAILED
+      }
+    );
+  }
+  
+  // If value is a string and source is literal, try to ensure it's valid JSON
+  if (typeof directive.value === 'string' && directive.source === 'literal') {
     try {
       JSON.parse(directive.value);
     } catch (error) {
+      // AST parser should have handled this, but double-check
       throw new MeldDirectiveError(
         'Invalid JSON string in data directive',
         'data',
-        node.location?.start,
-        DirectiveErrorCode.VALIDATION_FAILED
+        {
+          location: node.location?.start,
+          code: DirectiveErrorCode.VALIDATION_FAILED
+        }
       );
     }
   }
@@ -59,8 +88,10 @@ export function validateDataDirective(node: DirectiveNode): void {
     throw new MeldDirectiveError(
       'Data value must be JSON-serializable',
       'data',
-      node.location?.start,
-      DirectiveErrorCode.VALIDATION_FAILED
+      {
+        location: node.location?.start,
+        code: DirectiveErrorCode.VALIDATION_FAILED
+      }
     );
   }
 } 

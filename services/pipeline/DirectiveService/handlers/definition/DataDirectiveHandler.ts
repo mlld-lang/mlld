@@ -1,6 +1,11 @@
-import { DirectiveNode } from 'meld-spec';
-// TODO: Use meld-ast nodes and types instead of meld-spec directly
-// TODO: Import MeldDirectiveError from core/errors for proper error hierarchy
+import { DirectiveNode, DirectiveData } from 'meld-spec';
+// Define interfaces matching the meld-ast structure for data directives
+interface DataDirective extends DirectiveData {
+  kind: 'data';
+  identifier: string;
+  source: 'literal' | 'reference';
+  value: any;
+}
 
 import { IDirectiveHandler, DirectiveContext } from '@services/pipeline/DirectiveService/IDirectiveService.js';
 import { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
@@ -25,9 +30,14 @@ export class DataDirectiveHandler implements IDirectiveHandler {
   ) {}
 
   public async execute(node: DirectiveNode, context: DirectiveContext): Promise<IStateService> {
+    logger.debug('Processing data directive', {
+      location: node.location,
+      directive: node.directive
+    });
+
     await this.validationService.validate(node);
 
-    const { identifier, value } = node.directive;
+    const { identifier, value, source } = node.directive as DataDirective;
     const resolutionContext: ResolutionContext = {
       allowedVariableTypes: {
         text: true,
@@ -40,41 +50,49 @@ export class DataDirectiveHandler implements IDirectiveHandler {
     };
 
     try {
-      let parsedValue: unknown;
+      let resolvedValue: unknown;
 
-      // Handle both string and object values
-      if (typeof value === 'string') {
-        // First resolve any variables in the JSON string
-        const resolvedJsonString = await this.resolutionService.resolveInContext(value, resolutionContext);
-
-        // Then parse the JSON
-        try {
-          parsedValue = JSON.parse(resolvedJsonString);
-          // Recursively resolve any variables in the parsed object
-          parsedValue = await this.resolveObjectFields(parsedValue, resolutionContext);
-        } catch (error) {
-          if (error instanceof Error) {
-            throw new DirectiveError(
-              `Invalid JSON in data directive: ${error.message}`,
-              'data',
-              DirectiveErrorCode.VALIDATION_FAILED,
-              { 
-                node, 
-                context,
-                severity: DirectiveErrorSeverity[DirectiveErrorCode.VALIDATION_FAILED]
-              }
-            );
-          }
-          throw error;
-        }
+      // Values already come parsed from the AST - we just need to resolve any variables inside them
+      if (source === 'literal') {
+        // Value is already parsed by the AST, just resolve any variables it might contain
+        resolvedValue = await this.resolveObjectFields(value, resolutionContext);
+      } else if (source === 'reference') {
+        // Handle reference source (if needed)
+        // This handles cases where value is a reference to another variable
+        resolvedValue = await this.resolutionService.resolveInContext(value, resolutionContext);
       } else {
-        // Value is already an object, resolve variables in it
-        parsedValue = await this.resolveObjectFields(value, resolutionContext);
+        // Fallback for backward compatibility
+        if (typeof value === 'string') {
+          // Resolve any variables in the string
+          const resolvedJsonString = await this.resolutionService.resolveInContext(value, resolutionContext);
+          
+          try {
+            resolvedValue = JSON.parse(resolvedJsonString);
+            resolvedValue = await this.resolveObjectFields(resolvedValue, resolutionContext);
+          } catch (error) {
+            if (error instanceof Error) {
+              throw new DirectiveError(
+                `Invalid JSON in data directive: ${error.message}`,
+                'data',
+                DirectiveErrorCode.VALIDATION_FAILED,
+                { 
+                  node, 
+                  context,
+                  severity: DirectiveErrorSeverity[DirectiveErrorCode.VALIDATION_FAILED]
+                }
+              );
+            }
+            throw error;
+          }
+        } else {
+          // Value is already an object, resolve variables in it
+          resolvedValue = await this.resolveObjectFields(value, resolutionContext);
+        }
       }
 
       // Store the resolved value in a new state
       const newState = context.state.clone();
-      newState.setDataVar(identifier, parsedValue);
+      newState.setDataVar(identifier, resolvedValue);
       return newState;
     } catch (error) {
       if (error instanceof Error) {
@@ -106,7 +124,7 @@ export class DataDirectiveHandler implements IDirectiveHandler {
 
     if (typeof obj === 'string') {
       // If the string contains any variable references, resolve them
-      if (obj.includes('${') || obj.includes('#{') || obj.includes('$') || obj.includes('`')) {
+      if (obj.includes('{{') || obj.includes('${') || obj.includes('$')) {
         return this.resolutionService.resolveInContext(obj, context);
       }
       return obj;
