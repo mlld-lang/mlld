@@ -51,8 +51,15 @@ export class TestSnapshot {
       modifiedContents: new Map()
     };
 
-    // Helper to normalize paths by removing /project prefix
-    const normalizePath = (p: string) => p.replace(/^\/project\//, '');
+    // Helper to normalize paths with consistent format
+    const normalizePath = (p: string) => {
+      // Ensure path has leading slash for consistency
+      let normalized = p.replace(/^\/project\//, '/');
+      if (!normalized.startsWith('/')) {
+        normalized = '/' + normalized;
+      }
+      return normalized;
+    };
 
     // Find added and modified files
     for (const [path, content] of after) {

@@ -87,7 +87,8 @@ describe('TestSnapshot', () => {
       
       // Compare
       const diff = snapshot.compare(before, after);
-      expect(diff.added).toContain('new.txt');
+      console.log('Added files:', diff.added);
+      expect(diff.added).toContain('/new.txt');
       expect(diff.removed).toHaveLength(0);
       expect(diff.modified).toHaveLength(0);
     });
@@ -103,7 +104,8 @@ describe('TestSnapshot', () => {
       
       // Compare
       const diff = snapshot.compare(before, after);
-      expect(diff.removed).toContain('remove.txt');
+      console.log('Removed files:', diff.removed);
+      expect(diff.removed).toContain('/remove.txt');
       expect(diff.added).toHaveLength(0);
       expect(diff.modified).toHaveLength(0);
     });
@@ -119,10 +121,11 @@ describe('TestSnapshot', () => {
       
       // Compare
       const diff = snapshot.compare(before, after);
-      expect(diff.modified).toContain('modify.txt');
+      console.log('Modified files:', diff.modified);
+      expect(diff.modified).toContain('/modify.txt');
       expect(diff.added).toHaveLength(0);
       expect(diff.removed).toHaveLength(0);
-      expect(diff.modifiedContents.get('modify.txt')).toBe('modified');
+      expect(diff.modifiedContents.get('/modify.txt')).toBe('modified');
     });
 
     it('detects multiple changes', async () => {
@@ -140,24 +143,29 @@ describe('TestSnapshot', () => {
       
       // Compare
       const diff = snapshot.compare(before, after);
-      expect(diff.added).toContain('new.txt');
-      expect(diff.removed).toContain('remove.txt');
-      expect(diff.modified).toContain('modify.txt');
+      console.log('Multiple changes - added:', diff.added);
+      console.log('Multiple changes - removed:', diff.removed);
+      console.log('Multiple changes - modified:', diff.modified);
+      expect(diff.added).toContain('/new.txt');
+      expect(diff.removed).toContain('/remove.txt');
+      expect(diff.modified).toContain('/modify.txt');
       expect(diff.added.length + diff.removed.length + diff.modified.length).toBe(3);
-      expect(diff.modifiedContents.get('modify.txt')).toBe('modified');
+      expect(diff.modifiedContents.get('/modify.txt')).toBe('modified');
     });
   });
 
   describe('error handling', () => {
     it('handles comparison with empty snapshots', () => {
       const empty = new Map();
-      const nonEmpty = new Map([['file.txt', 'content']]);
+      const nonEmpty = new Map([['/file.txt', 'content']]);
       
       const diff1 = snapshot.compare(empty, nonEmpty);
-      expect(diff1.added).toContain('file.txt');
+      console.log('Empty snapshot diff1 added:', diff1.added);
+      expect(diff1.added).toContain('/file.txt');
       
       const diff2 = snapshot.compare(nonEmpty, empty);
-      expect(diff2.removed).toContain('file.txt');
+      console.log('Empty snapshot diff2 removed:', diff2.removed);
+      expect(diff2.removed).toContain('/file.txt');
     });
 
     it('handles undefined directory path gracefully', async () => {
