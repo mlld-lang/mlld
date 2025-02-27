@@ -1,4 +1,6 @@
 import { ResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError.js';
+import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
+import type { MeldNode, TextNode } from 'meld-spec';
 
 /**
  * Handles validation and parsing of string literals in text directives
@@ -6,6 +8,54 @@ import { ResolutionError } from '@services/resolution/ResolutionService/errors/R
 export class StringLiteralHandler {
   private readonly QUOTE_TYPES = ["'", '"', '`'] as const;
   private readonly MIN_CONTENT_LENGTH = 1;
+
+  constructor(private parserService?: IParserService) {}
+
+  /**
+   * Checks if a value appears to be a string literal
+   * This is a preliminary check before full validation
+   */
+  async isStringLiteralWithAst(value: string): Promise<boolean> {
+    if (!this.parserService) {
+      return this.isStringLiteral(value);
+    }
+    
+    try {
+      // Wrap the string in a directive to ensure proper parsing
+      const wrappedValue = `@text test = ${value}`;
+      
+      // Parse with AST
+      const nodes = await this.parserService.parse(wrappedValue);
+      
+      // Look for directive nodes
+      const directiveNode = nodes.find(node => 
+        node.type === 'Directive' && 
+        (node as any).directive?.kind === 'text'
+      );
+      
+      if (directiveNode) {
+        // In the test environment, the mock parser doesn't create a StringLiteral type
+        // but just passes the value through, so we need to check both formats
+        const directiveValue = (directiveNode as any).directive?.value;
+        
+        // Check if it's a StringLiteral node in the AST
+        if (directiveValue && typeof directiveValue === 'object' && directiveValue.type === 'StringLiteral') {
+          return true;
+        }
+        
+        // Check if it's a string value that looks like a string literal
+        if (typeof directiveValue === 'string') {
+          return this.isStringLiteral(directiveValue);
+        }
+      }
+      
+      return false;
+    } catch (error) {
+      // If parsing fails, fall back to manual check
+      console.warn('Failed to check string literal with AST, falling back to manual check:', error);
+      return this.isStringLiteral(value);
+    }
+  }
 
   /**
    * Checks if a value appears to be a string literal
@@ -37,6 +87,59 @@ export class StringLiteralHandler {
     }
 
     return true;
+  }
+
+  /**
+   * Validates a string literal for proper quoting and content
+   * @throws ResolutionError if the literal is invalid
+   */
+  async validateLiteralWithAst(value: string): Promise<void> {
+    if (!this.parserService) {
+      return this.validateLiteral(value);
+    }
+    
+    try {
+      // Wrap the string in a directive to ensure proper parsing
+      const wrappedValue = `@text test = ${value}`;
+      
+      // Parse with AST
+      const nodes = await this.parserService.parse(wrappedValue);
+      
+      // If parsing succeeds without errors, the literal is valid
+      // Just check if it's actually a string literal node
+      const directiveNode = nodes.find(node => 
+        node.type === 'Directive' && 
+        (node as any).directive?.kind === 'text'
+      );
+      
+      if (!directiveNode) {
+        throw new ResolutionError(
+          'Failed to validate string literal with AST',
+          { value }
+        );
+      }
+      
+      const directiveValue = (directiveNode as any).directive?.value;
+      
+      // In the test environment, the mock parser doesn't create a StringLiteral type
+      // but just passes the value through, so we need to check both formats
+      if (directiveValue && typeof directiveValue === 'object' && directiveValue.type === 'StringLiteral') {
+        // Valid string literal object
+        return;
+      } else if (typeof directiveValue === 'string') {
+        // Validate the string value as a string literal
+        return this.validateLiteral(directiveValue);
+      }
+      
+      throw new ResolutionError(
+        'String literal is invalid',
+        { value }
+      );
+    } catch (error) {
+      // If parsing fails, fall back to manual validation
+      console.warn('Failed to validate string literal with AST, falling back to manual validation:', error);
+      return this.validateLiteral(value);
+    }
   }
 
   /**
@@ -97,6 +200,55 @@ export class StringLiteralHandler {
         'Single and double quoted strings cannot contain newlines',
         { value }
       );
+    }
+  }
+
+  /**
+   * Parses a string literal, removing quotes and handling escapes
+   * @throws ResolutionError if the literal is invalid
+   */
+  async parseLiteralWithAst(value: string): Promise<string> {
+    if (!this.parserService) {
+      return this.parseLiteral(value);
+    }
+    
+    try {
+      // Validate first
+      await this.validateLiteralWithAst(value);
+      
+      // Wrap the string in a directive to ensure proper parsing
+      const wrappedValue = `@text test = ${value}`;
+      
+      // Parse with AST
+      const nodes = await this.parserService.parse(wrappedValue);
+      
+      // Extract the string literal value
+      const directiveNode = nodes.find(node => 
+        node.type === 'Directive' && 
+        (node as any).directive?.kind === 'text'
+      );
+      
+      if (directiveNode) {
+        const directiveValue = (directiveNode as any).directive?.value;
+        
+        if (directiveValue && 
+            typeof directiveValue === 'object' && 
+            directiveValue.type === 'StringLiteral') {
+          // The parser has already handled quote escaping
+          return directiveValue.value;
+        } else if (typeof directiveValue === 'string') {
+          // In test environment, the mock parser might return the string directly
+          // Parse the string value as a string literal
+          return this.parseLiteral(directiveValue);
+        }
+      }
+      
+      // Fall back to manual parsing
+      return this.parseLiteral(value);
+    } catch (error) {
+      // If parsing fails, fall back to manual parsing
+      console.warn('Failed to parse string literal with AST, falling back to manual parsing:', error);
+      return this.parseLiteral(value);
     }
   }
 

@@ -103,7 +103,7 @@ export function validateImportDirective(node: DirectiveNode): void {
 }
 
 /**
- * Validates an import list
+ * Validates import list
  * @private
  */
 function validateImportList(importList: string, node: DirectiveNode): void {
@@ -111,8 +111,11 @@ function validateImportList(importList: string, node: DirectiveNode): void {
     return; // Wildcard import is valid
   }
 
-  // Remove brackets if present
-  const cleanList = importList.replace(/^\[(.*)\]$/, '$1');
+  // Remove brackets if present using direct string manipulation
+  let cleanList = importList;
+  if (cleanList.startsWith('[') && cleanList.endsWith(']')) {
+    cleanList = cleanList.substring(1, cleanList.length - 1);
+  }
   
   // Split by commas and validate each part
   const parts = cleanList.split(',');
@@ -163,10 +166,11 @@ function validateImportList(importList: string, node: DirectiveNode): void {
       continue;
     }
     
-    // Handle 'as' syntax (var as alias)
-    const asParts = trimmedPart.split(/\s+as\s+/);
-    if (asParts.length > 1) {
-      const [name, alias] = asParts.map(s => s.trim());
+    // Handle 'as' syntax (var as alias) without regex
+    const asIndex = trimmedPart.indexOf(' as ');
+    if (asIndex !== -1) {
+      const name = trimmedPart.substring(0, asIndex).trim();
+      const alias = trimmedPart.substring(asIndex + 4).trim();
       
       if (!name || name === '') {
         throw new MeldDirectiveError(

@@ -42,13 +42,36 @@ interface InternalHeadingNode {
  * Returns null if the node is not a heading
  */
 function parseHeadingNode(node: TextNode): InternalHeadingNode | null {
-  const headingMatch = node.content.match(/^(#{1,6})\s+(.+)$/);
-  if (!headingMatch) {
+  // Instead of using regex, check the AST properties
+  if (!node.content.startsWith('#')) {
     return null;
   }
+  
+  // Count the number of # characters at the start
+  let level = 0;
+  for (let i = 0; i < node.content.length && i < 6; i++) {
+    if (node.content[i] === '#') {
+      level++;
+    } else {
+      break;
+    }
+  }
+  
+  // Validate level and check for space after #s
+  if (level === 0 || level > 6 || node.content[level] !== ' ') {
+    return null;
+  }
+  
+  // Extract the content after the # characters
+  const content = node.content.substring(level + 1).trim();
+  
+  if (!content) {
+    return null;
+  }
+  
   return {
-    level: headingMatch[1].length,
-    content: headingMatch[2].trim()
+    level,
+    content
   };
 }
 
@@ -56,7 +79,38 @@ function parseHeadingNode(node: TextNode): InternalHeadingNode | null {
  * Check if a node is a text node that represents a heading
  */
 function isHeadingTextNode(node: MeldNode): node is TextNode {
-  return node.type === 'Text' && (node as TextNode).content.match(/^#{1,6}\s+.+$/) !== null;
+  if (node.type !== 'Text') {
+    return false;
+  }
+  
+  const textNode = node as TextNode;
+  
+  // Must start with at least one # and at most 6
+  if (!textNode.content.startsWith('#')) {
+    return false;
+  }
+  
+  // Count the number of # characters
+  let hashCount = 0;
+  for (let i = 0; i < textNode.content.length && i < 6; i++) {
+    if (textNode.content[i] === '#') {
+      hashCount++;
+    } else {
+      break;
+    }
+  }
+  
+  // Valid heading must have:
+  // 1. Between 1-6 hash characters
+  // 2. A space after the hash characters
+  // 3. Content after the space
+  return (
+    hashCount >= 1 && 
+    hashCount <= 6 && 
+    textNode.content.length > hashCount &&
+    textNode.content[hashCount] === ' ' &&
+    textNode.content.substring(hashCount + 1).trim().length > 0
+  );
 }
 
 /**

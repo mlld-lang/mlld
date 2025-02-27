@@ -2,6 +2,8 @@ import { ResolutionError } from '@services/resolution/ResolutionService/errors/R
 import { StringLiteralHandler } from './StringLiteralHandler.js';
 import { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
+import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
+import type { MeldNode, TextNode } from 'meld-spec';
 
 /**
  * Handles string concatenation operations using the ++ operator
@@ -10,7 +12,8 @@ export class StringConcatenationHandler {
   private stringLiteralHandler: StringLiteralHandler;
 
   constructor(
-    private resolutionService: IResolutionService
+    private resolutionService: IResolutionService,
+    private parserService?: IParserService
   ) {
     this.stringLiteralHandler = new StringLiteralHandler();
   }
@@ -20,8 +23,46 @@ export class StringConcatenationHandler {
    * @returns Array of parts to be concatenated
    * @throws ResolutionError if the concatenation syntax is invalid
    */
-  private splitConcatenationParts(value: string): string[] {
-    // Split by ++ operator, preserving spaces around it
+  private async splitConcatenationParts(value: string): Promise<string[]> {
+    // If ParserService is available, try to use it for more accurate parsing
+    if (this.parserService) {
+      try {
+        // Create a simple element to parse with the concatenation
+        // Add some context to make it valid Meld syntax
+        const wrappedValue = `@text test = ${value}`;
+        
+        // Parse with AST
+        const nodes = await this.parserService.parse(wrappedValue);
+        
+        // Look for directive nodes with concatenation operators
+        const directiveNode = nodes.find(node => 
+          node.type === 'Directive' && 
+          (node as any).directive?.kind === 'text'
+        );
+        
+        if (directiveNode) {
+          // Access the value which should contain our concatenation
+          const directiveValue = (directiveNode as any).directive?.value;
+          
+          // If the parser properly recognized the concatenation
+          if (directiveValue && 
+              typeof directiveValue === 'object' && 
+              directiveValue.type === 'Concatenation') {
+            // Return the parts directly from the AST
+            return directiveValue.parts.map((p: any) => 
+              typeof p === 'object' && p.raw ? p.raw : String(p)
+            );
+          }
+        }
+        
+        // If AST parsing didn't identify concatenation structure,
+        // fall back to simpler splitting
+      } catch (error) {
+        console.warn('Failed to parse concatenation with AST, falling back to manual parsing:', error);
+      }
+    }
+    
+    // Fallback: Split by ++ operator, preserving spaces around it
     const parts = value.split(/\s*\+\+\s*/);
     
     // Validate each part is non-empty
@@ -38,8 +79,36 @@ export class StringConcatenationHandler {
   /**
    * Checks if a value contains the ++ operator
    */
-  hasConcatenation(value: string): boolean {
-    // Look for ++ with required spaces on both sides
+  async hasConcatenation(value: string): Promise<boolean> {
+    // Try to use the parser to detect concatenation if available
+    if (this.parserService) {
+      try {
+        // Wrap the value for parsing
+        const wrappedValue = `@text test = ${value}`;
+        
+        // Parse the wrapped value
+        const nodes = await this.parserService.parse(wrappedValue);
+        
+        // Look for directive nodes with concatenation operators
+        const directiveNode = nodes.find(node => 
+          node.type === 'Directive' && 
+          (node as any).directive?.kind === 'text'
+        );
+        
+        if (directiveNode) {
+          // Check if the parser recognized a Concatenation node
+          const directiveValue = (directiveNode as any).directive?.value;
+          return directiveValue && 
+                 typeof directiveValue === 'object' && 
+                 directiveValue.type === 'Concatenation';
+        }
+      } catch (error) {
+        // If parsing fails, fall back to regex check
+        console.warn('Failed to check concatenation with AST, falling back to regex:', error);
+      }
+    }
+    
+    // Fallback: Look for ++ with required spaces on both sides
     return /\s\+\+\s/.test(value);
   }
 
@@ -49,7 +118,7 @@ export class StringConcatenationHandler {
    */
   async resolveConcatenation(value: string, context: ResolutionContext): Promise<string> {
     // Split into parts
-    const parts = this.splitConcatenationParts(value);
+    const parts = await this.splitConcatenationParts(value);
 
     // Resolve each part
     const resolvedParts: string[] = [];

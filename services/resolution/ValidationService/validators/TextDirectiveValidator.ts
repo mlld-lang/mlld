@@ -157,20 +157,36 @@ export function validateTextDirective(node: DirectiveNode): void {
 
     // For @call, validate format without regex
     if (directive.value.startsWith('@call')) {
-      // Split by whitespace to get parts
-      const parts = directive.value.substring('@call'.length).trim().split(/\s+/);
+      // Extract parts without using regex
+      const valueAfterCall = directive.value.substring('@call'.length).trim();
       
-      // Check for apiMethod format (api.method)
-      const apiMethodPart = parts[0];
-      const hasDot = apiMethodPart && apiMethodPart.includes('.');
+      // Find the first space to separate api.method from path
+      const firstSpaceIndex = valueAfterCall.indexOf(' ');
+      if (firstSpaceIndex === -1) {
+        throw new MeldDirectiveError(
+          'Invalid @call format in text directive. Must be "@call api.method [path]"',
+          'text',
+          {
+            location: convertLocation(node.location?.start),
+            code: DirectiveErrorCode.VALIDATION_FAILED,
+            severity: ErrorSeverity.Fatal
+          }
+        );
+      }
+      
+      // Extract api.method part
+      const apiMethodPart = valueAfterCall.substring(0, firstSpaceIndex);
+      const hasDot = apiMethodPart.includes('.');
+      
+      // Extract api and method parts
       const apiMethodParts = hasDot ? apiMethodPart.split('.') : [];
       const hasValidApiMethod = apiMethodParts.length === 2 && 
                                isValidIdentifier(apiMethodParts[0]) && 
                                isValidIdentifier(apiMethodParts[1]);
       
-      // Combine the remaining parts and check for path format
-      const pathPart = parts.slice(1).join(' ');
-      const hasValidPath = pathPart.trim().startsWith('[') && pathPart.trim().endsWith(']');
+      // Extract path part
+      const pathPart = valueAfterCall.substring(firstSpaceIndex + 1).trim();
+      const hasValidPath = pathPart.startsWith('[') && pathPart.endsWith(']');
       
       if (!(hasDot && hasValidApiMethod && hasValidPath)) {
         throw new MeldDirectiveError(

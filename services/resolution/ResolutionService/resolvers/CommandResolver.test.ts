@@ -7,10 +7,13 @@ import { TestContext } from '@tests/utils/TestContext.js';
 import { MeldNode, DirectiveNode, TextNode } from 'meld-spec';
 import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
+import { createMockParserService, createDirectiveNode, createTextNode } from '@tests/utils/testFactories.js';
+import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 
 describe('CommandResolver', () => {
   let resolver: CommandResolver;
   let stateService: IStateService;
+  let parserService: ReturnType<typeof createMockParserService>;
   let context: ResolutionContext;
   let testContext: TestContext;
 
@@ -19,7 +22,8 @@ describe('CommandResolver', () => {
     await testContext.initialize();
 
     stateService = testContext.factory.createMockStateService();
-    resolver = new CommandResolver(stateService);
+    parserService = createMockParserService();
+    resolver = new CommandResolver(stateService, parserService);
 
     context = {
       currentFilePath: 'test.meld',
@@ -28,7 +32,8 @@ describe('CommandResolver', () => {
         data: true,
         path: true,
         command: true
-      }
+      },
+      state: stateService
     };
   });
 
@@ -59,9 +64,19 @@ describe('CommandResolver', () => {
         command: '@run [echo test]'
       });
 
+      // Mock parser to parse the command
+      vi.mocked(parserService.parse).mockResolvedValue([
+        createDirectiveNode('run', {
+          identifier: 'echo',
+          value: 'test',
+          args: []
+        })
+      ]);
+
       const result = await resolver.resolve(node, context);
       expect(result).toBe('echo test');
       expect(stateService.getCommand).toHaveBeenCalledWith('simple');
+      expect(parserService.parse).toHaveBeenCalled();
     });
 
     it('should resolve command with parameters', async () => {
@@ -77,9 +92,27 @@ describe('CommandResolver', () => {
         command: '@run [echo {{param1}} {{param2}}]'
       });
 
+      // Mock parser to parse the command and the parameter template
+      vi.mocked(parserService.parse)
+        .mockResolvedValueOnce([
+          createDirectiveNode('run', {
+            identifier: 'echo',
+            value: '{{param1}} {{param2}}',
+            args: []
+          })
+        ])
+        .mockResolvedValueOnce([
+          createTextNode('Some text {{var}} echo '),
+          createDirectiveNode('text', { identifier: 'param1' }),
+          createTextNode(' '),
+          createDirectiveNode('text', { identifier: 'param2' }),
+          createTextNode(' more text')
+        ]);
+
       const result = await resolver.resolve(node, context);
       expect(result).toBe('echo hello world');
       expect(stateService.getCommand).toHaveBeenCalledWith('echo');
+      expect(parserService.parse).toHaveBeenCalledTimes(2);
     });
 
     it('should handle commands with options', async () => {
@@ -95,6 +128,42 @@ describe('CommandResolver', () => {
         command: '@run [echo {{text}}]',
         options: { background: true }
       });
+
+      // Mock parser for both command parsing and parameter extraction
+      vi.mocked(parserService.parse)
+        .mockResolvedValueOnce([
+          createDirectiveNode('run', {
+            identifier: 'echo',
+            value: '{{text}}',
+            args: []
+          })
+        ])
+        .mockResolvedValueOnce([
+          createTextNode('Some text {{var}} echo '),
+          createDirectiveNode('text', { identifier: 'text' }),
+          createTextNode(' more text')
+        ]);
+
+      const result = await resolver.resolve(node, context);
+      expect(result).toBe('echo test');
+      expect(parserService.parse).toHaveBeenCalledTimes(2);
+    });
+
+    it('should handle parsing errors gracefully by falling back to regex', async () => {
+      const node: DirectiveNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'run',
+          identifier: 'echo',
+          args: ['test']
+        }
+      };
+      vi.mocked(stateService.getCommand).mockReturnValue({
+        command: '@run [echo {{text}}]'
+      });
+
+      // Make parser throw an error to test fallback
+      vi.mocked(parserService.parse).mockRejectedValue(new Error('Parsing failed'));
 
       const result = await resolver.resolve(node, context);
       expect(result).toBe('echo test');
@@ -132,7 +201,7 @@ describe('CommandResolver', () => {
       
       try {
         await resolver.resolve(node, context);
-        fail('Expected to throw but did not');
+        expect.fail('Expected to throw but did not');
       } catch (error) {
         expect(error).toBeInstanceOf(MeldResolutionError);
         expect((error as MeldResolutionError).severity).toBe(ErrorSeverity.Recoverable);
@@ -153,9 +222,12 @@ describe('CommandResolver', () => {
         command: 'invalid format'
       });
 
+      // Mock parser to throw an error for invalid command
+      vi.mocked(parserService.parse).mockRejectedValue(new Error('Parse error'));
+
       await expect(resolver.resolve(node, context))
         .rejects
-        .toThrow('Invalid command definition: must start with @run [');
+        .toThrow('Invalid command format');
     });
 
     it('should handle parameter count mismatches appropriately', async () => {
@@ -164,6 +236,23 @@ describe('CommandResolver', () => {
         command: '@run [echo {{param1}} {{param2}}]'
       };
       vi.mocked(stateService.getCommand).mockReturnValue(command);
+      
+      // Mock parser to properly handle parameter count
+      vi.mocked(parserService.parse)
+        .mockResolvedValueOnce([
+          createDirectiveNode('run', {
+            identifier: 'echo',
+            value: '{{param1}} {{param2}}',
+            args: []
+          })
+        ])
+        .mockResolvedValueOnce([
+          createTextNode('Some text '),
+          createDirectiveNode('text', { identifier: 'param1' }),
+          createTextNode(' '),
+          createDirectiveNode('text', { identifier: 'param2' }),
+          createTextNode(' more text')
+        ]);
       
       // Act & Assert
       // Test too few parameters
@@ -178,7 +267,7 @@ describe('CommandResolver', () => {
       
       try {
         await resolver.resolve(tooFewNode, context);
-        fail('Expected to throw but did not');
+        expect.fail('Expected to throw but did not');
       } catch (error) {
         expect(error).toBeInstanceOf(MeldResolutionError);
         expect((error as MeldResolutionError).severity).toBe(ErrorSeverity.Fatal);
@@ -197,7 +286,7 @@ describe('CommandResolver', () => {
       
       try {
         await resolver.resolve(tooManyNode, context);
-        fail('Expected to throw but did not');
+        expect.fail('Expected to throw but did not');
       } catch (error) {
         expect(error).toBeInstanceOf(MeldResolutionError);
         expect((error as MeldResolutionError).severity).toBe(ErrorSeverity.Fatal);

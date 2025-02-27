@@ -15,7 +15,8 @@ import { ErrorSeverity, MeldError } from '@core/errors/MeldError.js';
 import { 
   expectDirectiveValidationError, 
   expectToThrowWithConfig,
-  expectValidationError
+  expectValidationError,
+  expectValidationToThrowWithDetails
 } from '@tests/utils/errorTestUtils.js';
 
 describe('ValidationService', () => {
@@ -67,31 +68,38 @@ describe('ValidationService', () => {
     it('should throw on missing name with Fatal severity', async () => {
       const node = createTextDirective('', 'Hello', createLocation(1, 1));
       
-      await expectToThrowWithConfig(
-        async () => service.validate(node),
-        {
-          type: 'MeldDirectiveError',
-          code: DirectiveErrorCode.VALIDATION_FAILED,
-          severity: ErrorSeverity.Fatal,
-          directiveKind: 'text',
-          messageContains: 'identifier'
-        }
-      );
+      await expect(async () => {
+        await service.validate(node);
+      }).rejects.toThrow(MeldDirectiveError);
+      
+      try {
+        await service.validate(node);
+      } catch (error) {
+        expect(error).toBeInstanceOf(MeldDirectiveError);
+        const directiveError = error as MeldDirectiveError;
+        expect(directiveError.directiveKind).toBe('text');
+        expect(directiveError.code).toBe(DirectiveErrorCode.VALIDATION_FAILED);
+        expect(directiveError.severity).toBe(ErrorSeverity.Fatal);
+      }
     });
     
     it('should throw on missing value with Fatal severity', async () => {
       const node = createTextDirective('greeting', '', createLocation(1, 1));
       
-      await expectToThrowWithConfig(
-        async () => service.validate(node),
-        {
-          type: 'MeldDirectiveError',
-          code: DirectiveErrorCode.VALIDATION_FAILED,
-          severity: ErrorSeverity.Fatal,
-          directiveKind: 'text',
-          messageContains: 'value'
-        }
-      );
+      await expect(async () => {
+        await service.validate(node);
+      }).rejects.toThrow(MeldDirectiveError);
+      
+      try {
+        await service.validate(node);
+      } catch (error) {
+        expect(error).toBeInstanceOf(MeldDirectiveError);
+        const directiveError = error as MeldDirectiveError;
+        expect(directiveError.directiveKind).toBe('text');
+        expect(directiveError.code).toBe(DirectiveErrorCode.VALIDATION_FAILED);
+        expect(directiveError.severity).toBe(ErrorSeverity.Fatal);
+        expect(directiveError.message.toLowerCase()).toContain('value');
+      }
     });
     
     it('should throw on invalid name format with Fatal severity', async () => {

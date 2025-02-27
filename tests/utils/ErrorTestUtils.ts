@@ -353,4 +353,78 @@ export function expectToThrowWithConfigSync(
     // Otherwise check the actual error
     checkError(error, options);
   }
+}
+
+/**
+ * Specialized validation error checking for ValidationService tests
+ * This makes tests more resilient to error message changes
+ * 
+ * @param error The error to check
+ * @param directiveKind The directive kind (e.g., 'text', 'data', 'path')
+ * @param code The error code (e.g., DirectiveErrorCode.VALIDATION_FAILED)
+ * @param propertyName Optional property name that caused the validation error
+ * @param severity The error severity (defaults to Fatal)
+ */
+export function expectValidationErrorWithDetails(
+  error: unknown,
+  directiveKind: string,
+  code: string,
+  propertyName?: string,
+  severity: ErrorSeverity = ErrorSeverity.Fatal
+): void {
+  // Check basic error type
+  expect(error).toBeInstanceOf(MeldDirectiveError);
+  const directiveError = error as MeldDirectiveError;
+  
+  // Check properties regardless of exact message
+  expect(directiveError.directiveKind).toBe(directiveKind);
+  expect(directiveError.code).toBe(code);
+  expect(directiveError.severity).toBe(severity);
+  
+  // If property name is specified, check that it's mentioned in the message
+  if (propertyName) {
+    expect(directiveError.message.toLowerCase()).toContain(propertyName.toLowerCase());
+  }
+}
+
+/**
+ * Test a validation function expecting it to throw an error with specific attributes
+ * 
+ * @param validationFn The validation function to test
+ * @param directiveKind The expected directive kind in the error
+ * @param code The expected error code
+ * @param propertyName Optional property name that caused the validation error
+ * @param severity The expected severity
+ */
+export function expectValidationToThrowWithDetails(
+  validationFn: () => any,
+  directiveKind: string,
+  code: string,
+  propertyName?: string,
+  severity: ErrorSeverity = ErrorSeverity.Fatal
+): void {
+  try {
+    validationFn();
+    throw new Error(`Expected validation function to throw MeldDirectiveError for ${directiveKind}`);
+  } catch (error) {
+    expectValidationErrorWithDetails(error, directiveKind, code, propertyName, severity);
+  }
+}
+
+/**
+ * Asynchronous version of expectValidationToThrowWithDetails
+ */
+export async function expectValidationToThrowWithDetailsAsync(
+  validationFn: () => Promise<any>,
+  directiveKind: string,
+  code: string,
+  propertyName?: string,
+  severity: ErrorSeverity = ErrorSeverity.Fatal
+): Promise<void> {
+  try {
+    await validationFn();
+    throw new Error(`Expected validation function to throw MeldDirectiveError for ${directiveKind}`);
+  } catch (error) {
+    expectValidationErrorWithDetails(error, directiveKind, code, propertyName, severity);
+  }
 } 

@@ -14,7 +14,7 @@ build/
 *.tsbuildinfo
 
 # Logs
-logs
+logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
@@ -37,9 +37,26 @@ pids
 .env.test.local
 .env.production.local 
 
+# Documentation (allow specific docs only)
 /*.md
-_meld/*.md
-!/_/*.meld.md
+!README.md
+!LICENSE.md
+!CONTRIBUTING.md
+!CODE_OF_CONDUCT.md
 
+# Development folders (working files, not for public release)
+/_meld/
+/dev/
+/tmp/
+
+# Example outputs
 examples/*.xml
-examples/*.md
+examples/logs/
+
+# Temporary files
+diff.txt
+test_*.txt
+test_*.mjs
+test_output.log
+repomix-output.xml
+.repomixignore
