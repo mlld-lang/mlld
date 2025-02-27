@@ -99,8 +99,11 @@ export interface IResolutionService {
 
   /**
    * Extract a section from content by its heading
+   * @param content The content to extract the section from
+   * @param section The heading text to search for
+   * @param fuzzy Optional fuzzy matching threshold (0-1, where 1 is exact match, defaults to 0.7)
    */
-  extractSection(content: string, section: string): Promise<string>;
+  extractSection(content: string, section: string, fuzzy?: number): Promise<string>;
 
   /**
    * Check for circular variable references

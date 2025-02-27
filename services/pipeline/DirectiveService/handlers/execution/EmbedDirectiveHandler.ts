@@ -48,7 +48,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
       await this.validationService.validate(node);
 
       // 2. Get path and section from directive
-      const { path, section, headingLevel, underHeader } = node.directive;
+      const { path, section, headingLevel, underHeader, fuzzy } = node.directive;
 
       // 3. Process path
       if (!path) {
@@ -114,9 +114,15 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
             resolutionContext
           );
           try {
+            const fuzzyThreshold = typeof fuzzy === 'number' ? fuzzy : undefined;
+            this.logger.debug('Extracting section with parameters', {
+              section: resolvedSection,
+              fuzzyThreshold
+            });
             processedContent = await this.resolutionService.extractSection(
               content,
-              resolvedSection
+              resolvedSection,
+              fuzzyThreshold
             );
           } catch (error) {
             throw new DirectiveError(

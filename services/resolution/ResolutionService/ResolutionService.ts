@@ -516,47 +516,204 @@ export class ResolutionService implements IResolutionService {
 
   /**
    * Extract a section from content by its heading
+   * @param content The content to extract the section from
+   * @param heading The heading text to search for
+   * @param fuzzy Optional fuzzy matching threshold (0-1, where 1 is exact match, defaults to 0.7)
+   * 
+   * NOTE: This implementation contains workarounds for limitations in the llmxml library.
+   * See dev/LLMXML-IMPROVEMENTS.md for details about planned improvements to the library
+   * instead of maintaining these workarounds.
+   * 
+   * Current workarounds include:
+   * 1. Manual section extraction when llmxml fails
+   * 2. Error reporting with available headings
+   * 3. Configurable fuzzy matching threshold
    */
   async extractSection(content: string, heading: string, fuzzy?: number): Promise<string> {
+    logger.debug('Extracting section from content', {
+      headingToFind: heading,
+      contentLength: content.length,
+      fuzzyThreshold: fuzzy
+    });
+    
     try {
       // Use llmxml for section extraction
+      // TODO: Once llmxml is enhanced with better error reporting and per-call
+      // configuration, simplify this implementation
       const { createLLMXML } = await import('llmxml');
       const llmxml = createLLMXML({
-        defaultFuzzyThreshold: fuzzy || 0.7,
+        defaultFuzzyThreshold: fuzzy !== undefined ? fuzzy : 0.7,
         warningLevel: 'none'
       });
       
       // Extract the section directly from markdown
       const section = await llmxml.getSection(content, heading, {
-        exact: !fuzzy,
+        exact: fuzzy === 1 || fuzzy === undefined ? false : true,
         includeNested: true,
         fuzzyThreshold: fuzzy
       });
       
       if (!section) {
+        // If section not found with llmxml, fall back to manual extraction
+        // TODO: Remove this fallback once llmxml reliability is improved
+        const manualSection = this.manualSectionExtraction(content, heading, fuzzy);
+        
+        if (manualSection) {
+          logger.debug('Found section using manual extraction', {
+            heading,
+            sectionLength: manualSection.length
+          });
+          return manualSection;
+        }
+        
+        // If still not found, throw error with enhanced diagnostic information
+        // TODO: Once llmxml provides this information, use it directly
+        logger.warn('Section not found', {
+          heading,
+          contentFirstLines: content.split('\n').slice(0, 5).join('\n')
+        });
+        
         throw new MeldResolutionError(
           'Section not found: ' + heading,
           {
             code: ResolutionErrorCode.SECTION_NOT_FOUND,
-            details: { value: heading },
+            details: { 
+              value: heading,
+              contentPreview: content.substring(0, 100) + '...',
+              availableHeadings: this.extractHeadings(content).join(', ')
+            },
             severity: ErrorSeverity.Recoverable
           }
         );
       }
+      
+      logger.debug('Found section using llmxml', {
+        heading,
+        sectionLength: section.length
+      });
       
       return section;
     } catch (error) {
       if (error instanceof MeldResolutionError) {
         throw error;
       }
+      
+      // Log the actual error for debugging
+      logger.error('Error extracting section', {
+        heading,
+        error: error instanceof Error ? error.message : String(error)
+      });
+      
+      // Try manual extraction as fallback after llmxml error
+      // TODO: Remove once llmxml error handling is improved
+      const manualSection = this.manualSectionExtraction(content, heading, fuzzy);
+      if (manualSection) {
+        logger.debug('Found section using manual extraction after llmxml error', {
+          heading,
+          sectionLength: manualSection.length
+        });
+        return manualSection;
+      }
+      
       throw new MeldResolutionError(
         'Section not found: ' + heading,
         {
           code: ResolutionErrorCode.SECTION_NOT_FOUND,
-          details: { value: heading },
+          details: { 
+            value: heading,
+            error: error instanceof Error ? error.message : String(error),
+            availableHeadings: this.extractHeadings(content).join(', ')
+          },
           severity: ErrorSeverity.Recoverable
         }
       );
+    }
+  }
+  
+  /**
+   * Extract all headings from content for error reporting
+   * This functionality should ideally be provided by the llmxml library
+   * @private
+   * @todo Move this functionality into llmxml
+   */
+  private extractHeadings(content: string): string[] {
+    const headings: string[] = [];
+    const lines = content.split('\n');
+    
+    for (const line of lines) {
+      const match = line.match(/^(#{1,6})\s+(.+)$/);
+      if (match) {
+        headings.push(match[2].trim());
+      }
+    }
+    
+    return headings;
+  }
+  
+  /**
+   * Manual section extraction as a fallback when llmxml fails
+   * This is a workaround for limitations in the llmxml library
+   * @private
+   * @todo Remove once llmxml reliability is improved
+   */
+  private manualSectionExtraction(content: string, heading: string, fuzzy?: number): string | null {
+    try {
+      const lines = content.split('\n');
+      const threshold = fuzzy !== undefined ? fuzzy : 0.7;
+      
+      // Find all headings with their levels
+      const headings: { text: string; level: number; index: number }[] = [];
+      
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const match = line.match(/^(#{1,6})\s+(.+)$/);
+        if (match) {
+          headings.push({
+            text: match[2].trim(),
+            level: match[1].length,
+            index: i
+          });
+        }
+      }
+      
+      if (headings.length === 0) {
+        return null;
+      }
+      
+      // Find the best matching heading
+      let bestMatch: { text: string; level: number; index: number; similarity: number } | null = null;
+      
+      for (const h of headings) {
+        const similarity = this.calculateSimilarity(h.text, heading);
+        if (similarity >= threshold && (!bestMatch || similarity > bestMatch.similarity)) {
+          bestMatch = { ...h, similarity };
+        }
+      }
+      
+      if (!bestMatch) {
+        return null;
+      }
+      
+      // Find the end of the section (next heading of same or higher level)
+      let endIndex = lines.length;
+      
+      for (let i = bestMatch.index + 1; i < headings.length; i++) {
+        const nextHeading = headings[i];
+        if (nextHeading.level <= bestMatch.level) {
+          endIndex = nextHeading.index;
+          break;
+        }
+      }
+      
+      // Extract the section content
+      const sectionLines = lines.slice(bestMatch.index, endIndex);
+      return sectionLines.join('\n');
+    } catch (error) {
+      logger.warn('Manual section extraction failed', {
+        heading,
+        error: error instanceof Error ? error.message : String(error)
+      });
+      return null;
     }
   }
 
