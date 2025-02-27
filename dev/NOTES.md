@@ -1,62 +1,34 @@
 # API Integration Test Issues
 
-## Suggested Plan of Attack
+## Prioritized Plan
 
-Based on the investigation results, here is the recommended order to address the issues:
+1. ✅ **Import Handling** (Fixed)
+   - Using parent state directly rather than cloning for proper variable access
 
-1. ✅ **Fix Import Handling** (High Priority)
-   - ✅ Address how ImportDirectiveHandler populates variables from imported files into the parent state
-   - ✅ Ensure variables defined in imported files are accessible in the parent scope
-   - ✅ Validate by fixing a specific test case for nested imports with proper scope inheritance
+2. ✅ **Section Extraction** (Fixed)
+   - Added fallback manual extraction when llmxml fails
+   - Added detailed logging and error messages
 
-2. ✅ **Fix Section Extraction in EmbedDirectiveHandler** (Medium Priority)
-   - ✅ Debug the llmxml integration to understand why sections aren't being found
-   - ✅ Add better error handling and logging to the section extraction code
-   - ✅ Implement a fallback section extraction method using manual markdown parsing
+3. **Command Execution Mocking** (Next)
+   - Implement proper mock command executor for tests
 
-3. **Implement Command Execution Mocking** (Medium Priority)
-   - Create a proper mock command executor for tests instead of hardcoded fallbacks
-   - Allow tests to register expected command outputs for specific inputs
-   - Update CommandResolver to use this mock in test environments
+4. **TestDebuggerService** (Medium)
+   - Fix state capture and null-checking
 
-4. **Enhance TestDebuggerService** (Medium Priority)
-   - Update the service to capture transformedNodes in addition to textVars and dataVars
-   - Fix integration with StateService to properly receive state update events
-   - Add better error handling for null/undefined property access
+5. **Path Validation in Tests** (Low)
+   - Update fixtures to use proper path variables
 
-5. **Update Path Validation in Tests** (Low Priority)
-   - Fix multi-file test fixtures to use proper path variables ($PROJECTPATH, $.)
-   - Create standardized test project structure with correct path formats
-   - Update tests to reflect the new stricter path validation rules
-
-These changes will address all the major issues identified while maintaining backward compatibility.
-
-## Completed Issues
+## Completed
 
 ### Import Handling ✅
-- Previously, the ImportDirectiveHandler created a clone of the parent state and populated that with variables from imported files, but the variables were not accessible in the parent scope.
-- Fixed by modifying ImportDirectiveHandler to use the parent state directly instead of a clone, ensuring variables from imported files are properly accessible from the parent scope.
-- Added a better test case that explicitly verifies that variables from deeply nested imports are accessible in the parent scope.
+**Issue:** Variables from imported files were not accessible in parent scope
+**Fix:** Modified ImportDirectiveHandler to use parent state directly instead of cloning
+**Validation:** Tests verify variables from nested imports are accessible in parent scope
 
-**Root Cause:** The ImportDirectiveHandler was working with a cloned state rather than the parent state directly. Variables were being correctly imported into the cloned state, but this state was separate from the parent scope where the variables needed to be accessed.
-
-**Solution:** Modified ImportDirectiveHandler to use the parent state directly instead of creating a clone, ensuring variables from imported files are properly accessible.
-
-**Certainty:** 100% - Changes have been implemented and validated with tests. The nested import test now properly verifies that variables from all levels of imports are accessible in the parent scope.
-
-### Embed Section Extraction ✅
-- Previously, the section extraction functionality in EmbedDirectiveHandler would fail when using llmxml to extract sections from content.
-- The specific pattern of section headings in test files wasn't being properly recognized by the llmxml library.
-- Fixed by enhancing the ResolutionService.extractSection method with better error handling, debugging information, and a fallback manual section extraction method.
-- Added a new manualSectionExtraction method that parses Markdown headings directly and extracts sections based on heading levels.
-- Added better logging for troubleshooting section extraction issues.
-- Updated the EmbedDirectiveHandler to properly pass the fuzzy parameter to the extractSection method.
-
-**Root Cause:** The llmxml library's section extraction was failing silently without providing useful error information. The fallback manual extraction method was needed to handle cases where llmxml couldn't extract sections correctly.
-
-**Solution:** Implemented a robust fallback mechanism to manually extract sections using heading regex patterns when llmxml fails. Added detailed error messages that include available headings in the content to make debugging easier.
-
-**Certainty:** 100% - Changes have been implemented and all tests are now passing. The enhanced ResolutionService will reliably extract sections even when the llmxml library fails.
+### Section Extraction ✅
+**Issue:** llmxml library failing to extract markdown sections properly
+**Fix:** Added manual section extraction fallback with better error reporting
+**Validation:** All embed tests passing with reliable section extraction
 
 ## Issues Requiring Investigation
 
