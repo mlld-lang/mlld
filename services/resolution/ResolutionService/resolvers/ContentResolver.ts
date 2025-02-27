@@ -28,13 +28,9 @@ export class ContentResolver {
           break;
 
         case 'CodeFence':
-          // Code fence - preserve backticks, language and content exactly
-          const codeFence = node as CodeFenceNode;
-          // Extract backtick count from content
-          const backtickMatch = codeFence.content.match(/^(`+)/);
-          const backticks = backtickMatch ? backtickMatch[1] : '```';
-          const fence = backticks + (codeFence.language || '');
-          resolvedParts.push(`${fence}\n${codeFence.content.split('\n').slice(1, -1).join('\n')}\n${backticks}`);
+          // For code fences, directly use the content from the node
+          // meld-ast handles all code fence formatting
+          resolvedParts.push((node as CodeFenceNode).content);
           break;
       }
     }

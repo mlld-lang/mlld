@@ -119,29 +119,67 @@ export class ParserService implements IParserService {
   }
 
   private validateCodeFences(nodes: MeldNode[]): void {
-    // Validate that code fences are closed with exactly the same number of backticks
+    // Since we're using the meld-ast parser with validateNodes=true and preserveCodeFences=true,
+    // we can trust that the code fences are already valid.
+    // This is just an extra validation layer to ensure code fence integrity
     for (const node of nodes) {
       if (node.type === 'CodeFence') {
         const codeFence = node as CodeFenceNode;
         const content = codeFence.content;
         
-        // Extract opening and closing backticks
-        const openMatch = content.match(/^(`+)/);
-        const closeMatch = content.match(/\n(`+)$/);
+        // Skip empty code fences (should be rare but possible)
+        if (!content) {
+          continue;
+        }
         
-        if (!openMatch || !closeMatch) {
+        // Split the content by lines
+        const lines = content.split('\n');
+        if (lines.length < 2) {
           throw new MeldParseError(
-            'Invalid code fence: missing opening or closing backticks',
+            'Invalid code fence: must have at least an opening and closing line',
             node.location || { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } }
           );
         }
-
-        const openTicks = openMatch[1];
-        const closeTicks = closeMatch[1];
-
-        if (openTicks.length !== closeTicks.length) {
+        
+        // Get the first line (opening fence) and count backticks
+        const firstLine = lines[0];
+        let openTickCount = 0;
+        for (let i = 0; i < firstLine.length; i++) {
+          if (firstLine[i] === '`') {
+            openTickCount++;
+          } else {
+            break;
+          }
+        }
+        
+        // Get the last line (closing fence) and count backticks
+        const lastLine = lines[lines.length - 1];
+        let closeTickCount = 0;
+        for (let i = 0; i < lastLine.length; i++) {
+          if (lastLine[i] === '`') {
+            closeTickCount++;
+          } else {
+            break;
+          }
+        }
+        
+        if (openTickCount === 0) {
           throw new MeldParseError(
-            `Code fence must be closed with exactly ${openTicks.length} backticks, got ${closeTicks.length}`,
+            'Invalid code fence: missing opening backticks',
+            node.location || { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } }
+          );
+        }
+        
+        if (closeTickCount === 0) {
+          throw new MeldParseError(
+            'Invalid code fence: missing closing backticks',
+            node.location || { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } }
+          );
+        }
+        
+        if (openTickCount !== closeTickCount) {
+          throw new MeldParseError(
+            `Code fence must be closed with exactly ${openTickCount} backticks, got ${closeTickCount}`,
             node.location || { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } }
           );
         }

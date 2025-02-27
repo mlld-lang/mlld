@@ -3,6 +3,7 @@ import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
 import { DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 import { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
+import { isValidIdentifier } from '../utils/IdentifierValidator.js';
 
 /**
  * Validates path directives based on the latest meld-ast 1.6.1 structure
@@ -40,9 +41,8 @@ export async function validatePathDirective(node: DirectiveNode, context?: Resol
     );
   }
   
-  // Validate identifier format (only allows alphanumeric and underscore)
-  const identifierRegex = /^[a-zA-Z0-9_]+$/;
-  if (!identifierRegex.test(identifier)) {
+  // Validate identifier format using the shared utility
+  if (!isValidIdentifier(identifier)) {
     throw new MeldDirectiveError(
       `Invalid identifier format: ${identifier}. Must contain only letters, numbers, and underscores.`,
       DirectiveErrorCode.VALIDATION_FAILED,

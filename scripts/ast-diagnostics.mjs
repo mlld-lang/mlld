@@ -5,6 +5,7 @@ import * as fs from 'fs';
 // Async function to run all diagnostics
 async function runDiagnostics() {
   // Test with samples of each directive type (with corrected syntax)
+  const backtickFence = '```';
 
   const samples = {
     path: '@path docs = "$PROJECTPATH/docs"\n',
@@ -14,7 +15,9 @@ async function runDiagnostics() {
     import: '@import [$PROJECTPATH/other.meld]\n',
     define: '@define command = @run [echo hello]\n',
     embed: '@embed [$PROJECTPATH/docs/somefile.md]\n',
-    embed: '@text test = "test" \n\n @embed [${test}]\n'
+    embed: '@text test = "test" \n\n @embed [${test}]\n',
+    codefence: `${backtickFence}\nsomecode\n${backtickFence}\n`,
+    textcontent: `this is just a regular line of text`
   };
 
   // Options for the parser

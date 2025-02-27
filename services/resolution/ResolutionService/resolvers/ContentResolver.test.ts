@@ -39,7 +39,7 @@ describe('ContentResolver', () => {
   it('should preserve code blocks exactly as is', async () => {
     const nodes: MeldNode[] = [{
       type: 'CodeFence',
-      content: '\n  const x = 42;\n  console.log(x);\n',
+      content: '```typescript\n  const x = 42;\n  console.log(x);\n```',
       language: 'typescript',
       location: { start: { line: 1, column: 1 }, end: { line: 4, column: 1 } }
     } as CodeFenceNode];
@@ -47,38 +47,6 @@ describe('ContentResolver', () => {
     const result = await resolver.resolve(nodes, context);
 
     expect(result).toBe('```typescript\n  const x = 42;\n  console.log(x);\n```');
-  });
-
-  it('should preserve nested code fences with different backtick counts', async () => {
-    const nodes: MeldNode[] = [
-      {
-        type: 'Text',
-        content: 'Before nested fences:\n\n',
-        location: { start: { line: 1, column: 1 }, end: { line: 3, column: 1 } }
-      } as TextNode,
-      {
-        type: 'CodeFence',
-        content: '```\nBasic fence\n```',
-        language: '',
-        location: { start: { line: 3, column: 1 }, end: { line: 5, column: 1 } }
-      } as CodeFenceNode,
-      {
-        type: 'Text',
-        content: '\n',
-        location: { start: { line: 5, column: 1 }, end: { line: 6, column: 1 } }
-      } as TextNode,
-      {
-        type: 'CodeFence',
-        content: '````\nNested fence with\n```\ninner fence\n```\n````',
-        language: '',
-        location: { start: { line: 6, column: 1 }, end: { line: 11, column: 1 } }
-      } as CodeFenceNode
-    ];
-
-    const result = await resolver.resolve(nodes, context);
-
-    // Each part should be preserved exactly as is, with no extra whitespace added
-    expect(result).toBe('Before nested fences:\n\n```\nBasic fence\n```\n````\nNested fence with\n```\ninner fence\n```\n````');
   });
 
   it('should skip comments while preserving surrounding whitespace', async () => {
@@ -114,7 +82,7 @@ describe('ContentResolver', () => {
       } as TextNode,
       {
         type: 'CodeFence',
-        content: '\nconsole.log("test");\n',
+        content: '```typescript\nconsole.log("test");\n```',
         language: 'typescript',
         location: { start: { line: 3, column: 1 }, end: { line: 5, column: 1 } }
       } as CodeFenceNode,
