@@ -60,3 +60,4 @@ test_*.mjs
 test_output.log
 repomix-output.xml
 .repomixignore
+repomix.config.json

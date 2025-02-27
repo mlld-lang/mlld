@@ -1,0 +1,49 @@
+name: Clean Repository
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  check-clean:
+    name: Check for ignored files
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Check for ignored files in PR
+        run: |
+          # Create a list of directories that should not be in the public repo
+          IGNORED_DIRS="_meld dev tmp"
+          
+          # Check for ignored directories and files
+          FOUND_FILES=""
+          for dir in $IGNORED_DIRS; do
+            if [ -d "$dir" ]; then
+              echo "::warning::Found ignored directory: $dir"
+              FOUND_FILES="true"
+            fi
+          done
+          
+          # Check for ignored files
+          for pattern in "diff.txt" "test_*.txt" "test_*.mjs" "test_output.log" "repomix-output.xml" ".repomixignore"; do
+            MATCHES=$(find . -name "$pattern" -type f -not -path "*/node_modules/*" -not -path "*/dist/*" | wc -l)
+            if [ "$MATCHES" -gt 0 ]; then
+              echo "::warning::Found files matching pattern: $pattern"
+              FOUND_FILES="true"
+            fi
+          done
+          
+          # Fail if found any ignored files
+          if [ -n "$FOUND_FILES" ]; then
+            echo "::error::Repository contains files that should be ignored for the public release"
+            echo "Please remove these files or add them to .gitignore and ensure they're not committed to the main branch"
+            exit 1
+          else
+            echo "Repository is clean. No ignored files found."
+          fi
