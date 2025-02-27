@@ -52,8 +52,9 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
         );
       }
 
-      // Create a new state for modifications
-      const clonedState = context.state.clone();
+      // Use the context state directly instead of cloning it
+      // This ensures imported variables will be visible in the parent scope
+      const targetState = context.state;
 
       // Create resolution context
       const resolutionContext = {
@@ -130,7 +131,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
         const nodes = await this.parserService.parse(content);
 
         // Create child state for interpretation
-        const childState = clonedState.createChildState();
+        const childState = targetState.createChildState();
 
         // Interpret content
         const interpretedState = await this.interpreterService.interpret(nodes, {
@@ -142,10 +143,10 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
         // Process imports based on importList
         if (!importList || importList === '*') {
           // Import all variables
-          this.importAllVariables(interpretedState, clonedState);
+          this.importAllVariables(interpretedState, targetState);
         } else {
           // Process the import list
-          this.processImportList(importList, interpretedState, clonedState);
+          this.processImportList(importList, interpretedState, targetState);
         }
 
         logger.debug('Import directive processed successfully', {
@@ -161,10 +162,10 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
             content: '',
             location: node.location
           };
-          return { state: clonedState, replacement };
+          return { state: targetState, replacement };
         }
 
-        return clonedState;
+        return targetState;
       } finally {
         // Always end import tracking
         if (resolvedFullPath) {

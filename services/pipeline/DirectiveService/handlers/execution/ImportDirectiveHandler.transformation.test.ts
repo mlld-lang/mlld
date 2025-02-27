@@ -150,8 +150,8 @@ describe('ImportDirectiveHandler Transformation', () => {
           filePath: undefined
         }
       });
-      expect(result.state).toBe(clonedState);
-      expect(clonedState.setTextVar).toHaveBeenCalledWith('var1', 'value1');
+      expect(result.state).toBe(stateService);
+      expect(stateService.setTextVar).toHaveBeenCalledWith('var1', 'value1');
     });
 
     it('should still import variables when transformation enabled', async () => {
@@ -185,8 +185,8 @@ describe('ImportDirectiveHandler Transformation', () => {
           filePath: undefined
         }
       });
-      expect(result.state).toBe(clonedState);
-      expect(clonedState.setTextVar).toHaveBeenCalledWith('myVar', 'value1');
+      expect(result.state).toBe(stateService);
+      expect(stateService.setTextVar).toHaveBeenCalledWith('myVar', 'value1');
     });
 
     it('should handle aliased imports in transformation mode', async () => {
@@ -220,8 +220,8 @@ describe('ImportDirectiveHandler Transformation', () => {
           filePath: undefined
         }
       });
-      expect(result.state).toBe(clonedState);
-      expect(clonedState.setTextVar).toHaveBeenCalledWith('targetVar', 'value1');
+      expect(result.state).toBe(stateService);
+      expect(stateService.setTextVar).toHaveBeenCalledWith('targetVar', 'value1');
     });
 
     it('should preserve error handling in transformation mode', async () => {

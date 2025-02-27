@@ -265,12 +265,13 @@ describe('ImportDirectiveHandler', () => {
       const result = await handler.execute(node, context);
 
       expect(validationService.validate).toHaveBeenCalledWith(node);
-      expect(stateService.clone).toHaveBeenCalled();
-      expect(clonedState.setTextVar).toHaveBeenCalledWith('text1', 'value1');
-      expect(clonedState.setDataVar).toHaveBeenCalledWith('data1', { key: 'value' });
-      expect(clonedState.setPathVar).toHaveBeenCalledWith('path1', '/path/to/file');
-      expect(clonedState.setCommand).toHaveBeenCalledWith('cmd1', { command: 'echo test' });
-      expect(result).toBe(clonedState);
+      // We no longer use clone in the updated implementation
+      // expect(stateService.clone).toHaveBeenCalled();
+      expect(stateService.setTextVar).toHaveBeenCalledWith('text1', 'value1');
+      expect(stateService.setDataVar).toHaveBeenCalledWith('data1', { key: 'value' });
+      expect(stateService.setPathVar).toHaveBeenCalledWith('path1', '/path/to/file');
+      expect(stateService.setCommand).toHaveBeenCalledWith('cmd1', { command: 'echo test' });
+      expect(result).toBe(stateService);
     });
 
     it('should import specific variables', async () => {
@@ -299,10 +300,10 @@ describe('ImportDirectiveHandler', () => {
 
       const result = await handler.execute(node, context);
 
-      expect(stateService.clone).toHaveBeenCalled();
-      expect(clonedState.setTextVar).toHaveBeenCalledWith('var1', 'value1');
-      expect(clonedState.setTextVar).toHaveBeenCalledWith('alias2', 'value2');
-      expect(result).toBe(clonedState);
+      // expect(stateService.clone).toHaveBeenCalled(); // No longer used
+      expect(stateService.setTextVar).toHaveBeenCalledWith('var1', 'value1');
+      expect(stateService.setTextVar).toHaveBeenCalledWith('alias2', 'value2');
+      expect(result).toBe(stateService);
     });
 
     it('should handle invalid import list syntax', async () => {
