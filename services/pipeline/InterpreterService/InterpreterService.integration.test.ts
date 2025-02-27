@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { TestContext } from '@tests/utils/index.js';
 import { MeldInterpreterError } from '@core/errors/MeldInterpreterError.js';
+import { DirectiveError } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
+import { MeldImportError } from '@core/errors/MeldImportError.js';
 import type { TextNode } from 'meld-spec';
 
 describe('InterpreterService Integration', () => {
@@ -135,52 +137,40 @@ describe('InterpreterService Integration', () => {
 
   describe('Error handling', () => {
     it('handles circular imports', async () => {
-      // Set up the CircularityService to throw the right exception for our test
-      const mockCircularityService = {
-        beginImport: (filePath: string) => {
-          if (filePath === '/project/src/circular1.meld') {
-            // Simulate detecting a circular import
-            throw new MeldImportError(
-              `Circular import detected for file: ${filePath}`,
-              {
-                code: 'CIRCULAR_IMPORT',
-                details: {
-                  importChain: ['/project/src/circular2.meld', '/project/src/circular1.meld']
-                }
-              }
-            );
-          }
-        },
-        endImport: () => {},
-        isInStack: () => false,
-        getImportStack: () => [],
-        reset: () => {}
+      // Create a mock circular import setup
+      await context.writeFile('project/src/circular1.meld', '@import path = "$.project/src/circular2.meld"');
+      await context.writeFile('project/src/circular2.meld', '@import path = "$.project/src/circular1.meld"');
+
+      // Create an import directive node for the interpreter
+      const node = context.factory.createImportDirective(
+        '$.project/src/circular1.meld',
+        context.factory.createLocation(1, 1)
+      );
+
+      // Mock the CircularityService to throw a circular import error
+      const originalBeginImport = context.services.circularity.beginImport;
+      context.services.circularity.beginImport = (filePath: string) => {
+        throw new MeldImportError('Circular import detected', {
+          code: 'CIRCULAR_IMPORT',
+          details: { importChain: ['a.meld', 'b.meld', 'a.meld'] }
+        });
       };
 
-      // Replace the circularity service with our mock
-      const originalCircularityService = context.services.circularity;
-      context.services.circularity = mockCircularityService as any;
-
       try {
-        // Create a directive node that will trigger our mock
-        const node = context.factory.createImportDirective('/project/src/circular1.meld', context.factory.createLocation(1, 1));
-        node.directive.path = '/project/src/circular1.meld';
-        
-        // This should throw our mocked circular import error
+        // This should throw an error due to the circular import
         await context.services.interpreter.interpret([node], {
           filePath: 'test.meld'
         });
         throw new Error('Should have thrown error');
       } catch (error: unknown) {
         if (error instanceof MeldInterpreterError) {
-          expect(error).toBeInstanceOf(MeldInterpreterError);
-          expect(error.message).toMatch(/circular/i);
+          expect(error.message).toContain('Circular import');
         } else {
           throw error;
         }
       } finally {
-        // Restore the original service
-        context.services.circularity = originalCircularityService;
+        // Restore original functionality
+        context.services.circularity.beginImport = originalBeginImport;
       }
     });
 
@@ -287,52 +277,40 @@ describe('InterpreterService Integration', () => {
     });
 
     it('handles cleanup on circular imports', async () => {
-      // Set up the CircularityService to throw the right exception for our test
-      const mockCircularityService = {
-        beginImport: (filePath: string) => {
-          if (filePath === '/project/src/circular1.meld') {
-            // Simulate detecting a circular import
-            throw new MeldImportError(
-              `Circular import detected for file: ${filePath}`,
-              {
-                code: 'CIRCULAR_IMPORT',
-                details: {
-                  importChain: ['/project/src/circular2.meld', '/project/src/circular1.meld']
-                }
-              }
-            );
-          }
-        },
-        endImport: () => {},
-        isInStack: () => false,
-        getImportStack: () => [],
-        reset: () => {}
+      // Create a mock circular import setup
+      await context.writeFile('project/src/circular1.meld', '@import path = "$.project/src/circular2.meld"');
+      await context.writeFile('project/src/circular2.meld', '@import path = "$.project/src/circular1.meld"');
+
+      // Create an import directive node for the interpreter
+      const node = context.factory.createImportDirective(
+        '$.project/src/circular1.meld',
+        context.factory.createLocation(1, 1)
+      );
+
+      // Mock the CircularityService to throw a circular import error
+      const originalBeginImport = context.services.circularity.beginImport;
+      context.services.circularity.beginImport = (filePath: string) => {
+        throw new MeldImportError('Circular import detected', {
+          code: 'CIRCULAR_IMPORT',
+          details: { importChain: ['a.meld', 'b.meld', 'a.meld'] }
+        });
       };
 
-      // Replace the circularity service with our mock
-      const originalCircularityService = context.services.circularity;
-      context.services.circularity = mockCircularityService as any;
-
       try {
-        // Create a directive node that will trigger our mock
-        const node = context.factory.createImportDirective('/project/src/circular1.meld', context.factory.createLocation(1, 1));
-        node.directive.path = '/project/src/circular1.meld';
-        
-        // This should throw our mocked circular import error
+        // This should throw an error due to the circular import
         await context.services.interpreter.interpret([node], {
           filePath: 'test.meld'
         });
         throw new Error('Should have thrown error');
       } catch (error: unknown) {
         if (error instanceof MeldInterpreterError) {
-          expect(error).toBeInstanceOf(MeldInterpreterError);
-          expect(error.message).toMatch(/circular/i);
+          expect(error.message).toContain('Circular import');
         } else {
           throw error;
         }
       } finally {
-        // Restore the original service
-        context.services.circularity = originalCircularityService;
+        // Restore original functionality
+        context.services.circularity.beginImport = originalBeginImport;
       }
     });
   });
