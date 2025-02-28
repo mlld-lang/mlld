@@ -18,6 +18,8 @@
       "@output/*": ["output/*"],
       "@cli/*": ["cli/*"],
       "@sdk/*": ["api/*"],
+      "@api/*": ["api/*"],
+      "@api": ["api/index.ts", "api/index.js"],
       "@tests/*": ["tests/*"]
     }
   },

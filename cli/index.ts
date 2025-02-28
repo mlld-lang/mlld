@@ -17,7 +17,7 @@ import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js
 interface CLIOptions {
   input: string;
   output?: string;
-  format?: 'markdown' | 'md' | 'xml' | 'llm';
+  format?: 'markdown' | 'md' | 'llm';
   stdout?: boolean;
   verbose?: boolean;
   debug?: boolean;
@@ -32,27 +32,34 @@ interface CLIOptions {
 /**
  * Normalize format string to supported output format
  */
-function normalizeFormat(format?: string): 'markdown' | 'xml' {
-  if (!format) return 'xml'; // Default to xml/llm format
+function normalizeFormat(format?: string): 'markdown' | 'llm' {
+  if (!format) return 'markdown';
   
-  format = format.toLowerCase();
-  switch (format) {
-    case 'markdown':
+  switch (format.toLowerCase()) {
     case 'md':
+    case 'markdown':
       return 'markdown';
-    case 'xml':
     case 'llm':
-      return 'xml';
+      return 'llm';
+    case 'xml': // For backward compatibility
+      return 'markdown'; // Default to markdown for XML format
     default:
-      throw new Error(`Invalid format: ${format}. Must be 'markdown', 'md', 'xml', or 'llm'`);
+      return 'markdown';
   }
 }
 
 /**
- * Get file extension based on format
+ * Get file extension for the given format
  */
-function getOutputExtension(format: 'markdown' | 'xml'): string {
-  return format === 'markdown' ? '.md' : '.xml';
+function getOutputExtension(format: 'markdown' | 'llm'): string {
+  switch (format) {
+    case 'markdown':
+      return '.md';
+    case 'llm':
+      return '.llm';
+    default:
+      return '.md';
+  }
 }
 
 /**
@@ -61,7 +68,7 @@ function getOutputExtension(format: 'markdown' | 'xml'): string {
 function parseArgs(args: string[]): CLIOptions {
   const options: CLIOptions = {
     input: '',
-    format: 'xml', // Default to llm/xml format
+    format: 'markdown', // Default to markdown format
     strict: false  // Default to permissive mode
   };
 
@@ -134,7 +141,7 @@ function displayHelp(): void {
 Usage: meld [options] <input-file>
 
 Options:
-  -f, --format <format>  Output format (md, markdown, llm/xml) [default: llm]
+  -f, --format <format>  Output format (md, markdown, llm/xml) [default: markdown]
   -o, --output <path>    Output file path [default: input filename with new extension]
   --stdout               Print to stdout instead of file
   --strict               Enable strict mode (fail on all errors)
@@ -170,9 +177,8 @@ async function confirmOverwrite(filePath: string): Promise<boolean> {
  */
 function cliToApiOptions(cliOptions: CLIOptions): ProcessOptions {
   return {
-    format: cliOptions.format,
+    format: normalizeFormat(cliOptions.format),
     debug: cliOptions.debug,
-    strict: cliOptions.strict,
     transformation: true, // Enable transformation by default for CLI usage
     fs: cliOptions.custom ? undefined : new NodeFileSystem() // Allow custom filesystem in test mode
   };
@@ -219,17 +225,17 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
       console.log(result);
       logger.info('Successfully wrote output to stdout');
     } else {
-      // Determine output path
+      // Handle output path
       let outputPath = cliOptions.output;
       
       if (!outputPath) {
         // If no output path specified, use input path with new extension
         const inputExt = '.meld';
-        const outputExt = getOutputExtension(cliOptions.format || 'xml');
+        const outputExt = getOutputExtension(normalizeFormat(cliOptions.format));
         outputPath = cliOptions.input.replace(new RegExp(`${inputExt}$`), outputExt);
       } else if (!outputPath.includes('.')) {
         // If output path has no extension, add default extension
-        outputPath += getOutputExtension(cliOptions.format || 'xml');
+        outputPath += getOutputExtension(normalizeFormat(cliOptions.format));
       }
       
       // In test mode with custom filesystem, we might need special handling

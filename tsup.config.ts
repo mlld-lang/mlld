@@ -41,6 +41,7 @@ export default defineConfig([
         '@output': './output',
         '@cli': './cli',
         '@sdk': './api',
+        '@api': './api',
         '@tests': './tests'
       };
       options.define = {
@@ -87,6 +88,7 @@ export default defineConfig([
         '@output': './output',
         '@cli': './cli',
         '@sdk': './api',
+        '@api': './api',
         '@tests': './tests'
       };
       options.define = {

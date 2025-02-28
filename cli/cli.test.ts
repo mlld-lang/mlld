@@ -45,12 +45,17 @@ vi.mock('./commands/init.js', () => ({
 }));
 
 // Setup mocks before each test
-beforeEach(() => {
+beforeEach(async () => {
   // Reset mocks and ensure consistent behavior
   vi.mocked(readline.createInterface).mockClear();
   vi.mocked(fs.watch).mockClear().mockImplementation(() => createWatchAsyncIterable());
-  require('@api/index.js').main.mockClear().mockResolvedValue('Test output');
-  require('./commands/init.js').initCommand.mockClear().mockResolvedValue(undefined);
+  
+  // Reset the API and init command mocks using importMock
+  const apiModule = await vi.importMock('@api/index.js');
+  vi.mocked(apiModule.main).mockClear().mockResolvedValue('Test output');
+  
+  const initModule = await vi.importMock('./commands/init.js');
+  vi.mocked(initModule.initCommand).mockClear().mockResolvedValue(undefined);
 });
 
 describe('CLI Tests', () => {
@@ -123,7 +128,7 @@ describe('CLI Tests', () => {
       });
       
       // Set up API implementation to throw a file not found error when called
-      const apiModule = require('@api/index.js');
+      const apiModule = await vi.importMock('@api/index.js');
       apiModule.main.mockRejectedValueOnce(new Error('File not found: /nonexistent/file.meld'));
       
       // Set CLI arguments
@@ -228,7 +233,7 @@ describe('CLI Tests', () => {
       process.argv = ['node', 'meld', 'init'];
 
       // Get a fresh reference to the mocked function and reset it
-      const initModule = require('./commands/init.js');
+      const initModule = await vi.importMock('./commands/init.js');
       const initMock = initModule.initCommand;
       initMock.mockClear();
       
@@ -260,7 +265,7 @@ describe('CLI Tests', () => {
       process.argv = ['node', 'meld', '/project/test.meld', '--stdout'];
 
       // Get a reference to the API mock
-      const apiMock = require('@api/index.js').main;
+      const apiMock = (await vi.importMock('@api/index.js')).main;
       apiMock.mockClear();
       
       try {
@@ -399,7 +404,7 @@ describe('CLI Tests', () => {
       fsAdapter.exists = vi.fn().mockResolvedValue(true);
       
       // Make the API module mock throw a specific error
-      const apiMock = require('@api/index.js').main;
+      const apiMock = (await vi.importMock('@api/index.js')).main;
       apiMock.mockRejectedValueOnce(new Error('Parse error: Unclosed string literal'));
       
       process.argv = ['node', 'meld', '/project/invalid.meld'];
@@ -429,7 +434,7 @@ describe('CLI Tests', () => {
       process.argv = ['node', 'meld', '--strict', '/project/test.meld'];
       
       // Get a reference to the mocked function and reset it
-      const apiMainSpy = require('@api/index.js').main;
+      const apiMainSpy = (await vi.importMock('@api/index.js')).main;
       apiMainSpy.mockClear();
       
       // Run the main function
@@ -475,7 +480,7 @@ describe('CLI Tests', () => {
       } as any);
 
       // Make the API return a specific value
-      const apiMock = require('@api/index.js').main;
+      const apiMock = (await vi.importMock('@api/index.js')).main;
       apiMock.mockResolvedValueOnce('Processed Hello World content');
       
       try {
@@ -525,7 +530,7 @@ describe('CLI Tests', () => {
       } as any);
 
       // Make the API return a specific value
-      const apiMock = require('@api/index.js').main;
+      const apiMock = (await vi.importMock('@api/index.js')).main;
       apiMock.mockResolvedValueOnce('Transformed content that should not be written');
       
       // Spy on writeFile to ensure it's not called
