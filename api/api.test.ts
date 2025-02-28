@@ -10,7 +10,7 @@ import fs from 'fs';
 // Define the type for main function options
 type MainOptions = {
   fs?: NodeFileSystem;
-  format?: 'llm';
+  format?: 'xml' | 'llm';
   services?: any;
 };
 
@@ -437,7 +437,7 @@ describe('SDK Integration Tests', () => {
       */
       
       // Verify that the output contains the expected content
-      expect(result).toContain('&gt;&gt; This is a commment and should be ignored');
+      expect(result).toContain('>> This is a commment and should be ignored');
       expect(result).toContain('<UxDocumentation>');
       expect(result).toContain('<ArchitectureDocumentation>');
       expect(result).toContain('<PipelineDocumentation>');
