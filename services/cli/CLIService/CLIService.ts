@@ -277,7 +277,7 @@ export class CLIService implements ICLIService {
       });
       
       // Determine output path
-      const outputPath = this.determineOutputPath(options);
+      const outputPath = await this.determineOutputPath(options);
       
       // Convert to desired format
       const outputContent = await this.outputService.convert(
