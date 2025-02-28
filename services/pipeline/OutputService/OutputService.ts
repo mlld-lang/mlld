@@ -31,7 +31,9 @@ export class OutputService implements IOutputService {
     // Register default formatters
     this.registerFormat('markdown', this.convertToMarkdown.bind(this));
     this.registerFormat('md', this.convertToMarkdown.bind(this));
-    this.registerFormat('llm', this.convertToLLMXML.bind(this));
+    this.registerFormat('xml', this.convertToXML.bind(this));
+    // Keep 'llm' as an alias for 'xml' for backward compatibility
+    this.registerFormat('llm', this.convertToXML.bind(this));
 
     logger.debug('OutputService initialized with default formatters', {
       formats: Array.from(this.formatters.keys())
@@ -95,7 +97,7 @@ export class OutputService implements IOutputService {
       throw new MeldOutputError(
         'Failed to convert output',
         format,
-        error instanceof Error ? error : undefined
+        { cause: error instanceof Error ? error : undefined }
       );
     }
   }
@@ -121,6 +123,72 @@ export class OutputService implements IOutputService {
 
   getSupportedFormats(): string[] {
     return Array.from(this.formatters.keys());
+  }
+
+  /**
+   * Helper method to safely extract string content from various node types
+   * ensuring proper type safety
+   */
+  private getTextContentFromNode(node: any): string {
+    // Handle undefined or null
+    if (node === undefined || node === null) {
+      return '';
+    }
+    
+    // Handle id or identifier properties
+    if ('id' in node && typeof node.id === 'string') {
+      return node.id;
+    }
+    
+    if ('identifier' in node && typeof node.identifier === 'string') {
+      return node.identifier;
+    }
+    
+    // Handle direct text content
+    if ('text' in node && node.text !== undefined && node.text !== null) {
+      return String(node.text);
+    }
+    
+    // Handle value property which could be various types
+    if ('value' in node) {
+      const value = node.value;
+      if (value === null || value === undefined) {
+        return '';
+      }
+      if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+        return String(value);
+      }
+      if (typeof value === 'object') {
+        try {
+          return JSON.stringify(value);
+        } catch {
+          return '';
+        }
+      }
+      return String(value);
+    }
+    
+    // Handle content property as a fallback
+    if ('content' in node) {
+      const content = node.content;
+      if (content === null || content === undefined) {
+        return '';
+      }
+      if (typeof content === 'string' || typeof content === 'number' || typeof content === 'boolean') {
+        return String(content);
+      }
+      if (typeof content === 'object') {
+        try {
+          return JSON.stringify(content);
+        } catch {
+          return '';
+        }
+      }
+      return String(content);
+    }
+    
+    // Final fallback
+    return '';
   }
 
   private async convertToMarkdown(
@@ -174,23 +242,23 @@ export class OutputService implements IOutputService {
       throw new MeldOutputError(
         'Failed to convert to markdown',
         'markdown',
-        error instanceof Error ? error : undefined
+        { cause: error instanceof Error ? error : undefined }
       );
     }
   }
 
-  private async convertToLLMXML(
+  private async convertToXML(
     nodes: MeldNode[],
     state: IStateService,
     options?: OutputOptions
   ): Promise<string> {
     try {
-      // First convert to markdown since LLM XML is based on markdown
+      // First convert to markdown since XML is based on markdown
       const markdown = await this.convertToMarkdown(nodes, state, options);
 
-      // Use our wrapper to prevent HTML encoding of JSON content
-      const { createLLMXMLWrapper } = await import('./LLMXMLWrapper');
-      const llmxml = createLLMXMLWrapper({
+      // Use llmxml directly with version 1.3.0+ which handles JSON content properly
+      const { createLLMXML } = await import('llmxml');
+      const llmxml = createLLMXML({
         defaultFuzzyThreshold: 0.7,
         includeHlevel: false,
         includeTitle: false,
@@ -202,9 +270,9 @@ export class OutputService implements IOutputService {
       return llmxml.toXML(markdown);
     } catch (error) {
       throw new MeldOutputError(
-        'Failed to convert to LLM XML',
-        'llm',
-        error instanceof Error ? error : undefined
+        'Failed to convert output',
+        'xml',
+        { cause: error instanceof Error ? error : undefined }
       );
     }
   }
@@ -279,12 +347,9 @@ export class OutputService implements IOutputService {
             logger.debug(`Trying to resolve TextVar with identifier ${identifier}`, {
               resolved: textVarContent || 'NOT RESOLVED'
             });
-          } else if ('text' in node && node.text) {
-            textVarContent = node.text;
-          } else if ('value' in node && node.value) {
-            textVarContent = node.value;
-          } else if ('content' in node && (node as any).content) {
-            textVarContent = (node as any).content;
+          } else {
+            // Use the helper method to extract content safely
+            textVarContent = this.getTextContentFromNode(node);
           }
           
           // Process template variables in the content if it's a string
@@ -448,7 +513,7 @@ export class OutputService implements IOutputService {
     }
   }
 
-  private async nodeToLLM(node: MeldNode, state: IStateService): Promise<string> {
+  private async nodeToXML(node: MeldNode, state: IStateService): Promise<string> {
     // Use the same logic as markdown for now since we want consistent behavior
     return this.nodeToMarkdown(node, state);
   }
@@ -457,7 +522,7 @@ export class OutputService implements IOutputService {
     return `\`\`\`${node.language || ''}\n${node.content}\n\`\`\`\n`;
   }
 
-  private codeFenceToLLM(node: CodeFenceNode): string {
+  private codeFenceToXML(node: CodeFenceNode): string {
     // Use the same logic as markdown for now since we want consistent behavior
     return this.codeFenceToMarkdown(node);
   }
@@ -474,7 +539,7 @@ export class OutputService implements IOutputService {
     return '';
   }
 
-  private directiveToLLM(node: DirectiveNode): string {
+  private directiveToXML(node: DirectiveNode): string {
     // Use the same logic as markdown for now since we want consistent behavior
     return this.directiveToMarkdown(node);
   }

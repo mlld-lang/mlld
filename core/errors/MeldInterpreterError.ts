@@ -14,6 +14,8 @@ interface SerializedInterpreterError {
   filePath?: string;
   cause?: string;
   fullCauseMessage?: string;
+  severity: ErrorSeverity;
+  code?: string;
   context?: {
     filePath?: string;
     nodeType?: string;
@@ -46,6 +48,7 @@ export interface MeldInterpreterErrorOptions {
 export class MeldInterpreterError extends MeldError {
   public readonly nodeType: string;
   public readonly location?: InterpreterLocation;
+  public readonly context?: InterpreterErrorContext;
 
   constructor(
     message: string,
@@ -76,9 +79,17 @@ export class MeldInterpreterError extends MeldError {
     this.name = 'MeldInterpreterError';
     this.nodeType = nodeType;
     this.location = location;
+    this.context = options.context;
     
     // Ensure proper prototype chain for instanceof checks
     Object.setPrototypeOf(this, MeldInterpreterError.prototype);
+  }
+
+  /**
+   * Access to the cause property of this error
+   */
+  get cause(): Error | undefined {
+    return (this as any).errorCause;
   }
 
   /**
@@ -93,6 +104,8 @@ export class MeldInterpreterError extends MeldError {
       filePath: this.filePath,
       cause: this.cause?.message,
       fullCauseMessage: this.cause ? this.getFullCauseMessage(this.cause) : undefined,
+      severity: this.severity,
+      code: this.code,
       context: this.context ? {
         filePath: this.context.filePath,
         nodeType: this.context.nodeType,
@@ -107,9 +120,12 @@ export class MeldInterpreterError extends MeldError {
   private getFullCauseMessage(error: Error): string {
     if (!error) return '';
     
-    let message = error.message;
-    if ('cause' in error && error.cause instanceof Error) {
-      message += ` -> ${this.getFullCauseMessage(error.cause)}`;
+    let message = error.message || 'Unknown error';
+    if ('cause' in error) {
+      const cause = error.cause as unknown;
+      if (cause instanceof Error) {
+        message += ` -> ${this.getFullCauseMessage(cause)}`;
+      }
     }
     
     return message;

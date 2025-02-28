@@ -26,7 +26,8 @@ export const ValidationErrorSeverity: Record<DirectiveErrorCode, ErrorSeverity> 
   [DirectiveErrorCode.CIRCULAR_REFERENCE]: ErrorSeverity.Fatal,
   [DirectiveErrorCode.VARIABLE_NOT_FOUND]: ErrorSeverity.Recoverable,
   [DirectiveErrorCode.STATE_ERROR]: ErrorSeverity.Fatal,
-  [DirectiveErrorCode.INVALID_CONTEXT]: ErrorSeverity.Fatal
+  [DirectiveErrorCode.INVALID_CONTEXT]: ErrorSeverity.Fatal,
+  [DirectiveErrorCode.SECTION_NOT_FOUND]: ErrorSeverity.Recoverable
 };
 
 export class ValidationService implements IValidationService {

@@ -8,6 +8,9 @@ export interface ResolutionErrorDetails {
   variableName?: string;
   variableType?: 'text' | 'data' | 'path' | 'command';
   fieldPath?: string;
+  contentPreview?: string;
+  error?: string;
+  availableHeadings?: string;
 }
 
 export interface MeldResolutionErrorOptions {

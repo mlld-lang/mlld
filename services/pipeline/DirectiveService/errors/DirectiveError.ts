@@ -16,7 +16,8 @@ export enum DirectiveErrorCode {
   CIRCULAR_REFERENCE = 'CIRCULAR_REFERENCE',
   VARIABLE_NOT_FOUND = 'VARIABLE_NOT_FOUND',
   STATE_ERROR = 'STATE_ERROR',
-  INVALID_CONTEXT = 'INVALID_CONTEXT'
+  INVALID_CONTEXT = 'INVALID_CONTEXT',
+  SECTION_NOT_FOUND = 'SECTION_NOT_FOUND'
 }
 
 /**
@@ -31,7 +32,8 @@ export const DirectiveErrorSeverity: Record<DirectiveErrorCode, ErrorSeverity> =
   [DirectiveErrorCode.CIRCULAR_REFERENCE]: ErrorSeverity.Fatal,
   [DirectiveErrorCode.VARIABLE_NOT_FOUND]: ErrorSeverity.Recoverable,
   [DirectiveErrorCode.STATE_ERROR]: ErrorSeverity.Fatal,
-  [DirectiveErrorCode.INVALID_CONTEXT]: ErrorSeverity.Fatal
+  [DirectiveErrorCode.INVALID_CONTEXT]: ErrorSeverity.Fatal,
+  [DirectiveErrorCode.SECTION_NOT_FOUND]: ErrorSeverity.Recoverable
 };
 
 export interface DirectiveErrorDetails {

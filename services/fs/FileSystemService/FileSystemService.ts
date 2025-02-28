@@ -68,7 +68,7 @@ export class FileSystemService implements IFileSystemService {
       const err = error as Error;
       if (err.message.includes('ENOENT')) {
         logger.error('File not found', { ...context, error: err });
-        throw new MeldFileNotFoundError(filePath, err);
+        throw new MeldFileNotFoundError(filePath, { cause: err });
       }
       logger.error('Error reading file', { ...context, error: err });
       throw new MeldError(`Error reading file: ${filePath}`, { 

@@ -11,22 +11,27 @@ import { resolutionLogger as logger } from '@core/utils/logger.js';
 import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 import type { MeldNode, DirectiveNode, TextNode, DirectiveKind, CodeFenceNode } from 'meld-spec';
-import type { StructuredPath } from 'meld-spec/dist/types';
 import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
 import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 import { inject, singleton } from 'tsyringe';
-import { CommandContextService } from '../../command/CommandContextService';
-import { MeldInterpreterError } from '../../../errors';
-import {
-  ResolutionContext as DeprecatedContext,
-  CommandParameterResolutionContext,
-  NestedResolution
-} from '../ResolutionContextFactory';
-import { ICommandService } from '../../command/ICommandService';
-import { Command, ParameterResolutionMap } from '../../command/Command';
-import { CommandParameter } from '../../../types';
 import { IPathService } from '@services/fs/PathService/IPathService.js';
+
+/**
+ * Interface matching the StructuredPath expected from meld-spec
+ */
+interface StructuredPath {
+  raw: string;
+  structured: {
+    segments: string[];
+    variables?: {
+      special?: string[];
+      path?: string[];
+    };
+    cwd?: boolean;
+  };
+  normalized?: string;
+}
 
 /**
  * Internal type for heading nodes in the ResolutionService
@@ -369,7 +374,7 @@ export class ResolutionService implements IResolutionService {
               {
                 code: ResolutionErrorCode.INVALID_CONTEXT,
                 details: { 
-                  value: value, 
+                  value: typeof value === 'string' ? value : value.raw, 
                   context: JSON.stringify(context)
                 },
                 severity: ErrorSeverity.Fatal
@@ -385,7 +390,7 @@ export class ResolutionService implements IResolutionService {
               {
                 code: ResolutionErrorCode.INVALID_CONTEXT,
                 details: { 
-                  value: value, 
+                  value: typeof value === 'string' ? value : value.raw, 
                   context: JSON.stringify(context)
                 },
                 severity: ErrorSeverity.Fatal
@@ -401,7 +406,7 @@ export class ResolutionService implements IResolutionService {
               {
                 code: ResolutionErrorCode.INVALID_CONTEXT,
                 details: { 
-                  value: value, 
+                  value: typeof value === 'string' ? value : value.raw, 
                   context: JSON.stringify(context)
                 },
                 severity: ErrorSeverity.Fatal
@@ -417,7 +422,7 @@ export class ResolutionService implements IResolutionService {
               {
                 code: ResolutionErrorCode.INVALID_CONTEXT,
                 details: { 
-                  value: value, 
+                  value: typeof value === 'string' ? value : value.raw, 
                   context: JSON.stringify(context)
                 },
                 severity: ErrorSeverity.Fatal

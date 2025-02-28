@@ -327,7 +327,7 @@ export class DirectiveService implements IDirectiveService {
       throw new MeldDirectiveError(
         errorMessage,
         'text',
-        node.location?.start
+        { location: node.location?.start }
       );
     }
   }
@@ -366,7 +366,7 @@ export class DirectiveService implements IDirectiveService {
       throw new MeldDirectiveError(
         errorMessage,
         'data',
-        node.location?.start
+        { location: node.location?.start }
       );
     }
   }
@@ -441,7 +441,7 @@ export class DirectiveService implements IDirectiveService {
       throw new MeldDirectiveError(
         errorMessage,
         'import',
-        node.location?.start
+        { location: node.location?.start }
       );
     }
   }
@@ -631,7 +631,7 @@ export class DirectiveService implements IDirectiveService {
       throw new MeldDirectiveError(
         errorMessage,
         'embed',
-        node.location?.start
+        { location: node.location?.start }
       );
     }
   }

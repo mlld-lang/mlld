@@ -233,6 +233,8 @@ describe('OutputService', () => {
   describe('Format Registration', () => {
     it('should have default formats registered', () => {
       expect(service.supportsFormat('markdown')).toBe(true);
+      expect(service.supportsFormat('xml')).toBe(true);
+      // Backward compatibility
       expect(service.supportsFormat('llm')).toBe(true);
     });
 
@@ -250,7 +252,8 @@ describe('OutputService', () => {
     it('should list supported formats', () => {
       const formats = service.getSupportedFormats();
       expect(formats).toContain('markdown');
-      expect(formats).toContain('llm');
+      expect(formats).toContain('xml');
+      expect(formats).toContain('llm'); // Backward compatibility
     });
   });
 
@@ -316,13 +319,13 @@ describe('OutputService', () => {
     });
   });
 
-  describe('LLM XML Output', () => {
+  describe('XML Output', () => {
     it('should preserve text content', async () => {
       const nodes: MeldNode[] = [
         createTextNode('Hello world', createLocation(1, 1))
       ];
 
-      const output = await service.convert(nodes, state, 'llm');
+      const output = await service.convert(nodes, state, 'xml');
       expect(output).toContain('Hello world');
     });
 
@@ -331,7 +334,7 @@ describe('OutputService', () => {
         createCodeFenceNode('const x = 1;', 'typescript', createLocation(1, 1))
       ];
 
-      const output = await service.convert(nodes, state, 'llm');
+      const output = await service.convert(nodes, state, 'xml');
       expect(output).toContain('const x = 1;');
       expect(output).toContain('typescript');
     });
@@ -341,24 +344,15 @@ describe('OutputService', () => {
       const defNodes: MeldNode[] = [
         createDirectiveNode('text', { identifier: 'test', value: 'example' }, createLocation(1, 1))
       ];
-      let output = await service.convert(defNodes, state, 'llm');
+      let output = await service.convert(defNodes, state, 'xml');
       expect(output).toBe(''); // Definition directives are omitted
 
-      // Execution directive in non-transformation mode
+      // Execution directive
       const execNodes: MeldNode[] = [
         createDirectiveNode('run', { command: 'echo test' }, createLocation(1, 1))
       ];
-      output = await service.convert(execNodes, state, 'llm');
+      output = await service.convert(execNodes, state, 'xml');
       expect(output).toContain('[run directive output placeholder]');
-
-      // Execution directive in transformation mode
-      state.enableTransformation();
-      const transformedNodes: MeldNode[] = [
-        createTextNode('test output\n', createLocation(1, 1))
-      ];
-      state.setTransformedNodes(transformedNodes);
-      output = await service.convert(execNodes, state, 'llm');
-      expect(output).toContain('test output');
     });
 
     it('should preserve state variables when requested', async () => {
@@ -369,7 +363,7 @@ describe('OutputService', () => {
         createTextNode('Content', createLocation(1, 1))
       ];
 
-      const output = await service.convert(nodes, state, 'llm', {
+      const output = await service.convert(nodes, state, 'xml', {
         includeState: true
       });
 
@@ -454,7 +448,7 @@ describe('OutputService', () => {
       expect(output).toBe('```typescript\nconst x = 1;\n```\n');
     });
 
-    it('should handle LLM output in both modes', async () => {
+    it('should handle XML output in both modes', async () => {
       const originalNodes: MeldNode[] = [
         createTextNode('Before\n', createLocation(1, 1)),
         createDirectiveNode('run', { command: 'echo test' }, createLocation(2, 1)),
@@ -462,7 +456,7 @@ describe('OutputService', () => {
       ];
 
       // Non-transformation mode
-      let output = await service.convert(originalNodes, state, 'llm');
+      let output = await service.convert(originalNodes, state, 'xml');
       expect(output).toContain('Before');
       expect(output).toContain('[run directive output placeholder]');
       expect(output).toContain('After');
@@ -476,7 +470,7 @@ describe('OutputService', () => {
 
       state.enableTransformation();
       state.setTransformedNodes(transformedNodes);
-      output = await service.convert(originalNodes, state, 'llm');
+      output = await service.convert(originalNodes, state, 'xml');
       expect(output).toContain('Before');
       expect(output).toContain('test output');
       expect(output).toContain('After');

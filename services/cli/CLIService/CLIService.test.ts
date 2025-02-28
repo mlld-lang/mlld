@@ -150,13 +150,13 @@ describe('CLIService', () => {
   });
 
   describe('Format Conversion', () => {
-    it('should output llm format by default', async () => {
+    it('should output xml format by default', async () => {
       const args = ['node', 'meld', 'test.meld', '--stdout'];
       await expect(service.run(args)).resolves.not.toThrow();
       expect(mockOutputService.convert).toHaveBeenCalledWith(
         expect.any(Array),
         expect.any(Object),
-        'llm',
+        'xml',
         expect.any(Object)
       );
     });
@@ -207,7 +207,7 @@ describe('CLIService', () => {
       expect(mockOutputService.convert).toHaveBeenCalledWith(
         expect.any(Array),
         expect.any(Object),
-        'llm',
+        'xml',
         expect.any(Object)
       );
     });

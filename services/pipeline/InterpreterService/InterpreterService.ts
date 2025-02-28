@@ -85,6 +85,7 @@ export class InterpreterService implements IInterpreterService {
       throw new MeldInterpreterError(
         'No nodes provided for interpretation',
         'interpretation',
+        undefined,
         { severity: ErrorSeverity.Fatal }
       );
     }
@@ -93,6 +94,7 @@ export class InterpreterService implements IInterpreterService {
       throw new MeldInterpreterError(
         'Invalid nodes provided for interpretation: expected array',
         'interpretation',
+        undefined,
         { severity: ErrorSeverity.Fatal }
       );
     }
@@ -119,6 +121,7 @@ export class InterpreterService implements IInterpreterService {
         throw new MeldInterpreterError(
           'Failed to initialize state for interpretation',
           'initialization',
+          undefined,
           { severity: ErrorSeverity.Fatal }
         );
       }
@@ -181,6 +184,7 @@ export class InterpreterService implements IInterpreterService {
         : new MeldInterpreterError(
             `Unexpected error during interpretation: ${String(error)}`,
             'interpretation',
+            undefined,
             { severity: ErrorSeverity.Fatal, cause: error instanceof Error ? error : undefined }
           );
       

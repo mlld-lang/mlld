@@ -17,7 +17,7 @@ import { version } from '@core/version.js';
 export interface CLIOptions {
   input: string;
   output?: string;
-  format?: 'markdown' | 'md' | 'llm';
+  format?: 'markdown' | 'md' | 'xml' | 'llm';
   stdout?: boolean;
   verbose?: boolean;
   strict?: boolean;
@@ -58,19 +58,21 @@ export class CLIService implements ICLIService {
     private stateService: IStateService
   ) {}
 
-  private normalizeFormat(format: string): 'markdown' | 'llm' {
-    switch (format.toLowerCase()) {
-      case 'md':
+  private normalizeFormat(format: string): 'markdown' | 'xml' {
+    format = format.toLowerCase();
+    switch (format) {
       case 'markdown':
+      case 'md':
         return 'markdown';
-      case 'llm':
-        return 'llm';
+      case 'xml':
+      case 'llm': // For backward compatibility
+        return 'xml';
       default:
-        throw new Error(`Invalid format: ${format}. Must be 'markdown', 'md', or 'llm'`);
+        throw new Error(`Invalid format: ${format}. Must be 'markdown', 'md', 'xml', or 'llm'`);
     }
   }
 
-  private getOutputExtension(format: 'markdown' | 'llm'): string {
+  private getOutputExtension(format: 'markdown' | 'xml'): string {
     return format === 'markdown' ? '.md' : '.xml';
   }
 
@@ -79,7 +81,7 @@ export class CLIService implements ICLIService {
     
     const options: CLIOptions = {
       input: '',
-      format: 'llm',
+      format: 'xml',
       strict: false // Default to permissive mode for CLI
     };
 

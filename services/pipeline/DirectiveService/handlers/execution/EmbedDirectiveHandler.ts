@@ -1,8 +1,8 @@
-import { DirectiveNode, MeldNode, TextNode, StructuredPath } from 'meld-spec';
+import { DirectiveNode, MeldNode, TextNode } from 'meld-spec';
 import { IDirectiveHandler, DirectiveContext } from '@services/pipeline/DirectiveService/IDirectiveService.js';
 import { DirectiveResult } from '@services/pipeline/DirectiveService/types.js';
 import { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
-import { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
+import { IResolutionService, StructuredPath } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { IStateService } from '@services/state/StateService/IStateService.js';
 import { ICircularityService } from '@services/resolution/CircularityService/ICircularityService.js';
 import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
@@ -57,8 +57,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
           this.kind,
           DirectiveErrorCode.VALIDATION_FAILED,
           { 
-            node,
-            severity: DirectiveErrorSeverity[DirectiveErrorCode.VALIDATION_FAILED]
+            node
           }
         );
       }
@@ -97,8 +96,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
             DirectiveErrorCode.FILE_NOT_FOUND,
             { 
               node, 
-              context,
-              severity: DirectiveErrorSeverity[DirectiveErrorCode.FILE_NOT_FOUND]
+              context
             }
           );
         }
@@ -130,8 +128,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
               this.kind,
               DirectiveErrorCode.SECTION_NOT_FOUND,
               { 
-                node,
-                severity: DirectiveErrorSeverity[DirectiveErrorCode.SECTION_NOT_FOUND]
+                node
               }
             );
           }
@@ -146,8 +143,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
               this.kind,
               DirectiveErrorCode.VALIDATION_FAILED,
               { 
-                node,
-                severity: DirectiveErrorSeverity[DirectiveErrorCode.VALIDATION_FAILED]
+                node
               }
             );
           }
@@ -196,7 +192,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
         // Always end import tracking
         this.circularityService.endImport(resolvedPath);
       }
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error('Failed to process embed directive', {
         location: node.location,
         error
@@ -206,15 +202,18 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
       if (error instanceof DirectiveError) {
         throw error;
       }
+      
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorCause = error instanceof Error ? error : new Error(String(error));
+      
       throw new DirectiveError(
-        error instanceof Error ? error.message : 'Unknown error',
+        `Failed to execute embed directive: ${errorMessage}`,
         this.kind,
         DirectiveErrorCode.EXECUTION_FAILED,
         {
           node,
           context,
-          cause: error instanceof Error ? error : new Error(String(error)),
-          severity: DirectiveErrorSeverity[DirectiveErrorCode.EXECUTION_FAILED]
+          cause: errorCause
         }
       );
     }
@@ -227,9 +226,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
         `Invalid heading level: ${level}. Must be between 1 and 6.`,
         this.kind,
         DirectiveErrorCode.VALIDATION_FAILED,
-        {
-          severity: DirectiveErrorSeverity[DirectiveErrorCode.VALIDATION_FAILED]
-        }
+        {}
       );
     }
     

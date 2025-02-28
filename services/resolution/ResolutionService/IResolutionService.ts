@@ -1,5 +1,21 @@
-import type { MeldNode, StructuredPath } from 'meld-spec';
+import type { MeldNode } from 'meld-spec';
 import { IStateService } from '@services/state/StateService/IStateService.js';
+
+/**
+ * Interface matching the StructuredPath expected from meld-spec
+ */
+export interface StructuredPath {
+  raw: string;
+  structured: {
+    segments: string[];
+    variables?: {
+      special?: string[];
+      path?: string[];
+    };
+    cwd?: boolean;
+  };
+  normalized?: string;
+}
 
 /**
  * Context for variable resolution, specifying what types of variables and operations are allowed
