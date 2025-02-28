@@ -119,4 +119,9 @@ export class MemfsTestFileSystemAdapter extends NodeFileSystem {
       exitCode: 0
     });
   }
+  
+  // Required by CLIService.cliToApiOptions
+  getFileSystem(): any {
+    return this.memfs;
+  }
 } 

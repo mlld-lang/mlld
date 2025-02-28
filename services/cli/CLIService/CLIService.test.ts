@@ -21,12 +21,21 @@ const defaultOptions = {
 const mockWatcher = {
   [Symbol.asyncIterator]: async function* () {
     yield { filename: 'test.meld', eventType: 'change' };
+    // After yielding one item, pause for a while to let test run
+    await new Promise(resolve => setTimeout(resolve, 200));
+    
+    // Test will throw to exit, so we won't get here
+    throw new Error('Watch stopped');
   }
 };
 
-vi.mock('fs/promises', () => ({
-  watch: vi.fn().mockImplementation(() => mockWatcher)
-}));
+vi.mock('fs/promises', async () => {
+  const actual = await vi.importActual('fs/promises');
+  return {
+    ...actual,
+    watch: vi.fn().mockImplementation(() => mockWatcher)
+  };
+});
 
 // Move mock setup to top level
 vi.mock('readline', () => ({
@@ -87,7 +96,8 @@ describe('CLIService', () => {
       readFile: fs.readFile.bind(fs),
       writeFile: fs.writeFile.bind(fs),
       exists: fs.exists.bind(fs),
-      watch: fs.watch.bind(fs)
+      watch: fs.watch.bind(fs),
+      getFileSystem: vi.fn().mockReturnValue(fs)
     } as unknown as IFileSystemService;
 
     mockPathService = {

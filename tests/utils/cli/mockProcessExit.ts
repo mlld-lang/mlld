@@ -24,7 +24,12 @@ export interface MockProcessExitResult {
  */
 export function mockProcessExit(): MockProcessExitResult {
   const originalExit = process.exit;
-  const mockExit = vi.fn();
+  
+  // Create a proper Vitest spy that correctly records calls
+  const mockExit = vi.fn().mockImplementation((code: number) => {
+    console.log(`[mockExit] Called with code: ${code}`);
+    return undefined as never; // proper typing for process.exit
+  });
   
   // Replace process.exit
   process.exit = mockExit as any;

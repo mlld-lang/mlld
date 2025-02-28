@@ -23,5 +23,7 @@ export interface IFileSystemService {
   // Command execution
   executeCommand(command: string, options?: { cwd?: string }): Promise<{ stdout: string; stderr: string }>;
 
+  // FileSystem management
   setFileSystem(fileSystem: IFileSystem): void;
+  getFileSystem(): IFileSystem;
 } 

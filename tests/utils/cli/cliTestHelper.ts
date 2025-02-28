@@ -69,6 +69,9 @@ export function setupCliTest(options: CliTestOptions = {}): CliTestResult {
   pathService.initialize(fileSystemService);
   pathService.enableTestMode();
   
+  // Add spy for getFileSystem method to track calls
+  vi.spyOn(fileSystemService, 'getFileSystem');
+  
   const projectRoot = options.projectRoot || '/project';
   
   // Create project directory

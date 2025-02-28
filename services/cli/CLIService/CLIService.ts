@@ -1,18 +1,24 @@
+/**
+ * CLIService - A thin wrapper around the API
+ * 
+ * This service provides backward compatibility with code that depends on CLIService
+ * but delegates the actual processing to the API.
+ */
+
+import { main as apiMain } from '@api/index.js';
+import { cliLogger as logger } from '@core/utils/logger.js';
+import { MeldError, ErrorSeverity } from '@core/errors/MeldError.js';
+import { version } from '@core/version.js';
+import { createInterface } from 'readline';
+import { dirname } from 'path';
+import { watch } from 'fs/promises';
 import { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 import { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
-import { IOutputService, type OutputFormat } from '@services/pipeline/OutputService/IOutputService.js';
+import { IOutputService } from '@services/pipeline/OutputService/IOutputService.js';
 import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import { IPathService } from '@services/fs/PathService/IPathService.js';
 import { IStateService } from '@services/state/StateService/IStateService.js';
-import { cliLogger as logger, stateLogger, parserLogger, interpreterLogger, filesystemLogger, validationLogger, outputLogger, pathLogger, directiveLogger, circularityLogger, resolutionLogger, importLogger, embedLogger } from '@core/utils/logger.js';
-import { watch } from 'fs/promises';
-import { dirname } from 'path';
-import { createInterface } from 'readline';
-import { MeldParseError } from '@core/errors/MeldParseError.js';
-import { MeldInterpreterError } from '@core/errors/MeldInterpreterError.js';
-import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
-import { MeldError, ErrorSeverity } from '@core/errors/MeldError.js';
-import { version } from '@core/version.js';
+import { ProcessOptions } from '@core/types/index.js';
 
 export interface CLIOptions {
   input: string;
@@ -21,7 +27,6 @@ export interface CLIOptions {
   stdout?: boolean;
   verbose?: boolean;
   strict?: boolean;
-  config?: string;
   homePath?: string;
   watch?: boolean;
   version?: boolean;
@@ -33,22 +38,6 @@ export interface ICLIService {
 }
 
 export class CLIService implements ICLIService {
-  private allLoggers = [
-    logger,
-    stateLogger,
-    parserLogger,
-    interpreterLogger,
-    filesystemLogger,
-    validationLogger,
-    outputLogger,
-    pathLogger,
-    directiveLogger,
-    circularityLogger,
-    resolutionLogger,
-    importLogger,
-    embedLogger
-  ];
-
   constructor(
     private parserService: IParserService,
     private interpreterService: IInterpreterService,
@@ -77,8 +66,6 @@ export class CLIService implements ICLIService {
   }
 
   private parseArgs(args: string[]): CLIOptions {
-    console.log('CLIService.parseArgs called with args:', args);
-    
     const options: CLIOptions = {
       input: '',
       format: 'xml',
@@ -98,7 +85,6 @@ export class CLIService implements ICLIService {
     // Process all arguments starting from the appropriate index
     for (let i = startIndex; i < args.length; i++) {
       const arg = args[i];
-      console.log(`Processing arg[${i}]:`, arg);
       
       switch (arg) {
         case '--version':
@@ -125,13 +111,6 @@ export class CLIService implements ICLIService {
           break;
         case '--permissive':
           options.strict = false;
-          break;
-        case '--config':
-        case '-c':
-          options.config = args[++i];
-          break;
-        case '--home':
-          options.homePath = args[++i];
           break;
         case '--home-path':
           options.homePath = args[++i];
@@ -162,7 +141,7 @@ Options:
   -d, --debug            Enable debug output
   -h, --help             Display this help message
   -V, --version          Display version information
-        `);
+          `);
           break;
         default:
           if (!arg.startsWith('-') && !options.input) {
@@ -174,7 +153,6 @@ Options:
     }
 
     if (!options.input && !options.version) {
-      console.log('No input file specified. options:', options);
       throw new Error('No input file specified');
     }
 
@@ -182,85 +160,16 @@ Options:
   }
 
   /**
-   * Custom error handler for the CLI
-   * Logs warnings for recoverable errors
+   * Convert CLI options to API options
    */
-  private errorHandler(error: MeldError): void {
-    // Log warning with appropriate context
-    logger.warn(`Warning: ${error.message}`, {
-      code: error.code,
-      filePath: error.filePath,
-      severity: error.severity,
-      context: error.context
-    });
-  }
-
-  async run(args: string[]): Promise<void> {
-    try {
-      const options = this.parseArgs(args);
-
-      // Handle version flag first, before any logging
-      if (options.version) {
-        console.log(`meld version ${version}`);
-        return;
-      }
-
-      // Configure logging based on options
-      if (options.verbose) {
-        this.allLoggers.forEach(l => l.level = 'debug');
-      } else if (options.debug) {
-        this.allLoggers.forEach(l => l.level = 'trace');
-      } else {
-        this.allLoggers.forEach(l => l.level = 'info');
-      }
-
-      logger.info('Starting Meld CLI', {
-        version,
-        options
-      });
-
-      if (options.watch) {
-        await this.watch(options);
-      } else {
-        await this.processFile(options);
-      }
-    } catch (error) {
-      // For CLI errors, always log and exit with error code
-      logger.error('Error running Meld CLI', {
-        error: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined
-      });
-      
-      // Print user-friendly error message to console
-      console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
-      
-      // Rethrow the error instead of exiting
-      throw error;
-    }
-  }
-
-  async watch(options: CLIOptions): Promise<void> {
-    logger.info('Starting watch mode', { input: options.input });
-
-    const inputPath = await this.pathService.resolvePath(options.input);
-    const watchDir = dirname(inputPath);
-
-    try {
-      const watcher = this.fileSystemService.watch(watchDir, { recursive: true });
-      logger.info('Watching for changes', { directory: watchDir });
-
-      for await (const event of watcher) {
-        if (event.filename && event.filename.endsWith('.meld')) {
-          logger.info('Change detected', { file: event.filename });
-          await this.processFile(options);
-        }
-      }
-    } catch (error) {
-      logger.error('Watch mode failed', {
-        error: error instanceof Error ? error.message : String(error)
-      });
-      throw error;
-    }
+  private cliToApiOptions(cliOptions: CLIOptions): ProcessOptions {
+    return {
+      format: cliOptions.format,
+      debug: cliOptions.debug,
+      strict: cliOptions.strict,
+      transformation: true, // Enable transformation by default for CLI usage
+      fs: this.fileSystemService.getFileSystem()
+    };
   }
 
   private async confirmOverwrite(path: string): Promise<boolean> {
@@ -281,157 +190,97 @@ Options:
     });
   }
 
-  private async processFile(options: CLIOptions): Promise<void> {
+  /**
+   * Run the CLIService with the provided arguments
+   */
+  async run(args: string[]): Promise<void> {
     try {
-      // Create initial state
-      const state = this.stateService.createChildState();
-      
-      // Securely resolve project path
-      const projectPath = await this.pathService.resolveProjectPath();
-      logger.debug('Resolved project path', { projectPath });
-      console.log('Resolved project path:', projectPath);
-      
-      // Set project path variables
-      state.setPathVar('PROJECTPATH', projectPath);
-      state.setPathVar('.', projectPath);
-      
-      // Set home path
-      const homePath = options.homePath || this.pathService.getHomePath();
-      state.setPathVar('HOMEPATH', homePath);
-      state.setPathVar('~', homePath);
-      
-      // Resolve input path
-      let inputPath = options.input;
-      console.log('Input path before resolution:', inputPath);
-      
-      try {
-        // Special handling for tests with special path formats ($./file.meld)
-        if (process.env.NODE_ENV === 'test' && (inputPath.startsWith('$./') || inputPath.startsWith('$~/'))) {
-          // In test mode, we handle $./file.meld directly
-          const testProjectRoot = '/project';
-          const testHomePath = '/home/user';
-          
-          if (inputPath.startsWith('$./')) {
-            // Convert $./file.meld to /project/file.meld
-            const relativePath = inputPath.substring(3);
-            inputPath = `${testProjectRoot}/${relativePath}`;
-          } else if (inputPath.startsWith('$~/')) {
-            // Convert $~/file.meld to /home/user/file.meld
-            const relativePath = inputPath.substring(3);
-            inputPath = `${testHomePath}/${relativePath}`;
-          }
-          
-          console.log('Test mode resolved path:', inputPath);
-          
-          // Check if the file exists
-          const exists = await this.fileSystemService.exists(inputPath);
-          console.log('File exists at test path:', exists);
-          
-          if (!exists) {
-            throw new MeldError(`File not found: ${options.input}`, {
-              severity: ErrorSeverity.Fatal,
-              code: 'FILE_NOT_FOUND'
-            });
-          }
-        } else {
-          // Regular path resolution for non-test or non-special paths
-          // First try to resolve as a path with variables
-          inputPath = await this.pathService.resolvePath(inputPath);
-          console.log('Resolved input path:', inputPath);
-          
-          // If file doesn't exist at resolved path, try relative to project path
-          const exists = await this.fileSystemService.exists(inputPath);
-          console.log('File exists at resolved path:', exists);
-          
-          if (!exists) {
-            const projectRelativePath = await this.pathService.resolvePath(`$PROJECTPATH/${options.input}`);
-            console.log('Project relative path:', projectRelativePath);
-            
-            const projectRelativeExists = await this.fileSystemService.exists(projectRelativePath);
-            console.log('File exists at project relative path:', projectRelativeExists);
-            
-            if (projectRelativeExists) {
-              inputPath = projectRelativePath;
-            } else {
-              // If still not found, try relative to current directory
-              const cwdRelativePath = await this.pathService.resolvePath(`./${options.input}`);
-              console.log('CWD relative path:', cwdRelativePath);
-              
-              const cwdRelativeExists = await this.fileSystemService.exists(cwdRelativePath);
-              console.log('File exists at CWD relative path:', cwdRelativeExists);
-              
-              if (!cwdRelativeExists) {
-                throw new MeldError(`File not found: ${options.input}`, {
-                  severity: ErrorSeverity.Fatal,
-                  code: 'FILE_NOT_FOUND'
-                });
-              }
-              inputPath = cwdRelativePath;
-            }
-          }
-        }
-      } catch (e) {
-        // If path resolution fails, try as a simple filename
-        // But for test mode with special paths, don't try this fallback
-        if (process.env.NODE_ENV === 'test' && (options.input.startsWith('$./') || options.input.startsWith('$~/'))) {
-          throw new MeldError(`File not found: ${options.input}`, {
-            severity: ErrorSeverity.Fatal,
-            code: 'FILE_NOT_FOUND'
-          });
-        }
-        
-        const simpleFilePath = await this.pathService.resolvePath(options.input);
-        console.log('Simple file path:', simpleFilePath);
-        
-        const simpleFileExists = await this.fileSystemService.exists(simpleFilePath);
-        console.log('File exists at simple file path:', simpleFileExists);
-        
-        if (!simpleFileExists) {
-          throw new MeldError(`File not found: ${options.input}`, {
-            severity: ErrorSeverity.Fatal,
-            code: 'FILE_NOT_FOUND'
-          });
-        }
-        inputPath = simpleFilePath;
+      // Parse CLI arguments
+      const options = this.parseArgs(args);
+
+      // Handle version flag first
+      if (options.version) {
+        console.log(`meld version ${version}`);
+        return;
       }
 
-      // Verify file extension
-      if (!inputPath.endsWith('.meld')) {
-        throw new MeldError('Invalid file extension: File must have .meld extension', {
-          severity: ErrorSeverity.Fatal,
-          code: 'INVALID_FILE_EXTENSION'
-        });
+      // Configure logging based on options
+      if (options.verbose) {
+        logger.level = 'debug';
+      } else if (options.debug) {
+        logger.level = 'trace';
+      } else {
+        logger.level = 'info';
       }
 
-      // Read input file
-      const content = await this.fileSystemService.readFile(inputPath);
-
-      // Parse content
-      const nodes = await this.parserService.parse(content);
-
-      // Interpret nodes with appropriate error handling
-      await this.interpreterService.interpret(nodes, {
-        initialState: state,
-        filePath: inputPath,
-        mergeState: true,
-        strict: options.strict === true, // Use strict mode if explicitly set to true
-        errorHandler: this.errorHandler.bind(this)
+      logger.info('Starting Meld CLI', {
+        version,
+        options
       });
 
-      // Convert to output format
-      const output = await this.outputService.convert(
-        nodes,
-        state,
-        options.format || 'llm',
-        {
-          includeState: false,
-          preserveFormatting: true
-        }
-      );
+      if (options.watch) {
+        await this.watchFile(options);
+      } else {
+        await this.processFile(options);
+      }
+    } catch (error) {
+      // For CLI errors, always log and exit with error code
+      logger.error('Error running Meld CLI', {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      
+      // Print user-friendly error message to console
+      console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+      
+      // Rethrow the error
+      throw error;
+    }
+  }
 
-      // Write output
+  /**
+   * Watch for file changes and reprocess
+   */
+  private async watchFile(options: CLIOptions): Promise<void> {
+    logger.info('Starting watch mode', { input: options.input });
+
+    try {
+      // Resolve input path
+      const inputPath = await this.pathService.resolvePath(options.input);
+      const watchDir = dirname(inputPath);
+      
+      console.log(`Watching for changes in ${watchDir}...`);
+      const watcher = watch(watchDir, { recursive: true });
+
+      for await (const event of watcher) {
+        // Only process .meld files or the specific input file
+        if (event.filename?.endsWith('.meld')) {
+          console.log(`Change detected in ${event.filename}, reprocessing...`);
+          await this.processFile(options);
+        }
+      }
+    } catch (error) {
+      logger.error('Watch mode failed', {
+        error: error instanceof Error ? error.message : String(error)
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Process a file using the API
+   */
+  private async processFile(options: CLIOptions): Promise<void> {
+    try {
+      // Convert CLI options to API options
+      const apiOptions = this.cliToApiOptions(options);
+      
+      // Process the file through the API
+      const result = await apiMain(options.input, apiOptions);
+      
+      // Handle output based on CLI options
       if (options.stdout) {
-        console.log(output);
+        console.log(result);
         logger.info('Successfully wrote output to stdout');
       } else {
         // Determine output path
@@ -440,11 +289,11 @@ Options:
         if (!outputPath) {
           // If no output path specified, use input path with new extension
           const inputExt = '.meld';
-          const outputExt = this.getOutputExtension(options.format || 'llm');
+          const outputExt = this.getOutputExtension(options.format || 'xml');
           outputPath = options.input.replace(new RegExp(`${inputExt}$`), outputExt);
         } else if (!outputPath.includes('.')) {
           // If output path has no extension, add default extension
-          outputPath += this.getOutputExtension(options.format || 'llm');
+          outputPath += this.getOutputExtension(options.format || 'xml');
         }
         
         // Resolve output path
@@ -459,20 +308,22 @@ Options:
           }
         }
 
-        await this.fileSystemService.writeFile(outputPath, output);
+        await this.fileSystemService.writeFile(outputPath, result);
         logger.info('Successfully wrote output file', { path: outputPath });
       }
     } catch (error) {
       // Convert to MeldError if needed
       const meldError = error instanceof MeldError 
         ? error 
-        : MeldError.wrap(error);
+        : new MeldError(error instanceof Error ? error.message : String(error), {
+            severity: ErrorSeverity.Fatal,
+            code: 'PROCESSING_ERROR'
+          });
       
       // Log the error
       logger.error('Error processing file', {
         error: meldError.message,
         code: meldError.code,
-        filePath: meldError.filePath,
         severity: meldError.severity
       });
       

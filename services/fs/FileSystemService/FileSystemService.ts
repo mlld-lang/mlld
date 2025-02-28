@@ -35,6 +35,10 @@ export class FileSystemService implements IFileSystemService {
     this.fs = fileSystem;
   }
 
+  getFileSystem(): IFileSystem {
+    return this.fs;
+  }
+
   setPathService(pathService: IPathService): void {
     this.pathService = pathService;
   }
