@@ -30,6 +30,7 @@ export interface CLIOptions {
   verbose?: boolean;
   homePath?: string;
   debug?: boolean;
+  help?: boolean;
 }
 
 export interface ICLIService {
@@ -60,8 +61,18 @@ export class CLIService implements ICLIService {
     }
   }
 
-  private getOutputExtension(format: 'markdown' | 'xml'): string {
-    return format === 'markdown' ? '.md' : '.xml';
+  private getOutputExtension(format: string): string {
+    switch (format.toLowerCase()) {
+      case 'markdown':
+      case 'md':
+        return '.md';
+      case 'xml':
+        return '.xml';
+      case 'llm':
+        return '.llm';
+      default:
+        return '.xml'; // Default to XML
+    }
   }
 
   /**
@@ -122,22 +133,7 @@ export class CLIService implements ICLIService {
           break;
         case '--help':
         case '-h':
-          options.version = true; // Show version along with help
-          console.log(`
-Usage: meld [options] <input-file>
-
-Options:
-  -f, --format <format>  Output format (md, markdown, llm) [default: llm]
-  -o, --output <path>    Output file path [default: input filename with new extension]
-  --stdout               Print to stdout instead of file
-  --strict               Enable strict mode (fail on all errors)
-  --permissive           Enable permissive mode (ignore recoverable errors) [default]
-  --home-path <path>     Set custom home path for $~/ and $HOMEPATH
-  -v, --verbose          Enable verbose output
-  -d, --debug            Enable debug output
-  -h, --help             Display this help message
-  -V, --version          Display version information
-          `);
+          options.help = true;
           break;
         default:
           if (!arg.startsWith('-') && !options.input) {
@@ -187,16 +183,36 @@ Options:
   }
 
   /**
-   * Run the CLI
+   * Run the CLI with the given arguments
    */
-  async run(args: string[]): Promise<void> {
+  public async run(args: string[]): Promise<void> {
     try {
+      // Parse command line arguments
       const options = this.parseArguments(args);
 
-      // Handle version flag first
+      // Handle special commands
       if (options.version) {
         console.log(`meld version ${version}`);
         return;
+      }
+
+      if (options.help) {
+        this.showHelp();
+        return;
+      }
+
+      // Set up environment paths
+      const state = this.stateService.createChildState();
+      
+      // Set up project path
+      const projectPath = await this.pathService.resolveProjectPath();
+      state.setPathVar('PROJECTPATH', projectPath);
+      state.setPathVar('.', projectPath);
+      
+      // Set up home path if specified
+      if (options.homePath) {
+        state.setPathVar('HOMEPATH', options.homePath);
+        state.setPathVar('~', options.homePath);
       }
 
       // Configure logging based on options
@@ -229,36 +245,57 @@ Options:
    * Process a file using the API
    */
   private async processFile(options: CLIOptions): Promise<void> {
+    // Configure logging based on options
+    if (options.verbose) {
+      logger.level = 'debug';
+    }
+
+    logger.info('Starting Meld CLI', {
+      version,
+      options
+    });
+
     try {
-      // Convert CLI options to API options
-      const apiOptions = this.cliToApiOptions(options);
+      // Check if input file exists
+      const inputPath = await this.pathService.resolvePath(options.input);
+      if (!(await this.fileSystemService.exists(inputPath))) {
+        throw new MeldError(`File not found: ${options.input}`, {
+          severity: ErrorSeverity.Fatal,
+          code: 'FILE_NOT_FOUND'
+        });
+      }
+
+      // Read input file
+      const content = await this.fileSystemService.readFile(inputPath);
       
-      // Process the file through the API
-      const result = await apiMain(options.input, apiOptions);
+      // Parse content into AST
+      const ast = await this.parserService.parse(content);
       
-      // Handle output based on CLI options
+      // Interpret AST
+      const interpretResult = await this.interpreterService.interpret(ast, { 
+        strict: options.strict 
+      });
+      
+      // Determine output path
+      const outputPath = this.determineOutputPath(options);
+      
+      // Convert to desired format
+      const outputContent = await this.outputService.convert(
+        ast, // Pass the AST as the first parameter
+        this.stateService, // Pass the state service as the second parameter
+        options.format || 'xml', // Pass the format as the third parameter
+        { // Pass the options as the fourth parameter
+          preserveMarkdown: options.format === 'markdown'
+        }
+      );
+
+      // Write output or log to stdout
       if (options.stdout) {
-        console.log(result);
+        console.log(outputContent);
         logger.info('Successfully wrote output to stdout');
       } else {
-        // Determine output path
-        let outputPath = options.output;
-        
-        if (!outputPath) {
-          // If no output path specified, use input path with new extension
-          const inputExt = '.meld';
-          const outputExt = this.getOutputExtension(options.format || 'xml');
-          outputPath = options.input.replace(new RegExp(`${inputExt}$`), outputExt);
-        } else if (!outputPath.includes('.')) {
-          // If output path has no extension, add default extension
-          outputPath += this.getOutputExtension(options.format || 'xml');
-        }
-        
-        // Resolve output path
-        outputPath = await this.pathService.resolvePath(outputPath);
-
-        // Check for file overwrite
-        if (await this.fileSystemService.exists(outputPath)) {
+        // Check if output file exists and prompt for overwrite if needed
+        if (await this.fileSystemService.exists(outputPath) && !options.force) {
           const shouldOverwrite = await this.confirmOverwrite(outputPath);
           if (!shouldOverwrite) {
             logger.info('Operation cancelled by user');
@@ -266,27 +303,76 @@ Options:
           }
         }
 
-        await this.fileSystemService.writeFile(outputPath, result);
+        // Write output file
+        await this.fileSystemService.writeFile(outputPath, outputContent);
         logger.info('Successfully wrote output file', { path: outputPath });
       }
     } catch (error) {
-      // Convert to MeldError if needed
-      const meldError = error instanceof MeldError 
-        ? error 
+      // Convert errors to MeldError for consistent handling
+      const meldError = error instanceof MeldError
+        ? error
         : new MeldError(error instanceof Error ? error.message : String(error), {
             severity: ErrorSeverity.Fatal,
             code: 'PROCESSING_ERROR'
           });
-      
-      // Log the error
+
       logger.error('Error processing file', {
         error: meldError.message,
         code: meldError.code,
         severity: meldError.severity
       });
-      
-      // Rethrow to be caught by the main run method
+
       throw meldError;
     }
+  }
+
+  /**
+   * Determine the output path based on CLI options
+   */
+  private async determineOutputPath(options: CLIOptions): Promise<string> {
+    // If output path is explicitly specified, use it
+    if (options.output) {
+      return this.pathService.resolvePath(options.output);
+    }
+    
+    // If no output path specified, use input path with new extension
+    if (!options.input || typeof options.input !== 'string') {
+      throw new MeldError('Input file path is required', {
+        severity: ErrorSeverity.Fatal,
+        code: 'INVALID_INPUT'
+      });
+    }
+    
+    const inputPath = options.input;
+    const inputExt = '.meld';
+    const outputExt = this.getOutputExtension(options.format || 'xml');
+    
+    // Check if the input path ends with .meld extension
+    if (inputPath.endsWith(inputExt)) {
+      const outputPath = inputPath.substring(0, inputPath.length - inputExt.length) + outputExt;
+      return this.pathService.resolvePath(outputPath);
+    } else {
+      // If input doesn't end with .meld, just append the output extension
+      const outputPath = inputPath + outputExt;
+      return this.pathService.resolvePath(outputPath);
+    }
+  }
+
+  private showHelp() {
+    console.log(`
+Usage: meld [options] <input-file>
+
+Options:
+  -f, --format <format>  Output format (md, markdown, llm) [default: llm]
+  -o, --output <path>    Output file path [default: input filename with new extension]
+  --stdout               Print to stdout instead of file
+  --strict               Enable strict mode (fail on all errors)
+  --permissive           Enable permissive mode (ignore recoverable errors) [default]
+  --home-path <path>     Set custom home path for $~/ and $HOMEPATH
+  -v, --verbose          Enable verbose output
+  -d, --debug            Enable debug output
+  -h, --help             Display this help message
+  -V, --version          Display version information
+    `);
   }
 } 
