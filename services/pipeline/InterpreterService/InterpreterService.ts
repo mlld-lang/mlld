@@ -241,6 +241,13 @@ export class InterpreterService implements IInterpreterService {
           currentState = textState;
           break;
 
+        case 'CodeFence':
+          // Handle CodeFence nodes similar to Text nodes - preserve them exactly
+          const codeFenceState = currentState.clone();
+          codeFenceState.addNode(node);
+          currentState = codeFenceState;
+          break;
+
         case 'TextVar':
           // Handle TextVar nodes similar to Text nodes
           const textVarState = currentState.clone();

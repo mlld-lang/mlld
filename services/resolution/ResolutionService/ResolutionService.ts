@@ -796,18 +796,49 @@ export class ResolutionService implements IResolutionService {
     // Get base directory from context if available (use currentFilePath if available)
     const baseDir = context.currentFilePath ? this.pathService.dirname(context.currentFilePath) : process.cwd();
     
-    // Add debug logging for path resolution
+    // Add detailed debug logging for path resolution
     logger.debug('Resolving structured path', {
       raw: path.raw,
+      structured: path.structured,
       baseDir,
-      currentFilePath: context.currentFilePath
+      currentFilePath: context.currentFilePath,
+      home: process.env.HOME,
+      cwd: process.cwd()
     });
+    
+    // Add specific logging for home path resolution
+    if (structured.variables?.special?.includes('HOMEPATH')) {
+      const homePath = this.pathService.getHomePath();
+      console.log('Resolving home path in structured path:', {
+        raw,
+        homePath,
+        segments: structured.segments,
+        baseDir
+      });
+    }
     
     try {
       // Use the PathService to resolve the structured path
       // This handles all special variables and path normalization
-      return this.pathService.resolvePath(path, baseDir);
+      const resolvedPath = this.pathService.resolvePath(path, baseDir);
+      
+      // Log the final resolved path for debugging
+      console.log('Path resolved successfully:', {
+        raw,
+        resolvedPath,
+        exists: await this.fileSystemService.exists(resolvedPath)
+      });
+      
+      return resolvedPath;
     } catch (error) {
+      // Log detailed error information
+      console.error('Path resolution failed:', {
+        raw,
+        structured,
+        baseDir,
+        error: (error as Error).message
+      });
+      
       // Handle error based on severity
       throw new MeldResolutionError(
         `Failed to resolve path: ${(error as Error).message}`,

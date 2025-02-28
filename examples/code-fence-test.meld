@@ -1,0 +1,29 @@
+@text title = "Code Fence Test"
+@text greeting = "Hello from code fence test!"
+
+# {{title}}
+
+This is a test file with code fences.
+
+Greeting: {{greeting}}
+
+Here's a Python code sample:
+
+```python
+def hello_world():
+    print("Hello, World!")
+    
+hello_world()
+```
+
+And here's a JavaScript code sample:
+
+```javascript
+function helloWorld() {
+    console.log("Hello, World!");
+}
+
+helloWorld();
+```
+
+End of file. 

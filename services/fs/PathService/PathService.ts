@@ -211,30 +211,84 @@ export class PathService implements IPathService {
   private resolveStructuredPath(pathObj: StructuredPath, baseDir?: string): string {
     const { structured, raw } = pathObj;
 
+    // Add detailed logging for structured path resolution
+    console.log('PathService: Resolving structured path:', {
+      raw,
+      structured,
+      baseDir,
+      homePath: this.homePath,
+      projectPath: this.projectPath
+    });
+
     // If there are no segments, it's a simple filename
     if (!structured.segments || structured.segments.length === 0) {
-      return path.normalize(path.join(baseDir || process.cwd(), raw));
-    }
-
-    // Handle special variables
-    if (structured.variables?.special?.includes('HOMEPATH')) {
-      return path.normalize(path.join(this.homePath, ...structured.segments));
-    }
-    
-    if (structured.variables?.special?.includes('PROJECTPATH')) {
-      return path.normalize(path.join(this.projectPath, ...structured.segments));
-    }
-
-    // If it's a current working directory path
-    if (structured.cwd) {
-      // Always use the provided baseDir first if available, with enhanced debug logging
-      const resolvedPath = path.normalize(path.join(baseDir || process.cwd(), ...structured.segments));
+      const resolvedPath = path.normalize(path.join(baseDir || process.cwd(), raw));
+      console.log('PathService: Resolved simple filename:', {
+        raw,
+        baseDir: baseDir || process.cwd(),
+        resolvedPath
+      });
       return resolvedPath;
     }
 
-    // At this point, any other path format is invalid
+    // Handle special variables - explicitly handle home path
+    if (structured.variables?.special?.includes('HOMEPATH')) {
+      // Fix home path resolution
+      const segments = structured.segments;
+      const resolvedPath = path.normalize(path.join(this.homePath, ...segments));
+      
+      console.log('PathService: Resolved home path:', {
+        raw,
+        homePath: this.homePath,
+        segments,
+        resolvedPath,
+        // Use a safer check for file existence in test mode
+        exists: this.testMode ? 'test-mode' : this.fs ? this.fs.exists(resolvedPath) : false
+      });
+      
+      return resolvedPath;
+    }
+    
+    // Handle project path
+    if (structured.variables?.special?.includes('PROJECTPATH')) {
+      const segments = structured.segments;
+      const resolvedPath = path.normalize(path.join(this.projectPath, ...segments));
+      
+      console.log('PathService: Resolved project path:', {
+        raw,
+        projectPath: this.projectPath,
+        segments,
+        resolvedPath
+      });
+      
+      return resolvedPath;
+    }
+
+    // If it's a current working directory path or has the cwd flag
+    if (structured.cwd) {
+      // Prioritize the provided baseDir if available
+      const resolvedPath = path.normalize(path.join(baseDir || process.cwd(), ...structured.segments));
+      
+      console.log('PathService: Resolved current directory path:', {
+        raw,
+        baseDir: baseDir || process.cwd(),
+        segments: structured.segments,
+        resolvedPath
+      });
+      
+      return resolvedPath;
+    }
+
+    // Log unhandled path types for diagnostic purposes
+    console.warn('PathService: Unhandled structured path type:', {
+      raw,
+      structured,
+      baseDir
+    });
+
+    // At this point, any other path format is invalid - but provide a helpful error
     throw new PathValidationError(
-      'Invalid path format - paths must either be simple filenames or start with $. or $~',
+      `Invalid path format: ${raw} - paths must either be simple filenames or start with $. or $~`,
       PathErrorCode.INVALID_PATH_FORMAT
     );
   }
@@ -253,10 +307,31 @@ export class PathService implements IPathService {
     else {
       // Handle special path prefixes for backward compatibility
       if (filePath.startsWith('$~/') || filePath.startsWith('$HOMEPATH/')) {
+        // Add detailed logging for home path resolution
+        console.log('PathService: Resolving home path:', {
+          rawPath: filePath,
+          homePath: this.homePath,
+          segments: filePath.split('/').slice(1).filter(Boolean)
+        });
+        
+        // Fix the segment extraction for $~/ paths (currently the $ character is being included)
+        let segments;
+        if (filePath.startsWith('$~/')) {
+          // Skip the "$~/" prefix when extracting segments
+          segments = filePath.substring(3).split('/').filter(Boolean);
+        } else {
+          // Skip the "$HOMEPATH/" prefix when extracting segments
+          segments = filePath.substring(10).split('/').filter(Boolean);
+        }
+        
+        console.log('PathService: Extracted segments:', {
+          segments
+        });
+        
         structPath = {
           raw: filePath,
           structured: {
-            segments: filePath.split('/').slice(1).filter(Boolean),
+            segments: segments,
             variables: {
               special: ['HOMEPATH'],
               path: []
@@ -265,10 +340,30 @@ export class PathService implements IPathService {
         };
       } 
       else if (filePath.startsWith('$./') || filePath.startsWith('$PROJECTPATH/')) {
+        // Add detailed logging for project path resolution
+        console.log('PathService: Resolving project path:', {
+          rawPath: filePath,
+          projectPath: this.projectPath
+        });
+        
+        // Fix the segment extraction for $./ paths
+        let segments;
+        if (filePath.startsWith('$./')) {
+          // Skip the "$./" prefix when extracting segments
+          segments = filePath.substring(3).split('/').filter(Boolean);
+        } else {
+          // Skip the "$PROJECTPATH/" prefix when extracting segments
+          segments = filePath.substring(13).split('/').filter(Boolean);
+        }
+        
+        console.log('PathService: Extracted segments:', {
+          segments
+        });
+        
         structPath = {
           raw: filePath,
           structured: {
-            segments: filePath.split('/').slice(1).filter(Boolean),
+            segments: segments,
             variables: {
               special: ['PROJECTPATH'],
               path: []
@@ -326,11 +421,19 @@ export class PathService implements IPathService {
       v => v === 'HOMEPATH' || v === 'PROJECTPATH'
     );
 
+    // Also check for path variables which are valid - safely check length
+    const hasPathVar = (structured.variables?.path?.length ?? 0) > 0;
+
     // Check for path with slashes
     const hasSlashes = raw.includes('/');
     
-    // If path has slashes but no special variables, it's invalid
-    if (hasSlashes && !hasSpecialVar && !structured.cwd) {
+    // If path has slashes but no special variables or path variables, and isn't marked as cwd
+    if (hasSlashes && !hasSpecialVar && !hasPathVar && !structured.cwd) {
+      console.warn('PathService: Path validation warning - path with slashes has no special variables:', {
+        raw,
+        structured
+      });
+      
       throw new PathValidationError(
         'Paths with segments must start with $. or $~ - use $. for project-relative paths and $~ for home-relative paths',
         PathErrorCode.INVALID_PATH_FORMAT,

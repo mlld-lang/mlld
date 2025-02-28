@@ -255,6 +255,11 @@ export class FileSystemService implements IFileSystemService {
     return process.cwd();
   }
 
+  // Add dirname method that delegates to PathOperationsService
+  dirname(filePath: string): string {
+    return this.pathOps.dirname(filePath);
+  }
+
   watch(path: string, options?: { recursive?: boolean }): AsyncIterableIterator<{ filename: string; eventType: string }> {
     const resolvedPath = this.resolvePath(path);
     

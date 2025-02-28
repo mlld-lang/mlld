@@ -20,6 +20,9 @@ export interface IFileSystemService {
   // Working directory
   getCwd(): string;
 
+  // Path operations
+  dirname(filePath: string): string;
+
   // Command execution
   executeCommand(command: string, options?: { cwd?: string }): Promise<{ stdout: string; stderr: string }>;
 

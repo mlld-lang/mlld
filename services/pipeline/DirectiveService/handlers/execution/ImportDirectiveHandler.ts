@@ -56,7 +56,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
       // This ensures imported variables will be visible in the parent scope
       const targetState = context.state;
 
-      // Create resolution context
+      // Create resolution context with current file's directory
       const resolutionContext = {
         currentFilePath: context.currentFilePath,
         state: context.state,
@@ -68,15 +68,65 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
         }
       };
 
-      // Get the raw path string from the structured path object
-      let pathValue: string;
+      // Log all AST information for debugging
+      console.log('Import directive path analysis:', {
+        pathType: typeof path,
+        pathValue: typeof path === 'string' ? path : path.raw,
+        structured: typeof path === 'string' ? null : path.structured,
+        normalized: typeof path === 'string' ? null : path.normalized,
+        currentFilePath: context.currentFilePath,
+        currentDir: context.currentFilePath ? this.fileSystemService.dirname(context.currentFilePath) : process.cwd()
+      });
+
+      // Handle the path based on what the AST provides
       if (typeof path === 'string') {
-        pathValue = path;
-      } else if (path.raw) {
-        pathValue = path.raw;
-      } else if (path.normalized) {
-        pathValue = path.normalized;
+        // For string paths, use the resolution service directly
+        logger.debug('Resolving string path from import directive', {
+          path,
+          currentFilePath: context.currentFilePath
+        });
+        
+        // For string paths, pass to resolution service
+        resolvedFullPath = await this.resolutionService.resolveInContext(
+          path,
+          resolutionContext
+        );
+      } else if (path && 'structured' in path) {
+        // We have a structured path from the AST
+        logger.debug('Processing structured path from import directive', {
+          raw: path.raw,
+          structured: path.structured,
+          normalized: path.normalized,
+          currentFilePath: context.currentFilePath
+        });
+        
+        // Path variable handling - detect if this is a path variable reference
+        if (path.structured.variables?.path?.length > 0) {
+          // This is a path variable like $mypath
+          const pathVarName = path.structured.variables.path[0];
+          console.log(`Detected path variable reference: $${pathVarName}`);
+          
+          // Get the path variable from state
+          const pathVar = context.state.getPathVar(pathVarName);
+          if (pathVar) {
+            console.log(`Path variable resolved: ${pathVarName} = `, pathVar);
+          } else {
+            console.log(`Path variable not found: ${pathVarName}`);
+          }
+        }
+        
+        // For interpolation references like ${mypath}
+        if (path.raw.includes('${')) {
+          console.log('Detected interpolation reference in path:', path.raw);
+        }
+        
+        // Always pass the full structured path object
+        resolvedFullPath = await this.resolutionService.resolveInContext(
+          path,
+          resolutionContext
+        );
       } else {
+        // Handle path object that doesn't match expected structure
         throw new DirectiveError(
           'Import directive has invalid path format',
           this.kind,
@@ -85,43 +135,6 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
             node,
             severity: DirectiveErrorSeverity[DirectiveErrorCode.VALIDATION_FAILED]
           }
-        );
-      }
-
-      // Handle relative paths without special prefixes - if the path doesn't have slashes
-      // and doesn't start with $ (variable or special path), treat it as relative to the current file
-      if (!pathValue.includes('/') && !pathValue.startsWith('$') && context.currentFilePath) {
-        const currentDir = this.fileSystemService.dirname(context.currentFilePath);
-        
-        // Log the resolution for debugging
-        logger.debug('Resolving relative import path', {
-          originalPath: pathValue,
-          currentFilePath: context.currentFilePath,
-          currentDir
-        });
-        
-        // Create a resolution context with the current file's directory
-        const resolutionContext = {
-          currentFilePath: context.currentFilePath,
-          state: context.state,
-          allowedVariableTypes: {
-            text: true,
-            data: true,
-            path: true,
-            command: false
-          }
-        };
-
-        // Resolve the path using the resolution service
-        resolvedFullPath = await this.resolutionService.resolveInContext(
-          pathValue,
-          resolutionContext
-        );
-      } else {
-        // For paths with special variables or slashes, use standard resolution
-        resolvedFullPath = await this.resolutionService.resolveInContext(
-          pathValue,
-          resolutionContext
         );
       }
 
@@ -143,17 +156,49 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
       }
 
       try {
+        // Log the resolved path
+        logger.debug('Import path resolved', {
+          resolvedPath: resolvedFullPath,
+          currentFilePath: context.currentFilePath
+        });
+        
         // Check if file exists
         if (!await this.fileSystemService.exists(resolvedFullPath)) {
+          const pathStr = typeof path === 'string' ? path : path.raw || 'unknown';
+          
+          // Log detailed error information for debugging
           logger.error('Import file not found', {
-            originalPath: pathValue,
+            originalPath: pathStr,
             resolvedPath: resolvedFullPath,
             currentFilePath: context.currentFilePath,
-            error: `Import file not found: [${pathValue}]`
+            error: `Import file not found: [${pathStr}]`
           });
           
+          // Add more detailed console logging for diagnostic purposes
+          console.error('Import file not found:', {
+            originalPath: pathStr,
+            resolvedPath: resolvedFullPath,
+            currentFilePath: context.currentFilePath,
+            currentDir: context.currentFilePath ? this.fileSystemService.dirname(context.currentFilePath) : process.cwd(),
+            fileExists: await this.fileSystemService.exists(resolvedFullPath),
+            homePath: process.env.HOME,
+            cwd: process.cwd(),
+            pathType: typeof path,
+            structuredPath: typeof path === 'string' ? null : path
+          });
+          
+          // Try to check if the file exists in another location for diagnostics
+          if (typeof path !== 'string' && path.raw.startsWith('$~')) {
+            const homePath = process.env.HOME;
+            const testPath = path.raw.replace('$~', homePath);
+            console.error('Diagnostic - checking alternate path:', {
+              testPath,
+              exists: await this.fileSystemService.exists(testPath)
+            });
+          }
+          
           throw new DirectiveError(
-            `Import file not found: [${pathValue}]`,
+            `Import file not found: [${pathStr}]`,
             this.kind,
             DirectiveErrorCode.FILE_NOT_FOUND,
             { 
@@ -165,7 +210,6 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
         }
 
         logger.debug('Import file found and being processed', {
-          originalPath: pathValue,
           resolvedPath: resolvedFullPath,
           currentFilePath: context.currentFilePath
         });
@@ -194,7 +238,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
         }
 
         logger.debug('Import directive processed successfully', {
-          path: pathValue,
+          path: typeof path === 'string' ? path : path.raw,
           importList: importList,
           location: node.location
         });
