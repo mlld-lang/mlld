@@ -12,10 +12,13 @@ import { ErrorCollector } from '@tests/utils/ErrorTestUtils.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 import { cliLogger, type Logger } from '@core/utils/logger.js';
 
-// Mock the apiMain function that's used in CLIService
-const apiMain = vi.fn().mockResolvedValue('test output');
-// Make it globally available
-vi.stubGlobal('apiMain', apiMain);
+// Mock the API module
+vi.mock('@api/index.js', () => ({
+  main: vi.fn().mockResolvedValue('test output')
+}));
+
+// Mock console.log
+const consoleLog = vi.spyOn(console, 'log');
 
 const defaultOptions = {
   input: 'test.meld',
