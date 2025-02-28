@@ -87,9 +87,8 @@ export class VariableReferenceResolver {
         } else {
           result += textNode.content;
         }
-      } else if (node.type === 'TextVar' || node.type === 'DataVar' || node.type === 'VariableReference') {
+      } else if (node.type === 'TextVar' || node.type === 'DataVar') {
         // Handle text/data variable nodes (new meld-ast format)
-        // or variable reference nodes (backward compatibility)
         const varNode = node as any;
         
         // Extract variable reference - different formats depending on node type
@@ -216,7 +215,7 @@ export class VariableReferenceResolver {
             });
             
             // In permissive mode, use the original value
-            if (!context.strict) {
+            if (!context.hasOwnProperty('strict') || !context.strict) {
               result += directiveNode.directive.value || directiveNode.directive.identifier;
             } else {
               // In strict mode, rethrow the error
@@ -247,7 +246,7 @@ export class VariableReferenceResolver {
             });
             
             // In permissive mode, return a placeholder
-            if (!context.strict) {
+            if (!context.hasOwnProperty('strict') || !context.strict) {
               result += `[command ${directiveNode.directive.identifier} failed]`;
             } else {
               // In strict mode, rethrow the error
@@ -577,7 +576,8 @@ export class VariableReferenceResolver {
     
     // If not found in text vars, try data vars
     if (value === undefined && context.allowedVariableTypes.data) {
-      value = stateToUse.getDataVar(baseVar);
+      const dataValue = stateToUse.getDataVar(baseVar);
+      value = dataValue as string | undefined;
       console.log('*** Data variable lookup result:', {
         variable: baseVar,
         value: value
@@ -634,45 +634,44 @@ export class VariableReferenceResolver {
       });
       
       try {
+        // Store the original value for comparison
+        const originalValue = value;
+        
+        // Attempt to resolve field access
         value = this.resolveFieldAccess(value, parts.slice(1), context);
-        console.log('*** Field access result:', value);
+        
+        // If field access didn't change the value, it might have failed
+        if (value === originalValue) {
+          console.warn(`Field access may not have worked correctly for ${parts.join('.')}`);
+        }
       } catch (error) {
-        console.log('*** Field access error:', String(error));
+        if (error instanceof MeldResolutionError) {
+          throw error;
+        }
         throw new MeldResolutionError(
-          'Invalid field access: ' + parts.slice(1).join('.'),
+          `Failed to access field ${parts.slice(1).join('.')} in ${baseVar}`,
           {
             code: ResolutionErrorCode.FIELD_ACCESS_ERROR,
+            severity: ErrorSeverity.Recoverable,
             details: { 
-              fieldPath: parts.slice(1).join('.')
-            },
-            severity: ErrorSeverity.Fatal
+              variableName: baseVar,
+              value: `Error accessing ${parts.slice(1).join('.')}: ${(error as Error).message}`
+            }
           }
         );
       }
     }
     
-    // Convert to string if it's an object
+    // Only stringify if it's an object AND we weren't doing field access,
+    // or if the result of field access is still an object
     if (typeof value === 'object' && value !== null) {
-      // For nested objects, we want to return the specific field value, not the whole object
-      if (parts.length > 1) {
-        // If it's a primitive value, return as is
-        if (typeof value !== 'object' || value === null) {
-          return String(value);
-        }
-        
-        // For objects, try to extract the deepest field value
-        try {
-          const lastField = parts[parts.length - 1];
-          if (typeof value === 'object' && value !== null && lastField in value) {
-            return String(value[lastField]);
-          }
-        } catch (e) {
-          // If extraction fails, fall back to JSON stringification
-        }
+      if (parts.length === 1) {
+        // We're not doing field access, stringify the whole object
+        value = JSON.stringify(value);
+      } else {
+        // We were doing field access - only stringify if the result is still an object
+        value = typeof value === 'object' ? JSON.stringify(value) : String(value);
       }
-      
-      // If we couldn't extract a specific field or it's the base object, stringify it
-      return JSON.stringify(value);
     }
     
     const result = String(value);
@@ -688,8 +687,23 @@ export class VariableReferenceResolver {
     fieldPath: string[], 
     context: ResolutionContext
   ): any {
-    return fieldPath.reduce((current, field) => {
+    // Enhanced logging to debug field access issues
+    console.log('FIELD ACCESS DEBUG - Initial object:', typeof obj === 'object' ? JSON.stringify(obj, null, 2) : obj);
+    console.log('FIELD ACCESS DEBUG - Field path:', fieldPath);
+    
+    // Handle empty field path
+    if (!fieldPath || fieldPath.length === 0) {
+      console.log('FIELD ACCESS DEBUG - Empty field path, returning original object');
+      return obj;
+    }
+    
+    // Traverse the object via the field path
+    let current = obj;
+    for (const field of fieldPath) {
+      console.log(`FIELD ACCESS DEBUG - Accessing field: ${field}`);
+      
       if (current === null || current === undefined) {
+        console.log('FIELD ACCESS DEBUG - Cannot access field of null/undefined');
         throw new Error(`Cannot access field ${field} of undefined or null`);
       }
       
@@ -715,14 +729,32 @@ export class VariableReferenceResolver {
               }
             );
           }
-          return current[indexValue];
+          current = current[indexValue];
+        } else {
+          current = current[index];
+        }
+      } else {
+        // Normal property access
+        console.log(`FIELD ACCESS DEBUG - Current object type: ${typeof current}`);
+        if (typeof current === 'object' && current !== null) {
+          console.log(`FIELD ACCESS DEBUG - Current object keys:`, Object.keys(current));
+        }
+        console.log(`FIELD ACCESS DEBUG - Field ${field} exists:`, field in current);
+        
+        if (typeof current !== 'object' || !(field in current)) {
+          console.log(`FIELD ACCESS DEBUG - Field ${field} not found in object:`, current);
+          throw new Error(`Cannot access field ${field} of ${typeof current}`);
         }
         
-        return current[index];
+        current = current[field];
+        console.log(`FIELD ACCESS DEBUG - Field value:`, current);
+        console.log(`FIELD ACCESS DEBUG - Field value type:`, typeof current);
       }
-      
-      return current[field];
-    }, obj);
+    }
+    
+    console.log('FIELD ACCESS DEBUG - Final result:', current);
+    console.log('FIELD ACCESS DEBUG - Final result type:', typeof current);
+    return current;
   }
   
   /**
@@ -732,15 +764,8 @@ export class VariableReferenceResolver {
    * @returns Text with variables resolved
    */
   private resolveSimpleVariables(text: string, context: ResolutionContext): string {
-    console.log('*** SimpleVariables: Starting resolution on:', text);
-    
     // Choose state service - prefer context.state if available
     const stateToUse = context.state || this.stateService;
-    
-    console.log('*** SimpleVariables: Available state variables:', { 
-      textVars: stateToUse ? ['[state service available]'] : [],
-      dataVars: stateToUse ? ['[state service available]'] : []
-    });
 
     // If no ParserService available, throw an error
     if (!this.parserService) {
@@ -821,7 +846,46 @@ export class VariableReferenceResolver {
         // For data variables with field access, resolve fields
         if (parts.length > 1 && typeof value === 'object' && value !== null) {
           try {
-            value = this.resolveFieldAccess(value, parts.slice(1), context);
+            // Store the original object for comparison
+            const originalObject = value;
+            
+            // Direct implementation of field access
+            let current = value;
+            
+            // Enhanced debug logging for field access
+            console.log('FIELD ACCESS - Initial object:', JSON.stringify(value, null, 2));
+            console.log('FIELD ACCESS - Field path:', parts.slice(1));
+            
+            // Process each field in the path
+            for (const field of parts.slice(1)) {
+              console.log(`FIELD ACCESS - Accessing field: ${field}`);
+              
+              // Check if we can access this field
+              if (current === null || current === undefined) {
+                console.log('FIELD ACCESS - Cannot access field of null/undefined');
+                throw new Error(`Cannot access field ${field} of undefined or null`);
+              }
+              
+              // Check if the current value is an object and has the field
+              if (typeof current !== 'object' || !(field in current)) {
+                console.log(`FIELD ACCESS - Field ${field} not found in object:`, current);
+                throw new Error(`Cannot access field ${field} of ${typeof current}`);
+              }
+              
+              // Access the field
+              current = current[field];
+              console.log(`FIELD ACCESS - Field value:`, current);
+            }
+            
+            // Update the value with the field access result
+            value = current;
+            
+            // Check if the field access actually changed the value
+            if (value === originalObject) {
+              console.warn(`Field access may not have worked correctly for ${parts.join('.')}`);
+            }
+            
+            console.log('FIELD ACCESS - Final result:', value);
           } catch (error) {
             if (error instanceof MeldResolutionError) {
               throw error;
@@ -840,17 +904,30 @@ export class VariableReferenceResolver {
           }
         }
         
-        if (typeof value === 'object') {
-          value = JSON.stringify(value);
+        // Stringification logic - key part of the fix
+        let stringValue: string;
+        
+        if (typeof value === 'object' && value !== null) {
+          if (parts.length === 1) {
+            // We're not doing field access, stringify the whole object
+            // Use pretty-printed JSON for better readability
+            stringValue = JSON.stringify(value, null, 2);
+          } else {
+            // We were doing field access - only stringify if the result is still an object
+            stringValue = typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value);
+          }
+        } else {
+          // For primitive values, just convert to string
+          stringValue = String(value);
         }
         
         // Convert any undefined values to empty strings
         if (value === undefined) {
-          value = '';
+          stringValue = '';
         }
         
         // Replace the variable in the text
-        result = result.replace(fullMatch, String(value));
+        result = result.replace(fullMatch, stringValue);
       }
       
       return result;
@@ -1138,5 +1215,42 @@ export class VariableReferenceResolver {
       // Fall back to regex extraction
       return this.extractReferencesRegex(text);
     }
+  }
+
+  /**
+   * Test debugging method to directly test field access
+   */
+  debugFieldAccess(
+    obj: any, 
+    fieldPath: string[], 
+    context: ResolutionContext
+  ): { originalObj: any; result: any; } {
+    console.log('=== DEBUG TEST - debugFieldAccess ===');
+    console.log('Input:', { obj, fieldPath });
+    
+    const result = this.resolveFieldAccess(obj, fieldPath, context);
+    
+    console.log('Result:', { 
+      originalObj: obj,
+      result,
+      resultType: typeof result
+    });
+    
+    // Test our stringification logic directly
+    let stringified: string;
+    
+    if (typeof result === 'object' && result !== null) {
+      stringified = JSON.stringify(result);
+    } else {
+      stringified = String(result);
+    }
+    
+    console.log('Stringified result:', stringified);
+    console.log('=== END DEBUG TEST ===');
+    
+    return { 
+      originalObj: obj,
+      result 
+    };
   }
 } 

@@ -29,7 +29,7 @@ const pathService = new PathService();
 const stateService = new StateService();
 const validationService = new ValidationService();
 const circularityService = new CircularityService();
-const resolutionService = new ResolutionService(stateService, fileSystemService, parserService);
+const resolutionService = new ResolutionService(stateService, fileSystemService, parserService, pathService);
 const directiveService = new DirectiveService();
 
 // Initialize services

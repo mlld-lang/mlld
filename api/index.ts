@@ -89,7 +89,7 @@ function createDefaultServices(options: ProcessOptions): Services & RequiredServ
   const parser = new ParserService();
 
   // 5. Resolution Layer Services
-  const resolution = new ResolutionService(state, filesystem, parser);
+  const resolution = new ResolutionService(state, filesystem, parser, path);
   const validation = new ValidationService();
   const circularity = new CircularityService();
 

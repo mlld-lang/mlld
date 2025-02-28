@@ -807,4 +807,12 @@ export class ResolutionService implements IResolutionService {
       );
     }
   }
+
+  /**
+   * Get the variable reference resolver for debugging
+   * @internal For testing/debugging only
+   */
+  getVariableResolver(): VariableReferenceResolver {
+    return this.variableReferenceResolver;
+  }
 } 

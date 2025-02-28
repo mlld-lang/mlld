@@ -25,6 +25,9 @@ export interface ResolutionContext {
   /** Whether field access is allowed for data variables */
   allowDataFields?: boolean;
 
+  /** Whether to throw errors on resolution failures (true) or attempt to recover (false) */
+  strict?: boolean;
+
   /** The state service to use for variable resolution */
   state: IStateService;
 }

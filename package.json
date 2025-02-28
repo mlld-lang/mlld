@@ -25,7 +25,8 @@
     "clean": "rimraf dist",
     "prepublishOnly": "npm run clean && npm run build",
     "postinstall": "node scripts/install-warning.js",
-    "ast": "npx ts-node scripts/ast-diagnostics.mjs"
+    "ast": "npx ts-node scripts/ast-diagnostics.mjs",
+    "meld": "node scripts/process-meld.js"
   },
   "repository": {
     "type": "git",
@@ -69,6 +70,8 @@
     "fs-extra": "^11.3.0",
     "memfs": "^4.7.0",
     "rimraf": "^6.0.1",
+    "ts-node": "^10.9.2",
+    "tsconfig-paths": "^4.2.0",
     "tsup": "^8.0.2",
     "typescript": "^5.7.3",
     "vite-tsconfig-paths": "^5.1.4",

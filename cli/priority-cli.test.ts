@@ -1,11 +1,17 @@
-// /**
-//  * Priority CLI Tests
-//  * 
-//  * This file contains the highest priority CLI tests that need to be fixed first.
-//  * These tests focus on the core CLI functionality and error handling.
-//  */
+/**
+ * Priority CLI Tests
+ * 
+ * This file contains the highest priority CLI tests that need to be fixed first.
+ * These tests focus on the core CLI functionality and error handling.
+ */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+
+
+it.skip('skipping this test', () => {
+  expect(true).toBe(true);
+});
+
 // import { TestContext } from '../tests/utils/TestContext.js';
 // import { MemfsTestFileSystemAdapter } from '../tests/utils/MemfsTestFileSystemAdapter.js';
 // import { setupCliTest } from '../tests/utils/cli/cliTestHelper.js';
@@ -278,7 +284,3 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 //     });
 //   });
 // });
-
-it.skip('skipping this test', () => {
-  expect(true).toBe(true);
-});

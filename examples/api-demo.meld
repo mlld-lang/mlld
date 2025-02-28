@@ -7,11 +7,11 @@
   "tags": ["demo", "api", "documentation"]
 }}
 
-# ${title}
+@embed # {{title}} [[
 
-**Author:** ${author}  
-**Date:** ${date}  
-**Version:** #{metadata.version}
+**Author:** {{author}}  
+**Date:** {{date}}  
+**Version:** {{metadata.version}}
 
 ## Introduction
 
@@ -21,12 +21,14 @@ This document demonstrates the core capabilities of Meld, a directive-based scri
 
 @text greeting = "Hello"
 @text name = "World"
-@text message = `${greeting}, ${name}!`
+@text message = `{{greeting}}, {{name}}!`
 
 Text variables can be defined and referenced:
-- Greeting: ${greeting}
-- Name: ${name}
-- Combined: ${message}
+- Greeting: {{greeting}}
+- Name: {{name}}
+- Combined: {{message}}
+
+]]
 
 ## Data Variables
 
@@ -39,11 +41,13 @@ Text variables can be defined and referenced:
   "env": "production"
 }}
 
+@embed [[
 Data variables store structured data:
-- App name: #{config.app.name}
-- Version: #{config.app.version}
-- Environment: #{config.env}
-- Features: #{config.app.features}
+- App name: {{config.app.name}}
+- Version: {{config.app.version}}
+- Environment: {{config.env}}
+- Features: {{config.app.features}}
+]]
 
 ## Path Variables
 
@@ -51,10 +55,12 @@ Data variables store structured data:
 @path config = "$PROJECTPATH/config"
 @path home = "$HOMEPATH/meld"
 
+@embed = [[
 Path variables must use special variables:
-- Documentation path: ${docs}
-- Configuration path: ${config}
-- Home path: ${home}
+- Documentation path: {{docs}}
+- Configuration path: {{config}}
+- Home path: {{home}}
+]]
 
 ## Command Execution
 
@@ -63,13 +69,13 @@ Path variables must use special variables:
 @define greet = @run [echo "Hello from a defined command"]
 @run [$greet]
 
-@define greet_user(username) = @run [echo "Hello, ${username}!"]
+@define greet_user(username) = @run [echo "Hello, {{username}}!"]
 @text user = "Alice"
-@run [$greet_user(${user})]
+@run [$greet_user({{user}})]
 
 ## File Embedding
 
-Here's an embedded file:
+Here's an embedded meld file which is not interpreted because it's simply embedded, which only produces the static content of the file: 
 
 @embed [example-import.meld]
 
@@ -113,7 +119,7 @@ Still in outer fence
   { "name": "Item 3", "value": 300 }
 ]
 
-### ${section} with Data Iteration
+@embed  ### {{section}} with Data Iteration [[
 
 Here's how you might represent data:
 
@@ -124,19 +130,21 @@ Here's how you might represent data:
 | #{items[2].name} | #{items[2].value} |
 
 Total value: #{items[0].value + items[1].value + items[2].value}
+]]
 
-## Templating with Backticks
+## Templating
 
-@text template = `
+@text template = [[
 This is a multi-line
 template with variable
-interpolation: ${greeting}, ${name}!
+interpolation: {{greeting}}, {{name}}!
 
-Data reference: #{config.app.name}
-`
+Data reference: {{config.app.name}}
+]]
 
-Template result:
-${template}
+@embed Template result: [[
+{{template}}
+]]
 
 ## Conclusion
 
@@ -145,6 +153,6 @@ This demo shows the core capabilities of Meld:
 - Command execution (@run, @define)
 - File embedding (@embed)
 - Code fences for literal content
-- Variable interpolation (${var}, #{data.field})
+- Variable interpolation ({{var}}, {{data.field}})
 
 All of these features are available through the Meld API.

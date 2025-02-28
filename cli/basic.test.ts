@@ -1,8 +1,13 @@
-// /**
-//  * Basic CLI test to debug issues with the test environment
-//  */
+/**
+ * Basic CLI test to debug issues with the test environment
+ */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+
+it.skip('skipping this test', () => {
+  expect(true).toBe(true);
+});
+
 // import { TestContext } from '../tests/utils/TestContext.js';
 // import { MemfsTestFileSystemAdapter } from '../tests/utils/MemfsTestFileSystemAdapter.js';
 // import { setupCliTest } from '../tests/utils/cli/cliTestHelper.js';
@@ -36,8 +41,3 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 //     }
 //   });
 // });
-
-it.skip('skipping this test', () => {
-  expect(true).toBe(true);
-});
-

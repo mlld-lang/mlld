@@ -1,4 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi, beforeAll, afterAll } from 'vitest';
+
+it.skip('skipping this test', () => {
+  expect(true).toBe(true);
+});
+
 // import { main } from './index.js';
 // import { TestContext } from '@tests/utils/TestContext.js';
 // import { MemfsTestFileSystemAdapter } from '@tests/utils/MemfsTestFileSystemAdapter.js';
@@ -323,7 +328,7 @@ import { describe, it, expect, beforeEach, afterEach, vi, beforeAll, afterAll } 
 //     it('should handle command parameters', async () => {
 //       // Create a meld file with a command definition that uses parameters
 //       await context.fs.writeFile('/project/test.meld', `
-// @define greet(name) = @run [echo "Hello, \${name}!"]
+// @define greet(name) = @run [echo "Hello, {{name}}!"]
 // @run [$greet("World")]
 //       `);
       
@@ -349,7 +354,7 @@ import { describe, it, expect, beforeEach, afterEach, vi, beforeAll, afterAll } 
 //     it('should handle multiple parameters', async () => {
 //       // Create a meld file with a command definition that uses multiple parameters
 //       await context.fs.writeFile('/project/test.meld', `
-// @define greet(name, title) = @run [echo "\${title} \${name}"]
+// @define greet(name, title) = @run [echo "{{title}} {{name}}"]
 // @run [$greet("Smith", "Mr.")]
 //       `);
       
@@ -376,7 +381,7 @@ import { describe, it, expect, beforeEach, afterEach, vi, beforeAll, afterAll } 
 //     it('should validate parameter count', async () => {
 //       // Create a meld file with a command definition and incorrect parameter count
 //       await context.fs.writeFile('/project/test.meld', `
-// @define greet(name, title) = @run [echo "\${title} \${name}"]
+// @define greet(name, title) = @run [echo "{{title}} {{name}}"]
 // @run [$greet("Smith")]  // Missing parameter
 //       `);
       
@@ -404,7 +409,7 @@ import { describe, it, expect, beforeEach, afterEach, vi, beforeAll, afterAll } 
 //     it('should handle @define directive with command parameters', async () => {
 //       // Create a meld file with a command definition that uses parameters
 //       await context.fs.writeFile('/project/test.meld', `
-// @define greet(name) = @run [echo "Hello, \${name}!"]
+// @define greet(name) = @run [echo "Hello, {{name}}!"]
 // @run [$greet("World")]
 //       `);
       
@@ -870,7 +875,7 @@ import { describe, it, expect, beforeEach, afterEach, vi, beforeAll, afterAll } 
 // @text validAccess = "Data: #{user.name}"
 
 // // Invalid field access on text variable - should be a recoverable error
-// @text invalidAccess = "Text: \${name.length}"
+// @text invalidAccess = "Text: {{name.length}"
 //       `);
       
 //       // Set up the CLI arguments
@@ -2023,8 +2028,3 @@ import { describe, it, expect, beforeEach, afterEach, vi, beforeAll, afterAll } 
 //     });
 //   });
 // })});
-
-
-it.skip('skipping this test', () => {
-  expect(true).toBe(true);
-});

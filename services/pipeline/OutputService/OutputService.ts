@@ -188,9 +188,17 @@ export class OutputService implements IOutputService {
       // First convert to markdown since LLM XML is based on markdown
       const markdown = await this.convertToMarkdown(nodes, state, options);
 
-      // Convert markdown to LLM XML
-      const { createLLMXML } = await import('llmxml');
-      const llmxml = createLLMXML();
+      // Use our wrapper to prevent HTML encoding of JSON content
+      const { createLLMXMLWrapper } = await import('./LLMXMLWrapper');
+      const llmxml = createLLMXMLWrapper({
+        defaultFuzzyThreshold: 0.7,
+        includeHlevel: false,
+        includeTitle: false,
+        tagFormat: 'PascalCase',
+        verbose: false,
+        warningLevel: 'all'
+      });
+      
       return llmxml.toXML(markdown);
     } catch (error) {
       throw new MeldOutputError(
