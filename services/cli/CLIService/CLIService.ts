@@ -5,7 +5,7 @@
  * but delegates the actual processing to the API.
  */
 
-import { main } from '@api/index.js';
+import { main as apiMain } from '@api/index.js';
 import { cliLogger as logger } from '@core/utils/logger.js';
 import { MeldError, ErrorSeverity } from '@core/errors/MeldError.js';
 import { version } from '@core/version.js';
