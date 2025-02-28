@@ -118,13 +118,13 @@ describe('StateHistoryService', () => {
     it('filters operations by type', () => {
       const history = historyService.queryHistory({ types: ['create'] });
       expect(history).toHaveLength(1);
-      expect(history[0].type).toBe('create');
+      expect(history.at(0).type).toBe('create');
     });
 
     it('filters operations by source', () => {
       const history = historyService.queryHistory({ source: 'other' });
       expect(history).toHaveLength(1);
-      expect(history[0].source).toBe('other');
+      expect(history.at(0).source).toBe('other');
     });
 
     it('filters operations by time range', () => {

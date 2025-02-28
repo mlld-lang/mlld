@@ -119,10 +119,10 @@ describe('StateDebuggerService', () => {
       const diagnostics = await debugService.analyzeState(testStateId);
 
       expect(diagnostics).toHaveLength(2); // Two warnings
-      expect(diagnostics[0].type).toBe('warning');
-      expect(diagnostics[0].message).toContain('transformations');
-      expect(diagnostics[1].type).toBe('warning');
-      expect(diagnostics[1].message).toContain('child states');
+      expect(diagnostics.at(0).type).toBe('warning');
+      expect(diagnostics.at(0).message).toContain('transformations');
+      expect(diagnostics.at(1).type).toBe('warning');
+      expect(diagnostics.at(1).message).toContain('child states');
     });
 
     it('should run custom analyzers during analysis', async () => {
@@ -149,8 +149,8 @@ describe('StateDebuggerService', () => {
       const diagnostics = await debugService.analyzeState(testStateId);
 
       expect(diagnostics).toHaveLength(1);
-      expect(diagnostics[0].type).toBe('error');
-      expect(diagnostics[0].message).toContain('Failed to retrieve state');
+      expect(diagnostics.at(0).type).toBe('error');
+      expect(diagnostics.at(0).message).toContain('Failed to retrieve state');
     });
   });
 

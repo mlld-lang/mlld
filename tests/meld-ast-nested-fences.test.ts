@@ -16,8 +16,8 @@ describe('meld-ast nested code fence behavior', () => {
     
     expect(result.ast).toBeDefined();
     expect(result.ast).toHaveLength(1);
-    expect(result.ast[0].type).toBe('CodeFence');
-    expect(result.ast[0].content).toBe('```\nouter\n```');
+    expect(result.ast.at(0).type).toBe('CodeFence');
+    expect(result.ast.at(0).content).toBe('```\nouter\n```');
   });
 
   it('should preserve inner fences when outer fence has more backticks', async () => {
@@ -34,8 +34,8 @@ describe('meld-ast nested code fence behavior', () => {
     
     expect(result.ast).toBeDefined();
     expect(result.ast).toHaveLength(1);
-    expect(result.ast[0].type).toBe('CodeFence');
-    expect(result.ast[0].content).toBe('````\nouter\n```\ninner\n```\n````');
+    expect(result.ast.at(0).type).toBe('CodeFence');
+    expect(result.ast.at(0).content).toBe('````\nouter\n```\ninner\n```\n````');
   });
 
   it('should handle language identifiers and termination correctly', async () => {
@@ -52,9 +52,9 @@ describe('meld-ast nested code fence behavior', () => {
     
     expect(result.ast).toBeDefined();
     expect(result.ast).toHaveLength(1);
-    expect(result.ast[0].type).toBe('CodeFence');
-    expect(result.ast[0].language).toBe('typescript');
-    expect(result.ast[0].content).toBe('```typescript\nconst x = 1;\n```');
+    expect(result.ast.at(0).type).toBe('CodeFence');
+    expect(result.ast.at(0).language).toBe('typescript');
+    expect(result.ast.at(0).content).toBe('```typescript\nconst x = 1;\n```');
   });
 
   it('should handle language identifiers with nested fences', async () => {
@@ -71,8 +71,8 @@ describe('meld-ast nested code fence behavior', () => {
     
     expect(result.ast).toBeDefined();
     expect(result.ast).toHaveLength(1);
-    expect(result.ast[0].type).toBe('CodeFence');
-    expect(result.ast[0].language).toBe('typescript');
-    expect(result.ast[0].content).toBe('````typescript\nouter\n```js\ninner\n```\n````');
+    expect(result.ast.at(0).type).toBe('CodeFence');
+    expect(result.ast.at(0).language).toBe('typescript');
+    expect(result.ast.at(0).content).toBe('````typescript\nouter\n```js\ninner\n```\n````');
   });
 }); 

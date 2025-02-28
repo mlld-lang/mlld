@@ -60,11 +60,11 @@ describe('TestContext', () => {
       const ast = await context.parseMeld(content);
 
       expect(ast).toHaveLength(1);
-      expect(ast[0].type).toBe('Directive');
-      expect(ast[0].directive).toBeDefined();
-      expect(ast[0].directive.kind).toBe('text');
-      expect(ast[0].directive.identifier).toBe('greeting');
-      expect(ast[0].directive.value).toBe('Hello');
+      expect(ast.at(0).type).toBe('Directive');
+      expect(ast.at(0).directive).toBeDefined();
+      expect(ast.at(0).directive.kind).toBe('text');
+      expect(ast.at(0).directive.identifier).toBe('greeting');
+      expect(ast.at(0).directive.value).toBe('Hello');
     });
 
     it('parses meld content with locations', async () => {
@@ -72,15 +72,15 @@ describe('TestContext', () => {
       const ast = await context.parseMeldWithLocations(content, 'test.meld');
 
       expect(ast).toHaveLength(1);
-      expect(ast[0].type).toBe('Directive');
-      expect(ast[0].directive).toBeDefined();
-      expect(ast[0].directive.kind).toBe('text');
-      expect(ast[0].directive.identifier).toBe('greeting');
-      expect(ast[0].directive.value).toBe('Hello');
-      expect(ast[0].location).toBeDefined();
-      expect(ast[0].location.start).toBeDefined();
-      expect(ast[0].location.end).toBeDefined();
-      expect(ast[0].location.filePath).toBe('test.meld');
+      expect(ast.at(0).type).toBe('Directive');
+      expect(ast.at(0).directive).toBeDefined();
+      expect(ast.at(0).directive.kind).toBe('text');
+      expect(ast.at(0).directive.identifier).toBe('greeting');
+      expect(ast.at(0).directive.value).toBe('Hello');
+      expect(ast.at(0).location).toBeDefined();
+      expect(ast.at(0).location.start).toBeDefined();
+      expect(ast.at(0).location.end).toBeDefined();
+      expect(ast.at(0).location.filePath).toBe('test.meld');
     });
   });
 
