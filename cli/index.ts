@@ -179,6 +179,7 @@ function cliToApiOptions(cliOptions: CLIOptions): ProcessOptions {
   return {
     format: normalizeFormat(cliOptions.format),
     debug: cliOptions.debug,
+    strict: cliOptions.strict,
     transformation: true, // Enable transformation by default for CLI usage
     fs: cliOptions.custom ? undefined : new NodeFileSystem() // Allow custom filesystem in test mode
   };
