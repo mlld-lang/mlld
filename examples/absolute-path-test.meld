@@ -1,0 +1,12 @@
+@import [$/Users/adam/dev/meld/examples/example-import.meld]
+
+@text greeting = "Hello from absolute path test!"
+
+## Test Output
+
+This is a test file that uses an absolute path for import.
+Imported title: {{imported_title}}
+
+## More Content
+
+This is just some more content to demonstrate that the file works. 

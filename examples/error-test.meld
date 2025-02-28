@@ -1,0 +1,37 @@
+@text greeting = "Hello, world!"
+
+@data valid_json = {
+  "name": "John Doe",
+  "age": 30
+}
+
+@data invalid_json = {
+  name: "Invalid JSON,
+  missing quotes and braces
+}
+
+@data incomplete_object = {
+  "partial": "This JSON is valid but missing fields we will try to access"
+}
+
+## Test valid cases
+
+Greeting: {{greeting}}
+
+Valid JSON: {{valid_json}}
+
+Valid field access: {{valid_json.name}}
+
+## Test error cases
+
+Invalid JSON: {{invalid_json}}
+
+Try accessing fields of invalid JSON: {{invalid_json.name}}
+
+Missing field: {{valid_json.nonexistent}}
+
+Nested missing field: {{valid_json.address.city}}
+
+Accessing field of non-object: {{greeting.something}}
+
+Accessing field of incomplete object: {{incomplete_object.missing}} 

@@ -1,0 +1,18 @@
+@text greeting = "Hello from no-import test!"
+@text title = "Simple Test"
+@data person = {
+  "name": "John Doe",
+  "age": 30,
+  "occupation": "Developer"
+}
+
+## {{title}}
+
+This is a test file without imports.
+Greeting: {{greeting}}
+
+## Person Information
+
+Name: {{person.name}}
+Age: {{person.age}}
+Occupation: {{person.occupation}} 
