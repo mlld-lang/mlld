@@ -6,6 +6,7 @@ import { ErrorSeverity } from '@core/errors/MeldError.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 import type { MeldNode, TextNode, DirectiveNode } from 'meld-spec';
+import { resolutionLogger as logger } from '@core/utils/logger.js';
 
 /**
  * Handles resolution of variable references ({{var}})
@@ -536,224 +537,114 @@ export class VariableReferenceResolver {
   }
   
   /**
-   * Resolve a variable reference (with possible field access)
+   * Resolves a variable reference to its value
+   * @param varRef The variable reference (e.g., "user" or "user.name")
+   * @param context The resolution context
+   * @returns The resolved value as a string
    */
-  private async resolveVariable(
-    varRef: string, 
-    context: ResolutionContext
-  ): Promise<string> {
-    console.log('*** Resolving variable reference:', {
-      varRef,
-      contextState: context.state ? 'available' : 'missing',
-      allowedTypes: context.allowedVariableTypes
-    });
-    
-    // Handle field access (e.g., user.name)
-    const parts = varRef.split('.');
-    const baseVar = parts[0];
-    
-    console.log('*** Variable parts:', {
-      parts,
-      baseVar
-    });
-    
-    // Choose state service - prefer context.state if available
-    const stateToUse = context.state || this.stateService;
-    
-    // Print all variables in state for debugging
-    console.log('*** State variables available:', {
-      textVars: typeof stateToUse.getAllTextVars === 'function' ? '[state service available]' : 'not available',
-      dataVars: typeof stateToUse.getAllDataVars === 'function' ? '[state service available]' : 'not available',
-      pathVars: typeof stateToUse.getAllPathVars === 'function' ? '[state service available]' : 'not available'
-    });
-    
-    // Try text variable first
-    let value = stateToUse.getTextVar(baseVar);
-    console.log('*** Text variable lookup result:', {
-      variable: baseVar,
-      value: value
-    });
-    
-    // If not found in text vars, try data vars
-    if (value === undefined && context.allowedVariableTypes.data) {
-      const dataValue = stateToUse.getDataVar(baseVar);
-      value = dataValue as string | undefined;
-      console.log('*** Data variable lookup result:', {
-        variable: baseVar,
-        value: value
-      });
-    }
-    
-    // Handle environment variables
-    if (value === undefined && baseVar.startsWith('ENV_')) {
-      const envVar = process.env[baseVar];
-      console.log('*** Environment variable lookup:', {
-        variable: baseVar,
-        value: envVar
-      });
+  private async resolveVariable(varRef: string, context: ResolutionContext): Promise<string> {
+    try {
+      // Split by dot for field access
+      const parts = varRef.split('.');
+      const baseVar = parts[0];
       
-      if (envVar === undefined) {
-        throw new MeldResolutionError(
-          'Environment variable not set: ' + baseVar,
-          {
-            code: ResolutionErrorCode.UNDEFINED_VARIABLE,
-            details: { 
-              variableName: baseVar,
-              variableType: 'text'
-            },
-            severity: ErrorSeverity.Recoverable
-          }
-        );
+      // Get the base variable from state
+      const value = await this.getVariable(baseVar, context);
+      
+      if (value === undefined || value === null) {
+        logger.debug(`Variable ${baseVar} resolved to undefined or null`);
+        return ''; // Return empty string for undefined variables
       }
-      return envVar;
-    }
-    
-    // Handle undefined variables
-    if (value === undefined) {
-      console.log('*** Variable not found:', baseVar);
       
-      throw new MeldResolutionError(
-        'Undefined variable: ' + baseVar,
-        {
-          code: ResolutionErrorCode.UNDEFINED_VARIABLE,
-          details: { 
-            variableName: baseVar,
-            variableType: 'text'
-          },
-          severity: ErrorSeverity.Recoverable
+      // If this is field access (e.g., person.name)
+      if (parts.length > 1) {
+        if (typeof value !== 'object' || value === null) {
+          logger.warn(`Cannot access field ${parts[1]} of non-object value for variable ${baseVar}`);
+          return `Error: Cannot access field ${parts[1]} of non-object value`;
         }
-      );
-    }
-    
-    // Handle field access for data variables
-    if (parts.length > 1 && typeof value === 'object') {
-      console.log('*** Resolving field access:', {
-        baseVar,
-        fields: parts.slice(1),
-        baseValue: typeof value === 'object' ? JSON.stringify(value) : value
-      });
-      
-      try {
-        // Store the original value for comparison
-        const originalValue = value;
         
-        // Attempt to resolve field access
-        value = this.resolveFieldAccess(value, parts.slice(1), context);
-        
-        // If field access didn't change the value, it might have failed
-        if (value === originalValue) {
-          console.warn(`Field access may not have worked correctly for ${parts.join('.')}`);
-        }
-      } catch (error) {
-        if (error instanceof MeldResolutionError) {
-          throw error;
-        }
-        throw new MeldResolutionError(
-          `Failed to access field ${parts.slice(1).join('.')} in ${baseVar}`,
-          {
-            code: ResolutionErrorCode.FIELD_ACCESS_ERROR,
-            severity: ErrorSeverity.Recoverable,
-            details: { 
-              variableName: baseVar,
-              value: `Error accessing ${parts.slice(1).join('.')}: ${(error as Error).message}`
-            }
+        try {
+          // Access the field
+          const fieldValue = this.resolveFieldAccess(value, parts.slice(1), context);
+          
+          logger.debug(`Field access ${varRef} resolved to ${typeof fieldValue === 'object' ? 'object' : fieldValue}`);
+          
+          // Stringify objects, return primitives directly
+          if (fieldValue === undefined || fieldValue === null) {
+            return '';
+          } else if (typeof fieldValue === 'object') {
+            return JSON.stringify(fieldValue, null, 2); // Pretty format objects
+          } else {
+            return String(fieldValue); // Convert primitives to strings
           }
-        );
+        } catch (error) {
+          logger.warn(`Error accessing field in ${varRef}`, {
+            error: error instanceof Error ? error.message : String(error)
+          });
+          return `Error accessing field: ${error instanceof Error ? error.message : String(error)}`;
+        }
+      } 
+      // This is a direct variable access (e.g., person)
+      else {
+        logger.debug(`Direct variable access ${varRef} resolved to ${typeof value === 'object' ? 'object' : value}`);
+        
+        if (typeof value === 'object' && value !== null) {
+          return JSON.stringify(value, null, 2); // Pretty format objects
+        } else {
+          return String(value); // Convert primitives to strings
+        }
       }
+    } catch (error) {
+      logger.warn(`Error resolving variable ${varRef}`, {
+        error: error instanceof Error ? error.message : String(error)
+      });
+      return `Error resolving ${varRef}: ${error instanceof Error ? error.message : String(error)}`;
     }
-    
-    // Only stringify if it's an object AND we weren't doing field access,
-    // or if the result of field access is still an object
-    if (typeof value === 'object' && value !== null) {
-      if (parts.length === 1) {
-        // We're not doing field access, stringify the whole object
-        value = JSON.stringify(value);
-      } else {
-        // We were doing field access - only stringify if the result is still an object
-        value = typeof value === 'object' ? JSON.stringify(value) : String(value);
-      }
-    }
-    
-    const result = String(value);
-    console.log('*** Final resolved value:', result);
-    return result;
   }
   
   /**
-   * Resolve field access for object properties
+   * Resolves field access for an object
+   * @param obj The object to access fields from
+   * @param fieldPath The path to the field (e.g., ["name"] or ["contact", "email"])
+   * @param context The resolution context
+   * @returns The field value
    */
-  private resolveFieldAccess(
-    obj: any, 
-    fieldPath: string[], 
-    context: ResolutionContext
-  ): any {
-    // Enhanced logging to debug field access issues
-    console.log('FIELD ACCESS DEBUG - Initial object:', typeof obj === 'object' ? JSON.stringify(obj, null, 2) : obj);
-    console.log('FIELD ACCESS DEBUG - Field path:', fieldPath);
-    
-    // Handle empty field path
-    if (!fieldPath || fieldPath.length === 0) {
-      console.log('FIELD ACCESS DEBUG - Empty field path, returning original object');
+  private resolveFieldAccess(obj: any, fieldPath: string[], context: ResolutionContext): any {
+    if (!obj || !fieldPath.length) {
       return obj;
     }
     
-    // Traverse the object via the field path
     let current = obj;
-    for (const field of fieldPath) {
-      console.log(`FIELD ACCESS DEBUG - Accessing field: ${field}`);
-      
+    
+    for (const part of fieldPath) {
       if (current === null || current === undefined) {
-        console.log('FIELD ACCESS DEBUG - Cannot access field of null/undefined');
-        throw new Error(`Cannot access field ${field} of undefined or null`);
+        throw new Error(`Cannot access ${part} of undefined or null`);
       }
       
-      // Handle array access with [] notation
-      if (field.includes('[') && field.includes(']')) {
-        const [arrayName, indexExpr] = field.split('[');
-        const index = indexExpr.slice(0, -1); // Remove closing bracket
+      // Handle array access notation (e.g., addresses[0])
+      const arrayMatch = part.match(/^(\w+)\[(\d+)\]$/);
+      if (arrayMatch) {
+        const [_, arrayName, indexStr] = arrayMatch;
+        const index = parseInt(indexStr, 10);
         
-        // If index is a variable reference, resolve it
-        if (index.startsWith('{{') && index.endsWith('}}')) {
-          const indexVar = index.slice(2, -2);
-          const indexValue = this.stateService.getTextVar(indexVar);
-          if (indexValue === undefined) {
-            throw new MeldResolutionError(
-              'Undefined index variable: ' + indexVar,
-              {
-                code: ResolutionErrorCode.UNDEFINED_VARIABLE,
-                details: { 
-                  variableName: indexVar,
-                  variableType: 'text'
-                },
-                severity: ErrorSeverity.Recoverable
-              }
-            );
-          }
-          current = current[indexValue];
-        } else {
-          current = current[index];
+        if (!current[arrayName] || !Array.isArray(current[arrayName])) {
+          throw new Error(`${arrayName} is not an array or does not exist`);
         }
+        
+        if (index < 0 || index >= current[arrayName].length) {
+          throw new Error(`Array index ${index} out of bounds for ${arrayName}`);
+        }
+        
+        current = current[arrayName][index];
       } else {
-        // Normal property access
-        console.log(`FIELD ACCESS DEBUG - Current object type: ${typeof current}`);
-        if (typeof current === 'object' && current !== null) {
-          console.log(`FIELD ACCESS DEBUG - Current object keys:`, Object.keys(current));
-        }
-        console.log(`FIELD ACCESS DEBUG - Field ${field} exists:`, field in current);
-        
-        if (typeof current !== 'object' || !(field in current)) {
-          console.log(`FIELD ACCESS DEBUG - Field ${field} not found in object:`, current);
-          throw new Error(`Cannot access field ${field} of ${typeof current}`);
+        if (!(part in current)) {
+          throw new Error(`Field ${part} does not exist on object`);
         }
         
-        current = current[field];
-        console.log(`FIELD ACCESS DEBUG - Field value:`, current);
-        console.log(`FIELD ACCESS DEBUG - Field value type:`, typeof current);
+        current = current[part];
       }
     }
     
-    console.log('FIELD ACCESS DEBUG - Final result:', current);
-    console.log('FIELD ACCESS DEBUG - Final result type:', typeof current);
     return current;
   }
   
@@ -1252,5 +1143,38 @@ export class VariableReferenceResolver {
       originalObj: obj,
       result 
     };
+  }
+
+  /**
+   * Gets a variable from the state service
+   * @param name The variable name
+   * @param context The resolution context
+   * @returns The variable value
+   */
+  private async getVariable(name: string, context: ResolutionContext): Promise<any> {
+    const { state, allowedVariableTypes = { text: true, data: true } } = context;
+    
+    if (!state) {
+      throw new Error('State service not available');
+    }
+    
+    // Try to get a text variable first
+    let value: any;
+    if (allowedVariableTypes.text) {
+      value = state.getTextVar(name);
+    }
+    
+    // If no text variable found, try data variable
+    if (value === undefined && allowedVariableTypes.data) {
+      value = state.getDataVar(name);
+    }
+    
+    // Handle environment variables if relevant
+    // Note: We check if 'env' property exists before using it
+    if (value === undefined && allowedVariableTypes && 'env' in allowedVariableTypes && allowedVariableTypes.env) {
+      value = process.env[name];
+    }
+    
+    return value;
   }
 } 

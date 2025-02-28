@@ -267,7 +267,30 @@ export class OutputService implements IOutputService {
         warningLevel: 'all'
       });
       
-      return llmxml.toXML(markdown);
+      try {
+        return llmxml.toXML(markdown);
+      } catch (error) {
+        // If conversion fails due to non-string values, try to convert any JSON objects
+        // in the markdown to string before passing to llmxml again
+        logger.warn('First attempt to convert to XML failed, attempting to preprocess markdown', {
+          error: error instanceof Error ? error.message : String(error)
+        });
+        
+        // Try to find and stringify any JSON objects in the markdown
+        const processedMarkdown = markdown.replace(/```json\n([\s\S]*?)```/g, (match, jsonContent) => {
+          try {
+            // Parse and stringify the JSON to ensure it's valid
+            const parsed = JSON.parse(jsonContent);
+            return '```json\n' + JSON.stringify(parsed, null, 2) + '\n```';
+          } catch (jsonError) {
+            // If parsing fails, return the original content
+            return match;
+          }
+        });
+        
+        // Try again with processed markdown
+        return llmxml.toXML(processedMarkdown);
+      }
     } catch (error) {
       throw new MeldOutputError(
         'Failed to convert output',

@@ -29,13 +29,13 @@ describe('Parser Debug', () => {
     
     console.log('Path Directive:', pathDirective);
     
-    // The problem is that the path directive has 'id' instead of 'identifier'
-    expect(pathDirective).toHaveProperty('id');
-    expect(pathDirective.id).toBe('docs');
+    // Path directives use 'identifier' property, not 'id'
+    expect(pathDirective).toHaveProperty('identifier');
+    expect(pathDirective.identifier).toBe('docs');
     expect(pathDirective.path).toBeDefined();
     expect(pathDirective.path.raw).toBe('$PROJECTPATH/docs');
     
-    // It doesn't have the expected 'identifier' property
-    expect(pathDirective).not.toHaveProperty('identifier');
+    // Verify it doesn't have an 'id' property
+    expect(pathDirective).not.toHaveProperty('id');
   });
 });
