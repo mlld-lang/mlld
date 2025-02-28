@@ -88,11 +88,42 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
         );
       }
 
-      // Resolve the path using the resolution service
-      resolvedFullPath = await this.resolutionService.resolveInContext(
-        pathValue,
-        resolutionContext
-      );
+      // Handle relative paths without special prefixes - if the path doesn't have slashes
+      // and doesn't start with $ (variable or special path), treat it as relative to the current file
+      if (!pathValue.includes('/') && !pathValue.startsWith('$') && context.currentFilePath) {
+        const currentDir = this.fileSystemService.dirname(context.currentFilePath);
+        
+        // Log the resolution for debugging
+        logger.debug('Resolving relative import path', {
+          originalPath: pathValue,
+          currentFilePath: context.currentFilePath,
+          currentDir
+        });
+        
+        // Create a resolution context with the current file's directory
+        const resolutionContext = {
+          currentFilePath: context.currentFilePath,
+          state: context.state,
+          allowedVariableTypes: {
+            text: true,
+            data: true,
+            path: true,
+            command: false
+          }
+        };
+
+        // Resolve the path using the resolution service
+        resolvedFullPath = await this.resolutionService.resolveInContext(
+          pathValue,
+          resolutionContext
+        );
+      } else {
+        // For paths with special variables or slashes, use standard resolution
+        resolvedFullPath = await this.resolutionService.resolveInContext(
+          pathValue,
+          resolutionContext
+        );
+      }
 
       // Check for circular imports before proceeding
       try {
@@ -114,6 +145,13 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
       try {
         // Check if file exists
         if (!await this.fileSystemService.exists(resolvedFullPath)) {
+          logger.error('Import file not found', {
+            originalPath: pathValue,
+            resolvedPath: resolvedFullPath,
+            currentFilePath: context.currentFilePath,
+            error: `Import file not found: [${pathValue}]`
+          });
+          
           throw new DirectiveError(
             `Import file not found: [${pathValue}]`,
             this.kind,
@@ -125,6 +163,12 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
             }
           );
         }
+
+        logger.debug('Import file found and being processed', {
+          originalPath: pathValue,
+          resolvedPath: resolvedFullPath,
+          currentFilePath: context.currentFilePath
+        });
 
         // Read and parse the file
         const content = await this.fileSystemService.readFile(resolvedFullPath);

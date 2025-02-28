@@ -796,6 +796,13 @@ export class ResolutionService implements IResolutionService {
     // Get base directory from context if available (use currentFilePath if available)
     const baseDir = context.currentFilePath ? this.pathService.dirname(context.currentFilePath) : process.cwd();
     
+    // Add debug logging for path resolution
+    logger.debug('Resolving structured path', {
+      raw: path.raw,
+      baseDir,
+      currentFilePath: context.currentFilePath
+    });
+    
     try {
       // Use the PathService to resolve the structured path
       // This handles all special variables and path normalization

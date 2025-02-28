@@ -227,7 +227,9 @@ export class PathService implements IPathService {
 
     // If it's a current working directory path
     if (structured.cwd) {
-      return path.normalize(path.join(baseDir || process.cwd(), ...structured.segments));
+      // Always use the provided baseDir first if available, with enhanced debug logging
+      const resolvedPath = path.normalize(path.join(baseDir || process.cwd(), ...structured.segments));
+      return resolvedPath;
     }
 
     // At this point, any other path format is invalid
@@ -284,6 +286,7 @@ export class PathService implements IPathService {
       }
       else {
         // For simple filenames with no slashes
+        // Always mark them as relative to current directory for proper resolution
         structPath = {
           raw: filePath,
           structured: {

@@ -1,3 +1,7 @@
+@import [$~/dev/meld/examples/example-import.meld]
+@import [$./examples/example-import.meld]
+@import [example-import.meld]
+
 @text title = "Meld API Demo"
 @text author = "Meld Team"
 @text date = "2025-02-25"
@@ -7,7 +11,9 @@
   "tags": ["demo", "api", "documentation"]
 }}
 
-@embed # {{title}} [[
+@embed [[
+
+# {{title}}
 
 **Author:** {{author}}  
 **Date:** {{date}}  
@@ -16,7 +22,7 @@
 ## Introduction
 
 This document demonstrates the core capabilities of Meld, a directive-based scripting language for embedding small "@directives" inside plain text documents.
-
+]]
 ## Text Variables
 
 @text greeting = "Hello"
@@ -28,7 +34,15 @@ Text variables can be defined and referenced:
 - Name: {{name}}
 - Combined: {{message}}
 
-]]
+## Imports 
+
+You can import things from other meld files like variables and defined commands.
+
+Thenk you can embed them in this one: 
+
+@embed  {{task.code_review}}
+
+@run [$echo({{role.architect}})]
 
 ## Data Variables
 
@@ -55,7 +69,7 @@ Data variables store structured data:
 @path config = "$PROJECTPATH/config"
 @path home = "$HOMEPATH/meld"
 
-@embed = [[
+@embed [[
 Path variables must use special variables:
 - Documentation path: {{docs}}
 - Configuration path: {{config}}
@@ -71,6 +85,7 @@ Path variables must use special variables:
 
 @define greet_user(username) = @run [echo "Hello, {{username}}!"]
 @text user = "Alice"
+The output of this command will be included in the output:
 @run [$greet_user({{user}})]
 
 ## File Embedding
@@ -105,7 +120,7 @@ function greet() {
 ````
 Outer fence
 ```
-Inner fence with ${greeting} (not replaced)
+Inner fence with {{greeting}} (not replaced)
 ```
 Still in outer fence
 ````
@@ -119,17 +134,17 @@ Still in outer fence
   { "name": "Item 3", "value": 300 }
 ]
 
-@embed  ### {{section}} with Data Iteration [[
+@embed [[
 
 Here's how you might represent data:
 
 | Item | Value |
 |------|-------|
-| #{items[0].name} | #{items[0].value} |
-| #{items[1].name} | #{items[1].value} |
-| #{items[2].name} | #{items[2].value} |
+| {{items[0].name}} | {{items[0].value}} |
+| {{items[1].name}} | {{items[1].value}} |
+| {{items[2].name}} | {{items[2].value}} |
 
-Total value: #{items[0].value + items[1].value + items[2].value}
+Total value: {{items[0].value ++ items[1].value ++ items[2].value}}
 ]]
 
 ## Templating
@@ -142,17 +157,17 @@ interpolation: {{greeting}}, {{name}}!
 Data reference: {{config.app.name}}
 ]]
 
-@embed Template result: [[
+@embed [[
 {{template}}
 ]]
 
 ## Conclusion
 
 This demo shows the core capabilities of Meld:
-- Variable definitions (@text, @data, @path)
-- Command execution (@run, @define)
-- File embedding (@embed)
+- Variable definitions (text, data, path)
+- Command execution (run, define)
+- File embedding (embed)
 - Code fences for literal content
-- Variable interpolation ({{var}}, {{data.field}})
+- Variable interpolation ({{greeting}}, {{config.app.features}})
 
 All of these features are available through the Meld API.

@@ -11,3 +11,7 @@
     "ux_review": "Carefully review the user experience and advise on the quality of the user experience and areas of improvement.",
     "security_review": "Carefully review the security of the code and advise on the quality of the security and areas of improvement."
 }
+
+@define echo (value) {
+    echo {{value}}
+}
