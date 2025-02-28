@@ -548,57 +548,43 @@ export class VariableReferenceResolver {
       const parts = varRef.split('.');
       const baseVar = parts[0];
       
-      // Get the base variable from state
-      const value = await this.getVariable(baseVar, context);
-      
-      if (value === undefined || value === null) {
-        logger.debug(`Variable ${baseVar} resolved to undefined or null`);
-        return ''; // Return empty string for undefined variables
-      }
-      
-      // If this is field access (e.g., person.name)
-      if (parts.length > 1) {
-        if (typeof value !== 'object' || value === null) {
-          logger.warn(`Cannot access field ${parts[1]} of non-object value for variable ${baseVar}`);
-          return `Error: Cannot access field ${parts[1]} of non-object value`;
-        }
+      try {
+        // Try to get variable from state
+        let value = await this.getVariable(baseVar, context);
         
-        try {
-          // Access the field
-          const fieldValue = this.resolveFieldAccess(value, parts.slice(1), context);
-          
-          logger.debug(`Field access ${varRef} resolved to ${typeof fieldValue === 'object' ? 'object' : fieldValue}`);
-          
-          // Stringify objects, return primitives directly
-          if (fieldValue === undefined || fieldValue === null) {
-            return '';
-          } else if (typeof fieldValue === 'object') {
-            return JSON.stringify(fieldValue, null, 2); // Pretty format objects
-          } else {
-            return String(fieldValue); // Convert primitives to strings
+        // Handle field access (e.g., user.name)
+        if (parts.length > 1 && typeof value === 'object' && value !== null) {
+          try {
+            // Resolve field access
+            value = this.resolveFieldAccess(value, parts.slice(1), context);
+          } catch (error) {
+            logger.warn(`Error accessing field ${parts.slice(1).join('.')} of ${baseVar}`, {
+              error: error instanceof Error ? error.message : String(error)
+            });
+            return `Error accessing ${parts.slice(1).join('.')}: ${(error as Error).message}`;
           }
-        } catch (error) {
-          logger.warn(`Error accessing field in ${varRef}`, {
-            error: error instanceof Error ? error.message : String(error)
-          });
-          return `Error accessing field: ${error instanceof Error ? error.message : String(error)}`;
         }
-      } 
-      // This is a direct variable access (e.g., person)
-      else {
-        logger.debug(`Direct variable access ${varRef} resolved to ${typeof value === 'object' ? 'object' : value}`);
         
-        if (typeof value === 'object' && value !== null) {
-          return JSON.stringify(value, null, 2); // Pretty format objects
+        // Stringification logic - IMPORTANT for avoiding output conversion errors
+        if (value === undefined || value === null) {
+          return '';
+        } else if (typeof value === 'object') {
+          // Pretty-print JSON objects for readability
+          return JSON.stringify(value, null, 2);
         } else {
-          return String(value); // Convert primitives to strings
+          return String(value);
         }
+      } catch (error) {
+        logger.warn(`Error resolving variable ${varRef}`, {
+          error: error instanceof Error ? error.message : String(error)
+        });
+        return `{{${varRef}}}`; // Keep as is if variable not found or error occurs
       }
     } catch (error) {
-      logger.warn(`Error resolving variable ${varRef}`, {
+      logger.warn(`Unexpected error in resolveVariable for ${varRef}`, {
         error: error instanceof Error ? error.message : String(error)
       });
-      return `Error resolving ${varRef}: ${error instanceof Error ? error.message : String(error)}`;
+      return `{{${varRef}}}`;
     }
   }
   
@@ -621,7 +607,7 @@ export class VariableReferenceResolver {
         throw new Error(`Cannot access ${part} of undefined or null`);
       }
       
-      // Handle array access notation (e.g., addresses[0])
+      // Handle array access with bracket notation: items[0]
       const arrayMatch = part.match(/^(\w+)\[(\d+)\]$/);
       if (arrayMatch) {
         const [_, arrayName, indexStr] = arrayMatch;

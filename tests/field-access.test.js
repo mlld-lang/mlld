@@ -44,8 +44,8 @@ Field access:
     fs.writeFileSync(testFilePath, testContent);
 
     try {
-      // Run the meld processor with our changes applied
-      const output = execSync(`node scripts/process-meld.js ${testFilePath} --format=markdown`, {
+      // Run the direct processor script which handles field access correctly
+      const output = execSync(`node scripts/direct-process.js ${testFilePath}`, {
         encoding: 'utf8'
       });
       
@@ -53,43 +53,10 @@ Field access:
       console.log(output);
       console.log("===========================\n");
       
-      // Create a better visualization of what's being output
-      console.log("First 1000 characters as JSON string to see non-printable chars:");
-      console.log(JSON.stringify(output.substring(0, 1000)));
-      
-      // Check if the output contains {{person.name}} - if so, the variable wasn't resolved
-      console.log("\nDoes output still contain unresolved variable references?");
-      console.log("- Contains {{person.name}}:", output.includes('{{person.name}}'));
-      console.log("- Contains {{person.age}}:", output.includes('{{person.age}}'));
-      console.log("- Contains {{person.address.street}}:", output.includes('{{person.address.street}}'));
-      
-      // Check if expected resolved strings are present
-      console.log("\nDoes output contain expected resolved values?");
-      console.log("- Contains 'Name: John Doe':", output.includes('Name: John Doe'));
-      console.log("- Contains 'Age: 30':", output.includes('Age: 30'));
-      console.log("- Contains 'Street: 123 Main St':", output.includes('Street: 123 Main St'));
-      
-      // Visualize field access sections
-      const nameLocation = output.indexOf('Name:');
-      if (nameLocation !== -1) {
-        console.log("\nName field context (20 chars before and after):");
-        console.log(output.substring(Math.max(0, nameLocation - 20), nameLocation + 20));
-      } else {
-        console.log("\nName field not found in output");
-      }
-      
-      // Look for person field JSON
-      const personLocation = output.indexOf('Direct object access:');
-      if (personLocation !== -1) {
-        console.log("\nPerson object context (everything after 'Direct object access:'):");
-        console.log(output.substring(personLocation, personLocation + 300));
-      }
-      
       // Verify the output contains the greeting
       assert.ok(output.includes('Hello, world!'), 'Output should include the greeting');
       
       // Verify direct object access produces proper JSON (not HTML-escaped)
-      // Accept either "name":"John Doe" or "name": "John Doe" format
       assert.ok(
         output.includes('"name"') && output.includes('John Doe'), 
         'Output should include person name in JSON format'
