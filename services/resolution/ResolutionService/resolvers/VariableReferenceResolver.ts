@@ -552,6 +552,29 @@ export class VariableReferenceResolver {
         // Try to get variable from state
         let value = await this.getVariable(baseVar, context);
         
+        // If the variable is undefined and we're in strict mode, throw an error
+        if (value === undefined) {
+          const errorDetails = {
+            code: ResolutionErrorCode.UNDEFINED_VARIABLE,
+            details: { 
+              variableName: baseVar,
+              variableType: parts.length > 1 ? 'data' as const : 'text' as const
+            },
+            severity: ErrorSeverity.Recoverable
+          };
+          
+          // In strict mode, throw the error
+          if (context.strict !== false) {
+            throw new MeldResolutionError(
+              `Undefined variable: ${baseVar}`,
+              errorDetails
+            );
+          }
+          
+          // In permissive mode, return the variable reference as is
+          return `{{${varRef}}}`;
+        }
+        
         // Handle field access (e.g., user.name)
         if (parts.length > 1 && typeof value === 'object' && value !== null) {
           try {
@@ -561,6 +584,23 @@ export class VariableReferenceResolver {
             logger.warn(`Error accessing field ${parts.slice(1).join('.')} of ${baseVar}`, {
               error: error instanceof Error ? error.message : String(error)
             });
+            
+            // In strict mode, rethrow the error
+            if (context.strict !== false) {
+              throw new MeldResolutionError(
+                `Failed to access field ${parts.slice(1).join('.')} in ${baseVar}`,
+                {
+                  code: ResolutionErrorCode.FIELD_ACCESS_ERROR,
+                  details: { 
+                    fieldPath: parts.slice(1).join('.'),
+                    variableName: baseVar
+                  },
+                  severity: ErrorSeverity.Recoverable
+                }
+              );
+            }
+            
+            // In permissive mode, return an error message
             return `Error accessing ${parts.slice(1).join('.')}: ${(error as Error).message}`;
           }
         }
@@ -575,15 +615,34 @@ export class VariableReferenceResolver {
           return String(value);
         }
       } catch (error) {
+        // If we're in strict mode, rethrow the error
+        if (context.strict !== false && error instanceof MeldResolutionError) {
+          throw error;
+        }
+        
         logger.warn(`Error resolving variable ${varRef}`, {
           error: error instanceof Error ? error.message : String(error)
         });
-        return `{{${varRef}}}`; // Keep as is if variable not found or error occurs
+        
+        // In permissive mode, return the variable reference as is
+        return `{{${varRef}}}`; 
       }
     } catch (error) {
+      // Always rethrow fatal errors
+      if (error instanceof MeldResolutionError && error.severity === ErrorSeverity.Fatal) {
+        throw error;
+      }
+      
+      // If we're in strict mode, rethrow the error
+      if (context.strict !== false) {
+        throw error;
+      }
+      
       logger.warn(`Unexpected error in resolveVariable for ${varRef}`, {
         error: error instanceof Error ? error.message : String(error)
       });
+      
+      // In permissive mode, return the variable reference as is
       return `{{${varRef}}}`;
     }
   }
@@ -713,7 +772,7 @@ export class VariableReferenceResolver {
                 severity: ErrorSeverity.Recoverable,
                 details: { 
                   variableName: baseVar,
-                  variableType: parts.length > 1 ? 'data' : 'text'
+                  variableType: parts.length > 1 ? 'data' as const : 'text' as const
                 }
               }
             );
