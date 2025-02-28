@@ -32,8 +32,7 @@ describe('CLI Error Handling', () => {
       // Create a test file with reference to undefined variable
       await context.fs.writeFile('/project/test.meld', '@text greeting = "Hello {{undefined}}"');
       
-      // Mock process.exit and console output
-      const exitMock = context.mockProcessExit();
+      // Mock console output
       const consoleMocks = context.mockConsole();
       
       // Set up process.argv
@@ -41,12 +40,14 @@ describe('CLI Error Handling', () => {
       
       try {
         // Run the CLI in permissive mode (default)
-        // Using a try/catch to handle the expected transform of process.exit to error
         await cli.main(fsAdapter);
+        // If we get here without an error, the test should fail
+        expect.fail('Expected an error to be thrown');
       } catch (error) {
         // Verify appropriate error handling
-        expect(exitMock).toHaveBeenCalledWith(1);
-        expect(consoleMocks.error).toHaveBeenCalled();
+        expect(error).toBeDefined();
+        expect(consoleMocks.mocks.error).toHaveBeenCalled();
+        expect(consoleMocks.mocks.error.mock.calls[0][0]).toContain('Error during variable resolution');
       }
     });
     
@@ -54,32 +55,36 @@ describe('CLI Error Handling', () => {
       // Create a test file with reference to undefined variable
       await context.fs.writeFile('/project/test.meld', '@text greeting = "Hello {{undefined}}"');
       
-      // Mock process.exit and console output
-      const exitMock = context.mockProcessExit();
+      // Mock console output
       const consoleMocks = context.mockConsole();
       
-      // Set up process.argv with --strict flag
-      process.argv = ['node', 'meld', '--strict', '/project/test.meld', '--stdout'];
+      // Set up process.argv with strict mode flag
+      process.argv = ['node', 'meld', '/project/test.meld', '--stdout', '--strict'];
       
       try {
         // Run the CLI in strict mode
         await cli.main(fsAdapter);
+        // If we get here without an error, the test should fail
+        expect.fail('Expected an error to be thrown');
       } catch (error) {
         // Verify appropriate error handling in strict mode
-        expect(exitMock).toHaveBeenCalledWith(1);
-        expect(consoleMocks.error).toHaveBeenCalled();
+        expect(error).toBeDefined();
+        expect(consoleMocks.mocks.error).toHaveBeenCalled();
+        expect(consoleMocks.mocks.error.mock.calls[0][0]).toContain('Error during variable resolution');
       }
     });
   });
   
   describe('Using TestContext', () => {
     it('should handle multiple errors in permissive mode', async () => {
-      // Setup CLI test environment
-      const { exitMock, consoleMocks } = await context.setupCliTest({
-        files: {
-          '/project/test.meld': '@text greeting = "Hello {{undefined}}"\n@text farewell = "Goodbye {{nonexistent}}"'
-        }
-      });
+      // Create a test file with multiple errors
+      await context.fs.writeFile('/project/test.meld', `
+        @text greeting1 = "Hello {{undefined1}}"
+        @text greeting2 = "Hello {{undefined2}}"
+      `);
+      
+      // Mock console output
+      const consoleMocks = context.mockConsole();
       
       // Set up process.argv
       process.argv = ['node', 'meld', '/project/test.meld', '--stdout'];
@@ -87,10 +92,13 @@ describe('CLI Error Handling', () => {
       try {
         // Run the CLI in permissive mode
         await cli.main(fsAdapter);
+        // If we get here without an error, the test should fail
+        expect.fail('Expected an error to be thrown');
       } catch (error) {
-        // In permissive mode, warnings should be logged but execution continues
-        expect(exitMock).toHaveBeenCalledWith(1);
-        expect(consoleMocks.error).toHaveBeenCalled();
+        // In permissive mode, errors should still be logged
+        expect(error).toBeDefined();
+        expect(consoleMocks.mocks.error).toHaveBeenCalled();
+        expect(consoleMocks.mocks.error.mock.calls[0][0]).toContain('Error during variable resolution');
       }
     });
   });

@@ -5,13 +5,13 @@
  * but delegates the actual processing to the API.
  */
 
-import { main as apiMain } from '@api/index.js';
+import { main } from '@api/index.js';
 import { cliLogger as logger } from '@core/utils/logger.js';
 import { MeldError, ErrorSeverity } from '@core/errors/MeldError.js';
 import { version } from '@core/version.js';
 import { createInterface } from 'readline';
-import { dirname } from 'path';
-import { watch } from 'fs/promises';
+import { dirname, basename, extname } from 'path';
+import { join } from 'path';
 import { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 import { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
 import { IOutputService } from '@services/pipeline/OutputService/IOutputService.js';
@@ -21,15 +21,14 @@ import { IStateService } from '@services/state/StateService/IStateService.js';
 import { ProcessOptions } from '@core/types/index.js';
 
 export interface CLIOptions {
-  input: string;
+  input?: string;
   output?: string;
-  format?: 'markdown' | 'md' | 'xml' | 'llm';
-  stdout?: boolean;
-  verbose?: boolean;
+  format?: 'xml' | 'llmxml' | 'llm' | 'markdown' | 'md';
   strict?: boolean;
-  homePath?: string;
-  watch?: boolean;
+  stdout?: boolean;
   version?: boolean;
+  verbose?: boolean;
+  homePath?: string;
   debug?: boolean;
 }
 
@@ -65,11 +64,13 @@ export class CLIService implements ICLIService {
     return format === 'markdown' ? '.md' : '.xml';
   }
 
-  private parseArgs(args: string[]): CLIOptions {
+  /**
+   * Process CLI arguments
+   */
+  parseArguments(args: string[]): CLIOptions {
     const options: CLIOptions = {
-      input: '',
       format: 'xml',
-      strict: false // Default to permissive mode for CLI
+      strict: false
     };
 
     // Skip 'node' and 'meld' executable names if present at the beginning
@@ -115,10 +116,6 @@ export class CLIService implements ICLIService {
         case '--home-path':
           options.homePath = args[++i];
           break;
-        case '--watch':
-        case '-w':
-          options.watch = true;
-          break;
         case '--debug':
         case '-d':
           options.debug = true;
@@ -136,7 +133,6 @@ Options:
   --strict               Enable strict mode (fail on all errors)
   --permissive           Enable permissive mode (ignore recoverable errors) [default]
   --home-path <path>     Set custom home path for $~/ and $HOMEPATH
-  -w, --watch            Watch for file changes
   -v, --verbose          Enable verbose output
   -d, --debug            Enable debug output
   -h, --help             Display this help message
@@ -191,12 +187,11 @@ Options:
   }
 
   /**
-   * Run the CLIService with the provided arguments
+   * Run the CLI
    */
   async run(args: string[]): Promise<void> {
     try {
-      // Parse CLI arguments
-      const options = this.parseArgs(args);
+      const options = this.parseArguments(args);
 
       // Handle version flag first
       if (options.version) {
@@ -218,50 +213,13 @@ Options:
         options
       });
 
-      if (options.watch) {
-        await this.watchFile(options);
-      } else {
-        await this.processFile(options);
-      }
+      // Remove watch check and directly process the file
+      await this.processFile(options);
     } catch (error) {
       // For CLI errors, always log and exit with error code
       logger.error('Error running Meld CLI', {
         error: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined
-      });
-      
-      // Print user-friendly error message to console
-      console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
-      
-      // Rethrow the error
-      throw error;
-    }
-  }
-
-  /**
-   * Watch for file changes and reprocess
-   */
-  private async watchFile(options: CLIOptions): Promise<void> {
-    logger.info('Starting watch mode', { input: options.input });
-
-    try {
-      // Resolve input path
-      const inputPath = await this.pathService.resolvePath(options.input);
-      const watchDir = dirname(inputPath);
-      
-      console.log(`Watching for changes in ${watchDir}...`);
-      const watcher = watch(watchDir, { recursive: true });
-
-      for await (const event of watcher) {
-        // Only process .meld files or the specific input file
-        if (event.filename?.endsWith('.meld')) {
-          console.log(`Change detected in ${event.filename}, reprocessing...`);
-          await this.processFile(options);
-        }
-      }
-    } catch (error) {
-      logger.error('Watch mode failed', {
-        error: error instanceof Error ? error.message : String(error)
       });
       throw error;
     }

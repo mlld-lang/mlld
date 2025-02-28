@@ -4,40 +4,53 @@ import * as cli from './index.js';
 import * as fs from 'fs/promises';
 import * as readline from 'readline';
 
-// Setup module mocks for the entire test suite
-beforeAll(() => {
-  // Mock readline for overwrite confirmations
-  vi.mock('readline', () => ({
-    createInterface: vi.fn().mockReturnValue({
-      question: vi.fn((_, cb) => cb('y')),
-      close: vi.fn()
-    })
-  }));
+// Create a proper async iterator for watch mode
+function createWatchAsyncIterable() {
+  return {
+    [Symbol.asyncIterator]: async function* () {
+      yield { filename: 'test.meld', eventType: 'change' };
+      
+      // Exit after one yield to prevent infinite loop in tests
+      await new Promise(resolve => setTimeout(resolve, 50));
+      return;
+    }
+  };
+}
 
-  // Mock fs.watch for watch mode testing
-  vi.mock('fs/promises', async () => {
-    const actual = await vi.importActual('fs/promises');
-    return {
-      ...actual,
-      watch: vi.fn().mockReturnValue({
-        [Symbol.asyncIterator]: async function* () {
-          yield { filename: 'test.meld', eventType: 'change' };
-          // Complete the iterator after one event
-          return; // This exits the iteration
-        }
-      })
-    };
-  });
-  
-  // Mock API module
-  vi.mock('@api/index.js', () => ({
-    main: vi.fn().mockResolvedValue('Test output')
-  }));
-  
-  // Mock init command module
-  vi.mock('./commands/init.js', () => ({
-    initCommand: vi.fn().mockResolvedValue(undefined)
-  }));
+// Set up mocks before the tests
+vi.mock('readline', () => ({
+  createInterface: vi.fn().mockReturnValue({
+    question: vi.fn((_, cb) => cb('y')),
+    close: vi.fn()
+  })
+}));
+
+// Mock fs.watch
+vi.mock('fs/promises', async () => {
+  const actual = await vi.importActual('fs/promises');
+  return {
+    ...actual,
+    watch: vi.fn().mockImplementation(() => createWatchAsyncIterable())
+  };
+});
+
+// Mock the API module
+vi.mock('@api/index.js', () => ({
+  main: vi.fn().mockResolvedValue('Test output')
+}));
+
+// Mock the init command module
+vi.mock('./commands/init.js', () => ({
+  initCommand: vi.fn().mockResolvedValue(undefined)
+}));
+
+// Setup mocks before each test
+beforeEach(() => {
+  // Reset mocks and ensure consistent behavior
+  vi.mocked(readline.createInterface).mockClear();
+  vi.mocked(fs.watch).mockClear().mockImplementation(() => createWatchAsyncIterable());
+  require('@api/index.js').main.mockClear().mockResolvedValue('Test output');
+  require('./commands/init.js').initCommand.mockClear().mockResolvedValue(undefined);
 });
 
 describe('CLI Tests', () => {
@@ -99,21 +112,35 @@ describe('CLI Tests', () => {
     it('should handle error for file not found', async () => {
       const { fsAdapter, exitMock, consoleMocks, cleanup } = setupCliTest();
 
+      // Explicitly mock exists to return false for this specific file
+      const existsSpy = vi.spyOn(fsAdapter, 'exists');
+      existsSpy.mockImplementation(async (path) => {
+        if (path.includes('/nonexistent/file.meld')) {
+          return false;
+        }
+        // For other paths, use original implementation
+        return fsAdapter.existsSync(path);
+      });
+      
+      // Set up API implementation to throw a file not found error when called
+      const apiModule = require('@api/index.js');
+      apiModule.main.mockRejectedValueOnce(new Error('File not found: /nonexistent/file.meld'));
+      
+      // Set CLI arguments
       process.argv = ['node', 'meld', '/nonexistent/file.meld'];
 
-      try {
-        await cli.main(fsAdapter);
-        expect(exitMock).toHaveBeenCalledWith(1);
-        expect(consoleMocks.error).toHaveBeenCalled();
-        
-        const errorOutput = consoleMocks.error.mock.calls.flat().join('\n');
-        expect(errorOutput).toContain('not found');
-      } catch (error) {
-        // This is expected in test mode
-        expect(error.message).toContain('not found');
-      } finally {
-        cleanup();
-      }
+      // In test mode, main should throw the error from API
+      await expect(cli.main(fsAdapter)).rejects.toThrow(/not found|not exist/i);
+      
+      // Verify exists was called with the right path
+      expect(existsSpy).toHaveBeenCalledWith(expect.stringContaining('/nonexistent/file.meld'));
+      
+      // Verify error message was logged to console
+      expect(consoleMocks.error).toHaveBeenCalled();
+      const errorOutput = consoleMocks.error.mock.calls.flat().join('\n');
+      expect(errorOutput).toMatch(/not found|not exist/i);
+      
+      cleanup();
     });
 
     it('should handle permission issues for reading files', async () => {
@@ -123,28 +150,25 @@ describe('CLI Tests', () => {
         }
       });
 
+      // Make sure the file exists
+      fsAdapter.exists = vi.fn().mockResolvedValue(true);
+      
       // Mock a permission error when reading
-      const originalReadFile = fsAdapter.readFile;
-      fsAdapter.readFile = vi.fn().mockRejectedValue(new Error('EACCES: permission denied'));
+      fsAdapter.readFile = vi.fn().mockRejectedValue(
+        new Error('EACCES: permission denied')
+      );
 
       process.argv = ['node', 'meld', '/project/test.meld'];
 
-      try {
-        await cli.main(fsAdapter);
-        expect(exitMock).toHaveBeenCalledWith(1);
-        expect(consoleMocks.error).toHaveBeenCalled();
-        
-        const errorOutput = consoleMocks.error.mock.calls.flat().join('\n');
-        // Check for a more general error message that would match the actual output
-        expect(errorOutput).toContain('Error reading file');
-      } catch (error) {
-        // This is expected in test mode
-        expect(error.message).toContain('Error reading file');
-      } finally {
-        // Restore original function
-        fsAdapter.readFile = originalReadFile;
-        cleanup();
-      }
+      // When running in test mode, main() should throw
+      await expect(cli.main(fsAdapter)).rejects.toThrow(/Error reading file|permission denied/i);
+      
+      // Check error message displayed to user
+      expect(consoleMocks.error).toHaveBeenCalled();
+      const errorOutput = consoleMocks.error.mock.calls.flat().join('\n');
+      expect(errorOutput).toMatch(/Error reading file|permission denied/i);
+
+      cleanup();
     });
 
     it('should handle custom output path properly', async () => {
@@ -203,15 +227,18 @@ describe('CLI Tests', () => {
 
       process.argv = ['node', 'meld', 'init'];
 
-      // Get reference to the mocked function
-      const initMock = require('./commands/init.js').initCommand;
-
+      // Get a fresh reference to the mocked function and reset it
+      const initModule = require('./commands/init.js');
+      const initMock = initModule.initCommand;
+      initMock.mockClear();
+      
       try {
+        // Run the command
         await cli.main(fsAdapter);
+        
+        // Verify the init command was called
         expect(initMock).toHaveBeenCalled();
       } finally {
-        // No need to restore the mock since we're using vi.mock
-        vi.resetModules(); // Reset modules to ensure clean state
         cleanup();
       }
     });
@@ -226,14 +253,28 @@ describe('CLI Tests', () => {
         }
       });
 
+      // Make sure the file exists
+      fsAdapter.exists = vi.fn().mockResolvedValue(true);
+      
+      // Configure test command line
       process.argv = ['node', 'meld', '/project/test.meld', '--stdout'];
 
-      // We just need to verify that the CLI doesn't interfere with env vars
-      // The actual interpretation of them is done by the API
+      // Get a reference to the API mock
+      const apiMock = require('@api/index.js').main;
+      apiMock.mockClear();
+      
       try {
+        // Run the CLI
         await cli.main(fsAdapter);
-        // Verify that the command ran successfully
+        
+        // Verify the API was called
+        expect(apiMock).toHaveBeenCalled();
+        
+        // Verify the output was logged to console
         expect(consoleMocks.log).toHaveBeenCalled();
+        
+        // Verify environment variable is preserved
+        expect(process.env.TEST_VAR).toBe('test-value');
       } finally {
         cleanup();
       }
@@ -248,29 +289,61 @@ describe('CLI Tests', () => {
 
       process.argv = ['node', 'meld', '/project/test.meld', '--watch'];
 
-      // We're already mocking fs.watch at the top level with a proper async iterable
-      // Just reset and ensure it's properly set up
-      fs.watch.mockReset();
-      fs.watch.mockReturnValue({
+      // Create a controlled watch implementation with a way to stop it
+      const watchController = {
+        shouldStop: false,
+        values: [{ filename: 'test.meld', eventType: 'change' }]
+      };
+      
+      // Implement a controlled async iterator for watch
+      const watchIterator = {
         [Symbol.asyncIterator]: async function* () {
-          yield { filename: 'test.meld', eventType: 'change' };
-          // After one event, we're done
-          return;
+          // Yield each value
+          for (const value of watchController.values) {
+            yield value;
+            
+            // Short delay to let the test continue
+            await new Promise(resolve => setTimeout(resolve, 50));
+            
+            // Allow test to stop iteration
+            if (watchController.shouldStop) {
+              throw new Error('Watch stopped by test');
+            }
+          }
+          
+          // Ensure we stop the iterator
+          throw new Error('Watch complete');
         }
-      });
+      };
+      
+      // Setup the watch mock with our controlled iterator
+      vi.mocked(fs.watch).mockReturnValue(watchIterator);
 
       try {
-        // This should start watching
-        const mainPromise = cli.main(fsAdapter);
+        // Start the watch process - we need to make it stop after yielding once
+        const watchPromise = cli.main(fsAdapter).catch(err => {
+          // Only ignore expected errors
+          if (err.message !== 'Watch stopped by test' && 
+              err.message !== 'Watch complete') {
+            throw err;
+          }
+        });
         
-        // Wait a bit for watch to start
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // Stop the watch after a short delay
+        setTimeout(() => {
+          watchController.shouldStop = true;
+        }, 100);
         
-        // Complete the watch cycle
-        await mainPromise;
+        // Wait for the watch to complete (will be forced by our timer)
+        await watchPromise;
         
         // Verify watch was called
         expect(fs.watch).toHaveBeenCalled();
+        
+        // Verify that the console log was called to indicate watching
+        expect(consoleMocks.log).toHaveBeenCalledWith(
+          expect.stringContaining('Watching for changes')
+        );
       } finally {
         cleanup();
       }
@@ -279,16 +352,38 @@ describe('CLI Tests', () => {
 
   describe('Error Handling Tests', () => {
     it('should handle exit codes properly', async () => {
-      const { fsAdapter, exitMock, consoleMocks, cleanup } = setupCliTest();
-
-      process.argv = ['node', 'meld', '/nonexistent/file.meld'];
-
+      // Set up CLI test with a proper process.exit mock
+      const { fsAdapter, exitMock, consoleMocks, cleanup } = setupCliTest({
+        mockProcessExit: true
+      });
+      
+      // Save original NODE_ENV
+      const originalNodeEnv = process.env.NODE_ENV;
+      
       try {
-        await cli.main(fsAdapter);
+        // Set NODE_ENV to production to trigger process.exit call
+        process.env.NODE_ENV = 'production';
+        
+        // Ensure file doesn't exist
+        fsAdapter.exists = vi.fn().mockResolvedValue(false);
+        
+        // Set up CLI arguments
+        process.argv = ['node', 'meld', '/nonexistent/file.meld'];
+        
+        // Run the main function - it should eventually call process.exit(1)
+        // which our mock will convert to an error we can catch
+        await expect(cli.main(fsAdapter)).rejects.toThrow('Process exited with code 1');
+        
+        // Verify that the mock exit function was called with code 1
         expect(exitMock).toHaveBeenCalledWith(1);
-      } catch (error) {
-        // This is expected in test mode
+        
+        // Verify error message
+        expect(consoleMocks.error).toHaveBeenCalled();
+        const errorMsg = consoleMocks.error.mock.calls.flat().join(' ');
+        expect(errorMsg).toMatch(/not found|not exist/i);
       } finally {
+        // Restore original NODE_ENV
+        process.env.NODE_ENV = originalNodeEnv;
         cleanup();
       }
     });
@@ -300,48 +395,54 @@ describe('CLI Tests', () => {
         }
       });
 
+      // Make sure the file exists
+      fsAdapter.exists = vi.fn().mockResolvedValue(true);
+      
+      // Make the API module mock throw a specific error
+      const apiMock = require('@api/index.js').main;
+      apiMock.mockRejectedValueOnce(new Error('Parse error: Unclosed string literal'));
+      
       process.argv = ['node', 'meld', '/project/invalid.meld'];
 
-      try {
-        await cli.main(fsAdapter);
-      } catch (error) {
-        // This is expected in test mode
-        expect(consoleMocks.error).toHaveBeenCalled();
-        
-        const errorOutput = consoleMocks.error.mock.calls.flat().join('\n');
-        expect(errorOutput).toMatch(/Error:/);
-        expect(errorOutput).toContain('Unclosed');
-      } finally {
-        cleanup();
-      }
+      // Test should throw
+      await expect(cli.main(fsAdapter)).rejects.toThrow(/Parse error|Unclosed/i);
+      
+      // Verify error message format
+      expect(consoleMocks.error).toHaveBeenCalled();
+      const errorOutput = consoleMocks.error.mock.calls.flat().join('\n');
+      expect(errorOutput).toMatch(/Error:/);
+      
+      cleanup();
     });
 
     it('should properly pass strict flag to API', async () => {
-      const { fsAdapter, exitMock, consoleMocks, cleanup } = setupCliTest({
+      const { fsAdapter, consoleMocks, cleanup } = setupCliTest({
         files: {
           '/project/test.meld': 'Test file'
         }
       });
       
+      // Make sure file exists
+      fsAdapter.exists = vi.fn().mockResolvedValue(true);
+      
       // Run with strict flag
       process.argv = ['node', 'meld', '--strict', '/project/test.meld'];
       
-      // Get a reference to the mocked function
+      // Get a reference to the mocked function and reset it
       const apiMainSpy = require('@api/index.js').main;
+      apiMainSpy.mockClear();
       
-      try {
-        await cli.main(fsAdapter);
-        
-        // Verify that the strict flag was passed to the API
-        expect(apiMainSpy).toHaveBeenCalled();
-        const options = apiMainSpy.mock.calls[0][1]; // Get options passed to API
-        expect(options).toHaveProperty('strict', true);
-        
-      } finally {
-        // No need to restore the mock since we're using vi.mock
-        vi.resetModules(); // Reset modules to ensure clean state
-        cleanup();
-      }
+      // Run the main function
+      await cli.main(fsAdapter);
+      
+      // Verify the API was called with the strict flag
+      expect(apiMainSpy).toHaveBeenCalled();
+      
+      // Get the options from the call
+      const options = apiMainSpy.mock.calls[0][1];
+      expect(options).toHaveProperty('strict', true);
+      
+      cleanup();
     });
   });
 
@@ -354,25 +455,43 @@ describe('CLI Tests', () => {
         }
       });
 
+      // Make sure the file system returns that the files exist
+      fsAdapter.exists = vi.fn().mockImplementation(async (path) => {
+        if (path === '/project/test.meld' || path === '/project/test.xml') {
+          return true;
+        }
+        return false;
+      });
+      
       process.argv = ['node', 'meld', '/project/test.meld'];
 
       // Mock readline to simulate "yes" response
-      const mockRL = {
-        question: vi.fn((_, cb) => cb('y')),
-        close: vi.fn()
-      };
+      const mockQuestion = vi.fn((_, cb) => cb('y'));
+      const mockClose = vi.fn();
       
-      vi.mocked(readline.createInterface).mockReturnValue(mockRL as any);
+      vi.mocked(readline.createInterface).mockReturnValue({
+        question: mockQuestion,
+        close: mockClose,
+      } as any);
 
+      // Make the API return a specific value
+      const apiMock = require('@api/index.js').main;
+      apiMock.mockResolvedValueOnce('Processed Hello World content');
+      
       try {
         await cli.main(fsAdapter);
         
-        // Verify that the prompt was shown
-        expect(mockRL.question).toHaveBeenCalled();
+        // Verify the API was called
+        expect(apiMock).toHaveBeenCalled();
         
-        // Verify that the file was overwritten
-        const content = await fsAdapter.readFile('/project/test.xml');
-        expect(content).toContain('Hello World');
+        // Verify that the prompt was shown
+        expect(mockQuestion).toHaveBeenCalled();
+        
+        // Verify that writeFile was called to overwrite the file
+        expect(fsAdapter.writeFile).toHaveBeenCalledWith(
+          '/project/test.xml', 
+          'Processed Hello World content'
+        );
       } finally {
         cleanup();
       }
@@ -386,25 +505,40 @@ describe('CLI Tests', () => {
         }
       });
 
+      // Make sure the file system returns that the files exist
+      fsAdapter.exists = vi.fn().mockImplementation(async (path) => {
+        if (path === '/project/test.meld' || path === '/project/test.xml') {
+          return true;
+        }
+        return false;
+      });
+
       process.argv = ['node', 'meld', '/project/test.meld'];
 
       // Mock readline to simulate "no" response
-      const mockRL = {
-        question: vi.fn((_, cb) => cb('n')),
-        close: vi.fn()
-      };
+      const mockQuestion = vi.fn((_, cb) => cb('n'));
+      const mockClose = vi.fn();
       
-      vi.mocked(readline.createInterface).mockReturnValue(mockRL as any);
+      vi.mocked(readline.createInterface).mockReturnValue({
+        question: mockQuestion,
+        close: mockClose
+      } as any);
 
+      // Make the API return a specific value
+      const apiMock = require('@api/index.js').main;
+      apiMock.mockResolvedValueOnce('Transformed content that should not be written');
+      
+      // Spy on writeFile to ensure it's not called
+      const writeFileSpy = vi.spyOn(fsAdapter, 'writeFile');
+      
       try {
         await cli.main(fsAdapter);
         
         // Verify that the prompt was shown
-        expect(mockRL.question).toHaveBeenCalled();
+        expect(mockQuestion).toHaveBeenCalled();
         
-        // Verify that the file was not overwritten
-        const content = await fsAdapter.readFile('/project/test.xml');
-        expect(content).toBe('Existing content');
+        // Verify that writeFile was NOT called (operation cancelled)
+        expect(writeFileSpy).not.toHaveBeenCalledWith('/project/test.xml', expect.any(String));
       } finally {
         cleanup();
       }

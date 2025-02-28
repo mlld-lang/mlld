@@ -1,9 +1,23 @@
 import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
 import { MemfsTestFileSystem } from './MemfsTestFileSystem.js';
 
+import { vi } from 'vitest';
+
 export class MemfsTestFileSystemAdapter extends NodeFileSystem {
   constructor(private readonly memfs: MemfsTestFileSystem) {
     super();
+    
+    // Add spies to all methods so they can be tracked in tests
+    vi.spyOn(this, 'readFile');
+    vi.spyOn(this, 'writeFile');
+    vi.spyOn(this, 'exists');
+    vi.spyOn(this, 'mkdir');
+    vi.spyOn(this, 'readDir');
+    vi.spyOn(this, 'stat');
+    vi.spyOn(this, 'isDirectory');
+    vi.spyOn(this, 'isFile');
+    vi.spyOn(this, 'watch');
+    vi.spyOn(this, 'getFileSystem');
   }
 
   // Convenience methods

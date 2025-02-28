@@ -149,12 +149,15 @@ export function setupCliTest(options: CliTestOptions = {}): CliTestResult {
     fsAdapter,
     fileSystemService,
     pathService,
-    exitMock: exitMock?.mockExit,
+    exitMock: exitMock?.mockExit || vi.fn(),
     consoleMocks: consoleMocks?.mocks,
     cleanup: () => {
       // Restore mocks
       exitMock?.restore();
       consoleMocks?.restore();
+      
+      // Additional cleanup for Vitest 
+      vi.clearAllMocks();
       
       // Restore environment variables
       if (options.env) {

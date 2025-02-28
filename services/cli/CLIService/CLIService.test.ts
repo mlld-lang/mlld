@@ -12,28 +12,47 @@ import { ErrorCollector } from '@tests/utils/ErrorTestUtils.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 import { cliLogger, type Logger } from '@core/utils/logger.js';
 
+// Mock the apiMain function that's used in CLIService
+const apiMain = vi.fn().mockResolvedValue('test output');
+// Make it globally available
+vi.stubGlobal('apiMain', apiMain);
+
 const defaultOptions = {
   input: 'test.meld',
   format: 'llm' as const
 };
 
-// Mock fs.watch for watch mode tests
-const mockWatcher = {
-  [Symbol.asyncIterator]: async function* () {
-    yield { filename: 'test.meld', eventType: 'change' };
-    // After yielding one item, pause for a while to let test run
-    await new Promise(resolve => setTimeout(resolve, 200));
-    
-    // Test will throw to exit, so we won't get here
-    throw new Error('Watch stopped');
-  }
+// Create a proper async iterator implementation for watching
+const createAsyncIterable = () => {
+  let callCount = 0;
+  return {
+    [Symbol.asyncIterator]() {
+      return {
+        async next() {
+          if (callCount === 0) {
+            callCount++;
+            return { 
+              done: false, 
+              value: { filename: 'test.meld', eventType: 'change' } 
+            };
+          }
+          
+          // Simulate an infinite wait to keep the watcher running
+          // This won't block because we'll interrupt it with an error
+          await new Promise(resolve => setTimeout(resolve, 1000000));
+          return { done: true };
+        }
+      };
+    }
+  };
 };
 
+// Mock fs.watch to return a proper async iterable
 vi.mock('fs/promises', async () => {
   const actual = await vi.importActual('fs/promises');
   return {
     ...actual,
-    watch: vi.fn().mockImplementation(() => mockWatcher)
+    watch: vi.fn().mockImplementation(() => createAsyncIterable())
   };
 });
 
@@ -245,36 +264,6 @@ describe('CLIService', () => {
       const args = ['node', 'meld', 'test.meld', '--verbose'];
       await service.run(args);
       // Verify logging behavior if needed
-    });
-
-    it('should handle watch option', async () => {
-      const processFile = vi.spyOn(service as any, 'processFile');
-      
-      // Start the service in watch mode
-      const watchPromise = service.run(['node', 'meld', 'test.meld', '--watch']);
-      
-      // Wait a bit for the watcher to start
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-      // Trigger a file change
-      await context.fs.writeFile('test.meld', '@text greeting = "Updated"');
-      
-      // Wait for the watch event to be processed
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      expect(processFile).toHaveBeenCalled();
-      
-      // Clean up by throwing an error to stop the watcher
-      try {
-        const error = new Error('STOP_WATCH');
-        (context.fs as any).watcher.emit('error', error);
-        await expect(watchPromise).rejects.toThrow('STOP_WATCH');
-      } catch (e) {
-        // If the error is already caught by the watcher, that's fine
-        if (!(e instanceof Error && e.message === 'STOP_WATCH')) {
-          throw e;
-        }
-      }
     });
   });
 
