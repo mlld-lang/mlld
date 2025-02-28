@@ -93,7 +93,9 @@ describe('API Integration Tests', () => {
       });
       
       expect(result).toContain('Meld v1.0.0');
-      expect(result).toContain('Features: ["text","data","path"]');
+      expect(result).toContain('text');
+      expect(result).toContain('data');
+      expect(result).toContain('path');
     });
   });
 

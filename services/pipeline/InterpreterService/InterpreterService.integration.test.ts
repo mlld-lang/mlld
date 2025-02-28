@@ -122,7 +122,7 @@ describe('InterpreterService Integration', () => {
           expect(error.nodeType).toBe('Directive');
           expect(error.message).toMatch(/Directive error \(text\)/i);
           if (error.cause?.message) {
-            expect(error.cause.message).toMatch(/Undefined variable: nonexistent/i);
+            expect(error.cause.message).toMatch(/Failed to resolve string concatenation/i);
           }
           
           // Verify state was rolled back

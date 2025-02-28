@@ -186,7 +186,7 @@ export class StateDebuggerService implements IStateDebuggerService {
     if (format === 'summary') {
       return {
         id: stateId,
-        type: metadata.source,
+        type: metadata.type,
         childCount: (metadata.childStates || []).length,
         transformationCount: history.transformations.length,
         lastModified: metadata.lastModified || metadata.createdAt
