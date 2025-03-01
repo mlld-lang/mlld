@@ -166,6 +166,47 @@ The pipeline is organized into logical service groups, with strict initializatio
      - `markdown`: Clean markdown without directive definitions
    - Writes output to file or stdout
 
+## Transformation Mode and Variable Resolution
+
+When transformation mode is enabled, the pipeline handles directives and variables in a special way. Understanding this flow is critical for debugging and enhancing directive handlers:
+
+```ascii
+┌─────────────┐     ┌─────────────┐     ┌──────────────┐     ┌──────────────┐
+│  Directive  │     │Interpretation│     │   State      │     │   Output     │
+│  Handlers   ├────►│  & Node     ├────►│  Variable    ├────►│  Generation  │
+│(with replace│     │Transformation│     │  Resolution  │     │              │
+│  nodes)     │     │              │     │              │     │              │
+└─────────────┘     └─────────────┘     └──────────────┘     └──────────────┘
+```
+
+### Key Transformation Pipeline Concepts
+
+1. **Directive Handler Replacement Nodes**
+   - Directive handlers can return replacement nodes when in transformation mode
+   - The InterpreterService must properly apply these replacements in the transformed nodes array
+   - For import directives, the replacement is typically an empty text node
+   - For embed directives, the replacement node contains the embedded content
+
+2. **State Propagation Across Boundaries**
+   - Variables must be explicitly copied between parent and child states
+   - When importing files, variables must be copied from imported state to parent state
+   - The ImportDirectiveHandler must ensure all variable types (text, data, path, commands) are copied
+
+3. **Variable Resolution Process**
+   - Variables can be resolved at multiple stages:
+     - During directive processing
+     - During node transformation
+     - During final output generation
+     - During post-processing in the main function
+   - The OutputService's nodeToMarkdown method handles variable reference resolution in text nodes
+   - A final variable resolution pass in the main function ensures any remaining references are resolved
+
+4. **State Management for Transformation**
+   - The StateService maintains both original and transformed node arrays
+   - Transformed nodes must be explicitly initialized 
+   - The transformNode method is used to replace directive nodes with their outputs
+   - State must keep track of transformation options to determine which directives to transform
+
 ## Service Responsibilities
 
 ### Pipeline Services
@@ -180,18 +221,24 @@ The pipeline is organized into logical service groups, with strict initializatio
    - Handles node transformations
    - Maintains interpretation state
    - Handles imports and embedding
+   - **Critical for transformation:** Applies directive handler replacement nodes to transformed node array
+   - **State propagation:** Ensures proper variable inheritance between parent and child states
 
 3. **DirectiveService** (`services/pipeline/DirectiveService/`)
    - Routes directives to handlers
    - Validates directive syntax
    - Supports node transformation
    - Updates state based on directive results
+   - **Directive handlers:** Can return replacement nodes in transformation mode
+   - **Handler context:** Includes parent state for proper variable propagation
 
 4. **OutputService** (`services/pipeline/OutputService/`)
    - Uses transformed nodes for clean output
    - Supports markdown and LLM XML
    - Generates directive-free output
    - Handles formatting options
+   - **Variable resolution:** Resolves variable references in text nodes during output generation
+   - **Transformation handling:** Uses special processing for variable references in transformation mode
 
 ### State Services
 
@@ -200,6 +247,9 @@ The pipeline is organized into logical service groups, with strict initializatio
    - Maintains original and transformed nodes
    - Manages scope and inheritance
    - Tracks file dependencies
+   - **Transformation support:** Keeps track of both original and transformed node arrays
+   - **Variable copying:** Must explicitly copy variables between parent and child states
+   - **Transformation options:** Supports selective transformation of different directive types
 
 2. **StateEventService** (`services/state/StateEventService/`)
    - Handles state change events
