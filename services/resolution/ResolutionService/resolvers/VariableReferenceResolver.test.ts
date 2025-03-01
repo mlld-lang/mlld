@@ -92,7 +92,7 @@ describe('VariableReferenceResolver', () => {
         .toThrow('Variable ENV_TEST not found');
     });
 
-    it('should throw on undefined variable', async () => {
+    it('should throw for undefined variables', async () => {
       vi.mocked(parserService.parse).mockResolvedValue([
         createDirectiveNode('text', { identifier: 'missing' })
       ]);
