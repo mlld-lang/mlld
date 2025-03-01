@@ -1326,7 +1326,29 @@ export class VariableReferenceResolver {
       }
       // Handle object property access
       else if (typeof currentValue === 'object' && currentValue !== null) {
-        if (!(segment in currentValue)) {
+        // First try to access as a property
+        if (segment in currentValue) {
+          currentValue = currentValue[segment];
+        } 
+        // If that fails and segment is numeric, try array access 
+        // This is a fallback for objects with numeric keys stored as numbers
+        else if (/^\d+$/.test(segment) && Array.isArray(currentValue)) {
+          const index = parseInt(segment, 10);
+          if (index < 0 || index >= currentValue.length) {
+            throw new MeldResolutionError(
+              `Array index out of bounds: ${index} (length: ${currentValue.length})`,
+              {
+                code: ResolutionErrorCode.RESOLUTION_FAILED,
+                details: { 
+                  variableName, 
+                  fieldPath, 
+                  value: `Error accessing ${fieldPath}: index ${index} out of bounds` 
+                }
+              }
+            );
+          }
+          currentValue = currentValue[index];
+        } else {
           throw new MeldResolutionError(
             `Property ${segment} not found in object at path ${currentPath}`,
             {
@@ -1339,18 +1361,34 @@ export class VariableReferenceResolver {
             }
           );
         }
-        currentValue = currentValue[segment];
+      } 
+      // Handle direct value access (e.g., string[0])
+      else if (typeof currentValue === 'string' && /^\d+$/.test(segment)) {
+        const index = parseInt(segment, 10);
+        if (index < 0 || index >= currentValue.length) {
+          throw new MeldResolutionError(
+            `String index out of bounds: ${index} (length: ${currentValue.length})`,
+            {
+              code: ResolutionErrorCode.RESOLUTION_FAILED,
+              details: { 
+                variableName, 
+                fieldPath, 
+                value: `Error accessing ${fieldPath}: string index ${index} out of bounds` 
+              }
+            }
+          );
+        }
+        currentValue = currentValue[index];
       }
-      // Handle primitive values
       else {
         throw new MeldResolutionError(
-          `Cannot access field ${segment} of ${typeof currentValue} at path ${currentPath}`,
+          `Cannot access field ${segment} on non-object value at path ${currentPath}`,
           {
             code: ResolutionErrorCode.RESOLUTION_FAILED,
             details: { 
               variableName, 
               fieldPath, 
-              value: `Error accessing ${fieldPath}: cannot access field of ${typeof currentValue}` 
+              value: `Error accessing ${fieldPath}: cannot access field ${segment} on value of type ${typeof currentValue}` 
             }
           }
         );

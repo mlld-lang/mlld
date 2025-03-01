@@ -474,8 +474,7 @@ export class OutputService implements IOutputService {
             if ('identifier' in node) {
               const identifier = node.identifier as string;
               
-              // Debug log the structure of the DataVar node
-              logger.debug('DataVar node fields', {
+              logger.debug('Attempting to resolve DataVar in transformation mode with fields', {
                 identifier,
                 fields: node.fields,
                 fieldTypes: node.fields.map(f => f.type),
@@ -490,10 +489,10 @@ export class OutputService implements IOutputService {
                   state // state service to use
                 );
                 
-                // Build the complete reference with all fields
+                // Build the complete reference with all fields using dot notation
                 const fields = node.fields.map(field => {
-                  // Keep field types intact to ensure numeric indices are recognized as array indices
                   if (field.type === 'index') {
+                    // For index type, convert to numeric string
                     return String(field.value);
                   } else if (field.type === 'field') {
                     return field.value;
@@ -501,7 +500,8 @@ export class OutputService implements IOutputService {
                   return '';
                 }).filter(Boolean);
                 
-                // Create a variable reference with all fields
+                // Create a variable reference with all fields using dot notation
+                // This matches the format expected in the test files
                 const serializedNode = `{{${identifier}${fields.length > 0 ? '.' + fields.join('.') : ''}}}`;
                 
                 logger.debug('Resolving DataVar with all fields at once', {

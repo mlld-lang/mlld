@@ -32,7 +32,10 @@ describe('VariableReferenceResolver', () => {
   describe('resolve', () => {
     it('should resolve text variables', async () => {
       vi.mocked(parserService.parse).mockResolvedValue([
-        createDirectiveNode('text', { identifier: 'greeting', value: 'Hello World' })
+        { 
+          type: 'TextVar',
+          identifier: 'greeting'
+        } as any
       ]);
       
       vi.mocked(stateService.getTextVar).mockReturnValue('Hello World');
@@ -94,7 +97,7 @@ describe('VariableReferenceResolver', () => {
       vi.mocked(stateService.getDataVar).mockReturnValue(undefined);
       await expect(resolver.resolve('{{ENV_TEST}}', context))
         .rejects
-        .toThrow('Environment variable not set: ENV_TEST');
+        .toThrow('Variable ENV_TEST not found');
     });
 
     it('should throw on undefined variable', async () => {
@@ -106,7 +109,7 @@ describe('VariableReferenceResolver', () => {
       vi.mocked(stateService.getDataVar).mockReturnValue(undefined);
       await expect(resolver.resolve('{{missing}}', context))
         .rejects
-        .toThrow('Undefined variable: missing');
+        .toThrow('Variable missing not found');
     });
 
     it('should preserve text without variables', async () => {

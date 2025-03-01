@@ -64,22 +64,22 @@ describe('VariableReferenceResolver Array Index Debug', () => {
     const resolveFieldAccess = (resolver as any).resolveFieldAccess.bind(resolver);
 
     // Test simple array access
-    let result = resolveFieldAccess(array, ["0"], context);
+    let result = await resolveFieldAccess(array, ["0"], context);
     expect(result).toBe("apple");
 
     // Test out of bounds array access
-    expect(() => resolveFieldAccess(array, ["5"], context)).toThrow(/out of bounds/);
+    await expect(resolveFieldAccess(array, ["5"], context)).rejects.toThrow(/out of bounds/);
 
     // Test object array access
-    result = resolveFieldAccess(objArray, ["0"], context);
+    result = await resolveFieldAccess(objArray, ["0"], context);
     expect(result).toEqual({ name: "Alice", age: 30 });
 
     // Test nested array access
-    result = resolveFieldAccess(objArray, ["0", "name"], context);
+    result = await resolveFieldAccess(objArray, ["0", "name"], context);
     expect(result).toBe("Alice");
 
     // Test complex nested access
-    result = resolveFieldAccess(nestedObj, ["users", "0", "hobbies", "1"], context);
+    result = await resolveFieldAccess(nestedObj, ["users", "0", "hobbies", "1"], context);
     expect(result).toBe("hiking");
   });
 
