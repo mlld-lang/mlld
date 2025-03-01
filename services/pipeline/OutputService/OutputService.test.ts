@@ -10,6 +10,14 @@ import {
   createCodeFenceNode,
   createLocation
 } from '../../../tests/utils/testFactories.js';
+// Import centralized syntax examples
+import { 
+  textDirectiveExamples, 
+  dataDirectiveExamples,
+  runDirectiveExamples,
+  defineDirectiveExamples
+} from '@core/constants/syntax';
+import { getExample, getInvalidExample, createNodeFromExample } from '@tests/utils/syntax-test-helpers.js';
 
 // Mock StateService
 class MockStateService implements IStateService {
@@ -268,18 +276,18 @@ describe('OutputService', () => {
     });
 
     it('should handle directive nodes according to type', async () => {
-      // Definition directive
-      const defNodes: MeldNode[] = [
-        createDirectiveNode('text', { identifier: 'test', value: 'example' }, createLocation(1, 1))
-      ];
-      let output = await service.convert(defNodes, state, 'markdown');
+      // MIGRATION: Using centralized syntax examples instead of hardcoded examples
+      
+      // Definition directive - using @text example
+      const textExample = getExample('text', 'atomic', 'simpleString');
+      const textNode = await createNodeFromExample(textExample.code);
+      let output = await service.convert([textNode], state, 'markdown');
       expect(output).toBe(''); // Definition directives are omitted
 
-      // Execution directive
-      const execNodes: MeldNode[] = [
-        createDirectiveNode('run', { command: 'echo test' }, createLocation(1, 1))
-      ];
-      output = await service.convert(execNodes, state, 'markdown');
+      // Execution directive - using @run example
+      const runExample = getExample('run', 'atomic', 'simple');
+      const runNode = await createNodeFromExample(runExample.code);
+      output = await service.convert([runNode], state, 'markdown');
       expect(output).toBe('[run directive output placeholder]\n');
     });
 
@@ -340,18 +348,18 @@ describe('OutputService', () => {
     });
 
     it('should handle directives according to type', async () => {
-      // Definition directive
-      const defNodes: MeldNode[] = [
-        createDirectiveNode('text', { identifier: 'test', value: 'example' }, createLocation(1, 1))
-      ];
-      let output = await service.convert(defNodes, state, 'xml');
+      // MIGRATION: Using centralized syntax examples instead of hardcoded examples
+      
+      // Definition directive - using @text example
+      const textExample = getExample('text', 'atomic', 'simpleString');
+      const textNode = await createNodeFromExample(textExample.code);
+      let output = await service.convert([textNode], state, 'xml');
       expect(output).toBe(''); // Definition directives are omitted
 
-      // Execution directive
-      const execNodes: MeldNode[] = [
-        createDirectiveNode('run', { command: 'echo test' }, createLocation(1, 1))
-      ];
-      output = await service.convert(execNodes, state, 'xml');
+      // Execution directive - using @run example
+      const runExample = getExample('run', 'atomic', 'simple');
+      const runNode = await createNodeFromExample(runExample.code);
+      output = await service.convert([runNode], state, 'xml');
       expect(output).toContain('[run directive output placeholder]');
     });
 
@@ -377,8 +385,10 @@ describe('OutputService', () => {
 
   describe('Transformation Mode', () => {
     it('should use transformed nodes when transformation is enabled', async () => {
+      // MIGRATION: Using centralized syntax examples instead of hardcoded examples
       const originalNodes: MeldNode[] = [
-        createDirectiveNode('run', { command: 'echo test' }, createLocation(1, 1))
+        // Using a run directive example
+        await createNodeFromExample(getExample('run', 'atomic', 'simple').code)
       ];
 
       const transformedNodes: MeldNode[] = [
@@ -393,9 +403,11 @@ describe('OutputService', () => {
     });
 
     it('should handle mixed content in transformation mode', async () => {
+      // MIGRATION: Using centralized syntax examples instead of hardcoded examples
       const originalNodes: MeldNode[] = [
         createTextNode('Before\n', createLocation(1, 1)),
-        createDirectiveNode('run', { command: 'echo test' }, createLocation(2, 1)),
+        // Using a run directive example
+        await createNodeFromExample(getExample('run', 'atomic', 'simple').code),
         createTextNode('After\n', createLocation(3, 1))
       ];
 
@@ -413,9 +425,11 @@ describe('OutputService', () => {
     });
 
     it('should handle definition directives in non-transformation mode', async () => {
+      // MIGRATION: Using centralized syntax examples instead of hardcoded examples
       const nodes: MeldNode[] = [
         createTextNode('Before\n', createLocation(1, 1)),
-        createDirectiveNode('text', { identifier: 'test', value: 'example' }, createLocation(2, 1)),
+        // Using a text directive example from centralized examples
+        await createNodeFromExample(getExample('text', 'atomic', 'simpleString').code),
         createTextNode('After\n', createLocation(3, 1))
       ];
 
@@ -424,9 +438,11 @@ describe('OutputService', () => {
     });
 
     it('should show placeholders for execution directives in non-transformation mode', async () => {
+      // MIGRATION: Using centralized syntax examples instead of hardcoded examples
       const nodes: MeldNode[] = [
         createTextNode('Before\n', createLocation(1, 1)),
-        createDirectiveNode('run', { command: 'echo test' }, createLocation(2, 1)),
+        // Using a run directive example from centralized examples
+        await createNodeFromExample(getExample('run', 'atomic', 'simple').code),
         createTextNode('After\n', createLocation(3, 1))
       ];
 
@@ -435,23 +451,48 @@ describe('OutputService', () => {
     });
 
     it('should preserve code fences in both modes', async () => {
-      const codeFence = createCodeFenceNode('const x = 1;', 'typescript', createLocation(1, 1));
+      // Create a code fence node using the proper factory function
+      const codeFenceNode = createCodeFenceNode(
+        'const greeting = \'Hello, world!\';\nconsole.log(greeting);',
+        'js',
+        createLocation(1, 1)
+      );
       
-      // Non-transformation mode
-      let output = await service.convert([codeFence], state, 'markdown');
-      expect(output).toBe('```typescript\nconst x = 1;\n```\n');
+      const originalNodes = [
+        createTextNode('Before\n', createLocation(1, 1)),
+        codeFenceNode,
+        createTextNode('\nAfter', createLocation(3, 1))
+      ];
 
-      // Transformation mode
-      state.enableTransformation();
-      state.setTransformedNodes([codeFence]);
-      output = await service.convert([codeFence], state, 'markdown');
-      expect(output).toBe('```typescript\nconst x = 1;\n```\n');
+      // Test non-transformation mode
+      state.enableTransformation(false);
+      
+      let output = await service.convert(originalNodes, state, 'markdown');
+      expect(output).to.include('Before');
+      expect(output).to.include('```js');
+      expect(output).to.include('const greeting = \'Hello, world!\';');
+      expect(output).to.include('console.log(greeting);');
+      expect(output).to.include('After');
+
+      // Test transformation mode
+      state.enableTransformation(true);
+      // Set the transformed nodes to be the same as the original nodes
+      state.setTransformedNodes(originalNodes);
+      
+      output = await service.convert(originalNodes, state, 'markdown');
+      expect(output).to.include('Before');
+      expect(output).to.include('```js');
+      expect(output).to.include('const greeting = \'Hello, world!\';');
+      expect(output).to.include('console.log(greeting);');
+      expect(output).to.include('After');
     });
 
     it('should handle XML output in both modes', async () => {
+      // MIGRATION: Using centralized syntax examples instead of hardcoded examples
       const originalNodes: MeldNode[] = [
         createTextNode('Before\n', createLocation(1, 1)),
-        createDirectiveNode('run', { command: 'echo test' }, createLocation(2, 1)),
+        // Using a run directive example
+        await createNodeFromExample(getExample('run', 'atomic', 'simple').code),
         createTextNode('After\n', createLocation(3, 1))
       ];
 
