@@ -587,9 +587,9 @@ describe('API Integration Tests', () => {
       // Create main file that imports other files
       await context.writeFile(`${projectRoot}/main.meld`, `
         @path templates = "$PROJECTPATH/templates"
-        @import [{{templates}}/variables.meld]
+        @import [$templates/variables.meld]
         
-        @embed [{{templates}}/header.md]
+        @embed [$templates/header.md]
         
         ## {{projectName}} v{{version}}
         
@@ -598,7 +598,7 @@ describe('API Integration Tests', () => {
         
         This is the main content.
         
-        @embed [{{templates}}/footer.md]
+        @embed [$templates/footer.md]
       `);
       
       // Expecting path validation error

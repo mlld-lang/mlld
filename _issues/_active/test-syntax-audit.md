@@ -101,7 +101,7 @@ The `@import` directive imports content from other Meld files.
 @import [level3.meld]
 @import [level2.meld]
 @import [level1.meld]
-@import [{{templates}}/variables.meld]
+@import [$templates/variables.meld]
 @import "$PROJECTPATH/samples/nested.meld"
 @import "$~/examples/basic.meld"
 ```
@@ -141,8 +141,8 @@ The `@embed` directive embeds content from external files.
 ```
 @embed [embed.md]
 @embed [sections.md # Section Two]
-@embed [{{templates}}/header.md]
-@embed [{{templates}}/footer.md]
+@embed [$templates/header.md]
+@embed [$templates/footer.md]
 @embed [file.txt]
 @embed "$PROJECTPATH/README.md"
 @embed "$PROJECTPATH/README.md#section"

@@ -25,7 +25,7 @@ import { createLocation } from '@tests/utils/testFactories.js';
 // Import the centralized syntax examples and helpers
 import { embedDirectiveExamples } from '@core/constants/syntax';
 import { 
-  createNodeFromExample, 
+  createNodeFromExample as importedCreateNodeFromExample, 
   getExample,
   getInvalidExample 
 } from '@tests/utils/syntax-test-helpers';
@@ -148,7 +148,7 @@ describe('EmbedDirectiveHandler', () => {
   let stateService: IStateService;
   let circularityService: ICircularityService;
   let fileSystemService: IFileSystemService;
-  let parserService: ReturnType<typeof createRealParserService>;
+  let parserService: IParserService;
   let interpreterService: IInterpreterService;
   let clonedState: IStateService;
   let childState: IStateService;
@@ -204,7 +204,8 @@ describe('EmbedDirectiveHandler', () => {
       readFile: vi.fn(),
       dirname: vi.fn().mockReturnValue('/workspace'),
       join: vi.fn().mockImplementation((...args) => args.join('/')),
-      normalize: vi.fn().mockImplementation(path => path)
+      normalize: vi.fn().mockImplementation(path => path),
+      resolveRelativePath: vi.fn()
     } as unknown as IFileSystemService;
 
     parserService = createRealParserService();
@@ -413,6 +414,55 @@ describe('EmbedDirectiveHandler', () => {
 
       await expect(handler.execute(node, context)).rejects.toThrow(DirectiveError);
       expect(circularityService.endImport).toHaveBeenCalled();
+    });
+  });
+
+  describe('Path variables', () => {
+    it('should handle user-defined path variables with $ syntax', async () => {
+      // Setup user-defined path variable
+      stateService.getPathVar = vi.fn().mockImplementation((name) => {
+        if (name === 'docs') return '/project/docs';
+        if (name === 'PROJECTPATH') return '/project';
+        if (name === 'HOMEPATH') return '/home/user';
+        return undefined;
+      });
+      
+      // Create an embed directive with a path using a user-defined variable
+      // This would be equivalent to: @path docs = "$./docs" followed by @embed [$docs/file.md]
+      const embedCode = `@embed [$docs/file.md]`;
+      const node = await createNodeFromExample(embedCode);
+      
+      // Setup other mocks
+      (fileSystemService.exists as any).mockResolvedValue(true);
+      (fileSystemService.readFile as any).mockResolvedValue('# File content');
+      
+      // Execute the directive
+      const context = {
+        state: stateService,
+        currentFilePath: '/project/test.meld'
+      };
+      
+      await handler.execute(node, context);
+      
+      // Verify path resolution using the user-defined path variable
+      expect(resolutionService.resolveInContext).toHaveBeenCalled();
+      expect(fileSystemService.exists).toHaveBeenCalled();
+      expect(fileSystemService.readFile).toHaveBeenCalled();
+      
+      // Verify the directive was processed
+      expect(mockLogger.debug).toHaveBeenCalledWith(
+        "Processing embed directive",
+        expect.objectContaining({
+          context: expect.objectContaining({
+            currentFilePath: "/project/test.meld"
+          })
+        })
+      );
+      
+      expect(mockLogger.debug).toHaveBeenCalledWith(
+        "Embed directive processed successfully",
+        expect.any(Object)
+      );
     });
   });
 }); 

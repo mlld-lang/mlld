@@ -63,7 +63,7 @@ export const combinations = {
     createExample(
       'Path and embed example',
       `@path docs = "$PROJECTPATH/docs"
-@embed [{{docs}}/README.md # Introduction]`
+@embed [$docs/README.md # Introduction]`
     )
   ),
   

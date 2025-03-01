@@ -288,6 +288,60 @@ describe('ImportDirectiveHandler', () => {
         .rejects
         .toThrow('Import file not found');
     });
+
+    it('should handle user-defined path variables', async () => {
+      // Setup user-defined path variable in stateService
+      stateService.getPathVar = vi.fn().mockImplementation((name) => {
+        if (name === 'docs') return '/project/docs';
+        if (name === 'PROJECTPATH') return '/project';
+        if (name === 'HOMEPATH') return '/home/user';
+        return undefined;
+      });
+      
+      // Create an import directive node with a user-defined path variable
+      // This would be equivalent to: @path docs = "$./docs" followed by @import [$docs/file.meld]
+      const importCode = `@import [$docs/file.meld]`;
+      const node = await createNodeFromExample(importCode);
+      
+      // Mock the resolution service to handle the structured path correctly
+      resolutionService.resolveInContext = vi.fn().mockResolvedValue('/project/docs/file.meld');
+      
+      // Configure mocks for the test
+      fileSystemService.exists.mockResolvedValue(true);
+      
+      // Mock the file content
+      fileSystemService.readFile.mockResolvedValue('@text imported = "Imported content"');
+      
+      // Mock the parser to return a valid node
+      parserService.parse.mockResolvedValue([{
+        type: 'Directive',
+        directive: {
+          kind: 'text',
+          identifier: 'imported',
+          value: 'Imported content'
+        }
+      }]);
+      
+      // Execute the directive
+      const context = {
+        currentFilePath: '/project/main.meld',
+        state: stateService
+      };
+      
+      await handler.execute(node, context);
+      
+      // Verify path resolution happened correctly
+      expect(resolutionService.resolveInContext).toHaveBeenCalled();
+      
+      // Verify that file existed check was made
+      expect(fileSystemService.exists).toHaveBeenCalledWith('/project/docs/file.meld');
+      
+      // Verify content was read from file
+      expect(fileSystemService.readFile).toHaveBeenCalledWith('/project/docs/file.meld');
+      
+      // Verify interpreter was called
+      expect(interpreterService.interpret).toHaveBeenCalled();
+    });
   });
 
   describe('basic importing', () => {

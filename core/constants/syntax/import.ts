@@ -23,12 +23,17 @@ export const atomic = {
   
   projectPathImport: createExample(
     'Import with project path variable',
-    `@import "$PROJECTPATH/samples/nested.meld"`
+    `@import [$PROJECTPATH/samples/nested.meld]`
+  ),
+  
+  projectPathShortImport: createExample(
+    'Import with project path shorthand',
+    `@import [$./samples/nested.meld]`
   ),
   
   homePathImport: createExample(
     'Import with home path variable',
-    `@import "$~/examples/basic.meld"`
+    `@import [$~/examples/basic.meld]`
   )
 };
 
@@ -46,7 +51,7 @@ export const combinations = {
     ),
     createExample(
       'Import using path variable',
-      `@import [{{templates}}/variables.meld]`
+      `@import [$templates/variables.meld]`
     )
   ),
   
@@ -84,11 +89,11 @@ export const combinations = {
     'Circular reference examples',
     createExample(
       'circular1.meld',
-      `@import [circular2.meld]`
+      `@import [$./circular2.meld]`
     ),
     createExample(
       'circular2.meld',
-      `@import [circular1.meld]`
+      `@import [$./circular1.meld]`
     )
   )
 };

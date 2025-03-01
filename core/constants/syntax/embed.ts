@@ -32,7 +32,7 @@ export const atomic = {
   withVariablePath: createExample(
     'Embed with variable path',
     `@path templates = "$PROJECTPATH/templates"
-@embed [{{templates}}/header.md]`
+@embed [$templates/header.md]`
   ),
   
   withProjectPath: createExample(
@@ -60,7 +60,7 @@ export const combinations = {
     ),
     createExample(
       'Header embed',
-      `@embed [{{templates}}/header.md]`
+      `@embed [$templates/header.md]`
     ),
     createExample(
       'Content embed',
@@ -70,7 +70,7 @@ This is some content between embeds.
     ),
     createExample(
       'Footer embed',
-      `@embed [{{templates}}/footer.md]`
+      `@embed [$templates/footer.md]`
     )
   ),
   
