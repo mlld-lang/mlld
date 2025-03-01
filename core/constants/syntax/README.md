@@ -2,6 +2,25 @@
 
 This directory contains centralized syntax examples for all Meld directives and syntax patterns. These examples serve as a single source of truth for correct and problematic syntax, enabling consistent testing and documentation.
 
+## Migration Status (October 2023)
+
+### Completed
+- ✅ All Directive Handler Tests have been migrated to use centralized syntax:
+  - TextDirectiveHandler
+  - DataDirectiveHandler
+  - PathDirectiveHandler
+  - DefineDirectiveHandler
+  - RunDirectiveHandler
+  - ImportDirectiveHandler
+  - EmbedDirectiveHandler
+
+### In Progress
+- 🔲 Service-level tests 
+- 🔲 API and Integration tests
+- 🔲 Transformation tests
+
+For a complete migration status report, see: `_issues/_active/test-syntax-audit.md`
+
 ## Directory Structure
 
 ```
@@ -68,6 +87,25 @@ describe('TextDirectiveHandler', () => {
   });
 });
 ```
+
+## Migration Guide
+
+When migrating existing tests to centralized syntax:
+
+1. **Identify** test file syntax examples that need to be migrated
+2. **Analyze** where these should fit in the centralized system
+3. **Implement** examples in the appropriate syntax files 
+4. **Update** tests to reference the centralized examples
+5. **Verify** tests continue to pass as expected
+6. **Document** progress in `_issues/_active/test-syntax-audit.md`
+
+### Best Practices for Migration
+
+- Maintain backward compatibility when updating handlers
+- Keep migrations focused on one test file at a time
+- Create comprehensive test cases including valid and invalid examples
+- Consider edge cases and error conditions
+- Ensure proper error handling in tests
 
 ## Adding New Examples
 

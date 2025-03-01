@@ -248,11 +248,11 @@ inner
 1. `services/resolution/ResolutionService/ResolutionService.test.ts`
 2. `services/resolution/ResolutionService/resolvers/CommandResolver.test.ts`
 3. `services/cli/CLIService/CLIService.test.ts`
-4. `services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler.test.ts`
-5. `services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler.test.ts`
-6. `services/pipeline/DirectiveService/handlers/definition/DefineDirectiveHandler.test.ts`
+4. ✅ `services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler.test.ts`
+5. ✅ `services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler.test.ts`
+6. ✅ `services/pipeline/DirectiveService/handlers/definition/DefineDirectiveHandler.test.ts`
 7. `services/pipeline/OutputService/OutputService.test.ts`
-8. `services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler.test.ts`
+8. ✅ `services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler.test.ts`
 9. `api/api.test.ts`
 10. `services/pipeline/ParserService/ParserService.test.ts`
 11. `services/pipeline/InterpreterService/InterpreterService.integration.test.ts`
@@ -260,6 +260,47 @@ inner
 13. `api/integration.test.ts`
 14. `tests/meld-ast-nested-fences.test.ts`
 15. `tests/field-access.test.js`
+
+### Additional DirectiveHandler Tests Migrated
+16. ✅ `services/pipeline/DirectiveService/handlers/definition/DataDirectiveHandler.test.ts`
+17. ✅ `services/pipeline/DirectiveService/handlers/definition/PathDirectiveHandler.test.ts`
+18. ✅ `services/pipeline/DirectiveService/handlers/execution/ImportDirectiveHandler.test.ts`
+
+### Transformation Tests to Consider
+1. `services/pipeline/DirectiveService/handlers/execution/ImportDirectiveHandler.transformation.test.ts`
+2. `services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler.transformation.test.ts`
+3. `services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler.transformation.test.ts`
+
+## Migration Status Summary
+
+### DirectiveHandler Tests
+- ✅ All handler test files for core directives have been migrated to use centralized syntax:
+  - ✅ TextDirectiveHandler
+  - ✅ DataDirectiveHandler
+  - ✅ PathDirectiveHandler
+  - ✅ DefineDirectiveHandler
+  - ✅ RunDirectiveHandler
+  - ✅ ImportDirectiveHandler
+  - ✅ EmbedDirectiveHandler
+
+### Tests Still Needing Migration
+- 🔲 Service tests with Meld syntax:
+  - 🔲 `services/resolution/ResolutionService/ResolutionService.test.ts`
+  - 🔲 `services/resolution/ResolutionService/resolvers/CommandResolver.test.ts`
+  - 🔲 `services/cli/CLIService/CLIService.test.ts`
+  - 🔲 `services/pipeline/OutputService/OutputService.test.ts`
+  - 🔲 `services/pipeline/ParserService/ParserService.test.ts`
+  - 🔲 `services/pipeline/InterpreterService/InterpreterService.integration.test.ts`
+
+- 🔲 API and Integration tests:
+  - 🔲 `api/api.test.ts`
+  - 🔲 `api/integration.test.ts`
+
+### Transformation Tests
+- 🔲 DirectiveHandler transformation tests:
+  - 🔲 `ImportDirectiveHandler.transformation.test.ts`
+  - 🔲 `EmbedDirectiveHandler.transformation.test.ts`
+  - 🔲 `RunDirectiveHandler.transformation.test.ts`
 
 ## Meld Files Used for Testing
 
@@ -286,4 +327,4 @@ inner
 
 ## Conclusion
 
-This document provides a comprehensive catalog of all Meld syntax examples found in test files. This information can be used as a reference for consolidating syntax examples into centralized constants. 
+This document provides a comprehensive catalog of all Meld syntax examples found in test files. This information can be used as a reference for consolidating syntax examples into centralized constants.

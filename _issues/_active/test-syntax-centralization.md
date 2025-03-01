@@ -1,23 +1,48 @@
 # Meld Syntax Centralization Plan
 
-## Progress Summary (Updated June 2023)
+## Migration Status Summary
 
-**Current Status**: In Progress - Handler Test Migration Phase
+### DirectiveHandler Tests
+- ✅ All handler test files for core directives have been migrated to use centralized syntax:
+  - ✅ TextDirectiveHandler
+  - ✅ DataDirectiveHandler
+  - ✅ PathDirectiveHandler
+  - ✅ DefineDirectiveHandler
+  - ✅ RunDirectiveHandler
+  - ✅ ImportDirectiveHandler
+  - ✅ EmbedDirectiveHandler
 
-**Completed**:
-- ✅ Infrastructure setup (directory structure, helper utilities, example files)
-- ✅ Syntax Test Helpers implementation
-- ✅ Initial test migrations (PathDirectiveHandler, DefineDirectiveHandler, TextDirectiveHandler, DataDirectiveHandler)
-- ✅ RunDirectiveHandler test migration
+### Tests Still Needing Migration
+- 🔲 Service tests with Meld syntax:
+  - 🔲 `services/resolution/ResolutionService/ResolutionService.test.ts`
+  - 🔲 `services/resolution/ResolutionService/resolvers/CommandResolver.test.ts`
+  - 🔲 `services/cli/CLIService/CLIService.test.ts`
+  - 🔲 `services/pipeline/OutputService/OutputService.test.ts`
+  - 🔲 `services/pipeline/ParserService/ParserService.test.ts`
+  - 🔲 `services/pipeline/InterpreterService/InterpreterService.integration.test.ts`
+
+- 🔲 API and Integration tests:
+  - 🔲 `api/api.test.ts`
+  - 🔲 `api/integration.test.ts`
+
+### Transformation Tests
+- 🔲 DirectiveHandler transformation tests:
+  - 🔲 `ImportDirectiveHandler.transformation.test.ts`
+  - 🔲 `EmbedDirectiveHandler.transformation.test.ts`
+  - 🔲 `RunDirectiveHandler.transformation.test.ts`
 
 **Next Steps**:
-- Continue migrating remaining directive handler tests
+- Migrate Service-level tests (ResolutionService, OutputService, etc.)
+- Migrate API and Integration tests
+- Address transformation tests for directive handlers
 - Document patterns and best practices
 
 **Key Challenges Identified**:
 - Parser rejecting invalid syntax before handler tests
 - Structural differences between manually created nodes and parser-generated nodes
 - Different error handling patterns between test approaches
+- API changes in newer meld-ast versions requiring handler adaptations
+- Ensuring backward compatibility with older syntax patterns
 
 ## Import Requirements for Centralized Syntax
 
@@ -578,7 +603,7 @@ const example = getExample('text', 'atomic', 'simple');
 - [x] Migrate TextDirectiveHandler.test.ts to use centralized examples
 - [x] Migrate DataDirectiveHandler.test.ts using the same pattern
 - [x] Migrate RunDirectiveHandler.test.ts using the same pattern
-- [ ] Migrate ImportDirectiveHandler.test.ts using the same pattern
+- [x] Migrate ImportDirectiveHandler.test.ts using the same pattern
 - [ ] Migrate remaining directive handlers following the established pattern
 - [ ] Create README.md in core/constants/syntax with usage documentation
 - [ ] Ensure JSDoc comments on all exported functions and types
