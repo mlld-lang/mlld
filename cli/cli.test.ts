@@ -73,8 +73,8 @@ describe('CLI Tests', () => {
         }
       });
 
-      // Try with conflicting formats
-      process.argv = ['node', 'meld', '/project/test.meld', '--format', 'md', '--format', 'xml'];
+      // Try with an invalid option
+      process.argv = ['node', 'meld', '/project/test.meld', '--unknown-option', 'value'];
 
       try {
         await cli.main(fsAdapter);

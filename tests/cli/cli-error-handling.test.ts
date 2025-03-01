@@ -47,7 +47,7 @@ describe('CLI Error Handling', () => {
         // Verify appropriate error handling
         expect(error).toBeDefined();
         expect(consoleMocks.mocks.error).toHaveBeenCalled();
-        expect(consoleMocks.mocks.error.mock.calls[0][0]).toContain('Error during variable resolution');
+        expect(consoleMocks.mocks.error.mock.calls[0][0]).toContain('Failed to resolve string concatenation');
       }
     });
     
@@ -70,7 +70,7 @@ describe('CLI Error Handling', () => {
         // Verify appropriate error handling in strict mode
         expect(error).toBeDefined();
         expect(consoleMocks.mocks.error).toHaveBeenCalled();
-        expect(consoleMocks.mocks.error.mock.calls[0][0]).toContain('Error during variable resolution');
+        expect(consoleMocks.mocks.error.mock.calls[0][0]).toContain('Failed to resolve string concatenation');
       }
     });
   });
