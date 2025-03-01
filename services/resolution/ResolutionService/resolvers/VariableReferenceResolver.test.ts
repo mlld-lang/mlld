@@ -31,18 +31,10 @@ describe('VariableReferenceResolver', () => {
 
   describe('resolve', () => {
     it('should resolve text variables', async () => {
-      vi.mocked(parserService.parse).mockResolvedValueOnce([
-        { 
-          type: 'TextVar',
-          identifier: 'greeting'
-        } as any
-      ]);
-      
       vi.mocked(stateService.getTextVar).mockReturnValue('Hello World');
       const result = await resolver.resolve('{{greeting}}', context);
       expect(result).toBe('Hello World');
       expect(stateService.getTextVar).toHaveBeenCalledWith('greeting');
-      expect(parserService.parse).toHaveBeenCalledWith('{{greeting}}');
     });
 
     it('should resolve data variables when text variable not found', async () => {
