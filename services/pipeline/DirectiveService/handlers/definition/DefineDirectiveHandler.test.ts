@@ -10,6 +10,29 @@ import {
 import { DirectiveError } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import type { DirectiveNode } from 'meld-spec';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
+// Import the centralized syntax examples and helpers
+import { defineDirectiveExamples } from '@core/constants/syntax';
+import { getExample, getInvalidExample } from '@tests/utils/syntax-test-helpers.js';
+import { ErrorSeverity } from '@core/errors';
+
+/**
+ * MIGRATION STATUS: Partially Complete
+ * 
+ * This test file is being migrated to use centralized syntax examples from @core/constants/syntax.
+ * 
+ * Completed:
+ * - Basic command handling tests have been migrated to use centralized examples.
+ * - Added the createNodeFromExample helper function.
+ * - Migrated the duplicate parameter validation test to use centralized invalid examples.
+ * 
+ * Not Migrated:
+ * - The "value processing with mock nodes" section is kept for backward compatibility.
+ * - Most metadata handling, validation, state management, and error handling tests are not migrated yet.
+ * 
+ * Notes:
+ * - For invalid syntax tests, we still need to use createDefineDirective since the parser would reject
+ *   truly invalid syntax before it reaches the handler.
+ */
 
 /**
  * Create a Define directive node that matches the structure expected by the handler
@@ -48,6 +71,26 @@ function createDefineDirectiveNode(input: string): DirectiveNode {
   } as DirectiveNode;
 }
 
+/**
+ * Helper function to create real AST nodes using meld-ast
+ */
+const createNodeFromExample = async (code: string): Promise<DirectiveNode> => {
+  try {
+    const { parse } = await import('meld-ast');
+    
+    const result = await parse(code, {
+      trackLocations: true,
+      validateNodes: true,
+      structuredPaths: true
+    });
+    
+    return result.ast[0] as DirectiveNode;
+  } catch (error) {
+    console.error('Error parsing with meld-ast:', error);
+    throw error;
+  }
+};
+
 describe('DefineDirectiveHandler', () => {
   let handler: DefineDirectiveHandler;
   let stateService: ReturnType<typeof createMockStateService>;
@@ -75,7 +118,13 @@ describe('DefineDirectiveHandler', () => {
 
   describe('value processing with modern AST', () => {
     it('should handle basic command definition without parameters', async () => {
-      const node = createDefineDirectiveNode('greet = @run [echo "Hello"]');
+      // MIGRATION LOG:
+      // Original: Used createDefineDirectiveNode with hardcoded values
+      // Migration: Using centralized test examples
+      // Notes: Using the 'simpleCommand' example from centralized examples
+      
+      const example = getExample('define', 'atomic', 'simpleCommand');
+      const node = await createNodeFromExample(example.code);
       
       const context = {
         state: stateService,
@@ -93,7 +142,13 @@ describe('DefineDirectiveHandler', () => {
     });
 
     it('should handle command definition with parameters', async () => {
-      const node = createDefineDirectiveNode('greet(name) = @run [echo "Hello {{name}}"]');
+      // MIGRATION LOG:
+      // Original: Used createDefineDirectiveNode with hardcoded values
+      // Migration: Using centralized test examples
+      // Notes: Using the 'withParameter' example from centralized examples
+      
+      const example = getExample('define', 'atomic', 'withParameter');
+      const node = await createNodeFromExample(example.code);
 
       const context = {
         state: stateService,
@@ -106,12 +161,18 @@ describe('DefineDirectiveHandler', () => {
       const result = await handler.execute(node, context);
       expect(clonedState.setCommand).toHaveBeenCalledWith('greet', {
         parameters: ['name'],
-        command: 'echo "Hello {{name}}"'
+        command: 'echo "Hello, {{name}}!"'
       });
     });
 
     it('should handle command definition with multiple parameters', async () => {
-      const node = createDefineDirectiveNode('greet(first, last) = @run [echo "Hello {{first}} {{last}}"]');
+      // MIGRATION LOG:
+      // Original: Used createDefineDirectiveNode with hardcoded values
+      // Migration: Using centralized test examples
+      // Notes: Using the 'multipleParameters' example from centralized examples
+      
+      const example = getExample('define', 'atomic', 'multipleParameters');
+      const node = await createNodeFromExample(example.code);
 
       const context = {
         state: stateService,
@@ -129,7 +190,15 @@ describe('DefineDirectiveHandler', () => {
     });
     
     it('should handle parameters in quoted strings', async () => {
-      const node = createDefineDirectiveNode('greet(name, message) = @run [echo "Hello {{name}}, {{message}}"]');
+      // MIGRATION LOG:
+      // Original: Used createDefineDirectiveNode with hardcoded values
+      // Migration: Using a customized approach based on the complexData example
+      // Notes: This test is testing parameter handling in quoted strings specifically
+      
+      // For this test, we need something with parameters in quoted strings
+      // Using a modified example with our own parameter pattern
+      const code = `@define greet(name, message) = @run [echo "Hello {{name}}, {{message}}"]`;
+      const node = await createNodeFromExample(code);
 
       const context = {
         state: stateService,
@@ -421,9 +490,19 @@ describe('DefineDirectiveHandler', () => {
     });
 
     it('should reject duplicate parameter names', async () => {
+      // MIGRATION LOG:
+      // Original: Used createDefineDirective with hardcoded values
+      // Migration: Using centralized invalid example for duplicate parameters
+      // Notes: We need to mock the validation service to throw the expected error
+      
+      // Get the invalid example for duplicate parameters
+      const invalidExample = getInvalidExample('define', 'duplicateParameter');
+      
+      // We can't use createNodeFromExample here because the parser would reject this invalid syntax
+      // Instead, we'll create a node that simulates what would happen if the parser allowed it
       const node = createDefineDirective(
-        'greet',
-        'echo "Hello {{name}}"',
+        'bad',
+        'echo "{{name}}"',
         ['name', 'name'],
         createLocation(1, 1, 1, 30)
       );
@@ -433,8 +512,9 @@ describe('DefineDirectiveHandler', () => {
         currentFilePath: 'test.meld'
       };
 
+      // Use the error message from the invalid example
       vi.mocked(validationService.validate).mockRejectedValueOnce(
-        new DirectiveError('Duplicate parameter names are not allowed', 'define')
+        new DirectiveError(invalidExample.expectedError.message, 'define')
       );
 
       await expect(handler.execute(node, context))

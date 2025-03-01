@@ -4,20 +4,22 @@ import {
   dataDirectiveExamples,
   importDirectiveExamples,
   pathDirectiveExamples,
+  defineDirectiveExamples,
   integrationExamples
 } from '@core/constants/syntax';
 import { SyntaxExample, InvalidSyntaxExample } from '@core/constants/syntax/helpers';
 import { ErrorSeverity } from '@core/errors/index.js';
 
 // Define a type to reference the available directive example groups
-export type DirectiveType = 'text' | 'data' | 'import' | 'path' | 'integration';
+export type DirectiveType = 'text' | 'data' | 'import' | 'path' | 'define' | 'integration';
 
 // Map directive types to their example groups
 const directiveExamples = {
   text: textDirectiveExamples,
   data: dataDirectiveExamples,
-  path: pathDirectiveExamples,
   import: importDirectiveExamples,
+  path: pathDirectiveExamples,
+  define: defineDirectiveExamples,
   integration: integrationExamples
 };
 

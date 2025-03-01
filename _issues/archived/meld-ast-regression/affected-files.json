@@ -1,0 +1,23 @@
+{
+  "affectedFiles": [
+    "tests/utils/tests/TestContext.test.ts",
+    "tests/meld-ast-nested-fences.test.ts",
+    "tests/utils/debug/StateHistoryService/StateHistoryService.test.ts",
+    "tests/cli/cli-error-handling.test.ts",
+    "tests/utils/debug/StateDebuggerService/StateDebuggerService.test.ts",
+    "tests/utils/debug/StateVisualizationService/StateVisualizationService.test.ts",
+    "tests/utils/debug/StateTrackingService/StateTrackingService.test.ts"
+  ],
+  "totalFiles": 7,
+  "updateRequired": true,
+  "astChanges": [
+    {
+      "old": "Expected to throw error on bracket notation",
+      "new": "Now supports bracket notation with field type \"index\""
+    },
+    {
+      "old": "fields: [{ type: \"identifier\", value: \"0\" }]",
+      "new": "fields: [{ type: \"index\", value: 0 }]"
+    }
+  ]
+}

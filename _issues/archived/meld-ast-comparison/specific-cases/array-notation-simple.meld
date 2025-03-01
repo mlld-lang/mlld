@@ -1,0 +1,4 @@
+
+@data fruits = ["apple", "banana", "cherry"]
+
+Bracket notation: {{fruits[0]}}, {{fruits[1]}}, {{fruits[2]}}

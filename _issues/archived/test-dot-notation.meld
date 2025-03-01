@@ -1,0 +1,16 @@
+
+@data items = [
+  { "title": "First Item" },
+  { "title": "Second Item" }
+]
+
+@data nested = [
+  ["a", "b"],
+  ["c", "d", "e", "f"]
+]
+
+# Array Access Test
+
+First item: {{items.0.title}}
+Second item: {{items.1.title}}
+Nested value: {{nested.1.3}}
