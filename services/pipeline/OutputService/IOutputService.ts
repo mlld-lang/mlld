@@ -1,7 +1,7 @@
 import type { MeldNode } from 'meld-spec';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 
-export type OutputFormat = 'markdown' | 'llm';
+export type OutputFormat = 'markdown' | 'xml';
 
 export interface OutputOptions {
   /**

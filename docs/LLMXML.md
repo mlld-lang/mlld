@@ -14,7 +14,7 @@ llmxml is a specialized library in our codebase that handles the conversion betw
    - Manages error handling and format conversion failures
 
 2. **CLIService**
-   - Provides format selection options ('markdown' | 'llm')
+   - Provides format selection options ('markdown' | 'xml')
    - Routes output through OutputService for llmxml processing
    - Handles format aliases and defaults
 
@@ -62,7 +62,7 @@ private async convertToLLMXML(
 ### CLI Format Options
 ```typescript
 export interface CLIOptions {
-  format?: 'markdown' | 'llm';  // llm uses llmxml for conversion
+  format?: 'markdown' | 'xml';  // llm uses llmxml for conversion
   // ... other options
 }
 ```
@@ -117,7 +117,7 @@ We use llmxml version ^1.1.2 as specified in our package.json. The library is dy
    - Efficient handling of large documents
 
 2. **Format Selection**
-   - 'llm' format is the default in most cases
+   - 'xml' format is the default in most cases
    - Format selection available via CLI and API
    - Backward compatibility with markdown output
 

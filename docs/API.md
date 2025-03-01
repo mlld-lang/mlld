@@ -28,7 +28,7 @@ async function main(
   - `fs` - Custom file system implementation
   - `services` - Custom service implementations
   - `transformation` - Whether to enable transformation mode (default: false)
-  - `format` - Output format ('md' or 'llm')
+  - `format` - Output format ('md' or 'xml')
   - `debug` - Whether to enable debug services (default: false)
 
 **Returns:**
@@ -182,7 +182,7 @@ const markdown = await main('path/to/file.meld', {
 
 // Get XML (LLM) output
 const xml = await main('path/to/file.meld', {
-  format: 'llm'
+  format: 'xml'
 });
 ```
 

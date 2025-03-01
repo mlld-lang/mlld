@@ -25,7 +25,7 @@ const consoleLog = vi.spyOn(console, 'log');
 
 const defaultOptions = {
   input: 'test.meld',
-  format: 'llm' as const
+  format: 'xml' as const
 };
 
 // Create a proper async iterator implementation for watching

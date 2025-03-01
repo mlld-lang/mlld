@@ -23,7 +23,7 @@ import { ProcessOptions } from '@core/types/index.js';
 export interface CLIOptions {
   input?: string;
   output?: string;
-  format?: 'xml' | 'llmxml' | 'llm' | 'markdown' | 'md';
+  format?: 'xml' | 'llmxml' | 'markdown' | 'md';
   strict?: boolean;
   stdout?: boolean;
   version?: boolean;
@@ -54,10 +54,8 @@ export class CLIService implements ICLIService {
       case 'md':
         return 'markdown';
       case 'xml':
-      case 'llm': // For backward compatibility
-        return 'xml';
       default:
-        throw new Error(`Invalid format: ${format}. Must be 'markdown', 'md', 'xml', or 'llm'`);
+        throw new Error(`Invalid format: ${format}. Must be 'markdown', 'md', or 'xml'`);
     }
   }
 
@@ -68,8 +66,6 @@ export class CLIService implements ICLIService {
         return '.md';
       case 'xml':
         return '.xml';
-      case 'llm':
-        return '.llm';
       default:
         return '.xml'; // Default to XML
     }

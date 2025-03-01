@@ -32,8 +32,6 @@ export class OutputService implements IOutputService {
     this.registerFormat('markdown', this.convertToMarkdown.bind(this));
     this.registerFormat('md', this.convertToMarkdown.bind(this));
     this.registerFormat('xml', this.convertToXML.bind(this));
-    // Keep 'llm' as an alias for 'xml' for backward compatibility
-    this.registerFormat('llm', this.convertToXML.bind(this));
 
     logger.debug('OutputService initialized with default formatters', {
       formats: Array.from(this.formatters.keys())

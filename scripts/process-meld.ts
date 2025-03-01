@@ -48,9 +48,9 @@ async function run() {
   // Process options
   const formatArg = args.find(arg => arg.startsWith('--format='))?.split('=')[1];
   // Validate format is a valid OutputFormat
-  const format = (formatArg === 'markdown' || formatArg === 'llm') 
+  const format = (formatArg === 'markdown' || formatArg === 'xml') 
     ? formatArg 
-    : 'llm';
+    : 'xml';
   
   const transform = args.includes('--transform');
   

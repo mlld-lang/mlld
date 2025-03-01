@@ -165,7 +165,7 @@ const { state, output } = await runMeld('path/to/file.meld');
 
 // Run with custom options
 const { state, output } = await runMeld('path/to/file.meld', {
-  format: 'md',  // or 'llm'
+  format: 'md',  // or 'xml'
   initialState: new InterpreterState()
 });
 

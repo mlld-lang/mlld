@@ -17,7 +17,7 @@ import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js
 interface CLIOptions {
   input: string;
   output?: string;
-  format?: 'markdown' | 'md' | 'llm';
+  format?: 'markdown' | 'md' | 'xml';
   stdout?: boolean;
   verbose?: boolean;
   debug?: boolean;
@@ -32,16 +32,14 @@ interface CLIOptions {
 /**
  * Normalize format string to supported output format
  */
-function normalizeFormat(format?: string): 'markdown' | 'llm' {
+function normalizeFormat(format?: string): 'markdown' | 'xml' {
   if (!format) return 'markdown';
   
   switch (format.toLowerCase()) {
     case 'md':
     case 'markdown':
       return 'markdown';
-    case 'llm':
-      return 'llm';
-    case 'xml': // For backward compatibility
+    case 'xml':
       return 'markdown'; // Default to markdown for XML format
     default:
       return 'markdown';
@@ -51,12 +49,12 @@ function normalizeFormat(format?: string): 'markdown' | 'llm' {
 /**
  * Get file extension for the given format
  */
-function getOutputExtension(format: 'markdown' | 'llm'): string {
+function getOutputExtension(format: 'markdown' | 'xml'): string {
   switch (format) {
     case 'markdown':
       return '.md';
-    case 'llm':
-      return '.llm';
+    case 'xml':
+      return '.xml';
     default:
       return '.md';
   }

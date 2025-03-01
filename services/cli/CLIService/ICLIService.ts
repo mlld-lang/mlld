@@ -1,7 +1,7 @@
 export interface CLIOptions {
   input: string;
   output?: string;
-  format?: 'md' | 'llm';
+  format?: 'md' | 'xml';
   stdout?: boolean;
   watch?: boolean;
   verbose?: boolean;

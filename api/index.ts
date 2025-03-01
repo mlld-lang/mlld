@@ -216,7 +216,7 @@ export async function main(filePath: string, options: ProcessOptions = {}): Prom
       : ast;
     
     // Convert to desired format using the updated state
-    const converted = await services.output.convert(nodesToProcess, resultState, options.format || 'llm');
+    const converted = await services.output.convert(nodesToProcess, resultState, options.format || 'xml');
     
     return converted;
   } catch (error) {

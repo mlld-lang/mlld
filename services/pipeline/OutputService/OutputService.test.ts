@@ -242,8 +242,6 @@ describe('OutputService', () => {
     it('should have default formats registered', () => {
       expect(service.supportsFormat('markdown')).toBe(true);
       expect(service.supportsFormat('xml')).toBe(true);
-      // Backward compatibility
-      expect(service.supportsFormat('llm')).toBe(true);
     });
 
     it('should allow registering custom formats', async () => {
@@ -261,7 +259,6 @@ describe('OutputService', () => {
       const formats = service.getSupportedFormats();
       expect(formats).toContain('markdown');
       expect(formats).toContain('xml');
-      expect(formats).toContain('llm'); // Backward compatibility
     });
   });
 

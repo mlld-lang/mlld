@@ -191,7 +191,7 @@ async function main() {
   
   // Get format option
   const formatArg = args.find(arg => arg.startsWith('--format='))?.split('=')[1];
-  const format = (formatArg === 'llm' || formatArg === 'xml') ? 'xml' : 'markdown';
+  const format = (formatArg === 'xml') ? 'xml' : 'markdown';
   
   try {
     // Read the input file

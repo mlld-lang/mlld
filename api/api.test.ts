@@ -11,7 +11,7 @@ import { TestDebuggerService } from '@tests/utils/debug/TestDebuggerService.js';
 // Define the type for main function options
 type MainOptions = {
   fs?: NodeFileSystem;
-  format?: 'xml' | 'llm';
+  format?: 'xml';
   services?: any;
 };
 
@@ -127,7 +127,7 @@ describe('SDK Integration Tests', () => {
       
       const result = await main(testFilePath, {
         fs: context.fs,
-        format: 'llm',
+        format: 'xml',
         services: context.services as any, // Cast to any to avoid type errors
         debug: true
       });
@@ -200,7 +200,7 @@ More text`;
       
       const result = await main(testFilePath, {
         fs: context.fs,
-        format: 'llm',
+        format: 'xml',
         services: context.services as any, // Cast to any to avoid type errors
         debug: true
       });
