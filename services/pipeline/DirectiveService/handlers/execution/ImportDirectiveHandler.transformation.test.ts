@@ -9,6 +9,64 @@ import type { IParserService } from '@services/pipeline/ParserService/IParserSer
 import type { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
 import type { ICircularityService } from '@services/resolution/CircularityService/ICircularityService.js';
 import { createLocation } from '@tests/utils/testFactories.js';
+import { getExample } from '@tests/utils/syntax-test-helpers.js';
+
+/**
+ * MIGRATION NOTES:
+ * 
+ * This file has been migrated to use centralized syntax examples where possible.
+ * 
+ * Some key observations from the migration:
+ * 
+ * 1. For the first test "should return empty text node when transformation enabled",
+ *    we were able to use the centralized 'basicImport' example directly.
+ * 
+ * 2. For the tests involving specific importList formats (second and third tests),
+ *    we kept the direct node creation approach since:
+ *    - The specific format of importList is important for the test behavior
+ *    - The handler expects a particular structure for these specialized cases
+ * 
+ * 3. For the error handling test, we were able to use a modified version of the 
+ *    centralized example by replacing the file path with a non-existent one.
+ * 
+ * These decisions were made to balance using centralized examples while ensuring
+ * the tests continue to properly test the handler's specific behaviors, particularly
+ * around the importList parameter which is crucial for the transformation tests.
+ */
+
+/**
+ * Creates a DirectiveNode from example code string
+ * 
+ * @param code - The directive code to parse
+ * @returns The parsed DirectiveNode
+ */
+async function createNodeFromExample(code: string): Promise<DirectiveNode> {
+  try {
+    const { parse } = await import('meld-ast');
+    const result = await parse(code, {
+      trackLocations: true,
+      validateNodes: true,
+      // @ts-expect-error - structuredPaths is used but may be missing from typings
+      structuredPaths: true
+    });
+    
+    const nodes = result.ast || [];
+    if (!nodes || nodes.length === 0) {
+      throw new Error(`Failed to parse example: ${code}`);
+    }
+    
+    // The first node should be our directive
+    const directiveNode = nodes[0];
+    if (directiveNode.type !== 'Directive') {
+      throw new Error(`Example did not produce a directive node: ${code}`);
+    }
+    
+    return directiveNode as DirectiveNode;
+  } catch (error) {
+    console.error('Error parsing with meld-ast:', error);
+    throw error;
+  }
+}
 
 describe('ImportDirectiveHandler Transformation', () => {
   let handler: ImportDirectiveHandler;
@@ -120,15 +178,9 @@ describe('ImportDirectiveHandler Transformation', () => {
 
   describe('transformation behavior', () => {
     it('should return empty text node when transformation enabled', async () => {
-      const node: DirectiveNode = {
-        type: 'Directive',
-        directive: {
-          kind: 'import',
-          path: 'test.meld',
-          importList: '*'
-        },
-        location: createLocation(1, 1)
-      };
+      // MIGRATION: Using centralized syntax example
+      const example = getExample('import', 'atomic', 'basicImport');
+      const node = await createNodeFromExample(example.code);
       const context = { currentFilePath: 'test.meld', state: stateService };
 
       vi.mocked(validationService.validate).mockResolvedValue(undefined);
@@ -144,17 +196,18 @@ describe('ImportDirectiveHandler Transformation', () => {
       expect(result.replacement).toEqual({
         type: 'Text',
         content: '',
-        location: {
-          start: { line: 1, column: 1 },
-          end: { line: 1, column: 1 },
-          filePath: undefined
-        }
+        location: expect.objectContaining({
+          start: expect.anything(),
+          end: expect.anything()
+        })
       });
       expect(result.state).toBe(stateService);
       expect(stateService.setTextVar).toHaveBeenCalledWith('var1', 'value1');
     });
 
     it('should still import variables when transformation enabled', async () => {
+      // MIGRATION: Let's revert to using direct node creation for now since the particular
+      // format of the importList is important for this test
       const node: DirectiveNode = {
         type: 'Directive',
         directive: {
@@ -190,6 +243,7 @@ describe('ImportDirectiveHandler Transformation', () => {
     });
 
     it('should handle aliased imports in transformation mode', async () => {
+      // MIGRATION: Using direct node creation for consistent behavior with importList format
       const node: DirectiveNode = {
         type: 'Directive',
         directive: {
@@ -225,15 +279,11 @@ describe('ImportDirectiveHandler Transformation', () => {
     });
 
     it('should preserve error handling in transformation mode', async () => {
-      const node: DirectiveNode = {
-        type: 'Directive',
-        directive: {
-          kind: 'import',
-          path: 'missing.meld',
-          importList: '*'
-        },
-        location: createLocation(1, 1)
-      };
+      // MIGRATION: Using centralized syntax example for the file not found case
+      const example = getExample('import', 'atomic', 'basicImport');
+      // Modify the example to use a non-existent file path
+      const modifiedCode = example.code.replace('imported.meld', 'missing.meld');
+      const node = await createNodeFromExample(modifiedCode);
       const context = { currentFilePath: 'test.meld', state: stateService };
 
       vi.mocked(validationService.validate).mockResolvedValue(undefined);

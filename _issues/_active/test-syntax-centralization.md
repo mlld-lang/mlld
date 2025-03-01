@@ -27,7 +27,7 @@
 
 ### Transformation Tests
 - 🔲 DirectiveHandler transformation tests:
-  - 🔲 `ImportDirectiveHandler.transformation.test.ts`
+  - ✅ `ImportDirectiveHandler.transformation.test.ts`
   - 🔲 `EmbedDirectiveHandler.transformation.test.ts`
   - 🔲 `RunDirectiveHandler.transformation.test.ts`
 
