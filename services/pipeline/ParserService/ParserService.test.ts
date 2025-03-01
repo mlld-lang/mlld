@@ -3,6 +3,13 @@ import { ParserService } from './ParserService.js';
 import { MeldParseError } from '@core/errors/MeldParseError.js';
 import type { MeldNode, DirectiveNode, TextNode, CodeFenceNode } from 'meld-spec';
 import type { Location, Position } from '@core/types/index.js';
+// Import the centralized syntax examples and helpers
+import { 
+  textDirectiveExamples, 
+  codefenceExamples, 
+  contentExamples 
+} from '@core/constants/syntax';
+import { getExample, getInvalidExample } from '@tests/utils/syntax-test-helpers.js';
 
 // Define a type that combines the meld-spec Location with our filePath
 type LocationWithFilePath = {
@@ -51,15 +58,18 @@ describe('ParserService', () => {
 
   describe('parse', () => {
     it('should parse text content', async () => {
-      const content = 'Hello world';
-      const mockResult = [{
-        type: 'Text',
-        content: 'Hello world',
-        location: {
-          start: { line: 1, column: 1 },
-          end: { line: 1, column: 12 }
+      const content = contentExamples.atomic.simpleParagraph.code;
+      
+      const mockResult = [
+        {
+          type: 'Text',
+          content: 'This is a simple paragraph of text.',
+          location: {
+            start: { line: 1, column: 1 },
+            end: { line: 1, column: 36 }
+          }
         }
-      }];
+      ];
 
       const result = await service.parse(content);
       expect(result).toEqual(mockResult);
