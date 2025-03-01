@@ -67,6 +67,11 @@ export const combinations = {
       'Using variables in code fence',
       "```{{language}}\nconsole.log('Using variable for language');\n```"
     )
+  ),
+  
+  equalBacktickCounts: createExample(
+    'Code fences with equal backtick counts',
+    "```\nouter\n```\ninner\n```\n```"
   )
 };
 

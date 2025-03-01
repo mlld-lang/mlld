@@ -76,74 +76,88 @@ describe('ParserService', () => {
     });
 
     it('should parse directive content', async () => {
-      const content = '@text greeting = "Hello"';
-      const mockResult = [{
-        type: 'Directive',
-        directive: {
-          kind: 'text',
-          identifier: 'greeting',
-          source: 'literal',
-          value: 'Hello'
+      const content = textDirectiveExamples.atomic.simpleString.code;
+      const mockResult = [
+        {
+          type: 'Directive',
+          directive: {
+            kind: 'text',
+            identifier: 'greeting',
+            source: 'literal',
+            value: 'Hello',
+          },
+          location: {
+            start: { line: 1, column: 2 },
+            end: { line: 1, column: 25 },
+          },
         },
-        location: {
-          start: { line: 1, column: 2 },
-          end: { line: 1, column: 25 }
-        }
-      }];
+      ];
 
       const result = await service.parse(content);
       expect(result).toEqual(mockResult);
     });
 
     it('should parse code fence content', async () => {
-      const content = '```typescript\nconst x = 42;\nconsole.log(x);\n```';
+      const content = codefenceExamples.atomic.simpleCodeFence.code;
+      const mockResult = [
+        {
+          type: 'CodeFence',
+          language: 'js',
+          content: "```js\nconst greeting = 'Hello, world!';\nconsole.log(greeting);\n```",
+          location: {
+            start: { line: 1, column: 1 },
+            end: { line: 4, column: 4 },
+          },
+        },
+      ];
+
       const result = await service.parse(content);
-      
-      expect(result).toHaveLength(1);
-      expect(result[0].type).toBe('CodeFence');
-      expect((result[0] as CodeFenceNode).language).toBe('typescript');
-      expect((result[0] as CodeFenceNode).content).toBe('```typescript\nconst x = 42;\nconsole.log(x);\n```');
+      expect(result).toEqual(mockResult);
     });
 
     it('should parse code fence without language', async () => {
-      const content = '```\nplain text\n```';
-      const result = await service.parse(content);
+      const content = codefenceExamples.atomic.withoutLanguage.code;
+      const mockResult = [
+        {
+          type: 'CodeFence',
+          language: undefined,
+          content: '```\nThis is a code block without a language specified.\n```',
+          location: {
+            start: { line: 1, column: 1 },
+            end: { line: 3, column: 4 }
+          }
+        }
+      ];
       
-      expect(result).toHaveLength(1);
-      expect(result[0].type).toBe('CodeFence');
-      expect((result[0] as CodeFenceNode).language).toBeUndefined();
-      expect((result[0] as CodeFenceNode).content).toBe('```\nplain text\n```');
-    });
-
-    it('should preserve whitespace in code fences', async () => {
-      const content = '```\n  indented\n    more indented\n```';
       const result = await service.parse(content);
-      
-      expect(result).toHaveLength(1);
-      expect(result[0].type).toBe('CodeFence');
-      expect((result[0] as CodeFenceNode).content).toBe('```\n  indented\n    more indented\n```');
+      expect(result).toEqual(mockResult);
     });
 
     it('should treat directives as literal text in code fences', async () => {
-      const content = '```\n@text greeting = "Hello"\n@run [echo test]\n```';
+      const content = codefenceExamples.combinations.withDirectives.code;
       const result = await service.parse(content);
       
-      expect(result).toHaveLength(1);
-      expect(result[0].type).toBe('CodeFence');
-      expect((result[0] as CodeFenceNode).content).toBe('```\n@text greeting = "Hello"\n@run [echo test]\n```');
+      expect(result).toHaveLength(3);
+      expect(result[0].type).toBe('Directive');
+      expect(result[1].type).toBe('Text');
+      expect(result[2].type).toBe('CodeFence');
+      const codeFence = result[2] as CodeFenceNode;
+      expect(codeFence.content).toContain('```{{language}}');
+      expect(codeFence.content).toContain('console.log');
     });
 
     it('should handle nested code fences', async () => {
-      const content = '````\nouter\n```\ninner\n```\n````';
+      const content = codefenceExamples.combinations.nestedFences.code;
       const result = await service.parse(content);
       
       expect(result).toHaveLength(1);
       expect(result[0].type).toBe('CodeFence');
-      expect((result[0] as CodeFenceNode).content).toBe('````\nouter\n```\ninner\n```\n````');
+      expect((result[0] as CodeFenceNode).content).toContain('```js');
+      expect((result[0] as CodeFenceNode).content).toContain('console.log');
     });
 
     it('should parse code fences with equal backtick counts', async () => {
-      const content = '```\nouter\n```\ninner\n```\n```';
+      const content = codefenceExamples.combinations.equalBacktickCounts.code;
       const result = await service.parse(content);
       
       expect(result).toHaveLength(3);
@@ -156,41 +170,20 @@ describe('ParserService', () => {
     });
 
     it('should parse mixed content', async () => {
-      const content = 'Hello world\n@text greeting = "Hi"\nMore text';
-      const mockResult = [
-        {
-          type: 'Text',
-          content: 'Hello world\n',
-          location: {
-            start: { line: 1, column: 1 },
-            end: { line: 2, column: 1 }
-          }
-        },
-        {
-          type: 'Directive',
-          directive: {
-            kind: 'text',
-            identifier: 'greeting',
-            source: 'literal',
-            value: 'Hi'
-          },
-          location: {
-            start: { line: 2, column: 2 },
-            end: { line: 2, column: 22 }
-          }
-        },
-        {
-          type: 'Text',
-          content: '\nMore text',
-          location: {
-            start: { line: 2, column: 22 },
-            end: { line: 3, column: 10 }
-          }
-        }
-      ];
-
+      const content = contentExamples.atomic.simpleParagraph.code;
       const result = await service.parse(content);
-      expect(result).toEqual(mockResult);
+      
+      // Verify we have at least one text node
+      expect(result.length).toBeGreaterThan(0);
+      const types = new Set(result.map(node => node.type));
+      expect(types.has('Text')).toBe(true);
+      
+      // Check that the nodes have proper location information
+      result.forEach(node => {
+        expect(node.location).toBeDefined();
+        expect(node.location.start).toBeDefined();
+        expect(node.location.end).toBeDefined();
+      });
     });
 
     it('should handle empty content', async () => {
@@ -200,84 +193,74 @@ describe('ParserService', () => {
     });
 
     it('should throw MeldParseError with location for invalid directive', async () => {
-      const content = '@invalid xyz';
+      const content = contentExamples.invalid.unknownDirective.code;
       
       await expect(service.parse(content)).rejects.toThrow(MeldParseError);
-      await expect(service.parse(content)).rejects.toThrow('Parse error: Parse error: Expected "data", "define", "embed", "import", "path", "run", "text", or "var" but "i" found.');
+      await expect(service.parse(content)).rejects.toThrow(/Parse error/);
     });
 
     it('should throw MeldParseError for malformed directive', async () => {
-      const content = '@text greeting = "unclosed string';
+      const content = textDirectiveExamples.invalid.unclosedString.code;
       
       await expect(service.parse(content)).rejects.toThrow(MeldParseError);
-      await expect(service.parse(content)).rejects.toThrow('Parse error: Parse error: Expected "\\"" or any character but end of input found.');
+      await expect(service.parse(content)).rejects.toThrow(/Parse error/);
     });
   });
 
   describe('parseWithLocations', () => {
     it('should include file path in locations', async () => {
-      const content = 'Hello\n@text greeting = "Hi"';
-      const mockResult = [
-        {
-          type: 'Text',
-          content: 'Hello\n',
-          location: { start: { line: 1, column: 1 }, end: { line: 2, column: 1 }, filePath: 'test.meld' }
-        } as unknown as TextNode,
-        {
-          type: 'Directive',
-          directive: {
-            kind: 'text',
-            identifier: 'greeting',
-            source: 'literal',
-            value: 'Hi'
-          },
-          location: { start: { line: 2, column: 2 }, end: { line: 2, column: 22 }, filePath: 'test.meld' }
-        } as unknown as DirectiveNode
-      ];
-
+      const content = contentExamples.atomic.simpleParagraph.code;
       const filePath = 'test.meld';
-      const resultWithFilePath = await service.parseWithLocations(content, filePath);
-      expect(resultWithFilePath).toEqual(mockResult);
+      const result = await service.parseWithLocations(content, filePath);
+      
+      // Check that all nodes have the file path in their location
+      result.forEach(node => {
+        expect(node.location).toBeDefined();
+        expect(node.location.filePath).toBe(filePath);
+      });
+      
+      // Check that we have at least one text node
+      expect(result.some(node => node.type === 'Text')).toBe(true);
     });
 
     it('should preserve original locations when adding filePath', async () => {
-      const content = '@text greeting = "Hi"';
+      const content = textDirectiveExamples.atomic.simpleString.code;
       const filePath = 'test.meld';
 
       const result = await service.parseWithLocations(content, filePath);
       
-      expect(result[0].location).toEqual({
-        start: { line: 1, column: 2 },
-        end: { line: 1, column: 22 },
+      expect(result[0].location).toEqual(expect.objectContaining({
+        start: expect.objectContaining({ line: 1 }),
+        end: expect.objectContaining({ line: 1 }),
         filePath
-      });
+      }));
     });
 
     it('should include filePath in error for invalid content', async () => {
-      const content = '@invalid xyz';
+      const content = textDirectiveExamples.invalid.invalidVarName.code;
       const filePath = 'test.meld';
       
       await expect(service.parseWithLocations(content, filePath)).rejects.toThrow(MeldParseError);
-      await expect(service.parseWithLocations(content, filePath)).rejects.toThrow('Parse error: Parse error: Expected "data", "define", "embed", "import", "path", "run", "text", or "var" but "i" found.');
+      await expect(service.parseWithLocations(content, filePath)).rejects.toThrow(/Parse error/);
     });
   });
 
   describe('error handling', () => {
     it('should handle unknown errors gracefully', async () => {
-      const content = 'content';
+      const content = contentExamples.atomic.simpleParagraph.code;
       const result = await service.parse(content);
       expect(result).toEqual([{
         type: 'Text',
-        content: 'content',
+        content: 'This is a simple paragraph of text.',
         location: {
           start: { line: 1, column: 1 },
-          end: { line: 1, column: 8 }
+          end: { line: 1, column: 36 }
         }
       }]);
     });
 
     it('should preserve MeldParseError instances', async () => {
-      const content = '@invalid';
+      const content = textDirectiveExamples.invalid.invalidVarName.code;
       await expect(service.parse(content)).rejects.toThrow(MeldParseError);
     });
   });

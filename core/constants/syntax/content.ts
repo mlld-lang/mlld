@@ -1,8 +1,13 @@
 import { 
   createExample, 
+  createInvalidExample,
   combineExamples,
   SyntaxExampleGroup 
 } from './helpers';
+import { 
+  MeldParseError, 
+  ErrorSeverity 
+} from '../../errors';
 
 /**
  * Collection of atomic content examples
@@ -184,10 +189,29 @@ console.log(greeting);
 };
 
 /**
+ * Collection of invalid content examples
+ * 
+ * These examples demonstrate content that should result in parsing errors
+ */
+export const invalid = {
+  unknownDirective: createInvalidExample(
+    'Unknown directive type',
+    '@invalid xyz',
+    {
+      type: MeldParseError,
+      severity: ErrorSeverity.Fatal,
+      code: 'SYNTAX_ERROR',
+      message: 'Unknown directive type'
+    }
+  )
+};
+
+/**
  * Complete collection of content examples
  */
 export const contentExamples: SyntaxExampleGroup = {
   atomic,
   combinations,
-  withEmbeddedDirectives
+  withEmbeddedDirectives,
+  invalid
 }; 

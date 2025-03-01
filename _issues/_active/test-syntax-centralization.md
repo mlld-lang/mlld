@@ -18,8 +18,8 @@
   - ✅ `services/resolution/ResolutionService/resolvers/CommandResolver.test.ts`
   - 🔲 `services/cli/CLIService/CLIService.test.ts`
   - 🔲 `services/pipeline/OutputService/OutputService.test.ts`
-  - 🔲 `services/pipeline/ParserService/ParserService.test.ts`
-  - 🔲 `services/pipeline/InterpreterService/InterpreterService.integration.test.ts`
+  - ✅ `services/pipeline/ParserService/ParserService.test.ts`
+  - 🚧 `services/pipeline/InterpreterService/InterpreterService.integration.test.ts` (claimed already)
 
 - 🔲 API and Integration tests:
   - 🔲 `api/api.test.ts`
