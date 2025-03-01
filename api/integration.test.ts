@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { main } from './index.js';
 import { TestContext } from '@tests/utils/index.js';
-import type { ProcessOptions } from '@core/types/index.js';
+import type { ProcessOptions, Services } from '@core/types/index.js';
 import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
 import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
 import path from 'path';
@@ -29,6 +29,7 @@ describe('API Integration Tests', () => {
 
   describe('Variable Definitions and References', () => {
     it('should handle text variable definitions and references', async () => {
+      // Use direct content instead of examples to isolate the issue
       const content = `
         @text greeting = "Hello"
         @text subject = "World"
@@ -38,34 +39,41 @@ describe('API Integration Tests', () => {
       `;
       await context.writeFile('test.meld', content);
       
+      // Explicitly enable transformation in the context
+      context.enableTransformation();
+      
+      // Log the transformation state before calling main
+      console.log('Transformation enabled in context:', context.services.state.isTransformationEnabled());
+      
       const result = await main('test.meld', {
         fs: context.fs,
-        services: context.services,
-        transformation: true
+        services: context.services as unknown as Partial<Services>,
+        transformation: true // Explicitly enable transformation in options
       });
+      
+      // Log the result for debugging
+      console.log('Result:', result);
       
       // Verify output contains the resolved variable references
       expect(result.trim()).toBe('Hello, World!');
     });
     
     it('should handle data variable definitions and field access', async () => {
-      // Import examples from centralized location
-      const { getExample } = await import('@tests/utils/syntax-test-helpers.js');
-      const textExample = getExample('text', 'atomic', 'simpleString');
-      const dataExample = getExample('data', 'atomic', 'simpleObject');
-      
+      // Use hardcoded content instead of examples
       const content = `
-${textExample.code}
-${dataExample.code}
-Some text content
-@run [echo test]
-More text`;
+        @text greeting = "Hello"
+        @data user = { "name": "Test User", "id": 123 }
+        
+        Some text content
+        @run [echo test]
+        More text
+      `;
       await context.writeFile('test.meld', content);
       
       // context.disableTransformation(); // Explicitly disable transformation
       const result = await main('test.meld', {
         fs: context.fs,
-        services: context.services,
+        services: context.services as unknown as Partial<Services>,
         transformation: true
       });
       
@@ -79,7 +87,7 @@ More text`;
     
     it('should handle complex nested data structures', async () => {
       // Import examples from centralized location
-      const { getExample } = await import('@tests/utils/syntax-test-helpers.js');
+      const { getExample } = await import('../tests/utils/syntax-test-helpers.js');
       const textExample = getExample('text', 'atomic', 'simpleString');
       
       // Use a more complex data example for nested structures
@@ -100,7 +108,7 @@ More text`;
       // context.disableTransformation(); // Explicitly disable transformation
       const result = await main('test.meld', {
         fs: context.fs,
-        services: context.services,
+        services: context.services as unknown as Partial<Services>,
         transformation: true
       });
       
@@ -116,7 +124,7 @@ More text`;
   describe('Path Handling', () => {
     it('should handle path variables with special $PROJECTPATH syntax', async () => {
       // Import examples from centralized location
-      const { getExample } = await import('@tests/utils/syntax-test-helpers.js');
+      const { getExample } = await import('../tests/utils/syntax-test-helpers.js');
       const pathExample = getExample('path', 'atomic', 'projectRelativePath');
       
       const content = `
@@ -130,7 +138,7 @@ More text`;
       // context.disableTransformation(); // Explicitly disable transformation
       const result = await main('test.meld', {
         fs: context.fs,
-        services: context.services,
+        services: context.services as unknown as Partial<Services>,
         transformation: true
       });
       
@@ -142,7 +150,7 @@ More text`;
     
     it('should handle path variables with special $. alias syntax', async () => {
       // Import examples from centralized location
-      const { getExample } = await import('@tests/utils/syntax-test-helpers.js');
+      const { getExample } = await import('../tests/utils/syntax-test-helpers.js');
       const pathExample = getExample('path', 'atomic', 'dotAlias');
       
       const content = `
@@ -156,7 +164,7 @@ More text`;
       // context.disableTransformation(); // Explicitly disable transformation
       const result = await main('test.meld', {
         fs: context.fs,
-        services: context.services,
+        services: context.services as unknown as Partial<Services>,
         transformation: true
       });
       
@@ -168,7 +176,7 @@ More text`;
     
     it('should handle path variables with special $HOMEPATH syntax', async () => {
       // Import examples from centralized location
-      const { getExample } = await import('@tests/utils/syntax-test-helpers.js');
+      const { getExample } = await import('../tests/utils/syntax-test-helpers.js');
       const pathExample = getExample('path', 'atomic', 'homeRelativePath');
       
       const content = `
@@ -182,7 +190,7 @@ More text`;
       // context.disableTransformation(); // Explicitly disable transformation
       const result = await main('test.meld', {
         fs: context.fs,
-        services: context.services,
+        services: context.services as unknown as Partial<Services>,
         transformation: true
       });
       
@@ -197,7 +205,7 @@ More text`;
     
     it('should handle path variables with special $~ alias syntax', async () => {
       // Import examples from centralized location
-      const { getExample } = await import('@tests/utils/syntax-test-helpers.js');
+      const { getExample } = await import('../tests/utils/syntax-test-helpers.js');
       const pathExample = getExample('path', 'atomic', 'tildeAlias');
       
       const content = `
@@ -211,7 +219,7 @@ More text`;
       // context.disableTransformation(); // Explicitly disable transformation
       const result = await main('test.meld', {
         fs: context.fs,
-        services: context.services,
+        services: context.services as unknown as Partial<Services>,
         transformation: true
       });
       
@@ -233,7 +241,7 @@ More text`;
       context.disableTransformation(); // Explicitly disable transformation
       await expect(main('test.meld', {
         fs: context.fs,
-        services: context.services,
+        services: context.services as unknown as Partial<Services>,
         transformation: false
       })).rejects.toThrow(/Path directive must use a special path variable/);
     });
@@ -247,7 +255,7 @@ More text`;
       context.disableTransformation(); // Explicitly disable transformation
       await expect(main('test.meld', {
         fs: context.fs,
-        services: context.services,
+        services: context.services as unknown as Partial<Services>,
         transformation: false
       })).rejects.toThrow(/Path cannot contain relative segments/);
     });
@@ -256,7 +264,7 @@ More text`;
   describe('Import Handling', () => {
     it('should handle simple imports', async () => {
       // Import examples from centralized location
-      const { getExample } = await import('@tests/utils/syntax-test-helpers.js');
+      const { getExample } = await import('../tests/utils/syntax-test-helpers.js');
       const textExample = getExample('text', 'atomic', 'simpleString');
       const importExample = getExample('import', 'atomic', 'simplePath');
       
@@ -278,7 +286,7 @@ More text`;
       // context.disableTransformation(); // Explicitly disable transformation
       const result = await main('test.meld', {
         fs: context.fs,
-        services: context.services,
+        services: context.services as unknown as Partial<Services>,
         transformation: true
       });
       
@@ -289,7 +297,7 @@ More text`;
     
     it('should handle nested imports with proper scope inheritance', async () => {
       // Import examples from centralized location
-      const { getExample } = await import('@tests/utils/syntax-test-helpers.js');
+      const { getExample } = await import('../tests/utils/syntax-test-helpers.js');
       const textExample = getExample('text', 'atomic', 'simpleString');
       const importExample = getExample('import', 'atomic', 'simplePath');
       
@@ -338,7 +346,7 @@ More text`;
       // context.disableTransformation(); // Explicitly disable transformation
       const result = await main('test.meld', {
         fs: context.fs,
-        services: context.services,
+        services: context.services as unknown as Partial<Services>,
         transformation: true
       });
       
@@ -372,7 +380,7 @@ More text`;
       context.disableTransformation(); // Explicitly disable transformation
       await expect(main('test.meld', {
         fs: context.fs,
-        services: context.services,
+        services: context.services as unknown as Partial<Services>,
         transformation: false
       })).rejects.toThrow(/Circular import detected/);
     });
@@ -381,7 +389,7 @@ More text`;
   describe('Command Execution', () => {
     it('should handle @run directives', async () => {
       // Import examples from centralized location
-      const { getExample } = await import('@tests/utils/syntax-test-helpers.js');
+      const { getExample } = await import('../tests/utils/syntax-test-helpers.js');
       const runExample = getExample('run', 'atomic', 'simpleCommand');
       
       const content = `
@@ -392,7 +400,7 @@ More text`;
       // context.disableTransformation(); // Explicitly disable transformation
       const result = await main('test.meld', {
         fs: context.fs,
-        services: context.services,
+        services: context.services as unknown as Partial<Services>,
         transformation: true
       });
       
@@ -404,7 +412,7 @@ More text`;
     
     it('should handle @define and command execution', async () => {
       // Import examples from centralized location
-      const { getExample } = await import('@tests/utils/syntax-test-helpers.js');
+      const { getExample } = await import('../tests/utils/syntax-test-helpers.js');
       const defineExample = getExample('define', 'atomic', 'simpleCommand');
       const runExample = getExample('run', 'atomic', 'commandReference');
       
@@ -423,14 +431,14 @@ More text`;
       // we'll check for a relevant error
       await expect(main('test.meld', {
         fs: context.fs,
-        services: context.services,
+        services: context.services as unknown as Partial<Services>,
         transformation: true
       })).rejects.toThrow(/Command execution not supported/);
     });
     
     it('should handle commands with parameters', async () => {
       // Import examples from centralized location
-      const { getExample } = await import('@tests/utils/syntax-test-helpers.js');
+      const { getExample } = await import('../tests/utils/syntax-test-helpers.js');
       const defineExample = getExample('define', 'atomic', 'commandWithParams');
       const textExample = getExample('text', 'atomic', 'user');
       const runExample = getExample('run', 'atomic', 'commandWithArguments');
@@ -452,7 +460,7 @@ More text`;
       // we'll check for a relevant error
       await expect(main('test.meld', {
         fs: context.fs,
-        services: context.services,
+        services: context.services as unknown as Partial<Services>,
         transformation: true
       })).rejects.toThrow(/Command execution not supported/);
     });
@@ -461,7 +469,7 @@ More text`;
   describe('Embed Handling', () => {
     it('should handle @embed directives', async () => {
       // Import examples from centralized location
-      const { getExample } = await import('@tests/utils/syntax-test-helpers.js');
+      const { getExample } = await import('../tests/utils/syntax-test-helpers.js');
       const embedExample = getExample('embed', 'atomic', 'simplePath');
       
       // Create the file to embed
@@ -478,7 +486,7 @@ More text`;
       // context.disableTransformation(); // Explicitly disable transformation
       const result = await main('test.meld', {
         fs: context.fs,
-        services: context.services,
+        services: context.services as unknown as Partial<Services>,
         transformation: true,
         format: 'markdown' // Correct value from OutputFormat type
       });
@@ -490,7 +498,7 @@ More text`;
 
     it('should handle @embed with section extraction', async () => {
       // Import examples from centralized location
-      const { getExample } = await import('@tests/utils/syntax-test-helpers.js');
+      const { getExample } = await import('../tests/utils/syntax-test-helpers.js');
       const embedExample = getExample('embed', 'atomic', 'withSection');
       
       // Create the file with sections to embed
@@ -520,7 +528,7 @@ More text`;
       // we'll check for the expected error
       await expect(main('test.meld', {
         fs: context.fs,
-        services: context.services,
+        services: context.services as unknown as Partial<Services>,
         transformation: true,
         format: 'markdown' // Correct value from OutputFormat type
       })).rejects.toThrow(/Section not found/);
@@ -546,7 +554,7 @@ More text`;
       context.disableTransformation(); // Explicitly disable transformation
       await expect(main('test.meld', {
         fs: context.fs,
-        services: context.services,
+        services: context.services as unknown as Partial<Services>,
         transformation: false,
         format: 'markdown'
       })).rejects.toThrow(/Invalid code fence/);
@@ -568,7 +576,7 @@ More text`;
       context.disableTransformation(); // Explicitly disable transformation
       await expect(main('test.meld', {
         fs: context.fs,
-        services: context.services,
+        services: context.services as unknown as Partial<Services>,
         transformation: false,
         format: 'markdown'
       })).rejects.toThrow(/Invalid code fence/);
@@ -585,7 +593,7 @@ More text`;
       context.disableTransformation(); // Explicitly disable transformation
       await expect(main('test.meld', {
         fs: context.fs,
-        services: context.services,
+        services: context.services as unknown as Partial<Services>,
         transformation: false
       })).rejects.toThrow();
     });
@@ -599,7 +607,7 @@ More text`;
       context.disableTransformation(); // Explicitly disable transformation
       await expect(main('test.meld', {
         fs: context.fs,
-        services: context.services,
+        services: context.services as unknown as Partial<Services>,
         transformation: false
       })).rejects.toThrow(/File not found/);
     });
@@ -613,7 +621,7 @@ More text`;
       context.disableTransformation(); // Explicitly disable transformation
       await expect(main('test.meld', {
         fs: context.fs,
-        services: context.services,
+        services: context.services as unknown as Partial<Services>,
         transformation: false
       })).rejects.toThrow(/Invalid JSON/);
     });
@@ -622,10 +630,10 @@ More text`;
   describe('Format Transformation', () => {
     it('should format output as markdown', async () => {
       // Import examples from centralized location
-      const { getExample } = await import('@tests/utils/syntax-test-helpers.js');
+      const { getExample } = await import('../tests/utils/syntax-test-helpers.js');
       const textGreeting = getExample('text', 'atomic', 'simpleString');
       const textSubject = getExample('text', 'atomic', 'subject');
-      const textMessage = getExample('text', 'integration', 'compositeMessage');
+      const textMessage = getExample('text', 'combinations', 'compositeMessage');
       
       const content = `
         # Heading
@@ -644,7 +652,7 @@ More text`;
       // context.disableTransformation(); // Explicitly disable transformation
       const result = await main('test.meld', {
         fs: context.fs,
-        services: context.services,
+        services: context.services as unknown as Partial<Services>,
         transformation: true,
         format: 'markdown' // Use OutputFormat.Markdown once fixed
       });
@@ -656,12 +664,12 @@ More text`;
       expect(result).not.toContain('@text');  // Directives should be transformed away
     });
     
-    it('should format output as LLM', async () => {
+    it('should format output as XML', async () => {
       // Import examples from centralized location
-      const { getExample } = await import('@tests/utils/syntax-test-helpers.js');
+      const { getExample } = await import('../tests/utils/syntax-test-helpers.js');
       const textGreeting = getExample('text', 'atomic', 'simpleString');
       const textSubject = getExample('text', 'atomic', 'subject');
-      const textMessage = getExample('text', 'integration', 'compositeMessage');
+      const textMessage = getExample('text', 'combinations', 'compositeMessage');
       
       const content = `
         # Heading
@@ -680,12 +688,12 @@ More text`;
       // context.disableTransformation(); // Explicitly disable transformation
       const result = await main('test.meld', {
         fs: context.fs,
-        services: context.services,
+        services: context.services as unknown as Partial<Services>,
         transformation: true,
         format: 'xml' // Correct value from OutputFormat type
       });
       
-      // With transformation enabled and LLM format, output should include LLM-friendly XML
+      // With transformation enabled and XML format, output should include XML tags
       expect(result).toContain('```');
       expect(result).toContain('Hello, World!');
       expect(result).toContain('List item 1');
@@ -719,7 +727,7 @@ More text`;
       context.disableTransformation(); // Explicitly disable transformation
       const result1 = await main('file1.meld', {
         fs: context.fs,
-        services: context.services,
+        services: context.services as unknown as Partial<Services>,
         transformation: false,
         format: 'markdown'
       });
@@ -755,7 +763,7 @@ More text`;
       context.disableTransformation(); // Explicitly disable transformation
       await expect(main(`${projectRoot}/main.meld`, {
         fs: context.fs,
-        services: context.services,
+        services: context.services as unknown as Partial<Services>,
         transformation: false,
         format: 'markdown'
       })).rejects.toThrow(/Paths with segments must start with \$. or \$~/);

@@ -3,6 +3,10 @@ import type { MeldNode, CodeFenceNode } from 'meld-spec';
 import { parserLogger as logger } from '@core/utils/logger.js';
 import { MeldParseError } from '@core/errors/MeldParseError.js';
 import type { Location, Position } from '@core/types/index.js';
+import { IStateService } from '@core/services/IStateService.js';
+import { IResolutionService } from '@core/services/IResolutionService.js';
+import { ResolutionContext } from '@core/types/ResolutionContext.js';
+import { Serializer } from '@core/utils/Serializer.js';
 
 // Define our own ParseError type since it's not exported from meld-ast
 interface ParseError {
@@ -184,6 +188,61 @@ export class ParserService implements IParserService {
           );
         }
       }
+    }
+  }
+
+  /**
+   * Transform a variable node to its resolved value
+   * Used for preview and transformation mode to resolve values
+   * @param node The node to transform
+   * @param state The state service to use for lookup
+   * @returns A text node with the resolved value if transformation is enabled
+   */
+  async transformVariableNode(node: MeldNode, state: IStateService): Promise<MeldNode> {
+    // Only transform if transformation mode is enabled
+    if (!state.isTransformationEnabled()) {
+      return node;
+    }
+
+    const resolutionService = this.container.get<IResolutionService>('ResolutionService');
+    
+    // Ensure we have a resolution service
+    if (!resolutionService) {
+      console.warn('No resolution service available for variable transformation');
+      return node;
+    }
+
+    // Create a simple resolution context
+    const context: ResolutionContext = {
+      state,
+      baseDir: '/',
+      strict: false,
+      allowedVariableTypes: { text: true, data: true, path: true }
+    };
+
+    try {
+      // Handle different node types
+      switch (node.type) {
+        case 'TextVar':
+        case 'DataVar': {
+          // Serialize the node to a string representation
+          const nodeString = this.serializer.serializeNodes([node]);
+          
+          // Resolve the variable reference
+          const resolved = await resolutionService.resolveInContext(nodeString, context);
+          
+          // Create a new Text node with the resolved value
+          return {
+            type: 'Text',
+            content: resolved || ''
+          };
+        }
+        default:
+          return node;
+      }
+    } catch (error) {
+      console.error('Error transforming variable node:', error);
+      return node;
     }
   }
 } 

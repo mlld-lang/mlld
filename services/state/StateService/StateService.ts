@@ -11,6 +11,12 @@ export class StateService implements IStateService {
   private currentState: StateNode;
   private _isImmutable: boolean = false;
   private _transformationEnabled: boolean = false;
+  private _transformationOptions: TransformationOptions = {
+    variables: false,
+    directives: false,
+    commands: false,
+    imports: false
+  };
   private eventService?: IStateEventService;
   private trackingService?: IStateTrackingService;
 
@@ -234,12 +240,47 @@ export class StateService implements IStateService {
     return this._transformationEnabled;
   }
 
-  enableTransformation(enable: boolean): void {
-    this._transformationEnabled = enable;
-    if (enable && !this.currentState.transformedNodes) {
+  /**
+   * Checks if a specific transformation type is enabled
+   * @param type The transformation type to check (variables, directives, commands, imports)
+   * @returns Whether the specified transformation type is enabled
+   */
+  shouldTransform(type: keyof TransformationOptions): boolean {
+    return this._transformationEnabled && this._transformationOptions[type];
+  }
+
+  /**
+   * Enable transformation with specific options
+   * @param options Options for selective transformation, or true/false for all
+   */
+  enableTransformation(options?: TransformationOptions | boolean): void {
+    if (typeof options === 'boolean') {
+      // Legacy behavior - all on or all off
+      this._transformationEnabled = options;
+      this._transformationOptions = options ? 
+        { variables: true, directives: true, commands: true, imports: true } : 
+        { variables: false, directives: false, commands: false, imports: false };
+    } else {
+      // Selective transformation
+      this._transformationEnabled = true;
+      this._transformationOptions = {
+        ...{ variables: true, directives: true, commands: true, imports: true },
+        ...options
+      };
+    }
+
+    if (this._transformationEnabled && !this.currentState.transformedNodes) {
       // Initialize transformed nodes with current nodes when enabling transformation
       this.updateState({ transformedNodes: [...this.currentState.nodes] }, 'enableTransformation');
     }
+  }
+
+  /**
+   * Get the current transformation options
+   * @returns The current transformation options
+   */
+  getTransformationOptions(): TransformationOptions {
+    return { ...this._transformationOptions };
   }
 
   appendContent(content: string): void {

@@ -201,7 +201,8 @@ export class OutputService implements IOutputService {
       // Debug: Log node types
       logger.debug('Converting nodes to markdown', {
         nodeCount: nodes.length,
-        nodeTypes: nodes.map(n => n.type)
+        nodeTypes: nodes.map(n => n.type),
+        transformationEnabled: state.isTransformationEnabled()
       });
 
       // Add state variables if requested
@@ -212,6 +213,38 @@ export class OutputService implements IOutputService {
         }
       }
 
+      // Transformation mode handling 
+      // In transformation mode, we need to preserve the exact layout without adding newlines
+      if (state.isTransformationEnabled()) {
+        // Process nodes with careful handling of newlines
+        for (const node of nodes) {
+          try {
+            // Get the node output
+            const nodeOutput = await this.nodeToMarkdown(node, state);
+            
+            // Skip empty outputs
+            if (!nodeOutput) continue;
+            
+            // Add to output buffer
+            output += nodeOutput;
+          } catch (nodeError) {
+            // Log detailed error for the specific node
+            logger.error('Error converting node to markdown in transformation mode', {
+              nodeType: node.type,
+              location: node.location,
+              error: nodeError
+            });
+            throw nodeError;
+          }
+        }
+        
+        // Cleanup excessive whitespace without losing the basic text layout
+        output = output.replace(/\n{3,}/g, '\n\n');
+        
+        return output;
+      }
+      
+      // Standard mode processing (non-transformation)
       // Process nodes
       for (const node of nodes) {
         try {
@@ -401,6 +434,11 @@ export class OutputService implements IOutputService {
             type: typeof textVarContent
           });
           
+          // Handle transformation mode - don't add newlines in transformation mode
+          if (state.isTransformationEnabled()) {
+            return String(textVarContent);
+          }
+          
           return typeof textVarContent === 'string' 
             ? (textVarContent.endsWith('\n') ? textVarContent : textVarContent + '\n') 
             : String(textVarContent) + '\n';
@@ -419,6 +457,8 @@ export class OutputService implements IOutputService {
             idValue: 'id' in node ? node.id : 'undefined',
             hasIdentifier: 'identifier' in node,
             identifierValue: 'identifier' in node ? node.identifier : 'undefined',
+            hasFields: 'fields' in node,
+            fieldsValue: 'fields' in node ? JSON.stringify(node.fields) : 'undefined',
             hasData: 'data' in node,
             dataValue: 'data' in node ? JSON.stringify(node.data) : 'undefined',
             hasValue: 'value' in node,
@@ -428,6 +468,57 @@ export class OutputService implements IOutputService {
             nodeStr: JSON.stringify(node, null, 2)
           });
           
+          // For transformation mode, we need to resolve the field access if fields are present
+          // This is necessary for things like array access with dot notation (items.0)
+          if (state.isTransformationEnabled() && 'fields' in node && Array.isArray(node.fields) && node.fields.length > 0 && this.resolutionService) {
+            let serializedNode = '';
+            if ('identifier' in node) {
+              const identifier = node.identifier as string;
+              // Build a variable reference with fields
+              const fields = node.fields.map(field => {
+                if (field.type === 'index') {
+                  return String(field.value);
+                } else if (field.type === 'identifier') {
+                  return field.value;
+                }
+                return '';
+              }).filter(Boolean);
+              
+              // Create a variable reference with fields
+              serializedNode = `{{${identifier}${fields.length > 0 ? '.' + fields.join('.') : ''}}}`;
+              
+              logger.debug('Resolving DataVar with fields', {
+                serializedNode,
+                identifier,
+                fields
+              });
+              
+              try {
+                // Create appropriate resolution context
+                const context: ResolutionContext = ResolutionContextFactory.forDataDirective(
+                  undefined, // current file path not needed here
+                  state // state service to use
+                );
+                
+                // Use ResolutionService to resolve the variable reference
+                const resolved = await this.resolutionService.resolveInContext(serializedNode, context);
+                
+                logger.debug('DataVar field access resolution result', {
+                  serializedNode,
+                  resolved
+                });
+                
+                return String(resolved);
+              } catch (resolutionError) {
+                logger.error('Error resolving DataVar with field access', {
+                  serializedNode,
+                  error: resolutionError
+                });
+              }
+            }
+          }
+          
+          // If not transformation mode or resolution with fields failed, fall back to standard resolution
           // Try various possible property names and resolve from state
           let dataVarContent: any = '';
           if ('id' in node) {
@@ -479,6 +570,13 @@ export class OutputService implements IOutputService {
             content: dataVarContent ? JSON.stringify(dataVarContent) : 'undefined',
             type: typeof dataVarContent
           });
+          
+          // In transformation mode, don't add newlines
+          if (state.isTransformationEnabled()) {
+            return typeof dataVarContent === 'string' 
+              ? dataVarContent
+              : JSON.stringify(dataVarContent);
+          }
           
           return typeof dataVarContent === 'string' 
             ? (dataVarContent.endsWith('\n') ? dataVarContent : dataVarContent + '\n')

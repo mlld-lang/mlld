@@ -56,17 +56,15 @@ export class VariableReferenceResolver {
   }
   
   /**
-   * Process AST nodes to resolve variables
+   * Resolves a list of nodes, handling variable references
+   * @param nodes The nodes to resolve
+   * @param context The resolution context
+   * @returns The resolved content
    */
-  private async processNodes(nodes: MeldNode[], context: ResolutionContext): Promise<string> {
+  async resolveNodes(nodes: MeldNode[], context: ResolutionContext): Promise<string> {
     let result = '';
-    console.log('*** processNodes called with nodes:', {
-      count: nodes.length,
-      types: nodes.map(n => n.type),
-      full: JSON.stringify(nodes, null, 2)
-    });
     
-    // Track variables being resolved to prevent circular references
+    // Track the resolution path to detect circular references
     const resolutionPath: string[] = [];
     
     for (const node of nodes) {
@@ -97,36 +95,97 @@ export class VariableReferenceResolver {
         
         // For DataVar nodes, handle field access
         if (node.type === 'DataVar' && varNode.fields && varNode.fields.length > 0) {
-          varRef = `${varNode.identifier}.${varNode.fields.join('.')}`;
+          // Build the field access path, handling both identifier and index field types
+          const fieldParts = varNode.fields.map((field: any) => {
+            // Check if this is an index field (numeric array index)
+            if (field.type === 'index') {
+              // For index type, convert numeric value to string
+              return String(field.value);
+            } else {
+              // For identifier type, use the value directly
+              return field.value;
+            }
+          });
+          
+          // Join with dots to create the field reference path
+          varRef = `${varNode.identifier}.${fieldParts.join('.')}`;
+          
+          console.log('*** Processing DataVar with fields:', {
+            identifier: varNode.identifier,
+            fields: varNode.fields,
+            processedFields: fieldParts,
+            varRef
+          });
         }
         
         // Resolve the variable reference
-        const resolvedValue = await this.resolveVariable(varRef, context);
-        console.log('*** Resolved variable node:', {
-          varRef,
-          resolvedValue
-        });
-        result += resolvedValue;
+        try {
+          const resolved = await this.resolveVariable(varRef, context, resolutionPath);
+          console.log('*** Resolved variable reference:', {
+            varRef,
+            resolved
+          });
+          
+          // If we're in transformation mode, we need to replace the variable node with its resolved value
+          if (context.state?.isTransformationEnabled()) {
+            // For DataVar nodes, we might need to stringify the result if it's not a string
+            if (node.type === 'DataVar' && typeof resolved !== 'string') {
+              // For arrays and objects, we want to stringify them nicely
+              if (Array.isArray(resolved) || (typeof resolved === 'object' && resolved !== null)) {
+                try {
+                  // For simple values within arrays/objects, we want to extract them directly
+                  // This handles cases like items.0 or users.0.name
+                  if (typeof resolved === 'string' || 
+                      typeof resolved === 'number' || 
+                      typeof resolved === 'boolean') {
+                    result += String(resolved);
+                  } else {
+                    // Only stringify if it's a complex object
+                    result += String(resolved);
+                  }
+                } catch (e) {
+                  // If stringification fails, use the raw value
+                  result += String(resolved);
+                }
+              } else {
+                // For primitive values, just convert to string
+                result += String(resolved);
+              }
+            } else {
+              // For TextVar nodes or string DataVar values, use the resolved value directly
+              result += resolved;
+            }
+          } else {
+            // If transformation is not enabled, keep the variable reference
+            result += `{{${varRef}}}`;
+          }
+        } catch (error) {
+          console.error('*** Failed to resolve variable reference:', {
+            varRef,
+            error: error instanceof Error ? error.message : String(error)
+          });
+          
+          // If we're in strict mode, rethrow the error
+          if (context.strict !== false) {
+            throw error;
+          }
+          
+          // In permissive mode, keep the variable reference
+          result += `{{${varRef}}}`;
+        }
       } else if (node.type === 'PathVar') {
         // Handle path variable nodes
         const pathVarNode = node as any;
+        let pathValue: string;
         
-        // Get the path variable value
-        let pathValue: string | unknown;
-        
-        // First check if it's a structured path
-        if (pathVarNode.value && typeof pathVarNode.value === 'object' && 'raw' in pathVarNode.value) {
-          // Get the structured path
+        // For structured path variables with fields
+        if (pathVarNode.value && typeof pathVarNode.value === 'object') {
           const structPath = pathVarNode.value;
           
-          // Use the resolutionService to resolve the structured path
           try {
-            // We'll let the ResolutionService handle the structured path
-            pathValue = await this.resolutionService?.resolveInContext(structPath, context);
-            console.log('*** Resolved structured path:', {
-              raw: structPath.raw,
-              resolved: pathValue
-            });
+            // Let the ResolutionService handle structured path resolution
+            const resolvedPath = await this.resolutionService?.resolveInContext(structPath, context);
+            pathValue = resolvedPath || structPath.raw || '';
           } catch (error) {
             console.error('*** Failed to resolve structured path:', {
               raw: structPath.raw,
@@ -134,7 +193,7 @@ export class VariableReferenceResolver {
             });
             
             // For recoverable errors, use the raw path
-            pathValue = structPath.raw;
+            pathValue = structPath.raw || '';
           }
         } else {
           // For simple path variables
@@ -154,7 +213,8 @@ export class VariableReferenceResolver {
               const structPath = (parsedPathNode as any).value;
               
               // Let ResolutionService resolve it
-              pathValue = await this.resolutionService?.resolveInContext(structPath, context);
+              const resolvedPath = await this.resolutionService?.resolveInContext(structPath, context);
+              pathValue = resolvedPath || structPath.raw || '';
             } else {
               // Fallback to direct state access if parsing fails
               if (identifier === 'HOMEPATH' || identifier === '~') {
@@ -166,7 +226,7 @@ export class VariableReferenceResolver {
               } else {
                 // For regular path variables
                 pathValue = context.state?.getPathVar(identifier) || 
-                          this.stateService.getPathVar(identifier);
+                          this.stateService.getPathVar(identifier) || '';
                   
                 if (pathValue === undefined) {
                   throw new MeldResolutionError(
@@ -186,246 +246,42 @@ export class VariableReferenceResolver {
               error: (error as Error).message
             });
             
-            // For recoverable errors, return the unresolved reference
+            // For recoverable errors, use the variable reference
+            if (context.strict !== false) {
+              throw error;
+            }
+            
+            // In permissive mode, keep the path reference
             pathValue = `$${identifier}`;
           }
         }
         
-        // Add the resolved path value to the result
-        result += pathValue;
-      } else if (node.type === 'Directive') {
-        // Handle directive nodes (including run, path)
-        const directiveNode = node as any;
-        
-        // For 'path' directives, handle path resolution
-        if (directiveNode.directive.kind === 'path') {
-          try {
-            // Use the resolutionService's pathResolver
-            const pathValue = await this.resolutionService?.resolvePath(
-              directiveNode.directive.value || directiveNode.directive.identifier,
-              context
-            );
-            console.log('*** Resolved path directive:', {
-              original: directiveNode.directive.value || directiveNode.directive.identifier,
-              resolved: pathValue
-            });
-            result += pathValue;
-          } catch (error) {
-            console.error('*** Failed to resolve path directive:', {
-              error: (error as Error).message
-            });
-            
-            // In permissive mode, use the original value
-            if (!context.hasOwnProperty('strict') || !context.strict) {
-              result += directiveNode.directive.value || directiveNode.directive.identifier;
-            } else {
-              // In strict mode, rethrow the error
-              throw error;
-            }
-          }
-        } else if (directiveNode.directive.kind === 'run') {
-          // For 'run' directives, use commandResolver
-          try {
-            // Build args array
-            const args = directiveNode.directive.args || [];
-            
-            // Use the resolutionService's commandResolver
-            const cmdResult = await this.resolutionService?.resolveCommand(
-              directiveNode.directive.identifier,
-              args,
-              context
-            );
-            console.log('*** Resolved command directive:', {
-              command: directiveNode.directive.identifier,
-              args,
-              result: cmdResult
-            });
-            result += cmdResult;
-          } catch (error) {
-            console.error('*** Failed to resolve command directive:', {
-              error: (error as Error).message
-            });
-            
-            // In permissive mode, return a placeholder
-            if (!context.hasOwnProperty('strict') || !context.strict) {
-              result += `[command ${directiveNode.directive.identifier} failed]`;
-            } else {
-              // In strict mode, rethrow the error
-              throw error;
-            }
-          }
-        } else if (directiveNode.directive.kind === 'text') {
-          // Handle text directives
-          const id = directiveNode.directive.identifier;
-          
-          if (id) {
-            // Get the value from state
-            const value = context.state?.getTextVar(id) || 
-                        this.stateService.getTextVar(id);
-            
-            if (value !== undefined) {
-              console.log('*** Resolved text directive:', {
-                identifier: id,
-                value
-              });
-              result += value;
-            } else if (id.startsWith('ENV_')) {
-              // Handle environment variables
-              const envVar = process.env[id];
-              console.log('*** Environment variable lookup:', {
-                variable: id,
-                value: envVar
-              });
-              
-              if (envVar === undefined) {
-                throw new MeldResolutionError(
-                  'Environment variable not set: ' + id,
-                  {
-                    code: ResolutionErrorCode.UNDEFINED_VARIABLE,
-                    details: { 
-                      variableName: id,
-                      variableType: 'text'
-                    },
-                    severity: ErrorSeverity.Recoverable
-                  }
-                );
-              }
-              result += envVar;
-            } else {
-              // If not found in state and not an environment variable, throw error
-              console.log('*** Text variable not found:', id);
-              
-              // Check if we have a directive value before throwing
-              const directiveValue = directiveNode.directive.value;
-              if (directiveValue !== undefined) {
-                console.log('*** Using directive value:', directiveValue);
-                result += String(directiveValue);
-              } else {
-                throw new MeldResolutionError(
-                  'Undefined variable: ' + id,
-                  {
-                    code: ResolutionErrorCode.UNDEFINED_VARIABLE,
-                    details: { 
-                      variableName: id,
-                      variableType: 'text'
-                    },
-                    severity: ErrorSeverity.Recoverable
-                  }
-                );
-              }
-            }
-          }
-        } else if (directiveNode.directive.kind === 'data') {
-          // Handle data directives
-          const id = directiveNode.directive.identifier;
-          
-          if (id) {
-            // First check if there's a text variable with this name
-            // This is to match the expected behavior in the tests
-            const textValue = context.state?.getTextVar(id) || 
-                           this.stateService.getTextVar(id);
-            
-            // Then get the data value
-            const value = context.state?.getDataVar(id) || 
-                       this.stateService.getDataVar(id);
-            
-            if (value !== undefined) {
-              console.log('*** Resolved data directive:', {
-                identifier: id,
-                value
-              });
-              
-              // Handle field access if fields are specified
-              if (directiveNode.directive.fields && directiveNode.directive.fields.length > 0) {
-                try {
-                  // Access nested fields
-                  let fieldValue = value;
-                  for (const field of directiveNode.directive.fields) {
-                    if (fieldValue === null || fieldValue === undefined) {
-                      throw new Error(`Cannot access field ${field} of undefined or null`);
-                    }
-                    
-                    // Check if fieldValue is an object and has the property
-                    if (typeof fieldValue === 'object' && field in fieldValue) {
-                      fieldValue = fieldValue[field as keyof typeof fieldValue];
-                    } else {
-                      throw new Error(`Cannot access field ${field} of ${typeof fieldValue}`);
-                    }
-                  }
-                  
-                  // Convert to string representation
-                  result += typeof fieldValue === 'object' && fieldValue !== null 
-                    ? JSON.stringify(fieldValue) 
-                    : String(fieldValue);
-                } catch (error) {
-                  console.error('*** Field access error:', String(error));
-                  throw new MeldResolutionError(
-                    'Invalid field access: ' + directiveNode.directive.fields.join('.'),
-                    {
-                      code: ResolutionErrorCode.FIELD_ACCESS_ERROR,
-                      details: { 
-                        fieldPath: directiveNode.directive.fields.join('.')
-                      },
-                      severity: ErrorSeverity.Fatal
-                    }
-                  );
-                }
-              } else {
-                // Convert to string representation
-                result += typeof value === 'object' ? JSON.stringify(value) : String(value);
-              }
-            } else {
-              // If not found in state, use the value from the directive
-              const directiveValue = directiveNode.directive.value;
-              console.log('*** Data variable not found in state, using directive value:', {
-                identifier: id,
-                directiveValue
-              });
-              
-              if (directiveValue !== undefined) {
-                try {
-                  // Try to parse if it's a JSON string
-                  if (typeof directiveValue === 'string' && 
-                      (directiveValue.startsWith('{') || directiveValue.startsWith('['))) {
-                    const parsed = JSON.parse(directiveValue);
-                    result += JSON.stringify(parsed);
-                  } else {
-                    result += String(directiveValue);
-                  }
-                } catch (error) {
-                  // If parsing fails, use the raw value
-                  result += String(directiveValue);
-                }
-              } else {
-                throw new MeldResolutionError(
-                  'Undefined variable: ' + id,
-                  {
-                    code: ResolutionErrorCode.UNDEFINED_VARIABLE,
-                    details: { 
-                      variableName: id,
-                      variableType: 'data'
-                    },
-                    severity: ErrorSeverity.Recoverable
-                  }
-                );
-              }
-            }
-          }
+        // If we're in transformation mode, replace the path variable with its resolved value
+        if (context.state?.isTransformationEnabled()) {
+          result += pathValue;
         } else {
-          // For other directive types, use the default node toString
-          console.warn('*** Unhandled directive type:', directiveNode.directive.kind);
-          result += this.nodeToString(node);
+          // If transformation is not enabled, keep the path reference
+          result += `$${pathVarNode.identifier || pathVarNode.name}`;
         }
       } else {
-        // For other node types, convert to string but avoid directive syntax
-        console.log('*** Converting other node type to string:', node.type);
-        const str = this.getNodeValue(node, context);
-        console.log('*** Converted to:', str);
-        result += str;
+        // For other node types, just add them to the result
+        // This is a fallback for node types we don't explicitly handle
+        console.warn('*** Unhandled node type:', node.type);
+        
+        // Try to extract text content if possible
+        if ('content' in node) {
+          result += (node as any).content;
+        } else if ('text' in node) {
+          result += (node as any).text;
+        } else if ('value' in node && typeof (node as any).value === 'string') {
+          result += (node as any).value;
+        } else {
+          // If we can't extract text, just add a placeholder
+          result += `[${node.type}]`;
+        }
       }
     }
     
-    console.log('*** processNodes final result:', result);
     return result;
   }
   
@@ -542,7 +398,7 @@ export class VariableReferenceResolver {
    * @param context The resolution context
    * @returns The resolved value as a string
    */
-  private async resolveVariable(varRef: string, context: ResolutionContext): Promise<string> {
+  private async resolveVariable(varRef: string, context: ResolutionContext, resolutionPath: string[] = []): Promise<string> {
     try {
       // Split by dot for field access
       const parts = varRef.split('.');
@@ -666,6 +522,20 @@ export class VariableReferenceResolver {
         throw new Error(`Cannot access ${part} of undefined or null`);
       }
       
+      // Handle array access with numeric field access: items.0 (Ruby-style dot notation)
+      const numericMatch = /^\d+$/.test(part);
+      if (numericMatch && Array.isArray(current)) {
+        const index = parseInt(part, 10);
+        
+        if (index < 0 || index >= current.length) {
+          throw new Error(`Array index ${index} out of bounds for array of length ${current.length}`);
+        }
+        
+        current = current[index];
+        // Continue to the next part after handling the numeric index
+        continue;
+      }
+      
       // Handle array access with bracket notation: items[0]
       const arrayMatch = part.match(/^(\w+)\[(\d+)\]$/);
       if (arrayMatch) {
@@ -682,6 +552,7 @@ export class VariableReferenceResolver {
         
         current = current[arrayName][index];
       } else {
+        // Standard property access
         if (!(part in current)) {
           throw new Error(`Field ${part} does not exist on object`);
         }
@@ -1085,7 +956,7 @@ export class VariableReferenceResolver {
     
     // Process nodes to resolve variables
     console.log('*** Processing AST nodes');
-    const result = await this.processNodes(nodes, context);
+    const result = await this.resolveNodes(nodes, context);
     console.log('*** AST processing result:', result);
     return result;
   }
@@ -1154,40 +1025,56 @@ export class VariableReferenceResolver {
   }
 
   /**
-   * Test debugging method to directly test field access
+   * Debug helper to trace field access resolution
+   * @param obj The object to access fields on
+   * @param fields Array of field names to access
+   * @param context Resolution context
+   * @returns Detailed debug information about field access
    */
-  debugFieldAccess(
-    obj: any, 
-    fieldPath: string[], 
-    context: ResolutionContext
-  ): { originalObj: any; result: any; } {
-    console.log('=== DEBUG TEST - debugFieldAccess ===');
-    console.log('Input:', { obj, fieldPath });
-    
-    const result = this.resolveFieldAccess(obj, fieldPath, context);
-    
-    console.log('Result:', { 
-      originalObj: obj,
-      result,
-      resultType: typeof result
-    });
-    
-    // Test our stringification logic directly
-    let stringified: string;
-    
-    if (typeof result === 'object' && result !== null) {
-      stringified = JSON.stringify(result);
-    } else {
-      stringified = String(result);
+  private debugFieldAccess(obj: any, fields: string[], context: ResolutionContext): { 
+    result: any; 
+    steps: Array<{ field: string; type: string; value: any; }>; 
+  } {
+    if (!obj) {
+      return { 
+        result: undefined, 
+        steps: [{ field: 'initial', type: typeof obj, value: obj }] 
+      };
     }
     
-    console.log('Stringified result:', stringified);
-    console.log('=== END DEBUG TEST ===');
+    let current = obj;
+    const steps: Array<{ field: string; type: string; value: any; }> = [
+      { field: 'initial', type: Array.isArray(obj) ? 'array' : typeof obj, value: obj }
+    ];
     
-    return { 
-      originalObj: obj,
-      result 
-    };
+    for (const field of fields) {
+      // For arrays, check if the field is a valid numeric index
+      if (Array.isArray(current) && /^\d+$/.test(field)) {
+        const index = parseInt(field, 10);
+        if (index < 0 || index >= current.length) {
+          steps.push({ field, type: 'error', value: `Array index out of bounds: ${index} (array length: ${current.length})` });
+          return { result: undefined, steps };
+        }
+        current = current[index];
+        steps.push({ field, type: Array.isArray(current) ? 'array' : typeof current, value: current });
+      }
+      // For objects, check if the field exists
+      else if (typeof current === 'object' && current !== null) {
+        if (!(field in current)) {
+          steps.push({ field, type: 'error', value: `Field not found on object: ${field}` });
+          return { result: undefined, steps };
+        }
+        current = current[field];
+        steps.push({ field, type: Array.isArray(current) ? 'array' : typeof current, value: current });
+      }
+      // Handle primitive values
+      else {
+        steps.push({ field, type: 'error', value: `Cannot access field ${field} on primitive value: ${current}` });
+        return { result: undefined, steps };
+      }
+    }
+    
+    return { result: current, steps };
   }
 
   /**
