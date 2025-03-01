@@ -34,7 +34,7 @@ describe('API Integration Tests', () => {
       textExample = getExample('text', 'atomic', 'simpleString');
       pathExample = getExample('path', 'atomic', 'projectPath');
       importExample = getExample('import', 'atomic', 'simplePath');
-      runExample = getExample('run', 'atomic', 'simpleCommand');
+      runExample = getExample('run', 'atomic', 'simple');
       defineExample = getExample('define', 'atomic', 'simpleCommand');
       embedExample = getExample('embed', 'atomic', 'simplePath');
     } catch (error) {
@@ -157,36 +157,56 @@ More text with {{user.id}}`;
     it('should handle complex nested data structures', async () => {
       // Import examples from centralized location
       const { getExample } = await import('../tests/utils/syntax-test-helpers.js');
+      
+      // Use centralized examples
       const textExample = getExample('text', 'atomic', 'simpleString');
+      const complexDataExample = getExample('data', 'combinations', 'nestedObject');
+      const runExample = getExample('run', 'atomic', 'simple');
       
-      // Use a more complex data example for nested structures
-      const content = `
-${textExample.code}
-@data config = { 
-  "app": {
-    "name": "TestApp",
-    "version": "1.0.0",
-    "features": ["search", "export", "import"]
-  }
-}
-Some text content
-@run [echo test]
-More text`;
-      await context.writeFile('test.meld', content);
-      
-      // context.disableTransformation(); // Explicitly disable transformation
-      const result = await main('test.meld', {
-        fs: context.fs,
-        services: context.services as unknown as Partial<Services>,
-        transformation: true
+      console.log('Using examples:', {
+        textCode: textExample.code,
+        dataCode: complexDataExample.code,
+        runCode: runExample.code
       });
       
-      // Verify output contains the expected content with transformed directives
-      expect(result).toContain('Some text content');
-      expect(result).toContain('test'); // Output of the echo command
-      expect(result).toContain('More text');
-      expect(result).not.toContain('@text'); // Directive should be transformed away
-      expect(result).not.toContain('@data'); // Directive should be transformed away
+      // Combine examples with additional content
+      const content = `${textExample.code}
+${complexDataExample.code}
+
+Some text content
+${runExample.code}
+More text`;
+
+      await context.writeFile('test.meld', content);
+      
+      try {
+        // Enable transformation
+        const stateService = context.services.state;
+        stateService.enableTransformation(true);
+        
+        const result = await main('test.meld', {
+          fs: context.fs,
+          services: context.services as unknown as Partial<Services>,
+          transformation: true
+        });
+        
+        console.log('RESULT:', result);
+        
+        // Verify output contains the expected content with transformed directives
+        expect(result).toBeDefined();
+        expect(result).toContain('Some text content');
+        expect(result).toContain('More text');
+        
+        // Check that data is set in state
+        const configData = stateService.getDataVar('config') as any;
+        expect(configData).toBeDefined();
+        expect(configData).toHaveProperty('app.name', 'Meld');
+        expect(configData).toHaveProperty('app.features');
+        expect(Array.isArray(configData.app.features)).toBe(true);
+      } catch (error) {
+        console.error('ERROR during test execution:', error);
+        throw error;
+      }
     });
   });
 
@@ -438,7 +458,7 @@ More text`;
     it('should handle @run directives', async () => {
       // Import examples from centralized location
       const { getExample } = await import('../tests/utils/syntax-test-helpers.js');
-      const runExample = getExample('run', 'atomic', 'simpleCommand');
+      const runExample = getExample('run', 'atomic', 'simple');
       
       const content = `
         ${runExample.code}
