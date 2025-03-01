@@ -27,7 +27,7 @@ describe('API Integration Tests', () => {
     projectRoot = '/project';
     
     // Dynamically import examples
-    const { getExample } = await import('../tests/utils/syntax-test-helpers.js');
+    const { getExample } = await import('@tests/utils/syntax-test-helpers.js');
     
     // Load examples that will be used in multiple tests
     try {
@@ -59,7 +59,7 @@ describe('API Integration Tests', () => {
   describe('Variable Definitions and References', () => {
     it('should handle text variable definitions and references', async () => {
       // Import examples from centralized location
-      const { getExample } = await import('../tests/utils/syntax-test-helpers.js');
+      const { getExample } = await import('@tests/utils/syntax-test-helpers.js');
       
       // Use centralized examples
       const textVarExample = getExample('text', 'atomic', 'var1');
@@ -107,7 +107,7 @@ Some text content with {{var1}} and {{message}}
     
     it('should handle data variable definitions and field access', async () => {
       // Import examples from centralized location
-      const { getExample } = await import('../tests/utils/syntax-test-helpers.js');
+      const { getExample } = await import('@tests/utils/syntax-test-helpers.js');
       
       // Use centralized examples
       const textExample = getExample('text', 'atomic', 'simpleString');
@@ -148,7 +148,7 @@ Some content with {{greeting}} and {{user.id}}
     
     it('should handle complex nested data structures', async () => {
       // Import examples from centralized location
-      const { getExample } = await import('../tests/utils/syntax-test-helpers.js');
+      const { getExample } = await import('@tests/utils/syntax-test-helpers.js');
       
       // Use centralized examples
       const textExample = getExample('text', 'atomic', 'simpleString');
@@ -355,7 +355,7 @@ More text`;
     
     it('should handle nested imports with proper scope inheritance', async () => {
       // Import examples from centralized location
-      const { getExample } = await import('../tests/utils/syntax-test-helpers.js');
+      const { getExample } = await import('@tests/utils/syntax-test-helpers.js');
       const textExample = getExample('text', 'atomic', 'simpleString');
       const importExample = getExample('import', 'atomic', 'simplePath');
       
@@ -441,7 +441,7 @@ More text`;
   describe('Command Execution', () => {
     it('should handle @run directives', async () => {
       // Import examples from centralized location
-      const { getExample } = await import('../tests/utils/syntax-test-helpers.js');
+      const { getExample } = await import('@tests/utils/syntax-test-helpers.js');
       const runExample = getExample('run', 'atomic', 'simple');
       
       const content = `
@@ -464,7 +464,7 @@ More text`;
     
     it('should handle @define and command execution', async () => {
       // Import examples from centralized location
-      const { getExample } = await import('../tests/utils/syntax-test-helpers.js');
+      const { getExample } = await import('@tests/utils/syntax-test-helpers.js');
       const defineExample = getExample('define', 'atomic', 'simpleCommand');
       const runExample = getExample('run', 'atomic', 'commandReference');
       
@@ -490,7 +490,7 @@ More text`;
     
     it('should handle commands with parameters', async () => {
       // Import examples from centralized location
-      const { getExample } = await import('../tests/utils/syntax-test-helpers.js');
+      const { getExample } = await import('@tests/utils/syntax-test-helpers.js');
       const defineExample = getExample('define', 'atomic', 'commandWithParams');
       const textExample = getExample('text', 'atomic', 'user');
       const runExample = getExample('run', 'atomic', 'commandWithArguments');
@@ -521,7 +521,7 @@ More text`;
   describe('Embed Handling', () => {
     it('should handle @embed directives', async () => {
       // Import examples from centralized location
-      const { getExample } = await import('../tests/utils/syntax-test-helpers.js');
+      const { getExample } = await import('@tests/utils/syntax-test-helpers.js');
       const embedExample = getExample('embed', 'atomic', 'simplePath');
       
       // Create the file to embed
@@ -550,7 +550,7 @@ More text`;
 
     it('should handle @embed with section extraction', async () => {
       // Import examples from centralized location
-      const { getExample } = await import('../tests/utils/syntax-test-helpers.js');
+      const { getExample } = await import('@tests/utils/syntax-test-helpers.js');
       const embedExample = getExample('embed', 'atomic', 'withSection');
       
       // Create the file with sections to embed
@@ -681,7 +681,7 @@ More text`;
   describe('Format Transformation', () => {
     it('should format output as markdown', async () => {
       // Import examples from centralized location
-      const { getExample } = await import('../tests/utils/syntax-test-helpers.js');
+      const { getExample } = await import('@tests/utils/syntax-test-helpers.js');
       const textGreeting = getExample('text', 'atomic', 'simpleString');
       const textSubject = getExample('text', 'atomic', 'subject');
       const textMessage = getExample('text', 'combinations', 'compositeMessage');
@@ -717,7 +717,7 @@ More text`;
     
     it('should format output as XML', async () => {
       // Import examples from centralized location
-      const { getExample } = await import('../tests/utils/syntax-test-helpers.js');
+      const { getExample } = await import('@tests/utils/syntax-test-helpers.js');
       const textGreeting = getExample('text', 'atomic', 'simpleString');
       const textSubject = getExample('text', 'atomic', 'subject');
       const textMessage = getExample('text', 'combinations', 'compositeMessage');
