@@ -341,9 +341,10 @@ export class TestContext {
 
   /**
    * Enable transformation mode
+   * @param options Options for selective transformation, or true/false for all
    */
-  enableTransformation(): void {
-    this.services.state.enableTransformation(true);
+  enableTransformation(options: any = true): void {
+    this.services.state.enableTransformation(options);
   }
 
   /**

@@ -1,11 +1,11 @@
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
-import { ResolutionErrorCode } from '@services/resolution/ResolutionService/IResolutionService.js';
+import { ResolutionErrorCode, type ResolutionErrorDetails } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
-import type { MeldNode, TextNode, DirectiveNode } from 'meld-spec';
+import type { MeldNode, TextNode, DirectiveNode, TextVarNode, DataVarNode } from 'meld-spec';
 import { resolutionLogger as logger } from '@core/utils/logger.js';
 
 /**
@@ -86,84 +86,38 @@ export class VariableReferenceResolver {
         } else {
           result += textNode.content;
         }
-      } else if (node.type === 'TextVar' || node.type === 'DataVar') {
-        // Handle text/data variable nodes (new meld-ast format)
-        const varNode = node as any;
-        
-        // Extract variable reference - different formats depending on node type
-        let varRef = varNode.reference || varNode.variable || varNode.identifier;
-        
-        // For DataVar nodes, handle field access
-        if (node.type === 'DataVar' && varNode.fields && varNode.fields.length > 0) {
-          // Build the field access path, handling both identifier and index field types
-          const fieldParts = varNode.fields.map((field: any) => {
-            // Check if this is an index field (numeric array index)
-            if (field.type === 'index') {
-              // For index type, convert numeric value to string
-              return String(field.value);
-            } else {
-              // For identifier type, use the value directly
-              return field.value;
-            }
-          });
-          
-          // Join with dots to create the field reference path
-          varRef = `${varNode.identifier}.${fieldParts.join('.')}`;
-          
-          console.log('*** Processing DataVar with fields:', {
-            identifier: varNode.identifier,
-            fields: varNode.fields,
-            processedFields: fieldParts,
-            varRef
-          });
-        }
-        
-        // Resolve the variable reference
+      } else if (node.type === 'TextVar') {
+        // Handle text variable nodes
         try {
-          const resolved = await this.resolveVariable(varRef, context, resolutionPath);
-          console.log('*** Resolved variable reference:', {
-            varRef,
-            resolved
-          });
+          const textVarNode = node as TextVarNode;
+          const identifier = textVarNode.identifier;
           
-          // If we're in transformation mode, we need to replace the variable node with its resolved value
-          if (context.state?.isTransformationEnabled()) {
-            // For DataVar nodes, we might need to stringify the result if it's not a string
-            if (node.type === 'DataVar' && typeof resolved !== 'string') {
-              // For arrays and objects, we want to stringify them nicely
-              if (Array.isArray(resolved) || (typeof resolved === 'object' && resolved !== null)) {
-                try {
-                  // For simple values within arrays/objects, we want to extract them directly
-                  // This handles cases like items.0 or users.0.name
-                  if (typeof resolved === 'string' || 
-                      typeof resolved === 'number' || 
-                      typeof resolved === 'boolean') {
-                    result += String(resolved);
-                  } else {
-                    // Only stringify if it's a complex object
-                    result += String(resolved);
-                  }
-                } catch (e) {
-                  // If stringification fails, use the raw value
-                  result += String(resolved);
+          // If transformation is enabled with variables option, resolve the variable
+          if (context.state?.isTransformationEnabled() && 
+              (context.state?.shouldTransform?.('variables') ?? true)) {
+            const value = await this.getVariable(identifier, context);
+            
+            if (value !== undefined) {
+              result += String(value);
+            } else if (context.strict !== false) {
+              throw new MeldResolutionError(
+                `Undefined variable: ${identifier}`,
+                {
+                  code: ResolutionErrorCode.UNDEFINED_VARIABLE,
+                  details: { variableName: identifier },
+                  severity: ErrorSeverity.Recoverable
                 }
-              } else {
-                // For primitive values, just convert to string
-                result += String(resolved);
-              }
+              );
             } else {
-              // For TextVar nodes or string DataVar values, use the resolved value directly
-              result += resolved;
+              // Keep the variable reference if in permissive mode and value not found
+              result += `{{${identifier}}}`;
             }
           } else {
-            // If transformation is not enabled, keep the variable reference
-            result += `{{${varRef}}}`;
+            // If transformation is not enabled for variables, keep the reference
+            result += `{{${identifier}}}`;
           }
         } catch (error) {
-          console.error('*** Failed to resolve variable reference:', {
-            varRef,
-            error: error instanceof Error ? error.message : String(error)
-          });
+          console.error('*** Failed to resolve TextVar node:', error);
           
           // If we're in strict mode, rethrow the error
           if (context.strict !== false) {
@@ -171,7 +125,123 @@ export class VariableReferenceResolver {
           }
           
           // In permissive mode, keep the variable reference
-          result += `{{${varRef}}}`;
+          result += `{{${(node as TextVarNode).identifier}}}`;
+        }
+      } else if (node.type === 'DataVar') {
+        // Handle data variable nodes
+        try {
+          const dataVarNode = node as DataVarNode;
+          const identifier = dataVarNode.identifier;
+          const fields = dataVarNode.fields || [];
+          
+          // Build the reference string for debugging and fallback
+          let refString = identifier;
+          for (const field of fields) {
+            if (field.type === 'field') {
+              refString += `.${field.value}`;
+            } else if (field.type === 'index') {
+              refString += `[${field.value}]`;
+            }
+          }
+          
+          // If transformation is enabled with variables option, resolve the variable
+          if (context.state?.isTransformationEnabled() && 
+              (context.state?.shouldTransform?.('variables') ?? true)) {
+            // Get the base variable value
+            let value = await this.getVariable(identifier, context);
+            
+            if (value !== undefined) {
+              // Process fields if present
+              try {
+                for (const field of fields) {
+                  if (value === undefined) break;
+                  
+                  if (field.type === 'field' || field.type === 'index') {
+                    value = value[field.value];
+                  }
+                }
+                
+                // Convert the final value to a string
+                if (value !== undefined) {
+                  if (typeof value === 'object' && value !== null) {
+                    result += JSON.stringify(value);
+                  } else {
+                    result += String(value);
+                  }
+                } else if (context.strict !== false) {
+                  throw new MeldResolutionError(
+                    `Invalid field access in variable: ${refString}`,
+                    {
+                      code: ResolutionErrorCode.FIELD_ACCESS_ERROR,
+                      details: { 
+                        variableName: identifier,
+                        fieldPath: fields.map(f => String(f.value)).join('.')
+                      },
+                      severity: ErrorSeverity.Recoverable
+                    }
+                  );
+                } else {
+                  // Keep the variable reference if in permissive mode and field access failed
+                  result += `{{${refString}}}`;
+                }
+              } catch (e) {
+                if (context.strict !== false) {
+                  throw new MeldResolutionError(
+                    `Error accessing fields in variable: ${refString}`,
+                    {
+                      code: ResolutionErrorCode.FIELD_ACCESS_ERROR,
+                      details: { 
+                        variableName: identifier,
+                        fieldPath: fields.map(f => String(f.value)).join('.')
+                      },
+                      severity: ErrorSeverity.Recoverable
+                    }
+                  );
+                } else {
+                  // Keep the variable reference if in permissive mode and field access failed
+                  result += `{{${refString}}}`;
+                }
+              }
+            } else if (context.strict !== false) {
+              throw new MeldResolutionError(
+                `Undefined variable: ${identifier}`,
+                {
+                  code: ResolutionErrorCode.UNDEFINED_VARIABLE,
+                  details: { variableName: identifier },
+                  severity: ErrorSeverity.Recoverable
+                }
+              );
+            } else {
+              // Keep the variable reference if in permissive mode and value not found
+              result += `{{${refString}}}`;
+            }
+          } else {
+            // If transformation is not enabled for variables, keep the reference
+            result += `{{${refString}}}`;
+          }
+        } catch (error) {
+          console.error('*** Failed to resolve DataVar node:', error);
+          
+          // If we're in strict mode, rethrow the error
+          if (context.strict !== false) {
+            throw error;
+          }
+          
+          // In permissive mode, keep the variable reference
+          const dataVarNode = node as DataVarNode;
+          const identifier = dataVarNode.identifier;
+          const fields = dataVarNode.fields || [];
+          
+          let refString = identifier;
+          for (const field of fields) {
+            if (field.type === 'field') {
+              refString += `.${field.value}`;
+            } else if (field.type === 'index') {
+              refString += `[${field.value}]`;
+            }
+          }
+          
+          result += `{{${refString}}}`;
         }
       } else if (node.type === 'PathVar') {
         // Handle path variable nodes
@@ -338,15 +408,28 @@ export class VariableReferenceResolver {
    * @deprecated Use getNodeValue instead for actual variable values
    */
   private nodeToString(node: MeldNode): string {
-    switch (node.type) {
-      case 'Text':
-        return (node as TextNode).content;
-      case 'Directive':
-        const directive = node as DirectiveNode;
-        return `@${directive.directive.kind} ${directive.directive.identifier || ''} = "${directive.directive.value || ''}"`;
-      default:
-        return '';
+    if (node.type === 'TextVar') {
+      const textVarNode = node as TextVarNode;
+      return `{{${textVarNode.identifier}}}`;
+    } else if (node.type === 'DataVar') {
+      const dataVarNode = node as DataVarNode;
+      let result = dataVarNode.identifier;
+      
+      // Append fields/indices if present
+      if (dataVarNode.fields && dataVarNode.fields.length > 0) {
+        for (const field of dataVarNode.fields) {
+          if (field.type === 'field') {
+            result += `.${field.value}`;
+          } else if (field.type === 'index') {
+            result += `[${field.value}]`;
+          }
+        }
+      }
+      
+      return `{{${result}}}`;
     }
+    
+    return '';
   }
   
   /**
@@ -393,177 +476,130 @@ export class VariableReferenceResolver {
   }
   
   /**
-   * Resolves a variable reference to its value
-   * @param varRef The variable reference (e.g., "user" or "user.name")
+   * Resolves a variable node (TextVar or DataVar)
+   * @param node The variable node to resolve
    * @param context The resolution context
-   * @returns The resolved value as a string
+   * @param resolutionPath Path to detect circular references
+   * @returns The resolved value
    */
-  private async resolveVariable(varRef: string, context: ResolutionContext, resolutionPath: string[] = []): Promise<string> {
-    try {
-      // Split by dot for field access
-      const parts = varRef.split('.');
-      const baseVar = parts[0];
-      
-      try {
-        // Try to get variable from state
-        let value = await this.getVariable(baseVar, context);
-        
-        // If the variable is undefined and we're in strict mode, throw an error
-        if (value === undefined) {
-          const errorDetails = {
-            code: ResolutionErrorCode.UNDEFINED_VARIABLE,
-            details: { 
-              variableName: baseVar,
-              variableType: parts.length > 1 ? 'data' as const : 'text' as const
-            },
-            severity: ErrorSeverity.Recoverable
-          };
-          
-          // In strict mode, throw the error
-          if (context.strict !== false) {
-            throw new MeldResolutionError(
-              `Undefined variable: ${baseVar}`,
-              errorDetails
-            );
-          }
-          
-          // In permissive mode, return the variable reference as is
-          return `{{${varRef}}}`;
+  private async resolveVarNode(
+    node: MeldNode, 
+    context: ResolutionContext,
+    resolutionPath: string[] = []
+  ): Promise<any> {
+    // Normalize the variable node structure
+    const normalized = this.normalizeVarNode(node);
+    if (!normalized) {
+      throw new MeldResolutionError(
+        `Unsupported variable node type: ${node.type}`,
+        {
+          code: ResolutionErrorCode.INVALID_SYNTAX,
+          details: { message: `Unsupported variable node type: ${node.type}` } as ResolutionErrorDetails,
+          severity: ErrorSeverity.Recoverable
         }
-        
-        // Handle field access (e.g., user.name)
-        if (parts.length > 1 && typeof value === 'object' && value !== null) {
-          try {
-            // Resolve field access
-            value = this.resolveFieldAccess(value, parts.slice(1), context);
-          } catch (error) {
-            logger.warn(`Error accessing field ${parts.slice(1).join('.')} of ${baseVar}`, {
-              error: error instanceof Error ? error.message : String(error)
-            });
-            
-            // In strict mode, rethrow the error
-            if (context.strict !== false) {
-              throw new MeldResolutionError(
-                `Failed to access field ${parts.slice(1).join('.')} in ${baseVar}`,
-                {
-                  code: ResolutionErrorCode.FIELD_ACCESS_ERROR,
-                  details: { 
-                    fieldPath: parts.slice(1).join('.'),
-                    variableName: baseVar
-                  },
-                  severity: ErrorSeverity.Recoverable
-                }
-              );
-            }
-            
-            // In permissive mode, return an error message
-            return `Error accessing ${parts.slice(1).join('.')}: ${(error as Error).message}`;
-          }
-        }
-        
-        // Stringification logic - IMPORTANT for avoiding output conversion errors
-        if (value === undefined || value === null) {
-          return '';
-        } else if (typeof value === 'object') {
-          // Pretty-print JSON objects for readability
-          return JSON.stringify(value, null, 2);
-        } else {
-          return String(value);
-        }
-      } catch (error) {
-        // If we're in strict mode, rethrow the error
-        if (context.strict !== false && error instanceof MeldResolutionError) {
-          throw error;
-        }
-        
-        logger.warn(`Error resolving variable ${varRef}`, {
-          error: error instanceof Error ? error.message : String(error)
-        });
-        
-        // In permissive mode, return the variable reference as is
-        return `{{${varRef}}}`; 
-      }
-    } catch (error) {
-      // Always rethrow fatal errors
-      if (error instanceof MeldResolutionError && error.severity === ErrorSeverity.Fatal) {
-        throw error;
-      }
-      
-      // If we're in strict mode, rethrow the error
+      );
+    }
+
+    // Get the base variable value
+    let value = await this.getVariable(normalized.identifier, context);
+    if (value === undefined) {
       if (context.strict !== false) {
-        throw error;
+        throw new MeldResolutionError(
+          `Undefined variable: ${normalized.identifier}`,
+          {
+            code: ResolutionErrorCode.UNDEFINED_VARIABLE,
+            details: { variableName: normalized.identifier },
+            severity: ErrorSeverity.Recoverable
+          }
+        );
       }
-      
-      logger.warn(`Unexpected error in resolveVariable for ${varRef}`, {
-        error: error instanceof Error ? error.message : String(error)
-      });
-      
-      // In permissive mode, return the variable reference as is
-      return `{{${varRef}}}`;
+      return undefined;
     }
+
+    // Process fields/indices if present
+    if (normalized.fields.length > 0) {
+      try {
+        for (const field of normalized.fields) {
+          if (value === undefined) break;
+          
+          // Handle array index or object property access
+          if (field.type === 'index') {
+            // For numeric indices
+            value = value[field.value];
+          } else {
+            // For named properties
+            value = value[field.value];
+          }
+        }
+      } catch (error: any) {
+        throw new MeldResolutionError(
+          `Invalid field access for variable ${normalized.identifier}: ${error?.message || 'Unknown error'}`,
+          {
+            code: ResolutionErrorCode.FIELD_ACCESS_ERROR,
+            details: { 
+              variableName: normalized.identifier, 
+              fieldPath: normalized.fields.map(f => f.value).join('.'),
+              error: error?.message || 'Unknown error' 
+            } as ResolutionErrorDetails,
+            severity: ErrorSeverity.Recoverable
+          }
+        );
+      }
+    }
+
+    return value;
   }
-  
+
   /**
-   * Resolves field access for an object
-   * @param obj The object to access fields from
-   * @param fieldPath The path to the field (e.g., ["name"] or ["contact", "email"])
-   * @param context The resolution context
-   * @returns The field value
+   * Normalizes a variable node to a common format regardless of node type
    */
-  private resolveFieldAccess(obj: any, fieldPath: string[], context: ResolutionContext): any {
-    if (!obj || !fieldPath.length) {
-      return obj;
+  private normalizeVarNode(node: MeldNode): { 
+    identifier: string;
+    varType: 'text' | 'data';
+    fields: Array<{ type: 'field' | 'index', value: string | number }>;
+  } | null {
+    if (!node) return null;
+    
+    if (node.type === 'TextVar') {
+      const textVarNode = node as TextVarNode;
+      return {
+        identifier: textVarNode.identifier,
+        varType: 'text',
+        fields: []
+      };
+    } 
+    
+    if (node.type === 'DataVar') {
+      const dataVarNode = node as DataVarNode;
+      return {
+        identifier: dataVarNode.identifier,
+        varType: 'data',
+        fields: dataVarNode.fields?.map(field => {
+          if (typeof field === 'object' && field !== null) {
+            if (field.type === 'index') {
+              return {
+                type: 'index' as const,
+                value: typeof field.value === 'number' ? field.value : parseInt(field.value, 10)
+              };
+            } else if (field.type === 'field') {
+              return {
+                type: 'field' as const,
+                value: field.value
+              };
+            }
+          }
+          // Default case for unexpected field format
+          return {
+            type: 'field' as const,
+            value: String(field)
+          };
+        }) || []
+      };
     }
     
-    let current = obj;
-    
-    for (const part of fieldPath) {
-      if (current === null || current === undefined) {
-        throw new Error(`Cannot access ${part} of undefined or null`);
-      }
-      
-      // Handle array access with numeric field access: items.0 (Ruby-style dot notation)
-      const numericMatch = /^\d+$/.test(part);
-      if (numericMatch && Array.isArray(current)) {
-        const index = parseInt(part, 10);
-        
-        if (index < 0 || index >= current.length) {
-          throw new Error(`Array index ${index} out of bounds for array of length ${current.length}`);
-        }
-        
-        current = current[index];
-        // Continue to the next part after handling the numeric index
-        continue;
-      }
-      
-      // Handle array access with bracket notation: items[0]
-      const arrayMatch = part.match(/^(\w+)\[(\d+)\]$/);
-      if (arrayMatch) {
-        const [_, arrayName, indexStr] = arrayMatch;
-        const index = parseInt(indexStr, 10);
-        
-        if (!current[arrayName] || !Array.isArray(current[arrayName])) {
-          throw new Error(`${arrayName} is not an array or does not exist`);
-        }
-        
-        if (index < 0 || index >= current[arrayName].length) {
-          throw new Error(`Array index ${index} out of bounds for ${arrayName}`);
-        }
-        
-        current = current[arrayName][index];
-      } else {
-        // Standard property access
-        if (!(part in current)) {
-          throw new Error(`Field ${part} does not exist on object`);
-        }
-        
-        current = current[part];
-      }
-    }
-    
-    return current;
+    return null;
   }
-  
+
   /**
    * Handles the resolution of standard text variables using a simpler approach
    * @param text Text containing variable references

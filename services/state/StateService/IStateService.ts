@@ -2,6 +2,16 @@ import type { MeldNode } from 'meld-spec';
 import type { IStateEventService } from '../StateEventService/IStateEventService.js';
 import type { IStateTrackingService } from '../../../tests/utils/debug/StateTrackingService/IStateTrackingService.js';
 
+/**
+ * Options for selective transformation
+ */
+export interface TransformationOptions {
+  variables?: boolean;    // Transform variable references
+  directives?: boolean;   // Transform directive content
+  commands?: boolean;     // Execute commands
+  imports?: boolean;      // Process imports
+}
+
 export interface IStateService {
   // Event system
   setEventService(eventService: IStateEventService): void;
@@ -42,7 +52,9 @@ export interface IStateService {
   setTransformedNodes(nodes: MeldNode[]): void;
   transformNode(original: MeldNode, transformed: MeldNode): void;
   isTransformationEnabled(): boolean;
-  enableTransformation(enable: boolean): void;
+  enableTransformation(options?: TransformationOptions | boolean): void;
+  shouldTransform(type: keyof TransformationOptions): boolean;
+  getTransformationOptions(): TransformationOptions;
   getCommandOutput(command: string): string | undefined;
   hasTransformationSupport(): boolean;
 

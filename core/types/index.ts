@@ -10,6 +10,7 @@ import type { CircularityService } from '@services/resolution/CircularityService
 import type { DirectiveService } from '@services/pipeline/DirectiveService/DirectiveService.js';
 import type { OutputService } from '@services/pipeline/OutputService/OutputService.js';
 import type { StateDebuggerService as DebuggerService } from '@tests/utils/debug/StateDebuggerService/StateDebuggerService.js';
+import type { TransformationOptions } from '@services/state/StateService/IStateService.js';
 
 /**
  * Represents a position in a file
@@ -57,8 +58,11 @@ export interface Services {
 }
 
 export interface ProcessOptions {
-  /** Controls whether directives should be transformed */
-  transformation?: boolean;
+  /** 
+   * Controls whether directives should be transformed 
+   * Can be a boolean for all-or-nothing transformation, or an object with selective options
+   */
+  transformation?: boolean | TransformationOptions;
   /** Controls output format */
   format?: OutputFormat;
   /** Enables/disables debugging */

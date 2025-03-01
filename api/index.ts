@@ -199,7 +199,13 @@ export async function main(filePath: string, options: ProcessOptions = {}): Prom
     
     // Enable transformation if requested (do this before interpretation)
     if (options.transformation) {
-      services.state.enableTransformation(true);
+      // If transformation is a boolean, use the legacy all-or-nothing approach
+      // If it's an object with options, use selective transformation
+      if (typeof options.transformation === 'boolean') {
+        services.state.enableTransformation(options.transformation);
+      } else {
+        services.state.enableTransformation(options.transformation);
+      }
     }
     
     // Interpret the AST
@@ -207,7 +213,12 @@ export async function main(filePath: string, options: ProcessOptions = {}): Prom
     
     // Ensure transformation state is preserved from original state service
     if (services.state.isTransformationEnabled()) {
-      resultState.enableTransformation(true);
+      // Pass the complete transformation options to preserve selective settings
+      resultState.enableTransformation(
+        typeof options.transformation === 'boolean' 
+          ? options.transformation 
+          : options.transformation
+      );
     }
     
     // Get transformed nodes if available
