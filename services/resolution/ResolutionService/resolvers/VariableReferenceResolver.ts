@@ -1,12 +1,18 @@
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
-import { ResolutionErrorCode, type ResolutionErrorDetails } from '@services/resolution/ResolutionService/IResolutionService.js';
+import { ResolutionErrorCode } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 import type { MeldNode, TextNode, DirectiveNode, TextVarNode, DataVarNode } from 'meld-spec';
 import { resolutionLogger as logger } from '@core/utils/logger.js';
+
+// Define the field type for clarity
+interface Field {
+  type: 'field' | 'index';
+  value: string | number;
+}
 
 /**
  * Handles resolution of variable references ({{var}})
@@ -28,31 +34,81 @@ export class VariableReferenceResolver {
    * @param context Resolution context
    * @returns Resolved text with all variables replaced with their values
    */
-  async resolve(text: string, context: ResolutionContext): Promise<string> {
-    // Ensure context state is properly accessed
-    const stateTextVars = this.getSafeTextVars(context);
-    const stateDataVars = this.getSafeDataVars(context);
-    
-    console.log('*** VariableReferenceResolver.resolve: ', {
-      text,
-      stateTextVars,
-      stateDataVars
-    });
-
-    // Skip the resolution if there are no variable references
-    if (!text.includes('{{')) {
-      console.log('*** No variables detected in text, returning original');
-      return text;
+  async resolve(content: string, context: ResolutionContext): Promise<string> {
+    // If content is empty, return it as is
+    if (!content) {
+      return content;
     }
 
-    try {
-      console.log('*** Attempting to parse text for AST-based resolution');
-      return await this.resolveWithAst(text, context);
-    } catch (error) {
-      console.log('*** Error during AST parsing:', error);
-      console.log('*** Falling back to simple variable resolution');
-      return this.resolveSimpleVariables(text, context);
+    // Use regex to find all variable references in the content
+    const variableRegex = /{{([^{}]+)}}/g;
+    let result = content;
+    let match;
+
+    // Process each variable reference
+    while ((match = variableRegex.exec(content)) !== null) {
+      const fullMatch = match[0]; // The entire match, e.g., {{variable.field}}
+      const reference = match[1].trim(); // The variable reference, e.g., variable.field
+      
+      try {
+        // Split the reference into variable name and field path
+        const [variableName, ...fieldParts] = reference.split('.');
+        const fieldPath = fieldParts.length > 0 ? fieldParts.join('.') : '';
+        
+        // Use the new resolveFieldAccess method to handle field access
+        const value = await this.resolveFieldAccess(variableName, fieldPath, context);
+        
+        // Convert the value to a string for replacement
+        let stringValue = '';
+        if (value !== undefined) {
+          if (typeof value === 'object' && value !== null) {
+            stringValue = JSON.stringify(value);
+          } else {
+            stringValue = String(value);
+          }
+        } else if (context.strict !== false) {
+          // In strict mode, throw an error for undefined values
+          throw new MeldResolutionError(
+            `Variable ${variableName}${fieldPath ? '.' + fieldPath : ''} not found`,
+            {
+              code: ResolutionErrorCode.RESOLUTION_FAILED,
+              details: { variableName, fieldPath }
+            }
+          );
+        }
+        
+        // Replace the variable reference with its value
+        result = result.replace(fullMatch, stringValue);
+      } catch (error: unknown) {
+        // Handle errors based on context settings
+        if (error instanceof MeldResolutionError) {
+          if (context.strict !== false) {
+            throw error;
+          }
+          // In non-strict mode, keep the original reference
+          logger.warn(`Resolution error (non-strict mode): ${error.message}`);
+        } else {
+          // For other errors, wrap them in a MeldResolutionError
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          const wrappedError = new MeldResolutionError(
+            `Error resolving variable reference ${match[1]}: ${errorMessage}`,
+            {
+              code: ResolutionErrorCode.RESOLUTION_FAILED,
+              cause: error instanceof Error ? error : undefined,
+              details: { value: match[1] }
+            }
+          );
+          
+          if (context.strict !== false) {
+            throw wrappedError;
+          }
+          // In non-strict mode, keep the original reference
+          logger.warn(`Resolution error (non-strict mode): ${wrappedError.message}`);
+        }
+      }
     }
+
+    return result;
   }
   
   /**
@@ -137,10 +193,11 @@ export class VariableReferenceResolver {
           // Build the reference string for debugging and fallback
           let refString = identifier;
           for (const field of fields) {
-            if (field.type === 'field') {
-              refString += `.${field.value}`;
-            } else if (field.type === 'index') {
-              refString += `[${field.value}]`;
+            const typedField = field as unknown as Field;
+            if (typedField.type === 'field') {
+              refString += `.${typedField.value}`;
+            } else if (typedField.type === 'index') {
+              refString += `[${typedField.value}]`;
             }
           }
           
@@ -156,8 +213,30 @@ export class VariableReferenceResolver {
                 for (const field of fields) {
                   if (value === undefined) break;
                   
-                  if (field.type === 'field' || field.type === 'index') {
-                    value = value[field.value];
+                  const typedField = field as unknown as Field;
+                  if (typedField.type === 'field' || typedField.type === 'index') {
+                    // Improve array index handling
+                    const fieldKey = typedField.value;
+                    
+                    // Special handling for arrays with numeric string indices
+                    if (Array.isArray(value) && typeof fieldKey === 'string' && /^\d+$/.test(fieldKey)) {
+                      const numericIndex = parseInt(fieldKey, 10);
+                      if (numericIndex < 0 || numericIndex >= value.length) {
+                        throw new Error(`Array index out of bounds: ${numericIndex} (length: ${value.length})`);
+                      }
+                      value = value[numericIndex];
+                    } 
+                    // Regular object property access
+                    else if (typeof value === 'object' && value !== null) {
+                      if (!(fieldKey in value)) {
+                        throw new Error(`Property ${fieldKey} not found in object`);
+                      }
+                      value = value[fieldKey];
+                    }
+                    // Handle primitive values
+                    else {
+                      throw new Error(`Cannot access field ${fieldKey} of ${typeof value}`);
+                    }
                   }
                 }
                 
@@ -175,7 +254,7 @@ export class VariableReferenceResolver {
                       code: ResolutionErrorCode.FIELD_ACCESS_ERROR,
                       details: { 
                         variableName: identifier,
-                        fieldPath: fields.map(f => String(f.value)).join('.')
+                        fieldPath: fields.map(f => String((f as unknown as Field).value)).join('.')
                       },
                       severity: ErrorSeverity.Recoverable
                     }
@@ -192,7 +271,7 @@ export class VariableReferenceResolver {
                       code: ResolutionErrorCode.FIELD_ACCESS_ERROR,
                       details: { 
                         variableName: identifier,
-                        fieldPath: fields.map(f => String(f.value)).join('.')
+                        fieldPath: fields.map(f => String((f as unknown as Field).value)).join('.')
                       },
                       severity: ErrorSeverity.Recoverable
                     }
@@ -234,10 +313,11 @@ export class VariableReferenceResolver {
           
           let refString = identifier;
           for (const field of fields) {
-            if (field.type === 'field') {
-              refString += `.${field.value}`;
-            } else if (field.type === 'index') {
-              refString += `[${field.value}]`;
+            const typedField = field as unknown as Field;
+            if (typedField.type === 'field') {
+              refString += `.${typedField.value}`;
+            } else if (typedField.type === 'index') {
+              refString += `[${typedField.value}]`;
             }
           }
           
@@ -418,10 +498,11 @@ export class VariableReferenceResolver {
       // Append fields/indices if present
       if (dataVarNode.fields && dataVarNode.fields.length > 0) {
         for (const field of dataVarNode.fields) {
-          if (field.type === 'field') {
-            result += `.${field.value}`;
-          } else if (field.type === 'index') {
-            result += `[${field.value}]`;
+          const typedField = field as unknown as Field;
+          if (typedField.type === 'field') {
+            result += `.${typedField.value}`;
+          } else if (typedField.type === 'index') {
+            result += `[${typedField.value}]`;
           }
         }
       }
@@ -493,8 +574,8 @@ export class VariableReferenceResolver {
       throw new MeldResolutionError(
         `Unsupported variable node type: ${node.type}`,
         {
-          code: ResolutionErrorCode.INVALID_SYNTAX,
-          details: { message: `Unsupported variable node type: ${node.type}` } as ResolutionErrorDetails,
+          code: ResolutionErrorCode.RESOLUTION_FAILED,
+          details: { variableName: node.type },
           severity: ErrorSeverity.Recoverable
         }
       );
@@ -519,28 +600,54 @@ export class VariableReferenceResolver {
     // Process fields/indices if present
     if (normalized.fields.length > 0) {
       try {
+        // Build field path for error reporting
+        const fieldPath = normalized.fields.map(f => String((f as unknown as Field).value)).join('.');
+        
+        // Process each field
         for (const field of normalized.fields) {
           if (value === undefined) break;
           
-          // Handle array index or object property access
-          if (field.type === 'index') {
-            // For numeric indices
-            value = value[field.value];
-          } else {
-            // For named properties
-            value = value[field.value];
+          const typedField = field as unknown as Field;
+          const fieldKey = typedField.value;
+          
+          // Check if value is accessible
+          if (value === null || value === undefined) {
+            throw new Error(`Cannot access ${fieldKey} of ${value}`);
+          }
+          
+          // Special handling for arrays with numeric indices
+          if (Array.isArray(value) && typeof fieldKey === 'string' && /^\d+$/.test(fieldKey)) {
+            const numericIndex = parseInt(fieldKey, 10);
+            if (numericIndex < 0 || numericIndex >= value.length) {
+              throw new Error(`Array index out of bounds: ${numericIndex} (length: ${value.length})`);
+            }
+            value = value[numericIndex];
+          } 
+          // Object property access
+          else if (typeof value === 'object') {
+            if (!(fieldKey in value)) {
+              throw new Error(`Property ${fieldKey} not found in object`);
+            }
+            value = value[fieldKey];
+          }
+          // Primitive value access (will fail)
+          else {
+            throw new Error(`Cannot access field ${fieldKey} of ${typeof value}`);
           }
         }
       } catch (error: any) {
+        // Create a readable field path for the error message
+        const fieldPathStr = normalized.fields.map(f => String((f as unknown as Field).value)).join('.');
+        
         throw new MeldResolutionError(
           `Invalid field access for variable ${normalized.identifier}: ${error?.message || 'Unknown error'}`,
           {
             code: ResolutionErrorCode.FIELD_ACCESS_ERROR,
             details: { 
               variableName: normalized.identifier, 
-              fieldPath: normalized.fields.map(f => f.value).join('.'),
+              fieldPath: fieldPathStr,
               error: error?.message || 'Unknown error' 
-            } as ResolutionErrorDetails,
+            },
             severity: ErrorSeverity.Recoverable
           }
         );
@@ -576,15 +683,16 @@ export class VariableReferenceResolver {
         varType: 'data',
         fields: dataVarNode.fields?.map(field => {
           if (typeof field === 'object' && field !== null) {
-            if (field.type === 'index') {
+            const typedField = field as any; // Cast to any to bypass type checking
+            if (typedField.type === 'index') {
               return {
                 type: 'index' as const,
-                value: typeof field.value === 'number' ? field.value : parseInt(field.value, 10)
+                value: typeof typedField.value === 'number' ? typedField.value : parseInt(String(typedField.value), 10)
               };
-            } else if (field.type === 'field') {
+            } else if (typedField.type === 'field') {
               return {
                 type: 'field' as const,
-                value: field.value
+                value: typedField.value
               };
             }
           }
@@ -715,8 +823,17 @@ export class VariableReferenceResolver {
                 throw new Error(`Cannot access field ${field} of ${typeof current}`);
               }
               
-              // Access the field
-              current = current[field];
+              // Access the field - improve handling of array indices
+              if (Array.isArray(current) && /^\d+$/.test(field)) {
+                const index = parseInt(field, 10);
+                if (index < 0 || index >= current.length) {
+                  console.log(`FIELD ACCESS - Array index out of bounds: ${index} (length: ${current.length})`);
+                  throw new Error(`Array index out of bounds: ${index} (length: ${current.length})`);
+                }
+                current = current[index];
+              } else {
+                current = current[field];
+              }
               console.log(`FIELD ACCESS - Field value:`, current);
             }
             
@@ -1144,5 +1261,102 @@ export class VariableReferenceResolver {
     }
     
     return value;
+  }
+
+  async resolveFieldAccess(variableName: string, fieldPath: string, context: ResolutionContext): Promise<any> {
+    // Get the base variable value
+    const value = await this.getVariable(variableName, context);
+    
+    if (value === undefined) {
+      throw new MeldResolutionError(
+        `Variable ${variableName} not found`,
+        { 
+          code: ResolutionErrorCode.RESOLUTION_FAILED,
+          details: { variableName, fieldPath }
+        }
+      );
+    }
+    
+    // If no field path, return the value directly
+    if (!fieldPath) {
+      return value;
+    }
+    
+    // Split the field path into segments
+    const fieldSegments = fieldPath.split('.');
+    
+    // Traverse the object/array structure
+    let currentValue = value;
+    let currentPath = '';
+    
+    for (const segment of fieldSegments) {
+      if (currentValue === undefined || currentValue === null) {
+        throw new MeldResolutionError(
+          `Cannot access field ${fieldPath} in ${variableName}: path ${currentPath} is ${currentValue}`,
+          {
+            code: ResolutionErrorCode.RESOLUTION_FAILED,
+            details: { 
+              variableName, 
+              fieldPath, 
+              value: `Error accessing ${fieldPath}: path ${currentPath} is ${currentValue}` 
+            }
+          }
+        );
+      }
+      
+      currentPath = currentPath ? `${currentPath}.${segment}` : segment;
+      
+      // Check if segment is a numeric index and current value is an array
+      if (Array.isArray(currentValue) && /^\d+$/.test(segment)) {
+        const index = parseInt(segment, 10);
+        if (index < 0 || index >= currentValue.length) {
+          throw new MeldResolutionError(
+            `Array index out of bounds: ${index} (length: ${currentValue.length})`,
+            {
+              code: ResolutionErrorCode.RESOLUTION_FAILED,
+              details: { 
+                variableName, 
+                fieldPath, 
+                value: `Error accessing ${fieldPath}: index ${index} out of bounds` 
+              }
+            }
+          );
+        }
+        currentValue = currentValue[index];
+      }
+      // Handle object property access
+      else if (typeof currentValue === 'object' && currentValue !== null) {
+        if (!(segment in currentValue)) {
+          throw new MeldResolutionError(
+            `Property ${segment} not found in object at path ${currentPath}`,
+            {
+              code: ResolutionErrorCode.RESOLUTION_FAILED,
+              details: { 
+                variableName, 
+                fieldPath, 
+                value: `Error accessing ${fieldPath}: property ${segment} not found` 
+              }
+            }
+          );
+        }
+        currentValue = currentValue[segment];
+      }
+      // Handle primitive values
+      else {
+        throw new MeldResolutionError(
+          `Cannot access field ${segment} of ${typeof currentValue} at path ${currentPath}`,
+          {
+            code: ResolutionErrorCode.RESOLUTION_FAILED,
+            details: { 
+              variableName, 
+              fieldPath, 
+              value: `Error accessing ${fieldPath}: cannot access field of ${typeof currentValue}` 
+            }
+          }
+        );
+      }
+    }
+    
+    return currentValue;
   }
 } 

@@ -471,36 +471,46 @@ export class OutputService implements IOutputService {
           // For transformation mode, we need to resolve the field access if fields are present
           // This is necessary for things like array access with dot notation (items.0)
           if (state.isTransformationEnabled() && 'fields' in node && Array.isArray(node.fields) && node.fields.length > 0 && this.resolutionService) {
-            let serializedNode = '';
             if ('identifier' in node) {
               const identifier = node.identifier as string;
-              // Build a variable reference with fields
-              const fields = node.fields.map(field => {
-                if (field.type === 'index') {
-                  return String(field.value);
-                } else if (field.type === 'identifier') {
-                  return field.value;
-                }
-                return '';
-              }).filter(Boolean);
               
-              // Create a variable reference with fields
-              serializedNode = `{{${identifier}${fields.length > 0 ? '.' + fields.join('.') : ''}}}`;
-              
-              logger.debug('Resolving DataVar with fields', {
-                serializedNode,
+              // Debug log the structure of the DataVar node
+              logger.debug('DataVar node fields', {
                 identifier,
-                fields
+                fields: node.fields,
+                fieldTypes: node.fields.map(f => f.type),
+                fieldValues: node.fields.map(f => f.value)
               });
               
               try {
-                // Create appropriate resolution context
+                // Process all fields at once rather than individually
+                // Create a resolution context
                 const context: ResolutionContext = ResolutionContextFactory.forDataDirective(
                   undefined, // current file path not needed here
                   state // state service to use
                 );
                 
-                // Use ResolutionService to resolve the variable reference
+                // Build the complete reference with all fields
+                const fields = node.fields.map(field => {
+                  // Keep field types intact to ensure numeric indices are recognized as array indices
+                  if (field.type === 'index') {
+                    return String(field.value);
+                  } else if (field.type === 'field') {
+                    return field.value;
+                  }
+                  return '';
+                }).filter(Boolean);
+                
+                // Create a variable reference with all fields
+                const serializedNode = `{{${identifier}${fields.length > 0 ? '.' + fields.join('.') : ''}}}`;
+                
+                logger.debug('Resolving DataVar with all fields at once', {
+                  serializedNode,
+                  identifier,
+                  fields
+                });
+                
+                // Use ResolutionService to resolve the complete variable reference
                 const resolved = await this.resolutionService.resolveInContext(serializedNode, context);
                 
                 logger.debug('DataVar field access resolution result', {
@@ -510,10 +520,14 @@ export class OutputService implements IOutputService {
                 
                 return String(resolved);
               } catch (resolutionError) {
+                // Log the error but throw it to prevent falling through to other resolution methods
                 logger.error('Error resolving DataVar with field access', {
-                  serializedNode,
-                  error: resolutionError
+                  error: resolutionError,
+                  errorMessage: resolutionError instanceof Error ? resolutionError.message : String(resolutionError),
+                  cause: resolutionError instanceof Error && 'cause' in resolutionError ? resolutionError.cause : undefined
                 });
+                
+                throw resolutionError;
               }
             }
           }
