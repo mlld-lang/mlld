@@ -10,6 +10,57 @@ import type { IParserService } from '@services/pipeline/ParserService/IParserSer
 import type { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
 import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { createLocation, createEmbedDirective } from '@tests/utils/testFactories.js';
+import { getExample, getInvalidExample } from '@tests/utils/syntax-test-helpers.js';
+
+/**
+ * MIGRATION NOTES:
+ * 
+ * This file has been migrated to use centralized syntax examples where possible.
+ * 
+ * Some key observations from the migration:
+ * 
+ * 1. For tests with basic embed directives, we use centralized syntax examples.
+ * 
+ * 2. For tests requiring specific options or behaviors, we either:
+ *    - Use centralized examples with appropriate options if available
+ *    - Continue using createEmbedDirective where needed for specialized cases
+ * 
+ * 3. For error handling tests, we use appropriate invalid examples from the centralized examples.
+ */
+
+/**
+ * Creates a DirectiveNode from example code string
+ * 
+ * @param code - The directive code to parse
+ * @returns The parsed DirectiveNode
+ */
+async function createNodeFromExample(code: string): Promise<DirectiveNode> {
+  try {
+    const { parse } = await import('meld-ast');
+    const result = await parse(code, {
+      trackLocations: true,
+      validateNodes: true,
+      // @ts-expect-error - structuredPaths is used but may be missing from typings
+      structuredPaths: true
+    });
+    
+    const nodes = result.ast || [];
+    if (!nodes || nodes.length === 0) {
+      throw new Error(`Failed to parse example: ${code}`);
+    }
+    
+    // The first node should be our directive
+    const directiveNode = nodes[0];
+    if (directiveNode.type !== 'Directive') {
+      throw new Error(`Example did not produce a directive node: ${code}`);
+    }
+    
+    return directiveNode as DirectiveNode;
+  } catch (error) {
+    console.error('Error parsing with meld-ast:', error);
+    throw error;
+  }
+}
 
 // Mock the logger
 const mockLogger = {
@@ -111,8 +162,9 @@ describe('EmbedDirectiveHandler Transformation', () => {
 
   describe('transformation behavior', () => {
     it('should return replacement node with file contents when transformation enabled', async () => {
-      const node = createEmbedDirective('doc.md', undefined, createLocation(1, 1));
-      node.directive.path = 'doc.md';
+      // MIGRATION: Using centralized syntax example
+      const example = getExample('embed', 'atomic', 'simpleEmbed');
+      const node = await createNodeFromExample(example.code);
       const context = { currentFilePath: 'test.meld', state: stateService };
 
       vi.mocked(resolutionService.resolveInContext).mockResolvedValue('doc.md');
@@ -132,13 +184,14 @@ describe('EmbedDirectiveHandler Transformation', () => {
     });
 
     it('should handle section extraction in transformation', async () => {
-      const node = createEmbedDirective('doc.md', 'Introduction', createLocation(1, 1));
-      node.directive.path = 'doc.md';
+      // MIGRATION: Using centralized syntax example with section
+      const example = getExample('embed', 'atomic', 'withSection');
+      const node = await createNodeFromExample(example.code);
       const context = { currentFilePath: 'test.meld', state: stateService };
 
       vi.mocked(resolutionService.resolveInContext)
-        .mockResolvedValueOnce('doc.md')
-        .mockResolvedValueOnce('Introduction');
+        .mockResolvedValueOnce('sections.md')
+        .mockResolvedValueOnce('Section Two');
       vi.mocked(fileSystemService.exists).mockResolvedValue(true);
       vi.mocked(fileSystemService.readFile).mockResolvedValue('# Content');
       vi.mocked(resolutionService.extractSection).mockResolvedValue('# Introduction\nContent');
@@ -154,6 +207,8 @@ describe('EmbedDirectiveHandler Transformation', () => {
     });
 
     it('should handle heading level in transformation', async () => {
+      // MIGRATION: Need to continue using direct node creation for heading level test
+      // The complexOptions example doesn't parse correctly in this context
       const node = createEmbedDirective('doc.md', undefined, createLocation(1, 1), {
         headingLevel: 2
       });
@@ -175,6 +230,8 @@ describe('EmbedDirectiveHandler Transformation', () => {
     });
 
     it('should handle under header in transformation', async () => {
+      // MIGRATION: Need to continue using direct node creation for under header test
+      // Similar to headingLevel test, the complexOptions example doesn't parse correctly
       const node = createEmbedDirective('doc.md', undefined, createLocation(1, 1), {
         underHeader: 'My Header'
       });
@@ -196,6 +253,8 @@ describe('EmbedDirectiveHandler Transformation', () => {
     });
 
     it('should handle variable interpolation in path during transformation', async () => {
+      // MIGRATION: Need to continue using direct node creation for variable path test
+      // The withVariablePath example doesn't parse correctly in this context
       const node = createEmbedDirective('{{filename}}.md', undefined, createLocation(1, 1));
       node.directive.path = '{{filename}}.md';
       const context = { currentFilePath: 'test.meld', state: stateService };
@@ -219,8 +278,9 @@ describe('EmbedDirectiveHandler Transformation', () => {
     });
 
     it('should preserve error handling during transformation', async () => {
-      const node = createEmbedDirective('missing.md', undefined, createLocation(1, 1));
-      node.directive.path = 'missing.md';
+      // MIGRATION: Using centralized invalid example for file not found
+      const invalidExample = getInvalidExample('embed', 'fileNotFound');
+      const node = await createNodeFromExample(invalidExample.code);
       const context = { currentFilePath: 'test.meld', state: stateService };
 
       vi.mocked(resolutionService.resolveInContext).mockResolvedValue('missing.md');
@@ -231,8 +291,9 @@ describe('EmbedDirectiveHandler Transformation', () => {
     });
 
     it('should handle circular imports during transformation', async () => {
-      const node = createEmbedDirective('circular.md', undefined, createLocation(1, 1));
-      node.directive.path = 'circular.md';
+      // MIGRATION: Using centralized example for simple embed in circular import scenario
+      const example = getExample('embed', 'atomic', 'simpleEmbed');
+      const node = await createNodeFromExample(example.code);
       const context = { currentFilePath: 'test.meld', state: stateService };
 
       vi.mocked(resolutionService.resolveInContext).mockResolvedValue('circular.md');

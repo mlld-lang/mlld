@@ -19,7 +19,7 @@
   - 🔲 `services/cli/CLIService/CLIService.test.ts`
   - 🔲 `services/pipeline/OutputService/OutputService.test.ts`
   - ✅ `services/pipeline/ParserService/ParserService.test.ts`
-  - 🚧 `services/pipeline/InterpreterService/InterpreterService.integration.test.ts` (claimed already)
+  - ✅ `services/pipeline/InterpreterService/InterpreterService.integration.test.ts`
 
 - 🔲 API and Integration tests:
   - 🔲 `api/api.test.ts`
@@ -28,8 +28,8 @@
 ### Transformation Tests
 - 🔲 DirectiveHandler transformation tests:
   - ✅ `ImportDirectiveHandler.transformation.test.ts`
-  - 🔲 `EmbedDirectiveHandler.transformation.test.ts`
-  - 🔲 `RunDirectiveHandler.transformation.test.ts`
+  - ✅ `RunDirectiveHandler.transformation.test.ts`
+  - ✅ `EmbedDirectiveHandler.transformation.test.ts`
 
 **Next Steps**:
 - Migrate Service-level tests (ResolutionService, OutputService, etc.)
