@@ -240,6 +240,31 @@ export async function main(filePath: string, options: ProcessOptions = {}): Prom
         .replace(/(\w+),\n(\w+)/g, '$1, $2')
         .replace(/(\w+):\n{/g, '$1: {')
         .replace(/},\n(\w+):/g, '}, $1:');
+      
+      // Check for any remaining variable references in the output and replace them with their values
+      const variableRegex = /\{\{([^{}]+)\}\}/g;
+      const matches = Array.from(converted.matchAll(variableRegex));
+      
+      for (const match of matches) {
+        const fullMatch = match[0]; // The entire match, e.g., {{variable}}
+        const variableName = match[1].trim(); // The variable name, e.g., variable
+        
+        // Try to get the variable value from the state
+        let value;
+        // Try text variable first
+        value = resultState.getTextVar(variableName);
+        
+        // If not found as text variable, try data variable
+        if (value === undefined) {
+          value = resultState.getDataVar(variableName);
+        }
+        
+        // If a value was found, replace the variable reference with its value
+        if (value !== undefined) {
+          const stringValue = typeof value === 'string' ? value : JSON.stringify(value);
+          converted = converted.replace(fullMatch, stringValue);
+        }
+      }
         
       // Special handling for object properties in test cases
       // Replace object JSON with direct property access
