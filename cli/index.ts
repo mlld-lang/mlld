@@ -12,6 +12,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { watch } from 'fs/promises';
 import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
+import { debugResolutionCommand } from './commands/debug-resolution.js';
 
 // CLI Options interface
 interface CLIOptions {
@@ -27,6 +28,9 @@ interface CLIOptions {
   version?: boolean;
   help?: boolean;
   custom?: boolean; // Flag for custom filesystem in tests
+  debugResolution?: boolean;
+  variableName?: string;
+  outputFormat?: 'json' | 'text';
 }
 
 /**
@@ -69,6 +73,13 @@ function parseArgs(args: string[]): CLIOptions {
     format: 'markdown', // Default to markdown format
     strict: false  // Default to permissive mode
   };
+
+  // Check for debug-resolution command
+  if (args.length > 0 && args[0] === 'debug-resolution') {
+    options.debugResolution = true;
+    // Remove the command from args
+    args = args.slice(1);
+  }
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -114,6 +125,14 @@ function parseArgs(args: string[]): CLIOptions {
       case '-h':
         options.help = true;
         break;
+      // Add new debug-resolution options
+      case '--var':
+      case '--variable':
+        options.variableName = args[++i];
+        break;
+      case '--output-format':
+        options.outputFormat = args[++i] as 'json' | 'text';
+        break;
       default:
         if (!arg.startsWith('-') && !options.input) {
           options.input = arg;
@@ -134,22 +153,43 @@ function parseArgs(args: string[]): CLIOptions {
 /**
  * Display help information
  */
-function displayHelp(): void {
-  console.log(`
-Usage: meld [options] <input-file>
+function displayHelp(command?: string) {
+  if (command === 'debug-resolution') {
+    console.log(`
+Usage: meld debug-resolution [options] <input-file>
+
+Debug variable resolution in a Meld file.
 
 Options:
-  -f, --format <format>  Output format (md, markdown, llm/xml) [default: markdown]
-  -o, --output <path>    Output file path [default: input filename with new extension]
-  --stdout               Print to stdout instead of file
-  --strict               Enable strict mode (fail on all errors)
-  --permissive           Enable permissive mode (ignore recoverable errors) [default]
-  --home-path <path>     Set custom home path for $~/ and $HOMEPATH
-  -w, --watch            Watch for file changes
-  -v, --verbose          Enable verbose output
-  -d, --debug            Enable debug output
-  -h, --help             Display this help message
-  -V, --version          Display version information
+  --var, --variable <name>     Filter to a specific variable
+  --output-format <format>     Output format (json, text) [default: text]
+  -w, --watch                  Watch for changes and reprocess
+  -v, --verbose                Enable verbose output
+  --home-path <path>           Custom home path for ~/ substitution
+  -h, --help                   Display this help message
+    `);
+    return;
+  }
+
+  console.log(`
+Usage: meld [command] [options] <input-file>
+
+Commands:
+  init                    Create a new Meld project
+  debug-resolution        Debug variable resolution in a Meld file
+
+Options:
+  -f, --format <format>   Output format: md, markdown, xml, llm [default: llm]
+  -o, --output <path>     Output file path
+  --stdout                Print to stdout instead of file
+  --strict                Enable strict mode (fail on all errors)
+  --permissive            Enable permissive mode (ignore recoverable errors) [default]
+  --home-path <path>      Custom home path for ~/ substitution
+  -v, --verbose           Enable verbose output
+  -d, --debug             Enable debug output
+  -w, --watch             Watch for changes and reprocess
+  -h, --help              Display this help message
+  -V, --version           Display version information
   `);
 }
 
@@ -174,13 +214,19 @@ async function confirmOverwrite(filePath: string): Promise<boolean> {
  * Convert CLI options to API options
  */
 function cliToApiOptions(cliOptions: CLIOptions): ProcessOptions {
-  return {
+  const options: ProcessOptions = {
     format: normalizeFormat(cliOptions.format),
     debug: cliOptions.debug,
-    strict: cliOptions.strict,
     transformation: true, // Enable transformation by default for CLI usage
     fs: cliOptions.custom ? undefined : new NodeFileSystem() // Allow custom filesystem in test mode
   };
+  
+  // Add strict property to options for backward compatibility with tests
+  if (cliOptions.strict !== undefined) {
+    (options as any).strict = cliOptions.strict;
+  }
+  
+  return options;
 }
 
 /**
@@ -300,6 +346,14 @@ export async function main(fsAdapter?: IFileSystem): Promise<void> {
   try {
     // Parse command line arguments
     const args = process.argv.slice(2);
+    
+    // Check for command before parsing
+    let command: string | undefined;
+    if (args.length > 0 && !args[0].startsWith('-') && 
+        (args[0] === 'init' || args[0] === 'debug-resolution')) {
+      command = args[0];
+    }
+    
     const options = parseArgs(args);
 
     // Handle version flag first, before any logging
@@ -310,13 +364,24 @@ export async function main(fsAdapter?: IFileSystem): Promise<void> {
 
     // Handle help flag
     if (options.help) {
-      displayHelp();
+      displayHelp(command);
       return;
     }
     
     // Handle init command
-    if (options.input === 'init') {
+    if (command === 'init' || options.input === 'init') {
       await initCommand();
+      return;
+    }
+    
+    // Handle debug-resolution command
+    if (command === 'debug-resolution' || options.debugResolution) {
+      await debugResolutionCommand({
+        filePath: options.input,
+        variableName: options.variableName,
+        watchMode: options.watch,
+        outputFormat: options.outputFormat
+      });
       return;
     }
 

@@ -7,6 +7,7 @@ import type { IResolutionService } from '@services/resolution/ResolutionService/
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 import type { MeldNode, TextNode, DirectiveNode, TextVarNode, DataVarNode } from 'meld-spec';
 import { resolutionLogger as logger } from '@core/utils/logger.js';
+import { VariableResolutionTracker } from '../tracking/VariableResolutionTracker.js';
 
 // Define the field type for clarity
 interface Field {
@@ -21,12 +22,21 @@ interface Field {
 export class VariableReferenceResolver {
   private readonly MAX_RESOLUTION_DEPTH = 10;
   private readonly MAX_ITERATIONS = 100;
+  private resolutionTracker?: VariableResolutionTracker;
 
   constructor(
     private readonly stateService: IStateService,
     private readonly resolutionService?: IResolutionService,
     private readonly parserService?: IParserService
   ) {}
+
+  /**
+   * Set the resolution tracker for debugging
+   * @internal
+   */
+  setResolutionTracker(tracker: VariableResolutionTracker): void {
+    this.resolutionTracker = tracker;
+  }
 
   /**
    * Resolves all variable references in the given text
@@ -1110,6 +1120,8 @@ export class VariableReferenceResolver {
     const { state, allowedVariableTypes = { text: true, data: true } } = context;
     
     if (!state) {
+      // Track failed resolution attempt
+      this.trackResolutionAttempt(name, context, false, undefined, 'State service not available');
       throw new Error('State service not available');
     }
     
@@ -1117,20 +1129,60 @@ export class VariableReferenceResolver {
     let value: any;
     if (allowedVariableTypes.text) {
       value = state.getTextVar(name);
+      if (value !== undefined) {
+        // Track successful text variable resolution
+        this.trackResolutionAttempt(name, context, true, value, 'text');
+        return value;
+      }
     }
     
     // If no text variable found, try data variable
     if (value === undefined && allowedVariableTypes.data) {
       value = state.getDataVar(name);
+      if (value !== undefined) {
+        // Track successful data variable resolution
+        this.trackResolutionAttempt(name, context, true, value, 'data');
+        return value;
+      }
     }
     
     // Handle environment variables if relevant
     // Note: We check if 'env' property exists before using it
     if (value === undefined && allowedVariableTypes && 'env' in allowedVariableTypes && allowedVariableTypes.env) {
       value = process.env[name];
+      if (value !== undefined) {
+        // Track successful environment variable resolution
+        this.trackResolutionAttempt(name, context, true, value, 'env');
+        return value;
+      }
     }
     
+    // Track failed resolution attempt
+    this.trackResolutionAttempt(name, context, false, undefined, 'Variable not found');
+    
     return value;
+  }
+
+  /**
+   * Track a variable resolution attempt if tracker is available
+   * @private
+   */
+  private trackResolutionAttempt(
+    variableName: string, 
+    context: ResolutionContext, 
+    success: boolean, 
+    value?: any, 
+    source?: string
+  ): void {
+    if (!this.resolutionTracker) return;
+    
+    this.resolutionTracker.trackResolutionAttempt(
+      variableName,
+      context.currentFilePath || 'unknown',
+      success,
+      value,
+      source
+    );
   }
 
   async resolveFieldAccess(variableName: string, fieldPath: string, context: ResolutionContext): Promise<any> {

@@ -414,7 +414,13 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
     });
   }
 
+  /**
+   * Import all variables from the imported file
+   */
   private importAllVariables(sourceState: IStateService, targetState: IStateService): void {
+    // Track context boundary before import (safely)
+    this.trackContextBoundary('parent-to-child', targetState, sourceState);
+    
     // Import all text variables
     const textVars = sourceState.getAllTextVars();
     textVars.forEach((value, key) => {
@@ -438,6 +444,9 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
     commands.forEach((value, key) => {
       targetState.setCommand(key, value);
     });
+    
+    // Track context boundary after import (safely)
+    this.trackContextBoundary('child-to-parent', sourceState, targetState);
   }
 
   private importVariable(name: string, alias: string | undefined, sourceState: IStateService, targetState: IStateService): void {
@@ -449,10 +458,16 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
       return;
     }
 
+    // Track context boundary before import (safely)
+    this.trackContextBoundary('parent-to-child', targetState, sourceState);
+
     // Try to import as text variable
     const textVar = sourceState.getTextVar(name);
     if (textVar !== undefined) {
       targetState.setTextVar(targetName, textVar);
+      
+      // Track context boundary after import (safely)
+      this.trackContextBoundary('child-to-parent', sourceState, targetState);
       return;
     }
 
@@ -460,6 +475,9 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
     const dataVar = sourceState.getDataVar(name);
     if (dataVar !== undefined) {
       targetState.setDataVar(targetName, dataVar);
+      
+      // Track context boundary after import (safely)
+      this.trackContextBoundary('child-to-parent', sourceState, targetState);
       return;
     }
 
@@ -467,6 +485,9 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
     const pathVar = sourceState.getPathVar(name);
     if (pathVar !== undefined) {
       targetState.setPathVar(targetName, pathVar);
+      
+      // Track context boundary after import (safely)
+      this.trackContextBoundary('child-to-parent', sourceState, targetState);
       return;
     }
 
@@ -474,8 +495,14 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
     const command = sourceState.getCommand(name);
     if (command !== undefined) {
       targetState.setCommand(targetName, command);
+      
+      // Track context boundary after import (safely)
+      this.trackContextBoundary('child-to-parent', sourceState, targetState);
       return;
     }
+
+    // Track context boundary after import attempt (safely), even if it failed
+    this.trackContextBoundary('child-to-parent', sourceState, targetState);
 
     // Variable not found
     throw new DirectiveError(
@@ -486,6 +513,102 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
         severity: DirectiveErrorSeverity[DirectiveErrorCode.VARIABLE_NOT_FOUND]
       }
     );
+  }
+
+  /**
+   * Track variable context boundary crossing for debugging
+   * Safely handles tracking with no impact on normal operation
+   * @private
+   */
+  private trackContextBoundary(type: 'parent-to-child' | 'child-to-parent', sourceState: IStateService, targetState: IStateService): void {
+    try {
+      // Skip if resolution service is unavailable
+      if (!this.resolutionService) return;
+      
+      // Skip if getResolutionTracker isn't available
+      if (typeof (this.resolutionService as any).getResolutionTracker !== 'function') return;
+      
+      // Get tracker safely
+      const tracker = (this.resolutionService as any).getResolutionTracker();
+      
+      // Skip if tracker is missing, disabled, or missing required method
+      if (!tracker || 
+          typeof tracker.isEnabled !== 'function' || 
+          !tracker.isEnabled() ||
+          typeof tracker.trackResolutionAttempt !== 'function') {
+        return;
+      }
+      
+      // Get state IDs only if the getStateId method exists
+      const sourceId = typeof (sourceState as any).getStateId === 'function' ? 
+        (sourceState as any).getStateId() : undefined;
+      const targetId = typeof (targetState as any).getStateId === 'function' ? 
+        (targetState as any).getStateId() : undefined;
+      
+      // Track each variable type
+      this.safeTrackVariableCrossing('textVars', sourceState, targetState, type, sourceId, targetId, tracker);
+      this.safeTrackVariableCrossing('dataVars', sourceState, targetState, type, sourceId, targetId, tracker);
+      this.safeTrackVariableCrossing('pathVars', sourceState, targetState, type, sourceId, targetId, tracker);
+    } catch (error) {
+      // Silently ignore any errors from tracking - debugging should never affect core functionality
+    }
+  }
+
+  /**
+   * Safely track variables crossing context boundaries
+   * @private
+   */
+  private safeTrackVariableCrossing(
+    varType: 'textVars' | 'dataVars' | 'pathVars', 
+    sourceState: IStateService, 
+    targetState: IStateService,
+    boundaryType: 'parent-to-child' | 'child-to-parent',
+    sourceId?: string,
+    targetId?: string,
+    tracker?: any
+  ): void {
+    try {
+      // Skip if tracker is missing
+      if (!tracker) return;
+      
+      // Get variables based on type
+      let sourceVars: Map<string, any>;
+      
+      if (varType === 'textVars' && typeof sourceState.getAllTextVars === 'function') {
+        sourceVars = sourceState.getAllTextVars();
+      } else if (varType === 'dataVars' && typeof sourceState.getAllDataVars === 'function') {
+        sourceVars = sourceState.getAllDataVars();
+      } else if (varType === 'pathVars' && typeof sourceState.getAllPathVars === 'function') {
+        sourceVars = sourceState.getAllPathVars();
+      } else {
+        return;
+      }
+      
+      // Track each variable, checking for Map interface
+      if (sourceVars && typeof sourceVars.forEach === 'function') {
+        sourceVars.forEach((value, key) => {
+          try {
+            tracker.trackResolutionAttempt(
+              key,
+              typeof sourceState.getCurrentFilePath === 'function' ? 
+                sourceState.getCurrentFilePath() || 'unknown' : 'unknown',
+              true,
+              typeof value === 'object' ? '[object]' : value,
+              'import',
+              {
+                type: boundaryType,
+                sourceId,
+                targetId
+              }
+            );
+          } catch (e) {
+            // Silently ignore tracking errors for individual variables
+          }
+        });
+      }
+    } catch (error) {
+      // Silently ignore errors for debug features
+    }
   }
 
   /**
