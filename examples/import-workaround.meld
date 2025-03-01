@@ -19,7 +19,7 @@ use that variable in the import statement.
 
 @path example_import = "$PROJECTPATH/examples/example-import.meld"
 
-@import [{{example_import}}]
+@import [$example_import]
 
 ## Verification
 
@@ -46,5 +46,5 @@ Other path variable syntaxes that might work:
 @path home_example_import = "$~/dev/meld/examples/example-import.meld"
 
 You could try these by uncommenting and using:
-<!-- @import [{{alt_example_import}}] -->
-<!-- @import [{{home_example_import}}] --> 
+<!-- @import [$alt_example_import] -->
+<!-- @import [$home_example_import] --> 
