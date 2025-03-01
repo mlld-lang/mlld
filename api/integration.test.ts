@@ -721,24 +721,17 @@ First feature: {{config.app.features.0}}
 
   describe('Format Transformation', () => {
     it('should format output as markdown', async () => {
-      // Import examples from centralized location
-      const { getBackwardCompatibleExample } = await import('@tests/utils/syntax-test-helpers.js');
-      const textGreeting = getBackwardCompatibleExample('text', 'atomic', 'simpleString');
-      const textSubject = getBackwardCompatibleExample('text', 'atomic', 'subject');
-      const textMessage = getBackwardCompatibleExample('text', 'combinations', 'compositeMessage');
-      
-      const content = `
-        # Heading
-        
-        ${textGreeting.code}
-        ${textSubject.code}
-        ${textMessage.code}
-        
-        {{message}}
-        
-        - List item 1
-        - List item 2
-      `;
+      // Define the content directly with proper variable definitions
+      const content = `@text greeting = "Hello"
+@text subject = "World"
+@text message = "{{greeting}}, {{subject}}!"
+
+# Heading
+
+{{message}}
+
+- List item 1
+- List item 2`;
       await context.writeFile('test.meld', content);
       
       // context.disableTransformation(); // Explicitly disable transformation
@@ -757,24 +750,17 @@ First feature: {{config.app.features.0}}
     });
     
     it('should format output as XML', async () => {
-      // Import examples from centralized location
-      const { getBackwardCompatibleExample } = await import('@tests/utils/syntax-test-helpers.js');
-      const textGreeting = getBackwardCompatibleExample('text', 'atomic', 'simpleString');
-      const textSubject = getBackwardCompatibleExample('text', 'atomic', 'subject');
-      const textMessage = getBackwardCompatibleExample('text', 'combinations', 'compositeMessage');
-      
-      const content = `
-        # Heading
-        
-        ${textGreeting.code}
-        ${textSubject.code}
-        ${textMessage.code}
-        
-        {{message}}
-        
-        - List item 1
-        - List item 2
-      `;
+      // Define the content directly with proper variable definitions
+      const content = `@text greeting = "Hello"
+@text subject = "World"
+@text message = "{{greeting}}, {{subject}}!"
+
+# Heading
+
+{{message}}
+
+- List item 1
+- List item 2`;
       await context.writeFile('test.meld', content);
       
       // context.disableTransformation(); // Explicitly disable transformation
@@ -786,7 +772,7 @@ First feature: {{config.app.features.0}}
       });
       
       // With transformation enabled and XML format, output should include XML tags
-      expect(result).toContain('```');
+      expect(result).toContain('<Heading>');
       expect(result).toContain('Hello, World!');
       expect(result).toContain('List item 1');
       expect(result).not.toContain('@text');  // Directives should be transformed away
