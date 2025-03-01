@@ -16,7 +16,7 @@
 - 🔲 Service tests with Meld syntax:
   - ✅ `services/resolution/ResolutionService/ResolutionService.test.ts`
   - ✅ `services/resolution/ResolutionService/resolvers/CommandResolver.test.ts`
-  - 🔲 `services/cli/CLIService/CLIService.test.ts`
+  - ✅ `services/cli/CLIService/CLIService.test.ts`
   - ✅ `services/pipeline/OutputService/OutputService.test.ts`
   - ✅ `services/pipeline/ParserService/ParserService.test.ts`
   - ✅ `services/pipeline/InterpreterService/InterpreterService.integration.test.ts`

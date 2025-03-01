@@ -11,6 +11,9 @@ import * as readline from 'readline';
 import { ErrorCollector } from '@tests/utils/ErrorTestUtils.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 import { cliLogger, type Logger } from '@core/utils/logger.js';
+// Import the centralized syntax examples and helper function
+import { textDirectiveExamples } from '@core/constants/syntax';
+import { getExample } from '@tests/utils/syntax-test-helpers.js';
 
 // Mock the API module
 vi.mock('@api/index.js', () => ({
@@ -161,7 +164,8 @@ describe('CLIService', () => {
     );
 
     // Set up test files
-    await context.fs.writeFile('test.meld', '@text greeting = "Hello"');
+    const textExample = getExample('text', 'atomic', 'simpleString');
+    await context.fs.writeFile('test.meld', textExample.code);
 
     // Initialize mock logger
     mockLogger = {
