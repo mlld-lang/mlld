@@ -1,19 +1,22 @@
+import { describe, it, expect } from 'vitest';
 import { 
   textDirectiveExamples, 
   dataDirectiveExamples,
   importDirectiveExamples,
+  pathDirectiveExamples,
   integrationExamples
 } from '@core/constants/syntax';
 import { SyntaxExample, InvalidSyntaxExample } from '@core/constants/syntax/helpers';
-import { ErrorSeverity } from '@core/errors';
+import { ErrorSeverity } from '@core/errors/index.js';
 
 // Define a type to reference the available directive example groups
-export type DirectiveType = 'text' | 'data' | 'import' | 'integration';
+export type DirectiveType = 'text' | 'data' | 'import' | 'path' | 'integration';
 
 // Map directive types to their example groups
 const directiveExamples = {
   text: textDirectiveExamples,
   data: dataDirectiveExamples,
+  path: pathDirectiveExamples,
   import: importDirectiveExamples,
   integration: integrationExamples
 };
