@@ -5,13 +5,14 @@ import {
   importDirectiveExamples,
   pathDirectiveExamples,
   defineDirectiveExamples,
+  runDirectiveExamples,
   integrationExamples
 } from '@core/constants/syntax';
 import { SyntaxExample, InvalidSyntaxExample } from '@core/constants/syntax/helpers';
 import { ErrorSeverity } from '@core/errors/index.js';
 
 // Define a type to reference the available directive example groups
-export type DirectiveType = 'text' | 'data' | 'import' | 'path' | 'define' | 'integration';
+export type DirectiveType = 'text' | 'data' | 'import' | 'path' | 'define' | 'run' | 'integration';
 
 // Map directive types to their example groups
 const directiveExamples = {
@@ -20,6 +21,7 @@ const directiveExamples = {
   import: importDirectiveExamples,
   path: pathDirectiveExamples,
   define: defineDirectiveExamples,
+  run: runDirectiveExamples,
   integration: integrationExamples
 };
 

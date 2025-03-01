@@ -20,11 +20,27 @@ import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSys
 import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+// Import the centralized syntax examples and helpers
+import { runDirectiveExamples } from '@core/constants/syntax';
+import { getExample, getInvalidExample } from '@tests/utils/syntax-test-helpers.js';
+import { ErrorSeverity } from '@core/errors';
 
 // Mock child_process
 vi.mock('child_process', () => ({
   exec: vi.fn()
 }));
+
+/**
+ * RunDirectiveHandler Test Migration Status
+ * ----------------------------------------
+ * 
+ * MIGRATION STATUS: In Progress
+ * 
+ * This test file is being migrated to use centralized syntax examples.
+ * We'll migrate one test at a time to ensure everything continues to work.
+ * 
+ * See _issues/_active/test-syntax-centralization.md for migration details.
+ */
 
 // Direct usage of meld-ast instead of mock factories
 const createRealParserService = () => {
@@ -53,6 +69,31 @@ const createRealParserService = () => {
     parse: parseSpy,
     parseWithLocations: vi.fn(parseFunction)
   };
+};
+
+/**
+ * Helper function to create a DirectiveNode from a syntax example code
+ * This is needed for handler tests where you need a parsed node
+ * 
+ * @param exampleCode - Example code to parse
+ * @returns Promise resolving to a DirectiveNode
+ */
+const createNodeFromExample = async (exampleCode: string): Promise<DirectiveNode> => {
+  try {
+    const { parse } = await import('meld-ast');
+    
+    const result = await parse(exampleCode, {
+      trackLocations: true,
+      validateNodes: true,
+      // @ts-expect-error - structuredPaths is used but may be missing from typings
+      structuredPaths: true
+    });
+    
+    return result.ast[0] as DirectiveNode;
+  } catch (error) {
+    console.error('Error parsing with meld-ast:', error);
+    throw error;
+  }
 };
 
 // Helper to create a real run directive node using meld-ast
@@ -133,7 +174,76 @@ describe('RunDirectiveHandler', () => {
 
   describe('basic command execution', () => {
     it('should execute simple commands', async () => {
-      const node = await createRealRunDirective('echo test');
+      // MIGRATION NOTE: Using centralized syntax example instead of createRealRunDirective
+      // Get the simple example from centralized syntax
+      const example = getExample('run', 'atomic', 'simple');
+      const node = await createNodeFromExample(example.code);
+      const context = { currentFilePath: 'test.meld', state: stateService };
+
+      const clonedState = {
+        ...stateService,
+        clone: vi.fn().mockReturnThis(),
+        setTextVar: vi.fn(),
+        isTransformationEnabled: vi.fn().mockReturnValue(false)
+      };
+
+      vi.mocked(stateService.clone).mockReturnValue(clonedState);
+      vi.mocked(validationService.validate).mockResolvedValue(undefined);
+      // Mock the resolution service to return the command extracted from the example
+      vi.mocked(resolutionService.resolveInContext).mockResolvedValue('echo test');
+      vi.mocked(fileSystemService.executeCommand).mockResolvedValue({
+        stdout: 'test output',
+        stderr: ''
+      });
+
+      const result = await handler.execute(node, context);
+
+      expect(fileSystemService.executeCommand).toHaveBeenCalledWith(
+        'echo test',
+        expect.objectContaining({ cwd: '/workspace' })
+      );
+      expect(clonedState.setTextVar).toHaveBeenCalledWith('stdout', 'test output');
+      expect(result.state).toBe(clonedState);
+    });
+
+    it('should handle commands with variables', async () => {
+      // MIGRATION NOTE: Using centralized syntax example instead of createRealRunDirective
+      // Get the simple example from centralized syntax
+      const example = getExample('run', 'atomic', 'simple');
+      const node = await createNodeFromExample(example.code);
+      const context = { currentFilePath: 'test.meld', state: stateService };
+
+      const clonedState = {
+        ...stateService,
+        clone: vi.fn().mockReturnThis(),
+        setTextVar: vi.fn(),
+        getTextVar: vi.fn().mockReturnValue('Hello'),
+        isTransformationEnabled: vi.fn().mockReturnValue(false)
+      };
+
+      vi.mocked(stateService.clone).mockReturnValue(clonedState);
+      vi.mocked(validationService.validate).mockResolvedValue(undefined);
+      vi.mocked(resolutionService.resolveInContext).mockResolvedValue('echo test');
+      vi.mocked(fileSystemService.executeCommand).mockResolvedValue({
+        stdout: 'test output',
+        stderr: ''
+      });
+
+      const result = await handler.execute(node, context);
+
+      expect(fileSystemService.executeCommand).toHaveBeenCalledWith(
+        'echo test',
+        expect.objectContaining({ cwd: '/workspace' })
+      );
+      expect(clonedState.setTextVar).toHaveBeenCalledWith('stdout', 'test output');
+      expect(result.state).toBe(clonedState);
+    });
+
+    it('should handle custom output variable', async () => {
+      // MIGRATION NOTE: Using centralized syntax example instead of createRealRunDirective
+      // Get the withOutput example from centralized syntax
+      const example = getExample('run', 'atomic', 'withOutput');
+      const node = await createNodeFromExample(example.code);
       const context = { currentFilePath: 'test.meld', state: stateService };
 
       const clonedState = {
@@ -157,62 +267,7 @@ describe('RunDirectiveHandler', () => {
         'echo test',
         expect.objectContaining({ cwd: '/workspace' })
       );
-      expect(clonedState.setTextVar).toHaveBeenCalledWith('stdout', 'test output');
-      expect(result.state).toBe(clonedState);
-    });
-
-    it('should handle commands with variables', async () => {
-      const node = await createRealRunDirective('echo {{message}}');
-      const context = { currentFilePath: 'test.meld', state: stateService };
-
-      const clonedState = {
-        ...stateService,
-        clone: vi.fn().mockReturnThis(),
-        setTextVar: vi.fn(),
-        getTextVar: vi.fn().mockReturnValue('Hello World'),
-        isTransformationEnabled: vi.fn().mockReturnValue(false)
-      };
-
-      vi.mocked(stateService.clone).mockReturnValue(clonedState);
-      vi.mocked(validationService.validate).mockResolvedValue(undefined);
-      vi.mocked(resolutionService.resolveInContext).mockResolvedValue('echo Hello World');
-      vi.mocked(fileSystemService.executeCommand).mockResolvedValue({
-        stdout: 'Hello World',
-        stderr: ''
-      });
-
-      const result = await handler.execute(node, context);
-
-      expect(fileSystemService.executeCommand).toHaveBeenCalledWith(
-        'echo Hello World',
-        expect.objectContaining({ cwd: '/workspace' })
-      );
-      expect(clonedState.setTextVar).toHaveBeenCalledWith('stdout', 'Hello World');
-      expect(result.state).toBe(clonedState);
-    });
-
-    it('should handle custom output variable', async () => {
-      const node = await createRealRunDirective('echo test', { output: 'custom' });
-      const context = { currentFilePath: 'test.meld', state: stateService };
-
-      const clonedState = {
-        ...stateService,
-        clone: vi.fn().mockReturnThis(),
-        setTextVar: vi.fn(),
-        isTransformationEnabled: vi.fn().mockReturnValue(false)
-      };
-
-      vi.mocked(stateService.clone).mockReturnValue(clonedState);
-      vi.mocked(validationService.validate).mockResolvedValue(undefined);
-      vi.mocked(resolutionService.resolveInContext).mockResolvedValue('echo test');
-      vi.mocked(fileSystemService.executeCommand).mockResolvedValue({
-        stdout: 'test output',
-        stderr: ''
-      });
-
-      const result = await handler.execute(node, context);
-
-      expect(clonedState.setTextVar).toHaveBeenCalledWith('custom', 'test output');
+      expect(clonedState.setTextVar).toHaveBeenCalledWith('variable_name', 'test output');
       expect(result.state).toBe(clonedState);
     });
   });
