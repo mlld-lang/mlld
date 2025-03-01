@@ -9,6 +9,8 @@ import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 import { createMockParserService, createDirectiveNode, createTextNode } from '@tests/utils/testFactories.js';
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
+import { getExample, getInvalidExample, createNodeFromExample } from '@tests/utils/syntax-test-helpers.js';
+import { expectThrowsWithSeverity } from '@tests/utils/ErrorTestUtils.js';
 
 describe('CommandResolver', () => {
   let resolver: CommandResolver;
@@ -52,6 +54,8 @@ describe('CommandResolver', () => {
     });
 
     it('should resolve command without parameters', async () => {
+      // ORIGINAL IMPLEMENTATION:
+      // Keeping original node structure since we understand what CommandResolver expects
       const node: DirectiveNode = {
         type: 'Directive',
         directive: {
@@ -60,6 +64,12 @@ describe('CommandResolver', () => {
           args: []
         }
       };
+      
+      // MIGRATION NOTE: The centralized examples create nodes with a different structure
+      // than what CommandResolver expects. For now, we'll keep using the manually created node.
+      // In the future, we would update either the createNodeFromExample helper or the CommandResolver
+      // to align on the expected node structure.
+      
       vi.mocked(stateService.getCommand).mockReturnValue({
         command: '@run [echo test]'
       });
@@ -167,6 +177,36 @@ describe('CommandResolver', () => {
 
       const result = await resolver.resolve(node, context);
       expect(result).toBe('echo test');
+    });
+
+    // Add this temporary test to see the difference between the two node structures
+    it.only('TEMP: compare node structures', async () => {
+      // Create a node using the manual approach
+      const manualNode: DirectiveNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'run',
+          identifier: 'simple',
+          args: []
+        }
+      };
+      
+      // Create a node using the createNodeFromExample approach
+      const example = getExample('run', 'atomic', 'simple');
+      const parsedNode = await createNodeFromExample(example.code);
+      
+      // Instead of console.log, let's use assertions
+      expect(parsedNode.type).toBe(manualNode.type);
+      expect(parsedNode.directive.kind).toBe(manualNode.directive.kind);
+      
+      // These are the likely differences
+      expect(parsedNode.directive.identifier).toBe(manualNode.directive.identifier);
+      expect(parsedNode.directive.args).toEqual(manualNode.directive.args);
+      
+      // Convert to strings to help see differences
+      const manualStr = JSON.stringify(manualNode, null, 2);
+      const parsedStr = JSON.stringify(parsedNode, null, 2);
+      expect(parsedStr).toBe(manualStr);
     });
   });
 
