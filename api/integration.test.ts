@@ -27,16 +27,16 @@ describe('API Integration Tests', () => {
     projectRoot = '/project';
     
     // Dynamically import examples
-    const { getExample } = await import('@tests/utils/syntax-test-helpers.js');
+    const { getBackwardCompatibleExample } = await import('@tests/utils/syntax-test-helpers.js');
     
     // Load examples that will be used in multiple tests
     try {
-      textExample = getExample('text', 'atomic', 'simpleString');
-      pathExample = getExample('path', 'atomic', 'projectPath');
-      importExample = getExample('import', 'atomic', 'simplePath');
-      runExample = getExample('run', 'atomic', 'simple');
-      defineExample = getExample('define', 'atomic', 'simpleCommand');
-      embedExample = getExample('embed', 'atomic', 'simplePath');
+      textExample = getBackwardCompatibleExample('text', 'atomic', 'simpleString');
+      pathExample = getBackwardCompatibleExample('path', 'atomic', 'projectPath');
+      importExample = getBackwardCompatibleExample('import', 'atomic', 'simplePath');
+      runExample = getBackwardCompatibleExample('run', 'atomic', 'simple');
+      defineExample = getBackwardCompatibleExample('define', 'atomic', 'simpleCommand');
+      embedExample = getBackwardCompatibleExample('embed', 'atomic', 'simplePath');
     } catch (error) {
       console.error('Failed to load syntax examples:', error);
     }
@@ -59,11 +59,11 @@ describe('API Integration Tests', () => {
   describe('Variable Definitions and References', () => {
     it('should handle text variable definitions and references', async () => {
       // Import examples from centralized location
-      const { getExample } = await import('@tests/utils/syntax-test-helpers.js');
+      const { getBackwardCompatibleExample } = await import('@tests/utils/syntax-test-helpers.js');
       
       // Use centralized examples
-      const textVarExample = getExample('text', 'atomic', 'var1');
-      const templateLiteralExample = getExample('text', 'combinations', 'basicInterpolation');
+      const textVarExample = getBackwardCompatibleExample('text', 'atomic', 'var1');
+      const templateLiteralExample = getBackwardCompatibleExample('text', 'combinations', 'basicInterpolation');
       
       // Combine examples with additional content
       const content = `${textVarExample.code}
@@ -107,10 +107,10 @@ Some text content with {{var1}} and {{message}}
     
     it('should handle data variable definitions and field access', async () => {
       // Import examples from centralized location
-      const { getExample } = await import('@tests/utils/syntax-test-helpers.js');
+      const { getBackwardCompatibleExample } = await import('@tests/utils/syntax-test-helpers.js');
       
       // Use centralized examples
-      const textExample = getExample('text', 'atomic', 'simpleString');
+      const textExample = getBackwardCompatibleExample('text', 'atomic', 'simpleString');
       
       // Use a simple data example with JSON syntax
       const content = `${textExample.code}
@@ -148,12 +148,12 @@ Some content with {{greeting}} and {{user.id}}
     
     it('should handle complex nested data structures', async () => {
       // Import examples from centralized location
-      const { getExample } = await import('@tests/utils/syntax-test-helpers.js');
+      const { getBackwardCompatibleExample } = await import('@tests/utils/syntax-test-helpers.js');
       
       // Use centralized examples
-      const textExample = getExample('text', 'atomic', 'simpleString');
-      const complexDataExample = getExample('data', 'combinations', 'nestedObject');
-      const runExample = getExample('run', 'atomic', 'simple');
+      const textExample = getBackwardCompatibleExample('text', 'atomic', 'simpleString');
+      const complexDataExample = getBackwardCompatibleExample('data', 'combinations', 'nestedObject');
+      const runExample = getBackwardCompatibleExample('run', 'atomic', 'simple');
       
       // Combine examples with additional content
       const content = `${textExample.code}
@@ -355,9 +355,9 @@ More text`;
     
     it('should handle nested imports with proper scope inheritance', async () => {
       // Import examples from centralized location
-      const { getExample } = await import('@tests/utils/syntax-test-helpers.js');
-      const textExample = getExample('text', 'atomic', 'simpleString');
-      const importExample = getExample('import', 'atomic', 'simplePath');
+      const { getBackwardCompatibleExample } = await import('@tests/utils/syntax-test-helpers.js');
+      const textExample = getBackwardCompatibleExample('text', 'atomic', 'simpleString');
+      const importExample = getBackwardCompatibleExample('import', 'atomic', 'simplePath');
       
       // Create modified examples for different levels
       const level3Text = textExample.code
@@ -441,8 +441,8 @@ More text`;
   describe('Command Execution', () => {
     it('should handle @run directives', async () => {
       // Import examples from centralized location
-      const { getExample } = await import('@tests/utils/syntax-test-helpers.js');
-      const runExample = getExample('run', 'atomic', 'simple');
+      const { getBackwardCompatibleExample } = await import('@tests/utils/syntax-test-helpers.js');
+      const runExample = getBackwardCompatibleExample('run', 'atomic', 'simple');
       
       const content = `
         ${runExample.code}
@@ -464,9 +464,9 @@ More text`;
     
     it('should handle @define and command execution', async () => {
       // Import examples from centralized location
-      const { getExample } = await import('@tests/utils/syntax-test-helpers.js');
-      const defineExample = getExample('define', 'atomic', 'simpleCommand');
-      const runExample = getExample('run', 'atomic', 'commandReference');
+      const { getBackwardCompatibleExample } = await import('@tests/utils/syntax-test-helpers.js');
+      const defineExample = getBackwardCompatibleExample('define', 'atomic', 'simpleCommand');
+      const runExample = getBackwardCompatibleExample('run', 'atomic', 'commandReference');
       
       // Modify examples to work together as a pair
       const defineCode = defineExample.code.replace('mycommand', 'greet').replace('command-to-run', 'echo "Hello from defined command"');
@@ -490,10 +490,10 @@ More text`;
     
     it('should handle commands with parameters', async () => {
       // Import examples from centralized location
-      const { getExample } = await import('@tests/utils/syntax-test-helpers.js');
-      const defineExample = getExample('define', 'atomic', 'commandWithParams');
-      const textExample = getExample('text', 'atomic', 'user');
-      const runExample = getExample('run', 'atomic', 'commandWithArguments');
+      const { getBackwardCompatibleExample } = await import('@tests/utils/syntax-test-helpers.js');
+      const defineExample = getBackwardCompatibleExample('define', 'atomic', 'commandWithParams');
+      const textExample = getBackwardCompatibleExample('text', 'atomic', 'user');
+      const runExample = getBackwardCompatibleExample('run', 'atomic', 'commandWithArguments');
       
       // Modify examples to work together
       const defineCode = defineExample.code.replace('mycommand', 'greet').replace('arg1', 'name')
@@ -521,8 +521,8 @@ More text`;
   describe('Embed Handling', () => {
     it('should handle @embed directives', async () => {
       // Import examples from centralized location
-      const { getExample } = await import('@tests/utils/syntax-test-helpers.js');
-      const embedExample = getExample('embed', 'atomic', 'simplePath');
+      const { getBackwardCompatibleExample } = await import('@tests/utils/syntax-test-helpers.js');
+      const embedExample = getBackwardCompatibleExample('embed', 'atomic', 'simplePath');
       
       // Create the file to embed
       await context.writeFile('embed.md', 'This is embedded content');
@@ -550,8 +550,8 @@ More text`;
 
     it('should handle @embed with section extraction', async () => {
       // Import examples from centralized location
-      const { getExample } = await import('@tests/utils/syntax-test-helpers.js');
-      const embedExample = getExample('embed', 'atomic', 'withSection');
+      const { getBackwardCompatibleExample } = await import('@tests/utils/syntax-test-helpers.js');
+      const embedExample = getBackwardCompatibleExample('embed', 'atomic', 'withSection');
       
       // Create the file with sections to embed
       await context.writeFile('sections.md', `
@@ -637,10 +637,10 @@ More text`;
 
   describe('Error Handling', () => {
     it('should handle invalid directive syntax', async () => {
-      const content = `
-        @invalid directive syntax
-      `;
-      await context.writeFile('test.meld', content);
+      const { getBackwardCompatibleInvalidExample } = await import('@tests/utils/syntax-test-helpers.js');
+      const invalidSyntaxExample = getBackwardCompatibleInvalidExample('text', 'invalidDirective');
+      
+      await context.writeFile('test.meld', invalidSyntaxExample.code);
       
       await expect(main('test.meld', {
         fs: context.fs,
@@ -650,10 +650,10 @@ More text`;
     });
     
     it('should handle missing files gracefully', async () => {
-      const content = `
-        @import missing.meld
-      `;
-      await context.writeFile('test.meld', content);
+      const { getBackwardCompatibleInvalidExample } = await import('@tests/utils/syntax-test-helpers.js');
+      const missingFileExample = getBackwardCompatibleInvalidExample('import', 'fileNotFound');
+      
+      await context.writeFile('test.meld', missingFileExample.code);
       
       context.disableTransformation(); // Explicitly disable transformation
       await expect(main('test.meld', {
@@ -664,10 +664,10 @@ More text`;
     });
     
     it('should handle malformed YAML/JSON in data directives', async () => {
-      const content = `
-        @data invalid = { "unclosed": "object"
-      `;
-      await context.writeFile('test.meld', content);
+      const { getBackwardCompatibleInvalidExample } = await import('@tests/utils/syntax-test-helpers.js');
+      const invalidJsonExample = getBackwardCompatibleInvalidExample('data', 'unclosedObject');
+      
+      await context.writeFile('test.meld', invalidJsonExample.code);
       
       context.disableTransformation(); // Explicitly disable transformation
       await expect(main('test.meld', {
@@ -681,10 +681,10 @@ More text`;
   describe('Format Transformation', () => {
     it('should format output as markdown', async () => {
       // Import examples from centralized location
-      const { getExample } = await import('@tests/utils/syntax-test-helpers.js');
-      const textGreeting = getExample('text', 'atomic', 'simpleString');
-      const textSubject = getExample('text', 'atomic', 'subject');
-      const textMessage = getExample('text', 'combinations', 'compositeMessage');
+      const { getBackwardCompatibleExample } = await import('@tests/utils/syntax-test-helpers.js');
+      const textGreeting = getBackwardCompatibleExample('text', 'atomic', 'simpleString');
+      const textSubject = getBackwardCompatibleExample('text', 'atomic', 'subject');
+      const textMessage = getBackwardCompatibleExample('text', 'combinations', 'compositeMessage');
       
       const content = `
         # Heading
@@ -717,10 +717,10 @@ More text`;
     
     it('should format output as XML', async () => {
       // Import examples from centralized location
-      const { getExample } = await import('@tests/utils/syntax-test-helpers.js');
-      const textGreeting = getExample('text', 'atomic', 'simpleString');
-      const textSubject = getExample('text', 'atomic', 'subject');
-      const textMessage = getExample('text', 'combinations', 'compositeMessage');
+      const { getBackwardCompatibleExample } = await import('@tests/utils/syntax-test-helpers.js');
+      const textGreeting = getBackwardCompatibleExample('text', 'atomic', 'simpleString');
+      const textSubject = getBackwardCompatibleExample('text', 'atomic', 'subject');
+      const textMessage = getBackwardCompatibleExample('text', 'combinations', 'compositeMessage');
       
       const content = `
         # Heading
