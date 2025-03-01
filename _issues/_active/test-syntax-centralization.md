@@ -8,6 +8,7 @@
 - ✅ Infrastructure setup (directory structure, helper utilities, example files)
 - ✅ Syntax Test Helpers implementation
 - ✅ Initial test migrations (PathDirectiveHandler, DefineDirectiveHandler, TextDirectiveHandler, DataDirectiveHandler)
+- ✅ RunDirectiveHandler test migration
 
 **Next Steps**:
 - Continue migrating remaining directive handler tests
@@ -576,7 +577,7 @@ const example = getExample('text', 'atomic', 'simple');
 - [x] Migrate DefineDirectiveHandler.test.ts using the same pattern (partially complete - basic command handling tests and duplicate parameter test migrated)
 - [x] Migrate TextDirectiveHandler.test.ts to use centralized examples
 - [x] Migrate DataDirectiveHandler.test.ts using the same pattern
-- [ ] Migrate RunDirectiveHandler.test.ts using the same pattern
+- [x] Migrate RunDirectiveHandler.test.ts using the same pattern
 - [ ] Migrate ImportDirectiveHandler.test.ts using the same pattern
 - [ ] Migrate remaining directive handlers following the established pattern
 - [ ] Create README.md in core/constants/syntax with usage documentation
@@ -596,9 +597,9 @@ const example = getExample('text', 'atomic', 'simple');
 - ✅ DefineDirectiveHandler.test.ts (partially complete - basic command handling tests migrated)
 - ✅ TextDirectiveHandler.test.ts
 - ✅ DataDirectiveHandler.test.ts
+- ✅ RunDirectiveHandler.test.ts
 
 ### Next in Queue:
-- ⏳ RunDirectiveHandler.test.ts
 - ⏳ ImportDirectiveHandler.test.ts
 
 ### Remaining Handlers:

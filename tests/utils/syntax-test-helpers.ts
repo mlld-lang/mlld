@@ -6,13 +6,15 @@ import {
   pathDirectiveExamples,
   defineDirectiveExamples,
   runDirectiveExamples,
+  embedDirectiveExamples,
   integrationExamples
 } from '@core/constants/syntax';
 import { SyntaxExample, InvalidSyntaxExample } from '@core/constants/syntax/helpers';
 import { ErrorSeverity } from '@core/errors/index.js';
+// Types for directive nodes will be imported dynamically
 
 // Define a type to reference the available directive example groups
-export type DirectiveType = 'text' | 'data' | 'import' | 'path' | 'define' | 'run' | 'integration';
+export type DirectiveType = 'text' | 'data' | 'import' | 'path' | 'define' | 'run' | 'embed' | 'integration';
 
 // Map directive types to their example groups
 const directiveExamples = {
@@ -22,8 +24,43 @@ const directiveExamples = {
   path: pathDirectiveExamples,
   define: defineDirectiveExamples,
   run: runDirectiveExamples,
+  embed: embedDirectiveExamples,
   integration: integrationExamples
 };
+
+/**
+ * Creates a DirectiveNode from example code string
+ * 
+ * @param code - The directive code to parse
+ * @returns The parsed DirectiveNode
+ */
+export async function createNodeFromExample(code: string): Promise<any> {
+  try {
+    const { parse } = await import('meld-ast');
+    const result = await parse(code, {
+      trackLocations: true,
+      validateNodes: true,
+      // @ts-expect-error - structuredPaths is used but may be missing from typings
+      structuredPaths: true
+    });
+    
+    const nodes = result.ast || [];
+    if (!nodes || nodes.length === 0) {
+      throw new Error(`Failed to parse example: ${code}`);
+    }
+    
+    // The first node should be our directive
+    const directiveNode = nodes[0];
+    if (directiveNode.type !== 'Directive') {
+      throw new Error(`Example did not produce a directive node: ${code}`);
+    }
+    
+    return directiveNode;
+  } catch (error) {
+    console.error('Error parsing with meld-ast:', error);
+    throw error;
+  }
+}
 
 /**
  * Gets a specific valid example from a directive type

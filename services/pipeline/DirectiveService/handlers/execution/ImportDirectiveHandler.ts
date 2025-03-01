@@ -37,8 +37,8 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
       // Validate the directive
       await this.validationService.validate(node);
 
-      // Get path and import list directly from the AST structure
-      const { path, importList } = node.directive;
+      // Get path and import data directly from the AST structure
+      const { path, importList, imports } = node.directive;
       
       if (!path) {
         throw new DirectiveError(
@@ -228,12 +228,15 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
           mergeState: false
         });
 
-        // Process imports based on importList
-        if (!importList || importList === '*') {
+        // Process imports based on importList or imports array
+        if (imports && imports.length > 0) {
+          // Use the structured imports array from meld-ast 3.4.0
+          this.processStructuredImports(imports, interpretedState, targetState);
+        } else if (!importList || importList === '*') {
           // Import all variables
           this.importAllVariables(interpretedState, targetState);
         } else {
-          // Process the import list
+          // Process the legacy import list string
           this.processImportList(importList, interpretedState, targetState);
         }
 
@@ -401,5 +404,26 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
         severity: DirectiveErrorSeverity[DirectiveErrorCode.VARIABLE_NOT_FOUND]
       }
     );
+  }
+
+  /**
+   * Process structured imports array from meld-ast 3.4.0
+   * @private
+   */
+  private processStructuredImports(
+    imports: Array<{ name: string; alias?: string }>, 
+    sourceState: IStateService, 
+    targetState: IStateService
+  ): void {
+    // If imports is empty or contains a wildcard, import everything
+    if (imports.length === 0 || imports.some(imp => imp.name === '*')) {
+      this.importAllVariables(sourceState, targetState);
+      return;
+    }
+    
+    // Import variables based on the structured import expressions
+    for (const { name, alias } of imports) {
+      this.importVariable(name, alias, sourceState, targetState);
+    }
   }
 } 

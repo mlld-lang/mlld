@@ -17,6 +17,12 @@ interface StructuredPath {
   };
 }
 
+// Definition for Import item from meld-ast 3.4.0
+interface ImportItem {
+  name: string;
+  alias?: string;
+}
+
 /**
  * Convert AST SourceLocation to DirectiveLocation
  */
@@ -96,9 +102,65 @@ export function validateImportDirective(node: DirectiveNode): void {
     );
   }
 
-  // Validate import list if present
-  if (directive.importList && directive.importList !== '*') {
+  // Validate imports - use structured imports array if available, otherwise use importList
+  if (directive.imports && Array.isArray(directive.imports)) {
+    validateStructuredImports(directive.imports, node);
+  } else if (directive.importList && directive.importList !== '*') {
     validateImportList(directive.importList, node);
+  }
+}
+
+/**
+ * Validates structured imports array from meld-ast 3.4.0
+ * @private
+ */
+function validateStructuredImports(imports: ImportItem[], node: DirectiveNode): void {
+  if (imports.length === 0) {
+    // Empty imports array is valid - equivalent to "*"
+    return;
+  }
+
+  // Check if there's a wildcard import
+  if (imports.some(imp => imp.name === '*')) {
+    if (imports.length > 1) {
+      throw new MeldDirectiveError(
+        'Wildcard import (*) cannot be combined with other imports',
+        'import',
+        {
+          location: convertLocation(node.location),
+          code: DirectiveErrorCode.VALIDATION_FAILED,
+          severity: ErrorSeverity.Fatal
+        }
+      );
+    }
+    return; // Single wildcard import is valid
+  }
+
+  // Validate each import item
+  for (const item of imports) {
+    if (!item.name || item.name.trim() === '') {
+      throw new MeldDirectiveError(
+        'Import identifier cannot be empty',
+        'import',
+        {
+          location: convertLocation(node.location),
+          code: DirectiveErrorCode.VALIDATION_FAILED,
+          severity: ErrorSeverity.Fatal
+        }
+      );
+    }
+
+    if (item.alias !== undefined && (item.alias === null || item.alias.trim() === '')) {
+      throw new MeldDirectiveError(
+        'Import alias cannot be empty',
+        'import',
+        {
+          location: convertLocation(node.location),
+          code: DirectiveErrorCode.VALIDATION_FAILED,
+          severity: ErrorSeverity.Fatal
+        }
+      );
+    }
   }
 }
 

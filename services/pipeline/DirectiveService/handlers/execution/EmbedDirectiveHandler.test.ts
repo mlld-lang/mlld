@@ -22,6 +22,25 @@ import type { IParserService } from '@services/pipeline/ParserService/IParserSer
 import type { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
 import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { createLocation } from '@tests/utils/testFactories.js';
+// Import the centralized syntax examples and helpers
+import { embedDirectiveExamples } from '@core/constants/syntax';
+import { 
+  createNodeFromExample, 
+  getExample,
+  getInvalidExample 
+} from '@tests/utils/syntax-test-helpers';
+
+/**
+ * EmbedDirectiveHandler Test Migration Status
+ * ----------------------------------------
+ * 
+ * MIGRATION STATUS: In Progress
+ * 
+ * This test file is being migrated to use centralized syntax examples.
+ * We'll migrate one test at a time to ensure everything continues to work.
+ * 
+ * See _issues/_active/test-syntax-centralization.md for migration details.
+ */
 
 // Direct usage of meld-ast instead of mock factories
 const createRealParserService = () => {
@@ -50,6 +69,31 @@ const createRealParserService = () => {
     parse: parseSpy,
     parseWithLocations: vi.fn(parseFunction)
   };
+};
+
+/**
+ * Helper function to create a DirectiveNode from a syntax example code
+ * This is needed for handler tests where you need a parsed node
+ * 
+ * @param exampleCode - Example code to parse
+ * @returns Promise resolving to a DirectiveNode
+ */
+const createNodeFromExample = async (exampleCode: string): Promise<DirectiveNode> => {
+  try {
+    const { parse } = await import('meld-ast');
+    
+    const result = await parse(exampleCode, {
+      trackLocations: true,
+      validateNodes: true,
+      // @ts-expect-error - structuredPaths is used but may be missing from typings
+      structuredPaths: true
+    });
+    
+    return result.ast[0] as DirectiveNode;
+  } catch (error) {
+    console.error('Error parsing with meld-ast:', error);
+    throw error;
+  }
 };
 
 // Helper to create a real embed directive node using meld-ast
@@ -183,10 +227,13 @@ describe('EmbedDirectiveHandler', () => {
 
   describe('basic embed functionality', () => {
     it('should handle basic embed without modifiers', async () => {
-      const node = await createRealEmbedDirective('doc.md');
+      // Get example for simple embed
+      const example = embedDirectiveExamples.atomic.simpleEmbed;
+      const node = await createNodeFromExample(example.code);
+      
       const context = { currentFilePath: 'test.meld', state: stateService };
 
-      vi.mocked(resolutionService.resolveInContext).mockResolvedValue('doc.md');
+      vi.mocked(resolutionService.resolveInContext).mockResolvedValue('embed.md');
       vi.mocked(fileSystemService.exists).mockResolvedValue(true);
       vi.mocked(fileSystemService.readFile).mockResolvedValue('Test content');
 
@@ -205,7 +252,7 @@ describe('EmbedDirectiveHandler', () => {
         expect.anything(),
         expect.objectContaining({
           initialState: childState,
-          filePath: 'doc.md',
+          filePath: 'embed.md',
           mergeState: true
         })
       );
@@ -214,22 +261,25 @@ describe('EmbedDirectiveHandler', () => {
     });
 
     it('should handle embed with section', async () => {
-      const node = await createRealEmbedDirective('doc.md', 'Introduction');
+      // Get example for embed with section
+      const example = embedDirectiveExamples.atomic.withSection;
+      const node = await createNodeFromExample(example.code);
+      
       const context = { currentFilePath: 'test.meld', state: stateService };
 
       vi.mocked(resolutionService.resolveInContext)
-        .mockResolvedValueOnce('doc.md')
-        .mockResolvedValueOnce('Introduction');
+        .mockResolvedValueOnce('sections.md')
+        .mockResolvedValueOnce('Section Two');
       vi.mocked(fileSystemService.exists).mockResolvedValue(true);
       vi.mocked(fileSystemService.readFile).mockResolvedValue('# Content');
-      vi.mocked(resolutionService.extractSection).mockResolvedValue('# Introduction\nContent');
+      vi.mocked(resolutionService.extractSection).mockResolvedValue('# Section Two\nContent');
 
       const result = await handler.execute(node, context);
 
       expect(stateService.clone).toHaveBeenCalled();
       expect(resolutionService.extractSection).toHaveBeenCalledWith(
         '# Content',
-        'Introduction',
+        'Section Two',
         undefined
       );
       expect(clonedState.mergeChildState).toHaveBeenCalledWith(childState);
@@ -237,18 +287,28 @@ describe('EmbedDirectiveHandler', () => {
     });
 
     it('should handle embed with heading level', async () => {
-      const node = await createRealEmbedDirective('doc.md', undefined, {
-        headingLevel: 2
-      });
+      // Get example for complex options
+      const example = embedDirectiveExamples.combinations.complexOptions;
+      const node = await createNodeFromExample(example.code);
+      
       const context = { currentFilePath: 'test.meld', state: stateService };
 
-      vi.mocked(resolutionService.resolveInContext).mockResolvedValue('doc.md');
+      vi.mocked(resolutionService.resolveInContext).mockResolvedValue('file.md');
       vi.mocked(fileSystemService.exists).mockResolvedValue(true);
       vi.mocked(fileSystemService.readFile).mockResolvedValue('Test content');
 
       const result = await handler.execute(node, context);
 
+      expect(validationService.validate).toHaveBeenCalledWith(node);
       expect(stateService.clone).toHaveBeenCalled();
+      expect(interpreterService.interpret).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          initialState: childState,
+          filePath: 'file.md',
+          mergeState: true
+        })
+      );
       expect(clonedState.mergeChildState).toHaveBeenCalledWith(childState);
       expect(result.state).toBe(clonedState);
     });
@@ -272,17 +332,21 @@ describe('EmbedDirectiveHandler', () => {
   });
 
   describe('error handling', () => {
-    it('should handle file not found', async () => {
-      const node = await createRealEmbedDirective('missing.meld');
-      const context = {
-        currentFilePath: 'test.meld',
-        state: stateService,
-        parentState: undefined
-      };
+    it('should throw error if file not found', async () => {
+      // Get invalid example for file not found
+      const invalidExample = embedDirectiveExamples.invalid.fileNotFound;
+      const node = await createNodeFromExample(invalidExample.code);
+      
+      const context = { currentFilePath: 'test.meld', state: stateService };
 
+      vi.mocked(resolutionService.resolveInContext).mockResolvedValue('non-existent-file.md');
       vi.mocked(fileSystemService.exists).mockResolvedValue(false);
-
-      await expect(handler.execute(node, context)).rejects.toThrow(DirectiveError);
+      
+      await expect(handler.execute(node, context))
+        .rejects
+        .toThrow(DirectiveError);
+      
+      expect(circularityService.beginImport).toHaveBeenCalled();
       expect(circularityService.endImport).toHaveBeenCalled();
     });
 
