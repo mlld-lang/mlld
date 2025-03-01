@@ -285,11 +285,63 @@ export class InterpreterService implements IInterpreterService {
             );
           }
           const directiveNode = node as DirectiveNode;
-          currentState = await this.directiveService.processDirective(directiveNode, {
+          
+          // Store the directive result to check for replacement nodes
+          const directiveResult = await this.directiveService.processDirective(directiveNode, {
             state: directiveState,
             parentState: currentState,
             currentFilePath: state.getCurrentFilePath() ?? undefined
           });
+          
+          // Update current state with the result
+          currentState = directiveResult;
+          
+          // Check if the directive handler returned a replacement node
+          // This happens when the handler implements the DirectiveResult interface
+          // with a replacement property
+          if (directiveResult && 'replacement' in directiveResult) {
+            // We need to extract the replacement node and state from the result
+            const { replacement, state: resultState } = directiveResult;
+            
+            // Update current state with the result state
+            currentState = resultState;
+            
+            // If transformation is enabled and we have a replacement node,
+            // we need to apply it to the transformed nodes
+            if (currentState.isTransformationEnabled && currentState.isTransformationEnabled()) {
+              logger.debug('Applying replacement node from directive handler', {
+                originalType: node.type,
+                replacementType: replacement.type,
+                directiveKind: directiveNode.directive.kind
+              });
+              
+              // Apply the transformation by replacing the directive node with the replacement
+              try {
+                // Ensure we have the transformed nodes array initialized
+                if (!currentState.getTransformedNodes || !currentState.getTransformedNodes()) {
+                  // Initialize transformed nodes if needed
+                  const originalNodes = currentState.getNodes();
+                  if (originalNodes && currentState.setTransformedNodes) {
+                    currentState.setTransformedNodes([...originalNodes]);
+                    logger.debug('Initialized transformed nodes array', {
+                      nodesCount: originalNodes.length
+                    });
+                  }
+                }
+                
+                // Apply the transformation
+                currentState.transformNode(node, replacement);
+                
+              } catch (transformError) {
+                logger.error('Error applying transformation', {
+                  error: transformError,
+                  directiveKind: directiveNode.directive.kind
+                });
+                // Continue execution despite transformation error
+              }
+            }
+          }
+          
           break;
 
         default:

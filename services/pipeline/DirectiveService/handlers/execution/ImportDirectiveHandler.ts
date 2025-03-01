@@ -208,22 +208,52 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
         // Check if imports should be transformed
         const shouldTransformImports = !targetState.shouldTransform || targetState.shouldTransform('imports');
         
-        // Create an empty text node as replacement
-        const replacement: TextNode = {
-          type: 'Text',
-          content: '',
-          location: {
-            start: node.location.start,
-            end: node.location.end,
-            filePath: node.location.filePath
+        if (shouldTransformImports) {
+          // Create a text node with empty content as replacement
+          const replacement: TextNode = {
+            type: 'Text',
+            content: '',
+            location: {
+              start: node.location.start,
+              end: node.location.end,
+              filePath: node.location.filePath
+            }
+          };
+          
+          // IMPORTANT: Make sure the parent state has all the variables from the imported state
+          // This ensures that variable references in the parent document can access imported variables
+          if (context.parentState) {
+            // Copy all text variables from the imported state to the parent state
+            const textVars = targetState.getAllTextVars();
+            textVars.forEach((value, key) => {
+              context.parentState.setTextVar(key, value);
+            });
+            
+            // Copy all data variables from the imported state to the parent state
+            const dataVars = targetState.getAllDataVars();
+            dataVars.forEach((value, key) => {
+              context.parentState.setDataVar(key, value);
+            });
+            
+            // Copy all path variables from the imported state to the parent state
+            const pathVars = targetState.getAllPathVars();
+            pathVars.forEach((value, key) => {
+              context.parentState.setPathVar(key, value);
+            });
+            
+            // Copy all commands from the imported state to the parent state
+            const commands = targetState.getAllCommands();
+            commands.forEach((value, key) => {
+              context.parentState.setCommand(key, value);
+            });
           }
-        };
-        
-        // Return the replacement node and the updated state
-        return {
-          replacement,
-          state: targetState
-        };
+          
+          // Return the replacement node and the updated state
+          return {
+            replacement,
+            state: targetState
+          };
+        }
       }
 
       // If transformation is not enabled, return the state
