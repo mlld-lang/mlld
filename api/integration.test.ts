@@ -58,71 +58,20 @@ describe('API Integration Tests', () => {
 
   describe('Variable Definitions and References', () => {
     it('should handle text variable definitions and references', async () => {
-      console.log("TEST STARTING");
-      
-      // Use direct content instead of examples to isolate the issue
-      const content = `
-        @text greeting = "Hello"
-        @text subject = "World"
-        @text message = \`{{greeting}}, {{subject}}!\`
-        
-        {{message}}
-      `;
-      await context.writeFile('test.meld', content);
-      
-      // Check transformation state before calling main
-      console.log('Before main() - Transformation state:', {
-        enabled: context.services.state.isTransformationEnabled(),
-        options: JSON.stringify(context.services.state.getTransformationOptions())
-      });
-      
-      // Explicitly enable transformation with selective options
-      const result = await main('test.meld', {
-        fs: context.fs,
-        services: context.services as unknown as Partial<Services>,
-        transformation: { 
-          variables: true, 
-          directives: true 
-        }
-      });
-      
-      // Log the result for debugging
-      console.log('Actual result:', JSON.stringify(result));
-      
-      // TEMPORARY: Accept the raw output format since transformation isn't working
-      // This is a workaround until we can fix the transformation issue
-      expect(result).toContain('@text greeting = "Hello"');
-      expect(result).toContain('@text subject = "World"');
-      expect(result).toContain('@text message');
-      
-      // Original expectation (commented out until transformation is fixed)
-      // expect(result.trim()).toBe('Hello, World!');
-    });
-    
-    it('should handle data variable definitions and field access', async () => {
       // Import examples from centralized location
       const { getExample } = await import('../tests/utils/syntax-test-helpers.js');
       
-      // Get appropriate examples for text and data directives
-      const textExample = getExample('text', 'atomic', 'simpleString');
+      // Use centralized examples
+      const textVarExample = getExample('text', 'atomic', 'var1');
+      const templateLiteralExample = getExample('text', 'combinations', 'basicInterpolation');
       
-      // For the data example, we need an object with a field we can access
-      // simpleObject gives us a user with name and id fields
-      const dataExample = getExample('data', 'atomic', 'simpleObject');
-      
-      console.log('Using examples:', {
-        textCode: textExample.code,
-        dataCode: dataExample.code
-      });
-      
-      // Build content with the examples plus a reference to a field
-      const content = `${textExample.code}
-${dataExample.code}
+      // Combine examples with additional content
+      const content = `${textVarExample.code}
+${templateLiteralExample.code}
 
-Some text content
-More text with {{user.id}}`;
-      
-      console.log('Content to parse:', content);
+Some text content with {{var1}} and {{message}}
+`;
+
       await context.writeFile('test.meld', content);
       
       try {
@@ -136,18 +85,61 @@ More text with {{user.id}}`;
           transformation: true
         });
         
-        console.log('RESULT:', result);
+        // Verify output contains the expected content with transformed directives
+        expect(result).toBeDefined();
+        expect(result).toContain('Some text content with');
+        expect(result).toContain('Value 1');
+        expect(result).toContain('Hello, World!');
+        
+        // Check that text variables are set in state
+        const var1Value = stateService.getTextVar('var1');
+        expect(var1Value).toBeDefined();
+        expect(var1Value).toBe('Value 1');
+        
+        const messageValue = stateService.getTextVar('message');
+        expect(messageValue).toBeDefined();
+        expect(messageValue).toBe('Hello, World!');
+      } catch (error) {
+        console.error('ERROR during test execution:', error);
+        throw error;
+      }
+    });
+    
+    it('should handle data variable definitions and field access', async () => {
+      // Import examples from centralized location
+      const { getExample } = await import('../tests/utils/syntax-test-helpers.js');
+      
+      // Use centralized examples
+      const textExample = getExample('text', 'atomic', 'simpleString');
+      
+      // Use a simple data example with JSON syntax
+      const content = `${textExample.code}
+@data user = { "name": "Alice", "id": 123 }
+
+Some content with {{greeting}} and {{user.id}}
+`;
+
+      await context.writeFile('test.meld', content);
+      
+      try {
+        // Enable transformation
+        const stateService = context.services.state;
+        stateService.enableTransformation(true);
+        
+        const result = await main('test.meld', {
+          fs: context.fs,
+          services: context.services as unknown as Partial<Services>,
+          transformation: true
+        });
+        
+        // Verify output contains the expected content with transformed directives
+        expect(result).toBeDefined();
+        expect(result).toContain('Some content with');
+        expect(result).toContain('123');
         
         // Check that variables are set in state
         expect(stateService.getTextVar('greeting')).toBe('Hello');
         expect(stateService.getDataVar('user')).toEqual({ name: "Alice", id: 123 });
-        
-        // Check that content was parsed correctly
-        expect(result).toBeDefined();
-        expect(result).toContain('Some text content');
-        
-        // Check for field access transformation
-        expect(result).toContain('More text with');
       } catch (error) {
         console.error('ERROR during test execution:', error);
         throw error;
@@ -162,12 +154,6 @@ More text with {{user.id}}`;
       const textExample = getExample('text', 'atomic', 'simpleString');
       const complexDataExample = getExample('data', 'combinations', 'nestedObject');
       const runExample = getExample('run', 'atomic', 'simple');
-      
-      console.log('Using examples:', {
-        textCode: textExample.code,
-        dataCode: complexDataExample.code,
-        runCode: runExample.code
-      });
       
       // Combine examples with additional content
       const content = `${textExample.code}
@@ -189,8 +175,6 @@ More text`;
           services: context.services as unknown as Partial<Services>,
           transformation: true
         });
-        
-        console.log('RESULT:', result);
         
         // Verify output contains the expected content with transformed directives
         expect(result).toBeDefined();
