@@ -43,6 +43,7 @@ import { StateVisualizationService } from '@tests/utils/debug/StateVisualization
 import { StateHistoryService } from '@tests/utils/debug/StateHistoryService/StateHistoryService.js';
 import { StateEventService } from '@services/state/StateEventService/StateEventService.js';
 import { TestDebuggerService } from '@tests/utils/debug/TestDebuggerService.js';
+import { interpreterLogger as logger } from '@core/utils/logger.js';
 
 // Package info
 export { version } from '@core/version.js';
@@ -206,6 +207,12 @@ export async function main(filePath: string, options: ProcessOptions = {}): Prom
       } else {
         services.state.enableTransformation(options.transformation);
       }
+      
+      // Add debugging for transformation settings
+      logger.debug('Transformation enabled with options', {
+        isEnabled: services.state.isTransformationEnabled(),
+        options: services.state.getTransformationOptions?.()
+      });
     }
     
     // Interpret the AST
@@ -214,11 +221,17 @@ export async function main(filePath: string, options: ProcessOptions = {}): Prom
     // Ensure transformation state is preserved from original state service
     if (services.state.isTransformationEnabled()) {
       // Pass the complete transformation options to preserve selective settings
-      resultState.enableTransformation(
-        typeof options.transformation === 'boolean' 
-          ? options.transformation 
-          : options.transformation
-      );
+      const transformOpts = typeof options.transformation === 'boolean' 
+        ? options.transformation 
+        : options.transformation;
+      
+      resultState.enableTransformation(transformOpts);
+      
+      // Add debugging for resultState transformation settings
+      logger.debug('ResultState transformation settings', {
+        isEnabled: resultState.isTransformationEnabled(),
+        options: resultState.getTransformationOptions?.()
+      });
     }
     
     // Get transformed nodes if available

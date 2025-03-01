@@ -378,7 +378,8 @@ export class OutputService implements IOutputService {
             content,
             matches: matches.map(m => m[0]),
             transformationEnabled: state.isTransformationEnabled(),
-            transformationOptions: state.getTransformationOptions ? state.getTransformationOptions() : 'N/A'
+            transformationOptions: state.getTransformationOptions ? state.getTransformationOptions() : 'N/A',
+            shouldTransformVariables: state.shouldTransform ? state.shouldTransform('variables') : 'N/A'
           });
           
           // If no matches, return original content
@@ -386,117 +387,120 @@ export class OutputService implements IOutputService {
             return content.endsWith('\n') ? content : content + '\n';
           }
           
-          // Process each variable reference
-          for (const match of matches) {
-            const fullMatch = match[0]; // The entire match, e.g., {{variable}}
-            const reference = match[1].trim(); // The variable reference, e.g., variable
-
-            try {
-              // Split the reference into variable name and field path
-              const parts = reference.split('.');
-              const variableName = parts[0];
-              const fieldPath = parts.length > 1 ? parts.slice(1).join('.') : '';
-              
-              logger.debug('Processing variable reference:', {
-                fullMatch,
-                variableName,
-                fieldPath
-              });
-              
-              // Try to get the variable value from the state
-              let value;
-              
-              // Try text variable first
-              value = state.getTextVar(variableName);
-              
-              logger.debug('Looking up variable in state', {
-                variableName,
-                value: value !== undefined ? (typeof value === 'string' ? value : JSON.stringify(value)) : 'undefined',
-                type: 'text'
-              });
-              
-              // If not found as text variable, try data variable
-              if (value === undefined) {
-                value = state.getDataVar(variableName);
-                logger.debug('Looking up data variable in state', {
+          // Only proceed with transformation if we're supposed to transform variables
+          if (!state.shouldTransform || state.shouldTransform('variables')) {
+            // Process each variable reference
+            for (const match of matches) {
+              const fullMatch = match[0]; // The entire match, e.g., {{variable}}
+              const reference = match[1].trim(); // The variable reference, e.g., variable
+  
+              try {
+                // Split the reference into variable name and field path
+                const parts = reference.split('.');
+                const variableName = parts[0];
+                const fieldPath = parts.length > 1 ? parts.slice(1).join('.') : '';
+                
+                logger.debug('Processing variable reference:', {
+                  fullMatch,
+                  variableName,
+                  fieldPath
+                });
+                
+                // Try to get the variable value from the state
+                let value;
+                
+                // Try text variable first
+                value = state.getTextVar(variableName);
+                
+                logger.debug('Looking up variable in state', {
                   variableName,
                   value: value !== undefined ? (typeof value === 'string' ? value : JSON.stringify(value)) : 'undefined',
-                  type: 'data'
+                  type: 'text'
                 });
-              }
-              
-              // Process field access for data variables
-              if (value !== undefined && fieldPath) {
-                // Handle field access for data variables
-                const fields = fieldPath.split('.');
-                let currentValue: any = value;
                 
-                for (const field of fields) {
-                  // Check if field is numeric (array index)
-                  const isNumeric = /^\d+$/.test(field);
+                // If not found as text variable, try data variable
+                if (value === undefined) {
+                  value = state.getDataVar(variableName);
+                  logger.debug('Looking up data variable in state', {
+                    variableName,
+                    value: value !== undefined ? (typeof value === 'string' ? value : JSON.stringify(value)) : 'undefined',
+                    type: 'data'
+                  });
+                }
+                
+                // Process field access for data variables
+                if (value !== undefined && fieldPath) {
+                  // Handle field access for data variables
+                  const fields = fieldPath.split('.');
+                  let currentValue: any = value;
                   
-                  if (isNumeric && Array.isArray(currentValue)) {
-                    // Access array by index
-                    const index = parseInt(field, 10);
-                    if (index < currentValue.length) {
-                      currentValue = currentValue[index];
+                  for (const field of fields) {
+                    // Check if field is numeric (array index)
+                    const isNumeric = /^\d+$/.test(field);
+                    
+                    if (isNumeric && Array.isArray(currentValue)) {
+                      // Access array by index
+                      const index = parseInt(field, 10);
+                      if (index < currentValue.length) {
+                        currentValue = currentValue[index];
+                      } else {
+                        // Array index out of bounds
+                        currentValue = undefined;
+                        break;
+                      }
+                    } else if (typeof currentValue === 'object' && currentValue !== null) {
+                      // Access object property with type safety
+                      currentValue = currentValue[field];
                     } else {
-                      // Array index out of bounds
+                      // Cannot access property of non-object
                       currentValue = undefined;
                       break;
                     }
-                  } else if (typeof currentValue === 'object' && currentValue !== null) {
-                    // Access object property with type safety
-                    currentValue = currentValue[field];
-                  } else {
-                    // Cannot access property of non-object
-                    currentValue = undefined;
-                    break;
+                    
+                    // If we hit undefined, stop traversing
+                    if (currentValue === undefined) {
+                      break;
+                    }
                   }
                   
-                  // If we hit undefined, stop traversing
-                  if (currentValue === undefined) {
-                    break;
-                  }
+                  // Update value with resolved field access
+                  value = currentValue;
                 }
                 
-                // Update value with resolved field access
-                value = currentValue;
-              }
-              
-              // If a value was found, replace the variable reference with its value
-              if (value !== undefined) {
-                const stringValue = typeof value === 'string' ? value : JSON.stringify(value);
-                transformedContent = transformedContent.replace(fullMatch, stringValue);
-                
-                logger.debug('Replaced variable reference in Text node', {
-                  variableName,
-                  fieldPath,
-                  value: stringValue,
+                // If a value was found, replace the variable reference with its value
+                if (value !== undefined) {
+                  const stringValue = typeof value === 'string' ? value : JSON.stringify(value);
+                  transformedContent = transformedContent.replace(fullMatch, stringValue);
+                  
+                  logger.debug('Replaced variable reference in Text node', {
+                    variableName,
+                    fieldPath,
+                    value: stringValue,
+                    fullMatch,
+                    before: content,
+                    after: transformedContent
+                  });
+                } else {
+                  logger.warn('Variable not found in state', {
+                    variableName,
+                    fieldPath,
+                    fullMatch
+                  });
+                  // Leave the variable reference unchanged if value not found
+                }
+              } catch (error) {
+                // Handle errors during variable resolution
+                logger.error('Error resolving variable reference:', {
                   fullMatch,
-                  before: content,
-                  after: transformedContent
+                  reference,
+                  error
                 });
-              } else {
-                logger.warn('Variable not found in state', {
-                  variableName,
-                  fieldPath,
-                  fullMatch
-                });
-                // Leave the variable reference unchanged if value not found
+                // Leave the variable reference unchanged on error
               }
-            } catch (error) {
-              // Handle errors during variable resolution
-              logger.error('Error resolving variable reference:', {
-                fullMatch,
-                reference,
-                error
-              });
-              // Leave the variable reference unchanged on error
             }
+            
+            return transformedContent.endsWith('\n') ? transformedContent : transformedContent + '\n';
           }
-          
-          return transformedContent.endsWith('\n') ? transformedContent : transformedContent + '\n';
         }
         
         // Check if the content contains variable references and ResolutionService is available

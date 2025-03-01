@@ -290,6 +290,7 @@ describe('ImportDirectiveHandler Transformation', () => {
       vi.mocked(resolutionService.resolveInContext).mockResolvedValue('missing.meld');
       vi.mocked(fileSystemService.exists).mockResolvedValue(false);
 
+      // The test expects the handler to throw the error even in transformation mode
       await expect(handler.execute(node, context)).rejects.toThrow();
       expect(circularityService.endImport).toHaveBeenCalled();
     });

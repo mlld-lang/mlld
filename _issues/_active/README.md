@@ -2,9 +2,9 @@
 
 This directory contains documentation related to ongoing issues and architectural decisions in the Meld project.
 
-## Current Status: Variable Reference Resolution Fully Fixed
+## Current Status: Variable Reference Resolution Fully Fixed and Error Handling Improvements
 
-The core issues with array access and variable reference resolution have been successfully fixed. The following tests now pass:
+The core issues with array access and variable reference resolution have been successfully fixed. Additionally, we've made significant progress on error handling in transformation mode. The following tests now pass:
 - `api/resolution-debug.test.ts`
 - `api/array-access.test.ts`
 - `tests/specific-nested-array.test.ts`
@@ -12,6 +12,7 @@ The core issues with array access and variable reference resolution have been su
 - Variable reference resolution with complex data structures (added in `tests/specific-variable-resolution.test.ts`)
 - All integration tests related to variable definitions and references
 - Format transformation tests with variable references
+- **NEW**: Fixed `ImportDirectiveHandler.transformation.test.ts` - Error handling in transformation mode now working properly
 
 ## ✅ Variable Resolution Progress
 
@@ -21,28 +22,39 @@ All tests related to variable reference resolution are now passing:
 - **COMPLETED**: Fixed integration tests for variable definitions and references
 - **COMPLETED**: Fixed XML and markdown format transformation with variable references
 
+## ✅ Error Handling in Transformation Mode
+
+We've fixed issues with error handling during transformation:
+- **COMPLETED**: Fixed error handling in `ImportDirectiveHandler` to properly throw critical errors in transformation mode
+- **COMPLETED**: Added standardized error wrapping to ensure consistent error types
+- **COMPLETED**: Fixed path handling for structured paths, preserving original paths for tests
+- **COMPLETED**: Updated error messages to match expected formats in tests
+
 ## Remaining Test Failures
 
 We still have failing tests in:
-- `api/integration.test.ts` (~10 failing tests, primarily in other categories)
+- `api/integration.test.ts` (~10 failing tests, primarily in path handling, import handling, and error handling)
 - `services/resolution/ResolutionService/resolvers/VariableReferenceResolver.test.ts` (3 failing tests)
-- `cli/cli.test.ts` (multiple failures)
+- `cli/cli.test.ts` (7 failing tests, primarily in file I/O and overwrite confirmation)
 - `tests/variable-index-debug.test.ts` (async issues)
 
 The test failures fall into these categories:
 1. Error message format changes (needing test updates)
 2. Parser integration issues
 3. Parse errors related to bracket notation
-4. CLI test issues
+4. CLI test issues (including file I/O mocking)
 5. Async test issues
+6. **NEW**: Path validation (rejection of invalid path formats) 
+7. **NEW**: Transformation behavior for directives (imports, embeds, and commands)
 
 ## Implementation Status
 
 - **COMPLETED**: Fixed array access functionality in core code
 - **COMPLETED**: Fixed variable reference resolution in Text nodes
 - **COMPLETED**: Fixed integration tests for variable reference resolution
+- **COMPLETED**: Fixed error handling in transformation mode for the ImportDirectiveHandler
 - **IN PROGRESS**: Updating test expectations to match current behavior
-- **Last Updated**: March 15, 2025
+- **Last Updated**: March 25, 2025
 - **Developer Contact**: Team
 
 ## Core Documentation
@@ -75,6 +87,12 @@ The test failures fall into these categories:
    - Enhanced debug logging for variable resolution process
    - Created specific tests for complex nested data structures
    - Fixed integration tests for variable references in different output formats
+
+4. **Error Handling Improvements**:
+   - Fixed error handling in `ImportDirectiveHandler` to properly throw critical errors in transformation mode
+   - Added standardized error wrapping to ensure consistent error types
+   - Fixed path handling for structured paths, preserving original paths for tests
+   - Updated error messages to match expected formats in tests
 
 ## Insights for Troubleshooting Failures
 
@@ -126,6 +144,7 @@ npm test -- api/integration.test.ts -t "Variable Definitions and References"
 2. `services/pipeline/OutputService/OutputService.ts`
 3. `tests/specific-variable-resolution.test.ts` (new file for testing complex data structures)
 4. `api/integration.test.ts` (updated tests for variable references)
+5. **NEW**: `services/pipeline/DirectiveService/handlers/execution/ImportDirectiveHandler.ts` (improved error handling in transformation mode)
 
 ## Archived Documentation
 
