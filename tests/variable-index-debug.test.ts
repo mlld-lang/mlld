@@ -59,9 +59,24 @@ describe('VariableReferenceResolver Array Index Debug', () => {
       ]
     };
 
-    // Test private method directly using any type assertion
     // We need to test the implementation of resolveFieldAccess directly
-    const resolveFieldAccess = (resolver as any).resolveFieldAccess.bind(resolver);
+    // Create a wrapper function that simulates variable resolution
+    const resolveFieldAccess = async (obj: any, fields: string[], ctx: ResolutionContext) => {
+      // Add a helper function to the resolver instance 
+      const privateResolver = resolver as any;
+      
+      // Create a mock variable name for testing
+      const mockVarName = "testVar";
+      
+      // Mock the getVariable method to return our object
+      privateResolver.getVariable = vi.fn().mockResolvedValue(obj);
+      
+      // Convert fields array to dotted path string
+      const fieldPath = fields.join('.');
+      
+      // Call the actual resolveFieldAccess with our mocked variable
+      return privateResolver.resolveFieldAccess(mockVarName, fieldPath, ctx);
+    };
 
     // Test simple array access
     let result = await resolveFieldAccess(array, ["0"], context);
@@ -143,6 +158,11 @@ describe('VariableReferenceResolver Array Index Debug', () => {
       }
       return undefined;
     });
+    
+    // Add a mock for getVariable to handle direct variable resolution
+    (resolver as any).getVariable = async (name: string) => {
+      return mockStateService.getDataVar(name);
+    };
 
     // Test simple array access
     let result = await resolver.resolve('{{items.0}}', context);
