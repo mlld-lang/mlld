@@ -148,6 +148,11 @@ function parseArgs(args: string[]): CLIOptions {
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     
+    if (!arg.startsWith('-')) {
+      options.input = arg;
+      continue;
+    }
+    
     switch (arg) {
       case '--version':
       case '-V':
@@ -206,11 +211,7 @@ function parseArgs(args: string[]): CLIOptions {
         options.includeContent = true;
         break;
       default:
-        if (!arg.startsWith('-') && !options.input) {
-          options.input = arg;
-        } else {
-          throw new Error(`Unknown option: ${arg}`);
-        }
+        throw new Error(`Unknown option: ${arg}`);
     }
   }
 
@@ -242,23 +243,6 @@ Options:
     `);
     return;
   }
-  
-  if (command === 'debug-transform') {
-    console.log(`
-Usage: meld debug-transform [options] <input-file>
-
-Debug node transformations through the pipeline.
-
-Options:
-  --directive <type>           Focus on a specific directive type
-  --output-format <format>     Output format (text, json, mermaid) [default: text]
-  --output <path>              Output file path
-  --include-content            Include node content in output
-  -v, --verbose                Enable verbose output
-  -h, --help                   Display this help message
-    `);
-    return;
-  }
 
   console.log(`
 Usage: meld [command] [options] <input-file>
@@ -266,7 +250,6 @@ Usage: meld [command] [options] <input-file>
 Commands:
   init                    Create a new Meld project
   debug-resolution        Debug variable resolution in a Meld file
-  debug-transform         Debug node transformations through the pipeline
 
 Options:
   -f, --format <format>   Output format: md, markdown, xml, llm [default: llm]
@@ -341,225 +324,4 @@ async function watchFiles(options: CLIOptions): Promise<void> {
   const watchDir = path.dirname(inputPath);
 
   try {
-    console.log(`Watching for changes in ${watchDir}...`);
-    const watcher = watch(watchDir, { recursive: true });
-
-    for await (const event of watcher) {
-      // Only process .meld files or the specific input file
-      if (event.filename?.endsWith('.meld') || event.filename === path.basename(inputPath)) {
-        console.log(`Change detected in ${event.filename}, reprocessing...`);
-        await processFile(options);
-      }
-    }
-  } catch (error) {
-    logger.error('Watch mode failed', {
-      error: error instanceof Error ? error.message : String(error)
-    });
-    throw error;
-  }
-}
-
-/**
- * Process a file with specific API options
- */
-async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: ProcessOptions): Promise<void> {
-  try {
-    // Process the file through the API with provided options
-    const result = await apiMain(cliOptions.input, apiOptions);
-    
-    // Handle output based on CLI options
-    if (cliOptions.stdout) {
-      console.log(result);
-      logger.info('Successfully wrote output to stdout');
-    } else {
-      // Handle output path
-      let outputPath = cliOptions.output;
-      
-      if (!outputPath) {
-        // If no output path specified, use input path with new extension
-        const inputExt = '.meld';
-        const outputExt = getOutputExtension(normalizeFormat(cliOptions.format));
-        outputPath = cliOptions.input.replace(new RegExp(`${inputExt}$`), outputExt);
-      } else if (!outputPath.includes('.')) {
-        // If output path has no extension, add default extension
-        outputPath += getOutputExtension(normalizeFormat(cliOptions.format));
-      }
-      
-      // In test mode with custom filesystem, we might need special handling
-      if (cliOptions.custom && apiOptions.fs) {
-        // Use the filesystem from API options if available
-        const fs = apiOptions.fs;
-        if (typeof fs.writeFile === 'function') {
-          await fs.writeFile(outputPath, result);
-          logger.info('Successfully wrote output file using custom filesystem', { path: outputPath });
-          return;
-        }
-      }
-      
-      // Standard file system operations
-      const fileExists = await fs.access(outputPath).then(() => true).catch(() => false);
-      if (fileExists) {
-        const shouldOverwrite = await confirmOverwrite(outputPath);
-        if (!shouldOverwrite) {
-          logger.info('Operation cancelled by user');
-          return;
-        }
-      }
-      
-      await fs.writeFile(outputPath, result);
-      logger.info('Successfully wrote output file', { path: outputPath });
-    }
-  } catch (error) {
-    // Convert to MeldError if needed
-    const meldError = error instanceof MeldError 
-      ? error 
-      : new MeldError(error instanceof Error ? error.message : String(error), {
-          severity: ErrorSeverity.Fatal,
-          code: 'PROCESSING_ERROR'
-        });
-    
-    // Log the error
-    logger.error('Error processing file', {
-      error: meldError.message,
-      code: meldError.code,
-      severity: meldError.severity
-    });
-    
-    // Rethrow for the main function to handle
-    throw meldError;
-  }
-}
-
-/**
- * Process a single file
- */
-async function processFile(options: CLIOptions): Promise<void> {
-  // Convert CLI options to API options
-  const apiOptions = cliToApiOptions(options);
-  
-  if (options.debugContext) {
-    await debugContextCommand({
-      filePath: options.input,
-      variableName: options.variableName,
-      visualizationType: options.visualizationType || 'hierarchy',
-      rootStateId: options.rootStateId,
-      outputFormat: options.outputFormat as 'mermaid' | 'dot' | 'json' || 'mermaid',
-      outputFile: options.output,
-      includeVars: options.includeVars,
-      includeTimestamps: options.includeTimestamps,
-      includeFilePaths: options.includeFilePaths
-    });
-    return;
-  }
-
-  // Use the common processing function
-  await processFileWithOptions(options, apiOptions);
-}
-
-/**
- * Main CLI entry point
- */
-export async function main(fsAdapter?: IFileSystem): Promise<void> {
-  try {
-    // Parse command line arguments
-    const args = process.argv.slice(2);
-    
-    // Check for command before parsing
-    let command: string | undefined;
-    if (args.length > 0 && !args[0].startsWith('-') && 
-        (args[0] === 'init' || args[0] === 'debug-resolution')) {
-      command = args[0];
-    }
-    
-    const options = parseArgs(args);
-
-    // Handle version flag first, before any logging
-    if (options.version) {
-      console.log(`meld version ${version}`);
-      return;
-    }
-
-    // Handle help flag
-    if (options.help) {
-      displayHelp(command);
-      return;
-    }
-    
-    // Handle init command
-    if (command === 'init' || options.input === 'init') {
-      await initCommand();
-      return;
-    }
-    
-    // Handle debug-resolution command
-    if (command === 'debug-resolution' || options.debugResolution) {
-      await debugResolutionCommand({
-        filePath: options.input,
-        variableName: options.variableName,
-        watchMode: options.watch,
-        outputFormat: options.outputFormat as 'json' | 'text'
-      });
-      return;
-    }
-
-    // Handle debug-transform command
-    if (command === 'debug-transform' || options.debugTransform) {
-      await debugTransformCommand({
-        filePath: options.input,
-        directiveType: options.directiveType,
-        outputFormat: options.outputFormat,
-        outputFile: options.output,
-        includeContent: options.includeContent
-      });
-      return;
-    }
-
-    // Configure logging based on options
-    if (options.verbose) {
-      logger.level = 'debug';
-    } else if (options.debug) {
-      logger.level = 'trace';
-    } else {
-      logger.level = 'info';
-    }
-
-    // Handle testing with custom filesystem
-    let customApiOptions: ProcessOptions | undefined;
-    if (fsAdapter) {
-      // Mark for special handling in cliToApiOptions
-      options.custom = true; 
-      
-      // Create custom API options with the test filesystem
-      customApiOptions = cliToApiOptions(options);
-      customApiOptions.fs = fsAdapter;
-    }
-
-    // Watch mode handling
-    if (options.watch) {
-      await watchFiles(options);
-      return;
-    }
-
-    // Process the file with custom filesystem if provided
-    if (customApiOptions) {
-      await processFileWithOptions(options, customApiOptions);
-    } else {
-      await processFile(options);
-    }
-  } catch (error) {
-    logger.error('CLI execution failed', {
-      error: error instanceof Error ? error.message : String(error)
-    });
-    
-    // Display error to user
-    console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
-    
-    // Exit with error code for non-test environments
-    if (process.env.NODE_ENV !== 'test') {
-      process.exit(1);
-    } else {
-      // For tests, rethrow to be caught by the test runner
-      throw error;
-    }
-  }
-} 
+    console.log(`
