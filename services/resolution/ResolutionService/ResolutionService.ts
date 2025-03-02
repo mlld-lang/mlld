@@ -16,7 +16,6 @@ import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 import { inject, singleton } from 'tsyringe';
 import { IPathService } from '@services/fs/PathService/IPathService.js';
-import { VariableResolutionTracker, ResolutionTrackingConfig } from './tracking/VariableResolutionTracker.js';
 
 /**
  * Interface matching the StructuredPath expected from meld-spec
@@ -130,7 +129,6 @@ export class ResolutionService implements IResolutionService {
   private commandResolver: CommandResolver;
   private contentResolver: ContentResolver;
   private variableReferenceResolver: VariableReferenceResolver;
-  private resolutionTracker: VariableResolutionTracker;
 
   constructor(
     private stateService: IStateService,
@@ -148,42 +146,6 @@ export class ResolutionService implements IResolutionService {
       this,
       parserService
     );
-    
-    this.resolutionTracker = new VariableResolutionTracker();
-    
-    this.variableReferenceResolver.setResolutionTracker(this.resolutionTracker);
-    
-    const debugMode = process.env.MELD_DEBUG === 'true' || process.env.MELD_DEBUG_RESOLUTION === 'true';
-    if (debugMode) {
-      this.enableResolutionTracking();
-    }
-  }
-
-  /**
-   * Enable resolution tracking for debugging
-   */
-  enableResolutionTracking(config?: Partial<ResolutionTrackingConfig>): void {
-    this.resolutionTracker.configure({ 
-      enabled: true,
-      ...config
-    });
-    logger.debug('Resolution tracking enabled', { config });
-  }
-
-  /**
-   * Disable resolution tracking
-   */
-  disableResolutionTracking(): void {
-    this.resolutionTracker.configure({ enabled: false });
-    logger.debug('Resolution tracking disabled');
-  }
-
-  /**
-   * Get the resolution tracker for debugging
-   * @internal For testing/debugging only
-   */
-  getResolutionTracker(): VariableResolutionTracker {
-    return this.resolutionTracker;
   }
 
   /**
@@ -206,29 +168,8 @@ export class ResolutionService implements IResolutionService {
    * Resolve text variables in a string
    */
   async resolveText(text: string, context: ResolutionContext): Promise<string> {
-    try {
-      const nodes = await this.parseForResolution(text);
-      const result = await this.textResolver.resolve(nodes[0] as DirectiveNode, context);
-      
-      this.resolutionTracker.trackResolutionAttempt(
-        'text_value',
-        context.currentFilePath || 'unknown',
-        true,
-        result,
-        'resolveText'
-      );
-      
-      return result;
-    } catch (error) {
-      this.resolutionTracker.trackResolutionAttempt(
-        'text_value',
-        context.currentFilePath || 'unknown',
-        false,
-        undefined,
-        'resolveText'
-      );
-      throw error;
-    }
+    const nodes = await this.parseForResolution(text);
+    return this.textResolver.resolve(nodes[0] as DirectiveNode, context);
   }
 
   /**

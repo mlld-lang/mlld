@@ -173,13 +173,16 @@ export class PathService implements IPathService {
       v => v === 'HOMEPATH' || v === 'PROJECTPATH'
     );
 
+    // Also check for path variables which are valid - safely check length
+    const hasPathVar = (structured.variables?.path?.length ?? 0) > 0;
+
     // Check for path with slashes
     const hasSlashes = raw.includes('/');
     
-    // If path has slashes but no special variables, it's invalid
-    if (hasSlashes && !hasSpecialVar && !structured.cwd) {
+    // If path has slashes but no special variables or path variables, and isn't marked as cwd
+    if (hasSlashes && !hasSpecialVar && !hasPathVar && !structured.cwd) {
       throw new PathValidationError(
-        'Paths with segments must start with $. or $~ - use $. for project-relative paths and $~ for home-relative paths',
+        'Paths with segments must start with $. or $~ - use $. for project-relative paths and $~ for home-relative paths, or use a path variable ($variableName)',
         PathErrorCode.INVALID_PATH_FORMAT,
         location
       );
@@ -279,6 +282,22 @@ export class PathService implements IPathService {
       return resolvedPath;
     }
 
+    // Handle path variables
+    if ((structured.variables?.path?.length ?? 0) > 0) {
+      // The path variable should already be resolved through variable resolution
+      // Just return the resolved path
+      const resolvedPath = path.normalize(path.join(baseDir || process.cwd(), ...structured.segments));
+      
+      console.log('PathService: Resolved path variable path:', {
+        raw,
+        baseDir: baseDir || process.cwd(),
+        segments: structured.segments,
+        resolvedPath
+      });
+      
+      return resolvedPath;
+    }
+
     // Log unhandled path types for diagnostic purposes
     console.warn('PathService: Unhandled structured path type:', {
       raw,
@@ -288,7 +307,7 @@ export class PathService implements IPathService {
 
     // At this point, any other path format is invalid - but provide a helpful error
     throw new PathValidationError(
-      `Invalid path format: ${raw} - paths must either be simple filenames or start with $. or $~`,
+      `Invalid path format: ${raw} - paths must either be simple filenames, start with $. or $~, or use a path variable ($variableName)`,
       PathErrorCode.INVALID_PATH_FORMAT
     );
   }
@@ -435,7 +454,7 @@ export class PathService implements IPathService {
       });
       
       throw new PathValidationError(
-        'Paths with segments must start with $. or $~ - use $. for project-relative paths and $~ for home-relative paths',
+        'Paths with segments must start with $. or $~ - use $. for project-relative paths and $~ for home-relative paths, or use a path variable ($variableName)',
         PathErrorCode.INVALID_PATH_FORMAT,
         location
       );
