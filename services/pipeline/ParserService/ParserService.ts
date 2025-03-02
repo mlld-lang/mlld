@@ -1,12 +1,11 @@
 import { IParserService } from './IParserService.js';
-import type { MeldNode, CodeFenceNode } from 'meld-spec';
+import type { MeldNode, CodeFenceNode, TextNode } from 'meld-spec';
 import { parserLogger as logger } from '@core/utils/logger.js';
 import { MeldParseError } from '@core/errors/MeldParseError.js';
 import type { Location, Position } from '@core/types/index.js';
-import { IStateService } from '@core/services/IStateService.js';
-import { IResolutionService } from '@core/services/IResolutionService.js';
-import { ResolutionContext } from '@core/types/ResolutionContext.js';
-import { Serializer } from '@core/utils/Serializer.js';
+import { IStateService } from '@services/state/StateService/IStateService.js';
+import { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
+import type { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
 
 // Define our own ParseError type since it's not exported from meld-ast
 interface ParseError {
@@ -36,6 +35,16 @@ function isMeldAstError(error: unknown): error is MeldAstError {
 }
 
 export class ParserService implements IParserService {
+  private resolutionService?: IResolutionService;
+
+  constructor(resolutionService?: IResolutionService) {
+    this.resolutionService = resolutionService;
+  }
+
+  setResolutionService(resolutionService: IResolutionService): void {
+    this.resolutionService = resolutionService;
+  }
+
   private async parseContent(content: string): Promise<MeldNode[]> {
     try {
       const { parse } = await import('meld-ast');
@@ -204,20 +213,18 @@ export class ParserService implements IParserService {
       return node;
     }
 
-    const resolutionService = this.container.get<IResolutionService>('ResolutionService');
-    
     // Ensure we have a resolution service
-    if (!resolutionService) {
-      console.warn('No resolution service available for variable transformation');
+    if (!this.resolutionService) {
+      logger.warn('No resolution service available for variable transformation');
       return node;
     }
 
     // Create a simple resolution context
     const context: ResolutionContext = {
       state,
-      baseDir: '/',
+      currentFilePath: '/',
       strict: false,
-      allowedVariableTypes: { text: true, data: true, path: true }
+      allowedVariableTypes: { text: true, data: true, path: true, command: false }
     };
 
     try {
@@ -225,23 +232,39 @@ export class ParserService implements IParserService {
       switch (node.type) {
         case 'TextVar':
         case 'DataVar': {
-          // Serialize the node to a string representation
-          const nodeString = this.serializer.serializeNodes([node]);
+          // Extract variable name (simplified approach without serializer)
+          let variableName = '';
+          if (node.type === 'TextVar' && 'name' in node) {
+            variableName = `\${${(node as any).name}}`;
+          } else if (node.type === 'DataVar' && 'name' in node) {
+            variableName = `\${{${(node as any).name}}}`;
+          }
+          
+          if (!variableName) {
+            return node;
+          }
           
           // Resolve the variable reference
-          const resolved = await resolutionService.resolveInContext(nodeString, context);
+          const resolved = await this.resolutionService.resolveInContext(variableName, context);
           
           // Create a new Text node with the resolved value
-          return {
+          const textNode: TextNode = {
             type: 'Text',
             content: resolved || ''
           };
+          
+          // Copy location if available
+          if (node.location) {
+            textNode.location = node.location;
+          }
+          
+          return textNode;
         }
         default:
           return node;
       }
     } catch (error) {
-      console.error('Error transforming variable node:', error);
+      logger.error('Error transforming variable node:', { error });
       return node;
     }
   }

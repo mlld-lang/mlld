@@ -7,7 +7,7 @@ import type { IResolutionService } from '@services/resolution/ResolutionService/
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 import type { MeldNode, TextNode, DirectiveNode, TextVarNode, DataVarNode } from 'meld-spec';
 import { resolutionLogger as logger } from '@core/utils/logger.js';
-import { VariableResolutionTracker } from '../tracking/VariableResolutionTracker.js';
+import { VariableResolutionTracker } from '@tests/utils/debug/VariableResolutionTracker/index.js';
 
 // Define the field type for clarity
 interface Field {

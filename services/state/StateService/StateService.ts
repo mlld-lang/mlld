@@ -1,6 +1,6 @@
 import type { MeldNode, TextNode } from 'meld-spec';
 import { stateLogger as logger } from '@core/utils/logger.js';
-import type { IStateService } from './IStateService.js';
+import type { IStateService, TransformationOptions } from './IStateService.js';
 import type { StateNode, CommandDefinition } from './types.js';
 import { StateFactory } from './StateFactory.js';
 import type { IStateEventService, StateEvent } from '../StateEventService/IStateEventService.js';
@@ -241,12 +241,12 @@ export class StateService implements IStateService {
   }
 
   /**
-   * Checks if a specific transformation type is enabled
+   * Check if a specific transformation type is enabled
    * @param type The transformation type to check (variables, directives, commands, imports)
    * @returns Whether the specified transformation type is enabled
    */
   shouldTransform(type: keyof TransformationOptions): boolean {
-    return this._transformationEnabled && this._transformationOptions[type];
+    return this._transformationEnabled && Boolean(this._transformationOptions[type]);
   }
 
   /**

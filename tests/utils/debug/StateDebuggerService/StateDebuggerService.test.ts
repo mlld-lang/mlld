@@ -12,7 +12,8 @@ describe('StateDebuggerService', () => {
     childStates: ['child1', 'child2'],
     lastModified: Date.now(),
     parentState: null,
-    variables: {}
+    variables: {},
+    source: 'test'
   };
 
   const mockHistory = {
@@ -221,7 +222,7 @@ describe('StateDebuggerService', () => {
 
       expect(snapshot).toMatchObject({
         id: testStateId,
-        type: mockMetadata.type,
+        type: mockMetadata.source,
         childCount: mockMetadata.childStates.length,
         transformationCount: mockHistory.transformations.length,
         lastModified: expect.any(Number)

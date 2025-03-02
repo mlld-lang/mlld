@@ -299,9 +299,15 @@ export class InterpreterService implements IInterpreterService {
           // Check if the directive handler returned a replacement node
           // This happens when the handler implements the DirectiveResult interface
           // with a replacement property
-          if (directiveResult && 'replacement' in directiveResult) {
+          if (directiveResult && 'replacement' in directiveResult && 'state' in directiveResult) {
             // We need to extract the replacement node and state from the result
-            const { replacement, state: resultState } = directiveResult;
+            const result = directiveResult as unknown as { 
+              replacement: MeldNode;
+              state: IStateService;
+            };
+
+            const replacement = result.replacement;
+            const resultState = result.state;
             
             // Update current state with the result state
             currentState = resultState;
@@ -330,7 +336,7 @@ export class InterpreterService implements IInterpreterService {
                 }
                 
                 // Apply the transformation
-                currentState.transformNode(node, replacement);
+                currentState.transformNode(node, replacement as MeldNode);
                 
               } catch (transformError) {
                 logger.error('Error applying transformation', {

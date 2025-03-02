@@ -44,7 +44,57 @@ export interface IStateTrackingService {
    * @param stateId - The ID of the state to get metadata for
    * @returns The state metadata or undefined if not found
    */
-  getStateMetadata(stateId: string): Promise<StateMetadata | undefined>;
+  getStateMetadata(stateId: string): StateMetadata | undefined;
+
+  /**
+   * Track a context boundary between two states.
+   * @param sourceStateId - The source state ID
+   * @param targetStateId - The target state ID
+   * @param boundaryType - The type of boundary
+   * @param filePath - Optional file path associated with the boundary
+   */
+  trackContextBoundary(
+    sourceStateId: string, 
+    targetStateId: string, 
+    boundaryType: 'import' | 'embed',
+    filePath?: string
+  ): void;
+
+  /**
+   * Track a variable crossing between two states.
+   * @param sourceStateId - The source state ID
+   * @param targetStateId - The target state ID
+   * @param variableName - The name of the variable
+   * @param variableType - The type of variable
+   * @param alias - Optional alias for the variable in the target state
+   */
+  trackVariableCrossing(
+    sourceStateId: string,
+    targetStateId: string,
+    variableName: string,
+    variableType: 'text' | 'data' | 'path' | 'command',
+    alias?: string
+  ): void;
+
+  /**
+   * Get all context boundaries.
+   * @returns Array of context boundaries
+   */
+  getContextBoundaries(): ContextBoundary[];
+
+  /**
+   * Get variable crossings for a state.
+   * @param stateId - The ID of the state to get variable crossings for
+   * @returns Array of variable crossings
+   */
+  getVariableCrossings(stateId: string): VariableCrossing[];
+
+  /**
+   * Get the context hierarchy for a state.
+   * @param rootStateId - The ID of the root state
+   * @returns Context hierarchy information
+   */
+  getContextHierarchy(rootStateId: string): ContextHierarchyInfo;
 }
 
 /**
@@ -65,6 +115,39 @@ export interface StateMetadata {
  * Represents a relationship between states.
  */
 export interface StateRelationship {
+  sourceId?: string;
   targetId: string;
   type: 'parent-child' | 'merge-source' | 'merge-target';
+}
+
+/**
+ * Represents a context boundary between states.
+ */
+export interface ContextBoundary {
+  sourceStateId: string;
+  targetStateId: string;
+  boundaryType: 'import' | 'embed';
+  timestamp: number;
+  filePath?: string;
+}
+
+/**
+ * Represents a variable crossing between states.
+ */
+export interface VariableCrossing {
+  sourceStateId: string;
+  targetStateId: string;
+  variableName: string;
+  variableType: 'text' | 'data' | 'path' | 'command';
+  timestamp: number;
+  alias?: string;
+}
+
+/**
+ * Information about the context hierarchy.
+ */
+export interface ContextHierarchyInfo {
+  states: StateMetadata[];
+  boundaries: ContextBoundary[];
+  variableCrossings: VariableCrossing[];
 } 
