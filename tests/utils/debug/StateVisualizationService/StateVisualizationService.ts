@@ -619,4 +619,747 @@ export class StateVisualizationService implements IStateVisualizationService {
     // TODO: Implement complete graph export
     return '';
   }
+
+  /**
+   * Generate a context hierarchy visualization showing context boundaries
+   * @param rootStateId - The root state to start visualization from
+   * @param config - Context visualization configuration
+   * @returns Context hierarchy visualization in the specified format
+   */
+  public visualizeContextHierarchy(rootStateId: string, config: ContextVisualizationConfig): string {
+    // Get the hierarchy information from the tracking service
+    const hierarchyInfo = this.trackingService.getContextHierarchy(rootStateId);
+    
+    // Generate visualization based on the format
+    switch (config.format) {
+      case 'mermaid':
+        return this.generateMermaidContextHierarchy(hierarchyInfo, config);
+      case 'dot':
+        return this.generateDotContextHierarchy(hierarchyInfo, config);
+      case 'json':
+        return JSON.stringify(hierarchyInfo, null, 2);
+      default:
+        throw new Error(`Unsupported format: ${config.format}`);
+    }
+  }
+
+  /**
+   * Generate a variable propagation visualization showing how variables move across contexts
+   * @param variableName - The name of the variable to track propagation for
+   * @param rootStateId - Optional root state to limit visualization scope
+   * @param config - Context visualization configuration
+   * @returns Variable propagation visualization in the specified format
+   */
+  public visualizeVariablePropagation(variableName: string, rootStateId?: string, config?: ContextVisualizationConfig): string {
+    const defaultConfig: ContextVisualizationConfig = {
+      format: 'mermaid',
+      includeVars: true,
+      filterToRelevantVars: true,
+      includeTimestamps: true,
+      includeFilePaths: true
+    };
+    
+    const mergedConfig = { ...defaultConfig, ...config };
+    
+    // Get all states or limit to the subtree from rootStateId
+    let states: StateMetadata[] = [];
+    
+    if (rootStateId) {
+      const hierarchyInfo = this.trackingService.getContextHierarchy(rootStateId);
+      states = hierarchyInfo.states;
+    } else {
+      states = this.trackingService.getAllStates();
+    }
+    
+    // Get all variable crossings for the specified variable
+    const allCrossings = states.flatMap(state => 
+      this.trackingService.getVariableCrossings(state.id)
+    );
+    
+    // Filter to just the specified variable
+    const variableCrossings = allCrossings.filter(
+      crossing => crossing.variableName === variableName
+    );
+    
+    // If there are no crossings, return a simple message
+    if (variableCrossings.length === 0) {
+      return `// No variable crossings found for variable "${variableName}"`;
+    }
+    
+    // Generate visualization based on the format
+    switch (mergedConfig.format) {
+      case 'mermaid':
+        return this.generateMermaidVariablePropagation(variableName, states, variableCrossings, mergedConfig);
+      case 'dot':
+        return this.generateDotVariablePropagation(variableName, states, variableCrossings, mergedConfig);
+      case 'json':
+        return JSON.stringify({ variableName, states, crossings: variableCrossings }, null, 2);
+      default:
+        throw new Error(`Unsupported format: ${mergedConfig.format}`);
+    }
+  }
+
+  /**
+   * Generate a combined context and variable flow visualization
+   * @param rootStateId - The root state to start visualization from
+   * @param config - Context visualization configuration
+   * @returns Combined context and variable flow visualization
+   */
+  public visualizeContextsAndVariableFlow(rootStateId: string, config: ContextVisualizationConfig): string {
+    // Get the hierarchy information from the tracking service
+    const hierarchyInfo = this.trackingService.getContextHierarchy(rootStateId);
+    
+    // Generate visualization based on the format
+    switch (config.format) {
+      case 'mermaid':
+        return this.generateMermaidContextsAndFlow(hierarchyInfo, config);
+      case 'dot':
+        return this.generateDotContextsAndFlow(hierarchyInfo, config);
+      case 'json':
+        return JSON.stringify(hierarchyInfo, null, 2);
+      default:
+        throw new Error(`Unsupported format: ${config.format}`);
+    }
+  }
+
+  /**
+   * Generate a resolution path timeline visualization for a specific variable
+   * @param variableName - The name of the variable to track resolution for
+   * @param rootStateId - Optional root state to limit visualization scope
+   * @param config - Context visualization configuration
+   * @returns Resolution path timeline visualization
+   */
+  public visualizeResolutionPathTimeline(variableName: string, rootStateId?: string, config?: ContextVisualizationConfig): string {
+    const defaultConfig: ContextVisualizationConfig = {
+      format: 'mermaid',
+      includeVars: true,
+      includeTimestamps: true,
+      includeFilePaths: true
+    };
+    
+    const mergedConfig = { ...defaultConfig, ...config };
+    
+    // Get all states or limit to the subtree from rootStateId
+    let states: StateMetadata[] = [];
+    
+    if (rootStateId) {
+      const hierarchyInfo = this.trackingService.getContextHierarchy(rootStateId);
+      states = hierarchyInfo.states;
+    } else {
+      states = this.trackingService.getAllStates();
+    }
+    
+    // Get all variable crossings for the specified variable
+    const allCrossings = states.flatMap(state => 
+      this.trackingService.getVariableCrossings(state.id)
+    );
+    
+    // Filter to just the specified variable
+    const variableCrossings = allCrossings.filter(
+      crossing => crossing.variableName === variableName
+    );
+    
+    // If there are no crossings, return a simple message
+    if (variableCrossings.length === 0) {
+      return `// No variable crossings found for variable "${variableName}"`;
+    }
+    
+    // Generate visualization based on the format
+    switch (mergedConfig.format) {
+      case 'mermaid':
+        return this.generateMermaidResolutionTimeline(variableName, states, variableCrossings, mergedConfig);
+      case 'dot':
+        return this.generateDotResolutionTimeline(variableName, states, variableCrossings, mergedConfig);
+      case 'json':
+        return JSON.stringify({ variableName, states, crossings: variableCrossings }, null, 2);
+      default:
+        throw new Error(`Unsupported format: ${mergedConfig.format}`);
+    }
+  }
+
+  /**
+   * Generate a Mermaid diagram for context hierarchy
+   * @private
+   */
+  private generateMermaidContextHierarchy(hierarchyInfo: ContextHierarchyInfo, config: ContextVisualizationConfig): string {
+    const { states, boundaries } = hierarchyInfo;
+    
+    let mermaid = 'graph TD\n';
+    
+    // Add states as nodes
+    states.forEach(state => {
+      const label = this.formatStateLabel(state, config);
+      mermaid += `  ${state.id}["${label}"]\n`;
+      mermaid += `  style ${state.id} ${this.getContextNodeStyle(state, config)}\n`;
+    });
+    
+    // Add boundaries as edges
+    boundaries.forEach(boundary => {
+      const style = this.getContextBoundaryStyle(boundary, config);
+      
+      let label = '';
+      if (config.includeBoundaryTypes) {
+        label = ` |${boundary.boundaryType}|`;
+      }
+      
+      mermaid += `  ${boundary.sourceStateId} --> ${boundary.targetStateId}${label}\n`;
+    });
+    
+    // Add variable crossings if requested
+    if (config.includeVars && hierarchyInfo.variableCrossings.length > 0) {
+      mermaid += '\n  %% Variable crossings\n';
+      
+      hierarchyInfo.variableCrossings.forEach(crossing => {
+        const sourceNodeId = crossing.sourceStateId;
+        const targetNodeId = crossing.targetStateId;
+        
+        let label = `${crossing.variableName}`;
+        if (crossing.alias && crossing.alias !== crossing.variableName) {
+          label += ` as ${crossing.alias}`;
+        }
+        
+        mermaid += `  ${sourceNodeId} -. "${label}" .-> ${targetNodeId}\n`;
+      });
+    }
+    
+    return mermaid;
+  }
+
+  /**
+   * Generate a DOT diagram for context hierarchy
+   * @private
+   */
+  private generateDotContextHierarchy(hierarchyInfo: ContextHierarchyInfo, config: ContextVisualizationConfig): string {
+    const { states, boundaries } = hierarchyInfo;
+    
+    let dot = 'digraph ContextHierarchy {\n';
+    dot += '  rankdir=TB;\n';
+    dot += '  node [shape=box, style=filled, fontname="Arial"];\n';
+    
+    // Add states as nodes
+    states.forEach(state => {
+      const label = this.formatStateLabel(state, config);
+      dot += `  "${state.id}" [label="${label}" ${this.getContextNodeStyleDot(state, config)}];\n`;
+    });
+    
+    // Add boundaries as edges
+    boundaries.forEach(boundary => {
+      let label = '';
+      if (config.includeBoundaryTypes) {
+        label = `label="${boundary.boundaryType}"`;
+      }
+      
+      dot += `  "${boundary.sourceStateId}" -> "${boundary.targetStateId}" [${label} ${this.getContextBoundaryStyleDot(boundary, config)}];\n`;
+    });
+    
+    // Add variable crossings if requested
+    if (config.includeVars && hierarchyInfo.variableCrossings.length > 0) {
+      dot += '\n  // Variable crossings\n';
+      
+      hierarchyInfo.variableCrossings.forEach(crossing => {
+        const sourceNodeId = crossing.sourceStateId;
+        const targetNodeId = crossing.targetStateId;
+        
+        let label = `${crossing.variableName}`;
+        if (crossing.alias && crossing.alias !== crossing.variableName) {
+          label += ` as ${crossing.alias}`;
+        }
+        
+        dot += `  "${sourceNodeId}" -> "${targetNodeId}" [label="${label}", style=dashed, color=blue];\n`;
+      });
+    }
+    
+    dot += '}\n';
+    
+    return dot;
+  }
+
+  /**
+   * Generate a Mermaid diagram for variable propagation
+   * @private
+   */
+  private generateMermaidVariablePropagation(
+    variableName: string, 
+    states: StateMetadata[], 
+    crossings: VariableCrossing[], 
+    config: ContextVisualizationConfig
+  ): string {
+    // Create a map for quick state lookup
+    const stateMap = new Map<string, StateMetadata>();
+    states.forEach(state => stateMap.set(state.id, state));
+    
+    let mermaid = `graph TD\n  %% Variable propagation for "${variableName}"\n`;
+    
+    // Add states involved in crossings
+    const involvedStateIds = new Set<string>();
+    crossings.forEach(crossing => {
+      involvedStateIds.add(crossing.sourceStateId);
+      involvedStateIds.add(crossing.targetStateId);
+    });
+    
+    // Add states as nodes
+    Array.from(involvedStateIds).forEach(stateId => {
+      const state = stateMap.get(stateId);
+      if (state) {
+        const label = this.formatStateLabel(state, config);
+        mermaid += `  ${state.id}["${label}"]\n`;
+        mermaid += `  style ${state.id} ${this.getContextNodeStyle(state, config)}\n`;
+      }
+    });
+    
+    // Add crossings as edges
+    crossings.forEach(crossing => {
+      const sourceNodeId = crossing.sourceStateId;
+      const targetNodeId = crossing.targetStateId;
+      
+      let label = variableName;
+      if (crossing.alias && crossing.alias !== variableName) {
+        label += ` as ${crossing.alias}`;
+      }
+      
+      let edge = '';
+      if (crossing.variableType === 'text') {
+        edge = ` -. "${label} (text)" .-> `;
+      } else if (crossing.variableType === 'data') {
+        edge = ` -. "${label} (data)" .-> `;
+      } else if (crossing.variableType === 'path') {
+        edge = ` -. "${label} (path)" .-> `;
+      } else {
+        edge = ` -. "${label}" .-> `;
+      }
+      
+      mermaid += `  ${sourceNodeId}${edge}${targetNodeId}\n`;
+    });
+    
+    return mermaid;
+  }
+
+  /**
+   * Generate a DOT diagram for variable propagation
+   * @private
+   */
+  private generateDotVariablePropagation(
+    variableName: string, 
+    states: StateMetadata[], 
+    crossings: VariableCrossing[], 
+    config: ContextVisualizationConfig
+  ): string {
+    // Create a map for quick state lookup
+    const stateMap = new Map<string, StateMetadata>();
+    states.forEach(state => stateMap.set(state.id, state));
+    
+    let dot = `digraph VariablePropagation {\n  // Variable propagation for "${variableName}"\n`;
+    dot += '  rankdir=TB;\n';
+    dot += '  node [shape=box, style=filled, fontname="Arial"];\n';
+    
+    // Add states involved in crossings
+    const involvedStateIds = new Set<string>();
+    crossings.forEach(crossing => {
+      involvedStateIds.add(crossing.sourceStateId);
+      involvedStateIds.add(crossing.targetStateId);
+    });
+    
+    // Add states as nodes
+    Array.from(involvedStateIds).forEach(stateId => {
+      const state = stateMap.get(stateId);
+      if (state) {
+        const label = this.formatStateLabel(state, config);
+        dot += `  "${state.id}" [label="${label}" ${this.getContextNodeStyleDot(state, config)}];\n`;
+      }
+    });
+    
+    // Add crossings as edges
+    crossings.forEach(crossing => {
+      const sourceNodeId = crossing.sourceStateId;
+      const targetNodeId = crossing.targetStateId;
+      
+      let label = variableName;
+      if (crossing.alias && crossing.alias !== variableName) {
+        label += ` as ${crossing.alias}`;
+      }
+      
+      if (crossing.variableType) {
+        label += ` (${crossing.variableType})`;
+      }
+      
+      dot += `  "${sourceNodeId}" -> "${targetNodeId}" [label="${label}", style=dashed, color=blue];\n`;
+    });
+    
+    dot += '}\n';
+    
+    return dot;
+  }
+
+  /**
+   * Generate a Mermaid diagram for combined context and variable flow
+   * @private
+   */
+  private generateMermaidContextsAndFlow(hierarchyInfo: ContextHierarchyInfo, config: ContextVisualizationConfig): string {
+    const { states, boundaries, variableCrossings } = hierarchyInfo;
+    
+    let mermaid = 'graph TD\n';
+    
+    // Add states as nodes
+    states.forEach(state => {
+      const label = this.formatStateLabel(state, config);
+      mermaid += `  ${state.id}["${label}"]\n`;
+      mermaid += `  style ${state.id} ${this.getContextNodeStyle(state, config)}\n`;
+    });
+    
+    // Add boundaries as edges
+    boundaries.forEach(boundary => {
+      const style = this.getContextBoundaryStyle(boundary, config);
+      
+      let label = '';
+      if (config.includeBoundaryTypes) {
+        label = ` |${boundary.boundaryType}|`;
+      }
+      
+      mermaid += `  ${boundary.sourceStateId} --> ${boundary.targetStateId}${label}\n`;
+    });
+    
+    // Group variable crossings by variable name
+    const crossingsByVariable = new Map<string, VariableCrossing[]>();
+    
+    variableCrossings.forEach(crossing => {
+      if (!crossingsByVariable.has(crossing.variableName)) {
+        crossingsByVariable.set(crossing.variableName, []);
+      }
+      
+      crossingsByVariable.get(crossing.variableName)!.push(crossing);
+    });
+    
+    // Add variable crossings grouped by variable
+    if (config.includeVars && variableCrossings.length > 0) {
+      mermaid += '\n  %% Variable flows\n';
+      
+      crossingsByVariable.forEach((crossings, variableName) => {
+        mermaid += `  %% Flow for variable "${variableName}"\n`;
+        
+        crossings.forEach(crossing => {
+          const sourceNodeId = crossing.sourceStateId;
+          const targetNodeId = crossing.targetStateId;
+          
+          let label = variableName;
+          if (crossing.alias && crossing.alias !== variableName) {
+            label += ` as ${crossing.alias}`;
+          }
+          
+          mermaid += `  ${sourceNodeId} -. "${label}" .-> ${targetNodeId}\n`;
+        });
+      });
+    }
+    
+    return mermaid;
+  }
+
+  /**
+   * Generate a DOT diagram for combined context and variable flow
+   * @private
+   */
+  private generateDotContextsAndFlow(hierarchyInfo: ContextHierarchyInfo, config: ContextVisualizationConfig): string {
+    const { states, boundaries, variableCrossings } = hierarchyInfo;
+    
+    let dot = 'digraph ContextsAndVariableFlow {\n';
+    dot += '  rankdir=TB;\n';
+    dot += '  node [shape=box, style=filled, fontname="Arial"];\n';
+    
+    // Add states as nodes
+    states.forEach(state => {
+      const label = this.formatStateLabel(state, config);
+      dot += `  "${state.id}" [label="${label}" ${this.getContextNodeStyleDot(state, config)}];\n`;
+    });
+    
+    // Add boundaries as edges
+    boundaries.forEach(boundary => {
+      let label = '';
+      if (config.includeBoundaryTypes) {
+        label = `label="${boundary.boundaryType}"`;
+      }
+      
+      dot += `  "${boundary.sourceStateId}" -> "${boundary.targetStateId}" [${label} ${this.getContextBoundaryStyleDot(boundary, config)}];\n`;
+    });
+    
+    // Group variable crossings by variable name
+    const crossingsByVariable = new Map<string, VariableCrossing[]>();
+    
+    variableCrossings.forEach(crossing => {
+      if (!crossingsByVariable.has(crossing.variableName)) {
+        crossingsByVariable.set(crossing.variableName, []);
+      }
+      
+      crossingsByVariable.get(crossing.variableName)!.push(crossing);
+    });
+    
+    // Add variable crossings grouped by variable
+    if (config.includeVars && variableCrossings.length > 0) {
+      dot += '\n  // Variable flows\n';
+      
+      crossingsByVariable.forEach((crossings, variableName) => {
+        dot += `  // Flow for variable "${variableName}"\n`;
+        
+        crossings.forEach(crossing => {
+          const sourceNodeId = crossing.sourceStateId;
+          const targetNodeId = crossing.targetStateId;
+          
+          let label = variableName;
+          if (crossing.alias && crossing.alias !== variableName) {
+            label += ` as ${crossing.alias}`;
+          }
+          
+          dot += `  "${sourceNodeId}" -> "${targetNodeId}" [label="${label}", style=dashed, color=blue];\n`;
+        });
+      });
+    }
+    
+    dot += '}\n';
+    
+    return dot;
+  }
+
+  /**
+   * Generate a Mermaid timeline diagram for variable resolution
+   * @private
+   */
+  private generateMermaidResolutionTimeline(
+    variableName: string, 
+    states: StateMetadata[], 
+    crossings: VariableCrossing[], 
+    config: ContextVisualizationConfig
+  ): string {
+    // Create a map for quick state lookup
+    const stateMap = new Map<string, StateMetadata>();
+    states.forEach(state => stateMap.set(state.id, state));
+    
+    // Sort crossings by timestamp
+    const sortedCrossings = [...crossings].sort((a, b) => a.timestamp - b.timestamp);
+    
+    let mermaid = `gantt\n  title Resolution Timeline for "${variableName}"\n`;
+    mermaid += `  dateFormat X\n`;
+    mermaid += `  axisFormat %s\n`;
+    
+    // Define context sections
+    const contextIds = new Set<string>();
+    crossings.forEach(crossing => {
+      contextIds.add(crossing.sourceStateId);
+      contextIds.add(crossing.targetStateId);
+    });
+    
+    // Add context sections
+    Array.from(contextIds).forEach(stateId => {
+      const state = stateMap.get(stateId);
+      if (state) {
+        const contextName = state.filePath ? `${state.id} (${state.filePath})` : state.id;
+        mermaid += `  section ${contextName}\n`;
+        
+        // Find all crossings where this state is involved
+        const relevantCrossings = sortedCrossings.filter(
+          crossing => crossing.sourceStateId === stateId || crossing.targetStateId === stateId
+        );
+        
+        if (relevantCrossings.length === 0) {
+          mermaid += `  No crossings : 0, 0\n`;
+        } else {
+          relevantCrossings.forEach(crossing => {
+            const direction = crossing.sourceStateId === stateId ? 'out' : 'in';
+            const otherStateId = direction === 'out' ? crossing.targetStateId : crossing.sourceStateId;
+            
+            const description = `${direction === 'out' ? 'Export to' : 'Import from'} ${otherStateId}`;
+            
+            // For timelines, use the timestamp directly
+            const timestamp = crossing.timestamp;
+            const duration = 10; // Small fixed duration for visibility
+            
+            mermaid += `  ${description} : ${timestamp}, ${timestamp + duration}\n`;
+          });
+        }
+      }
+    });
+    
+    return mermaid;
+  }
+
+  /**
+   * Generate a DOT timeline diagram for variable resolution
+   * @private
+   */
+  private generateDotResolutionTimeline(
+    variableName: string, 
+    states: StateMetadata[], 
+    crossings: VariableCrossing[], 
+    config: ContextVisualizationConfig
+  ): string {
+    // Create a map for quick state lookup
+    const stateMap = new Map<string, StateMetadata>();
+    states.forEach(state => stateMap.set(state.id, state));
+    
+    // Sort crossings by timestamp
+    const sortedCrossings = [...crossings].sort((a, b) => a.timestamp - b.timestamp);
+    
+    let dot = `digraph ResolutionTimeline {\n  label="Resolution Timeline for "${variableName}"\n`;
+    dot += '  rankdir=LR;\n';
+    dot += '  node [shape=box, style=filled, fontname="Arial"];\n';
+    
+    // Create a timeline node for each crossing
+    sortedCrossings.forEach((crossing, index) => {
+      const sourceState = stateMap.get(crossing.sourceStateId);
+      const targetState = stateMap.get(crossing.targetStateId);
+      
+      const sourceLabel = sourceState?.filePath ? `${crossing.sourceStateId} (${sourceState.filePath})` : crossing.sourceStateId;
+      const targetLabel = targetState?.filePath ? `${crossing.targetStateId} (${targetState.filePath})` : crossing.targetStateId;
+      
+      const eventTime = new Date(crossing.timestamp).toISOString().replace('T', ' ').substring(0, 19);
+      const label = `${eventTime}\\n${variableName}${crossing.alias ? ` as ${crossing.alias}` : ''}`;
+      
+      dot += `  "event${index}" [label="${label}", shape=circle, color=lightblue];\n`;
+      
+      // Add edge from source to event
+      dot += `  "${crossing.sourceStateId}" -> "event${index}" [label="export", style=dashed];\n`;
+      
+      // Add edge from event to target
+      dot += `  "event${index}" -> "${crossing.targetStateId}" [label="import", style=dashed];\n`;
+      
+      // Add node labels if first occurrence
+      if (!dot.includes(`"${crossing.sourceStateId}" [`)) {
+        dot += `  "${crossing.sourceStateId}" [label="${sourceLabel}", ${this.getContextNodeStyleDot(sourceState!, config)}];\n`;
+      }
+      
+      if (!dot.includes(`"${crossing.targetStateId}" [`)) {
+        dot += `  "${crossing.targetStateId}" [label="${targetLabel}", ${this.getContextNodeStyleDot(targetState!, config)}];\n`;
+      }
+    });
+    
+    // Add timeline constraint
+    if (sortedCrossings.length > 1) {
+      dot += '\n  // Timeline ordering\n';
+      dot += '  { rank=same; ';
+      
+      for (let i = 0; i < sortedCrossings.length; i++) {
+        dot += `"event${i}" `;
+      }
+      
+      dot += '}\n';
+      
+      // Add invisible edges for timeline ordering
+      for (let i = 0; i < sortedCrossings.length - 1; i++) {
+        dot += `  "event${i}" -> "event${i+1}" [style=invis];\n`;
+      }
+    }
+    
+    dot += '}\n';
+    
+    return dot;
+  }
+
+  /**
+   * Format a state label for visualization
+   * @private
+   */
+  private formatStateLabel(state: StateMetadata, config: ContextVisualizationConfig): string {
+    let label = state.id;
+    
+    if (config.includeFilePaths && state.filePath) {
+      label += `\\n${state.filePath}`;
+    }
+    
+    if (config.includeTimestamps && state.createdAt) {
+      const date = new Date(state.createdAt);
+      label += `\\n${date.toISOString().replace('T', ' ').substring(0, 19)}`;
+    }
+    
+    return label;
+  }
+
+  /**
+   * Get Mermaid style string for a context node
+   * @private
+   */
+  private getContextNodeStyle(state: StateMetadata, config: ContextVisualizationConfig): string {
+    let style = '';
+    
+    // Style based on state source
+    switch (state.source) {
+      case 'new':
+        style = 'fill:#e1f5fe,stroke:#01579b';
+        break;
+      case 'clone':
+        style = 'fill:#fff9c4,stroke:#fbc02d';
+        break;
+      case 'child':
+        style = 'fill:#c8e6c9,stroke:#388e3c';
+        break;
+      case 'merge':
+        style = 'fill:#f8bbd0,stroke:#c2185b';
+        break;
+      case 'implicit':
+        style = 'fill:#d1c4e9,stroke:#512da8';
+        break;
+      default:
+        style = 'fill:#f5f5f5,stroke:#616161';
+    }
+    
+    return style;
+  }
+
+  /**
+   * Get DOT style string for a context node
+   * @private
+   */
+  private getContextNodeStyleDot(state: StateMetadata, config: ContextVisualizationConfig): string {
+    let fillColor = '';
+    let strokeColor = '';
+    
+    // Style based on state source
+    switch (state.source) {
+      case 'new':
+        fillColor = '#e1f5fe';
+        strokeColor = '#01579b';
+        break;
+      case 'clone':
+        fillColor = '#fff9c4';
+        strokeColor = '#fbc02d';
+        break;
+      case 'child':
+        fillColor = '#c8e6c9';
+        strokeColor = '#388e3c';
+        break;
+      case 'merge':
+        fillColor = '#f8bbd0';
+        strokeColor = '#c2185b';
+        break;
+      case 'implicit':
+        fillColor = '#d1c4e9';
+        strokeColor = '#512da8';
+        break;
+      default:
+        fillColor = '#f5f5f5';
+        strokeColor = '#616161';
+    }
+    
+    return `fillcolor="${fillColor}", color="${strokeColor}"`;
+  }
+
+  /**
+   * Get Mermaid style for a context boundary edge
+   * @private
+   */
+  private getContextBoundaryStyle(boundary: ContextBoundary, config: ContextVisualizationConfig): string {
+    if (boundary.boundaryType === 'import') {
+      return 'stroke:#388e3c,stroke-width:2';
+    } else {
+      return 'stroke:#01579b,stroke-width:2';
+    }
+  }
+
+  /**
+   * Get DOT style for a context boundary edge
+   * @private
+   */
+  private getContextBoundaryStyleDot(boundary: ContextBoundary, config: ContextVisualizationConfig): string {
+    if (boundary.boundaryType === 'import') {
+      return 'color="#388e3c", penwidth=2';
+    } else {
+      return 'color="#01579b", penwidth=2';
+    }
+  }
 } 

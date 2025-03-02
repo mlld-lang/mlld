@@ -11,6 +11,7 @@ import { IInterpreterService } from '@services/pipeline/InterpreterService/IInte
 import { DirectiveError, DirectiveErrorCode, DirectiveErrorSeverity } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { embedLogger } from '@core/utils/logger.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
+import { IStateTrackingService } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
 
 export interface ILogger {
   debug: (message: string, ...args: any[]) => void;
@@ -25,6 +26,8 @@ export interface ILogger {
  */
 export class EmbedDirectiveHandler implements IDirectiveHandler {
   readonly kind = 'embed';
+  private debugEnabled: boolean = false;
+  private stateTrackingService?: IStateTrackingService;
 
   constructor(
     private validationService: IValidationService,
@@ -34,8 +37,98 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
     private fileSystemService: IFileSystemService,
     private parserService: IParserService,
     private interpreterService: IInterpreterService,
-    private logger: ILogger = embedLogger
-  ) {}
+    private logger: ILogger = embedLogger,
+    trackingService?: IStateTrackingService
+  ) {
+    this.stateTrackingService = trackingService;
+    this.debugEnabled = !!trackingService && (process.env.MELD_DEBUG === 'true');
+  }
+
+  /**
+   * Track context boundary between states
+   */
+  private trackContextBoundary(sourceState: IStateService, targetState: IStateService, filePath?: string): void {
+    if (!this.debugEnabled || !this.stateTrackingService) {
+      return;
+    }
+
+    try {
+      const sourceId = sourceState.getStateId();
+      const targetId = targetState.getStateId();
+      
+      if (!sourceId || !targetId) {
+        this.logger.debug('Cannot track context boundary - missing state ID', {
+          source: sourceState,
+          target: targetState
+        });
+        return;
+      }
+      
+      this.logger.debug('Tracking context boundary', {
+        sourceId,
+        targetId,
+        filePath
+      });
+      
+      // Call the tracking service with the correct parameters
+      this.stateTrackingService.trackContextBoundary(
+        sourceId,
+        targetId,
+        'embed',
+        filePath || ''
+      );
+    } catch (error) {
+      // Don't let tracking errors affect normal operation
+      this.logger.debug('Error tracking context boundary', { error });
+    }
+  }
+
+  /**
+   * Track variable copying between contexts
+   */
+  private trackVariableCrossing(
+    variableName: string,
+    variableType: 'text' | 'data' | 'path' | 'command',
+    sourceState: IStateService,
+    targetState: IStateService,
+    alias?: string
+  ): void {
+    if (!this.debugEnabled || !this.stateTrackingService) {
+      return;
+    }
+
+    try {
+      const sourceId = sourceState.getStateId();
+      const targetId = targetState.getStateId();
+      
+      if (!sourceId || !targetId) {
+        this.logger.debug('Cannot track variable crossing - missing state ID', {
+          source: sourceState,
+          target: targetState
+        });
+        return;
+      }
+      
+      this.logger.debug('Tracking variable crossing', {
+        variableName,
+        variableType,
+        sourceId,
+        targetId,
+        alias
+      });
+      
+      this.stateTrackingService.trackVariableCrossing(
+        sourceId,
+        targetId,
+        variableName,
+        variableType,
+        alias
+      );
+    } catch (error) {
+      // Don't let tracking errors affect normal operation
+      this.logger.debug('Error tracking variable crossing', { error });
+    }
+  }
 
   async execute(node: DirectiveNode, context: DirectiveContext): Promise<DirectiveResult> {
     this.logger.debug('Processing embed directive', {
@@ -160,6 +253,9 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
 
         // Create child state for interpretation
         const childState = newState.createChildState();
+        
+        // Track context boundary for debugging
+        this.trackContextBoundary(newState, childState, resolvedPath);
 
         // Interpret content
         const interpretedState = await this.interpreterService.interpret(nodes, {
@@ -167,6 +263,27 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
           filePath: resolvedPath,
           mergeState: true
         });
+
+        // Track variables that will be merged back to parent
+        if (this.debugEnabled && this.stateTrackingService) {
+          // Track text variables
+          const textVars = interpretedState.getAllTextVars();
+          textVars.forEach((value, name) => {
+            this.trackVariableCrossing(name, 'text', interpretedState, newState);
+          });
+          
+          // Track data variables
+          const dataVars = interpretedState.getAllDataVars();
+          dataVars.forEach((value, name) => {
+            this.trackVariableCrossing(name, 'data', interpretedState, newState);
+          });
+          
+          // Track path variables
+          const pathVars = interpretedState.getAllPathVars();
+          pathVars.forEach((value, name) => {
+            this.trackVariableCrossing(name, 'path', interpretedState, newState);
+          });
+        }
 
         // Merge interpreted state back
         newState.mergeChildState(interpretedState);

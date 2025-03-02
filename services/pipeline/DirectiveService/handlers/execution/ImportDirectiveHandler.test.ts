@@ -129,6 +129,8 @@ describe('ImportDirectiveHandler', () => {
       getAllCommands: vi.fn().mockReturnValue(new Map()),
       clone: vi.fn(),
       mergeChildState: vi.fn(),
+      getCurrentFilePath: vi.fn().mockReturnValue('imported.meld'),
+      setCurrentFilePath: vi.fn(),
       __isMock: true
     } as unknown as IStateService;
 
@@ -139,7 +141,9 @@ describe('ImportDirectiveHandler', () => {
       setCommand: vi.fn(),
       createChildState: vi.fn().mockReturnValue(childState),
       mergeChildState: vi.fn(),
-      clone: vi.fn()
+      clone: vi.fn(),
+      getCurrentFilePath: vi.fn().mockReturnValue('cloned.meld'),
+      setCurrentFilePath: vi.fn()
     } as unknown as IStateService;
 
     stateService = {
@@ -149,6 +153,8 @@ describe('ImportDirectiveHandler', () => {
       setCommand: vi.fn(),
       clone: vi.fn().mockReturnValue(clonedState),
       createChildState: vi.fn().mockReturnValue(childState),
+      getCurrentFilePath: vi.fn().mockReturnValue('source.meld'),
+      setCurrentFilePath: vi.fn(),
       __isMock: true
     } as unknown as IStateService;
 

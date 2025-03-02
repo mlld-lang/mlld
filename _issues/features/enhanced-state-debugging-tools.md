@@ -79,15 +79,22 @@ Rather than building new tools from scratch, we'll extend our existing state vis
 
 ## Implementation Phases
 
-### Phase 1: Focused Variable Resolution Tracking (1-2 days)
+### Phase 1: Focused Variable Resolution Tracking (1-2 days) ✅ COMPLETED
 
 Focus on the most immediate pain point: variable resolution across context boundaries.
 
 **Tasks:**
-- Add lightweight resolution attempt tracking to ResolutionService
-- Instrument ImportDirectiveHandler for context boundary tracking
-- Create a basic CLI command to debug variable resolution issues
-- Implement conditional execution to prevent performance impact
+- ✅ Add lightweight resolution attempt tracking to ResolutionService
+- ✅ Instrument ImportDirectiveHandler for context boundary tracking
+- ✅ Create a basic CLI command to debug variable resolution issues
+- ✅ Implement conditional execution to prevent performance impact
+
+**Progress Update:**
+- We've enhanced the `ImportDirectiveHandler` with robust error handling around context boundary tracking.
+- All calls to `getCurrentFilePath` now have proper try-catch blocks to prevent crashes when the method is unavailable.
+- Fixed the `parseImportList` method to safely handle null/undefined import lists.
+- Implemented proper tracking of context boundaries and variable crossings with performance safeguards.
+- Updated test mocks to properly simulate the state tracking interface.
 
 **Code Example:**
 ```typescript
@@ -117,39 +124,70 @@ private trackResolutionAttempt(
 - ✅ Verified zero performance impact when debugging is disabled
 - ✅ Successfully diagnose at least one real-world variable resolution issue
 
-### Phase 2: Context Boundary Visualization (1-2 days)
+### Phase 2: Context Boundary Visualization (1-2 days) ✅ IN PROGRESS
 
 Build on Phase 1 to add visualizations of context boundaries and variable propagation.
 
 **Tasks:**
-- Track state parent-child relationships during imports
-- Record variable copying between contexts
-- Create basic visualization of context hierarchy
-- Show variable propagation across contexts
-- Develop resolution path timeline visualization
+- ✅ Track state parent-child relationships during imports
+- ✅ Record variable copying between contexts
+- 🟡 Create basic visualization of context hierarchy
+- 🟡 Show variable propagation across contexts
+- 🟡 Develop resolution path timeline visualization
+
+**Progress Update:**
+- We've implemented the foundational tracking for state relationships and variable copying:
+  - The `ImportDirectiveHandler` now tracks context boundaries with `trackContextBoundary` method
+  - Variable crossing between states is tracked with `trackVariableCrossing` method
+  - Both methods include robust error handling to prevent crashes
+- The `StateDebuggerService` is properly initialized with the dependency chain:
+  - `StateTrackingService` for recording state relationships
+  - `StateHistoryService` for tracking changes over time
+  - `StateVisualizationService` for rendering the data
+- Documentation has been updated to explain how to use these features via the CLI
+
+**Current Challenges:**
+- There are some test failures related to our implementation:
+  - Transformation mode in `ImportDirectiveHandler` isn't properly generating replacement nodes
+  - Circular import detection is not working as expected
+  - Variable propagation across contexts in API integration tests is failing
 
 **Code Example:**
 ```typescript
-// Example extension to StateVisualizationService
-visualizeContextHierarchy(rootStateId: string) {
-  const states = this.trackingService.getStateDescendants(rootStateId);
-  const relationships = this.trackingService.getStateRelationships(states);
-  
-  // Generate simplified context hierarchy visualization
-  return this.generateContextGraph(states, relationships, {
-    format: 'mermaid',
-    includeVars: true,
-    filterToRelevantVars: true
-  });
+// Tracking context boundaries
+private trackContextBoundary(sourceState: IStateService, targetState: IStateService, filePath?: string): void {
+  if (!this.debugEnabled || !this.stateTrackingService) {
+    return;
+  }
+
+  try {
+    const sourceId = sourceState.getStateId();
+    const targetId = targetState.getStateId();
+    
+    if (!sourceId || !targetId) {
+      logger.debug('Cannot track context boundary - missing state ID');
+      return;
+    }
+    
+    (this.stateTrackingService as any).trackContextBoundary(
+      sourceId,
+      targetId,
+      'import',
+      filePath || ''
+    );
+  } catch (error) {
+    // Don't let tracking errors affect normal operation
+    logger.debug('Error tracking context boundary', { error });
+  }
 }
 ```
 
 **Exit Criteria:**
-- ✅ All tests still pass with no regression
-- ✅ Context hierarchy visualization correctly shows state relationships
+- 🟡 All tests pass with no regression
+- ✅ Context hierarchy tracking correctly records state relationships
 - ✅ Variable propagation tracking correctly identifies cross-context movement
 - ✅ Performance impact is acceptable when debugging is enabled
-- ✅ Successfully diagnose at least one complex import/embed scenario
+- 🟡 Successfully diagnose at least one complex import/embed scenario
 
 ### Phase 3: Transformation Pipeline Insights (2-3 days)
 
@@ -177,11 +215,11 @@ trackNodeTransformation(nodeId: string, handlerName: string, transformationType:
 ```
 
 **Exit Criteria:**
-- ✅ All tests still pass with no regression
-- ✅ Node transformation tracking correctly identifies transformation points
-- ✅ Transformation flow visualization shows clear directive processing path
-- ✅ Performance impact remains within acceptable limits
-- ✅ Successfully diagnose at least one transformation pipeline issue
+- All tests still pass with no regression
+- Node transformation tracking correctly identifies transformation points
+- Transformation flow visualization shows clear directive processing path
+- Performance impact remains within acceptable limits
+- Successfully diagnose at least one transformation pipeline issue
 
 ### Phase 4: Integration and Documentation (1-2 days)
 
@@ -194,11 +232,11 @@ Integrate the tools into the CLI and provide comprehensive documentation.
 - Create troubleshooting guide for common issues
 
 **Exit Criteria:**
-- ✅ All debug commands work correctly from CLI
-- ✅ Reports can be exported in multiple formats
-- ✅ Documentation is comprehensive and includes examples
-- ✅ Troubleshooting guide covers common issues
-- ✅ No additional test failures introduced
+- All debug commands work correctly from CLI
+- Reports can be exported in multiple formats
+- Documentation is comprehensive and includes examples
+- Troubleshooting guide covers common issues
+- No additional test failures introduced
 
 ## Key Technical Details
 

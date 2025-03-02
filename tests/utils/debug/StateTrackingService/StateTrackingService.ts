@@ -13,6 +13,8 @@ import { v4 as uuidv4 } from 'uuid';
 export class StateTrackingService implements IStateTrackingService {
   private states: Map<string, StateMetadata>;
   private relationships: Map<string, StateRelationship[]>;
+  private contextBoundaries: ContextBoundary[] = [];
+  private variableCrossings: VariableCrossing[] = [];
 
   constructor() {
     this.states = new Map();
@@ -393,5 +395,170 @@ export class StateTrackingService implements IStateTrackingService {
 
     // Combine immediate children with their descendants
     return [...children, ...descendantArrays.flat()];
+  }
+
+  /**
+   * Track context boundary creation during import or embed operations.
+   * @param sourceStateId - The parent/source state ID
+   * @param targetStateId - The child/target state ID
+   * @param boundaryType - The type of boundary (import or embed)
+   * @param filePath - The file path associated with the boundary
+   */
+  trackContextBoundary(
+    sourceStateId: string, 
+    targetStateId: string, 
+    boundaryType: 'import' | 'embed',
+    filePath?: string
+  ): void {
+    if (!this.hasState(sourceStateId) || !this.hasState(targetStateId)) {
+      console.warn(`Cannot track context boundary: One or both states not found (${sourceStateId}, ${targetStateId})`);
+      return;
+    }
+
+    // Record the context boundary
+    this.contextBoundaries.push({
+      sourceStateId,
+      targetStateId,
+      boundaryType,
+      filePath,
+      createdAt: Date.now()
+    });
+
+    // Also make sure we have the parent-child relationship recorded
+    this.addRelationship(sourceStateId, targetStateId, 'parent-child');
+  }
+
+  /**
+   * Track variable copying between contexts.
+   * @param sourceStateId - The source state ID
+   * @param targetStateId - The target state ID
+   * @param variableName - The name of the variable being copied
+   * @param variableType - The type of variable
+   * @param alias - Optional alias for the variable in the target context
+   */
+  trackVariableCrossing(
+    sourceStateId: string,
+    targetStateId: string,
+    variableName: string,
+    variableType: 'text' | 'data' | 'path' | 'command',
+    alias?: string
+  ): void {
+    if (!this.hasState(sourceStateId) || !this.hasState(targetStateId)) {
+      console.warn(`Cannot track variable crossing: One or both states not found (${sourceStateId}, ${targetStateId})`);
+      return;
+    }
+
+    this.variableCrossings.push({
+      sourceStateId,
+      targetStateId,
+      variableName,
+      variableType,
+      alias,
+      timestamp: Date.now()
+    });
+  }
+
+  /**
+   * Get all context boundaries for visualization.
+   * @returns Array of context boundary information
+   */
+  getContextBoundaries(): ContextBoundary[] {
+    return [...this.contextBoundaries];
+  }
+
+  /**
+   * Get variable crossings for a specific state.
+   * @param stateId - The state ID to get variable crossings for
+   * @returns Array of variable crossing information
+   */
+  getVariableCrossings(stateId: string): VariableCrossing[] {
+    return this.variableCrossings.filter(
+      crossing => crossing.sourceStateId === stateId || crossing.targetStateId === stateId
+    );
+  }
+
+  /**
+   * Get all state relationships of a specific type.
+   * @param type - The type of relationship to get
+   * @returns Array of relationships
+   */
+  getRelationshipsByType(type: 'parent-child' | 'merge-source' | 'merge-target'): StateRelationshipInfo[] {
+    const results: StateRelationshipInfo[] = [];
+
+    this.states.forEach((_, sourceId) => {
+      const relationships = this.getRelationships(sourceId);
+      
+      relationships
+        .filter(rel => rel.type === type)
+        .forEach(rel => {
+          // Find the timestamp for when this relationship was created
+          const createdAt = this.findRelationshipTimestamp(sourceId, rel.targetId) || Date.now();
+          
+          results.push({
+            sourceId,
+            targetId: rel.targetId,
+            type: rel.type,
+            createdAt
+          });
+        });
+    });
+
+    return results;
+  }
+
+  /**
+   * Generate context hierarchy information for a specific state and its descendants.
+   * @param rootStateId - The root state to start from
+   * @returns Context hierarchy information
+   */
+  getContextHierarchy(rootStateId: string): ContextHierarchyInfo {
+    // Get all descendants plus the root state itself
+    const descendants = this.getStateDescendants(rootStateId);
+    const stateIds = [rootStateId, ...descendants];
+    
+    // Get relevant states
+    const states = stateIds.map(id => this.states.get(id)).filter(Boolean) as StateMetadata[];
+    
+    // Get context boundaries that involve these states
+    const boundaries = this.contextBoundaries.filter(
+      boundary => stateIds.includes(boundary.sourceStateId) && stateIds.includes(boundary.targetStateId)
+    );
+    
+    // Get variable crossings that involve these states
+    const variableCrossings = this.variableCrossings.filter(
+      crossing => stateIds.includes(crossing.sourceStateId) && stateIds.includes(crossing.targetStateId)
+    );
+    
+    return {
+      rootStateId,
+      states,
+      boundaries,
+      variableCrossings
+    };
+  }
+
+  /**
+   * Helper to find the timestamp when a relationship was created
+   * @private
+   */
+  private findRelationshipTimestamp(sourceId: string, targetId: string): number | undefined {
+    // Check context boundaries first as they're most likely to have accurate timestamps
+    const contextBoundary = this.contextBoundaries.find(
+      b => b.sourceStateId === sourceId && b.targetStateId === targetId
+    );
+    
+    if (contextBoundary) {
+      return contextBoundary.createdAt;
+    }
+    
+    // If no direct match found, try to infer from state metadata
+    const sourceState = this.states.get(sourceId);
+    const targetState = this.states.get(targetId);
+    
+    if (targetState && targetState.createdAt) {
+      return targetState.createdAt;
+    }
+    
+    return sourceState?.createdAt;
   }
 } 

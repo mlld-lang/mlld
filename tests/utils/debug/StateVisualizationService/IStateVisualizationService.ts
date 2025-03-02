@@ -8,8 +8,8 @@
  * output formats for different use cases (e.g., debug, analysis).
  */
 
-import { StateOperation, StateTransformation } from '../StateHistoryService/IStateHistoryService';
-import { StateMetadata, StateRelationship } from '../StateTrackingService/IStateTrackingService';
+import { StateOperation, StateTransformation } from '../StateHistoryService/IStateHistoryService.js';
+import { StateMetadata, StateRelationship, ContextBoundary, VariableCrossing } from '../StateTrackingService/IStateTrackingService.js';
 
 /**
  * Supported visualization formats
@@ -49,6 +49,17 @@ export interface VisualizationConfig {
     start?: number;
     end?: number;
   };
+}
+
+/**
+ * Configuration for context visualizations
+ */
+export interface ContextVisualizationConfig extends VisualizationConfig {
+  includeVars?: boolean;
+  filterToRelevantVars?: boolean;
+  highlightBoundaries?: boolean;
+  includeBoundaryTypes?: boolean;
+  includeFilePaths?: boolean;
 }
 
 /**
@@ -113,4 +124,38 @@ export interface IStateVisualizationService {
    * @returns Complete state graph visualization
    */
   exportStateGraph(config: VisualizationConfig): string;
+
+  /**
+   * Generate a context hierarchy visualization showing context boundaries
+   * @param rootStateId - The root state to start visualization from
+   * @param config - Context visualization configuration
+   * @returns Context hierarchy visualization in the specified format
+   */
+  visualizeContextHierarchy(rootStateId: string, config: ContextVisualizationConfig): string;
+
+  /**
+   * Generate a variable propagation visualization showing how variables move across contexts
+   * @param variableName - The name of the variable to track propagation for
+   * @param rootStateId - Optional root state to limit visualization scope
+   * @param config - Context visualization configuration
+   * @returns Variable propagation visualization in the specified format
+   */
+  visualizeVariablePropagation(variableName: string, rootStateId?: string, config?: ContextVisualizationConfig): string;
+
+  /**
+   * Generate a combined context and variable flow visualization
+   * @param rootStateId - The root state to start visualization from
+   * @param config - Context visualization configuration
+   * @returns Combined context and variable flow visualization
+   */
+  visualizeContextsAndVariableFlow(rootStateId: string, config: ContextVisualizationConfig): string;
+
+  /**
+   * Generate a resolution path timeline visualization for a specific variable
+   * @param variableName - The name of the variable to track resolution for
+   * @param rootStateId - Optional root state to limit visualization scope
+   * @param config - Context visualization configuration
+   * @returns Resolution path timeline visualization
+   */
+  visualizeResolutionPathTimeline(variableName: string, rootStateId?: string, config?: ContextVisualizationConfig): string;
 } 

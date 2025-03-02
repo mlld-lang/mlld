@@ -13,6 +13,7 @@ import path from 'path';
 import { watch } from 'fs/promises';
 import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
 import { debugResolutionCommand } from './commands/debug-resolution.js';
+import { debugContextCommand } from './commands/debug-context.js';
 
 // CLI Options interface
 interface CLIOptions {
@@ -31,6 +32,12 @@ interface CLIOptions {
   debugResolution?: boolean;
   variableName?: string;
   outputFormat?: 'json' | 'text';
+  debugContext?: boolean;
+  visualizationType?: 'hierarchy' | 'variable-propagation' | 'combined' | 'timeline';
+  rootStateId?: string;
+  includeVars?: boolean;
+  includeTimestamps?: boolean;
+  includeFilePaths?: boolean;
 }
 
 /**
@@ -79,6 +86,52 @@ function parseArgs(args: string[]): CLIOptions {
     options.debugResolution = true;
     // Remove the command from args
     args = args.slice(1);
+  }
+
+  // Add context debug options
+  if (args.includes('--debug-context')) {
+    options.debugContext = true;
+    // Remove the flag so it doesn't get treated as a file path
+    args = args.filter(arg => arg !== '--debug-context');
+  }
+
+  // Handle visualization type
+  const vizTypeIndex = args.findIndex(arg => arg === '--viz-type');
+  if (vizTypeIndex !== -1 && vizTypeIndex < args.length - 1) {
+    const vizType = args[vizTypeIndex + 1];
+    if (['hierarchy', 'variable-propagation', 'combined', 'timeline'].includes(vizType)) {
+      options.visualizationType = vizType as 'hierarchy' | 'variable-propagation' | 'combined' | 'timeline';
+    } else {
+      console.error(`Invalid visualization type: ${vizType}. Using default.`);
+    }
+    // Remove from args to avoid treating as file path
+    args.splice(vizTypeIndex, 2);
+  }
+
+  // Handle root state ID
+  const rootStateIdIndex = args.findIndex(arg => arg === '--root-state-id');
+  if (rootStateIdIndex !== -1 && rootStateIdIndex < args.length - 1) {
+    options.rootStateId = args[rootStateIdIndex + 1];
+    // Remove from args
+    args.splice(rootStateIdIndex, 2);
+  }
+
+  // Include vars option
+  if (args.includes('--no-vars')) {
+    options.includeVars = false;
+    args = args.filter(arg => arg !== '--no-vars');
+  }
+
+  // Include timestamps option
+  if (args.includes('--no-timestamps')) {
+    options.includeTimestamps = false;
+    args = args.filter(arg => arg !== '--no-timestamps');
+  }
+
+  // Include file paths option
+  if (args.includes('--no-file-paths')) {
+    options.includeFilePaths = false;
+    args = args.filter(arg => arg !== '--no-file-paths');
   }
 
   for (let i = 0; i < args.length; i++) {
@@ -191,6 +244,18 @@ Options:
   -h, --help              Display this help message
   -V, --version           Display version information
   `);
+
+  if (!command || command === 'debug-context') {
+    console.log('\nContext Debugging Options:');
+    console.log('  --debug-context            Debug context boundaries and variable propagation');
+    console.log('  --viz-type <type>          Type of visualization (hierarchy, variable-propagation, combined, timeline)');
+    console.log('  --root-state-id <id>       Root state ID to start visualization from');
+    console.log('  --variable-name <name>     Variable name to track (required for variable-propagation and timeline)');
+    console.log('  --output-format <format>   Output format (mermaid, dot, json)');
+    console.log('  --no-vars                  Exclude variables from context visualization');
+    console.log('  --no-timestamps            Exclude timestamps from visualization');
+    console.log('  --no-file-paths            Exclude file paths from visualization');
+  }
 }
 
 /**
@@ -335,6 +400,21 @@ async function processFile(options: CLIOptions): Promise<void> {
   // Convert CLI options to API options
   const apiOptions = cliToApiOptions(options);
   
+  if (options.debugContext) {
+    await debugContextCommand({
+      filePath: options.input,
+      variableName: options.variableName,
+      visualizationType: options.visualizationType || 'hierarchy',
+      rootStateId: options.rootStateId,
+      outputFormat: options.outputFormat as 'mermaid' | 'dot' | 'json' || 'mermaid',
+      outputFile: options.output,
+      includeVars: options.includeVars,
+      includeTimestamps: options.includeTimestamps,
+      includeFilePaths: options.includeFilePaths
+    });
+    return;
+  }
+
   // Use the common processing function
   await processFileWithOptions(options, apiOptions);
 }
