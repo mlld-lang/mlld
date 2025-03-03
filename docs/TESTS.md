@@ -309,6 +309,80 @@ npm test -- --watch
 
 # Run tests with coverage
 npm test -- --coverage
+
+# Run tests with different verbosity levels
+MELD_TEST_VERBOSE=true npm test
+MELD_TEST_OUTPUT_LEVEL=minimal npm test
+```
+
+### Controlling Test Output Verbosity
+
+The Meld testing infrastructure includes a selective test output system that allows for precise control over test verbosity. This is especially useful when debugging complex test failures or when running tests in CI environments.
+
+#### Global Test Output Control
+
+You can control the verbosity of all tests using environment variables:
+
+```bash
+# Enable verbose output for all tests
+MELD_TEST_VERBOSE=true npm test
+
+# Set a specific output level for all tests
+MELD_TEST_OUTPUT_LEVEL=minimal npm test
+MELD_TEST_OUTPUT_LEVEL=normal npm test
+MELD_TEST_OUTPUT_LEVEL=verbose npm test
+MELD_TEST_OUTPUT_LEVEL=debug npm test
+```
+
+#### Per-Test Output Control
+
+For more fine-grained control, you can configure output for specific tests:
+
+```typescript
+import { withTestOutput } from '@tests/utils/debug/vitest-output-setup';
+
+describe('My test suite', () => {
+  it('should test with custom output', async () => {
+    await withTestOutput({ level: 'verbose' }, async () => {
+      // Your test code here
+      // Will run with verbose output regardless of global settings
+    });
+  });
+});
+```
+
+#### Filtering Specific Operations or State Fields
+
+You can also filter specific operations or state fields:
+
+```typescript
+await withTestOutput({
+  level: 'verbose',
+  include: ['state.variables', 'resolution.process'],
+  exclude: ['validation.details']
+}, async () => {
+  // Will only show state variables and resolution process
+  // Will exclude validation details
+});
+```
+
+#### Debugging Failed Tests
+
+When debugging complex test failures:
+
+```bash
+# Run a specific failing test with maximum verbosity
+MELD_TEST_VERBOSE=true npm test path/to/failing.test.ts
+
+# OR use targeted verbosity in the test itself
+it('failing test case', async () => {
+  await withTestOutput({ 
+    level: 'debug',
+    include: ['state', 'resolution', 'transformation']
+  }, async () => {
+    // Test code here with detailed output
+  });
+});
 ```
 
 ## Test Coverage
