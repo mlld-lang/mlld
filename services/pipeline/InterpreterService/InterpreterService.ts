@@ -5,6 +5,7 @@ import type { IDirectiveService } from '@services/pipeline/DirectiveService/IDir
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import { MeldInterpreterError, type InterpreterLocation } from '@core/errors/MeldInterpreterError.js';
 import { MeldError, ErrorSeverity } from '@core/errors/MeldError.js';
+import { StateVariableCopier } from '@services/state/utilities/StateVariableCopier.js';
 
 const DEFAULT_OPTIONS: Required<Omit<InterpreterOptions, 'initialState' | 'errorHandler'>> = {
   filePath: '',
@@ -31,6 +32,7 @@ export class InterpreterService implements IInterpreterService {
   private directiveService?: IDirectiveService;
   private stateService?: IStateService;
   private initialized = false;
+  private stateVariableCopier = new StateVariableCopier();
 
   public canHandleTransformations(): boolean {
     return true;
@@ -318,48 +320,18 @@ export class InterpreterService implements IInterpreterService {
             
             // Special handling for imports in transformation mode:
             // Copy all variables from the imported file to the original state
-            // This ensures the variables are available to the rest of the transformation
             if (isImportDirective && 
                 currentState.isTransformationEnabled && 
                 currentState.isTransformationEnabled()) {
               try {
                 logger.debug('Import directive in transformation mode, copying variables to original state');
                 
-                // Copy text variables from result to original state
-                if (typeof currentState.getAllTextVars === 'function' && 
-                    typeof originalState.setTextVar === 'function') {
-                  const textVars = currentState.getAllTextVars();
-                  textVars.forEach((value, key) => {
-                    originalState.setTextVar(key, value);
-                  });
-                }
-                
-                // Copy data variables
-                if (typeof currentState.getAllDataVars === 'function' && 
-                    typeof originalState.setDataVar === 'function') {
-                  const dataVars = currentState.getAllDataVars();
-                  dataVars.forEach((value, key) => {
-                    originalState.setDataVar(key, value);
-                  });
-                }
-                
-                // Copy path variables
-                if (typeof currentState.getAllPathVars === 'function' && 
-                    typeof originalState.setPathVar === 'function') {
-                  const pathVars = currentState.getAllPathVars();
-                  pathVars.forEach((value, key) => {
-                    originalState.setPathVar(key, value);
-                  });
-                }
-                
-                // Copy commands if methods exist
-                if (typeof currentState.getAllCommands === 'function' && 
-                    typeof originalState.setCommand === 'function') {
-                  const commands = currentState.getAllCommands();
-                  commands.forEach((value, key) => {
-                    originalState.setCommand(key, value);
-                  });
-                }
+                // Use the state variable copier utility to copy all variables
+                this.stateVariableCopier.copyAllVariables(currentState, originalState, {
+                  skipExisting: false,
+                  trackContextBoundary: false, // No tracking service in the interpreter
+                  trackVariableCrossing: false
+                });
               } catch (e) {
                 logger.debug('Error copying variables from import to original state', { error: e });
               }

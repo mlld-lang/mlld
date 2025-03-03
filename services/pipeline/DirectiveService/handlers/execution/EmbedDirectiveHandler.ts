@@ -14,6 +14,7 @@ import { ErrorSeverity } from '@core/errors/MeldError.js';
 import { IStateTrackingService } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
 import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
+import { StateVariableCopier } from '@services/state/utilities/StateVariableCopier.js';
 
 // Define the embed directive parameters interface
 interface EmbedDirectiveParams {
@@ -39,6 +40,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
   readonly kind = 'embed';
   private debugEnabled: boolean = false;
   private stateTrackingService?: IStateTrackingService;
+  private stateVariableCopier: StateVariableCopier;
 
   constructor(
     private validationService: IValidationService,
@@ -53,6 +55,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
   ) {
     this.stateTrackingService = trackingService;
     this.debugEnabled = !!trackingService && (process.env.MELD_DEBUG === 'true');
+    this.stateVariableCopier = new StateVariableCopier(trackingService);
   }
 
   /**
@@ -256,50 +259,12 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
       // Merge the interpreted state back into the new state
       newState.mergeChildState(interpretedState);
       
-      // Copy all variables from the interpreted state to the context state
-      // Track text variables
-      if (typeof interpretedState.getAllTextVars === 'function') {
-        const textVars = interpretedState.getAllTextVars();
-        for (const [key, value] of Object.entries(textVars)) {
-          newState.setTextVar(key, value);
-          
-          // Track variable crossing for debugging
-          this.trackVariableCrossing(key, 'text', interpretedState, newState);
-        }
-      }
-      
-      // Track data variables
-      if (typeof interpretedState.getAllDataVars === 'function') {
-        const dataVars = interpretedState.getAllDataVars();
-        for (const [key, value] of Object.entries(dataVars)) {
-          newState.setDataVar(key, value);
-          
-          // Track variable crossing for debugging
-          this.trackVariableCrossing(key, 'data', interpretedState, newState);
-        }
-      }
-      
-      // Track path variables
-      if (typeof interpretedState.getAllPathVars === 'function') {
-        const pathVars = interpretedState.getAllPathVars();
-        for (const [key, value] of Object.entries(pathVars)) {
-          newState.setPathVar(key, value);
-          
-          // Track variable crossing for debugging
-          this.trackVariableCrossing(key, 'path', interpretedState, newState);
-        }
-      }
-      
-      // Track commands
-      if (typeof interpretedState.getAllCommands === 'function') {
-        const commands = interpretedState.getAllCommands();
-        for (const [key, value] of Object.entries(commands)) {
-          newState.setCommand(key, value);
-          
-          // Track variable crossing for debugging
-          this.trackVariableCrossing(key, 'command', interpretedState, newState);
-        }
-      }
+      // Copy all variables from the interpreted state to the context state using the utility
+      this.stateVariableCopier.copyAllVariables(interpretedState, newState, {
+        skipExisting: false,
+        trackContextBoundary: true,
+        trackVariableCrossing: true
+      });
       
       // Log successful processing
       this.logger.debug(`Successfully processed embed directive`, {

@@ -12,6 +12,7 @@ import { DirectiveError, DirectiveErrorCode, DirectiveErrorSeverity } from '@ser
 import { directiveLogger as logger } from '@core/utils/logger.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 import { IStateTrackingService } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
+import { StateVariableCopier } from '@services/state/utilities/StateVariableCopier.js';
 
 /**
  * Handler for @import directives
@@ -21,6 +22,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
   readonly kind = 'import';
   private debugEnabled: boolean = false;
   private stateTrackingService?: IStateTrackingService;
+  private stateVariableCopier: StateVariableCopier;
 
   constructor(
     private validationService: IValidationService,
@@ -34,6 +36,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
   ) {
     this.stateTrackingService = trackingService;
     this.debugEnabled = !!trackingService && (process.env.MELD_DEBUG === 'true');
+    this.stateVariableCopier = new StateVariableCopier(trackingService);
   }
 
   async execute(node: DirectiveNode, context: DirectiveContext): Promise<DirectiveResult | IStateService> {
@@ -366,46 +369,11 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
   }
 
   private importAllVariables(sourceState: IStateService, targetState: IStateService): void {
-    // Track context boundary before import (safely)
-    let filePath: string | null | undefined = null;
-    try {
-      filePath = sourceState.getCurrentFilePath();
-    } catch (error) {
-      // Handle the case where getCurrentFilePath is not available
-      logger.debug('Error getting current file path', { error });
-    }
-    this.trackContextBoundary(sourceState, targetState, filePath ? filePath : undefined);
-    
-    // Import all text variables
-    const textVars = sourceState.getAllTextVars();
-    textVars.forEach((value, name) => {
-      targetState.setTextVar(name, value);
-      this.trackVariableCrossing(name, 'text', sourceState, targetState);
+    this.stateVariableCopier.copyAllVariables(sourceState, targetState, {
+      skipExisting: false,
+      trackContextBoundary: true,
+      trackVariableCrossing: true
     });
-    
-    // Import all data variables
-    const dataVars = sourceState.getAllDataVars();
-    dataVars.forEach((value, name) => {
-      targetState.setDataVar(name, value);
-      this.trackVariableCrossing(name, 'data', sourceState, targetState);
-    });
-    
-    // Import all path variables
-    const pathVars = sourceState.getAllPathVars();
-    pathVars.forEach((value, name) => {
-      targetState.setPathVar(name, value);
-      this.trackVariableCrossing(name, 'path', sourceState, targetState);
-    });
-    
-    // Import all commands
-    const commands = sourceState.getAllCommands();
-    commands.forEach((value, name) => {
-      targetState.setCommand(name, value);
-      this.trackVariableCrossing(name, 'command', sourceState, targetState);
-    });
-    
-    // Track context boundary after import (safely)
-    this.trackContextBoundary(sourceState, targetState, filePath ? filePath : undefined);
   }
 
   private importVariable(name: string, alias: string | undefined, sourceState: IStateService, targetState: IStateService): void {
