@@ -1,0 +1,320 @@
+{
+  "simplePath": {
+    "error": "Parse error: Path directive must use a special path variable ($HOMEPATH, $~, $PROJECTPATH, or $.)"
+  },
+  "projectPathStandard": [
+    {
+      "type": "Directive",
+      "directive": {
+        "kind": "path",
+        "identifier": "docs",
+        "path": {
+          "raw": "$PROJECTPATH/docs",
+          "structured": {
+            "base": "$PROJECTPATH",
+            "segments": [
+              "docs"
+            ],
+            "variables": {
+              "special": [
+                "PROJECTPATH"
+              ]
+            }
+          },
+          "normalized": "$PROJECTPATH/docs",
+          "base": "$PROJECTPATH",
+          "segments": [
+            "docs"
+          ]
+        }
+      },
+      "location": {
+        "start": {
+          "line": 1,
+          "column": 2
+        },
+        "end": {
+          "line": 1,
+          "column": 33
+        }
+      }
+    }
+  ],
+  "projectPathShorthand": [
+    {
+      "type": "Directive",
+      "directive": {
+        "kind": "path",
+        "identifier": "config",
+        "path": {
+          "raw": "$./config",
+          "structured": {
+            "base": "$.",
+            "segments": [
+              "config"
+            ],
+            "variables": {
+              "special": [
+                "PROJECTPATH"
+              ]
+            }
+          },
+          "normalized": "$PROJECTPATH/config",
+          "base": "$.",
+          "segments": [
+            "config"
+          ]
+        }
+      },
+      "location": {
+        "start": {
+          "line": 1,
+          "column": 2
+        },
+        "end": {
+          "line": 1,
+          "column": 27
+        }
+      }
+    }
+  ],
+  "homePathStandard": [
+    {
+      "type": "Directive",
+      "directive": {
+        "kind": "path",
+        "identifier": "home",
+        "path": {
+          "raw": "$HOMEPATH/meld",
+          "structured": {
+            "base": "$HOMEPATH",
+            "segments": [
+              "meld"
+            ],
+            "variables": {
+              "special": [
+                "HOMEPATH"
+              ]
+            }
+          },
+          "normalized": "$HOMEPATH/meld",
+          "base": "$HOMEPATH",
+          "segments": [
+            "meld"
+          ]
+        }
+      },
+      "location": {
+        "start": {
+          "line": 1,
+          "column": 2
+        },
+        "end": {
+          "line": 1,
+          "column": 30
+        }
+      }
+    }
+  ],
+  "homePathShorthand": [
+    {
+      "type": "Directive",
+      "directive": {
+        "kind": "path",
+        "identifier": "data",
+        "path": {
+          "raw": "$~/data",
+          "structured": {
+            "base": "$~",
+            "segments": [
+              "data"
+            ],
+            "variables": {
+              "special": [
+                "HOMEPATH"
+              ]
+            }
+          },
+          "normalized": "$HOMEPATH/data",
+          "base": "$~",
+          "segments": [
+            "data"
+          ]
+        }
+      },
+      "location": {
+        "start": {
+          "line": 1,
+          "column": 2
+        },
+        "end": {
+          "line": 1,
+          "column": 23
+        }
+      }
+    }
+  ],
+  "projectPathRoot": [
+    {
+      "type": "Directive",
+      "directive": {
+        "kind": "path",
+        "identifier": "root",
+        "path": {
+          "raw": "$PROJECTPATH",
+          "structured": {
+            "base": "$PROJECTPATH",
+            "segments": [
+              "$PROJECTPATH"
+            ],
+            "variables": {
+              "special": [
+                "PROJECTPATH"
+              ]
+            }
+          },
+          "normalized": "./$PROJECTPATH",
+          "base": "$PROJECTPATH",
+          "segments": [
+            "$PROJECTPATH"
+          ]
+        }
+      },
+      "location": {
+        "start": {
+          "line": 1,
+          "column": 2
+        },
+        "end": {
+          "line": 1,
+          "column": 28
+        }
+      }
+    }
+  ],
+  "projectPathDotRoot": [
+    {
+      "type": "Directive",
+      "directive": {
+        "kind": "path",
+        "identifier": "root",
+        "path": {
+          "raw": "$./",
+          "structured": {
+            "base": "$.",
+            "segments": [],
+            "variables": {
+              "special": [
+                "PROJECTPATH"
+              ]
+            }
+          },
+          "normalized": "$PROJECTPATH/",
+          "base": "$.",
+          "segments": []
+        }
+      },
+      "location": {
+        "start": {
+          "line": 1,
+          "column": 2
+        },
+        "end": {
+          "line": 1,
+          "column": 19
+        }
+      }
+    }
+  ],
+  "homePathRoot": [
+    {
+      "type": "Directive",
+      "directive": {
+        "kind": "path",
+        "identifier": "homedir",
+        "path": {
+          "raw": "$HOMEPATH",
+          "structured": {
+            "base": "$HOMEPATH",
+            "segments": [
+              "$HOMEPATH"
+            ],
+            "variables": {
+              "special": [
+                "HOMEPATH"
+              ]
+            }
+          },
+          "normalized": "./$HOMEPATH",
+          "base": "$HOMEPATH",
+          "segments": [
+            "$HOMEPATH"
+          ]
+        }
+      },
+      "location": {
+        "start": {
+          "line": 1,
+          "column": 2
+        },
+        "end": {
+          "line": 1,
+          "column": 28
+        }
+      }
+    }
+  ],
+  "homePathTildeRoot": [
+    {
+      "type": "Directive",
+      "directive": {
+        "kind": "path",
+        "identifier": "homedir",
+        "path": {
+          "raw": "$~",
+          "structured": {
+            "base": "$~",
+            "segments": [
+              "$~"
+            ],
+            "variables": {
+              "special": [
+                "HOMEPATH"
+              ]
+            }
+          },
+          "normalized": "./$~",
+          "base": "$~",
+          "segments": [
+            "$~"
+          ]
+        }
+      },
+      "location": {
+        "start": {
+          "line": 1,
+          "column": 2
+        },
+        "end": {
+          "line": 1,
+          "column": 21
+        }
+      }
+    }
+  ],
+  "rawAbsolutePath": {
+    "error": "Parse error: Path with slashes must be a URL (starting with http:// or https://) or use a special variable (starting with $)"
+  },
+  "traversalPath": {
+    "error": "Parse error: Path cannot contain relative segments ('..' or './')"
+  },
+  "dotSegmentPath": {
+    "error": "Parse error: Path cannot contain relative segments ('..' or './')"
+  },
+  "embedWithPath": {
+    "error": "Parse error: Path with slashes must be a URL (starting with http:// or https://) or use a special variable (starting with $)"
+  },
+  "importWithPath": {
+    "error": "Parse error: Path with slashes must be a URL (starting with http:// or https://) or use a special variable (starting with $)"
+  }
+}
