@@ -120,71 +120,6 @@ date: 2023-01-01
 Written by {{author}} on {{date}}.
 
 This is the main content of the document.`
-  ),
-  
-  withDirectives: combineExamples(
-    'Content with directives interspersed',
-    createExample(
-      'Initial content',
-      `# Document Title
-
-This is the introduction.`
-    ),
-    createExample(
-      'Variable definition',
-      `@text name = "Example User"`
-    ),
-    createExample(
-      'Content using variable',
-      `## Hello, {{name}}!
-
-Welcome to this document.`
-    ),
-    createExample(
-      'Path definition',
-      `@path images = "./assets/images"`
-    ),
-    createExample(
-      'Content with image using path variable',
-      `Here's an image:
-
-![Example Image]({{images}}/example.png)`
-    )
-  )
-};
-
-/**
- * Collection of examples with directives within Markdown content
- * 
- * These examples demonstrate how directives can be embedded within regular Markdown content
- */
-export const withEmbeddedDirectives = {
-  inlineParagraph: createExample(
-    'Inline directive in paragraph',
-    `This paragraph contains a @text variable = "dynamic value" that is defined inline.`
-  ),
-  
-  adjacentElements: combineExamples(
-    'Directives adjacent to Markdown elements',
-    createExample(
-      'Heading and directive',
-      `# Heading
-@text variable = "value"`
-    ),
-    createExample(
-      'List with directive',
-      `- Item 1
-- @text item = "Dynamic item"
-- Item using {{item}}`
-    )
-  ),
-  
-  embeddedCodeVariables: createExample(
-    'Code with embedded variables',
-    `\`\`\`js
-const greeting = "{{greetingText}}";
-console.log(greeting);
-\`\`\``
   )
 };
 
@@ -212,6 +147,5 @@ export const invalid = {
 export const contentExamples: SyntaxExampleGroup = {
   atomic,
   combinations,
-  withEmbeddedDirectives,
   invalid
 }; 

@@ -10,3 +10,6 @@ export { MeldOutputError } from './MeldOutputError';
 export { MeldDirectiveError } from './MeldDirectiveError';
 export { PathValidationError } from './PathValidationError';
 export { ServiceInitializationError } from './ServiceInitializationError'; 
+
+// Export error message collections
+export * from './messages'; 

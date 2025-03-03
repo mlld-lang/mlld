@@ -207,7 +207,7 @@ describe('PathService Temporary Path Rules', () => {
       };
       expect(() => service.resolvePath(structuredPath))
         .toThrow(new PathValidationError(
-          'Paths with segments must start with $. or $~ - use $. for project-relative paths and $~ for home-relative paths',
+          'Paths with segments must start with $. or $~ - use $. for project-relative paths and $~ for home-relative paths, or use a path variable ($variableName)',
           PathErrorCode.INVALID_PATH_FORMAT
         ));
     });
@@ -229,7 +229,7 @@ describe('PathService Temporary Path Rules', () => {
       };
       expect(() => service.resolvePath(structuredPath))
         .toThrow(new PathValidationError(
-          'Paths with segments must start with $. or $~ - use $. for project-relative paths and $~ for home-relative paths',
+          'Paths with segments must start with $. or $~ - use $. for project-relative paths and $~ for home-relative paths, or use a path variable ($variableName)',
           PathErrorCode.INVALID_PATH_FORMAT
         ));
     });

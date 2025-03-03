@@ -7,6 +7,11 @@ import * as path from 'path';
 import * as os from 'os';
 import { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 import type { MeldNode } from 'meld-spec';
+import { 
+  MeldError, 
+  MeldFileNotFoundError, 
+  PathErrorMessages 
+} from '../../../core/errors';
 
 /**
  * Service for validating and normalizing paths
@@ -181,8 +186,13 @@ export class PathService implements IPathService {
     
     // If path has slashes but no special variables or path variables, and isn't marked as cwd
     if (hasSlashes && !hasSpecialVar && !hasPathVar && !structured.cwd) {
+      console.warn('PathService: Path validation warning - path with slashes has no special variables:', {
+        raw,
+        structured
+      });
+      
       throw new PathValidationError(
-        'Paths with segments must start with $. or $~ - use $. for project-relative paths and $~ for home-relative paths, or use a path variable ($variableName)',
+        PathErrorMessages.validation.slashesWithoutPathVariable.message,
         PathErrorCode.INVALID_PATH_FORMAT,
         location
       );
@@ -191,7 +201,7 @@ export class PathService implements IPathService {
     // Check for dot segments in any part of the path
     if (structured.segments.some(segment => segment === '.' || segment === '..')) {
       throw new PathValidationError(
-        'Path cannot contain . or .. segments - use $. or $~ to reference project or home directory',
+        PathErrorMessages.validation.dotSegments.message,
         PathErrorCode.CONTAINS_DOT_SEGMENTS,
         location
       );
@@ -454,7 +464,7 @@ export class PathService implements IPathService {
       });
       
       throw new PathValidationError(
-        'Paths with segments must start with $. or $~ - use $. for project-relative paths and $~ for home-relative paths, or use a path variable ($variableName)',
+        PathErrorMessages.validation.slashesWithoutPathVariable.message,
         PathErrorCode.INVALID_PATH_FORMAT,
         location
       );
@@ -463,7 +473,7 @@ export class PathService implements IPathService {
     // Check for dot segments in any part of the path
     if (structured.segments.some(segment => segment === '.' || segment === '..')) {
       throw new PathValidationError(
-        'Path cannot contain . or .. segments - use $. or $~ to reference project or home directory',
+        PathErrorMessages.validation.dotSegments.message,
         PathErrorCode.CONTAINS_DOT_SEGMENTS,
         location
       );

@@ -1,4 +1,5 @@
 import { MeldError, ErrorSeverity } from './MeldError.js';
+import { PathErrorMessages } from './messages';
 
 export interface MeldFileNotFoundErrorOptions {
   cause?: Error;
@@ -14,8 +15,11 @@ export class MeldFileNotFoundError extends MeldError {
     // File not found errors are typically recoverable by default
     const severity = options.severity || ErrorSeverity.Recoverable;
     
-    super(`File not found: ${filePath}`, {
-      code: 'FILE_NOT_FOUND',
+    // Format the message using the centralized error message template
+    const message = PathErrorMessages.fileAccess.fileNotFound.message.replace('{filePath}', filePath);
+    
+    super(message, {
+      code: PathErrorMessages.fileAccess.fileNotFound.code,
       filePath,
       cause: options.cause,
       severity,
