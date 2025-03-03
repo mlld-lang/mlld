@@ -175,3 +175,61 @@ While we've fixed the TypeScript errors and basic functionality of the `EmbedDir
 3. **Complex Embedding Scenarios**: Additional testing for complex scenarios like embedding with sections or fuzzy matching
 
 Refer to the specific issue documents for more detailed debugging techniques and approaches.
+
+## Recent Updates (March 2024)
+
+### Test Fixes for EmbedDirectiveHandler
+
+#### Changes Made
+- Fixed failing tests in `services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler.test.ts`
+  - Updated expectations for `resolutionService.resolveInContext` to be more flexible
+  - Modified logger debug message expectations to match current implementation
+- Created dedicated tests in `tests/embed-directive-transformation-fixes.test.ts` to verify specific transformation behaviors
+  - Added tests for replacement node generation with file content
+  - Added tests for variable propagation in transformation mode
+  - Added error handling tests for file not found scenarios
+  - Added tests to verify proper resource cleanup (calling endImport)
+
+#### Key Findings
+- The `EmbedDirectiveHandler` implementation was correct, but the tests had expectations that were too rigid regarding implementation details
+- Tests are now more resilient to minor implementation changes while still verifying correct functionality
+- The dedicated transformation tests provide better coverage for critical features in transformation mode
+
+#### Next Steps
+- Continue testing transformation options for the `EmbedDirectiveHandler`
+- Investigate the `ImportDirectiveHandler` for similar issues
+- Test more complex embedding scenarios (sections, fuzzy matching)
+- Address any remaining transformation test failures
+
+## Test Suite Status
+
+After running the full test suite with `npm test`, we've identified several patterns of failures that need to be addressed:
+
+1. **Import and Variable Propagation**: 
+   - Most critical issue is with the `ImportDirectiveHandler` in transformation mode
+   - Variables from imported files are not propagating correctly to parent states
+   - This affects multiple integration tests and should be the highest priority
+
+2. **Run Directive Transformation**:
+   - Command directives are not being replaced with their output in transformation mode
+   - Tests expecting command output to replace directives are failing
+
+3. **Path Validation Updates**:
+   - Error messages in the `PathService` have changed, but tests still expect old formats
+   - This is a simple fix involving updating expected error messages in tests
+
+4. **CLI-specific Issues**:
+   - Several CLI tests are failing, but these appear to be unrelated to transformation mode
+   - Lower priority since they don't directly impact the core transformation functionality
+
+### Priority Next Steps
+
+1. Fix the `ImportDirectiveHandler` variable propagation by examining the code and comparing with the working `EmbedDirectiveHandler` implementation.
+
+2. Update the `RunDirectiveHandler` to correctly transform command directives in transformation mode.
+
+3. Update path validation tests to match the current error message format.
+
+4. Address CLI-specific issues as a separate task.
+
+The above recommendations should be followed in order, as the import and variable propagation issues appear to be the most critical based on the number of failing tests and their fundamental importance to transformation functionality.

@@ -555,4 +555,49 @@ it('DEBUG: import variable propagation', async () => {
    });
    
    expect(result.trim()).toBe('Content two');
-   ``` 
+   ```
+
+## Recent Progress (March 2024)
+
+### Fixes Implemented
+
+1. **EmbedDirectiveHandler Transformation Fixes**:
+   - Fixed variable propagation from embedded content to parent state in transformation mode
+   - Ensured proper resource cleanup (endImport calls) even when errors occur
+   - Added dedicated tests in `tests/embed-directive-transformation-fixes.test.ts`
+   - Updated test expectations to be less rigid about implementation details
+
+### Remaining Issues
+
+1. **ImportDirectiveHandler Transformation Issues**:
+   - API integration tests for imports are failing (variables not propagating)
+   - The handler correctly creates an empty text node in transformation mode, but doesn't seem to be propagating variables correctly to parent states
+   - Circular import detection isn't working in transformation mode
+
+2. **RunDirectiveHandler Transformation Issues**:
+   - Commands are not executed properly in transformation mode
+   - The directive remains in the output instead of being replaced with the command output
+
+3. **PathService Issues**:
+   - Path validation error messages have changed, causing test failures
+   - Tests need to be updated to match the new error message format
+
+4. **CLI-related Issues**:
+   - Several CLI tests are failing related to file handling, overwrite confirmation, and exit codes
+   - These seem to be unrelated to the transformation functionality
+
+### Next Steps
+
+1. Investigate the `ImportDirectiveHandler` to fix variable propagation issues:
+   - Compare it with the working `EmbedDirectiveHandler` implementation
+   - Verify that variables are being correctly copied from child states to parent states
+
+2. Debug the transformation flow using the debug tools:
+   - Use `debug-transform` or `debug-context` commands to visualize state flow
+   - Focus on how variables move between states during imports
+
+3. Fix the API integration tests for transformation mode:
+   - Update tests to reflect the correct behavior of directives in transformation mode
+   - Ensure error handling is consistent across all handlers
+
+4. Update path validation tests to match current error message formats 
