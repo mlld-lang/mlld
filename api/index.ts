@@ -246,11 +246,26 @@ export async function main(filePath: string, options: ProcessOptions = {}): Prom
           throw new Error(`Path directive must use a special path variable: ${pathValue}`);
         }
         
-        // Check for relative paths with dot segments
-        if (typeof pathValue === 'string' && 
-            (pathValue.includes('./') || pathValue.includes('../'))) {
-          console.log(`DEBUG: Found path with dot segments: ${pathValue}`);
-          throw new Error(`Path cannot contain relative segments: ${pathValue}`);
+        // Check for relative paths with dot segments, but exclude special prefixes $. and $~
+        if (typeof pathValue === 'string') {
+          // Skip validation for special path prefixes $. and $~
+          if (!pathValue.startsWith('$.') && !pathValue.startsWith('$~') && 
+              !pathValue.startsWith('"$.') && !pathValue.startsWith('"$~') && 
+              !pathValue.startsWith('\'$.') && !pathValue.startsWith('\'$~')) {
+            // Also properly handle path values that may be wrapped in quotes
+            let valueToCheck = pathValue;
+            // Remove quotes if present (handles both single and double quotes)
+            if ((valueToCheck.startsWith('"') && valueToCheck.endsWith('"')) || 
+                (valueToCheck.startsWith('\'') && valueToCheck.endsWith('\''))) {
+              valueToCheck = valueToCheck.substring(1, valueToCheck.length - 1);
+            }
+            
+            // Check for problematic relative segments
+            if (valueToCheck.includes('./') || valueToCheck.includes('../')) {
+              console.log(`DEBUG: Found path with dot segments: ${pathValue}`);
+              throw new Error(`Path cannot contain relative segments: ${pathValue}`);
+            }
+          }
         }
       }
     }
