@@ -269,6 +269,40 @@ export function getBackwardCompatibleExample(
   // Log the mapped key
   console.log(`Mapped to: ${directiveType}.${category}.${mappedKey}`);
   
+  // Handle the case where the category doesn't exist in directiveExamples
+  if (!directiveExamples[directiveType] || !directiveExamples[directiveType][category]) {
+    console.warn(`Category not found: ${directiveType}.${category}`);
+    
+    // Try to find a fallback category
+    const availableCategories = directiveExamples[directiveType] ? Object.keys(directiveExamples[directiveType]) : [];
+    const fallbackCategory = availableCategories.find(c => c === 'atomic' || c === 'combinations') || availableCategories[0];
+    
+    if (fallbackCategory) {
+      console.log(`Using fallback category: ${directiveType}.${fallbackCategory}`);
+      
+      // Get the first example from the fallback category
+      const fallbackCategoryExamples = directiveExamples[directiveType][fallbackCategory];
+      const fallbackKey = Object.keys(fallbackCategoryExamples)[0];
+      const fallbackExample = fallbackCategoryExamples[fallbackKey];
+      
+      if (fallbackExample) {
+        console.log(`Using fallback example: ${directiveType}.${fallbackCategory}.${fallbackKey}`);
+        
+        // Return a basic fallback example
+        return {
+          description: `Fallback example for ${directiveType}.${category}.${exampleKey}`,
+          code: fallbackExample.code
+        };
+      }
+    }
+    
+    // Create a minimal fallback example if no other option is available
+    return {
+      description: `Missing example: ${directiveType}.${category}.${mappedKey}`,
+      code: `@${directiveType} missing_example = "This is a placeholder for a missing example"`
+    } as SyntaxExample;
+  }
+  
   const example = directiveExamples[directiveType][category][mappedKey];
   if (!example) {
     console.warn(`Example not found: ${directiveType}.${category}.${mappedKey} (original key: ${exampleKey})`);
@@ -316,24 +350,8 @@ export function getBackwardCompatibleExample(
   
   const convertedExample = { ...example };
   
-  // Convert new syntax with brackets to old format
-  if (directiveType === 'import') {
-    // Convert @import [path] to @import path
-    convertedExample.code = convertedExample.code.replace(/@import \[(.*?)\]/g, '@import $1');
-  } else if (directiveType === 'run') {
-    // Convert @run [command] to @run command
-    convertedExample.code = convertedExample.code.replace(/@run \[(.*?)\]/g, '@run $1');
-  } else if (directiveType === 'embed') {
-    // Convert @embed [path] to @embed path
-    convertedExample.code = convertedExample.code.replace(/@embed \[(.*?)\]/g, '@embed $1');
-  } else if (directiveType === 'define') {
-    // Convert @define name = @run [command] to @define name = @run command
-    convertedExample.code = convertedExample.code.replace(/@run \[(.*?)\]/g, '@run $1');
-    // Convert @run [$command] to @run $command
-    convertedExample.code = convertedExample.code.replace(/@run \[\$(.*?)\]/g, '@run $$$1');
-    // Convert @run [$command(params)] to @run $command(params)
-    convertedExample.code = convertedExample.code.replace(/@run \[\$(.*?\(.*?\))\]/g, '@run $$$1');
-  }
+  // DON'T convert new syntax with brackets to old format
+  // Keep the bracket syntax for @run directives
   
   return convertedExample;
 }

@@ -21,30 +21,30 @@ import {
 export const atomic = {
   simple: createExample(
     'Basic run directive',
-    `@run "echo test"`
+    `@run [echo test]`
   ),
   
   withQuotes: createExample(
     'Run directive with quotes',
-    `@run 'echo "This is a simple example"'`
+    `@run [echo "This is a simple example"]`
   ),
   
   textInterpolation: createExample(
     'Run directive with variable interpolation',
     `@text greeting = "Hello"
-@run "echo {{greeting}}"`
+@run [echo {{greeting}}]`
   ),
   
   multipleVariables: createExample(
     'Run directive with multiple variables',
     `@text greeting = "Hello"
 @text name = "World"
-@run "echo {{greeting}}, {{name}}!"`
+@run [echo {{greeting}}, {{name}}!]`
   ),
   
-  withOutput: createExample(
+  outputCapture: createExample(
     'Run with output capture',
-    `@run { command = "echo test", output = "variable_name" }`
+    `@text variable_name = @run [echo test]`
   )
 };
 
@@ -58,7 +58,7 @@ export const combinations = {
     'Using defined command',
     createExample(
       'Define a command',
-      `@define greet = "echo 'Hello'"`
+      `@define greet = "echo 'Hello World!'"`
     ),
     createExample(
       'Run the defined command',
@@ -66,47 +66,40 @@ export const combinations = {
     )
   ),
   
-  definedCommandWithParams: combineExamples(
-    'Using defined command with parameters',
+  commandWithParams: combineExamples(
+    'Command with parameters',
     createExample(
-      'Define a command with parameter',
+      'Define a parameterized command',
       `@define greet(name) = "echo 'Hello, {{name}}!'"`
     ),
     createExample(
-      'Text variable',
-      `@text user = "Alice"`
+      'Run with user variable',
+      `@text user = "John"
+@run $greet({{user}})`
     ),
     createExample(
-      'Run with parameter',
-      `@run $greet({{user}})`
-    )
-  ),
-  
-  complexCommand: combineExamples(
-    'Complex command with multiple parameters',
-    createExample(
-      'Define complex command',
-      `@define greet(first, last) = "echo 'Hello {{first}} {{last}}'"`
+      'Run with direct parameter',
+      `@run $greet("John Doe")`
     ),
     createExample(
-      'Run with multiple parameters',
-      `@run $greet("John", "Doe")`
+      'Run with mixed parameters',
+      `@data bob = { lastname: "Smith" }
+@run $greet("Bob", {{bob.lastname}})`
     )
   ),
   
   dataInterpolation: combineExamples(
-    'Using data with command parameters',
+    'Command with data object interpolation',
     createExample(
-      'Define command with parameters',
-      `@define greet(firstname, lastname) = "echo 'Hello, {{firstname}} {{lastname}}!'"`
+      'Define data',
+      `@data user = { 
+  name: "Alice", 
+  role: "Admin" 
+}`
     ),
     createExample(
-      'Define data object',
-      `@data bob = { lastname: "Smith" }`
-    ),
-    createExample(
-      'Run with mixed parameters',
-      `@run $greet("Bob", {{bob.lastname}})`
+      'Run command with data interpolation',
+      `@run [echo "{{user.name}} is an {{user.role}}"]`
     )
   )
 };
@@ -117,48 +110,48 @@ export const combinations = {
  * These examples demonstrate invalid @run syntax that should be rejected
  */
 export const invalid = {
-  unclosedQuote: createInvalidExample(
-    'Unclosed quote',
-    `@run "echo test`,
+  unbalancedQuotes: createInvalidExample(
+    'Unbalanced quotes in run directive',
+    `@run [echo test`,
     {
-      type: MeldParseError,
-      severity: ErrorSeverity.Fatal,
-      code: 'SYNTAX_ERROR',
-      message: 'Unclosed quote'
-    }
-  ),
-  
-  missingCommand: createInvalidExample(
-    'Missing command',
-    `@run ""`,
-    {
-      type: DirectiveError,
+      type: ErrorSeverity,
       severity: ErrorSeverity.Fatal,
       code: DirectiveErrorCode.VALIDATION_FAILED,
-      message: 'Empty command'
+      message: 'Expected closing bracket after command'
     }
   ),
   
-  undefinedReference: createInvalidExample(
+  emptyCommand: createInvalidExample(
+    'Empty command in run directive',
+    `@run []`,
+    {
+      type: ErrorSeverity,
+      severity: ErrorSeverity.Fatal,
+      code: DirectiveErrorCode.VALIDATION_FAILED,
+      message: 'Command cannot be empty'
+    }
+  ),
+  
+  undefinedCommand: createInvalidExample(
     'Reference to undefined command',
     `@run $undefinedCommand`,
     {
-      type: DirectiveError,
+      type: ErrorSeverity,
       severity: ErrorSeverity.Fatal,
       code: DirectiveErrorCode.VARIABLE_NOT_FOUND,
-      message: 'Undefined command'
+      message: 'Cannot resolve reference to undefined command'
     }
   ),
   
-  wrongParameterCount: createInvalidExample(
-    'Wrong parameter count for defined command',
+  unclosedInterpolation: createInvalidExample(
+    'Unclosed interpolation in run directive',
     `@define greet(name) = "echo 'Hello, {{name}}!'"
 @run $greet("John", "Doe")`,
     {
-      type: DirectiveError,
+      type: ErrorSeverity,
       severity: ErrorSeverity.Fatal,
       code: DirectiveErrorCode.VALIDATION_FAILED,
-      message: 'Invalid parameter count'
+      message: 'Unclosed interpolation'
     }
   )
 };
@@ -166,7 +159,7 @@ export const invalid = {
 /**
  * Complete collection of @run directive examples
  */
-export const runDirectiveExamples: SyntaxExampleGroup = {
+export default {
   atomic,
   combinations,
   invalid
