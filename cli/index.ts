@@ -1,5 +1,7 @@
 import '@core/di-config.js';
 
+console.log('************** CLI STARTING **************');
+
 import { main as apiMain } from '@api/index.js';
 import { version } from '@core/version.js';
 import { cliLogger as logger } from '@core/utils/logger.js';
@@ -99,6 +101,13 @@ function parseArgs(args: string[]): CLIOptions {
     args = args.slice(1);
   }
 
+  // Check for debug-context command
+  if (args.length > 0 && args[0] === 'debug-context') {
+    options.debugContext = true;
+    // Remove the command from args
+    args = args.slice(1);
+  }
+
   // Add context debug options
   if (args.includes('--debug-context')) {
     options.debugContext = true;
@@ -192,6 +201,7 @@ function parseArgs(args: string[]): CLIOptions {
       // Add new debug-resolution options
       case '--var':
       case '--variable':
+      case '--variable-name':
         options.variableName = args[++i];
         break;
       case '--output-format':
@@ -460,18 +470,28 @@ async function processFile(options: CLIOptions): Promise<void> {
  * Main CLI entry point
  */
 export async function main(fsAdapter?: IFileSystem): Promise<void> {
+  console.log('************** CLI main() CALLED **************');
+  
+  process.title = 'meld';
+
+  // Parse command-line arguments
+  const args = process.argv.slice(2);
+  console.log('************** CLI ARGS:', args);
+  
   try {
-    // Parse command line arguments
-    const args = process.argv.slice(2);
-    
     // Check for command before parsing
     let command: string | undefined;
     if (args.length > 0 && !args[0].startsWith('-') && 
-        (args[0] === 'init' || args[0] === 'debug-resolution')) {
+        (args[0] === 'init' || 
+         args[0] === 'debug-resolution' || 
+         args[0] === 'debug-context' || 
+         args[0] === 'debug-transform')) {
       command = args[0];
+      console.log('Command detected:', command);
     }
     
     const options = parseArgs(args);
+    console.log('Parsed options:', JSON.stringify(options, null, 2));
 
     // Handle version flag first, before any logging
     if (options.version) {
@@ -487,27 +507,54 @@ export async function main(fsAdapter?: IFileSystem): Promise<void> {
     
     // Handle init command
     if (command === 'init' || options.input === 'init') {
+      console.log('Running init command');
       await initCommand();
       return;
     }
     
     // Handle debug-resolution command
     if (command === 'debug-resolution' || options.debugResolution) {
-      await debugResolutionCommand({
+      console.log('************** DETECTED debug-resolution **************');
+      console.log('DEBUG: Running debug-resolution command with args:', args);
+      console.log('Running debug-resolution command');
+      try {
+        await debugResolutionCommand({
+          filePath: options.input,
+          variableName: options.variableName,
+          outputFormat: options.outputFormat as 'json' | 'text',
+          watchMode: options.watch
+        });
+        console.log('DEBUG: debug-resolution command completed successfully');
+      } catch (error) {
+        console.error('DEBUG: Error running debug-resolution command:', error);
+      }
+      return;
+    }
+
+    // Handle debug-context command
+    if (command === 'debug-context' || options.debugContext) {
+      console.log('Running debug-context command');
+      await debugContextCommand({
         filePath: options.input,
         variableName: options.variableName,
-        watchMode: options.watch,
-        outputFormat: options.outputFormat as 'json' | 'text'
+        visualizationType: options.visualizationType || 'hierarchy',
+        rootStateId: options.rootStateId,
+        outputFormat: options.outputFormat as 'mermaid' | 'dot' | 'json',
+        outputFile: options.output,
+        includeVars: options.includeVars !== false,
+        includeTimestamps: options.includeTimestamps !== false,
+        includeFilePaths: options.includeFilePaths !== false
       });
       return;
     }
 
     // Handle debug-transform command
     if (command === 'debug-transform' || options.debugTransform) {
+      console.log('Running debug-transform command');
       await debugTransformCommand({
         filePath: options.input,
         directiveType: options.directiveType,
-        outputFormat: options.outputFormat,
+        outputFormat: options.outputFormat as 'text' | 'json' | 'mermaid',
         outputFile: options.output,
         includeContent: options.includeContent
       });
@@ -562,4 +609,13 @@ export async function main(fsAdapter?: IFileSystem): Promise<void> {
       throw error;
     }
   }
+}
+
+// Only call main if this file is being run directly (not imported)
+if (require.main === module) {
+  console.log('************** CALLING main() **************');
+  main().catch(err => {
+    console.error('Unhandled error in CLI:', err);
+    process.exit(1);
+  });
 } 

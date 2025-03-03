@@ -1,5 +1,6 @@
 import type { MeldNode } from 'meld-spec';
 import { IStateService } from '@services/state/StateService/IStateService.js';
+import { VariableResolutionTracker, ResolutionTrackingConfig } from '@tests/utils/debug/VariableResolutionTracker/index.js';
 
 /**
  * Interface matching the StructuredPath expected from meld-spec
@@ -128,4 +129,16 @@ export interface IResolutionService {
    * Check for circular variable references
    */
   detectCircularReferences(value: string): Promise<void>;
+  
+  /**
+   * Enable tracking of variable resolution attempts
+   * @param config Configuration for the resolution tracker
+   */
+  enableResolutionTracking(config: Partial<ResolutionTrackingConfig>): void;
+  
+  /**
+   * Get the resolution tracker for debugging
+   * @returns The current resolution tracker or undefined if not enabled
+   */
+  getResolutionTracker(): VariableResolutionTracker | undefined;
 } 

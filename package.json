@@ -27,7 +27,17 @@
     "postinstall": "node scripts/install-warning.js",
     "ast": "npx ts-node scripts/ast-diagnostics.mjs",
     "var-ast": "npx ts-node scripts/variable-ast-analysis.mjs",
-    "meld": "node scripts/process-meld.js"
+    "meld": "node scripts/process-meld.js",
+    "debug": "node dist/cli.cjs debug-resolution",
+    "debug:resolution": "node dist/cli.cjs debug-resolution",
+    "debug:context": "node dist/cli.cjs debug-context",
+    "debug:transform": "node dist/cli.cjs debug-transform",
+    "debug:test-file": "npm run build && node dist/cli.cjs debug-resolution test-files/debug-test.meld",
+    "debug:test-import": "npm run build && node dist/cli.cjs debug-resolution test-files/debug-imported.meld",
+    "debug:test-context": "npm run build && node dist/cli.cjs debug-context test-files/debug-test.meld --variable-name testVar --viz-type variable-propagation",
+    "debug:test-fixed": "npm run build && node dist/cli.cjs debug-resolution test-files/debug-test-fixed.meld",
+    "debug:test-fixed-context": "npm run build && node dist/cli.cjs debug-context test-files/debug-test-fixed.meld --variable-name testVar --viz-type variable-propagation",
+    "debug:test-fixed-transform": "npm run build && node dist/cli.cjs debug-transform test-files/debug-test-fixed.meld"
   },
   "repository": {
     "type": "git",

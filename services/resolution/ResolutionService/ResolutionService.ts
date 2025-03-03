@@ -16,6 +16,7 @@ import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 import { inject, singleton } from 'tsyringe';
 import { IPathService } from '@services/fs/PathService/IPathService.js';
+import { VariableResolutionTracker, ResolutionTrackingConfig } from '@tests/utils/debug/VariableResolutionTracker/index.js';
 
 /**
  * Interface matching the StructuredPath expected from meld-spec
@@ -129,6 +130,7 @@ export class ResolutionService implements IResolutionService {
   private commandResolver: CommandResolver;
   private contentResolver: ContentResolver;
   private variableReferenceResolver: VariableReferenceResolver;
+  private resolutionTracker?: VariableResolutionTracker;
 
   constructor(
     private stateService: IStateService,
@@ -852,10 +854,37 @@ export class ResolutionService implements IResolutionService {
   }
 
   /**
-   * Get the variable reference resolver for debugging
-   * @internal For testing/debugging only
+   * Get the variable reference resolver
    */
   getVariableResolver(): VariableReferenceResolver {
     return this.variableReferenceResolver;
+  }
+
+  /**
+   * Enable tracking of variable resolution attempts
+   * @param config Configuration for the resolution tracker
+   */
+  enableResolutionTracking(config: Partial<ResolutionTrackingConfig>): void {
+    // Import and create the tracker if it doesn't exist
+    if (!this.resolutionTracker) {
+      this.resolutionTracker = new VariableResolutionTracker();
+    }
+    
+    // Configure the tracker
+    this.resolutionTracker.configure({
+      enabled: true,
+      ...config
+    });
+    
+    // Set it on the variable reference resolver
+    this.variableReferenceResolver.setResolutionTracker(this.resolutionTracker);
+  }
+
+  /**
+   * Get the resolution tracker for debugging
+   * @returns The current resolution tracker or undefined if not enabled
+   */
+  getResolutionTracker(): VariableResolutionTracker | undefined {
+    return this.resolutionTracker;
   }
 } 

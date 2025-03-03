@@ -164,6 +164,42 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
           } : undefined
         };
 
+        // IMPORTANT: Copy variables from imported state to parent state
+        // even in transformation mode
+        if (context.parentState) {
+          // Copy all text variables from the imported state to the parent state
+          const textVars = targetState.getAllTextVars();
+          textVars.forEach((value, key) => {
+            if (context.parentState) {
+              context.parentState.setTextVar(key, value);
+            }
+          });
+          
+          // Copy all data variables from the imported state to the parent state
+          const dataVars = targetState.getAllDataVars();
+          dataVars.forEach((value, key) => {
+            if (context.parentState) {
+              context.parentState.setDataVar(key, value);
+            }
+          });
+          
+          // Copy all path variables from the imported state to the parent state
+          const pathVars = targetState.getAllPathVars();
+          pathVars.forEach((value, key) => {
+            if (context.parentState) {
+              context.parentState.setPathVar(key, value);
+            }
+          });
+          
+          // Copy all commands from the imported state to the parent state
+          const commands = targetState.getAllCommands();
+          commands.forEach((value, key) => {
+            if (context.parentState) {
+              context.parentState.setCommand(key, value);
+            }
+          });
+        }
+
         return {
           state: targetState,
           replacement

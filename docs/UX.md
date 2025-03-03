@@ -2,6 +2,8 @@
 
 IMPORTANT NOTE: We are NOT implementing @api and @call yet.
 
+UPDATE: The syntax below for ${var} and #{var} is outdated. Text and data variables are expressed as {{variable}} and path variables remain $path style.
+
 # Meld Grammar Specification
 
 Meld is a very simple and constrained scripting language for use in the middle of markdown-like docs. We only interpret @directive lines. All other lines are treated as literal text, including lines inside backtick fences.
@@ -37,9 +39,10 @@ Lines that begin with `>> ` (two greater-than signs followed by a space) are tre
 ### Delimiters
 ```
 [ ]     Command/path boundaries
-[[ ]]   Multi-line command boundaries
+[[ ]]   Multi-line content boundaries
 { }     Function embed boundaries
-{{ }}   Multi-line object boundaries
+[\n ]   Multi-line array 
+[\n ]   Multi-line object 
 #       Section marker
 =       Assignment (requires spaces on both sides)
 .       Metadata/field accessor
@@ -106,8 +109,8 @@ Data to Text Conversion:
 
 Examples:
 ```meld
-@data config = {{ name: "test", version: 1 }}
-@data nested = {{ user: { name: "Alice" } }}
+@data config = { name: "test", version: 1 }
+@data nested = { user: { name: "Alice" } }
 
 @text simple = `Name: {{config.name}}`          # Outputs: Name: test
 @text object = `Config: {{config}}`             # Outputs: Config: {"name":"test","version":1}
@@ -124,13 +127,13 @@ Examples:
 @text name = "Alice"
 @text key = "username"
 
-@data user = {{
+@data user = {
   {{key}}: {{name}},              # Dynamic key from text
   id: {{userId}},                # Text value in data structure
   settings: {
     displayName: {{name}}        # Nested text value
   }
-}}
+}
 ```
 
 ### Variables
@@ -326,26 +329,26 @@ where:
 Examples:
 ```meld
 # Minimal API definition
-@api github = {{
+@api github = {
   baseUrl: "https://api.github.com"
-}}
+}
 
 # Full API definition with optional fields
-@api github = {{
+@api github = {
   baseUrl: "https://api.github.com",
   headers: {
     Authorization: "Bearer {{ENV_TOKEN}}"
   }
-}}
+}
 
 # GET request
 @data issues = @call github.issues.get
 
 # POST request with payload
-@data newIssue = @call github.issues.post {{
+@data newIssue = @call github.issues.post {
   title: ${title},
   body: ${description}
-}}
+}
 
 # Direct path usage
 @data repo = @call github.get [/repos/${owner}/${repo}]
@@ -361,12 +364,12 @@ Examples:
 ### @call
 ```meld
 @call identifier.method [path]
-@call identifier.method [path] {{
+@call identifier.method [path] {
   key: value,
   nested: {
     key: value
   }
-}}
+}
 @call identifier.endpoint.method
 ```
 where:
@@ -535,27 +538,27 @@ Invalid patterns:
 ### API Examples
 ```meld
 # Define base API
-@api github = {{
+@api github = {
   baseUrl: "https://api.github.com",
   headers: {
     Authorization: "Bearer ${ENV_TOKEN}"
   }
-}}
+}
 
 # Define specific endpoints
-@api github.issues = {{
+@api github.issues = {
   path: "/repos/${owner}/${repo}/issues",
   methods: ["GET", "POST"]
-}}
+}
 
 # GET request
 @data issues = @call github.issues.get
 
 # POST request with payload
-@data newIssue = @call github.issues.post {{
+@data newIssue = @call github.issues.post {
   title: ${title},
   body: ${description}
-}}
+}
 
 # Direct path usage
 @data repo = @call github.get [/repos/${owner}/${repo}]
