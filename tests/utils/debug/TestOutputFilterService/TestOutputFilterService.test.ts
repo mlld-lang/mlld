@@ -255,8 +255,8 @@ describe('TestOutputFilterService', () => {
       expect(Array.isArray(filtered)).toBe(true);
       expect(filtered).toHaveLength(2);
       expect(filtered[0]).toHaveProperty('id');
-      // After filtering: original structure is preserved, but deep objects are marked
-      expect(filtered[0].deep).toEqual({ value: '[Object]' });
+      // After filtering: deep objects are marked with [Object]
+      expect(filtered[0].deep).toBe('[Object]');
     });
   });
   
