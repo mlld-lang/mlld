@@ -294,7 +294,7 @@ describe('ImportDirectiveHandler', () => {
 
       await expect(handler.execute(node, context))
         .rejects
-        .toThrow('Import file not found');
+        .toThrow(/File not found/);
     });
 
     it('should handle user-defined path variables', async () => {

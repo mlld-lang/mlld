@@ -377,81 +377,26 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
   }
 
   private importVariable(name: string, alias: string | undefined, sourceState: IStateService, targetState: IStateService): void {
-    // Use alias if provided, otherwise use original name
-    const actualName = alias || name;
-    
-    // Track context boundary before import (safely)
-    let filePath: string | null | undefined = null;
-    try {
-      filePath = sourceState.getCurrentFilePath();
-    } catch (error) {
-      // Handle the case where getCurrentFilePath is not available
-      logger.debug('Error getting current file path', { error });
-    }
-    this.trackContextBoundary(sourceState, targetState, filePath ? filePath : undefined);
-
-    // Try to import as text variable
-    const hasTextVar = sourceState.getTextVar(name) !== undefined;
-    if (hasTextVar) {
-      const value = sourceState.getTextVar(name);
-      if (value !== undefined) {
-        targetState.setTextVar(actualName, value);
-        this.trackVariableCrossing(name, 'text', sourceState, targetState, alias);
-        
-        // Track context boundary after import (safely)
-        this.trackContextBoundary(sourceState, targetState, filePath ? filePath : undefined);
-        return;
+    // Use the StateVariableCopier to copy a specific variable
+    const variablesCopied = this.stateVariableCopier.copySpecificVariables(
+      sourceState,
+      targetState,
+      [{ name, alias }],
+      {
+        skipExisting: false,
+        trackContextBoundary: true,
+        trackVariableCrossing: true
       }
-    }
-
-    // Try to import as data variable
-    const hasDataVar = sourceState.getDataVar(name) !== undefined;
-    if (hasDataVar) {
-      const value = sourceState.getDataVar(name);
-      targetState.setDataVar(actualName, value);
-      this.trackVariableCrossing(name, 'data', sourceState, targetState, alias);
-      
-      // Track context boundary after import (safely)
-      this.trackContextBoundary(sourceState, targetState, filePath ? filePath : undefined);
-      return;
-    }
-
-    // Try to import as path variable
-    const hasPathVar = sourceState.getPathVar(name) !== undefined;
-    if (hasPathVar) {
-      const value = sourceState.getPathVar(name);
-      if (value !== undefined) {
-        targetState.setPathVar(actualName, value);
-        this.trackVariableCrossing(name, 'path', sourceState, targetState, alias);
-        
-        // Track context boundary after import (safely)
-        this.trackContextBoundary(sourceState, targetState, filePath ? filePath : undefined);
-        return;
-      }
-    }
-
-    // Try to import as command
-    if (sourceState.getCommand) {
-      const command = sourceState.getCommand(name);
-      if (command) {
-        targetState.setCommand(actualName, command);
-        this.trackVariableCrossing(name, 'command', sourceState, targetState, alias);
-        
-        // Track context boundary after import (safely)
-        this.trackContextBoundary(sourceState, targetState, filePath ? filePath : undefined);
-        return;
-      }
-    }
-
-    // Track context boundary after import attempt (safely), even if it failed
-    this.trackContextBoundary(sourceState, targetState, filePath ? filePath : undefined);
-
-    // Variable not found
-    throw new DirectiveError(
-      `Variable "${name}" not found in imported file`,
-      this.kind,
-      DirectiveErrorCode.VARIABLE_NOT_FOUND
     );
+    
+    // If no variables were copied, throw an error
+    if (variablesCopied === 0) {
+      throw new DirectiveError(
+        `Variable "${name}" not found in imported file`,
+        this.kind,
+        DirectiveErrorCode.VARIABLE_NOT_FOUND
+      );
+    }
   }
 
   /**
