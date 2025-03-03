@@ -19,6 +19,7 @@ import { StateVisualizationService } from './debug/StateVisualizationService/Sta
 import { StateDebuggerService } from './debug/StateDebuggerService/StateDebuggerService.js';
 import { StateHistoryService } from './debug/StateHistoryService/StateHistoryService.js';
 import { StateEventService } from '@services/state/StateEventService/StateEventService.js';
+import { TestOutputFilterService } from './debug/TestOutputFilterService/TestOutputFilterService.js';
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 import type { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
 import type { IDirectiveService } from '@services/pipeline/DirectiveService/IDirectiveService.js';
@@ -132,7 +133,7 @@ export class TestContext {
 
     // Initialize event service
     const eventService = new StateEventService();
-
+    
     // Initialize state service
     const state = new StateService(eventService);
     state.setCurrentFilePath('test.meld'); // Set initial file path
@@ -148,7 +149,7 @@ export class TestContext {
     // Initialize debugger service
     const debuggerService = new TestDebuggerService(state);
     debuggerService.initialize(state);
-
+    
     // Initialize directive service
     const directive = new DirectiveService();
     directive.initialize(
