@@ -1,8 +1,11 @@
 import { 
   createExample, 
   combineExamples,
-  SyntaxExampleGroup 
+  SyntaxExampleGroup,
+  createInvalidExample
 } from './helpers';
+import { ErrorSeverity } from '@core/errors/index.js';
+import { DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 
 /**
  * Collection of atomic comment examples
@@ -10,32 +13,20 @@ import {
  * These are the most basic examples of Meld comments
  */
 export const atomic = {
-  inlineComment: createExample(
-    'Inline comment',
-    `<!-- This is an inline comment -->`
+  singleLineComment: createExample(
+    'Single line comment',
+    `>> This is a commented out line`
   ),
   
   multilineComment: createExample(
     'Multiline comment',
-    `<!--
-This is a multiline comment
-spanning multiple lines
--->`
+    `>> This
+>> is a multi-line comment`
   ),
   
   indentedComment: createExample(
     'Indented comment',
-    `    <!-- This comment is indented -->`
-  ),
-  
-  meldSpecificComment: createExample(
-    'Meld-specific comment',
-    `<!-- @meld-hidden -->`
-  ),
-  
-  conditionalComment: createExample(
-    'Conditional comment',
-    `<!-- @meld-if {{condition}} -->`
+    `    >> This comment is indented`
   )
 };
 
@@ -55,7 +46,7 @@ This is the introduction.`
     ),
     createExample(
       'Comment',
-      `<!-- This comment will not appear in the output -->`
+      `>> This comment will not appear in the output`
     ),
     createExample(
       'After comment',
@@ -65,105 +56,54 @@ More content here.`
     )
   ),
   
-  conditionalBlocks: combineExamples(
-    'Conditional content blocks',
+  mixedComments: combineExamples(
+    'Mixed comment types',
     createExample(
-      'Variable definition',
-      `@text showAdvanced = true`
+      'First comment',
+      `>> First comment line`
     ),
     createExample(
-      'Conditional start',
-      `<!-- @meld-if {{showAdvanced}} -->`
+      'Some content',
+      `This is normal content between comments.`
     ),
     createExample(
-      'Conditional content',
-      `## Advanced Section
-
-This content only appears when showAdvanced is true.`
+      'Multiline comment',
+      `>> This is the first line of a multi-line comment
+>> This is the second line of the same comment`
     ),
     createExample(
-      'Conditional end',
-      `<!-- @meld-endif -->`
-    )
-  ),
-  
-  nestedConditionals: combineExamples(
-    'Nested conditional blocks',
-    createExample(
-      'Variable definitions',
-      `@text isLoggedIn = true
-@text isPremium = true`
-    ),
-    createExample(
-      'Outer conditional start',
-      `<!-- @meld-if {{isLoggedIn}} -->`
-    ),
-    createExample(
-      'Content for logged in users',
-      `## Welcome back!
-
-You are logged in.`
-    ),
-    createExample(
-      'Inner conditional start',
-      `<!-- @meld-if {{isPremium}} -->`
-    ),
-    createExample(
-      'Premium content',
-      `### Premium Content
-
-This content is only for premium users.`
-    ),
-    createExample(
-      'Inner conditional end',
-      `<!-- @meld-endif -->`
-    ),
-    createExample(
-      'More logged in content',
-      `## Other Features
-
-These features are available to all logged in users.`
-    ),
-    createExample(
-      'Outer conditional end',
-      `<!-- @meld-endif -->`
+      'More content',
+      `More normal content after comments.`
     )
   )
 };
 
 /**
- * Collection of Meld-specific comment directives
+ * Collection of invalid comment examples
  * 
- * These examples demonstrate special Meld comment directives
+ * These examples demonstrate invalid comment syntax
  */
-export const meldDirectives = {
-  hidden: createExample(
-    'Hidden content',
-    `<!-- @meld-hidden -->
-This content will not be included in the output.`
+export const invalid = {
+  missingPrefix: createInvalidExample(
+    'Missing comment prefix',
+    `This line is missing the >> prefix`,
+    {
+      type: DirectiveErrorCode.VALIDATION_FAILED,
+      severity: ErrorSeverity.Fatal,
+      code: DirectiveErrorCode.VALIDATION_FAILED,
+      message: 'Invalid comment syntax'
+    }
   ),
   
-  include: createExample(
-    'Conditional include',
-    `<!-- @meld-include {{includeDebug}} -->`
-  ),
-  
-  exclude: createExample(
-    'Conditional exclude',
-    `<!-- @meld-exclude {{isProduction}} -->`
-  ),
-  
-  rawBlock: createExample(
-    'Raw content block',
-    `<!-- @meld-raw -->
-This content will not be processed for Meld directives.
-@text variable = "This will be shown as literal text"
-<!-- @meld-endraw -->`
-  ),
-  
-  metadata: createExample(
-    'Metadata comment',
-    `<!-- @meld-meta title="Document Title" author="Example Author" -->`
+  incorrectPrefix: createInvalidExample(
+    'Incorrect comment prefix',
+    `> Single chevron instead of double`,
+    {
+      type: DirectiveErrorCode.VALIDATION_FAILED,
+      severity: ErrorSeverity.Fatal,
+      code: DirectiveErrorCode.VALIDATION_FAILED,
+      message: 'Invalid comment syntax'
+    }
   )
 };
 
@@ -173,5 +113,5 @@ This content will not be processed for Meld directives.
 export const commentExamples: SyntaxExampleGroup = {
   atomic,
   combinations,
-  meldDirectives
+  invalid
 }; 
