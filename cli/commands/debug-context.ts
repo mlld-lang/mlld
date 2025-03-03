@@ -10,7 +10,7 @@ import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
 import path from 'path';
 import chalk from 'chalk';
 import fs from 'fs/promises';
-import { initializeContextDebugger, VariableResolutionTracker } from '../../src/debug/index.js';
+import { initializeContextDebugger, VariableResolutionTracker } from '../../tests/utils/debug/index.js';
 import { IPathService } from '@services/fs/PathService/IPathService.js';
 
 // Import concrete classes for direct instantiation
@@ -79,20 +79,12 @@ export async function debugContextCommand(options: DebugContextOptions): Promise
       
       // Create the base services first
       stateService = new StateService();
-      fileSystemService = new FileSystemService();
-      
-      // Initialize fileSystemService if the method exists (for runtime)
-      if (typeof fileSystemService.initialize === 'function') {
-        fileSystemService.initialize(nodeFs);
-      }
-      
+      fileSystemService = new FileSystemService(pathOps, nodeFs);
       parserService = new ParserService();
       pathService = new PathService();
       
-      // Initialize the path service if the method exists (for runtime)
-      if (typeof pathService.initialize === 'function') {
-        pathService.initialize(fileSystemService, pathOps);
-      }
+      // Initialize the path service
+      pathService.initialize(fileSystemService, pathOps);
       
       // Set up state with proper paths
       const resolvedPath = path.resolve(filePath);
@@ -114,7 +106,7 @@ export async function debugContextCommand(options: DebugContextOptions): Promise
         console.warn(chalk.yellow('Could not set home path variables'));
       }
       
-      // Create resolution and interpreter services
+      // Create resolution service
       resolutionService = new ResolutionService(
         stateService,
         fileSystemService,
@@ -122,22 +114,27 @@ export async function debugContextCommand(options: DebugContextOptions): Promise
         pathService
       );
       
+      // Create the directive service
       directiveService = new DirectiveService();
       
-      // Initialize directive service if the method exists (for runtime)
-      if (typeof directiveService.initialize === 'function') {
-        directiveService.initialize(
-          stateService,
-          resolutionService,
-          fileSystemService,
-          pathService
-        );
-      }
-      
-      interpreterService = new InterpreterService(
+      // Initialize directive service
+      directiveService.initialize(
+        undefined, // ValidationService (not needed for this command)
+        stateService,
+        pathService,
+        fileSystemService,
         parserService,
-        directiveService
+        undefined, // InterpreterService (will set this later)
+        undefined, // CircularityService (not needed for this command)
+        resolutionService
       );
+      
+      // Create the interpreter service
+      interpreterService = new InterpreterService();
+      interpreterService.initialize(directiveService, stateService);
+      
+      // Register default handlers
+      directiveService.registerDefaultHandlers();
     }
     
     // Initialize the context debugger

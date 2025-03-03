@@ -9,7 +9,7 @@ import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemSe
 import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
 import path from 'path';
 import chalk from 'chalk';
-import { VariableResolutionTracker, ResolutionTrackingConfig } from '../../src/debug/index.js';
+import { VariableResolutionTracker, ResolutionTrackingConfig } from '../../tests/utils/debug/index.js';
 import { IPathService } from '@services/fs/PathService/IPathService.js';
 
 // Import concrete classes for direct instantiation
@@ -21,6 +21,7 @@ import { FileSystemService } from '@services/fs/FileSystemService/FileSystemServ
 import { PathService } from '@services/fs/PathService/PathService.js';
 import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
 import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService.js';
+import { DirectiveService } from '@services/pipeline/DirectiveService/DirectiveService.js';
 
 interface DebugResolutionOptions {
   filePath: string;
@@ -66,11 +67,11 @@ export async function debugResolutionCommand(options: DebugResolutionOptions): P
     
     // Create the base services first
     const stateService = new StateService();
-    const fileSystemService = new FileSystemService();
+    const fileSystemService = new FileSystemService(pathOps, nodeFs);
     const parserService = new ParserService();
     const pathService = new PathService();
     
-    // Initialize the path service 
+    // Initialize the path service
     pathService.initialize(fileSystemService, parserService);
     
     // Initialize paths in the state service
@@ -90,10 +91,24 @@ export async function debugResolutionCommand(options: DebugResolutionOptions): P
       pathService
     );
     
-    const interpreterService = new InterpreterService(
+    // Create the directive service
+    const directiveService = new DirectiveService();
+    directiveService.initialize(
+      undefined, // ValidationService (not needed for this command)
+      stateService,
+      pathService,
+      fileSystemService,
       parserService,
+      undefined, // InterpreterService (will set this later)
+      undefined, // CircularityService (not needed for this command)
       resolutionService
     );
+    
+    const interpreterService = new InterpreterService();
+    interpreterService.initialize(directiveService, stateService);
+    
+    // Register default handlers
+    directiveService.registerDefaultHandlers();
     
     // Enable resolution tracking if a variable name is provided
     let tracker: VariableResolutionTracker | undefined;

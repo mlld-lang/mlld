@@ -10,7 +10,7 @@ import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
 import path from 'path';
 import chalk from 'chalk';
 import fs from 'fs/promises';
-import { initializeContextDebugger, StateVisualizationService } from '../../src/debug/index.js';
+import { initializeContextDebugger, StateVisualizationService } from '../../tests/utils/debug/index.js';
 import { IPathService } from '@services/fs/PathService/IPathService.js';
 
 // Import concrete classes for direct instantiation
@@ -69,20 +69,12 @@ export async function debugTransformCommand(options: DebugTransformOptions): Pro
       
       // Create the base services first
       stateService = new StateService();
-      fileSystemService = new FileSystemService();
-      
-      // Initialize fileSystemService if the method exists (for runtime)
-      if (typeof fileSystemService.initialize === 'function') {
-        fileSystemService.initialize(nodeFs);
-      }
-      
+      fileSystemService = new FileSystemService(pathOps, nodeFs);
       parserService = new ParserService();
       const pathService = new PathService();
       
-      // Initialize the path service if the method exists (for runtime)
-      if (typeof pathService.initialize === 'function') {
-        pathService.initialize(fileSystemService, pathOps);
-      }
+      // Initialize the path service
+      pathService.initialize(fileSystemService, pathOps);
       
       // Create the resolution service
       const resolutionService = new ResolutionService(
@@ -95,21 +87,24 @@ export async function debugTransformCommand(options: DebugTransformOptions): Pro
       // Create the directive service
       directiveService = new DirectiveService();
       
-      // Initialize directive service if the method exists (for runtime)
-      if (typeof directiveService.initialize === 'function') {
-        directiveService.initialize(
-          stateService,
-          resolutionService,
-          fileSystemService,
-          pathService
-        );
-      }
+      // Initialize directive service
+      directiveService.initialize(
+        undefined, // ValidationService (not needed for this command)
+        stateService,
+        pathService,
+        fileSystemService,
+        parserService,
+        undefined, // InterpreterService (will set this later)
+        undefined, // CircularityService (not needed for this command)
+        resolutionService
+      );
       
       // Create the interpreter service
-      interpreterService = new InterpreterService(
-        parserService,
-        directiveService
-      );
+      interpreterService = new InterpreterService();
+      interpreterService.initialize(directiveService, stateService);
+      
+      // Register default handlers
+      directiveService.registerDefaultHandlers();
     }
     
     // Set up state with proper paths
