@@ -286,6 +286,10 @@ export class InterpreterService implements IInterpreterService {
           }
           const directiveNode = node as DirectiveNode;
           
+          // Capture the original state for importing directives in transformation mode
+          const originalState = state;
+          const isImportDirective = directiveNode.directive.kind === 'import';
+          
           // Store the directive result to check for replacement nodes
           const directiveResult = await this.directiveService.processDirective(directiveNode, {
             state: directiveState,
@@ -311,6 +315,55 @@ export class InterpreterService implements IInterpreterService {
             
             // Update current state with the result state
             currentState = resultState;
+            
+            // Special handling for imports in transformation mode:
+            // Copy all variables from the imported file to the original state
+            // This ensures the variables are available to the rest of the transformation
+            if (isImportDirective && 
+                currentState.isTransformationEnabled && 
+                currentState.isTransformationEnabled()) {
+              try {
+                logger.debug('Import directive in transformation mode, copying variables to original state');
+                
+                // Copy text variables from result to original state
+                if (typeof currentState.getAllTextVars === 'function' && 
+                    typeof originalState.setTextVar === 'function') {
+                  const textVars = currentState.getAllTextVars();
+                  textVars.forEach((value, key) => {
+                    originalState.setTextVar(key, value);
+                  });
+                }
+                
+                // Copy data variables
+                if (typeof currentState.getAllDataVars === 'function' && 
+                    typeof originalState.setDataVar === 'function') {
+                  const dataVars = currentState.getAllDataVars();
+                  dataVars.forEach((value, key) => {
+                    originalState.setDataVar(key, value);
+                  });
+                }
+                
+                // Copy path variables
+                if (typeof currentState.getAllPathVars === 'function' && 
+                    typeof originalState.setPathVar === 'function') {
+                  const pathVars = currentState.getAllPathVars();
+                  pathVars.forEach((value, key) => {
+                    originalState.setPathVar(key, value);
+                  });
+                }
+                
+                // Copy commands if methods exist
+                if (typeof currentState.getAllCommands === 'function' && 
+                    typeof originalState.setCommand === 'function') {
+                  const commands = currentState.getAllCommands();
+                  commands.forEach((value, key) => {
+                    originalState.setCommand(key, value);
+                  });
+                }
+              } catch (e) {
+                logger.debug('Error copying variables from import to original state', { error: e });
+              }
+            }
             
             // If transformation is enabled and we have a replacement node,
             // we need to apply it to the transformed nodes

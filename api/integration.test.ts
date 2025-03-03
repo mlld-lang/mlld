@@ -101,23 +101,43 @@ Some text content with {{var1}} and {{message}}
         console.log('DEBUG - subject:', stateService.getTextVar('subject'));
         console.log('DEBUG - message:', stateService.getTextVar('message'));
         
+        // Log the state before running the test
+        console.log('===== STATE BEFORE TEST =====');
+        console.log('Text variables:', [...context.services.state.getAllTextVars().entries()]);
+        console.log('Transformation enabled:', context.services.state.isTransformationEnabled());
+        console.log('State ID:', context.services.state.getStateId ? context.services.state.getStateId() : undefined);
+        console.log('Test context state object type:', Object.prototype.toString.call(context.services.state));
+        console.log('=============================');
+        
         const result = await main('test.meld', {
           fs: context.fs,
           services: context.services as unknown as Partial<Services>,
           transformation: true
         });
         
-        // More detailed debugging
-        console.log('DEBUG - Result LENGTH:', result.length);
-        console.log('DEBUG - Result SUBSTRING:', result.substring(0, Math.min(500, result.length)));
-        console.log('DEBUG - Result includes "Value 1":', result.includes('Value 1'));
-        console.log('DEBUG - Result includes "{{var1}}":', result.includes('{{var1}}'));
-        console.log('DEBUG - Result includes "Hello, World!":', result.includes('Hello, World!'));
+        // Get the debug visualization
+        const visualization = await context.visualizeState('mermaid');
+        console.log('===== STATE VISUALIZATION =====');
+        console.log(visualization);
+        console.log('===============================');
         
-        // Get all text variables for debugging
-        const allTextVars = stateService.getAllTextVars ? stateService.getAllTextVars() : 'getAllTextVars not available';
-        console.log('DEBUG - All text variables:', 
-          allTextVars instanceof Map ? Object.fromEntries(allTextVars) : allTextVars);
+        // Add simpler debug info to avoid TypeScript errors
+        console.log('===== TEST CONTEXT STRUCTURE =====');
+        console.log('Has services:', !!context.services);
+        console.log('Has state service:', !!context.services.state);
+        console.log('State service methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(context.services.state)));
+        console.log('=================================');
+        
+        // Get debug session results
+        const debugResults = await context.endDebugSession(sessionId);
+        console.log('===== DEBUG SESSION RESULTS =====');
+        console.log(JSON.stringify(debugResults, null, 2));
+        console.log('=================================');
+        
+        // Log the state after running the test
+        console.log('===== STATE AFTER TEST =====');
+        console.log('Text variables:', [...context.services.state.getAllTextVars().entries()]);
+        console.log('Transformation enabled:', context.services.state.isTransformationEnabled());
         
         // Verify output contains the expected content with transformed directives
         expect(result).toBeDefined();
@@ -269,14 +289,8 @@ First feature: {{config.app.features.0}}
         }
       });
       
-      // TEMPORARY: Accept the raw output format since transformation isn't working
-      // This is a workaround until we can fix the transformation issue
-      expect(result).toContain('@path docs');
-      expect(result).toContain('@text docsText');
-      
-      // Original expectations (commented out until transformation is fixed)
-      // expect(result.trim()).toContain('Docs are at');
-      // expect(result).not.toContain('@path'); // Path directive should be transformed away
+      expect(result.trim()).toContain('Docs are at');
+      expect(result).not.toContain('@path'); // Path directive should be transformed away
     });
     
     it('should handle path variables with special $. alias syntax', async () => {
@@ -556,10 +570,76 @@ First feature: {{config.app.features.0}}
       // Enable transformation with more logging
       context.enableTransformation(true);
       
+      // Enable debugging services
+      await context.enableDebug();
+      const sessionId = await context.startDebugSession({
+        captureConfig: {
+          capturePoints: ['pre-transform', 'post-transform', 'error'],
+          includeFields: ['variables', 'nodes', 'transformedNodes'],
+        },
+        visualization: {
+          format: 'mermaid',
+          includeMetadata: true
+        }
+      });
+      
       // Log the state before running the test
       console.log('===== STATE BEFORE TEST =====');
       console.log('Text variables:', [...context.services.state.getAllTextVars().entries()]);
       console.log('Transformation enabled:', context.services.state.isTransformationEnabled());
+      console.log('=============================');
+      
+      // Create a direct test of the ImportDirectiveHandler
+      console.log('===== DIRECT IMPORT TEST =====');
+      
+      // Import the handler
+      const { ImportDirectiveHandler } = await import('@services/pipeline/DirectiveService/handlers/execution/ImportDirectiveHandler.js');
+      
+      // Create an instance of the handler with the necessary services
+      const importHandler = new ImportDirectiveHandler(
+        context.services.validation,
+        context.services.resolution,
+        context.services.state,
+        context.services.filesystem,
+        context.services.parser,
+        context.services.interpreter,
+        context.services.circularity,
+        context.debugger?.stateTrackingService
+      );
+      
+      // Create a directive node for the import
+      const importNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'import',
+          path: 'imported.meld',
+          imports: '*'
+        },
+        location: {
+          start: { line: 1, column: 1 },
+          end: { line: 1, column: 20 }
+        }
+      };
+      
+      // Create a directive context
+      const directiveContext = {
+        state: context.services.state,
+        currentFilePath: 'test.meld',
+        parentState: context.services.state
+      };
+      
+      // Execute the import directive
+      try {
+        const importResult = await importHandler.execute(importNode, directiveContext);
+        console.log('Import result:', importResult);
+        console.log('After direct import, importedVar exists:', context.services.state.getTextVar('importedVar') !== undefined);
+        if (context.services.state.getTextVar('importedVar') !== undefined) {
+          console.log('importedVar value:', context.services.state.getTextVar('importedVar'));
+        }
+      } catch (error) {
+        console.error('Error executing import directive:', error);
+      }
+      
       console.log('=============================');
       
       const result = await main('test.meld', {
@@ -568,10 +648,57 @@ First feature: {{config.app.features.0}}
         transformation: true
       });
       
+      // Get the debug visualization
+      const visualization = await context.visualizeState('mermaid');
+      console.log('===== STATE VISUALIZATION =====');
+      console.log(visualization);
+      console.log('===============================');
+      
+      // Get debug session results
+      const debugResults = await context.endDebugSession(sessionId);
+      console.log('===== DEBUG SESSION RESULTS =====');
+      console.log(JSON.stringify(debugResults, null, 2));
+      console.log('=================================');
+      
       // Log the state after running the test
       console.log('===== STATE AFTER TEST =====');
       console.log('Text variables:', [...context.services.state.getAllTextVars().entries()]);
       console.log('Transformation enabled:', context.services.state.isTransformationEnabled());
+      
+      // Check if there's a parent state
+      console.log('Parent state exists:', context.services.state.getParentState !== undefined);
+      if (context.services.state.getParentState) {
+        const parentState = context.services.state.getParentState();
+        console.log('Parent state:', parentState !== undefined);
+        if (parentState) {
+          console.log('Parent text variables:', [...parentState.getAllTextVars().entries()]);
+        }
+      }
+      
+      // Check for child states
+      console.log('Context State ID:', context.services.state.getId ? context.services.state.getId() : 'No ID method');
+      
+      // Add direct checking for the importedVar in different states
+      if (context.services.state.getChildStates) {
+        const childStates = context.services.state.getChildStates();
+        console.log('Child states count:', childStates.length);
+        
+        for (let i = 0; i < childStates.length; i++) {
+          const childState = childStates[i];
+          console.log(`Child state ${i} has importedVar:`, childState.getTextVar('importedVar') !== undefined);
+          if (childState.getTextVar('importedVar') !== undefined) {
+            console.log(`Child state ${i} importedVar value:`, childState.getTextVar('importedVar'));
+          }
+          
+          const childTextVars = [...childState.getAllTextVars().entries()];
+          console.log(`Child state ${i} text variables:`, childTextVars);
+        }
+      }
+      
+      // Log the result in detail
+      console.log('===== TEST RESULT =====');
+      console.log(result);
+      console.log('======================');
       
       // Also check if we have the importedVar variable 
       console.log('importedVar exists:', context.services.state.getTextVar('importedVar') !== undefined);
@@ -579,11 +706,6 @@ First feature: {{config.app.features.0}}
         console.log('importedVar value:', context.services.state.getTextVar('importedVar'));
       }
       console.log('=============================');
-      
-      // Log the result in detail
-      console.log('===== TEST RESULT =====');
-      console.log(result);
-      console.log('======================');
       
       // Just verify that importedVar exists in the state
       expect(context.services.state.getTextVar('importedVar')).toBe('Imported content');

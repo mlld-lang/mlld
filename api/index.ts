@@ -269,6 +269,45 @@ export async function main(filePath: string, options: ProcessOptions = {}): Prom
         isEnabled: resultState.isTransformationEnabled(),
         options: resultState.getTransformationOptions?.()
       });
+
+      // IMPORTANT FIX: After interpretation, copy all variables from resultState back to the original state
+      // This ensures that variables from imports are properly propagated back to the state
+      // referenced by the test context
+      if (typeof resultState.getAllTextVars === 'function' && 
+          typeof services.state.setTextVar === 'function') {
+        // Copy text variables
+        const textVars = resultState.getAllTextVars();
+        textVars.forEach((value, key) => {
+          services.state.setTextVar(key, value);
+        });
+        
+        // Copy data variables
+        if (typeof resultState.getAllDataVars === 'function' && 
+            typeof services.state.setDataVar === 'function') {
+          const dataVars = resultState.getAllDataVars();
+          dataVars.forEach((value, key) => {
+            services.state.setDataVar(key, value);
+          });
+        }
+        
+        // Copy path variables
+        if (typeof resultState.getAllPathVars === 'function' && 
+            typeof services.state.setPathVar === 'function') {
+          const pathVars = resultState.getAllPathVars();
+          pathVars.forEach((value, key) => {
+            services.state.setPathVar(key, value);
+          });
+        }
+        
+        // Copy commands
+        if (typeof resultState.getAllCommands === 'function' && 
+            typeof services.state.setCommand === 'function') {
+          const commands = resultState.getAllCommands();
+          commands.forEach((value, key) => {
+            services.state.setCommand(key, value);
+          });
+        }
+      }
     }
     
     // Get transformed nodes if available
