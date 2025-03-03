@@ -614,3 +614,170 @@ console.log('Child transformed nodes count:', childState.getTransformedNodes().l
    console.log('Before nodes:', beforeState.getNodes().length);
    console.log('After nodes:', state.getNodes().length);
    ``` 
+
+## EmbedDirectiveHandler Debugging
+
+This section focuses on specific debugging techniques for issues related to the `EmbedDirectiveHandler`, particularly in transformation mode.
+
+### 1. Debug File Resolution and Existence
+
+When dealing with file not found or path resolution issues:
+
+```typescript
+// Debug path resolution
+console.log('Resolving path:', {
+  originalPath: params.path,
+  contextFilePath: context.filePath,
+  directiveKind: this.kind
+});
+
+// After resolution
+console.log('Path resolved:', {
+  originalPath: params.path,
+  resolvedPath,
+  exists: await this.fileSystemService.exists(resolvedPath)
+});
+
+// If using the debug-transform command, you can see the resolved path:
+// npx meld debug-transform tests/test-files/embed.meld --directive embed --output-format mermaid
+```
+
+### 2. Diagnose Circular Import/Embed Issues
+
+For debugging circular dependencies in embed directives:
+
+```typescript
+// Check circularity service state before starting new import
+console.log('Current import stack:', this.circularityService.getCurrentImportStack());
+
+// Test for circularity with a specific path
+try {
+  this.circularityService.beginImport(resolvedPath);
+  console.log('No circularity detected');
+} catch (error) {
+  console.log('Circularity detected:', {
+    error: error.message,
+    path: resolvedPath,
+    stack: error.stack
+  });
+} finally {
+  // Always clean up
+  this.circularityService.endImport(resolvedPath);
+}
+```
+
+### 3. Debug Error Propagation for EmbedDirectiveHandler
+
+To diagnose issues with error handling and propagation:
+
+```typescript
+// Set up minimal test case
+context.fs.writeFileSync('nonexistent-embed.meld', '@embed [does-not-exist.md]');
+
+// Add debugging to handle error cases
+try {
+  const result = await main('nonexistent-embed.meld', {
+    fs: context.fs,
+    services: context.services,
+    transformation: true
+  });
+  console.log('Unexpectedly succeeded:', result);
+} catch (error) {
+  console.log('Error caught:', {
+    message: error.message,
+    type: error.constructor.name,
+    code: error.code,
+    kind: error.kind,
+    directiveKind: error.directiveKind,
+    path: error.path
+  });
+  
+  // Check if it's the expected error type
+  if (error instanceof MeldFileNotFoundError) {
+    console.log('File not found error detected correctly');
+  } else if (error instanceof DirectiveError) {
+    console.log('Directive error detected:', error.code);
+  } else {
+    console.log('Unexpected error type:', error.constructor.name);
+  }
+}
+```
+
+### 4. Tracing Variables and State in EmbedDirectiveHandler
+
+For debugging state issues in embed directives:
+
+```typescript
+// Debug state before embed processing
+console.log('Pre-embed state:', {
+  transformationEnabled: context.state.isTransformationEnabled(),
+  transformationOptions: context.state.getTransformationOptions(),
+  nodesCount: context.state.getNodes().length,
+  transformedNodesCount: context.state.getTransformedNodes()?.length
+});
+
+// After embed processing
+console.log('Post-embed state:', {
+  transformationEnabled: resultState.isTransformationEnabled(),
+  transformationOptions: resultState.getTransformationOptions(),
+  nodesCount: resultState.getNodes().length,
+  transformedNodesCount: resultState.getTransformedNodes()?.length,
+  replacement: replacement ? replacement.type : 'none'
+});
+```
+
+### 5. Debug Resource Cleanup
+
+For ensuring resources are properly cleaned up:
+
+```typescript
+// Track resource cleanup in finally blocks
+let resourcesCleaned = false;
+try {
+  // Code that might throw
+} catch (error) {
+  // Error handling
+} finally {
+  try {
+    // Cleanup code
+    resourcesCleaned = true;
+    console.log('Resources cleaned successfully');
+  } catch (cleanupError) {
+    console.error('Error during cleanup:', cleanupError);
+  }
+}
+
+// Check cleanup status after execution
+console.log('Resources cleaned:', resourcesCleaned);
+```
+
+### 6. Using Debug Commands for EmbedDirectiveHandler Issues
+
+These CLI commands are particularly helpful for diagnosing embed directive issues:
+
+```bash
+# Debug path resolution
+npx meld debug-context tests/test-files/embed.meld --viz-type hierarchy --output-format mermaid
+
+# Debug transformation process for embed directives
+npx meld debug-transform tests/test-files/embed.meld --directive embed --output-format mermaid
+
+# Check if content is transformed correctly
+npx meld transform tests/test-files/embed.meld
+```
+
+The `debug-transform` command is particularly useful as it shows:
+1. The full path resolution process
+2. Whether circular dependencies are detected
+3. The content that's being embedded
+4. How the directive is transformed
+
+### 7. Common EmbedDirectiveHandler Issues and Solutions
+
+| Issue | Symptoms | Debug Approach |
+|-------|----------|----------------|
+| File not found | Unhelpful error or no error when file doesn't exist | Add explicit file existence check with `fileSystemService.exists()` |
+| Circular dependency | Stack overflow or incorrect error message | Check import stack with `circularityService.getCurrentImportStack()` |
+| Resource cleanup failure | Memory leaks or inconsistent state | Move variable declarations outside try blocks and use finally blocks |
+| Parameter validation | Unclear errors for missing parameters | Add explicit validation for required parameters |
+| Incorrect error types | Build errors or misleading error messages | Use proper error types like `DirectiveError` and `MeldFileNotFoundError` | 

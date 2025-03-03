@@ -98,6 +98,165 @@ Similar to the import directive issue, the `EmbedDirectiveHandler` has problems 
 2. Error conditions (like section not found) should still propagate errors
 3. Circular dependency detection should work in transformation mode
 
+## EmbedDirectiveHandler Issues and Fixes
+
+### 1. Error Handling in EmbedDirectiveHandler
+
+**Issue**: The EmbedDirectiveHandler had several issues with error handling, particularly in transformation mode:
+
+1. Path validation wasn't properly performed, leading to unclear errors when paths were invalid
+2. File existence wasn't checked before attempting to read the file
+3. Import tracking wasn't properly ended when errors occurred
+4. Error messages referenced `node.kind` instead of `this.kind`
+
+**Symptoms**:
+- Unclear error messages when embed paths were invalid
+- Uncaught errors when embedded files didn't exist
+- Potential for memory leaks or circular dependency detection issues due to unclosed import tracking
+- TypeScript errors in the build process
+
+**Root Cause**:
+The error handling in the EmbedDirectiveHandler wasn't properly structured to catch and process errors in a consistent way, especially for file not found errors.
+
+**Solution**:
+We updated the EmbedDirectiveHandler to:
+
+1. Check for the presence of a path parameter and throw a DirectiveError if missing
+2. Verify file existence using `fileSystemService.exists()` before attempting to read the file
+3. Throw a properly structured `MeldFileNotFoundError` with the directive kind and location info when files don't exist
+4. Use `this.kind` instead of `node.kind` for more consistent error messages
+5. Add a `finally` block to ensure import tracking is always ended, even if errors occur
+6. Make the code more robust to handle edge cases like undefined paths
+
+```typescript
+// Example of the improved error handling in EmbedDirectiveHandler
+try {
+  // Extract path parameter
+  if (!params.path) {
+    throw new DirectiveError(
+      `Missing path parameter for ${this.kind} directive`,
+      DirectiveErrorKind.VALIDATION_ERROR,
+      DirectiveErrorCode.MISSING_REQUIRED_PARAMETER
+    );
+  }
+
+  // Resolve and validate file path
+  const resolvedPath = await this.resolutionService.resolveFilePath(params.path, context.filePath);
+  
+  // Check if file exists before attempting to read it
+  if (!await this.fileSystemService.exists(resolvedPath)) {
+    throw new MeldFileNotFoundError({
+      path: resolvedPath,
+      directiveKind: this.kind,
+      location: node.location
+    });
+  }
+  
+  // Begin import tracking for circularity detection
+  this.circularityService.beginImport(resolvedPath);
+  
+  // Process the file content
+  // ...
+} catch (error) {
+  // Handle and properly wrap errors
+  if (!(error instanceof DirectiveError)) {
+    throw new DirectiveError(
+      `Error executing ${this.kind} directive: ${error.message}`,
+      DirectiveErrorKind.EXECUTION_ERROR,
+      DirectiveErrorCode.UNKNOWN_ERROR,
+      { cause: error }
+    );
+  }
+  throw error;
+} finally {
+  // Ensure import tracking is always ended, even if an error occurs
+  if (resolvedPath) {
+    try {
+      this.circularityService.endImport(resolvedPath);
+    } catch (error) {
+      this.logger.error(`Error ending import tracking: ${error.message}`);
+    }
+  }
+}
+```
+
+### 2. TypeScript Errors and Type Safety
+
+**Issue**: The `EmbedDirectiveHandler` had several TypeScript errors that prevented successful builds:
+
+1. Missing or improperly defined interfaces like `EmbedDirectiveParams`
+2. Incorrect error propagation with missing parameters
+3. Calling the `endImport` method without required parameters
+
+**Symptoms**:
+- TypeScript build errors
+- DTS build failures
+- Difficulty determining correct parameter types
+
+**Root Cause**:
+The TypeScript type definitions weren't properly maintained, leading to inconsistencies between the implementation and the type definitions.
+
+**Solution**:
+1. Properly define the `EmbedDirectiveParams` interface with all required fields
+2. Add appropriate type declarations for error handling
+3. Ensure all method calls include the required parameters with correct types
+4. Add safeguards for undefined values
+
+```typescript
+// Proper EmbedDirectiveParams interface definition
+interface EmbedDirectiveParams {
+  path?: string | StructuredPath;
+  section?: string;
+  headingLevel?: string;
+  underHeader?: string;
+  fuzzy?: string;
+}
+
+// Properly typed error handling
+if (!await this.fileSystemService.exists(resolvedPath)) {
+  throw new MeldFileNotFoundError({
+    path: resolvedPath,
+    directiveKind: this.kind,
+    location: node.location
+  });
+}
+
+// Ensure endImport is always called with the correct parameter
+try {
+  // Code that might throw
+} catch (error) {
+  // Error handling
+} finally {
+  if (resolvedPath) {
+    try {
+      this.circularityService.endImport(resolvedPath);
+    } catch (error) {
+      this.logger.error(`Error ending import tracking: ${error.message}`);
+    }
+  }
+}
+```
+
+### 3. Circularity Tracking Improvements
+
+**Issue**: Circular dependency tracking wasn't properly implemented in the EmbedDirectiveHandler, particularly regarding error handling.
+
+**Symptoms**:
+- Incomplete circular dependency detection
+- Potential for memory leaks if import tracking wasn't properly ended
+- Lack of robustness in handling edge cases
+
+**Root Cause**:
+The import tracking methods weren't properly called in all code paths, especially in error conditions.
+
+**Solution**:
+1. Add a `finally` block to ensure import tracking is always properly ended
+2. Move variable declarations outside of try blocks to ensure they're available in the finally block
+3. Add error handling around the `endImport` call to prevent secondary errors from obscuring primary errors
+4. Make sure `resolvedPath` is defined before attempting to end import tracking
+
+This implementation ensures that circular dependencies are properly tracked and that resources are properly released even when errors occur.
+
 ## Comprehensive Solution
 
 ### 1. Fix ImportDirectiveHandler

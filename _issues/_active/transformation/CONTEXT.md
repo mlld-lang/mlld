@@ -307,3 +307,94 @@ The transformation process involves several services working together:
 - **ResolutionService** handles variable resolution and command execution
 - **StateService** maintains both original and transformed nodes
 - **OutputService** selects appropriate nodes for final output 
+
+## Directive Handler Context
+
+### DirectiveContext Structure
+
+The `DirectiveContext` is a crucial structure passed to directive handlers like `EmbedDirectiveHandler`. Understanding its structure is essential for debugging transformation issues:
+
+```typescript
+interface DirectiveContext {
+  // The parent state, if this directive is executing in a nested context
+  parentState?: IStateService;
+  
+  // The current file path being processed
+  filePath?: string;
+  
+  // Validation options for path resolution and commands
+  validationOptions?: ValidationOptions;
+  
+  // A reference to a CircularityService to prevent circular imports
+  circularityService?: ICircularityService;
+  
+  // Options for error handling and validation
+  options?: {
+    // Whether to throw errors or collect them
+    throwOnError?: boolean;
+    
+    // Whether path validation is strict
+    strictPaths?: boolean;
+    
+    // Whether to allow command execution
+    allowCommands?: boolean;
+  };
+}
+```
+
+When working with the `EmbedDirectiveHandler`, the context is used to:
+1. Determine the current file path for resolving relative paths
+2. Access the parent state for variable propagation
+3. Specify validation options for path resolution
+4. Track circular dependencies through the circularity service
+
+### Resolution Context
+
+The `ResolutionContext` is used during path resolution, particularly in the `EmbedDirectiveHandler`:
+
+```typescript
+interface ResolutionContext {
+  // The current file path being processed
+  currentFilePath?: string;
+  
+  // Whether to use strict path validation
+  strict?: boolean;
+  
+  // Custom validators for path validation
+  validators?: PathValidator[];
+  
+  // The directive kind (e.g., "embed", "import")
+  directiveKind?: string;
+  
+  // The location of the directive in the source file
+  location?: Location;
+}
+```
+
+This context is crucial for providing proper error messages and ensuring paths are resolved correctly. For example, when an embedded file is not found, the `ResolutionContext` provides:
+
+1. The current file path to create a proper relative path
+2. The directive kind ("embed") for better error messages
+3. The location in the source file for pinpointing errors
+
+## Understanding EmbedDirectiveHandler Processing Flow
+
+The `EmbedDirectiveHandler` processing flow involves several context-dependent steps:
+
+1. **Parameter Extraction**: The handler extracts parameters like `path` and `section` from the directive
+2. **Path Resolution**: Using the `ResolutionService`, it resolves the file path using the current context
+3. **Circularity Check**: It checks for circular dependencies using the `CircularityService`
+4. **File Reading**: It reads the file content using the `FileSystemService`
+5. **Content Processing**: It processes the content (e.g., extracting sections, applying heading levels)
+6. **Node Replacement**: In transformation mode, it replaces the directive node with the embedded content
+
+Each step relies on context information, making it essential to understand the context structure for debugging.
+
+### Common Context-Related Issues
+
+1. **Missing File Paths**: If `context.filePath` is undefined, path resolution fails with unclear errors
+2. **Undefined Parent State**: If `context.parentState` is missing, variable propagation fails silently
+3. **Missing CircularityService**: If `context.circularityService` is undefined, circular dependency detection fails
+4. **Incomplete ResolutionContext**: If the resolution context lacks directive information, error messages are less helpful
+
+When debugging `EmbedDirectiveHandler` issues, always check that these context structures are complete and correctly populated. 

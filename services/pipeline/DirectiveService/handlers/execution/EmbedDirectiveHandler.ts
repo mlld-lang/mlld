@@ -2,7 +2,7 @@ import { DirectiveNode, MeldNode, TextNode } from 'meld-spec';
 import { IDirectiveHandler, DirectiveContext } from '@services/pipeline/DirectiveService/IDirectiveService.js';
 import { DirectiveResult } from '@services/pipeline/DirectiveService/types.js';
 import { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
-import { IResolutionService, StructuredPath } from '@services/resolution/ResolutionService/IResolutionService.js';
+import { IResolutionService, StructuredPath, ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { IStateService } from '@services/state/StateService/IStateService.js';
 import { ICircularityService } from '@services/resolution/CircularityService/ICircularityService.js';
 import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
@@ -12,6 +12,17 @@ import { DirectiveError, DirectiveErrorCode, DirectiveErrorSeverity } from '@ser
 import { embedLogger } from '@core/utils/logger.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 import { IStateTrackingService } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
+import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
+import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
+
+// Define the embed directive parameters interface
+interface EmbedDirectiveParams {
+  path?: string | StructuredPath;
+  section?: string;
+  headingLevel?: string;
+  underHeader?: string;
+  fuzzy?: string;
+}
 
 export interface ILogger {
   debug: (message: string, ...args: any[]) => void;
@@ -145,7 +156,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
     if (!path) {
       throw new DirectiveError(
         'Path is required for embed directive',
-        node,
+        this.kind,
         DirectiveErrorCode.VALIDATION_FAILED
       );
     }
@@ -154,25 +165,30 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
     const newState = context.state.clone();
     
     // Create a resolution context
-    const resolutionContext = {
-      state: newState,
-      currentFilePath: context.currentFilePath
-    };
+    const resolutionContext = ResolutionContextFactory.forImportDirective(
+      context.currentFilePath,
+      newState
+    );
+
+    // Track path resolution for finally block
+    let resolvedPath: string | undefined;
 
     try {
       // Resolve variables in the path
-      const resolvedPath = await this.resolutionService.resolveInContext(
+      resolvedPath = await this.resolutionService.resolveInContext(
         path,
         resolutionContext
       );
 
       // Begin import tracking
-      this.circularityService.beginImport(resolvedPath, context.currentFilePath);
+      this.circularityService.beginImport(resolvedPath);
 
       // Check for circular imports
       try {
-        this.circularityService.checkImport(resolvedPath, context.currentFilePath);
-      } catch (error) {
+        if (this.circularityService.isInStack(resolvedPath)) {
+          throw new Error(`Circular import detected: ${resolvedPath}`);
+        }
+      } catch (error: any) {
         // Circular imports during embedding should be logged but not fail normal operation
         this.logger.warn(`Circular import detected in embed directive: ${error.message}`, {
           error,
@@ -183,10 +199,13 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
 
       // Check if the file exists
       if (!(await this.fileSystemService.exists(resolvedPath))) {
-        throw new FileNotFoundError(
-          `Embed file not found: ${resolvedPath}`,
+        throw new MeldFileNotFoundError(
+          resolvedPath,
           {
-            filePath: resolvedPath
+            context: { 
+              directive: this.kind,
+              location: node.location
+            }
           }
         );
       }
@@ -219,7 +238,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
       }
       
       // Parse the content into nodes
-      const nodes = this.parserService.parse(content);
+      const nodes = await this.parserService.parse(content);
       
       // Create a child state for interpretation
       const childState = newState.createChildState();
@@ -292,13 +311,57 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
 
       // If transformation is enabled, return the parsed content
       if (newState.isTransformationEnabled()) {
+        // IMPORTANT: Copy variables from embedded state to parent state
+        // even in transformation mode
+        if (context.parentState) {
+          // Copy all text variables from the embedded state to the parent state
+          if (typeof interpretedState.getAllTextVars === 'function') {
+            const textVars = interpretedState.getAllTextVars();
+            for (const [key, value] of Object.entries(textVars)) {
+              if (context.parentState) {
+                context.parentState.setTextVar(key, value);
+              }
+            }
+          }
+          
+          // Copy all data variables from the embedded state to the parent state
+          if (typeof interpretedState.getAllDataVars === 'function') {
+            const dataVars = interpretedState.getAllDataVars();
+            for (const [key, value] of Object.entries(dataVars)) {
+              if (context.parentState) {
+                context.parentState.setDataVar(key, value);
+              }
+            }
+          }
+          
+          // Copy all path variables from the embedded state to the parent state
+          if (typeof interpretedState.getAllPathVars === 'function') {
+            const pathVars = interpretedState.getAllPathVars();
+            for (const [key, value] of Object.entries(pathVars)) {
+              if (context.parentState) {
+                context.parentState.setPathVar(key, value);
+              }
+            }
+          }
+          
+          // Copy all commands from the embedded state to the parent state
+          if (typeof interpretedState.getAllCommands === 'function') {
+            const commands = interpretedState.getAllCommands();
+            for (const [key, value] of Object.entries(commands)) {
+              if (context.parentState) {
+                context.parentState.setCommand(key, value);
+              }
+            }
+          }
+        }
+
         return {
           state: newState,
           replacement: {
             type: 'Text',
             content,
             location: node.location
-          }
+          } as TextNode
         };
       }
       
@@ -306,7 +369,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
       return {
         state: newState
       };
-    } catch (error) {
+    } catch (error: any) {
       // Handle and log errors
       this.logger.error(`Error executing embed directive: ${error.message}`, {
         error,
@@ -317,7 +380,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
       if (!(error instanceof DirectiveError)) {
         throw new DirectiveError(
           `Failed to execute embed directive: ${error.message}`,
-          node,
+          this.kind,
           DirectiveErrorCode.EXECUTION_FAILED,
           { cause: error }
         );
@@ -327,8 +390,10 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
     } finally {
       // Always end import tracking, even if there was an error
       try {
-        this.circularityService.endImport();
-      } catch (error) {
+        if (resolvedPath) {
+          this.circularityService.endImport(resolvedPath);
+        }
+      } catch (error: any) {
         // Don't let errors in endImport affect the main flow
         this.logger.debug(`Error ending import tracking: ${error.message}`, { error });
       }

@@ -105,3 +105,73 @@ When adding to this documentation:
 3. Document patterns and anti-patterns
 4. Update status information when issues are resolved
 5. Move resolved issue documentation to the archive folder
+
+## Recent Fixes and Learnings (April 2024)
+
+### EmbedDirectiveHandler Improvements
+
+We've recently addressed several critical issues in the `EmbedDirectiveHandler` that were causing TypeScript errors and runtime problems:
+
+#### 1. Error Handling and Type Safety
+
+- Fixed TypeScript errors by properly defining the `EmbedDirectiveParams` interface
+- Added explicit file existence checking before attempting to read embedded files
+- Improved error handling with proper error types and message consistency
+- Added parameter validation to provide clearer error messages for missing parameters
+
+#### 2. Resource Management and Circular Dependency Detection
+
+- Ensured proper cleanup of circular dependency tracking with `finally` blocks
+- Fixed an issue where `circularityService.endImport()` wasn't being called consistently
+- Made the code more robust by handling edge cases like undefined paths
+- Added error handling around resource cleanup to prevent secondary errors from hiding primary errors
+
+#### 3. Improved Debugging Capabilities
+
+- Added support for proper visualization in `debug-transform` and `debug-context` commands
+- Enhanced error messages to include more context about the directive type and location
+- Fixed TypeScript errors to ensure better IDE support and type checking
+
+### Key Learnings
+
+#### 1. Error Handling Best Practices
+
+- Always use a `finally` block for resource cleanup, especially for tracking mechanisms
+- Move critical variable declarations outside of `try` blocks to ensure they're available in `finally` blocks
+- Wrap specific errors inside more general directive errors to maintain consistent error types
+- Provide specific error types that include relevant context (e.g., file path, directive type)
+
+#### 2. File System Interaction
+
+- Always check for file existence before attempting to read a file
+- Use proper error types (`MeldFileNotFoundError`) to distinguish file issues from other errors
+- Include directive context in file errors to make debugging easier
+
+#### 3. Testing Directives
+
+The most effective way to test directives is:
+
+1. Use the `debug-transform` command with specific directive type:
+   ```bash
+   npx meld debug-transform tests/test-files/embed.meld --directive embed --output-format mermaid
+   ```
+
+2. Use the `debug-context` command to visualize variable and state relationships:
+   ```bash
+   npx meld debug-context tests/test-files/embed.meld --viz-type hierarchy --output-format mermaid
+   ```
+
+3. Create minimal test files to reproduce specific issues:
+   ```bash
+   echo -e "@embed [embedded.md]\n\nSome text after the embed directive." > tests/test-files/embed.meld
+   ```
+
+### Outstanding Issues
+
+While we've fixed the TypeScript errors and basic functionality of the `EmbedDirectiveHandler`, some issues still need further investigation:
+
+1. **Transformation Options**: Further testing is needed to ensure transformation options are consistently applied
+2. **Variable Propagation**: Testing is needed to verify that variables are properly propagated from embedded files
+3. **Complex Embedding Scenarios**: Additional testing for complex scenarios like embedding with sections or fuzzy matching
+
+Refer to the specific issue documents for more detailed debugging techniques and approaches.

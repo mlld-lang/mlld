@@ -25,6 +25,7 @@ import { PathOperationsService } from '@services/fs/FileSystemService/PathOperat
 import { DirectiveService } from '@services/pipeline/DirectiveService/DirectiveService.js';
 import { StateEventService } from '@services/state/StateEventService/StateEventService.js';
 import { ValidationService } from '@services/resolution/ValidationService/ValidationService.js';
+import { CircularityService } from '@services/resolution/CircularityService/CircularityService.js';
 
 interface DebugContextOptions {
   filePath: string;
@@ -128,20 +129,25 @@ export async function debugContextCommand(options: DebugContextOptions): Promise
       // Create validation service
       const validationService = new ValidationService();
       
-      // Initialize directive service
+      // Create circularity service
+      const circularityService = new CircularityService();
+      
+      // Create the interpreter service
+      interpreterService = new InterpreterService();
+      
+      // Initialize directive service with the interpreter service
       directiveService.initialize(
         validationService, // Add ValidationService instance
         stateService,
         pathService,
         fileSystemService,
         parserService,
-        undefined, // InterpreterService (will set this later)
-        undefined, // CircularityService (not needed for this command)
+        interpreterService, // Pass the interpreter service directly
+        circularityService, // Add CircularityService instance
         resolutionService
       );
       
-      // Create the interpreter service
-      interpreterService = new InterpreterService();
+      // Initialize the interpreter service
       interpreterService.initialize(directiveService, stateService);
       
       // Register default handlers
