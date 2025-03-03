@@ -296,4 +296,38 @@ The following tests are failing due to path validation issues:
    - "should reject raw absolute paths"
    - "should reject paths with slashes but no path variable"
 
-Fixing the error propagation and updating the test expectations should resolve these failures. 
+Fixing the error propagation and updating the test expectations should resolve these failures.
+
+# Path Validation Issues in Transformation Mode
+
+## Test Failure Evidence (March 2024)
+
+Recent test runs have provided clear evidence of path transformation issues:
+
+1. **Path Directives Not Transformed**: Our tests show that path directives remain completely unprocessed in transformation mode:
+
+```
+AssertionError: expected '```\n    @path testpath = "$PROJECTPA…' not to contain '@path'
+```
+
+2. **Path Variable References Unchanged**: Path variable references (e.g., `$docs`) remain unchanged in the output even with transformation enabled:
+
+```
+expect(result).not.toContain('$docs');  // This test fails
+```
+
+3. **Impact on Multiple Path Types**: The issue affects all path variable types:
+   - `$PROJECTPATH` 
+   - `$HOMEPATH`
+   - `$.` alias
+   - `$~` alias
+
+4. **Context for the Fix**: The diff.txt changes focus on variable copying between states, which suggests that path variables defined in child states aren't being properly propagated to parent states where they're needed.
+
+These path transformation issues appear to be part of the broader state propagation problem that affects transformation mode across all directive types.
+
+## Overview
+
+This document covers issues with path validation and transformation in Meld.
+
+## Path Variables in Transformation Context 

@@ -335,4 +335,26 @@ it('should only transform variables when only variables option is enabled', () =
   // Verify the node wasn't transformed (because directives: false)
   expect(service.getTransformedNodes()[0]).toEqual(directiveNode);
 });
-``` 
+```
+
+# State Service Transformation Issues
+
+## Recent Testing Evidence (March 2024)
+
+Our recent testing has confirmed that state propagation is a critical issue in the transformation process. The evidence suggests:
+
+1. **Variable Propagation Breakdown**: Testing the path variable transformation reveals that variables are not being properly processed at all. Raw directives remain in the output, suggesting that transformation isn't being applied correctly.
+
+2. **State Silos**: Variables appear to remain "siloed" in child states without being propagated to parent states. In the import test, the important `importedVar` exists in the child state but is not accessible from the parent state.
+
+3. **Effectiveness of Variable Copying Solution**: The fix in diff.txt, which implements explicit variable copying from child states to parent states, suggests that relying on the built-in state inheritance mechanism isn't sufficient in transformation mode.
+
+4. **Code Fence Wrapping**: The presence of code fences in the output suggests that there is basic formatting happening, but the state transformations aren't being properly applied.
+
+This evidence supports the theory that the architectural issue is in how state is managed across component boundaries during transformation. The variable copying approach directly addresses this root cause by ensuring state changes propagate upward in the state hierarchy.
+
+## Overview
+
+This document covers issues with how the `StateService` handles transformation in Meld.
+
+## Key Concepts 

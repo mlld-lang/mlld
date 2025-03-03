@@ -2,6 +2,41 @@
 
 This document covers issues with import and embed directives in transformation mode.
 
+## Recent Testing Insights
+
+Our recent test runs have provided important additional evidence for the import/embed transformation issues:
+
+1. **Complete Transformation Failure**: Tests show that transformation is not working for any directive type. When running the path variables test, all output was wrapped in code fences and contained raw directives:
+
+```
+```
+    @path testpath = "$PROJECTPATH"
+    Path: $testpath
+  
+    @path docs = "$PROJECTPATH/my/docs"
+    Docs are at $docs
+  
+```
+```
+
+2. **Variable Reference Preservation**: All variable references (`$docs`) remain unchanged in the output.
+
+3. **Code Fence Wrapping**: All output is being wrapped in code fences, suggesting that some processing is happening, but not the expected transformation.
+
+4. **Variable Propagation Failure**: The test `should handle simple imports` confirms that variables from imported files aren't being propagated to the parent state:
+
+```
+AssertionError: expected undefined to be 'Imported content'
+```
+
+5. **Circular Import Detection Disabled**: In transformation mode, circular import detection is not functioning:
+
+```
+AssertionError: promise resolved "'```\n    @import circular1.meld\n  \n…'" instead of rejecting
+```
+
+These findings suggest the transformation issues are more fundamental than just the Import/Embed directives - it appears to be a systemic issue with how transformation is handled across all directive types.
+
 ## Common Issues
 
 ### 1. Variables Not Propagating from Imported Files

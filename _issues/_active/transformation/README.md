@@ -2,6 +2,27 @@
 
 This directory contains documentation for debugging and resolving transformation issues in the Meld project.
 
+## Latest Testing Insights (March 2024)
+
+Recent testing has revealed that transformation issues are more widespread than previously documented:
+
+1. **Systemic Transformation Failure**: When running integration tests with transformation enabled:
+   - All directive types remain unprocessed (`@path`, `@import`, `@embed`, `@run`)
+   - Variable references remain unchanged (`$docs`, `{{variable}}`)
+   - Output is wrapped in code fences
+
+2. **API and InterpreterService Investigation**: The issues appear to stem from how transformation is handled in the core interpretation pipeline:
+   - Transformation mode appears to be enabled but not correctly applied
+   - Changes in diff.txt suggest that variable copying between states is the core issue
+   - The InterpreterService appears to be returning early without properly copying variables
+
+3. **Proposed Fix's Scope**: The changes in the diff.txt file address variable copying in two key places:
+   - In the `ImportDirectiveHandler` when transformation is enabled
+   - In the `InterpreterService` specifically for import directives
+   - After completion in the main API function as a fallback
+
+This suggests the root cause is a fundamental architectural issue with how state is passed between components during transformation, not just isolated directive handler bugs.
+
 ## What Are Transformation Issues?
 
 Transformation issues occur when Meld's transformation mode doesn't correctly process directives, variables, or other elements. In transformation mode, Meld should:
