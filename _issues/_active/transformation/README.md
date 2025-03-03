@@ -39,6 +39,7 @@ When these transformations don't work correctly, tests fail and users experience
 
 - [**Transformation Options**](./transformation-options-reference.md) - Reference for selective transformation options
 - [**Variable Formats**](./variable-formats-reference.md) - Reference for variable reference formats and resolution
+- [**StateService Transformation**](./state-service-transformation.md) - Reference for how StateService manages transformed nodes
 
 ## Common Issue Patterns
 

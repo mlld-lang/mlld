@@ -229,4 +229,81 @@ interface DataVarNode {
   },
   "location": {...}
 }
-``` 
+```
+
+## Transformation Architecture
+
+### Dual Storage Model
+
+Meld uses a dual storage approach for handling transformation:
+
+1. **Original Nodes**: All AST nodes parsed from the original content are stored unmodified.
+2. **Transformed Nodes**: When transformation is enabled, a parallel array of nodes is maintained that contains transformed versions.
+
+This approach allows Meld to:
+- Preserve the original document structure
+- Apply transformations without losing the original content
+- Switch between transformed and untransformed views
+- Debug transformation issues by comparing original and transformed nodes
+
+### Transformation Flow
+
+Here's how the transformation process works end-to-end:
+
+1. **Input Parsing**:
+   - Input text is parsed into an AST of MeldNodes
+   - The AST contains Text, TextVar, DataVar, Directive nodes
+
+2. **Interpretation**:
+   - InterpreterService processes each node sequentially
+   - Nodes are added to the StateService's `nodes` array
+
+3. **Directive Processing**:
+   - When a Directive node is encountered, it's routed to a handler
+   - The handler processes the directive and can return a replacement node
+   - If transformation is enabled, the original directive is replaced with the result
+
+4. **Variable Resolution**:
+   - When variable references are encountered, ResolutionService resolves them
+   - If transformation is enabled, variable references are replaced with their values
+
+5. **Output Generation**:
+   - The OutputService accesses the appropriate nodes array:
+     - `getTransformedNodes()` if transformation is enabled
+     - `getNodes()` if transformation is disabled
+   - The nodes are converted back to text format
+
+### Service Interaction
+
+The transformation process involves several services working together:
+
+```
+┌─────────────┐    ┌─────────────┐    ┌─────────────┐
+│ Interpreter │    │  Directive  │    │  Resolution │
+│   Service   ├───►│   Service   ├───►│   Service   │
+└──────┬──────┘    └──────┬──────┘    └──────┬──────┘
+       │                  │                  │
+       │                  │                  │
+       ▼                  ▼                  ▼
+┌─────────────────────────────────────────────────┐
+│               StateService                      │
+│                                                 │
+│  ┌─────────────┐        ┌─────────────────┐     │
+│  │  Original   │        │   Transformed   │     │
+│  │    Nodes    │        │      Nodes      │     │
+│  └─────────────┘        └─────────────────┘     │
+└─────────────────────────────────────────────────┘
+                      │
+                      │
+                      ▼
+                ┌──────────────┐
+                │    Output    │
+                │   Service    │
+                └──────────────┘
+```
+
+- **InterpreterService** processes nodes and manages the overall flow
+- **DirectiveService** delegates directive processing to specialized handlers
+- **ResolutionService** handles variable resolution and command execution
+- **StateService** maintains both original and transformed nodes
+- **OutputService** selects appropriate nodes for final output 

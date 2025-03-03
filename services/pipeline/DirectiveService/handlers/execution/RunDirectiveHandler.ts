@@ -69,6 +69,17 @@ export class RunDirectiveHandler implements IDirectiveHandler {
           content,
           location: node.location
         };
+        
+        // Copy variables from cloned state to context state
+        if (node.directive.output) {
+          context.state.setTextVar(node.directive.output, stdout);
+        } else {
+          context.state.setTextVar('stdout', stdout);
+        }
+        if (stderr) {
+          context.state.setTextVar('stderr', stderr);
+        }
+        
         clonedState.transformNode(node, replacement);
         return { state: clonedState, replacement };
       }

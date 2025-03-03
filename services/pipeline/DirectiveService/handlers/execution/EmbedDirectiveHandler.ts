@@ -131,208 +131,207 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
   }
 
   async execute(node: DirectiveNode, context: DirectiveContext): Promise<DirectiveResult> {
-    this.logger.debug('Processing embed directive', {
-      location: node.location,
-      context
+    this.logger.debug(`Processing embed directive`, {
+      node: JSON.stringify(node),
+      location: node.location
     });
 
+    // Validate the directive structure
+    this.validationService.validate(node);
+    
+    // Extract properties from the directive
+    const { path, section, headingLevel, underHeader, fuzzy } = node.directive as EmbedDirectiveParams;
+
+    if (!path) {
+      throw new DirectiveError(
+        'Path is required for embed directive',
+        node,
+        DirectiveErrorCode.VALIDATION_FAILED
+      );
+    }
+
+    // Clone the current state for modifications
+    const newState = context.state.clone();
+    
+    // Create a resolution context
+    const resolutionContext = {
+      state: newState,
+      currentFilePath: context.currentFilePath
+    };
+
     try {
-      // 1. Validate directive structure
-      await this.validationService.validate(node);
+      // Resolve variables in the path
+      const resolvedPath = await this.resolutionService.resolveInContext(
+        path,
+        resolutionContext
+      );
 
-      // 2. Get path and section from directive
-      const { path, section, headingLevel, underHeader, fuzzy } = node.directive;
+      // Begin import tracking
+      this.circularityService.beginImport(resolvedPath, context.currentFilePath);
 
-      // 3. Process path
-      if (!path) {
-        throw new DirectiveError(
-          'Embed directive requires a path',
-          this.kind,
-          DirectiveErrorCode.VALIDATION_FAILED,
-          { 
-            node
+      // Check for circular imports
+      try {
+        this.circularityService.checkImport(resolvedPath, context.currentFilePath);
+      } catch (error) {
+        // Circular imports during embedding should be logged but not fail normal operation
+        this.logger.warn(`Circular import detected in embed directive: ${error.message}`, {
+          error,
+          path: resolvedPath,
+          currentFile: context.currentFilePath
+        });
+      }
+
+      // Check if the file exists
+      if (!(await this.fileSystemService.exists(resolvedPath))) {
+        throw new FileNotFoundError(
+          `Embed file not found: ${resolvedPath}`,
+          {
+            filePath: resolvedPath
           }
         );
       }
 
-      // Create a new state for modifications
-      const newState = context.state.clone();
-
-      // Create resolution context
-      const resolutionContext = {
-        currentFilePath: context.currentFilePath,
-        state: context.state,
-        allowedVariableTypes: {
-          text: true,
-          data: true,
-          path: true,
-          command: false
-        }
-      };
-
-      // Resolve variables in path - properly handle structured path objects
-      const rawPath = typeof path === 'string' ? path : path.raw;
-      const resolvedPath = await this.resolutionService.resolveInContext(
-        rawPath,
-        resolutionContext
-      );
-
-      // Check for circular imports
-      this.circularityService.beginImport(resolvedPath);
-
-      try {
-        // Check if file exists
-        if (!await this.fileSystemService.exists(resolvedPath)) {
-          throw new DirectiveError(
-            `Embed file not found: ${resolvedPath}`,
-            this.kind,
-            DirectiveErrorCode.FILE_NOT_FOUND,
-            { 
-              node, 
-              context
-            }
-          );
-        }
-
-        // Read file content
-        const content = await this.fileSystemService.readFile(resolvedPath);
-
-        // Extract section if specified
-        let processedContent = content;
-        if (section) {
-          const resolvedSection = await this.resolutionService.resolveInContext(
-            section,
-            resolutionContext
-          );
-          try {
-            const fuzzyThreshold = typeof fuzzy === 'number' ? fuzzy : undefined;
-            this.logger.debug('Extracting section with parameters', {
-              section: resolvedSection,
-              fuzzyThreshold
-            });
-            processedContent = await this.resolutionService.extractSection(
-              content,
-              resolvedSection,
-              fuzzyThreshold
-            );
-          } catch (error) {
-            throw new DirectiveError(
-              `Failed to extract section '${resolvedSection}': ${error instanceof Error ? error.message : String(error)}`,
-              this.kind,
-              DirectiveErrorCode.SECTION_NOT_FOUND,
-              { 
-                node
-              }
-            );
-          }
-        }
-
-        // Apply heading level if specified
-        if (headingLevel !== undefined) {
-          // Validate heading level
-          if (headingLevel < 1 || headingLevel > 6) {
-            throw new DirectiveError(
-              `Invalid heading level: ${headingLevel}. Must be between 1 and 6.`,
-              this.kind,
-              DirectiveErrorCode.VALIDATION_FAILED,
-              { 
-                node
-              }
-            );
-          }
-          processedContent = this.applyHeadingLevel(processedContent, headingLevel);
-        }
-
-        // Apply under header if specified
-        if (underHeader) {
-          processedContent = this.wrapUnderHeader(processedContent, underHeader);
-        }
-
-        // Parse content
-        const nodes = await this.parserService.parse(processedContent);
-
-        // Create child state for interpretation
-        const childState = newState.createChildState();
-        
-        // Track context boundary for debugging
-        this.trackContextBoundary(newState, childState, resolvedPath);
-
-        // Interpret content
-        const interpretedState = await this.interpreterService.interpret(nodes, {
-          initialState: childState,
-          filePath: resolvedPath,
-          mergeState: true
-        });
-
-        // Track variables that will be merged back to parent
-        if (this.debugEnabled && this.stateTrackingService) {
-          // Track text variables
-          const textVars = interpretedState.getAllTextVars();
-          textVars.forEach((value, name) => {
-            this.trackVariableCrossing(name, 'text', interpretedState, newState);
-          });
-          
-          // Track data variables
-          const dataVars = interpretedState.getAllDataVars();
-          dataVars.forEach((value, name) => {
-            this.trackVariableCrossing(name, 'data', interpretedState, newState);
-          });
-          
-          // Track path variables
-          const pathVars = interpretedState.getAllPathVars();
-          pathVars.forEach((value, name) => {
-            this.trackVariableCrossing(name, 'path', interpretedState, newState);
-          });
-        }
-
-        // Merge interpreted state back
-        newState.mergeChildState(interpretedState);
-
-        this.logger.debug('Embed directive processed successfully', {
-          path: resolvedPath,
+      // Read the file content
+      let content = await this.fileSystemService.readFile(resolvedPath);
+      
+      // Extract the requested section if specified
+      if (section) {
+        const sectionName = await this.resolutionService.resolveInContext(
           section,
-          location: node.location
-        });
-
-        // If transformation is enabled, return a replacement node
-        if (context.state.isTransformationEnabled?.()) {
-          const replacement: TextNode = {
-            type: 'Text',
-            content: processedContent,
-            location: node.location
-          };
-          return { state: newState, replacement };
-        }
-
-        return { state: newState };
-      } finally {
-        // Always end import tracking
-        this.circularityService.endImport(resolvedPath);
+          resolutionContext
+        );
+        
+        content = await this.resolutionService.extractSection(
+          content,
+          sectionName,
+          fuzzy ? parseFloat(fuzzy) : undefined
+        );
       }
-    } catch (error: unknown) {
-      this.logger.error('Failed to process embed directive', {
-        location: node.location,
-        error
+      
+      // Apply heading level if specified
+      if (headingLevel) {
+        content = this.applyHeadingLevel(content, parseInt(headingLevel, 10));
+      }
+      
+      // Wrap under header if specified
+      if (underHeader) {
+        content = this.wrapUnderHeader(content, underHeader);
+      }
+      
+      // Parse the content into nodes
+      const nodes = this.parserService.parse(content);
+      
+      // Create a child state for interpretation
+      const childState = newState.createChildState();
+      
+      // Track context boundaries for debugging
+      this.trackContextBoundary(newState, childState, resolvedPath);
+      
+      // Interpret the parsed nodes
+      const interpretedState = await this.interpreterService.interpret(nodes, {
+        initialState: childState,
+        filePath: resolvedPath,
+        mergeState: true
+      });
+      
+      // Merge the interpreted state back into the new state
+      newState.mergeChildState(interpretedState);
+      
+      // Copy all variables from the interpreted state to the context state
+      // Track text variables
+      if (typeof interpretedState.getAllTextVars === 'function') {
+        const textVars = interpretedState.getAllTextVars();
+        for (const [key, value] of Object.entries(textVars)) {
+          newState.setTextVar(key, value);
+          
+          // Track variable crossing for debugging
+          this.trackVariableCrossing(key, 'text', interpretedState, newState);
+        }
+      }
+      
+      // Track data variables
+      if (typeof interpretedState.getAllDataVars === 'function') {
+        const dataVars = interpretedState.getAllDataVars();
+        for (const [key, value] of Object.entries(dataVars)) {
+          newState.setDataVar(key, value);
+          
+          // Track variable crossing for debugging
+          this.trackVariableCrossing(key, 'data', interpretedState, newState);
+        }
+      }
+      
+      // Track path variables
+      if (typeof interpretedState.getAllPathVars === 'function') {
+        const pathVars = interpretedState.getAllPathVars();
+        for (const [key, value] of Object.entries(pathVars)) {
+          newState.setPathVar(key, value);
+          
+          // Track variable crossing for debugging
+          this.trackVariableCrossing(key, 'path', interpretedState, newState);
+        }
+      }
+      
+      // Track commands
+      if (typeof interpretedState.getAllCommands === 'function') {
+        const commands = interpretedState.getAllCommands();
+        for (const [key, value] of Object.entries(commands)) {
+          newState.setCommand(key, value);
+          
+          // Track variable crossing for debugging
+          this.trackVariableCrossing(key, 'command', interpretedState, newState);
+        }
+      }
+      
+      // Log successful processing
+      this.logger.debug(`Successfully processed embed directive`, {
+        path: resolvedPath,
+        section: section || undefined,
+        headingLevel: headingLevel || undefined,
+        underHeader: underHeader || undefined
       });
 
-      // Wrap in DirectiveError if needed
-      if (error instanceof DirectiveError) {
-        throw error;
+      // If transformation is enabled, return the parsed content
+      if (newState.isTransformationEnabled()) {
+        return {
+          state: newState,
+          replacement: {
+            type: 'Text',
+            content,
+            location: node.location
+          }
+        };
       }
       
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      const errorCause = error instanceof Error ? error : new Error(String(error));
+      // Otherwise, just return the new state
+      return {
+        state: newState
+      };
+    } catch (error) {
+      // Handle and log errors
+      this.logger.error(`Error executing embed directive: ${error.message}`, {
+        error,
+        node
+      });
       
-      throw new DirectiveError(
-        `Failed to execute embed directive: ${errorMessage}`,
-        this.kind,
-        DirectiveErrorCode.EXECUTION_FAILED,
-        {
+      // Wrap the error in a DirectiveError if it's not already one
+      if (!(error instanceof DirectiveError)) {
+        throw new DirectiveError(
+          `Failed to execute embed directive: ${error.message}`,
           node,
-          context,
-          cause: errorCause
-        }
-      );
+          DirectiveErrorCode.EXECUTION_FAILED,
+          { cause: error }
+        );
+      }
+      
+      throw error;
+    } finally {
+      // Always end import tracking, even if there was an error
+      try {
+        this.circularityService.endImport();
+      } catch (error) {
+        // Don't let errors in endImport affect the main flow
+        this.logger.debug(`Error ending import tracking: ${error.message}`, { error });
+      }
     }
   }
 

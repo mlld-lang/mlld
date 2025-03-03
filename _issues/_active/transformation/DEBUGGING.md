@@ -454,4 +454,163 @@ it('should transform directives but not execute commands', async () => {
   expect(result).toContain('@run echo "test"'); // Command not executed
   expect(result).not.toContain('@text greeting'); // Directive transformed
 });
-``` 
+```
+
+## Debugging StateService Transformation
+
+The `StateService` is central to Meld's transformation capabilities. This section focuses on debugging transformation-specific issues in the StateService.
+
+### Diagnosing Transformation State Issues
+
+When transformation isn't working as expected, check these fundamental aspects:
+
+```typescript
+// 1. Is transformation enabled?
+console.log('Transformation enabled:', state.isTransformationEnabled());
+
+// 2. Which transformation aspects are enabled?
+console.log('Transformation options:', state.getTransformationOptions());
+
+// 3. Are transformed nodes initialized?
+console.log('Has transformed nodes:', Boolean(state.getTransformedNodes()));
+console.log('Transformed nodes length:', state.getTransformedNodes().length);
+
+// 4. Are original and transformed nodes different?
+const originals = state.getNodes();
+const transformed = state.getTransformedNodes();
+const different = transformed.some((node, idx) => 
+  node !== originals[idx] && node.type !== originals[idx].type);
+console.log('Original and transformed nodes differ:', different);
+```
+
+### Inspecting Node Transformations
+
+To analyze node transformation in detail:
+
+```typescript
+// Log all transformed nodes
+state.getTransformedNodes().forEach((node, index) => {
+  console.log(`Transformed node ${index}:`, {
+    type: node.type,
+    content: 'content' in node ? node.content : undefined,
+    childCount: 'children' in node ? node.children?.length : undefined,
+    location: node.location
+  });
+});
+
+// Compare specific original and transformed nodes
+state.getNodes().forEach((origNode, index) => {
+  const transNode = state.getTransformedNodes()[index];
+  if (origNode !== transNode) {
+    console.log(`Node ${index} was transformed:`, {
+      originalType: origNode.type, 
+      transformedType: transNode.type,
+      originalContent: 'content' in origNode ? origNode.content : undefined,
+      transformedContent: 'content' in transNode ? transNode.content : undefined
+    });
+  }
+});
+```
+
+### Analyzing Transformation Inheritance
+
+Debugging state inheritance issues:
+
+```typescript
+// Log parent state transformation properties
+console.log('Parent transformation enabled:', parentState.isTransformationEnabled());
+console.log('Parent transformation options:', parentState.getTransformationOptions());
+
+// Create a child state
+const childState = parentState.createChildState();
+
+// Log child state transformation properties
+console.log('Child transformation enabled:', childState.isTransformationEnabled());
+console.log('Child transformation options:', childState.getTransformationOptions());
+
+// Verify nodes were properly inherited and transformed
+console.log('Parent nodes count:', parentState.getNodes().length);
+console.log('Child nodes count:', childState.getNodes().length);
+console.log('Parent transformed nodes count:', parentState.getTransformedNodes().length);
+console.log('Child transformed nodes count:', childState.getTransformedNodes().length);
+```
+
+### Common StateService Transformation Issues
+
+#### 1. Missing Transformations
+
+**Problem**: Nodes aren't being transformed despite transformation being enabled.
+
+**Debugging Steps**:
+1. Verify transformation options:
+   ```typescript
+   console.log(state.getTransformationOptions());
+   ```
+2. Check if specific option (`variables`, `directives`, etc.) is enabled:
+   ```typescript
+   console.log('Should transform directives:', state.shouldTransform('directives'));
+   ```
+3. Examine directive handler implementation to ensure it returns replacements:
+   ```typescript
+   // Inside directive handler
+   console.log('Returning replacement node:', Boolean(replacementNode));
+   ```
+
+#### 2. Transformation Array Initialization
+
+**Problem**: `TypeError: Cannot read properties of undefined (reading 'length')`
+
+**Debugging Steps**:
+1. Check for uninitialized transformed nodes array:
+   ```typescript
+   console.log('Has transformed nodes array:', 
+     Boolean(state.currentState.transformedNodes));
+   ```
+2. Add defensive code:
+   ```typescript
+   // Initialize transformed nodes if needed
+   if (!state.getTransformedNodes()) {
+     state.setTransformedNodes([...state.getNodes()]);
+     console.log('Initialized transformed nodes array');
+   }
+   ```
+
+#### 3. Node Not Found During Transformation
+
+**Problem**: `Error: Cannot transform node: original node not found`
+
+**Debugging Steps**:
+1. Log node details:
+   ```typescript
+   console.log('Trying to transform node:', {
+     type: originalNode.type,
+     location: originalNode.location,
+     content: 'content' in originalNode ? originalNode.content : undefined
+   });
+   ```
+2. Check if node exists in state:
+   ```typescript
+   const exists = state.getNodes().some(node => 
+     node.location?.start?.line === originalNode.location?.start?.line &&
+     node.location?.start?.column === originalNode.location?.start?.column
+   );
+   console.log('Node exists in state:', exists);
+   ```
+
+#### 4. State Corruption After Transformation
+
+**Problem**: State is inconsistent after transformation.
+
+**Debugging Steps**:
+1. Clone state before transformation:
+   ```typescript
+   const beforeState = state.clone();
+   ```
+2. Apply transformation.
+3. Compare before and after:
+   ```typescript
+   console.log('Before vars:', Array.from(beforeState.getAllTextVars().keys()));
+   console.log('After vars:', Array.from(state.getAllTextVars().keys()));
+   console.log('Before nodes:', beforeState.getNodes().length);
+   console.log('After nodes:', state.getNodes().length);
+   ``` 

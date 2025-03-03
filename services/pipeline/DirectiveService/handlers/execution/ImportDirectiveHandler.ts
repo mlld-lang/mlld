@@ -200,6 +200,28 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
           });
         }
 
+        // Add the original imported variables to the context state as well
+        // This ensures variables are available in the current context
+        const textVars = targetState.getAllTextVars();
+        textVars.forEach((value, key) => {
+          context.state.setTextVar(key, value);
+        });
+
+        const dataVars = targetState.getAllDataVars();
+        dataVars.forEach((value, key) => {
+          context.state.setDataVar(key, value);
+        });
+
+        const pathVars = targetState.getAllPathVars();
+        pathVars.forEach((value, key) => {
+          context.state.setPathVar(key, value);
+        });
+
+        const commands = targetState.getAllCommands();
+        commands.forEach((value, key) => {
+          context.state.setCommand(key, value);
+        });
+
         return {
           state: targetState,
           replacement
