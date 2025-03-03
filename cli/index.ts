@@ -1,10 +1,11 @@
 import '@core/di-config.js';
 
-console.log('************** CLI STARTING **************');
+// CLI initialization
 
 import { main as apiMain } from '@api/index.js';
 import { version } from '@core/version.js';
 import { cliLogger as logger } from '@core/utils/logger.js';
+import { loggingConfig } from '@core/config/logging.js';
 import { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
 import { createInterface } from 'readline';
 import { initCommand } from './commands/init.js';
@@ -285,8 +286,8 @@ Options:
   --strict                Enable strict mode (fail on all errors)
   --permissive            Enable permissive mode (ignore recoverable errors) [default]
   --home-path <path>      Custom home path for ~/ substitution
-  -v, --verbose           Enable verbose output
-  -d, --debug             Enable debug output
+  -v, --verbose           Enable verbose output (some additional info)
+  -d, --debug             Enable debug output (full verbose logging)
   -w, --watch             Watch for changes and reprocess
   -h, --help              Display this help message
   -V, --version           Display version information
@@ -470,13 +471,10 @@ async function processFile(options: CLIOptions): Promise<void> {
  * Main CLI entry point
  */
 export async function main(fsAdapter?: IFileSystem): Promise<void> {
-  console.log('************** CLI main() CALLED **************');
-  
   process.title = 'meld';
 
   // Parse command-line arguments
   const args = process.argv.slice(2);
-  console.log('************** CLI ARGS:', args);
   
   try {
     // Check for command before parsing
@@ -487,11 +485,9 @@ export async function main(fsAdapter?: IFileSystem): Promise<void> {
          args[0] === 'debug-context' || 
          args[0] === 'debug-transform')) {
       command = args[0];
-      console.log('Command detected:', command);
     }
     
     const options = parseArgs(args);
-    console.log('Parsed options:', JSON.stringify(options, null, 2));
 
     // Handle version flag first, before any logging
     if (options.version) {
@@ -507,16 +503,12 @@ export async function main(fsAdapter?: IFileSystem): Promise<void> {
     
     // Handle init command
     if (command === 'init' || options.input === 'init') {
-      console.log('Running init command');
       await initCommand();
       return;
     }
     
     // Handle debug-resolution command
     if (command === 'debug-resolution' || options.debugResolution) {
-      console.log('************** DETECTED debug-resolution **************');
-      console.log('DEBUG: Running debug-resolution command with args:', args);
-      console.log('Running debug-resolution command');
       try {
         await debugResolutionCommand({
           filePath: options.input,
@@ -524,16 +516,15 @@ export async function main(fsAdapter?: IFileSystem): Promise<void> {
           outputFormat: options.outputFormat as 'json' | 'text',
           watchMode: options.watch
         });
-        console.log('DEBUG: debug-resolution command completed successfully');
       } catch (error) {
-        console.error('DEBUG: Error running debug-resolution command:', error);
+        logger.error('Error running debug-resolution command', { error });
+        throw error;
       }
       return;
     }
 
     // Handle debug-context command
     if (command === 'debug-context' || options.debugContext) {
-      console.log('Running debug-context command');
       await debugContextCommand({
         filePath: options.input,
         variableName: options.variableName,
@@ -550,7 +541,6 @@ export async function main(fsAdapter?: IFileSystem): Promise<void> {
 
     // Handle debug-transform command
     if (command === 'debug-transform' || options.debugTransform) {
-      console.log('Running debug-transform command');
       await debugTransformCommand({
         filePath: options.input,
         directiveType: options.directiveType,
@@ -562,12 +552,18 @@ export async function main(fsAdapter?: IFileSystem): Promise<void> {
     }
 
     // Configure logging based on options
-    if (options.verbose) {
-      logger.level = 'debug';
-    } else if (options.debug) {
+    if (options.debug) {
+      // Set environment variable for child processes and imported modules
+      process.env.DEBUG = 'true';
       logger.level = 'trace';
+      // Set log level for all service loggers
+      Object.values(loggingConfig.services).forEach(serviceConfig => {
+        (serviceConfig as any).level = 'debug';
+      });
+    } else if (options.verbose) {
+      logger.level = 'debug';
     } else {
-      logger.level = 'info';
+      logger.level = 'error'; // Only show error messages by default
     }
 
     // Handle testing with custom filesystem
@@ -613,9 +609,8 @@ export async function main(fsAdapter?: IFileSystem): Promise<void> {
 
 // Only call main if this file is being run directly (not imported)
 if (require.main === module) {
-  console.log('************** CALLING main() **************');
   main().catch(err => {
-    console.error('Unhandled error in CLI:', err);
+    console.error('Error:', err.message || err);
     process.exit(1);
   });
 } 

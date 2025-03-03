@@ -18,7 +18,7 @@ export const loggingConfig = {
   },
 
   // Default level based on environment
-  defaultLevel: 'info',
+  defaultLevel: 'error',
 
   // Format configuration
   format: {
