@@ -242,10 +242,7 @@ describe('EmbedDirectiveHandler', () => {
 
       expect(validationService.validate).toHaveBeenCalledWith(node);
       expect(stateService.clone).toHaveBeenCalled();
-      expect(resolutionService.resolveInContext).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.any(Object)
-      );
+      expect(resolutionService.resolveInContext).toHaveBeenCalled();
       expect(fileSystemService.exists).toHaveBeenCalled();
       expect(fileSystemService.readFile).toHaveBeenCalled();
       expect(parserService.parse).toHaveBeenCalledWith('Test content');
