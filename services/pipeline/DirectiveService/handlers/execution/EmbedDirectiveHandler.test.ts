@@ -285,9 +285,8 @@ describe('EmbedDirectiveHandler', () => {
     });
 
     it('should handle embed with heading level', async () => {
-      // Get example for complex options
-      const example = embedDirectiveExamples.combinations.complexOptions;
-      const node = await createNodeFromExample(example.code);
+      // Creating a directive node directly with proper syntax instead of using the removed complexOptions example
+      const node = await createRealEmbedDirective('file.md', undefined, { headingLevel: 3 });
       
       const context = { currentFilePath: 'test.meld', state: stateService };
 

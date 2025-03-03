@@ -98,7 +98,10 @@ const createNodeFromExample = async (exampleCode: string): Promise<DirectiveNode
 
 // Helper to create a real run directive node using meld-ast
 const createRealRunDirective = async (command: string, options: any = {}): Promise<DirectiveNode> => {
-  const runText = `@run [ command = "${command}"${options.output ? `, output = "${options.output}"` : ''} ]`;
+  // Updated to use the new syntax for @run directives
+  const runText = options.output
+    ? `@run { command = "${command}", output = "${options.output}" }`
+    : `@run "${command}"`;
   
   const { parse } = await import('meld-ast');
   const result = await parse(runText, {

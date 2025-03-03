@@ -74,11 +74,6 @@ This is some content between embeds.
     )
   ),
   
-  complexOptions: createExample(
-    'Embed with complex options',
-    `@embed [ path = "file.md", section = "Section Name", headingLevel = 3, underHeader = "true" ]`
-  ),
-  
   nestedSections: combineExamples(
     'Nested section embedding',
     createExample(

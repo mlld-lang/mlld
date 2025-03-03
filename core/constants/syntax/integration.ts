@@ -51,10 +51,10 @@ export const combinations = {
     'Define function and use it with run',
     createExample(
       'Define and run example',
-      `@define greet(name) = @run [echo "Hello, {{name}}!"]
+      `@define greet(name) = "echo 'Hello, {{name}}!'"
 @text user = "Alice"
 
-@run [$greet({{user}})]`
+@run $greet({{user}})`
     )
   ),
   
@@ -91,6 +91,22 @@ export const combinations = {
 Application: {{appInfo}}
 {{features}}
 {{userHobby}}`
+    )
+  ),
+  
+  defineDataAndRun: combineExamples(
+    'Define, data, and run integration',
+    createExample(
+      'Define command with parameters',
+      `@define greet(firstname, lastname) = "echo 'Hello, {{firstname}} {{lastname}}!'"`
+    ),
+    createExample(
+      'Create data object',
+      `@data person = { firstname: "Bob", lastname: "Smith" }`
+    ),
+    createExample(
+      'Run with data object properties',
+      `@run $greet({{person.firstname}}, {{person.lastname}})`
     )
   )
 };
