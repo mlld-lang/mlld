@@ -4,12 +4,13 @@ import { StateVisualizationService } from '../StateVisualizationService/StateVis
 import { StateHistoryService } from '../StateHistoryService/StateHistoryService.js';
 import { StateTrackingService } from '../StateTrackingService/StateTrackingService.js';
 import { IStateEventService } from '@services/state/StateEventService/IStateEventService.js';
+import { ContextDebuggerService } from './ContextDebuggerService.js';
 
 /**
  * Initialize the context debugger with all required services
- * @returns An instance of the StateDebuggerService
+ * @returns An instance of the ContextDebuggerService
  */
-export function initializeContextDebugger(): StateDebuggerService {
+export function initializeContextDebugger(): ContextDebuggerService {
   // Create services in proper dependency order
   const trackingService = new StateTrackingService();
   
@@ -25,8 +26,8 @@ export function initializeContextDebugger(): StateDebuggerService {
     trackingService
   );
   
-  // Create and return the debugger service
-  return new StateDebuggerService(
+  // Create and return the context debugger service
+  return new ContextDebuggerService(
     visualizationService,
     historyService,
     trackingService
@@ -35,4 +36,5 @@ export function initializeContextDebugger(): StateDebuggerService {
 
 // Re-export types and classes
 export * from './IStateDebuggerService.js';
-export * from './StateDebuggerService.js'; 
+export * from './StateDebuggerService.js';
+export * from './ContextDebuggerService.js'; 

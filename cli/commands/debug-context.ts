@@ -23,6 +23,8 @@ import { PathService } from '@services/fs/PathService/PathService.js';
 import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
 import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService.js';
 import { DirectiveService } from '@services/pipeline/DirectiveService/DirectiveService.js';
+import { StateEventService } from '@services/state/StateEventService/StateEventService.js';
+import { ValidationService } from '@services/resolution/ValidationService/ValidationService.js';
 
 interface DebugContextOptions {
   filePath: string;
@@ -83,6 +85,12 @@ export async function debugContextCommand(options: DebugContextOptions): Promise
       parserService = new ParserService();
       pathService = new PathService();
       
+      // Create the state event service
+      const stateEventService = new StateEventService();
+      
+      // Register the state event service in the container
+      container.register('StateEventService', { useValue: stateEventService });
+      
       // Initialize the path service
       pathService.initialize(fileSystemService, pathOps);
       
@@ -117,9 +125,12 @@ export async function debugContextCommand(options: DebugContextOptions): Promise
       // Create the directive service
       directiveService = new DirectiveService();
       
+      // Create validation service
+      const validationService = new ValidationService();
+      
       // Initialize directive service
       directiveService.initialize(
-        undefined, // ValidationService (not needed for this command)
+        validationService, // Add ValidationService instance
         stateService,
         pathService,
         fileSystemService,
@@ -184,9 +195,10 @@ export async function debugContextCommand(options: DebugContextOptions): Promise
     // Use parse instead of parseWithLocations to match test expectations
     const nodes = await parserService.parse(fileContent);
     
-    // Create a root state
-    const rootState = stateService.createState();
-    rootState.setFilePath(filePath);
+    // Create a root state - StateService doesn't have createState method
+    // Instead, we'll use the existing stateService instance which already has a state
+    const rootState = stateService;
+    rootState.setCurrentFilePath(filePath);
     
     // Process the file
     await interpreterService.interpret(nodes, {
@@ -197,7 +209,7 @@ export async function debugContextCommand(options: DebugContextOptions): Promise
     
     // Generate visualization
     let visualization = '';
-    const effectiveRootStateId = rootStateId || rootState.getId();
+    const effectiveRootStateId = rootStateId || rootState.getStateId();
     
     console.log(chalk.blue('Generating visualization...'));
     
