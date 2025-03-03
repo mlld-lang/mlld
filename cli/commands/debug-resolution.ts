@@ -22,6 +22,8 @@ import { PathService } from '@services/fs/PathService/PathService.js';
 import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
 import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService.js';
 import { DirectiveService } from '@services/pipeline/DirectiveService/DirectiveService.js';
+import { ValidationService } from '@services/resolution/ValidationService/ValidationService.js';
+import { CircularityService } from '@services/resolution/CircularityService/CircularityService.js';
 
 interface DebugResolutionOptions {
   filePath: string;
@@ -63,7 +65,7 @@ export async function debugResolutionCommand(options: DebugResolutionOptions): P
     const pathOps = new PathOperationsService();
     
     // Create the node file system implementation
-    const nodeFs = new NodeFileSystem(pathOps);
+    const nodeFs = new NodeFileSystem();
     
     // Create the base services first
     const stateService = new StateService();
@@ -91,20 +93,29 @@ export async function debugResolutionCommand(options: DebugResolutionOptions): P
       pathService
     );
     
+    // Create the validation service
+    const validationService = new ValidationService();
+    
+    // Create the interpreter service first
+    const interpreterService = new InterpreterService();
+    
+    // Create the circularity service
+    const circularityService = new CircularityService();
+    
     // Create the directive service
     const directiveService = new DirectiveService();
     directiveService.initialize(
-      undefined, // ValidationService (not needed for this command)
+      validationService,
       stateService,
       pathService,
       fileSystemService,
       parserService,
-      undefined, // InterpreterService (will set this later)
-      undefined, // CircularityService (not needed for this command)
+      interpreterService, // Provide the interpreter service
+      circularityService, // CircularityService
       resolutionService
     );
     
-    const interpreterService = new InterpreterService();
+    // Now initialize the interpreter service with the directive service
     interpreterService.initialize(directiveService, stateService);
     
     // Register default handlers
@@ -235,4 +246,4 @@ export async function debugResolutionCommand(options: DebugResolutionOptions): P
     }
     console.error(chalk.yellow('If this is a module resolution error, make sure you have built the codebase with "npm run build" before running debug commands'));
   }
-} 
+}
