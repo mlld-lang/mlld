@@ -333,7 +333,17 @@ export class TestOutputFilterService implements ITestOutputFilterService {
    * @private
    */
   private applyFieldFiltering(data: any, depth: number): any {
-    // Check max depth
+    // Handle null/undefined
+    if (data === null || data === undefined) {
+      return data;
+    }
+    
+    // Return primitives as-is
+    if (typeof data !== 'object') {
+      return data;
+    }
+    
+    // Check max depth before processing
     if (depth > this.maxDepth) {
       if (Array.isArray(data)) {
         return `[Array(${data.length})]`;
@@ -344,33 +354,30 @@ export class TestOutputFilterService implements ITestOutputFilterService {
     
     // Handle arrays
     if (Array.isArray(data)) {
+      // For test purposes, we need to preserve the original structure
+      // but limit the depth of nested objects
       return data.map(item => this.applyFieldFiltering(item, depth + 1));
     }
     
     // Handle objects
-    if (typeof data === 'object' && data !== null) {
-      const result: any = {};
-      
-      // Process each field
-      for (const key in data) {
-        // Skip if explicitly excluded
-        if (this.excludeStateFields.includes(key)) {
-          continue;
-        }
-        
-        // Include only if in includeStateFields (if specified)
-        if (this.includeStateFields.length > 0 && !this.includeStateFields.includes(key)) {
-          continue;
-        }
-        
-        // Process value recursively
-        result[key] = this.applyFieldFiltering(data[key], depth + 1);
+    const result: any = {};
+    
+    // Process each field
+    for (const key in data) {
+      // Skip if explicitly excluded
+      if (this.excludeStateFields.includes(key)) {
+        continue;
       }
       
-      return result;
+      // Include only if in includeStateFields (if specified)
+      if (this.includeStateFields.length > 0 && !this.includeStateFields.includes(key)) {
+        continue;
+      }
+      
+      // Process value recursively
+      result[key] = this.applyFieldFiltering(data[key], depth + 1);
     }
     
-    // Return non-objects as-is
-    return data;
+    return result;
   }
 }
