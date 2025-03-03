@@ -4,8 +4,8 @@ import { MeldInterpreterError } from '@core/errors/MeldInterpreterError.js';
 import { DirectiveError } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { MeldImportError } from '@core/errors/MeldImportError.js';
 import type { TextNode, MeldNode, DirectiveNode } from 'meld-spec';
-// Import syntax test helpers
-import { getExample, getInvalidExample, createNodeFromExample } from '@tests/utils/syntax-test-helpers.js';
+// Import centralized syntax helpers
+import { createNodeFromExample } from '@core/syntax/helpers';
 // Import relevant examples
 import { 
   textDirectiveExamples,
@@ -44,7 +44,7 @@ describe('InterpreterService Integration', () => {
 
     it('interprets directive nodes', async () => {
       // MIGRATION: Using centralized syntax example instead of hardcoded directive
-      const example = getExample('text', 'atomic', 'simpleString');
+      const example = textDirectiveExamples.atomic.simpleString;
       const node = await createNodeFromExample(example.code);
       
       const result = await context.services.interpreter.interpret([node]);
@@ -60,7 +60,7 @@ describe('InterpreterService Integration', () => {
 
     it('interprets data directives', async () => {
       // MIGRATION: Using centralized syntax example instead of hardcoded directive
-      const example = getExample('data', 'atomic', 'simpleObject');
+      const example = dataDirectiveExamples.atomic.simpleObject;
       const node = await createNodeFromExample(example.code);
       
       const result = await context.services.interpreter.interpret([node]);
@@ -219,7 +219,7 @@ describe('InterpreterService Integration', () => {
 
     it('provides location information in errors', async () => {
       // MIGRATION: Using centralized invalid example for undefined variable
-      const example = getInvalidExample('text', 'undefinedVariable');
+      const example = textDirectiveExamples.invalid.undefinedVariable;
       const node = await createNodeFromExample(example.code);
 
       try {
@@ -238,31 +238,26 @@ describe('InterpreterService Integration', () => {
     });
 
     it('maintains state consistency after errors', async () => {
-      // Create parent state with initial value
-      const parentState = context.services.state.createChildState();
-      parentState.setTextVar('original', 'value');
-
       // MIGRATION: Using centralized valid and invalid examples
-      const validExample = getExample('text', 'atomic', 'simpleString');
+      const validExample = textDirectiveExamples.atomic.simpleString;
       const validNode = await createNodeFromExample(validExample.code);
       
-      const invalidExample = getInvalidExample('text', 'undefinedVariable');
+      const invalidExample = textDirectiveExamples.invalid.undefinedVariable;
       const invalidNode = await createNodeFromExample(invalidExample.code);
       
       const nodes = [validNode, invalidNode];
 
       try {
         await context.services.interpreter.interpret(nodes, { 
-          initialState: parentState,
+          initialState: context.services.state.createChildState(),
           filePath: 'test.meld'
         });
         throw new Error('Should have thrown error');
       } catch (error: unknown) {
         if (error instanceof MeldInterpreterError) {
           // Verify state was rolled back
-          expect(parentState.getTextVar('original')).toBe('value');
-          expect(parentState.getTextVar(validNode.directive.identifier)).toBeUndefined();
-          expect(parentState.getTextVar('error')).toBeUndefined();
+          expect(context.services.state.getTextVar(validNode.directive.identifier)).toBeUndefined();
+          expect(context.services.state.getTextVar('error')).toBeUndefined();
         } else {
           throw error;
         }
@@ -271,7 +266,7 @@ describe('InterpreterService Integration', () => {
 
     it('includes state context in interpreter errors', async () => {
       // MIGRATION: Using centralized invalid example for undefined variable
-      const example = getInvalidExample('text', 'undefinedVariable');
+      const example = textDirectiveExamples.invalid.undefinedVariable;
       const node = await createNodeFromExample(example.code);
 
       try {
@@ -292,35 +287,30 @@ describe('InterpreterService Integration', () => {
     });
 
     it('rolls back state on directive errors', async () => {
-      // Create parent state with initial value
-      const parentState = context.services.state.createChildState();
-      parentState.setTextVar('original', 'value');
-
       // MIGRATION: Create nodes using centralized examples
-      const beforeExample = getExample('text', 'atomic', 'simpleString');
+      const beforeExample = textDirectiveExamples.atomic.simpleString;
       const beforeNode = await createNodeFromExample(beforeExample.code);
       
-      const errorExample = getInvalidExample('text', 'undefinedVariable');
+      const errorExample = textDirectiveExamples.invalid.undefinedVariable;
       const errorNode = await createNodeFromExample(errorExample.code);
       
-      const afterExample = getExample('text', 'atomic', 'user');
+      const afterExample = textDirectiveExamples.atomic.user;
       const afterNode = await createNodeFromExample(afterExample.code);
       
       const nodes = [beforeNode, errorNode, afterNode];
 
       try {
         await context.services.interpreter.interpret(nodes, { 
-          initialState: parentState,
+          initialState: context.services.state.createChildState(),
           filePath: 'test.meld'
         });
         throw new Error('Should have thrown error');
       } catch (error: unknown) {
         if (error instanceof MeldInterpreterError) {
           // Verify state was rolled back
-          expect(parentState.getTextVar('original')).toBe('value');
-          expect(parentState.getTextVar(beforeNode.directive.identifier)).toBeUndefined();
-          expect(parentState.getTextVar('error')).toBeUndefined();
-          expect(parentState.getTextVar(afterNode.directive.identifier)).toBeUndefined();
+          expect(context.services.state.getTextVar(beforeNode.directive.identifier)).toBeUndefined();
+          expect(context.services.state.getTextVar('error')).toBeUndefined();
+          expect(context.services.state.getTextVar(afterNode.directive.identifier)).toBeUndefined();
         } else {
           throw error;
         }
@@ -441,7 +431,7 @@ describe('InterpreterService Integration', () => {
   describe('AST structure handling', () => {
     it('handles text directives with correct format', async () => {
       // MIGRATION: Using centralized syntax example instead of hardcoded directive
-      const example = getExample('text', 'atomic', 'simpleString');
+      const example = textDirectiveExamples.atomic.simpleString;
       const node = await createNodeFromExample(example.code);
       
       const result = await context.services.interpreter.interpret([node]);
@@ -454,7 +444,7 @@ describe('InterpreterService Integration', () => {
 
     it('handles data directives with correct format', async () => {
       // MIGRATION: Using centralized syntax example instead of hardcoded directive
-      const example = getExample('data', 'atomic', 'simpleObject');
+      const example = dataDirectiveExamples.atomic.simpleObject;
       const node = await createNodeFromExample(example.code);
       
       const result = await context.services.interpreter.interpret([node]);
@@ -476,7 +466,7 @@ describe('InterpreterService Integration', () => {
 
     it('handles complex directives with schema validation', async () => {
       // MIGRATION: Using centralized syntax example instead of hardcoded directive
-      const example = getExample('data', 'atomic', 'person');
+      const example = dataDirectiveExamples.atomic.person;
       const node = await createNodeFromExample(example.code);
       
       const result = await context.services.interpreter.interpret([node]);
@@ -490,9 +480,9 @@ describe('InterpreterService Integration', () => {
 
     it('maintains correct node order with mixed content', async () => {
       // MIGRATION: Using centralized examples instead of hardcoded directives
-      const example1 = getExample('text', 'atomic', 'simpleString');
-      const example2 = getExample('text', 'atomic', 'subject');
-      const example3 = getExample('text', 'atomic', 'user');
+      const example1 = textDirectiveExamples.atomic.simpleString;
+      const example2 = textDirectiveExamples.atomic.subject;
+      const example3 = textDirectiveExamples.atomic.user;
       
       const node1 = await createNodeFromExample(example1.code);
       const node2 = await createNodeFromExample(example2.code);

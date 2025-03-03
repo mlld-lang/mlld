@@ -6,47 +6,27 @@ import type { IStateService } from '@services/state/StateService/IStateService.j
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import type { DirectiveNode } from '../../../../node_modules/meld-spec/dist/types.js';
 import { DirectiveError } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
-import { getExample, getInvalidExample } from '@tests/utils/syntax-test-helpers.js';
+import { pathDirectiveExamples } from '@core/syntax/index.js';
+import { createNodeFromExample } from '@core/syntax/helpers';
 
 /**
  * PathDirectiveHandler Test Status
  * --------------------------------
  * 
- * MIGRATION STATUS: Partially Complete
+ * MIGRATION STATUS: Complete
  * 
- * This test file has been partially migrated to use centralized syntax examples.
+ * This test file has been fully migrated to use centralized syntax examples.
  * 
  * COMPLETED:
  * - All "basic path handling" tests successfully migrated to use centralized examples
+ * - Removed dependency on syntax-test-helpers.js
+ * - Using centralized createNodeFromExample helper
  * 
- * NOT MIGRATED:
+ * NOTES:
  * - Error handling tests continue to use createPathDirective since the parser rejects 
  *   truly invalid syntax before the handler gets to process it, making it difficult
  *   to test validation error handling with actual invalid syntax examples.
  */
-
-/**
- * Creates a DirectiveNode from example code
- * This is needed for handler tests where you need a parsed node
- * 
- * @param exampleCode - Example code to parse
- * @returns Promise resolving to a DirectiveNode
- */
-const createNodeFromExample = async (exampleCode: string): Promise<DirectiveNode> => {
-  try {
-    const { parse } = await import('meld-ast');
-    
-    const result = await parse(exampleCode, {
-      trackLocations: true,
-      validateNodes: true
-    } as any); // Using 'as any' to avoid type issues
-    
-    return result.ast[0] as DirectiveNode;
-  } catch (error) {
-    console.error('Error parsing with meld-ast:', error);
-    throw error;
-  }
-};
 
 describe('PathDirectiveHandler', () => {
   let handler: PathDirectiveHandler;
@@ -86,7 +66,7 @@ describe('PathDirectiveHandler', () => {
       // MIGRATION INSIGHTS:
       // When using centralized examples, the handler now receives a structured path object
       // instead of a simple string.
-      const example = getExample('path', 'atomic', 'projectPath');
+      const example = pathDirectiveExamples.atomic.projectPath;
       const node = await createNodeFromExample(example.code);
       const context = { currentFilePath: 'test.meld', state: stateService };
 
@@ -115,7 +95,7 @@ describe('PathDirectiveHandler', () => {
     it('should handle paths with variables', async () => {
       // MIGRATION: Using the pathWithVariables example from combinations category
       // Note: This contains two directives - a text variable definition and a path that uses it
-      const exampleSet = getExample('path', 'combinations', 'pathWithVariables');
+      const exampleSet = pathDirectiveExamples.combinations.pathWithVariables;
       // We specifically want the second line which is the path directive
       const exampleLines = exampleSet.code.split('\n');
       const pathDirectiveLine = exampleLines[1]; // Get just the path directive line
@@ -145,7 +125,7 @@ describe('PathDirectiveHandler', () => {
 
     it('should handle relative paths', async () => {
       // MIGRATION: Using the relativePath example from atomic category
-      const example = getExample('path', 'atomic', 'relativePath');
+      const example = pathDirectiveExamples.atomic.relativePath;
       const node = await createNodeFromExample(example.code);
       const context = { currentFilePath: 'test.meld', state: stateService };
 

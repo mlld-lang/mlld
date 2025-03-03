@@ -6,8 +6,19 @@ import { IParserService } from '@services/pipeline/ParserService/IParserService.
 import { ResolutionContext } from './IResolutionService.js';
 import { ResolutionError } from './errors/ResolutionError.js';
 import type { MeldNode, DirectiveNode, TextNode } from 'meld-spec';
-// Import syntax test helpers
-import { getExample, getInvalidExample } from '@tests/utils/syntax-test-helpers.js';
+// Import centralized syntax examples and helpers
+import { 
+  textDirectiveExamples, 
+  dataDirectiveExamples,
+  defineDirectiveExamples,
+  pathDirectiveExamples
+} from '@core/syntax/index.js';
+// Import run examples directly
+import runDirectiveExamplesModule from '@core/syntax/run.js';
+import { createExample, createInvalidExample, createNodeFromExample } from '@core/syntax/helpers';
+
+// Use the correctly imported run directive examples
+const runDirectiveExamples = runDirectiveExamplesModule;
 
 // Mock the logger
 vi.mock('@core/utils/logger', () => ({
@@ -75,7 +86,7 @@ describe('ResolutionService', () => {
 
     it('should resolve text variables', async () => {
       // Use centralized syntax example for text directive
-      const example = getExample('text', 'atomic', 'simpleString');
+      const example = textDirectiveExamples.atomic.simpleString;
       
       // Create a node matching what the parser would return for "{{greeting}}"
       const node: DirectiveNode = {
@@ -96,7 +107,7 @@ describe('ResolutionService', () => {
 
     it('should resolve data variables', async () => {
       // Use centralized syntax example for data directive
-      const example = getExample('data', 'atomic', 'simpleObject');
+      const example = dataDirectiveExamples.atomic.simpleObject;
       
       // Create a node matching what the parser would return for "{{config}}"
       const node: DirectiveNode = {
@@ -135,7 +146,7 @@ describe('ResolutionService', () => {
 
     it('should resolve user-defined path variables', async () => {
       // Use centralized syntax example for path directive
-      const example = getExample('path', 'atomic', 'homePath');
+      const example = pathDirectiveExamples.atomic.homePath;
       
       // Create a node matching what the parser would return for "$home"
       const node: DirectiveNode = {
@@ -175,7 +186,7 @@ describe('ResolutionService', () => {
 
     it('should resolve command references', async () => {
       // Use centralized syntax example for run directive
-      const example = getExample('run', 'atomic', 'simple');
+      const example = runDirectiveExamples.atomic.simple;
       
       // Create a node matching what the parser would return for "$echo(hello)"
       const node: DirectiveNode = {
@@ -291,7 +302,7 @@ Content 2`;
       context.allowedVariableTypes.text = false;
       
       // Use centralized syntax example for text directive
-      const example = getExample('text', 'atomic', 'simpleString');
+      const example = textDirectiveExamples.atomic.simpleString;
       
       const node: DirectiveNode = {
         type: 'Directive',
@@ -313,7 +324,7 @@ Content 2`;
       context.allowedVariableTypes.data = false;
       
       // Use centralized syntax example for data directive
-      const example = getExample('data', 'atomic', 'simpleObject');
+      const example = dataDirectiveExamples.atomic.simpleObject;
       
       const node: DirectiveNode = {
         type: 'Directive',
@@ -335,7 +346,7 @@ Content 2`;
       context.allowedVariableTypes.path = false;
       
       // Use centralized syntax example for path directive
-      const example = getExample('path', 'atomic', 'homePath');
+      const example = pathDirectiveExamples.atomic.homePath;
       
       const node: DirectiveNode = {
         type: 'Directive',
@@ -356,7 +367,7 @@ Content 2`;
       context.allowedVariableTypes.command = false;
       
       // Use centralized syntax example for run directive with defined command
-      const example = getExample('run', 'combinations', 'definedCommand');
+      const example = runDirectiveExamples.combinations.definedCommand;
       
       const node: DirectiveNode = {
         type: 'Directive',
@@ -419,7 +430,7 @@ Content 2`;
 
     it('should handle non-circular references', async () => {
       // Use the basicInterpolation example which refers to other variables
-      const example = getExample('text', 'combinations', 'basicInterpolation');
+      const example = textDirectiveExamples.combinations.basicInterpolation;
       
       const node: DirectiveNode = {
         type: 'Directive',

@@ -21,44 +21,14 @@ import {
 } from '@tests/utils';
 // Import the centralized syntax examples and helpers
 import { importDirectiveExamples } from '@core/syntax/index.js';
-import { getExample, getInvalidExample } from '@tests/utils/syntax-test-helpers.js';
+import { createNodeFromExample } from '@core/syntax/helpers';
 
 /**
  * ImportDirectiveHandler Test Migration Status
  * ----------------------------------------
  * 
- * MIGRATION STATUS: In Progress
- * 
- * This test file is being migrated to use centralized syntax examples.
- * We'll migrate one test at a time to ensure everything continues to work.
- * 
- * See _issues/_active/test-syntax-centralization.md for migration details.
+ * MIGRATION STATUS: Complete
  */
-
-/**
- * Helper function to create a DirectiveNode from a syntax example code
- * This is needed for handler tests where you need a parsed node
- * 
- * @param exampleCode - Example code to parse
- * @returns Promise resolving to a DirectiveNode
- */
-const createNodeFromExample = async (exampleCode: string): Promise<DirectiveNode> => {
-  try {
-    const { parse } = await import('meld-ast');
-    
-    const result = await parse(exampleCode, {
-      trackLocations: true,
-      validateNodes: true,
-      // @ts-expect-error - structuredPaths is used but may be missing from typings
-      structuredPaths: true
-    });
-    
-    return result.ast[0] as DirectiveNode;
-  } catch (error) {
-    console.error('Error parsing with meld-ast:', error);
-    throw error;
-  }
-};
 
 /**
  * Create an Import directive node that matches the structure expected by the handler
@@ -355,7 +325,7 @@ describe('ImportDirectiveHandler', () => {
   describe('basic importing', () => {
     it('should import all variables with *', async () => {
       // MIGRATION NOTE: Using centralized syntax example instead of createImportDirectiveNode
-      const example = getExample('import', 'atomic', 'basicImport');
+      const example = importDirectiveExamples.atomic.basicImport;
       const node = await createNodeFromExample(example.code);
       
       const context = { currentFilePath: 'test.meld', state: stateService };

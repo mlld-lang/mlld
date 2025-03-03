@@ -10,7 +10,11 @@ import type { IParserService } from '@services/pipeline/ParserService/IParserSer
 import type { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
 import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { createLocation, createEmbedDirective } from '@tests/utils/testFactories.js';
-import { getExample, getInvalidExample } from '@tests/utils/syntax-test-helpers.js';
+// Import centralized syntax examples and helpers
+import { 
+  embedDirectiveExamples
+} from '@core/syntax/index.js';
+import { createNodeFromExample } from '@core/syntax/helpers';
 
 /**
  * MIGRATION NOTES:
@@ -163,7 +167,7 @@ describe('EmbedDirectiveHandler Transformation', () => {
   describe('transformation behavior', () => {
     it('should return replacement node with file contents when transformation enabled', async () => {
       // MIGRATION: Using centralized syntax example
-      const example = getExample('embed', 'atomic', 'simpleEmbed');
+      const example = embedDirectiveExamples.atomic.simpleEmbed;
       const node = await createNodeFromExample(example.code);
       const context = { currentFilePath: 'test.meld', state: stateService };
 
@@ -185,7 +189,7 @@ describe('EmbedDirectiveHandler Transformation', () => {
 
     it('should handle section extraction in transformation', async () => {
       // MIGRATION: Using centralized syntax example with section
-      const example = getExample('embed', 'atomic', 'withSection');
+      const example = embedDirectiveExamples.atomic.withSection;
       const node = await createNodeFromExample(example.code);
       const context = { currentFilePath: 'test.meld', state: stateService };
 
@@ -279,7 +283,7 @@ describe('EmbedDirectiveHandler Transformation', () => {
 
     it('should preserve error handling during transformation', async () => {
       // MIGRATION: Using centralized invalid example for file not found
-      const invalidExample = getInvalidExample('embed', 'fileNotFound');
+      const invalidExample = embedDirectiveExamples.invalid.fileNotFound;
       const node = await createNodeFromExample(invalidExample.code);
       const context = { currentFilePath: 'test.meld', state: stateService };
 
@@ -292,7 +296,7 @@ describe('EmbedDirectiveHandler Transformation', () => {
 
     it('should handle circular imports during transformation', async () => {
       // MIGRATION: Using centralized example for simple embed in circular import scenario
-      const example = getExample('embed', 'atomic', 'simpleEmbed');
+      const example = embedDirectiveExamples.atomic.simpleEmbed;
       const node = await createNodeFromExample(example.code);
       const context = { currentFilePath: 'test.meld', state: stateService };
 

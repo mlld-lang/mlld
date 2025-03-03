@@ -26,17 +26,24 @@ describe('API Integration Tests', () => {
     await context.initialize();
     projectRoot = '/project';
     
-    // Dynamically import examples
-    const { getBackwardCompatibleExample } = await import('@tests/utils/syntax-test-helpers.js');
+    // Import centralized syntax examples
+    const { 
+      textDirectiveExamples, 
+      pathDirectiveExamples,
+      importDirectiveExamples,
+      runDirectiveExamples,
+      defineDirectiveExamples,
+      embedDirectiveExamples
+    } = await import('@core/syntax');
     
     // Load examples that will be used in multiple tests
     try {
-      textExample = getBackwardCompatibleExample('text', 'atomic', 'simpleString');
-      pathExample = getBackwardCompatibleExample('path', 'atomic', 'projectPath');
-      importExample = getBackwardCompatibleExample('import', 'atomic', 'simplePath');
-      runExample = getBackwardCompatibleExample('run', 'atomic', 'simple');
-      defineExample = getBackwardCompatibleExample('define', 'atomic', 'simpleCommand');
-      embedExample = getBackwardCompatibleExample('embed', 'atomic', 'simplePath');
+      textExample = textDirectiveExamples.atomic.simpleString;
+      pathExample = pathDirectiveExamples.atomic.projectPath;
+      importExample = importDirectiveExamples.atomic.simplePath || importDirectiveExamples.atomic.basicImport;
+      runExample = runDirectiveExamples.atomic.simple;
+      defineExample = defineDirectiveExamples.atomic.simpleCommand;
+      embedExample = embedDirectiveExamples.atomic.simplePath || embedDirectiveExamples.atomic.simpleEmbed;
     } catch (error) {
       console.error('Failed to load syntax examples:', error);
     }
@@ -248,6 +255,106 @@ First feature: {{config.app.features.0}}
         expect(configData).toHaveProperty('app.name', 'Meld');
         expect(configData).toHaveProperty('app.features');
         expect(Array.isArray(configData.app.features)).toBe(true);
+      } catch (error) {
+        console.error('ERROR during test execution:', error);
+        throw error;
+      }
+    });
+
+    it('should handle template literals in text directives', async () => {
+      // Import centralized syntax examples
+      const { 
+        textDirectiveExamples
+      } = await import('@core/syntax');
+      
+      // Get template example with variable interpolation
+      const textVarExample = textDirectiveExamples.atomic.var1;
+      const templateLiteralExample = textDirectiveExamples.combinations.basicInterpolation;
+      
+      // Write the test file
+      const content = `${textVarExample.code}
+${templateLiteralExample.code}
+
+Some text content with {{var1}} and {{message}}
+`;
+
+      await context.writeFile('test.meld', content);
+      
+      try {
+        // Enable transformation
+        const stateService = context.services.state;
+        stateService.enableTransformation(true);
+        
+        // Debug transformation settings
+        console.log('DEBUG - Transformation enabled:', stateService.isTransformationEnabled());
+        console.log('DEBUG - Transformation options:', stateService.getTransformationOptions());
+        
+        // Set variables directly for debugging
+        stateService.setTextVar('var1', 'Value 1');
+        stateService.setTextVar('greeting', 'Hello');
+        stateService.setTextVar('subject', 'World');
+        stateService.setTextVar('message', 'Hello, World!');
+        
+        console.log('DEBUG - Variables set directly in state:');
+        console.log('DEBUG - var1:', stateService.getTextVar('var1'));
+        console.log('DEBUG - greeting:', stateService.getTextVar('greeting'));
+        console.log('DEBUG - subject:', stateService.getTextVar('subject'));
+        console.log('DEBUG - message:', stateService.getTextVar('message'));
+        
+        // Log the state before running the test
+        console.log('===== STATE BEFORE TEST =====');
+        console.log('Text variables:', [...context.services.state.getAllTextVars().entries()]);
+        console.log('Transformation enabled:', context.services.state.isTransformationEnabled());
+        console.log('=============================');
+        
+        const result = await main('test.meld', {
+          fs: context.fs,
+          services: context.services as unknown as Partial<Services>,
+          transformation: true
+        });
+        
+        // Get the debug visualization
+        const visualization = await context.visualizeState('mermaid');
+        console.log('===== STATE VISUALIZATION =====');
+        console.log(visualization);
+        console.log('===============================');
+        
+        // Add simpler debug info to avoid TypeScript errors
+        console.log('===== TEST CONTEXT STRUCTURE =====');
+        console.log('Has services:', !!context.services);
+        console.log('Has state service:', !!context.services.state);
+        console.log('State service methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(context.services.state)));
+        console.log('=================================');
+        
+        // Get debug session results
+        const debugResults = await context.endDebugSession(sessionId);
+        console.log('===== DEBUG SESSION RESULTS =====');
+        console.log(JSON.stringify(debugResults, null, 2));
+        console.log('=================================');
+        
+        // Log the state after running the test
+        console.log('===== STATE AFTER TEST =====');
+        console.log('Text variables:', [...context.services.state.getAllTextVars().entries()]);
+        console.log('Transformation enabled:', context.services.state.isTransformationEnabled());
+        
+        // Verify output contains the expected content with transformed directives
+        expect(result).toBeDefined();
+        expect(result).toContain('Some text content with');
+        expect(result).toContain('Value 1');
+        expect(result).toContain('Hello, World!');
+        
+        // Check that text variables are set in state
+        const var1Value = stateService.getTextVar('var1');
+        console.log('DEBUG - var1 value in state:', var1Value);
+        
+        expect(var1Value).toBeDefined();
+        expect(var1Value).toBe('Value 1');
+        
+        const messageValue = stateService.getTextVar('message');
+        console.log('DEBUG - message value in state:', messageValue);
+        
+        expect(messageValue).toBeDefined();
+        expect(messageValue).toBe('Hello, World!');
       } catch (error) {
         console.error('ERROR during test execution:', error);
         throw error;
@@ -1343,6 +1450,32 @@ First feature: {{config.app.features.0}}
         transformation: false,
         format: 'markdown'
       })).rejects.toThrow(/Paths with segments must start with \$. or \$~/);
+    });
+  });
+
+  describe('Special "include" option for direct content in API usage', () => {
+    it('should handle the "include" option for direct content in API usage', async () => {
+      // Import centralized syntax examples
+      const { 
+        textDirectiveExamples
+      } = await import('@core/syntax');
+      
+      // Get simple text example
+      const textExample = textDirectiveExamples.atomic.simpleString;
+      
+      // Use the example in the test
+      const content = textExample.code;
+      await context.writeFile('test.meld', content);
+      
+      // Process the file
+      const result = await main('test.meld', {
+        fs: context.fs,
+        services: context.services as unknown as Partial<Services>,
+        transformation: true
+      });
+      
+      // Verify the result
+      expect(result).toBe(content);
     });
   });
 });

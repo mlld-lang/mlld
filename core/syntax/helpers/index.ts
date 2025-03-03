@@ -67,5 +67,39 @@ export function combineExamples(
   };
 }
 
+/**
+ * Creates a DirectiveNode from example code string
+ * 
+ * @param code - The directive code to parse
+ * @returns The parsed DirectiveNode
+ */
+export async function createNodeFromExample(code: string): Promise<any> {
+  try {
+    const { parse } = await import('meld-ast');
+    const result = await parse(code, {
+      trackLocations: true,
+      validateNodes: true,
+      // @ts-expect-error - structuredPaths is used but may be missing from typings
+      structuredPaths: true
+    });
+    
+    const nodes = result.ast || [];
+    if (!nodes || nodes.length === 0) {
+      throw new Error(`Failed to parse example: ${code}`);
+    }
+    
+    // The first node should be our directive
+    const directiveNode = nodes[0];
+    if (directiveNode.type !== 'Directive') {
+      throw new Error(`Example did not produce a directive node: ${code}`);
+    }
+    
+    return directiveNode;
+  } catch (error) {
+    console.error('Error parsing with meld-ast:', error);
+    throw error;
+  }
+}
+
 export { meld };
 export * from './types'; 

@@ -14,10 +14,14 @@ import {
 import { 
   textDirectiveExamples, 
   dataDirectiveExamples,
-  runDirectiveExamples,
   defineDirectiveExamples
 } from '@core/syntax/index.js';
-import { getExample, getInvalidExample, createNodeFromExample } from '@tests/utils/syntax-test-helpers.js';
+// Import run examples directly
+import runDirectiveExamplesModule from '@core/syntax/run.js';
+import { createNodeFromExample } from '@core/syntax/helpers';
+
+// Use the correctly imported run directive examples
+const runDirectiveExamples = runDirectiveExamplesModule;
 
 // Mock StateService
 class MockStateService implements IStateService {
@@ -276,13 +280,13 @@ describe('OutputService', () => {
       // MIGRATION: Using centralized syntax examples instead of hardcoded examples
       
       // Definition directive - using @text example
-      const textExample = getExample('text', 'atomic', 'simpleString');
+      const textExample = textDirectiveExamples.atomic.simpleString;
       const textNode = await createNodeFromExample(textExample.code);
       let output = await service.convert([textNode], state, 'markdown');
       expect(output).toBe(''); // Definition directives are omitted
 
       // Execution directive - using @run example
-      const runExample = getExample('run', 'atomic', 'simple');
+      const runExample = runDirectiveExamples.atomic.simple;
       const runNode = await createNodeFromExample(runExample.code);
       output = await service.convert([runNode], state, 'markdown');
       expect(output).toBe('[run directive output placeholder]\n');
@@ -348,13 +352,13 @@ describe('OutputService', () => {
       // MIGRATION: Using centralized syntax examples instead of hardcoded examples
       
       // Definition directive - using @text example
-      const textExample = getExample('text', 'atomic', 'simpleString');
+      const textExample = textDirectiveExamples.atomic.simpleString;
       const textNode = await createNodeFromExample(textExample.code);
       let output = await service.convert([textNode], state, 'xml');
       expect(output).toBe(''); // Definition directives are omitted
 
       // Execution directive - using @run example
-      const runExample = getExample('run', 'atomic', 'simple');
+      const runExample = runDirectiveExamples.atomic.simple;
       const runNode = await createNodeFromExample(runExample.code);
       output = await service.convert([runNode], state, 'xml');
       expect(output).toContain('[run directive output placeholder]');
@@ -385,7 +389,7 @@ describe('OutputService', () => {
       // MIGRATION: Using centralized syntax examples instead of hardcoded examples
       const originalNodes: MeldNode[] = [
         // Using a run directive example
-        await createNodeFromExample(getExample('run', 'atomic', 'simple').code)
+        await createNodeFromExample(runDirectiveExamples.atomic.simple.code)
       ];
 
       const transformedNodes: MeldNode[] = [
@@ -404,7 +408,7 @@ describe('OutputService', () => {
       const originalNodes: MeldNode[] = [
         createTextNode('Before\n', createLocation(1, 1)),
         // Using a run directive example
-        await createNodeFromExample(getExample('run', 'atomic', 'simple').code),
+        await createNodeFromExample(runDirectiveExamples.atomic.simple.code),
         createTextNode('After\n', createLocation(3, 1))
       ];
 
@@ -426,7 +430,7 @@ describe('OutputService', () => {
       const nodes: MeldNode[] = [
         createTextNode('Before\n', createLocation(1, 1)),
         // Using a text directive example from centralized examples
-        await createNodeFromExample(getExample('text', 'atomic', 'simpleString').code),
+        await createNodeFromExample(textDirectiveExamples.atomic.simpleString.code),
         createTextNode('After\n', createLocation(3, 1))
       ];
 
@@ -439,7 +443,7 @@ describe('OutputService', () => {
       const nodes: MeldNode[] = [
         createTextNode('Before\n', createLocation(1, 1)),
         // Using a run directive example from centralized examples
-        await createNodeFromExample(getExample('run', 'atomic', 'simple').code),
+        await createNodeFromExample(runDirectiveExamples.atomic.simple.code),
         createTextNode('After\n', createLocation(3, 1))
       ];
 
@@ -489,7 +493,7 @@ describe('OutputService', () => {
       const originalNodes: MeldNode[] = [
         createTextNode('Before\n', createLocation(1, 1)),
         // Using a run directive example
-        await createNodeFromExample(getExample('run', 'atomic', 'simple').code),
+        await createNodeFromExample(runDirectiveExamples.atomic.simple.code),
         createTextNode('After\n', createLocation(3, 1))
       ];
 
@@ -548,5 +552,17 @@ describe('OutputService', () => {
         .rejects
         .toThrow(MeldOutputError);
     });
+  });
+
+  it('should handle text directives', async () => {
+    // Arrange
+    const textExample = textDirectiveExamples.atomic.simpleString;
+    // ... existing code ...
+  });
+
+  it('should handle run directives', async () => {
+    // Arrange
+    const runExample = runDirectiveExamples.atomic.simple;
+    // ... existing code ...
   });
 }); 

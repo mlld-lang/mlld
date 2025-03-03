@@ -9,7 +9,9 @@ import type { IParserService } from '@services/pipeline/ParserService/IParserSer
 import type { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
 import type { ICircularityService } from '@services/resolution/CircularityService/ICircularityService.js';
 import { createLocation } from '@tests/utils/testFactories.js';
-import { getExample } from '@tests/utils/syntax-test-helpers.js';
+// Import centralized syntax examples and helpers
+import { importDirectiveExamples } from '@core/syntax/index.js';
+import { createNodeFromExample } from '@core/syntax/helpers';
 
 /**
  * MIGRATION NOTES:
@@ -179,7 +181,7 @@ describe('ImportDirectiveHandler Transformation', () => {
   describe('transformation behavior', () => {
     it('should return empty text node when transformation enabled', async () => {
       // MIGRATION: Using centralized syntax example
-      const example = getExample('import', 'atomic', 'basicImport');
+      const example = importDirectiveExamples.atomic.basicImport;
       const node = await createNodeFromExample(example.code);
       const context = { currentFilePath: 'test.meld', state: stateService };
 
@@ -304,7 +306,7 @@ describe('ImportDirectiveHandler Transformation', () => {
 
     it('should preserve error handling in transformation mode', async () => {
       // MIGRATION: Using centralized syntax example for the file not found case
-      const example = getExample('import', 'atomic', 'basicImport');
+      const example = importDirectiveExamples.atomic.basicImport;
       // Modify the example to use a non-existent file path
       const modifiedCode = example.code.replace('imported.meld', 'missing.meld');
       const node = await createNodeFromExample(modifiedCode);
