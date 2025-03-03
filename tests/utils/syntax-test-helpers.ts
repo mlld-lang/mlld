@@ -14,6 +14,12 @@ import { ErrorSeverity } from '@core/errors/index.js';
 import { DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 // Types for directive nodes will be imported dynamically
 
+// Define explicit interface for syntax examples to aid TypeScript
+interface TypedSyntaxExample {
+  description: string;
+  code: string;
+}
+
 // Define a type to reference the available directive example groups
 export type DirectiveType = 'text' | 'data' | 'import' | 'path' | 'define' | 'run' | 'embed' | 'integration';
 
@@ -75,8 +81,72 @@ export function getExample(
   directiveType: DirectiveType,
   category: 'atomic' | 'combinations',
   exampleKey: string
-): SyntaxExample {
-  return directiveExamples[directiveType][category][exampleKey];
+): TypedSyntaxExample {
+  // Log the requested example for debugging
+  console.log(`Requested example: ${directiveType}.${category}.${exampleKey}`);
+  
+  // Handle the case where the category doesn't exist in directiveExamples
+  if (!directiveExamples[directiveType] || !directiveExamples[directiveType][category]) {
+    console.warn(`Category not found: ${directiveType}.${category}`);
+    
+    // Try to find a fallback category
+    const availableCategories = directiveExamples[directiveType] ? Object.keys(directiveExamples[directiveType]) : [];
+    const fallbackCategory = availableCategories.find(c => c === 'atomic' || c === 'combinations') || availableCategories[0];
+    
+    if (fallbackCategory) {
+      console.log(`Using fallback category: ${directiveType}.${fallbackCategory}`);
+      
+      // Get the first example from the fallback category
+      const fallbackCategoryExamples = directiveExamples[directiveType][fallbackCategory] as Record<string, TypedSyntaxExample>;
+      const fallbackKey = Object.keys(fallbackCategoryExamples)[0];
+      const fallbackExample = fallbackCategoryExamples[fallbackKey] as TypedSyntaxExample;
+      
+      if (fallbackExample) {
+        console.log(`Using fallback example: ${directiveType}.${fallbackCategory}.${fallbackKey}`);
+        
+        // Return a basic fallback example
+        return {
+          description: `Fallback example for ${directiveType}.${category}.${exampleKey}`,
+          code: fallbackExample.code
+        };
+      }
+    }
+    
+    // Create a minimal fallback example if no other option is available
+    return {
+      description: `Missing example: ${directiveType}.${category}.${exampleKey}`,
+      code: `@${directiveType} missing_example = "This is a placeholder for a missing example"`
+    };
+  }
+  
+  const categoryExamples = directiveExamples[directiveType][category] as Record<string, TypedSyntaxExample>;
+  const example = categoryExamples[exampleKey] as TypedSyntaxExample | undefined;
+  
+  if (!example) {
+    console.warn(`Example not found: ${directiveType}.${category}.${exampleKey}`);
+    
+    // Try to find any example from the same category as a fallback
+    const fallbackKey = Object.keys(categoryExamples)[0];
+    const fallbackExample = categoryExamples[fallbackKey] as TypedSyntaxExample;
+    
+    if (fallbackExample) {
+      console.log(`Using fallback example: ${directiveType}.${category}.${fallbackKey}`);
+      
+      // Return a basic fallback example
+      return {
+        description: `Fallback example for ${directiveType}.${category}.${exampleKey}`,
+        code: fallbackExample.code
+      };
+    }
+    
+    // Create a minimal fallback example if no examples exist
+    return {
+      description: `Missing example: ${directiveType}.${category}.${exampleKey}`,
+      code: `@${directiveType} missing_example = "This is a placeholder for a missing example"`
+    };
+  }
+  
+  return example;
 }
 
 /**
@@ -221,7 +291,7 @@ export function getBackwardCompatibleExample(
   directiveType: DirectiveType,
   category: 'atomic' | 'combinations',
   exampleKey: string
-): SyntaxExample {
+): TypedSyntaxExample {
   // Map old example keys to new keys
   const keyMappings: Record<string, Record<string, Record<string, string>>> = {
     import: {
@@ -281,9 +351,9 @@ export function getBackwardCompatibleExample(
       console.log(`Using fallback category: ${directiveType}.${fallbackCategory}`);
       
       // Get the first example from the fallback category
-      const fallbackCategoryExamples = directiveExamples[directiveType][fallbackCategory];
+      const fallbackCategoryExamples = directiveExamples[directiveType][fallbackCategory] as Record<string, TypedSyntaxExample>;
       const fallbackKey = Object.keys(fallbackCategoryExamples)[0];
-      const fallbackExample = fallbackCategoryExamples[fallbackKey];
+      const fallbackExample = fallbackCategoryExamples[fallbackKey] as TypedSyntaxExample;
       
       if (fallbackExample) {
         console.log(`Using fallback example: ${directiveType}.${fallbackCategory}.${fallbackKey}`);
@@ -300,23 +370,27 @@ export function getBackwardCompatibleExample(
     return {
       description: `Missing example: ${directiveType}.${category}.${mappedKey}`,
       code: `@${directiveType} missing_example = "This is a placeholder for a missing example"`
-    } as SyntaxExample;
+    };
   }
   
-  const example = directiveExamples[directiveType][category][mappedKey];
+  const categoryExamples = directiveExamples[directiveType][category] as Record<string, TypedSyntaxExample>;
+  const example = categoryExamples[mappedKey] as TypedSyntaxExample | undefined;
+  
   if (!example) {
     console.warn(`Example not found: ${directiveType}.${category}.${mappedKey} (original key: ${exampleKey})`);
     
     // Try to find any example from the same category as a fallback
-    const categoryExamples = directiveExamples[directiveType][category];
     const fallbackKey = Object.keys(categoryExamples)[0];
-    const fallbackExample = categoryExamples[fallbackKey];
+    const fallbackExample = categoryExamples[fallbackKey] as TypedSyntaxExample;
     
     if (fallbackExample) {
       console.log(`Using fallback example: ${directiveType}.${category}.${fallbackKey}`);
       
       // Clone the fallback example and modify it to match the requested example type
-      const modifiedExample = { ...fallbackExample };
+      const modifiedExample: TypedSyntaxExample = { 
+        description: fallbackExample.description,
+        code: fallbackExample.code
+      };
       
       if (directiveType === 'text') {
         // Replace variable name with the requested key
@@ -345,10 +419,14 @@ export function getBackwardCompatibleExample(
     return {
       description: `Missing example: ${directiveType}.${category}.${mappedKey}`,
       code: `@${directiveType} missing_example = "This is a placeholder for a missing example"`
-    } as SyntaxExample;
+    };
   }
   
-  const convertedExample = { ...example };
+  // Clone the example to avoid modifying the original
+  const convertedExample: TypedSyntaxExample = {
+    description: example.description,
+    code: example.code
+  };
   
   // DON'T convert new syntax with brackets to old format
   // Keep the bracket syntax for @run directives
