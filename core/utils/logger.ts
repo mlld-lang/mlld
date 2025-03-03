@@ -25,7 +25,7 @@ const fileFormat = winston.format.combine(
 
 // Create the logger instance
 export const logger = winston.createLogger({
-  level: process.env.LOG_LEVEL || (process.env.NODE_ENV === 'test' ? 'error' : loggingConfig.defaultLevel),
+  level: process.env.LOG_LEVEL || (process.env.NODE_ENV === 'test' ? 'error' : (process.env.DEBUG ? 'debug' : loggingConfig.defaultLevel)),
   levels: loggingConfig.levels,
   transports: [
     // Console transport (but not during test)
@@ -69,7 +69,7 @@ export function createServiceLogger(serviceName: keyof typeof loggingConfig.serv
   const serviceConfig = loggingConfig.services[serviceName];
   
   const logger = winston.createLogger({
-    level: process.env.NODE_ENV === 'test' ? 'error' : serviceConfig.level,
+    level: process.env.NODE_ENV === 'test' ? 'error' : (process.env.DEBUG ? 'debug' : serviceConfig.level),
     format: winston.format.combine(
       winston.format.timestamp(),
       winston.format.json()
