@@ -29,9 +29,9 @@ export const atomic = {
     `@define hello = "echo 'Hello, World!'"`
   ),
   
-  withParameter: createExample(
-    'Command with a parameter',
-    `@define greet(name) = @run [echo "Hello, {{name}}!"]`
+  singleParameter: createExample(
+    'Command with parameter',
+    `@define greet(name) = @run [echo "Hello {{name}}"]`
   ),
   
   multipleParameters: createExample(
@@ -39,6 +39,7 @@ export const atomic = {
     `@define greet(first, last) = @run [echo "Hello {{first}} {{last}}"]`
   ),
   
+  // TODO: Review this complex @define example that includes command fields.
   complexData: createExample(
     'Complex object definition',
     `@define complex = { "command": "find", "args": ["-name", "*.js"] }`
@@ -62,7 +63,7 @@ export const combinations = {
   
   parameterizedCommand: combineExamples(
     'Parameterized command with variable',
-    atomic.withParameter,
+    atomic.singleParameter,
     createExample(
       'Text variable',
       `@text user = "Alice"`

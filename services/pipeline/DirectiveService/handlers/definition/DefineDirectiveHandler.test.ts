@@ -145,9 +145,9 @@ describe('DefineDirectiveHandler', () => {
       // MIGRATION LOG:
       // Original: Used createDefineDirectiveNode with hardcoded values
       // Migration: Using centralized test examples
-      // Notes: Using the 'withParameter' example from centralized examples
+      // Notes: Using the 'singleParameter' example from centralized examples
       
-      const example = getExample('define', 'atomic', 'withParameter');
+      const example = getExample('define', 'atomic', 'singleParameter');
       const node = await createNodeFromExample(example.code);
 
       const context = {
