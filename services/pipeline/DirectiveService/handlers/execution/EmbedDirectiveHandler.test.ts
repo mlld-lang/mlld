@@ -23,7 +23,7 @@ import type { IInterpreterService } from '@services/pipeline/InterpreterService/
 import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { createLocation } from '@tests/utils/testFactories.js';
 // Import the centralized syntax examples and helpers
-import { embedDirectiveExamples } from '@core/constants/syntax';
+import { embedDirectiveExamples } from '@core/syntax/index.js';
 import { 
   createNodeFromExample as importedCreateNodeFromExample, 
   getExample,

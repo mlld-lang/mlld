@@ -8,7 +8,7 @@ import {
   textDirectiveExamples, 
   codefenceExamples, 
   contentExamples 
-} from '@core/constants/syntax';
+} from '@core/syntax/index.js';
 import { getExample, getInvalidExample } from '@tests/utils/syntax-test-helpers.js';
 
 // Define a type that combines the meld-spec Location with our filePath

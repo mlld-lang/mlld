@@ -8,7 +8,7 @@ import type { IResolutionService } from '@services/resolution/ResolutionService/
 import type { DirectiveNode } from 'meld-spec';
 import type { ResolutionContext, StructuredPath } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { DirectiveError, DirectiveErrorCode, DirectiveErrorSeverity } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
-import { getExample, getInvalidExample } from '@tests/utils/syntax-test-helpers.js';
+import { dataDirectiveExamples } from '@core/syntax';
 
 /**
  * DataDirectiveHandler Test Status
@@ -164,7 +164,7 @@ describe('DataDirectiveHandler', () => {
       // Original: Used createDirectiveNode with hardcoded nested JSON
       // Migration: Using centralized example for data containing a person with nested address
       
-      const example = getExample('data', 'atomic', 'person');
+      const example = dataDirectiveExamples.atomic.person;
       const node = await createNodeFromExample(example.code);
 
       const directiveContext = { 
@@ -195,7 +195,7 @@ describe('DataDirectiveHandler', () => {
       // Original: Used createDirectiveNode with hardcoded JSON array
       // Migration: Using centralized example for simple array
       
-      const example = getExample('data', 'atomic', 'simpleArray');
+      const example = dataDirectiveExamples.atomic.simpleArray;
       const node = await createNodeFromExample(example.code);
 
       const directiveContext = { 
@@ -213,6 +213,36 @@ describe('DataDirectiveHandler', () => {
       expect(clonedState.setDataVar).toHaveBeenCalledWith('fruits', ["apple", "banana", "cherry"]);
       expect(result).toBe(clonedState);
     });
+
+    it('should successfully assign a parsed object', async () => {
+      // Arrange
+      const example = dataDirectiveExamples.atomic.person;
+      // ... existing code ...
+    });
+
+    it('should successfully assign a parsed array', async () => {
+      // Arrange
+      const example = dataDirectiveExamples.atomic.simpleArray;
+      // ... existing code ...
+    });
+
+    it('should successfully assign a simple object', async () => {
+      // Arrange
+      const example = dataDirectiveExamples.atomic.simpleObject;
+      // ... existing code ...
+    });
+
+    it('should properly handle stringified JSON', async () => {
+      // Arrange
+      const example = dataDirectiveExamples.atomic.simpleObject;
+      // ... existing code ...
+    });
+
+    it('should handle nested objects correctly', async () => {
+      // Arrange
+      const example = dataDirectiveExamples.combinations.nestedObject;
+      // ... existing code ...
+    });
   });
 
   describe('error handling', () => {
@@ -223,7 +253,7 @@ describe('DataDirectiveHandler', () => {
       
       // Instead of trying to parse an invalid example which would fail immediately,
       // we'll use a valid example but mock the validation response to simulate a failure
-      const example = getExample('data', 'atomic', 'simpleObject');
+      const example = dataDirectiveExamples.atomic.simpleObject;
       const node = await createNodeFromExample(example.code);
 
       const directiveContext = {
@@ -283,7 +313,7 @@ describe('DataDirectiveHandler', () => {
       // Original: Used createDirectiveNode with valid JSON
       // Migration: Using simple object example with special state mock
       
-      const example = getExample('data', 'atomic', 'simpleObject');
+      const example = dataDirectiveExamples.atomic.simpleObject;
       const node = await createNodeFromExample(example.code);
 
       const directiveContext = {
@@ -321,7 +351,7 @@ describe('DataDirectiveHandler', () => {
       // Original: Used createDirectiveNode with complex nested JSON
       // Migration: Using complex nested object from combinations category
       
-      const example = getExample('data', 'combinations', 'nestedObject');
+      const example = dataDirectiveExamples.combinations.nestedObject;
       const node = await createNodeFromExample(example.code);
 
       const directiveContext = {

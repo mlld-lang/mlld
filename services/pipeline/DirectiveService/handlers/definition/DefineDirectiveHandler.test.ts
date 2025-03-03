@@ -11,7 +11,7 @@ import { DirectiveError } from '@services/pipeline/DirectiveService/errors/Direc
 import type { DirectiveNode } from 'meld-spec';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 // Import the centralized syntax examples and helpers
-import { defineDirectiveExamples } from '@core/constants/syntax';
+import { defineDirectiveExamples } from '@core/syntax/index.js';
 import { getExample, getInvalidExample } from '@tests/utils/syntax-test-helpers.js';
 import { ErrorSeverity } from '@core/errors';
 

@@ -21,7 +21,7 @@ import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/Directive
 import { exec } from 'child_process';
 import { promisify } from 'util';
 // Import the centralized syntax examples and helpers but don't use the problematic syntax-test-helpers
-import { runDirectiveExamples } from '@core/constants/syntax';
+import { runDirectiveExamples } from '@core/syntax/index.js';
 import { parse } from 'meld-ast';
 import { ErrorSeverity } from '@core/errors';
 

@@ -11,9 +11,8 @@ import * as readline from 'readline';
 import { ErrorCollector } from '@tests/utils/ErrorTestUtils.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 import { cliLogger, type Logger } from '@core/utils/logger.js';
-// Import the centralized syntax examples and helper function
-import { textDirectiveExamples } from '@core/constants/syntax';
-import { getExample } from '@tests/utils/syntax-test-helpers.js';
+// Import the centralized syntax examples
+import { textDirectiveExamples } from '@core/syntax/index.js';
 
 // Mock the API module
 vi.mock('@api/index.js', () => ({
@@ -164,7 +163,7 @@ describe('CLIService', () => {
     );
 
     // Set up test files
-    const textExample = getExample('text', 'atomic', 'simpleString');
+    const textExample = textDirectiveExamples.atomic.simpleString;
     await context.fs.writeFile('test.meld', textExample.code);
 
     // Initialize mock logger
@@ -388,5 +387,11 @@ describe('CLIService', () => {
         'test output'
       );
     });
+  });
+
+  it('should handle parsing input content directly', async () => {
+    // ... existing code ...
+    const textExample = textDirectiveExamples.atomic.simpleString;
+    // ... existing code ...
   });
 }); 

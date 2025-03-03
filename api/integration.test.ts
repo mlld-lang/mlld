@@ -7,7 +7,7 @@ import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
 import path from 'path';
 import { TestDebuggerService } from '../tests/utils/debug/TestDebuggerService.js';
 import type { OutputFormat } from '@services/pipeline/OutputService/IOutputService.js';
-import { SyntaxExample } from '@core/constants/syntax/helpers';
+import { SyntaxExample } from '@core/syntax/helpers/index.js';
 
 describe('API Integration Tests', () => {
   let context: TestContext;

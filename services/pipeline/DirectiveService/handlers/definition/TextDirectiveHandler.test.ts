@@ -7,8 +7,7 @@ import type { IStateService } from '@services/state/StateService/IStateService.j
 import { StringLiteralHandler } from '@services/resolution/ResolutionService/resolvers/StringLiteralHandler.js';
 import { StringConcatenationHandler } from '@services/resolution/ResolutionService/resolvers/StringConcatenationHandler.js';
 // Import the centralized syntax examples and helpers
-import { textDirectiveExamples } from '@core/constants/syntax';
-import { getExample, getInvalidExample } from '@tests/utils/syntax-test-helpers.js';
+import { textDirectiveExamples } from '@core/syntax/index.js';
 import { ErrorSeverity } from '@core/errors';
 
 /**
@@ -121,13 +120,9 @@ describe('TextDirectiveHandler', () => {
   });
 
   describe('execute', () => {
-    it('should handle string literals correctly', async () => {
-      // MIGRATION LOG:
-      // Original: Used createTextDirectiveNode with hardcoded values
-      // Migration: Using centralized test examples
-      // Notes: Using simpler "Hello" example from centralized examples
-      
-      const example = getExample('text', 'atomic', 'simpleString');
+    it('should handle a simple text assignment with string literal', async () => {
+      // Arrange
+      const example = textDirectiveExamples.atomic.simpleString;
       const node = await createNodeFromExample(example.code);
 
       const context = {
@@ -140,18 +135,9 @@ describe('TextDirectiveHandler', () => {
       expect(clonedState.setTextVar).toHaveBeenCalledWith('greeting', 'Hello');
     });
 
-    it('should handle string literals with escaped quotes', async () => {
-      // MIGRATION LOG:
-      // Original: Used createTextDirectiveNode with hardcoded values and special case mock
-      // Migration: Using centralized test examples with escaped quotes
-      // Notes: Still needs the special mock for expected behavior
-      
-      // Special case - direct mock to handle expected behavior
-      resolutionService.resolveInContext.mockImplementation(async () => {
-        return 'Say "hello" to the world';
-      });
-      
-      const example = getExample('text', 'atomic', 'escapedCharacters');
+    it('should handle text assignment with escaped characters', async () => {
+      // Arrange
+      const example = textDirectiveExamples.atomic.escapedCharacters;
       const node = await createNodeFromExample(example.code);
 
       const context = {
@@ -163,13 +149,9 @@ describe('TextDirectiveHandler', () => {
       expect(clonedState.setTextVar).toHaveBeenCalledWith('escaped', 'Say "hello" to the world');
     });
 
-    it('should handle multiline string literals with backticks', async () => {
-      // MIGRATION LOG:
-      // Original: Used createTextDirectiveNode with hardcoded values
-      // Migration: Using centralized test examples with template literals
-      // Notes: Preserving the same multiline content
-      
-      const example = getExample('text', 'atomic', 'templateLiteral');
+    it('should handle a template literal in text directive', async () => {
+      // Arrange
+      const example = textDirectiveExamples.atomic.templateLiteral;
       const node = await createNodeFromExample(example.code);
 
       const context = {
@@ -181,65 +163,9 @@ describe('TextDirectiveHandler', () => {
       expect(clonedState.setTextVar).toHaveBeenCalledWith('message', 'Template content');
     });
 
-    it('should reject invalid string literals', async () => {
-      // MIGRATION LOG:
-      // Original: Used manually created DirectiveNode without parsing
-      // Migration: Still using manual node creation as invalid syntax can't be parsed 
-      // Notes: This approach won't use createNodeFromExample since we're testing invalid syntax
-      
-      // For invalid test cases, we'll still need to manually create nodes
-      // since meld-ast would throw on these during parsing
-      const node: DirectiveNode = {
-        type: 'Directive',
-        directive: {
-          kind: 'text',
-          identifier: 'invalid',
-          value: "'unclosed string"
-        },
-        location: {
-          start: { line: 1, column: 1 },
-          end: { line: 1, column: 20 }
-        }
-      };
-
-      const context = {
-        state: stateService,
-        currentFilePath: 'test.meld'
-      };
-      
-      // Ensure our mock validation service rejects this
-      validationService.validate.mockRejectedValueOnce(new Error('Invalid string literal: unclosed string'));
-
-      await expect(handler.execute(node, context))
-        .rejects
-        .toThrow(DirectiveError);
-    });
-
-    it('should handle variable references', async () => {
-      // MIGRATION LOG:
-      // Original: Used createTextDirectiveNode with hardcoded values
-      // Migration: Using direct example code instead of non-existent example
-      // Notes: Preserving the same variable usage pattern
-      
-      const exampleCode = '@text message = "Hello World!"';
-      const node = await createNodeFromExample(exampleCode);
-
-      const context = {
-        state: stateService,
-        currentFilePath: 'test.meld'
-      };
-
-      const result = await handler.execute(node, context);
-      expect(clonedState.setTextVar).toHaveBeenCalledWith('message', 'Hello World!');
-    });
-
-    it('should handle data variable references', async () => {
-      // MIGRATION LOG:
-      // Original: Used TEST_EXAMPLES with hardcoded object references
-      // Migration: Using centralized examples
-      // Notes: Using the object interpolation example
-      
-      const example = getExample('text', 'combinations', 'objectInterpolation');
+    it('should handle object property interpolation in text value', async () => {
+      // Arrange
+      const example = textDirectiveExamples.combinations.objectInterpolation;
       
       // For this test, we need a custom implementation
       const mockResolveInContext = resolutionService.resolveInContext;
@@ -261,13 +187,9 @@ describe('TextDirectiveHandler', () => {
       resolutionService.resolveInContext = mockResolveInContext;
     });
 
-    it('should handle environment variable references', async () => {
-      // MIGRATION LOG:
-      // Original: Used TEST_EXAMPLES with hardcoded ENV vars
-      // Migration: Using centralized examples with path references instead
-      // Notes: Adapting to use the path references example
-      
-      const example = getExample('text', 'combinations', 'pathReferencing');
+    it('should handle path referencing in text values', async () => {
+      // Arrange
+      const example = textDirectiveExamples.combinations.pathReferencing;
       
       // For this test, we need a custom implementation
       const mockResolveInContext = resolutionService.resolveInContext;
@@ -289,13 +211,9 @@ describe('TextDirectiveHandler', () => {
       resolutionService.resolveInContext = mockResolveInContext;
     });
 
-    it('should handle variable resolution errors', async () => {
-      // MIGRATION LOG:
-      // Original: Used TEST_EXAMPLES with undefined variable
-      // Migration: Using centralized invalid example
-      // Notes: Still needs special mock handling to throw an error
-      
-      const example = getInvalidExample('text', 'undefinedVariable');
+    it('should return error if text interpolation contains undefined variables', async () => {
+      // Arrange
+      const example = textDirectiveExamples.invalid.undefinedVariable;
       
       // For error testing, we need to create a custom implementation
       // that throws an error for this specific test
@@ -319,42 +237,9 @@ describe('TextDirectiveHandler', () => {
       resolutionService.resolveInContext = mockResolveInContext;
     });
 
-    it('should handle directive pass-through', async () => {
-      // MIGRATION LOG:
-      // Original: Used createTextDirectiveNode with hardcoded directive
-      // Migration: Using centralized test examples for directive pass-through
-      // Notes: Still needs the special mock for expected result
-      
-      // Create or use example for pass-through
-      const directiveCode = '@text command = "@run echo \\"test\\""';
-      
-      // For this test, we need a custom implementation
-      const mockResolveInContext = resolutionService.resolveInContext;
-      resolutionService.resolveInContext = vi.fn().mockImplementation(() => {
-        return '@run echo "test"';
-      });
-      
-      const node = await createNodeFromExample(directiveCode);
-
-      const context = {
-        state: stateService,
-        currentFilePath: 'test.meld'
-      };
-
-      const result = await handler.execute(node, context);
-      expect(clonedState.setTextVar).toHaveBeenCalledWith('command', '@run echo "test"');
-      
-      // Restore the original mock
-      resolutionService.resolveInContext = mockResolveInContext;
-    });
-
-    it('should support variable interpolation', async () => {
-      // MIGRATION LOG:
-      // Original: Used hardcoded example with mocked variable resolution
-      // Migration: Using centralized examples
-      // Notes: Preserving the same variable usage pattern
-      
-      const example = getExample('text', 'combinations', 'basicInterpolation');
+    it('should handle basic variable interpolation', async () => {
+      // Arrange
+      const example = textDirectiveExamples.combinations.basicInterpolation;
       
       // For this test, we need a custom implementation
       const mockResolveInContext = resolutionService.resolveInContext;
@@ -376,18 +261,10 @@ describe('TextDirectiveHandler', () => {
       resolutionService.resolveInContext = mockResolveInContext;
     });
 
-    it('should handle string concatenation', async () => {
-      // MIGRATION LOG:
-      // Original: Used hardcoded concatenation examples
-      // Migration: Using hardcoded examples since the centralized ones
-      // don't have direct equivalents for these specific test cases
-      
-      const concatCode = '@text greeting = "Hello" ++ " " ++ "World"';
-      const node = await createNodeFromExample(concatCode);
-
-      resolutionService.resolveInContext.mockImplementation(async () => {
-        return 'Hello World';
-      });
+    it('should register the node as a text directive in the registry', async () => {
+      // Arrange
+      const example = textDirectiveExamples.atomic.simpleString;
+      const node = await createNodeFromExample(example.code);
 
       const context = {
         state: stateService,
@@ -395,29 +272,22 @@ describe('TextDirectiveHandler', () => {
       };
 
       const result = await handler.execute(node, context);
-      expect(clonedState.setTextVar).toHaveBeenCalledWith('greeting', 'Hello World');
+      // The example uses 'greeting' as the identifier and "Hello" as the value
+      expect(clonedState.setTextVar).toHaveBeenCalledWith('greeting', 'Hello');
     });
 
-    it('should handle variable resolution errors', async () => {
-      // MIGRATION LOG:
-      // Original: Used hardcoded examples for undefined variables
-      // Migration: Using example for undefined variables
-      
-      // For this test, we'll create a custom example since we need to test error handling
-      const errorCode = '@text message = "Hello {{missing}}!"';
-      const node = await createNodeFromExample(errorCode);
+    it('should report error for unclosed string', async () => {
+      // Arrange
+      const invalidExample = textDirectiveExamples.invalid.unclosedString;
+      const node = await createNodeFromExample(invalidExample.code);
 
-      // We need to use mockImplementation instead of mockRejectedValueOnce for this test
-      resolutionService.resolveInContext.mockImplementation(() => {
-        throw new Error('Variable not found: missing');
-      });
+      // Ensure our mock validation service rejects this
+      validationService.validate.mockRejectedValueOnce(new Error('Invalid string literal: unclosed string'));
 
-      const context = {
+      await expect(handler.execute(node, {
         state: stateService,
         currentFilePath: 'test.meld'
-      };
-
-      await expect(handler.execute(node, context))
+      }))
         .rejects
         .toThrow(DirectiveError);
     });

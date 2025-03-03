@@ -16,7 +16,7 @@ import {
   dataDirectiveExamples,
   runDirectiveExamples,
   defineDirectiveExamples
-} from '@core/constants/syntax';
+} from '@core/syntax/index.js';
 import { getExample, getInvalidExample, createNodeFromExample } from '@tests/utils/syntax-test-helpers.js';
 
 // Mock StateService

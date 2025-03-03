@@ -8,8 +8,8 @@ import {
   runDirectiveExamples,
   embedDirectiveExamples,
   integrationExamples
-} from '@core/constants/syntax';
-import { SyntaxExample, InvalidSyntaxExample } from '@core/constants/syntax/helpers';
+} from '@core/syntax';
+import { SyntaxExample, InvalidSyntaxExample } from '@core/syntax/helpers';
 import { ErrorSeverity } from '@core/errors/index.js';
 import { DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 // Types for directive nodes will be imported dynamically

@@ -20,7 +20,7 @@ import {
   ErrorCollector
 } from '@tests/utils';
 // Import the centralized syntax examples and helpers
-import { importDirectiveExamples } from '@core/constants/syntax';
+import { importDirectiveExamples } from '@core/syntax/index.js';
 import { getExample, getInvalidExample } from '@tests/utils/syntax-test-helpers.js';
 
 /**

@@ -14,7 +14,7 @@ import {
   importDirectiveExamples,
   defineDirectiveExamples,
   integrationExamples
-} from '@core/constants/syntax';
+} from '@core/syntax';
 import { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
 import { InterpreterService } from '@services/pipeline/InterpreterService/InterpreterService.js';
 
