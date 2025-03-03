@@ -450,14 +450,13 @@ describe('EmbedDirectiveHandler', () => {
       expect(mockLogger.debug).toHaveBeenCalledWith(
         "Processing embed directive",
         expect.objectContaining({
-          context: expect.objectContaining({
-            currentFilePath: "/project/test.meld"
-          })
+          node: expect.any(String),
+          location: expect.any(Object)
         })
       );
       
       expect(mockLogger.debug).toHaveBeenCalledWith(
-        "Embed directive processed successfully",
+        "Successfully processed embed directive",
         expect.any(Object)
       );
     });
