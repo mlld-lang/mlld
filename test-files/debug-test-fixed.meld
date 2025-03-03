@@ -1,0 +1,27 @@
+# Debug Test File (Fixed)
+
+This is a test file for debugging variable resolution.
+
+## Variables
+
+@text testVar = "Hello, world!"
+@text nestedVar = "{{testVar}} nested"
+@import ["$PROJECTPATH/test-files/debug-imported.meld"]
+@text combinedVar = "{{testVar}} + {{importVar}}"
+
+## Display Variables
+
+The value of testVar is: {{testVar}}
+The value of nestedVar is: {{nestedVar}}
+The value of importVar is: {{importVar}}
+The value of combinedVar is: {{combinedVar}}
+
+## Conditional Section
+
+@if testVar == "Hello, world!"
+This section is displayed because testVar equals "Hello, world!"
+@endif
+
+## Import Test
+
+@import ["$PROJECTPATH/test-files/debug-import.meld"] 
