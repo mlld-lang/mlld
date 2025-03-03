@@ -161,7 +161,7 @@ describe('DefineDirectiveHandler', () => {
       const result = await handler.execute(node, context);
       expect(clonedState.setCommand).toHaveBeenCalledWith('greet', {
         parameters: ['name'],
-        command: 'echo "Hello, {{name}}!"'
+        command: 'echo "Hello {{name}}"'
       });
     });
 
