@@ -221,6 +221,11 @@ export function getSourceMapDebugInfo(): string {
   return sourceMapService.getDebugInfo();
 }
 
+// Enhanced debug helper that shows more detailed mapping information
+export function getDetailedSourceMapDebugInfo(): string {
+  return sourceMapService.getDetailedDebugInfo();
+}
+
 /**
  * Reset all source mappings (useful for tests)
  */

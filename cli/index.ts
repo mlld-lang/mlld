@@ -48,6 +48,7 @@ interface CLIOptions {
   directiveType?: string;
   includeContent?: boolean;
   debugSourceMaps?: boolean; // Flag to display source mapping information
+  detailedSourceMaps?: boolean; // Flag to display detailed source mapping information
 }
 
 /**
@@ -187,6 +188,9 @@ function parseArgs(args: string[]): CLIOptions {
         break;
       case '--debug-source-maps':
         options.debugSourceMaps = true;
+        break;
+      case '--detailed-source-maps':
+        options.detailedSourceMaps = true;
         break;
       case '--strict':
         options.strict = true;
@@ -386,8 +390,35 @@ async function watchFiles(options: CLIOptions): Promise<void> {
  */
 async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: ProcessOptions): Promise<void> {
   try {
+    // Show source map debug info before processing if requested
+    if (cliOptions.debugSourceMaps || cliOptions.detailedSourceMaps) {
+      console.log(chalk.cyan('Source map debugging enabled for file:', cliOptions.input));
+    }
+    
     // Process the file through the API with provided options
     const result = await apiMain(cliOptions.input, apiOptions);
+    
+    // Show source map debug info after processing if requested
+    if (cliOptions.debugSourceMaps) {
+      try {
+        const { getSourceMapDebugInfo } = require('@core/utils/sourceMapUtils.js');
+        console.log(chalk.cyan('\nSource map debug information:'));
+        console.log(getSourceMapDebugInfo());
+      } catch (e) {
+        console.error('Failed to get source map debug info:', e);
+      }
+    }
+    
+    // Show detailed source map debug info if requested
+    if (cliOptions.detailedSourceMaps) {
+      try {
+        const { getDetailedSourceMapDebugInfo } = require('@core/utils/sourceMapUtils.js');
+        console.log(chalk.cyan('\nDetailed source map debug information:'));
+        console.log(getDetailedSourceMapDebugInfo());
+      } catch (e) {
+        console.error('Failed to get detailed source map debug info:', e);
+      }
+    }
     
     // Handle output based on CLI options
     if (cliOptions.stdout) {
@@ -451,6 +482,28 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
       }
     }
   } catch (error) {
+    // Show source map debug info on error if requested
+    if (cliOptions.debugSourceMaps) {
+      try {
+        const { getSourceMapDebugInfo } = require('@core/utils/sourceMapUtils.js');
+        console.log(chalk.cyan('\nSource map debug information (on error):'));
+        console.log(getSourceMapDebugInfo());
+      } catch (e) {
+        console.error('Failed to get source map debug info:', e);
+      }
+    }
+    
+    // Show detailed source map debug info on error if requested
+    if (cliOptions.detailedSourceMaps) {
+      try {
+        const { getDetailedSourceMapDebugInfo } = require('@core/utils/sourceMapUtils.js');
+        console.log(chalk.cyan('\nDetailed source map debug information (on error):'));
+        console.log(getDetailedSourceMapDebugInfo());
+      } catch (e) {
+        console.error('Failed to get detailed source map debug info:', e);
+      }
+    }
+    
     // Convert to MeldError if needed
     const meldError = error instanceof MeldError 
       ? error 
@@ -560,7 +613,7 @@ console.error = function(...args: any[]) {
 /**
  * Main CLI entry point
  */
-export async function main(fsAdapter?: IFileSystem): Promise<void> {
+export async function main(fsAdapter?: any): Promise<void> {
   process.title = 'meld';
 
   // Reset errorLogged flag for each invocation of main

@@ -18,4 +18,7 @@ export interface IFileSystem {
 
   // Command execution
   executeCommand(command: string, options?: { cwd?: string }): Promise<{ stdout: string; stderr: string }>;
+  
+  // Optional testing property
+  isTestEnvironment?: boolean;
 } 

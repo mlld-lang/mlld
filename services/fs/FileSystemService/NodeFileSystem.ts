@@ -9,7 +9,7 @@ import { spawn } from 'child_process';
  */
 export class NodeFileSystem implements IFileSystem {
   // Environmental check to determine if we're in a testing environment
-  private isTestEnvironment: boolean = process.env.NODE_ENV === 'test' || process.env.VITEST;
+  isTestEnvironment = process.env.NODE_ENV === 'test' || Boolean(process.env.VITEST);
 
   async readFile(path: string): Promise<string> {
     return fs.readFile(path, 'utf-8');

@@ -34,6 +34,7 @@ import { PathOperationsService } from '@services/fs/FileSystemService/PathOperat
 import { OutputService } from '@services/pipeline/OutputService/OutputService.js';
 import { CircularityService } from '@services/resolution/CircularityService/CircularityService.js';
 import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
+import { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
 import { StateDebuggerService } from '@tests/utils/debug/StateDebuggerService/StateDebuggerService.js';
 import { ProcessOptions, Services } from '@core/types/index.js';
 import type { IStateDebuggerService } from '@tests/utils/debug/StateDebuggerService/IStateDebuggerService.js';
@@ -70,7 +71,8 @@ type RequiredServices = {
 function createDefaultServices(options: ProcessOptions): Services & RequiredServices {
   // 1. FileSystemService (base dependency)
   const pathOps = new PathOperationsService();
-  const fs = options.fs || new NodeFileSystem();
+  // If options.fs is provided, use it; otherwise create a new NodeFileSystem
+  const fs: IFileSystem = options.fs || new NodeFileSystem();
   const filesystem = new FileSystemService(pathOps, fs);
   filesystem.setFileSystem(fs);
 

@@ -432,6 +432,23 @@ export class ErrorDisplayService implements IErrorDisplayService {
           };
           return; // Found location, stop searching
         }
+        
+        // If no location on the directive error, extract from the message if possible
+        const msgMatch = err.message.match(/at line (\d+), column (\d+)/i);
+        if (msgMatch && msgMatch.length >= 3) {
+          const line = parseInt(msgMatch[1], 10);
+          const column = parseInt(msgMatch[2], 10);
+          
+          // Validate numbers are reasonable
+          if (!isNaN(line) && !isNaN(column) && line > 0 && column >= 0) {
+            location = {
+              filePath: err.filePath || filePath || '',
+              line: line,
+              column: column
+            };
+            return; // Found location, stop searching
+          }
+        }
       }
       
       // Check for any direct line and column properties (might come from meld-ast)
