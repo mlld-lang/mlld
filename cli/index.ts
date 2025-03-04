@@ -700,19 +700,44 @@ export async function main(fsAdapter?: IFileSystem): Promise<void> {
         console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
       } else {
         try {
-          if (error instanceof MeldError) {
-            // Use the new error display service for both debug and normal mode
-            const enhancedErrorDisplay = await errorDisplayService.enhanceErrorDisplay(error);
-            console.error(enhancedErrorDisplay);
-          } else {
-            // For non-MeldError instances, show a basic error message
-            console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+          // Add debug logging to see what kind of error we're dealing with
+          if (options.debug) {
+            console.error('DEBUG: Error type:', error instanceof MeldError ? 'MeldError' : (
+              error instanceof Error ? error.constructor.name : typeof error
+            ));
+            if (error instanceof MeldError) {
+              console.error('DEBUG: Error properties:');
+              console.error('  - message:', error.message);
+              console.error('  - code:', error.code);
+              console.error('  - severity:', error.severity);
+              console.error('  - filePath:', error.filePath);
+              console.error('  - context:', JSON.stringify(error.context, null, 2));
+              if (error.stack) {
+                console.error('  - stack trace available');
+              }
+            } else if (error instanceof Error) {
+              console.error('DEBUG: Standard Error properties:');
+              console.error('  - message:', error.message);
+              console.error('  - name:', error.name);
+              if (error.stack) {
+                console.error('  - stack trace available');
+              }
+            }
           }
+          
+          // Use the error display service for all error types
+          const enhancedErrorDisplay = await errorDisplayService.enhanceErrorDisplay(error);
+          console.error(enhancedErrorDisplay);
         } catch (displayError) {
           // Fallback if enhanced display fails
           logger.error('Error display failed', { 
             error: displayError instanceof Error ? displayError.message : String(displayError) 
           });
+          
+          // Add more debugging for display errors
+          if (options.debug) {
+            console.error('DEBUG: Error display failure:', displayError);
+          }
           
           // Display a basic error message as fallback
           if (error instanceof MeldError) {

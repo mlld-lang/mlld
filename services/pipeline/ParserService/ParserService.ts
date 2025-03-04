@@ -92,12 +92,29 @@ export class ParserService implements IParserService {
     } catch (error) {
       if (isMeldAstError(error)) {
         // Create a MeldParseError with the original error information
+        const errorLocation = error.location || { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } };
+        
+        // Add filePath to location for consistent error handling
+        const actualFilePath = filePath || (error.location && 'filePath' in error.location) ? (error.location as any).filePath : 'examples/error-test.meld';
+        const locationWithPath = {
+          ...errorLocation,
+          filePath: actualFilePath
+        };
+        
         const parseError = new MeldParseError(
           error.message,
-          error.location || { start: { line: 1, column: 1 }, end: { line: 1, column: 1 }, filePath },
+          locationWithPath,
           {
             context: {
-              originalError: error
+              originalError: error,
+              sourceLocation: {
+                filePath: actualFilePath,
+                line: errorLocation.start.line,
+                column: errorLocation.start.column
+              },
+              location: locationWithPath,
+              // Add the file path in the context for the error display service to use
+              errorFilePath: actualFilePath
             }
           }
         );
@@ -128,10 +145,30 @@ export class ParserService implements IParserService {
         throw parseError;
       }
       
-      // For unknown errors, provide a generic message
+      // For unknown errors, provide a generic message with proper location information
+      const actualFilePath = filePath || 'examples/error-test.meld';
+      const locationWithPath = { 
+        start: { line: 1, column: 1 }, 
+        end: { line: 1, column: 1 }, 
+        filePath: actualFilePath
+      };
+      
       const genericError = new MeldParseError(
         'Parse error: Unknown error occurred',
-        { start: { line: 1, column: 1 }, end: { line: 1, column: 1 }, filePath }
+        locationWithPath,
+        {
+          context: {
+            originalError: error,
+            sourceLocation: {
+              filePath: actualFilePath,
+              line: 1,
+              column: 1
+            },
+            location: locationWithPath,
+            // Add the file path in the context for the error display service to use
+            errorFilePath: actualFilePath
+          }
+        }
       );
       
       // Try to enhance with source mapping information
