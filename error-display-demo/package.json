@@ -1,0 +1,9 @@
+{
+  "name": "error-display-demo",
+  "version": "1.0.0",
+  "description": "Demo for Meld error display enhancements",
+  "main": "index.js",
+  "dependencies": {
+    "chalk": "^4.1.2"
+  }
+}

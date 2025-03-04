@@ -4,11 +4,11 @@
 
 @data badJson = {
   "key": "value",
-  "broken": syntax_error
+  "broken": "Fixed syntax error"
 }
 
 @define myFunction(param) {
-  @text computed = "Processed: ${param"
+  @text computed = "Processed: ${param}"
   @run [echo {{computed}}]
 }
 

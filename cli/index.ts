@@ -18,7 +18,7 @@ import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js
 import { debugResolutionCommand } from './commands/debug-resolution.js';
 import { debugContextCommand } from './commands/debug-context.js';
 import { debugTransformCommand } from './commands/debug-transform.js';
-import { ErrorDisplayService } from '@services/display/ErrorDisplayService/ErrorDisplayService.js';
+import chalk from 'chalk';
 
 // CLI Options interface
 interface CLIOptions {
@@ -517,11 +517,21 @@ let errorLogged = false;
 // Keep track of error messages we've seen
 const seenErrors = new Set<string>();
 
+// Flag to bypass the error deduplication for formatted errors
+let bypassDeduplication = false;
+
 // Store the original console.error
 const originalConsoleError = console.error;
 
 // Replace console.error with our custom implementation
 console.error = function(...args: any[]) {
+  // Enhanced error displays from our service should bypass deduplication
+  if (bypassDeduplication) {
+    // Call the original console.error directly
+    originalConsoleError.apply(console, args);
+    return;
+  }
+  
   // Convert the arguments to a string for comparison
   const errorMsg = args.join(' ');
   
@@ -691,8 +701,113 @@ export async function main(fsAdapter?: IFileSystem): Promise<void> {
         error: error instanceof Error ? error.message : String(error)
       });
       
-      // Create the error display service
-      const errorDisplayService = new ErrorDisplayService();
+      // Create a simple error display function instead of using the service
+      const displayErrorWithSourceContext = async (error: MeldError) => {
+        if (!error.filePath) {
+          return chalk.red.bold(`Error: ${error.message}`);
+        }
+        
+        // Debug the actual file path being searched
+        if (options.debug) {
+          console.error(`DEBUG: Searching for source file: ${error.filePath}`);
+        }
+        
+        try {
+          // Get file path and location
+          let filePath = error.filePath;
+          let line = 1;
+          let column = 1;
+          
+          // Extract location from error
+          if ((error as any).location?.start) {
+            line = (error as any).location.start.line;
+            column = (error as any).location.start.column;
+          } else if (error.context?.sourceLocation) {
+            line = error.context.sourceLocation.line;
+            column = error.context.sourceLocation.column;
+          }
+          
+          // Fix for hard-coded 'examples/error-test.meld' paths in error objects
+          if (filePath === 'examples/error-test.meld' && options.input) {
+            if (options.debug) {
+              console.error(`DEBUG: Replacing hardcoded path with input file: ${options.input}`);
+            }
+            filePath = options.input;
+          }
+          
+          // Verify file exists
+          let fileExists = false;
+          try {
+            await fs.access(filePath);
+            fileExists = true;
+          } catch (err) {
+            if (options.debug) {
+              console.error(`DEBUG: Could not access file: ${filePath}`);
+            }
+          }
+          
+          if (!fileExists) {
+            return chalk.red.bold(`Error in ${filePath}: ${error.message}`);
+          }
+          
+          // Read the source file
+          const sourceCode = await fs.readFile(filePath, 'utf8');
+          const lines = sourceCode.split('\n');
+          
+          // Get the error line
+          const errorLine = lines[line - 1] || '';
+          
+          // Highlight the error character
+          const beforeError = errorLine.substring(0, column - 1);
+          const errorChar = errorLine.substring(column - 1, column) || ' ';
+          const afterError = errorLine.substring(column);
+          
+          const highlightedLine = chalk.white(beforeError) + 
+                                chalk.bgRed.white(errorChar) + 
+                                chalk.white(afterError);
+          
+          // Create pointer line
+          const pointerLine = ' '.repeat(column - 1 + 6) + chalk.red('^');
+          
+          // Get context lines (up to 2 lines before and after)
+          const contextLines = [];
+          
+          for (let i = Math.max(1, line - 2); i < line; i++) {
+            contextLines.push(
+              chalk.dim(`${i.toString().padStart(4)} | `) + 
+              chalk.dim(lines[i - 1] || '')
+            );
+          }
+          
+          // Add error line
+          contextLines.push(
+            chalk.bold(`${line.toString().padStart(4)} | `) + 
+            highlightedLine
+          );
+          contextLines.push(pointerLine);
+          
+          // Add lines after
+          for (let i = line + 1; i <= Math.min(lines.length, line + 2); i++) {
+            contextLines.push(
+              chalk.dim(`${i.toString().padStart(4)} | `) + 
+              chalk.dim(lines[i - 1] || '')
+            );
+          }
+          
+          // Compose the final message
+          const errorType = error.constructor.name.replace('Meld', '').replace('Error', ' Error');
+          
+          return [
+            chalk.red.bold(`${errorType}: `) + error.message,
+            chalk.dim(`    at ${chalk.cyan(filePath)}:${chalk.yellow(line.toString())}:${chalk.yellow(column.toString())}`),
+            '',
+            ...contextLines
+          ].join('\n');
+        } catch (err) {
+          console.log("Failed to format error with source context:", err);
+          return chalk.red(`Error in ${error.filePath}: ${error.message}`);
+        }
+      };
       
       // Display error to user in a clean format
       if (process.env.NODE_ENV === 'test') {
@@ -702,16 +817,35 @@ export async function main(fsAdapter?: IFileSystem): Promise<void> {
         try {
           // Add debug logging to see what kind of error we're dealing with
           if (options.debug) {
-            console.error('DEBUG: Error type:', error instanceof MeldError ? 'MeldError' : (
-              error instanceof Error ? error.constructor.name : typeof error
-            ));
+            // Log the error type for debugging
+            const errorType = error instanceof MeldError 
+              ? `MeldError (${error.constructor.name})` 
+              : (error instanceof Error ? error.constructor.name : typeof error);
+            
+            console.error('DEBUG: Error type:', errorType);
+            
+            // For MeldError types, log additional properties
             if (error instanceof MeldError) {
               console.error('DEBUG: Error properties:');
               console.error('  - message:', error.message);
               console.error('  - code:', error.code);
               console.error('  - severity:', error.severity);
               console.error('  - filePath:', error.filePath);
+              
+              // Log specialized properties based on error type
+              if ('directiveKind' in error) {
+                console.error('  - directiveKind:', (error as any).directiveKind);
+              }
+              if ('location' in error) {
+                console.error('  - location:', JSON.stringify((error as any).location, null, 2));
+              }
+              if ('details' in error) {
+                console.error('  - details:', JSON.stringify((error as any).details, null, 2));
+              }
+              
+              // Log context for debugging
               console.error('  - context:', JSON.stringify(error.context, null, 2));
+              
               if (error.stack) {
                 console.error('  - stack trace available');
               }
@@ -725,9 +859,59 @@ export async function main(fsAdapter?: IFileSystem): Promise<void> {
             }
           }
           
-          // Use the error display service for all error types
-          const enhancedErrorDisplay = await errorDisplayService.enhanceErrorDisplay(error);
-          console.error(enhancedErrorDisplay);
+          if (error instanceof MeldError) {
+            try {
+              // Always use input file path if available to handle hardcoded paths
+              if (options.input && error.filePath === 'examples/error-test.meld') {
+                // Create a clone of the error with the correct file path
+                const fixedPathError = new MeldError(error.message, {
+                  code: error.code,
+                  severity: error.severity,
+                  filePath: options.input,
+                  context: error.context ? { ...error.context } : {}
+                });
+                
+                // Copy special properties if they exist (like location)
+                for (const prop of ['location', 'details', 'directiveKind']) {
+                  if (prop in error) {
+                    (fixedPathError as any)[prop] = (error as any)[prop];
+                  }
+                }
+                
+                // Use this error instead
+                error = fixedPathError;
+              }
+              
+              // Bypass deduplication for our enhanced display
+              bypassDeduplication = true;
+              
+              // Clear previous errors from the seen set that might conflict
+              seenErrors.clear(); // Clear all seen errors to be safe
+              
+              // Use our custom error display function
+              const enhancedErrorDisplay = await displayErrorWithSourceContext(error);
+              
+              // Display the enhanced error (use console.log for cleaner output)
+              console.log('\n'); // Add a blank line for separation
+              console.error(enhancedErrorDisplay);
+              
+              // Reset the bypass flag
+              bypassDeduplication = false;
+            } catch (displayError) {
+              // If the enhanced display fails, fall back to basic formatting
+              console.error(`\nError in ${error.filePath || 'unknown'}: ${error.message}`);
+              
+              if (options.debug) {
+                console.error(`\nDebug: Display error: ${displayError}`);
+              }
+            }
+          } else if (error instanceof Error) {
+            // For standard Error types
+            console.error(`Error: ${error.message}`);
+          } else {
+            // For other unknown error types
+            console.error(`Error: ${String(error)}`);
+          }
         } catch (displayError) {
           // Fallback if enhanced display fails
           logger.error('Error display failed', { 

@@ -83,7 +83,8 @@ export class ParserService implements IParserService {
       if (result.errors && result.errors.length > 0) {
         result.errors.forEach(error => {
           if (isMeldAstError(error)) {
-            logger.warn('Parse warning', { error: error.toString() });
+            // Don't log warnings directly - we'll handle them through the error display service
+            logger.debug('Parse warning detected', { errorMessage: error.toString() });
           }
         });
       }
@@ -94,8 +95,8 @@ export class ParserService implements IParserService {
         // Create a MeldParseError with the original error information
         const errorLocation = error.location || { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } };
         
-        // Add filePath to location for consistent error handling
-        const actualFilePath = filePath || (error.location && 'filePath' in error.location) ? (error.location as any).filePath : 'examples/error-test.meld';
+        // Always use the provided filePath if we have one, don't rely on what's in the error
+        const actualFilePath = filePath;
         const locationWithPath = {
           ...errorLocation,
           filePath: actualFilePath
@@ -146,7 +147,7 @@ export class ParserService implements IParserService {
       }
       
       // For unknown errors, provide a generic message with proper location information
-      const actualFilePath = filePath || 'examples/error-test.meld';
+      const actualFilePath = filePath;
       const locationWithPath = { 
         start: { line: 1, column: 1 }, 
         end: { line: 1, column: 1 }, 
