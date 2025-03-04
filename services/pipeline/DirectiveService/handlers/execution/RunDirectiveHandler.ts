@@ -43,55 +43,70 @@ export class RunDirectiveHandler implements IDirectiveHandler {
         context
       );
 
-      // Execute the command
-      const { stdout, stderr } = await this.fileSystemService.executeCommand(
-        resolvedCommand,
-        {
-          cwd: context.workingDirectory || this.fileSystemService.getCwd()
-        }
-      );
-
-      // Store the output in state variables
-      if (node.directive.output) {
-        clonedState.setTextVar(node.directive.output, stdout);
-      } else {
-        clonedState.setTextVar('stdout', stdout);
-      }
-      if (stderr) {
-        clonedState.setTextVar('stderr', stderr);
-      }
-
-      // In transformation mode, return a replacement node with the command output
-      if (clonedState.isTransformationEnabled()) {
-        const content = stdout && stderr ? `${stdout}\n${stderr}` : stdout || stderr || '';
-        const replacement: TextNode = {
-          type: 'Text',
-          content,
-          location: node.location
-        };
+      // Show feedback that command is running (skips in test env)
+      this.showRunningCommandFeedback(resolvedCommand);
+      
+      try {
+        // Execute the command
+        const { stdout, stderr } = await this.fileSystemService.executeCommand(
+          resolvedCommand,
+          {
+            cwd: context.workingDirectory || this.fileSystemService.getCwd()
+          }
+        );
         
-        // Copy variables from cloned state to context state
+        // Clear the animated feedback after command completes
+        this.clearCommandFeedback();
+
+        // Store the output in state variables
         if (node.directive.output) {
-          context.state.setTextVar(node.directive.output, stdout);
+          clonedState.setTextVar(node.directive.output, stdout);
         } else {
-          context.state.setTextVar('stdout', stdout);
+          clonedState.setTextVar('stdout', stdout);
         }
         if (stderr) {
-          context.state.setTextVar('stderr', stderr);
+          clonedState.setTextVar('stderr', stderr);
         }
-        
-        clonedState.transformNode(node, replacement);
-        return { state: clonedState, replacement };
-      }
 
-      // In normal mode, return a placeholder node
-      const placeholder: TextNode = {
-        type: 'Text',
-        content: '[run directive output placeholder]',
-        location: node.location
-      };
-      return { state: clonedState, replacement: placeholder };
+        // In transformation mode, return a replacement node with the command output
+        if (clonedState.isTransformationEnabled()) {
+          const content = stdout && stderr ? `${stdout}\n${stderr}` : stdout || stderr || '';
+          const replacement: TextNode = {
+            type: 'Text',
+            content,
+            location: node.location
+          };
+          
+          // Copy variables from cloned state to context state
+          if (node.directive.output) {
+            context.state.setTextVar(node.directive.output, stdout);
+          } else {
+            context.state.setTextVar('stdout', stdout);
+          }
+          if (stderr) {
+            context.state.setTextVar('stderr', stderr);
+          }
+          
+          clonedState.transformNode(node, replacement);
+          return { state: clonedState, replacement };
+        }
+
+        // In normal mode, return a placeholder node
+        const placeholder: TextNode = {
+          type: 'Text',
+          content: '[run directive output placeholder]',
+          location: node.location
+        };
+        return { state: clonedState, replacement: placeholder };
+      } catch (error) {
+        // Make sure to clear animation on command execution error
+        this.clearCommandFeedback();
+        throw error;
+      }
     } catch (error) {
+      // Clear any animation if there's an error
+      this.clearCommandFeedback();
+      
       directiveLogger.error('Error executing run directive:', error);
       
       // If it's already a DirectiveError, just rethrow it
@@ -114,6 +129,64 @@ export class RunDirectiveHandler implements IDirectiveHandler {
           severity: DirectiveErrorSeverity[DirectiveErrorCode.EXECUTION_FAILED]
         }
       );
+    }
+  }
+  
+  // Reference to the interval for the animation
+  private animationInterval: NodeJS.Timeout | null = null;
+  
+  // Determine if we're in a test environment
+  private isTestEnvironment: boolean = process.env.NODE_ENV === 'test' || process.env.VITEST;
+  
+  /**
+   * Display animated feedback that a command is running
+   */
+  private showRunningCommandFeedback(command: string): void {
+    // Skip animation in test environments
+    if (this.isTestEnvironment) {
+      return;
+    }
+    
+    // Clear any existing animation
+    this.clearCommandFeedback();
+    
+    // Start position for the ellipses
+    let count = 0;
+    
+    // Function to update the animation
+    const updateAnimation = () => {
+      // Create the ellipses string with the appropriate number of dots
+      const ellipses = '.'.repeat(count % 4);
+      
+      // Clear the current line and print the message with animated ellipses
+      process.stdout.write(`\r\x1b[K`); // Clear the line
+      process.stdout.write(`Running \`${command}\`${ellipses}`);
+      
+      count++;
+    };
+    
+    // Initial display
+    updateAnimation();
+    
+    // Update the animation every 500ms
+    this.animationInterval = setInterval(updateAnimation, 500);
+  }
+  
+  /**
+   * Clear the command feedback animation
+   */
+  private clearCommandFeedback(): void {
+    // Skip in test environments
+    if (this.isTestEnvironment) {
+      return;
+    }
+    
+    if (this.animationInterval) {
+      clearInterval(this.animationInterval);
+      this.animationInterval = null;
+      
+      // Clear the line
+      process.stdout.write(`\r\x1b[K`);
     }
   }
 } 

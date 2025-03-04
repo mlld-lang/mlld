@@ -2,7 +2,7 @@
 
 ## Overview
 
-The goal of this second phase is to enhance the CLI error output to leverage our source maps implementation and create a more user-friendly error display. When errors occur, we'll show the original source code line with syntax highlighting, a red highlight for the problematic section, and a caret pointing to the exact location of the error.
+The goal of this second phase is to enhance the CLI error output to leverage our source maps implementation and create a more user-friendly error display. When errors occur, we'll show the original source code line with syntax highlighting, a red highlight for the problematic section, and a caret pointing to the exact location of the error. 
 
 ## Requirements
 

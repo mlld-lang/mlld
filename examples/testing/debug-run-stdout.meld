@@ -1,0 +1,2 @@
+>> Testing just the cpai stdout command
+@run [cpai api cli core services --stdout] 

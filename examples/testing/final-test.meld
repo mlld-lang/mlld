@@ -1,0 +1,13 @@
+>> Testing a combination of working run and embed directives
+
+>> Simple run command
+@run [echo "Hello, world!"]
+
+>> Data variable and embed
+@data role = {
+    "architect": "You are a senior architect skilled in assessing TypeScript codebases."
+}
+@embed {{role.architect}}
+
+>> Embed from file
+@embed [$./docs/UX.md] 
