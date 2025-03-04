@@ -510,11 +510,17 @@ async function processFile(options: CLIOptions): Promise<void> {
   await processFileWithOptions(options, apiOptions);
 }
 
+// Track if an error has been logged to prevent duplicate messages
+let errorLogged = false;
+
 /**
  * Main CLI entry point
  */
 export async function main(fsAdapter?: IFileSystem): Promise<void> {
   process.title = 'meld';
+
+  // Reset errorLogged flag for each invocation of main
+  errorLogged = false;
 
   // Explicitly disable debug mode by default
   process.env.DEBUG = '';
@@ -652,31 +658,37 @@ export async function main(fsAdapter?: IFileSystem): Promise<void> {
       await processFile(options);
     }
   } catch (error) {
-    logger.error('CLI execution failed', {
-      error: error instanceof Error ? error.message : String(error)
-    });
-    
-    // Display error to user in a clean format
-    if (process.env.NODE_ENV === 'test') {
-      // Show errors with the "Error:" prefix for test expectations
-      console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
-    } else if (options && options.debug) {
-      // Show full error details in debug mode
-      console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
-    } else {
-      // Show simplified error in normal mode, with source location if available
-      if (error instanceof MeldError) {
-        if (error.filePath && error.context?.sourceLocation) {
-          const sourceLocation = error.context.sourceLocation;
-          console.error(`Error in ${sourceLocation.filePath}:${sourceLocation.line}: ${error.message}`);
-        } else if (error.filePath) {
-          console.error(`Error in ${error.filePath}: ${error.message}`);
-        } else {
-          console.error(`Error: ${error.message}`);
-        }
-      } else {
+    // Only log if not already logged
+    if (!errorLogged) {
+      logger.error('CLI execution failed', {
+        error: error instanceof Error ? error.message : String(error)
+      });
+      
+      // Display error to user in a clean format
+      if (process.env.NODE_ENV === 'test') {
+        // Show errors with the "Error:" prefix for test expectations
         console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+      } else if (options && options.debug) {
+        // Show full error details in debug mode
+        console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+      } else {
+        // Show simplified error in normal mode, with source location if available
+        if (error instanceof MeldError) {
+          if (error.filePath && error.context?.sourceLocation) {
+            const sourceLocation = error.context.sourceLocation;
+            console.error(`Error in ${sourceLocation.filePath}:${sourceLocation.line}: ${error.message}`);
+          } else if (error.filePath) {
+            console.error(`Error in ${error.filePath}: ${error.message}`);
+          } else {
+            console.error(`Error: ${error.message}`);
+          }
+        } else {
+          console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+        }
       }
+      
+      // Mark as logged to prevent duplicate logging
+      errorLogged = true;
     }
     
     // Exit with error code for non-test environments
@@ -692,7 +704,7 @@ export async function main(fsAdapter?: IFileSystem): Promise<void> {
 // Only call main if this file is being run directly (not imported)
 if (require.main === module) {
   main().catch(err => {
-    console.error('Error:', err.message || err);
+    // Don't log the error again since it's already logged in the main function
     process.exit(1);
   });
 } 

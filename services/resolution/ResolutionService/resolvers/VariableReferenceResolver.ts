@@ -401,12 +401,14 @@ export class VariableReferenceResolver {
     context: ResolutionContext, 
     resolutionPath: string[] = []
   ): Promise<string> {
-    // Debug the incoming context state
-    console.log('*** resolveText context state:', {
-      stateExists: !!context.state,
-      stateMethods: context.state ? Object.keys(context.state) : 'undefined',
-      text
-    });
+    // Wrap any console.log statements in DEBUG checks
+    if (process.env.DEBUG === 'true') {
+      console.log('*** resolveText context state:', {
+        stateExists: !!context.state,
+        stateMethods: context.state ? Object.keys(context.state) : 'undefined',
+        text
+      });
+    }
     
     if (!text) {
       return '';
@@ -683,23 +685,31 @@ export class VariableReferenceResolver {
             // Direct implementation of field access
             let current = value;
             
-            // Enhanced debug logging for field access
-            console.log('FIELD ACCESS - Initial object:', JSON.stringify(value, null, 2));
-            console.log('FIELD ACCESS - Field path:', parts.slice(1));
+            // Wrap any console.log statements in DEBUG checks
+            if (process.env.DEBUG === 'true') {
+              console.log('FIELD ACCESS - Initial object:', JSON.stringify(value, null, 2));
+              console.log('FIELD ACCESS - Field path:', parts.slice(1));
+            }
             
             // Process each field in the path
             for (const field of parts.slice(1)) {
-              console.log(`FIELD ACCESS - Accessing field: ${field}`);
+              if (process.env.DEBUG === 'true') {
+                console.log(`FIELD ACCESS - Accessing field: ${field}`);
+              }
               
               // Check if we can access this field
               if (current === null || current === undefined) {
-                console.log('FIELD ACCESS - Cannot access field of null/undefined');
+                if (process.env.DEBUG === 'true') {
+                  console.log('FIELD ACCESS - Cannot access field of null/undefined');
+                }
                 throw new Error(`Cannot access field ${field} of undefined or null`);
               }
               
               // Check if the current value is an object and has the field
               if (typeof current !== 'object' || !(field in current)) {
-                console.log(`FIELD ACCESS - Field ${field} not found in object:`, current);
+                if (process.env.DEBUG === 'true') {
+                  console.log(`FIELD ACCESS - Field ${field} not found in object:`, current);
+                }
                 throw new Error(`Cannot access field ${field} of ${typeof current}`);
               }
               
@@ -707,14 +717,18 @@ export class VariableReferenceResolver {
               if (Array.isArray(current) && /^\d+$/.test(field)) {
                 const index = parseInt(field, 10);
                 if (index < 0 || index >= current.length) {
-                  console.log(`FIELD ACCESS - Array index out of bounds: ${index} (length: ${current.length})`);
+                  if (process.env.DEBUG === 'true') {
+                    console.log(`FIELD ACCESS - Array index out of bounds: ${index} (length: ${current.length})`);
+                  }
                   throw new Error(`Array index out of bounds: ${index} (length: ${current.length})`);
                 }
                 current = current[index];
               } else {
                 current = current[field];
               }
-              console.log(`FIELD ACCESS - Field value:`, current);
+              if (process.env.DEBUG === 'true') {
+                console.log(`FIELD ACCESS - Field value:`, current);
+              }
             }
             
             // Update the value with the field access result
@@ -722,10 +736,14 @@ export class VariableReferenceResolver {
             
             // Check if the field access actually changed the value
             if (value === originalObject) {
-              console.warn(`Field access may not have worked correctly for ${parts.join('.')}`);
+              if (process.env.DEBUG === 'true') {
+                console.warn(`Field access may not have worked correctly for ${parts.join('.')}`);
+              }
             }
             
-            console.log('FIELD ACCESS - Final result:', value);
+            if (process.env.DEBUG === 'true') {
+              console.log('FIELD ACCESS - Final result:', value);
+            }
           } catch (error) {
             if (error instanceof MeldResolutionError) {
               throw error;

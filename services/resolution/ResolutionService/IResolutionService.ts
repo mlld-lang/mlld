@@ -16,6 +16,7 @@ export interface StructuredPath {
     cwd?: boolean;
   };
   normalized?: string;
+  isVariableReference?: boolean;
 }
 
 /**
