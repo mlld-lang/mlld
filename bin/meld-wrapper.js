@@ -1,37 +1,19 @@
 #!/usr/bin/env node
 
-console.log('Loading reflect-metadata...');
-// Ensure reflect-metadata is loaded before tsyringe
-require('reflect-metadata');
+// Use Node's spawn to run with the --require flag
+const { spawnSync } = require('child_process');
 
-console.log('Loading CLI...');
-// Disable error deduplication by setting global flag
-global.MELD_DISABLE_ERROR_DEDUPLICATION = true;
+// Get the arguments passed to this script
+const args = process.argv.slice(2);
 
-// Capture unhandled promise rejections
-process.on('unhandledRejection', (reason, promise) => {
-  console.log('Unhandled Rejection at:', promise, 'reason:', reason);
+// Run the CLI with the --require flag to ensure reflect-metadata is loaded first
+const result = spawnSync('node', [
+  '--require', 'reflect-metadata',
+  require.resolve('../dist/cli.cjs'),
+  ...args
+], {
+  stdio: 'inherit' // Pass stdin/stdout/stderr through to the parent process
 });
 
-// Capture uncaught exceptions
-process.on('uncaughtException', (error) => {
-  console.log('Uncaught Exception:', error);
-});
-
-try {
-  console.log('Requiring CLI...');
-  // Now load the CLI
-  const cli = require('../dist/cli.cjs');
-  console.log('CLI loaded. Available exports:', Object.keys(cli));
-  
-  if (cli.main) {
-    console.log('Calling main function...');
-    cli.main().catch(error => {
-      console.log('Error in main function:', error);
-    });
-  } else {
-    console.log('No main function found in exports');
-  }
-} catch (error) {
-  console.log('Error loading CLI:', error);
-} 
+// Forward the exit code
+process.exit(result.status); 
