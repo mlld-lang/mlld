@@ -381,7 +381,11 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
     // Handle output based on CLI options
     if (cliOptions.stdout) {
       console.log(result);
-      logger.info('Successfully wrote output to stdout');
+      if (!cliOptions.debug) {
+        console.log('✅ Successfully processed Meld file');
+      } else {
+        logger.info('Successfully wrote output to stdout');
+      }
     } else {
       // Handle output path
       let outputPath = cliOptions.output;
@@ -418,7 +422,13 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
       }
       
       await fs.writeFile(outputPath, result);
-      logger.info('Successfully wrote output file', { path: outputPath });
+      
+      // Show a clean success message in normal mode
+      if (!cliOptions.debug) {
+        console.log(`✅ Successfully processed Meld file and wrote output to ${outputPath}`);
+      } else {
+        logger.info('Successfully wrote output file', { path: outputPath });
+      }
     }
   } catch (error) {
     // Convert to MeldError if needed
@@ -429,12 +439,17 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
           code: 'PROCESSING_ERROR'
         });
     
-    // Log the error
+    // Log the error for detailed debugging
     logger.error('Error processing file', {
       error: meldError.message,
       code: meldError.code,
       severity: meldError.severity
     });
+    
+    // In non-debug mode, show a simple error message
+    if (!cliOptions.debug) {
+      console.error(`❌ ${meldError.message}`);
+    }
     
     // Rethrow for the main function to handle
     throw meldError;
@@ -561,9 +576,16 @@ export async function main(fsAdapter?: IFileSystem): Promise<void> {
         (serviceConfig as any).level = 'debug';
       });
     } else if (options.verbose) {
-      logger.level = 'debug';
+      logger.level = 'info'; // Show info level messages for verbose
     } else {
-      logger.level = 'error'; // Only show error messages by default
+      // Only show errors by default (no debug logs)
+      logger.level = 'error';
+      process.env.DEBUG = ''; // Explicitly disable DEBUG
+      
+      // Set all service loggers to only show errors
+      Object.values(loggingConfig.services).forEach(serviceConfig => {
+        (serviceConfig as any).level = 'error';
+      });
     }
 
     // Handle testing with custom filesystem
@@ -594,8 +616,18 @@ export async function main(fsAdapter?: IFileSystem): Promise<void> {
       error: error instanceof Error ? error.message : String(error)
     });
     
-    // Display error to user
-    console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+    // Display error to user in a clean format
+    if (options.debug) {
+      // Show full error details in debug mode
+      console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+    } else {
+      // Show simplified error in normal mode
+      if (error instanceof MeldError) {
+        console.error(`❌ ${error.message}`);
+      } else {
+        console.error(`❌ Error processing file: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
     
     // Exit with error code for non-test environments
     if (process.env.NODE_ENV !== 'test') {

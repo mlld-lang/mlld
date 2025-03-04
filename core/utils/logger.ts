@@ -10,6 +10,17 @@ const consoleFormat = winston.format.combine(
   winston.format.timestamp({ format: loggingConfig.format.timestamp }),
   winston.format.colorize({ all: loggingConfig.format.colorize }),
   winston.format.printf(({ level, message, timestamp, service, ...metadata }) => {
+    // In non-debug mode, use more concise output
+    if (process.env.DEBUG !== 'true') {
+      // For non-error levels, just show the message
+      if (level !== 'error') {
+        return message;
+      }
+      // For errors, include minimal context
+      return `Error: ${message}`;
+    }
+    
+    // Full verbose output for debug mode
     let msg = `${timestamp} [${level}]${service ? ` [${service}]` : ''} ${message}`;
     if (Object.keys(metadata).length > 0) {
       msg += '\n' + JSON.stringify(metadata, null, 2);
@@ -23,13 +34,33 @@ const fileFormat = winston.format.combine(
   winston.format.json()
 );
 
+// Determine the log level based on environment variables
+const getLogLevel = () => {
+  // Explicit LOG_LEVEL takes precedence
+  if (process.env.LOG_LEVEL) {
+    return process.env.LOG_LEVEL;
+  }
+  
+  // During tests, respect TEST_LOG_LEVEL or default to silent for minimal output
+  if (process.env.NODE_ENV === 'test') {
+    return process.env.TEST_LOG_LEVEL || 'error';
+  }
+  
+  // In debug mode use debug level
+  if (process.env.DEBUG === 'true') {
+    return 'debug';
+  }
+  
+  // Otherwise use the default level
+  return loggingConfig.defaultLevel;
+};
 // Create the logger instance
 export const logger = winston.createLogger({
-  level: process.env.LOG_LEVEL || (process.env.NODE_ENV === 'test' ? 'error' : (process.env.DEBUG ? 'debug' : loggingConfig.defaultLevel)),
+  level: getLogLevel(),
   levels: loggingConfig.levels,
   transports: [
-    // Console transport (but not during test)
-    ...(process.env.NODE_ENV === 'test' ? [] : [
+    // Console transport (but not during silent test)
+    ...((process.env.NODE_ENV === 'test' && !process.env.TEST_LOG_LEVEL) ? [] : [
       new winston.transports.Console({
         format: consoleFormat
       })
@@ -68,8 +99,28 @@ export interface Logger {
 export function createServiceLogger(serviceName: keyof typeof loggingConfig.services): winston.Logger {
   const serviceConfig = loggingConfig.services[serviceName];
   
+  // Determine the service-specific log level based on environment variables
+  const getServiceLogLevel = () => {
+    // Explicit LOG_LEVEL takes precedence
+    if (process.env.LOG_LEVEL) {
+      return process.env.LOG_LEVEL;
+    }
+    
+    // During tests, respect TEST_LOG_LEVEL or default to error for minimal output
+    if (process.env.NODE_ENV === 'test') {
+      return process.env.TEST_LOG_LEVEL || 'error';
+    }
+    
+    // In debug mode use debug level
+    if (process.env.DEBUG === 'true') {
+      return 'debug';
+    }
+    
+    // Otherwise use the service's configured level
+    return serviceConfig.level;
+  };
   const logger = winston.createLogger({
-    level: process.env.NODE_ENV === 'test' ? 'error' : (process.env.DEBUG ? 'debug' : serviceConfig.level),
+    level: getServiceLogLevel(),
     format: winston.format.combine(
       winston.format.timestamp(),
       winston.format.json()
@@ -80,7 +131,7 @@ export function createServiceLogger(serviceName: keyof typeof loggingConfig.serv
       ...(process.env.NODE_ENV === 'test' ? [] : [
         new winston.transports.Console({
           format: consoleFormat,
-          level: serviceConfig.level
+          level: getServiceLogLevel()
         })
       ])
     ]
