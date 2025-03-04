@@ -43,6 +43,12 @@ export const atomic = {
   withProjectPathAndSection: createExample(
     'Embed with project path and section',
     `@embed "$PROJECTPATH/README.md#section"`
+  ),
+  
+  withVariableContent: createExample(
+    'Embed with variable content',
+    `@text content = "# Content to embed"
+@embed {{content}}`
   )
 };
 

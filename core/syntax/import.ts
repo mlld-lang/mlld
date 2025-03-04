@@ -33,7 +33,17 @@ export const atomic = {
   
   homePathImport: createExample(
     'Import with home path variable',
+    `@import [$HOMEPATH/examples/basic.meld]`
+  ),
+  
+  homePathShortImport: createExample(
+    'Import with home path shorthand',
     `@import [$~/examples/basic.meld]`
+  ),
+  
+  homePathNestedImport: createExample(
+    'Import with home path and deeply nested path',
+    `@import [$~/dev/meld/examples/example-import.meld]`
   )
 };
 

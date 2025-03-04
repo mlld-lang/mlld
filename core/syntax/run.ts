@@ -45,6 +45,19 @@ export const atomic = {
   outputCapture: createExample(
     'Run with output capture',
     `@text variable_name = @run [echo test]`
+  ),
+  
+  functionCallSyntax: createExample(
+    'Run with function-call syntax for defined commands',
+    `@define echo(value) = @run [echo {{value}}]
+@run $echo("Hello, World!")`
+  ),
+  
+  functionCallWithVariable: createExample(
+    'Run with function-call syntax using variable',
+    `@define echo(value) = @run [echo {{value}}]
+@text message = "Hello from variable"
+@run $echo({{message}})`
   )
 };
 
