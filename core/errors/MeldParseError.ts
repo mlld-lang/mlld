@@ -15,6 +15,7 @@ export interface MeldParseErrorOptions {
   cause?: Error;
   severity?: ErrorSeverity;
   context?: any;
+  filePath?: string; // Add filePath to options
 }
 
 /**
@@ -64,7 +65,7 @@ export class MeldParseError extends MeldError {
     
     super(`Parse error: ${message}${locationStr}`, {
       cause: options.cause,
-      filePath,
+      filePath: options.filePath || filePath, // Use options.filePath if provided
       severity,
       context: {
         ...options.context,

@@ -929,6 +929,76 @@ export async function main(fsAdapter?: IFileSystem): Promise<void> {
               // Create a new instance of the ErrorDisplayService with the file system
               const errorDisplayService = new ErrorDisplayService(fsService);
               
+              // Debug logging for file path issues
+              if (options.debug) {
+                console.error("DEBUG: Input file path:", options.input);
+                
+                // Cast error to MeldError for type safety
+                const meldError = error as MeldError;
+                
+                console.error("DEBUG: Error filePath property:", meldError.filePath);
+                if (meldError.context?.sourceLocation) {
+                  console.error("DEBUG: Error sourceLocation.filePath:", meldError.context.sourceLocation.filePath);
+                }
+                if (meldError.context?.errorFilePath) {
+                  console.error("DEBUG: Error context.errorFilePath:", meldError.context.errorFilePath);
+                }
+                if ((meldError as any).location?.filePath) {
+                  console.error("DEBUG: Error location.filePath:", (meldError as any).location.filePath);
+                }
+
+                // Check if file exists at the input path
+                try {
+                  fsService.exists(options.input).then(exists => {
+                    console.error("DEBUG: Input file exists:", exists);
+                  });
+                } catch (err) {
+                  console.error("DEBUG: Error checking if file exists:", err);
+                }
+              }
+              
+              // Fix file path issues - if filePath is missing, create a new error with the correct path
+              // Cast error to MeldError for type safety
+              let meldError = error as MeldError;
+              
+              if (!meldError.filePath && options.input) {
+                // Start with a clean context object
+                const newContext: Record<string, any> = {};
+                
+                // Copy the original context if available
+                if (meldError.context) {
+                  Object.assign(newContext, meldError.context);
+                }
+                
+                // Set sourceLocation with the proper file path
+                if (meldError.context?.sourceLocation) {
+                  newContext.sourceLocation = {
+                    ...meldError.context.sourceLocation,
+                    filePath: options.input
+                  };
+                }
+                
+                // Create a new error with the correct file path
+                const updatedError = new MeldError(meldError.message, {
+                  filePath: options.input,
+                  code: meldError.code,
+                  severity: meldError.severity,
+                  cause: meldError instanceof Error ? meldError : undefined,
+                  context: newContext
+                });
+                
+                // For any other properties, try to copy them
+                for (const prop of ['location', 'details', 'directiveKind', 'originalError']) {
+                  if (prop in meldError) {
+                    (updatedError as any)[prop] = (meldError as any)[prop];
+                  }
+                }
+                
+                // Use this updated error instead
+                meldError = updatedError;
+                error = updatedError;
+              }
+              
               // Use the enhanced error display service which now handles nested errors correctly
               const enhancedErrorDisplay = await errorDisplayService.enhanceErrorDisplay(error);
               

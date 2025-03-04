@@ -16,8 +16,9 @@ interface ParseError {
   };
 }
 
-interface MeldAstError {
+interface MeldAstError extends Error {
   message: string;
+  name: string;
   location?: {
     start: { line: number; column: number };
     end: { line: number; column: number };
@@ -30,6 +31,7 @@ function isMeldAstError(error: unknown): error is MeldAstError {
     typeof error === 'object' &&
     error !== null &&
     'message' in error &&
+    'name' in error &&
     typeof (error as any).toString === 'function'
   );
 }
@@ -106,6 +108,8 @@ export class ParserService implements IParserService {
           error.message,
           locationWithPath,
           {
+            filePath: actualFilePath, // Directly set filePath in the error options
+            cause: isMeldAstError(error) ? error : undefined, // Set the original error as the cause only if it's a proper Error
             context: {
               originalError: error,
               sourceLocation: {
@@ -158,6 +162,8 @@ export class ParserService implements IParserService {
         'Parse error: Unknown error occurred',
         locationWithPath,
         {
+          filePath: actualFilePath, // Directly set filePath in the error options
+          cause: isMeldAstError(error) ? error : undefined, // Set the original error as the cause only if it's a proper Error
           context: {
             originalError: error,
             sourceLocation: {
