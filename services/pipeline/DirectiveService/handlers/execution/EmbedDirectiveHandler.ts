@@ -233,6 +233,30 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
 
         // Read the file content
         content = await this.fileSystemService.readFile(resolvedPath);
+        
+        // Register the source file with source mapping service if available
+        try {
+          const { registerSource, addMapping } = require('@core/utils/sourceMapUtils.js');
+          
+          // Register the source file content
+          registerSource(resolvedPath, content);
+          
+          // Add a mapping from the first line of the source file to the location of the embed directive
+          if (node.location && node.location.start) {
+            addMapping(
+              resolvedPath,
+              1, // Start at line 1 of the embedded file
+              1, // Start at column 1
+              node.location.start.line,
+              node.location.start.column
+            );
+            
+            this.logger.debug(`Added source mapping from ${resolvedPath}:1:1 to line ${node.location.start.line}:${node.location.start.column}`);
+          }
+        } catch (err) {
+          // Source mapping is optional, so just log a debug message if it fails
+          this.logger.debug('Source mapping not available, skipping', { error: err });
+        }
       }
       
       // Extract the requested section if specified

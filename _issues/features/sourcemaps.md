@@ -345,25 +345,29 @@ This approach caused several issues:
 
 You're right that the core functionality of source mapping (intercepting errors, tracking line/column information, and enhancing error messages) doesn't inherently require dependency injection.
 
-I should revise the implementation plan to provide a simpler approach that doesn't rely on Inversify, making it more lightweight and easier to integrate without dependency issues.</think># Revised Source Mapping Implementation Plan
+I should revise the implementation plan to provide a simpler approach that doesn't rely on Inversify, making it more lightweight and easier to integrate without dependency issues.</think># Sourcemaps Implementation Plan
 
-You're absolutely right - we don't need to use Inversify's dependency injection for this feature. The core functionality of source mapping is straightforward and can be implemented without the complexity of DI containers and decorators.
+## Overview
 
-## Why Inversify Caused Problems
+This document outlines the implementation plan for source mapping capabilities in Meld. The source mapping system will provide better error reporting by tracking the original location of content in imported and embedded files, enabling more precise error messages that point to the actual source of problems.
 
-The problems we encountered were primarily due to:
-1. Using `@injectable()` and `@inject()` decorators requiring experimental decorator support
-2. Complex dependency chains through the DI container
-3. Path alias resolution issues in tests
+## Goals
 
-## Simpler Implementation Approach
+1. Enhance error messages with original source file information
+2. Integrate with the existing error handling architecture
+3. Support both `@import` and `@embed` directives
+4. Map LLMXML and meld-ast parser errors back to source files
+5. Provide debugging utilities for inspecting source maps
+6. Maintain compatibility with both strict and permissive error modes
 
-Here's a revised approach that avoids dependency injection:
+## Technical Approach
 
-### 1. Create a Plain Source Mapping Service
+After examining the codebase and considering the existing architecture, we'll implement source mapping using a standalone service that integrates with key components without requiring dependency injection or changes to the core error architecture.
+
+### 1. Source Map Service
 
 ```typescript
-// core/SourceMapService.ts
+// core/utils/SourceMapService.ts
 export interface SourceLocation {
   filePath: string;
   line: number;
@@ -376,24 +380,26 @@ export class SourceMapService {
     source: SourceLocation;
     combined: { line: number; column: number };
   }> = [];
-
+  
+  // Register a source file and its content
   registerSource(filePath: string, content: string): void {
-    // Split content into lines for easier line-based access
     this.sources.set(filePath, content.split('\n'));
   }
-
+  
+  // Add a mapping from source file location to combined file location
   addMapping(source: SourceLocation, combinedLine: number, combinedColumn: number): void {
     this.mappings.push({
       source,
       combined: { line: combinedLine, column: combinedColumn }
     });
   }
-
+  
+  // Find the original location for a given line/column in the combined content
   findOriginalLocation(combinedLine: number, combinedColumn: number): SourceLocation | null {
     // Find the closest mapping that's less than or equal to the target line
     let bestMapping = null;
     let bestDistance = Infinity;
-
+    
     for (const mapping of this.mappings) {
       if (mapping.combined.line <= combinedLine) {
         const distance = combinedLine - mapping.combined.line;
@@ -403,7 +409,7 @@ export class SourceMapService {
         }
       }
     }
-
+    
     if (bestMapping) {
       // Calculate the original line by adding the line offset to the source line
       const originalLine = bestMapping.source.line + (combinedLine - bestMapping.combined.line);
@@ -419,96 +425,205 @@ export class SourceMapService {
         column: originalColumn
       };
     }
-
+    
     return null;
   }
-
+  
+  // Get debug information about all mappings
   getDebugInfo(): string {
     return this.mappings.map(m => 
       `${m.source.filePath}:${m.source.line}:${m.source.column} -> combined:${m.combined.line}:${m.combined.column}`
     ).join('\n');
   }
+  
+  // Reset all mappings (useful for tests)
+  reset(): void {
+    this.sources.clear();
+    this.mappings = [];
+  }
 }
+
+// Create a singleton instance for use throughout the app
+export const sourceMapService = new SourceMapService();
 ```
 
-### 2. Use a Module-Level Instance (Singleton Pattern)
-
-Instead of using DI, we can use a module-level singleton pattern:
+### 2. Error Enhancement Utilities
 
 ```typescript
-// core/sourceMapping.ts
-import { SourceLocation, SourceMapService } from './SourceMapService';
+// core/utils/sourceMapUtils.ts
+import { sourceMapService, SourceLocation } from './SourceMapService';
+import { MeldError, MeldErrorOptions, ErrorSeverity } from '@core/errors/MeldError';
 
-// Create a single instance to be used throughout the application
-export const sourceMapService = new SourceMapService();
-
-// Helper functions that work with the singleton instance
-export function registerSource(filePath: string, content: string): void {
-  sourceMapService.registerSource(filePath, content);
-}
-
-export function addMapping(source: SourceLocation, combinedLine: number, combinedColumn: number): void {
-  sourceMapService.addMapping(source, combinedLine, combinedColumn);
-}
-
-export function findOriginalLocation(combinedLine: number, combinedColumn: number): SourceLocation | null {
-  return sourceMapService.findOriginalLocation(combinedLine, combinedColumn);
-}
-
-export function getDebugInfo(): string {
-  return sourceMapService.getDebugInfo();
-}
-
-// Helper to enhance error messages with source information
-export function enhanceErrorWithSourceInfo(error: Error): Error {
-  // Extract line/column from error message if available
+// Extract line/column from error messages
+export function extractErrorLocation(error: Error): { line: number; column: number } | null {
   const lineColPattern = /(?:at\s+)?(?:line\s+)?(\d+)(?:,\s+column\s+|:)(\d+)/i;
   const match = error.message.match(lineColPattern);
   
   if (match && match.length >= 3) {
-    const line = parseInt(match[1], 10);
-    const column = parseInt(match[2], 10);
-    
-    // Try to find the original source location
-    const sourceLocation = findOriginalLocation(line, column);
-    
-    if (sourceLocation) {
-      return new Error(
-        `${error.message}\n\nOriginal source: ${sourceLocation.filePath}:${sourceLocation.line}:${sourceLocation.column}`
-      );
-    }
+    return {
+      line: parseInt(match[1], 10),
+      column: parseInt(match[2], 10)
+    };
   }
   
-  return error;
+  return null;
+}
+
+// Enhance a MeldError with source location information
+export function enhanceMeldErrorWithSourceInfo(
+  error: MeldError, 
+  options?: { 
+    preferExistingSourceInfo?: boolean 
+  }
+): MeldError {
+  // Extract location from the error message
+  const location = extractErrorLocation(error);
+  
+  // Skip enhancement if location can't be extracted
+  if (!location) {
+    return error;
+  }
+  
+  // Try to find the original source location
+  const sourceLocation = sourceMapService.findOriginalLocation(
+    location.line, 
+    location.column
+  );
+  
+  // Skip if source location not found
+  if (!sourceLocation) {
+    return error;
+  }
+  
+  // If error already has a filePath and we should prefer it, don't override
+  if (options?.preferExistingSourceInfo && error.filePath) {
+    return error;
+  }
+  
+  // Create new error options with source info
+  const newOptions: MeldErrorOptions = {
+    code: error.code,
+    severity: error.severity,
+    context: error.context,
+    filePath: sourceLocation.filePath,
+  };
+  
+  // Add sourceLocation to context
+  if (!newOptions.context) {
+    newOptions.context = {};
+  }
+  newOptions.context.sourceLocation = sourceLocation;
+  
+  // Create enhanced message
+  const enhancedMessage = `${error.message} (in ${sourceLocation.filePath}:${sourceLocation.line})`;
+  
+  // Create a new error of the same type with enhanced information
+  const EnhancedErrorConstructor = Object.getPrototypeOf(error).constructor;
+  return new EnhancedErrorConstructor(enhancedMessage, newOptions);
+}
+
+// Helper to register source file content
+export function registerSource(filePath: string, content: string): void {
+  sourceMapService.registerSource(filePath, content);
+}
+
+// Helper to add source mapping
+export function addMapping(
+  sourceFilePath: string, 
+  sourceLine: number, 
+  sourceColumn: number,
+  targetLine: number, 
+  targetColumn: number
+): void {
+  sourceMapService.addMapping(
+    { filePath: sourceFilePath, line: sourceLine, column: sourceColumn },
+    targetLine,
+    targetColumn
+  );
+}
+
+// Debug helper for CLI
+export function getSourceMapDebugInfo(): string {
+  return sourceMapService.getDebugInfo();
 }
 ```
 
-### 3. Integration with Directive Handlers
+## Implementation Plan
 
-For the EmbedDirectiveHandler, we can integrate without dependency injection:
+### Phase 1: Core Implementation and Integration Tests
+
+1. **Source Map Service Implementation**
+   - Create the `SourceMapService` class and utilities
+   - Implement source location tracking and mapping algorithms
+   - Add unit tests for the service
+
+2. **Integration Tests & Debugging Utilities**
+   - Create test cases for source mapping functionality
+   - Implement debug CLI options for source map inspection
+   - Add error enhancement utilities for MeldErrors
+
+### Phase 2: Directive Handler Integration
+
+3. **EmbedDirectiveHandler Integration**
+   - Modify `EmbedDirectiveHandler` to register source files and add mappings
+   - Add source mapping test cases for embed errors
+   - Update error handling to enhance errors with source information
+
+4. **ImportDirectiveHandler Integration**
+   - Modify `ImportDirectiveHandler` to register source files and add mappings
+   - Add source mapping test cases for import errors
+   - Update error handling to enhance errors with source information
+
+### Phase 3: Parser Integration and Output Enhancement
+
+5. **Parser Error Integration**
+   - Enhance `ParserService` to map parser errors to original sources
+   - Update MeldParseError to include source location information
+   - Add test cases for parser error mapping
+
+6. **OutputService Integration**
+   - Enhance `OutputService` to map LLMXML errors to original sources
+   - Add source mapping support to error handling in XML conversion
+   - Create test cases for LLMXML error mapping
+
+### Phase 4: CLI Integration and Documentation
+
+7. **CLI Integration**
+   - Add CLI options for source map debugging
+   - Update error reporting to include source information
+   - Add `--debug-source-maps` flag to show mapping information
+
+8. **Documentation**
+   - Update ERROR_HANDLING.md with source mapping information
+   - Document source mapping in user documentation
+   - Add examples and guidelines for working with source-mapped errors
+
+## Detailed Implementation
+
+### Directive Handler Integration
+
+For each directive handler that imports or embeds content, we'll add source mapping:
 
 ```typescript
-// Inside EmbedDirectiveHandler.ts
-import { registerSource, addMapping } from '@core/sourceMapping';
+// Example implementation for EmbedDirectiveHandler.ts
+import { registerSource, addMapping } from '@core/utils/sourceMapUtils';
 
-// In the execute method:
+// In the execute method
 async execute(node: DirectiveNode, context: DirectiveContext): Promise<DirectiveResult> {
   // ... existing code ...
   
-  // Read file content
+  // After reading file content
   const content = await this.fileSystemService.readFile(resolvedPath);
   
   // Register the source file with source mapping
   registerSource(resolvedPath, content);
   
-  // If we know the location of the embed directive, create a mapping
+  // Create mapping between the embedded file and the current location
   if (node.location && node.location.start) {
     addMapping(
-      {
-        filePath: resolvedPath,
-        line: 1, // Start at line 1 of the embedded file
-        column: 1
-      },
+      resolvedPath,
+      1, // Start at line 1 of the embedded file
+      1, // Start at column 1
       node.location.start.line,
       node.location.start.column
     );
@@ -518,15 +633,15 @@ async execute(node: DirectiveNode, context: DirectiveContext): Promise<Directive
 }
 ```
 
-### 4. Integration with Output Service for LLMXML Errors
+### Error Enhancement Integration
 
-Similarly, we can enhance LLMXML errors without dependency injection:
+We'll update error handling in key services to enhance errors with source information:
 
 ```typescript
-// Inside OutputService.ts
-import { enhanceErrorWithSourceInfo } from '@core/sourceMapping';
+// Example for OutputService.ts
+import { enhanceMeldErrorWithSourceInfo } from '@core/utils/sourceMapUtils';
 
-// In the convertToXML method:
+// In the convertToXML method
 private async convertToXML(
   nodes: MeldNode[],
   state: IStateService,
@@ -536,60 +651,120 @@ private async convertToXML(
     // ... existing code ...
     
     try {
-      return llmxml.toXML(processedMarkdown);
-    } catch (processingError) {
-      // Enhance the error with source mapping information
-      const enhancedError = enhanceErrorWithSourceInfo(
-        processingError instanceof Error ? processingError : new Error(String(processingError))
+      return llmxml.toXML(markdown);
+    } catch (error) {
+      // Wrap the error
+      const meldError = new MeldOutputError(
+        `LLMXML error: ${error instanceof Error ? error.message : String(error)}`,
+        'xml',
+        { cause: error instanceof Error ? error : undefined }
       );
-      throw enhancedError;
+      
+      // Enhance with source mapping information
+      throw enhanceMeldErrorWithSourceInfo(meldError);
     }
   } catch (error) {
-    // Enhance the error with source mapping information
-    const enhancedError = error instanceof Error ? 
-      enhanceErrorWithSourceInfo(error) : 
-      new Error(String(error));
+    // If it's already a MeldError, enhance it with source info
+    if (error instanceof MeldError) {
+      throw enhanceMeldErrorWithSourceInfo(error);
+    }
     
-    throw new MeldOutputError(
-      'Failed to convert output',
+    // Otherwise, create a new MeldError and enhance it
+    const meldError = new MeldOutputError(
+      `Failed to convert output: ${error instanceof Error ? error.message : String(error)}`,
       'xml',
-      { cause: enhancedError }
+      { cause: error instanceof Error ? error : undefined }
     );
+    
+    throw enhanceMeldErrorWithSourceInfo(meldError);
   }
 }
 ```
 
-### 5. Integration with Error Handling System
+### CLI Integration
 
-Update the CLI service to support source mapping without dependency injection:
+We'll update the CLI to support the debug flag and include source information in error messages:
 
 ```typescript
-// Inside CLIService.ts
-import { getDebugInfo } from '@core/sourceMapping';
+// Example for CLIService.ts
+import { getSourceMapDebugInfo } from '@core/utils/sourceMapUtils';
 
-// Add CLI options to print debug info:
-if (argv['debug-source-maps']) {
+// Add CLI options
+const options = {
+  // ... existing options
+  debugSourceMaps: argv['debug-source-maps'] || false
+};
+
+// If debug flag is set, print source mapping debug info
+if (options.debugSourceMaps) {
   console.log('Source mapping debug information:');
-  console.log(getDebugInfo());
+  console.log(getSourceMapDebugInfo());
+}
+
+// In error handling
+try {
+  // ... existing code ...
+} catch (error) {
+  if (error instanceof MeldError) {
+    const errorMsg = error.filePath 
+      ? `Error in ${error.filePath}:${error.context?.sourceLocation?.line || '?'}: ${error.message}`
+      : `Error: ${error.message}`;
+    
+    console.error(errorMsg);
+    // ... existing error handling ...
+  }
 }
 ```
 
-## Implementation Guidelines
+## Testing Strategy
 
-1. **Start Simple**: Begin with a straightforward implementation of the SourceMapService without DI
+1. **Unit Tests**
+   - Test the `SourceMapService` mapping functionality
+   - Test error enhancement utilities
+   - Test location extraction and pattern matching
 
-2. **Use Module Exports**: Export a singleton instance and helper functions 
+2. **Integration Tests**
+   - Test error mapping with embedded content
+   - Test error mapping with imported content
+   - Test nested import/embed scenarios
 
-3. **Gradual Integration**: Integrate with EmbedDirectiveHandler and ImportDirectiveHandler first
+3. **Error Handling Tests**
+   - Test that errors are properly enhanced with source information
+   - Test error presentation in both strict and permissive modes
 
-4. **Error Enhancement**: Add error enhancement to the OutputService for LLMXML errors
+## Documentation Updates
 
-5. **Debug Support**: Add command-line options to show mapping debug info
+The ERROR_HANDLING.md document will be updated to include a new section on source mapping:
 
-6. **Path Aliases**: Continue using path aliases (like `@core/`) for imports, as they make code more maintainable
+```markdown
+## Source Mapping for Error Locations
 
-7. **Testing**: Add specific tests for source mapping functionality
+Meld now supports source mapping for error locations, helping trace errors back to their original source files.
 
-This approach avoids the complexity of dependency injection while still providing the same functionality. It's more lightweight, easier to understand, and less likely to cause issues with build tools and test frameworks.
+### How Source Mapping Works
 
-The core of source mapping is just math and string manipulation - all we're doing is tracking source locations and transforming error messages, which doesn't require DI. This simpler approach should work well with your existing codebase while avoiding the path resolution issues we encountered.
+1. **Registration**: When files are loaded, they're registered with the source mapping system
+2. **Mapping Creation**: As content is combined, mappings are created between original and output locations
+3. **Error Enhancement**: When errors occur, they're enhanced with original source information
+4. **User-Friendly Messages**: Error messages include the file and line where the issue originated
+
+### Debugging Source Maps
+
+Use the `--debug-source-maps` flag with the CLI to output source mapping information:
+
+```bash
+meld examples/api-demo.meld --debug-source-maps
+```
+```
+
+## Conclusion
+
+This implementation plan provides a comprehensive approach to implementing source mapping in Meld that:
+
+1. Works with the existing error handling system
+2. Integrates with import and embed directives
+3. Enhances both LLMXML and meld-ast parser errors
+4. Provides debugging tools
+5. Maintains compatibility with both strict and permissive modes
+
+By using a simple singleton approach rather than dependency injection, we avoid the complexity and issues encountered in previous attempts, while ensuring that the source mapping functionality is accessible throughout the application.

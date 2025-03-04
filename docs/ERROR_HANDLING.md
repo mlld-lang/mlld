@@ -13,7 +13,8 @@ This document describes the error handling architecture in Meld, including how e
    - [Handling Errors](#handling-errors)
    - [Testing Errors](#testing-errors)
 6. [Error Types Reference](#error-types-reference)
-7. [Best Practices](#best-practices)
+7. [Source Mapping](#source-mapping)
+8. [Best Practices](#best-practices)
 
 ## Overview
 
@@ -219,6 +220,44 @@ Each error type includes:
 - Optional error code
 - Optional file path
 
+## Source Mapping
+
+Meld includes source mapping to provide better error reporting by tracking the original file locations when content is imported or embedded from other files. This helps users identify the actual source of errors instead of seeing errors in the combined or transformed content.
+
+### How Source Mapping Works
+
+1. **Registration**: When files are imported or embedded, the content is registered with the source mapping system.
+2. **Mapping Creation**: Line mappings are created to track where content from source files appears in the combined output.
+3. **Error Enhancement**: When errors occur, they're automatically enhanced with information about the original source location.
+4. **User-Friendly Messages**: Error messages include both the combined file location and the original source file/line.
+
+### Example
+
+Instead of seeing:
+```
+Error: Invalid syntax at line 42 in main.meld
+```
+
+Users will see:
+```
+Error in /path/to/imported-file.meld:5: Invalid syntax at line 42 in main.meld
+```
+
+This makes debugging much easier, especially for files that import or embed content from multiple sources.
+
+### Source Mapping Integration
+
+Source mapping is integrated into the following components:
+
+- **EmbedDirectiveHandler**: Maps embedded content to its original source file
+- **ImportDirectiveHandler**: Maps imported content to its original source file
+- **ParserService**: Enhances parser errors with source file information
+- **OutputService**: Enhances LLMXML errors with source file information
+
+### Implementation Details
+
+Source mappings are maintained via a singleton `SourceMapService` that tracks source files and creates mappings between source locations and combined file locations. The service is accessed through utility functions that register sources, add mappings, and enhance errors with source information.
+
 ## Best Practices
 
 1. **Always specify severity**: When creating errors, always specify the appropriate severity level.
@@ -240,3 +279,5 @@ Each error type includes:
 9. **Include recovery suggestions**: When possible, include suggestions for how to recover from errors.
 
 10. **Log warnings appropriately**: Use the appropriate logging level for warnings. 
+
+11. **Preserve source info**: When wrapping errors, preserve source file information from the original error.
