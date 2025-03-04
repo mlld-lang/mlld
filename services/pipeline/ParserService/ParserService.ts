@@ -94,9 +94,8 @@ export class ParserService implements IParserService {
         // Create a MeldParseError with the original error information
         const parseError = new MeldParseError(
           error.message,
-          error.location || { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } },
+          error.location || { start: { line: 1, column: 1 }, end: { line: 1, column: 1 }, filePath },
           {
-            filePath,
             context: {
               originalError: error
             }
@@ -108,45 +107,20 @@ export class ParserService implements IParserService {
           try {
             const { enhanceMeldErrorWithSourceInfo } = require('@core/utils/sourceMapUtils.js');
             const enhancedError = enhanceMeldErrorWithSourceInfo(parseError);
-            
-            logger.debug('Enhanced parse error with source mapping', {
-              original: parseError.message,
-              enhanced: enhancedError.message
-            });
-            
             throw enhancedError;
-          } catch (enhancementError) {
-            // If enhancement fails, throw the original error
-            logger.debug('Failed to enhance parse error with source mapping', {
-              error: enhancementError
-            });
-            
+          } catch (sourceMapError) {
+            // If source mapping fails, just throw the original error
             throw parseError;
           }
         }
         
         throw parseError;
       }
-      
       // For unknown errors, provide a generic message
-      const genericError = new MeldParseError(
+      throw new MeldParseError(
         'Parse error: Unknown error occurred',
-        { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } },
-        { filePath }
+        { start: { line: 1, column: 1 }, end: { line: 1, column: 1 }, filePath }
       );
-      
-      // Try to enhance with source mapping information
-      if (filePath) {
-        try {
-          const { enhanceMeldErrorWithSourceInfo } = require('@core/utils/sourceMapUtils.js');
-          throw enhanceMeldErrorWithSourceInfo(genericError);
-        } catch (enhancementError) {
-          // If enhancement fails, throw the original error
-          throw genericError;
-        }
-      }
-      
-      throw genericError;
     }
   }
 
