@@ -223,9 +223,6 @@ export async function main(filePath: string, options: ProcessOptions = {}): Prom
       strict: true  // Add strict mode to ensure validation errors are propagated
     });
     
-    // Add debug logging for path validation errors
-    console.log('DEBUG: Interpretation completed, checking for path validation errors');
-    
     // Check for path directives with invalid paths
     const pathDirectives = ast.filter(node => 
       node.type === 'Directive' && 
@@ -234,15 +231,11 @@ export async function main(filePath: string, options: ProcessOptions = {}): Prom
     );
     
     if (pathDirectives.length > 0) {
-      console.log(`DEBUG: Found ${pathDirectives.length} path directives`);
-      
       for (const pathNode of pathDirectives) {
         const pathValue = (pathNode as any).directive.path?.raw || (pathNode as any).directive.value;
-        console.log(`DEBUG: Path directive value: ${pathValue}`);
         
         // Check for absolute paths
         if (typeof pathValue === 'string' && path.isAbsolute(pathValue)) {
-          console.log(`DEBUG: Found absolute path: ${pathValue}`);
           throw new Error(`Path directive must use a special path variable: ${pathValue}`);
         }
         
@@ -262,7 +255,6 @@ export async function main(filePath: string, options: ProcessOptions = {}): Prom
             
             // Check for problematic relative segments
             if (valueToCheck.includes('./') || valueToCheck.includes('../')) {
-              console.log(`DEBUG: Found path with dot segments: ${pathValue}`);
               throw new Error(`Path cannot contain relative segments: ${pathValue}`);
             }
           }
