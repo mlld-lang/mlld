@@ -462,7 +462,7 @@ describe('EmbedDirectiveHandler', () => {
   });
   
   describe('Variable reference embeds', () => {
-    it('should handle variable reference embeds without trying to load a file', async () => {
+    it('should handle simple variable reference embeds without trying to load a file', async () => {
       // Create a variable reference embed directive
       const variablePath = {
         raw: '{{role.architect}}',
@@ -517,6 +517,150 @@ describe('EmbedDirectiveHandler', () => {
         expect.stringContaining("Using variable reference directly as content"),
         expect.any(Object)
       );
+    });
+    
+    it('should handle text variable embeds correctly', async () => {
+      // Create a simple text variable reference embed
+      const variablePath = {
+        raw: '{{content}}',
+        isVariableReference: true,
+        variable: {
+          type: 'TextVar',
+          identifier: 'content'
+        }
+      };
+      
+      const node = await createNodeFromExample(`@embed {{content}}`);
+      if (node.directive && node.directive.path) {
+        node.directive.path = variablePath;
+      }
+      
+      const context = { currentFilePath: 'test.meld', state: stateService };
+      
+      // Mock variable resolution to return a text variable
+      vi.mocked(resolutionService.resolveInContext).mockResolvedValue('# Sample Content');
+      
+      const result = await handler.execute(node, context);
+      
+      // The file system should never be checked for variable references
+      expect(fileSystemService.exists).not.toHaveBeenCalled();
+      expect(fileSystemService.readFile).not.toHaveBeenCalled();
+      
+      // The content should be parsed and interpreted
+      expect(parserService.parse).toHaveBeenCalledWith('# Sample Content');
+      
+      // Final state should include correct result
+      expect(result.state).toBe(clonedState);
+    });
+    
+    it('should apply modifiers (heading level, under header) to variable content', async () => {
+      // Create a variable reference embed with heading level
+      const variablePath = {
+        raw: '{{content}}',
+        isVariableReference: true,
+        variable: {
+          type: 'TextVar',
+          identifier: 'content'
+        }
+      };
+      
+      // Create node with both path and headingLevel
+      const node = await createRealEmbedDirective('{{content}}', undefined, {
+        headingLevel: 2
+      });
+      
+      // Override path to make it a variable reference
+      if (node.directive && node.directive.path) {
+        node.directive.path = variablePath;
+      }
+      
+      const context = { currentFilePath: 'test.meld', state: stateService };
+      
+      // Variable resolves to plain text
+      vi.mocked(resolutionService.resolveInContext).mockResolvedValue('Variable Content');
+      
+      await handler.execute(node, context);
+      
+      // Content should have heading applied
+      expect(parserService.parse).toHaveBeenCalledWith('## Variable Content');
+      
+      // The file system should never be checked
+      expect(fileSystemService.exists).not.toHaveBeenCalled();
+      expect(fileSystemService.readFile).not.toHaveBeenCalled();
+    });
+    
+    it('should handle data variable with nested fields correctly', async () => {
+      // Create a complex data variable reference
+      const variablePath = {
+        raw: '{{config.settings.theme}}',
+        isVariableReference: true,
+        variable: {
+          type: 'DataVar',
+          identifier: 'config',
+          fields: [
+            { type: 'field', value: 'settings' },
+            { type: 'field', value: 'theme' }
+          ]
+        }
+      };
+      
+      const node = await createNodeFromExample(`@embed {{config.settings.theme}}`);
+      if (node.directive && node.directive.path) {
+        node.directive.path = variablePath;
+      }
+      
+      const context = { currentFilePath: 'test.meld', state: stateService };
+      
+      // Mock variable resolution to return the resolved field value
+      vi.mocked(resolutionService.resolveInContext).mockResolvedValue('dark');
+      
+      await handler.execute(node, context);
+      
+      expect(resolutionService.resolveInContext).toHaveBeenCalledWith(variablePath, expect.any(Object));
+      expect(parserService.parse).toHaveBeenCalledWith('dark');
+      
+      // The file system should never be checked
+      expect(fileSystemService.exists).not.toHaveBeenCalled();
+      expect(fileSystemService.readFile).not.toHaveBeenCalled();
+    });
+    
+    it('should handle variable embeds in transformation mode', async () => {
+      // Setup transformation mode
+      vi.mocked(stateService.isTransformationEnabled).mockReturnValue(true);
+      vi.mocked(clonedState.isTransformationEnabled).mockReturnValue(true);
+      
+      const variablePath = {
+        raw: '{{content}}',
+        isVariableReference: true,
+        variable: {
+          type: 'TextVar',
+          identifier: 'content'
+        }
+      };
+      
+      const node = await createNodeFromExample(`@embed {{content}}`);
+      if (node.directive && node.directive.path) {
+        node.directive.path = variablePath;
+      }
+      
+      const context = { currentFilePath: 'test.meld', state: stateService };
+      
+      // Variable resolves to plain text
+      vi.mocked(resolutionService.resolveInContext).mockResolvedValue('Transformed Content');
+      
+      const result = await handler.execute(node, context);
+      
+      // In transformation mode, result should include replacement node
+      expect(result.replacement).toBeDefined();
+      expect(result.replacement).toEqual({
+        type: 'Text',
+        content: 'Transformed Content',
+        location: node.location
+      });
+      
+      // No file operations should happen
+      expect(fileSystemService.exists).not.toHaveBeenCalled();
+      expect(fileSystemService.readFile).not.toHaveBeenCalled();
     });
   });
 }); 
