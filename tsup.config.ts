@@ -53,7 +53,7 @@ export default defineConfig([
   // CLI build - CJS only
   {
     entry: {
-      cli: 'cli/index.ts',
+      cli: 'cli/cli-entry.ts',
     },
     format: 'cjs',
     dts: true,

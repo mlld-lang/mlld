@@ -1,3 +1,4 @@
+import 'reflect-metadata';
 import '@core/di-config.js';
 
 // CLI initialization
@@ -520,11 +521,20 @@ const seenErrors = new Set<string>();
 // Flag to bypass the error deduplication for formatted errors
 let bypassDeduplication = false;
 
+// Check if error deduplication should be completely disabled
+const disableDeduplication = !!(global as any).MELD_DISABLE_ERROR_DEDUPLICATION;
+
 // Store the original console.error
 const originalConsoleError = console.error;
 
 // Replace console.error with our custom implementation
 console.error = function(...args: any[]) {
+  // If deduplication is completely disabled via global flag, call original directly
+  if (disableDeduplication) {
+    originalConsoleError.apply(console, args);
+    return;
+  }
+
   // Enhanced error displays from our service should bypass deduplication
   if (bypassDeduplication) {
     // Call the original console.error directly
@@ -879,7 +889,7 @@ export async function main(fsAdapter?: IFileSystem): Promise<void> {
                 severity: error.severity,
                 filePath: options.input,
                 context: error.context ? { ...error.context } : {},
-                cause: error.cause
+                cause: error.cause as Error | undefined
               });
               
               // Copy special properties if they exist (like location)
@@ -905,20 +915,19 @@ export async function main(fsAdapter?: IFileSystem): Promise<void> {
             // In a real implementation, we would import and use the ErrorDisplayService directly
             // Here we need to dynamically load it to avoid circular dependencies
             try {
-              // Dynamic import of the ErrorDisplayService
-              const { container } = await import('@core/di-config.js');
+              // Dynamic import of the ErrorDisplayService and file system
               const { ErrorDisplayService } = await import('@services/display/ErrorDisplayService/ErrorDisplayService.js');
+              const { FileSystemService } = await import('@services/fs/FileSystemService/FileSystemService.js');
+              const { NodeFileSystem } = await import('@services/fs/FileSystemService/NodeFileSystem.js');
+              const { PathOperationsService } = await import('@services/fs/FileSystemService/PathOperationsService.js');
               
-              // Create the error display service
-              let errorDisplayService;
+              // Create the required services
+              const nodeFs = fsAdapter || new NodeFileSystem();
+              const pathOps = new PathOperationsService();
+              const fsService = new FileSystemService(pathOps, nodeFs);
               
-              // Try to get it from the DI container first
-              try {
-                errorDisplayService = container.resolve('ErrorDisplayService');
-              } catch (resolveError) {
-                // Create a new instance if DI fails
-                errorDisplayService = new ErrorDisplayService();
-              }
+              // Create a new instance of the ErrorDisplayService with the file system
+              const errorDisplayService = new ErrorDisplayService(fsService);
               
               // Use the enhanced error display service which now handles nested errors correctly
               const enhancedErrorDisplay = await errorDisplayService.enhanceErrorDisplay(error);
@@ -943,11 +952,13 @@ export async function main(fsAdapter?: IFileSystem): Promise<void> {
                 error instanceof Error ? error.message : String(error),
                 {
                   filePath: options.input,
-                  cause: error,
+                  cause: error instanceof Error ? error : undefined,
                   context: {
                     // Copy line/column from meld-ast errors if available
-                    sourceLocation: ('line' in error && 'column' in error) ? {
-                      filePath: ('sourceFile' in error) ? (error as any).sourceFile : options.input,
+                    sourceLocation: (typeof error === 'object' && error !== null && 'line' in error && 'column' in error) ? {
+                      filePath: (typeof error === 'object' && error !== null && 'sourceFile' in error && typeof (error as any).sourceFile === 'string') 
+                        ? (error as any).sourceFile 
+                        : options.input,
                       line: (error as any).line,
                       column: (error as any).column
                     } : undefined

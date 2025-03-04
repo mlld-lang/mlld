@@ -1,0 +1,10 @@
+>> This is a simple test file
+
+## Hello World
+
+This is a simple test file to verify that the CLI is working correctly.
+
+@data message = "Hello, World!"
+
+## Output
+{{message}} 
