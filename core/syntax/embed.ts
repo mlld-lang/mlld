@@ -49,6 +49,15 @@ export const atomic = {
     'Embed with variable content',
     `@text content = "# Content to embed"
 @embed {{content}}`
+  ),
+  
+  withDataVariableContent: createExample(
+    'Embed with data variable field',
+    `@data role = {
+  "architect": "You are a senior architect skilled in TypeScript.",
+  "security": "You are a security expert."
+}
+@embed {{role.architect}}`
   )
 };
 

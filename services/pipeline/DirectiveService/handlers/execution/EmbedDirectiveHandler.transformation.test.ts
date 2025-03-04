@@ -280,6 +280,98 @@ describe('EmbedDirectiveHandler Transformation', () => {
         expect.any(Object)
       );
     });
+    
+    it('should handle variable reference embeds in transformation mode', async () => {
+      // Create a variable reference embed
+      const variablePath = {
+        raw: '{{content}}',
+        isVariableReference: true,
+        variable: {
+          type: 'TextVar',
+          identifier: 'content'
+        }
+      };
+      
+      // Create the node
+      const node = await createNodeFromExample(`@embed {{content}}`);
+      if (node.directive && node.directive.path) {
+        node.directive.path = variablePath;
+      }
+      
+      const context = { 
+        currentFilePath: 'test.meld', 
+        state: stateService,
+        parentState: stateService
+      };
+      
+      // The variable resolves to text content
+      vi.mocked(resolutionService.resolveInContext).mockResolvedValue('Variable Content');
+      
+      const result = await handler.execute(node, context);
+      
+      // Should directly use variable value as content
+      expect(result.replacement).toBeDefined();
+      expect(result.replacement).toEqual({
+        type: 'Text',
+        content: 'Variable Content',
+        location: node.location
+      });
+      
+      // No file operations should happen
+      expect(fileSystemService.exists).not.toHaveBeenCalled();
+      expect(fileSystemService.readFile).not.toHaveBeenCalled();
+    });
+    
+    it('should handle data variable field embeds in transformation mode', async () => {
+      // Use the centralized example for data variable field embedding
+      const example = embedDirectiveExamples.atomic.withDataVariableContent;
+      const nodes = await parserService.parse(example.code);
+      
+      // Find the embed directive node (should be the second node)
+      const embedNode = nodes.find(n => n.type === 'Directive' && 
+                                       (n as any).directive?.kind === 'embed');
+      
+      if (!embedNode) {
+        throw new Error('Failed to find embed directive in example');
+      }
+      
+      // Make sure the directive has isVariableReference set
+      if ((embedNode as any).directive && (embedNode as any).directive.path) {
+        (embedNode as any).directive.path = {
+          raw: '{{role.architect}}',
+          isVariableReference: true,
+          variable: {
+            type: 'DataVar',
+            identifier: 'role',
+            fields: [{ type: 'field', value: 'architect' }]
+          }
+        };
+      }
+      
+      const context = { 
+        currentFilePath: 'test.meld', 
+        state: stateService,
+        parentState: stateService
+      };
+      
+      // Variable resolves to the content string
+      vi.mocked(resolutionService.resolveInContext)
+        .mockResolvedValue('You are a senior architect skilled in TypeScript.');
+      
+      const result = await handler.execute(embedNode as DirectiveNode, context);
+      
+      // Should use variable value directly
+      expect(result.replacement).toBeDefined();
+      expect(result.replacement).toEqual({
+        type: 'Text',
+        content: 'You are a senior architect skilled in TypeScript.',
+        location: embedNode.location
+      });
+      
+      // No file operations should happen
+      expect(fileSystemService.exists).not.toHaveBeenCalled();
+      expect(fileSystemService.readFile).not.toHaveBeenCalled();
+    });
 
     it('should preserve error handling during transformation', async () => {
       // MIGRATION: Using centralized invalid example for file not found

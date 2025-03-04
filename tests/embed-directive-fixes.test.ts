@@ -236,4 +236,113 @@ describe('EmbedDirectiveHandler Fixes', () => {
       expect(mockFileSystemService.readFile).toHaveBeenCalledWith('test.md');
     });
   });
+
+  describe('Variable Reference Handling', () => {
+    it('should handle variable references without calling file system operations', async () => {
+      // Create a variable reference directive node
+      const variableNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'embed',
+          path: {
+            raw: '{{role.architect}}',
+            isVariableReference: true,
+            variable: {
+              type: 'DataVar',
+              identifier: 'role',
+              fields: [{
+                type: 'field',
+                value: 'architect'
+              }]
+            }
+          }
+        },
+        location: {
+          start: { line: 1, column: 1 },
+          end: { line: 1, column: 20 }
+        }
+      } as DirectiveNode;
+
+      const context = { currentFilePath: 'test.meld', state: mockStateService };
+
+      // Setup mocks
+      mockResolutionService.resolveInContext.mockResolvedValue(
+        'You are a senior architect skilled in assessing TypeScript codebases.'
+      );
+      mockParserService.parse.mockResolvedValue([]);
+
+      // Execute
+      await handler.execute(variableNode, context);
+      
+      // Verify variable content was used directly
+      expect(mockParserService.parse).toHaveBeenCalledWith(
+        'You are a senior architect skilled in assessing TypeScript codebases.'
+      );
+      
+      // Verify file system was not used
+      expect(mockFileSystemService.exists).not.toHaveBeenCalled();
+      expect(mockFileSystemService.readFile).not.toHaveBeenCalled();
+      
+      // Verify circularity service was not used
+      expect(mockCircularityService.beginImport).not.toHaveBeenCalled();
+      expect(mockCircularityService.endImport).not.toHaveBeenCalled();
+    });
+
+    it('should distinguish between variable references and file paths', async () => {
+      // Create a regular file path directive
+      const fileNode = createEmbedDirectiveNode('test.md');
+      
+      // Create a variable reference directive
+      const variableNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'embed',
+          path: {
+            raw: '{{content}}',
+            isVariableReference: true,
+            variable: {
+              type: 'TextVar',
+              identifier: 'content'
+            }
+          }
+        },
+        location: {
+          start: { line: 1, column: 1 },
+          end: { line: 1, column: 20 }
+        }
+      } as DirectiveNode;
+
+      const context = { currentFilePath: 'test.meld', state: mockStateService };
+
+      // Setup different resolutions based on path type
+      mockResolutionService.resolveInContext.mockImplementation((path) => {
+        if (typeof path === 'string') {
+          return Promise.resolve('test.md');
+        } else if (path?.isVariableReference) {
+          return Promise.resolve('Variable Content');
+        }
+        return Promise.resolve('');
+      });
+      
+      mockFileSystemService.exists.mockResolvedValue(true);
+      mockFileSystemService.readFile.mockResolvedValue('File Content');
+      mockParserService.parse.mockResolvedValue([]);
+
+      // Execute both directives
+      await handler.execute(fileNode, context);
+      await handler.execute(variableNode, context);
+      
+      // Verify different behavior for the two types
+      // File path: Should use file system
+      expect(mockFileSystemService.exists).toHaveBeenCalledTimes(1);
+      expect(mockFileSystemService.readFile).toHaveBeenCalledTimes(1);
+      expect(mockCircularityService.beginImport).toHaveBeenCalledTimes(1);
+      expect(mockCircularityService.endImport).toHaveBeenCalledTimes(1);
+      
+      // Parser should be called for both with different content
+      expect(mockParserService.parse).toHaveBeenCalledTimes(2);
+      expect(mockParserService.parse).toHaveBeenCalledWith('File Content');
+      expect(mockParserService.parse).toHaveBeenCalledWith('Variable Content');
+    });
+  });
 }); 
