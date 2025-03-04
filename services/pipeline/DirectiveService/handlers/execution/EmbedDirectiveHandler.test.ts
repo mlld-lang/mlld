@@ -460,4 +460,63 @@ describe('EmbedDirectiveHandler', () => {
       );
     });
   });
+  
+  describe('Variable reference embeds', () => {
+    it('should handle variable reference embeds without trying to load a file', async () => {
+      // Create a variable reference embed directive
+      const variablePath = {
+        raw: '{{role.architect}}',
+        isVariableReference: true,
+        variable: {
+          type: 'DataVar',
+          identifier: 'role',
+          fields: [{
+            type: 'field',
+            value: 'architect'
+          }]
+        }
+      };
+      
+      // Use real meld-ast to parse a variable directive
+      const embedCode = `@embed {{role.architect}}`;
+      const node = await createNodeFromExample(embedCode);
+      
+      // Manual override to ensure isVariableReference is set (since parse might not set it correctly)
+      if (node.directive && node.directive.path) {
+        node.directive.path = variablePath;
+      }
+      
+      const context = { currentFilePath: 'test.meld', state: stateService };
+
+      // Mock variable resolution to return the variable's content
+      vi.mocked(resolutionService.resolveInContext).mockResolvedValue(
+        'You are a senior architect skilled in assessing TypeScript codebases.'
+      );
+      
+      await handler.execute(node, context);
+
+      // The resolver should be called with the variable path
+      expect(resolutionService.resolveInContext).toHaveBeenCalledWith(variablePath, expect.any(Object));
+      
+      // The file system should never be checked for variable references
+      expect(fileSystemService.exists).not.toHaveBeenCalled();
+      expect(fileSystemService.readFile).not.toHaveBeenCalled();
+      
+      // The circularity service should not be called for variable references
+      expect(circularityService.beginImport).not.toHaveBeenCalled();
+      
+      // Verify logger calls to confirm variable reference handling
+      expect(mockLogger.debug).toHaveBeenCalledWith(
+        expect.stringContaining("variable reference"),
+        expect.objectContaining({
+          isVariableReference: true
+        })
+      );
+      
+      expect(mockLogger.debug).toHaveBeenCalledWith(
+        expect.stringContaining("Using variable reference directly as content"),
+        expect.any(Object)
+      );
+    });
+  });
 }); 
