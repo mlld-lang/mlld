@@ -640,23 +640,34 @@ export async function main(fsAdapter?: IFileSystem): Promise<void> {
       await processFile(options);
     }
   } catch (error) {
-    logger.error('CLI execution failed', {
-      error: error instanceof Error ? error.message : String(error)
-    });
+    // Check if this is a MeldError with a custom property to indicate it's been logged
+    const isAlreadyLogged = error instanceof MeldError && (error as any).__logged;
     
-    // Display error to user in a clean format
-    if (process.env.NODE_ENV === 'test') {
-      // Show errors with the "Error:" prefix for test expectations
-      console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
-    } else if (options && options.debug) {
-      // Show full error details in debug mode
-      console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
-    } else {
-      // Show simplified error in normal mode
-      if (error instanceof MeldError) {
-        console.error(`Error: ${error.message}`);
-      } else {
+    // Only log if not already logged
+    if (!isAlreadyLogged) {
+      logger.error('CLI execution failed', {
+        error: error instanceof Error ? error.message : String(error)
+      });
+      
+      // Display error to user in a clean format
+      if (process.env.NODE_ENV === 'test') {
+        // Show errors with the "Error:" prefix for test expectations
         console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+      } else if (options && options.debug) {
+        // Show full error details in debug mode
+        console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+      } else {
+        // Show simplified error in normal mode
+        if (error instanceof MeldError) {
+          console.error(`Error: ${error.message}`);
+        } else {
+          console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+      
+      // Mark as logged to prevent duplicate logging
+      if (error instanceof MeldError) {
+        (error as any).__logged = true;
       }
     }
     
@@ -673,7 +684,7 @@ export async function main(fsAdapter?: IFileSystem): Promise<void> {
 // Only call main if this file is being run directly (not imported)
 if (require.main === module) {
   main().catch(err => {
-    console.error('Error:', err.message || err);
+    // Don't log the error again since it's already logged in the main function
     process.exit(1);
   });
 } 

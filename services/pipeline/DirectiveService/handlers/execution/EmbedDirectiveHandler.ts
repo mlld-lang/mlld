@@ -335,11 +335,14 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
         state: newState
       };
     } catch (error: any) {
-      // Handle and log errors
-      this.logger.error(`Error executing embed directive: ${error.message}`, {
-        error,
-        node
-      });
+      // Don't log MeldFileNotFoundError since it will be logged by the CLI
+      if (!(error instanceof MeldFileNotFoundError)) {
+        // Handle and log errors
+        this.logger.error(`Error executing embed directive: ${error.message}`, {
+          error,
+          node
+        });
+      }
       
       // Wrap the error in a DirectiveError if it's not already one
       if (!(error instanceof DirectiveError)) {
