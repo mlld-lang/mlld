@@ -17,7 +17,8 @@ const mockStateService = {
   clone: vi.fn(),
   createChildState: vi.fn(),
   mergeChildState: vi.fn(),
-  isTransformationEnabled: vi.fn().mockReturnValue(true) // Transformation mode enabled
+  isTransformationEnabled: vi.fn().mockReturnValue(true), // Transformation mode enabled
+  transformNode: vi.fn()
 };
 
 const mockCircularityService = {
@@ -81,7 +82,8 @@ describe('EmbedDirectiveHandler Transformation Fixes', () => {
       getAllDataVars: vi.fn().mockReturnValue({ 'dataVar': { test: 'data' } }),
       getAllPathVars: vi.fn().mockReturnValue({ 'pathVar': '/test/path' }),
       getAllCommands: vi.fn().mockReturnValue({ 'cmdVar': 'echo test' }),
-      isTransformationEnabled: vi.fn().mockReturnValue(true)
+      isTransformationEnabled: vi.fn().mockReturnValue(true),
+      transformNode: vi.fn()
     };
 
     clonedState = {
@@ -91,14 +93,16 @@ describe('EmbedDirectiveHandler Transformation Fixes', () => {
       setCommand: vi.fn(),
       createChildState: vi.fn().mockReturnValue(childState),
       mergeChildState: vi.fn(),
-      isTransformationEnabled: vi.fn().mockReturnValue(true)
+      isTransformationEnabled: vi.fn().mockReturnValue(true),
+      transformNode: vi.fn()
     };
 
     parentState = {
       setTextVar: vi.fn(),
       setDataVar: vi.fn(),
       setPathVar: vi.fn(),
-      setCommand: vi.fn()
+      setCommand: vi.fn(),
+      transformNode: vi.fn()
     };
 
     mockStateService.clone.mockReturnValue(clonedState);

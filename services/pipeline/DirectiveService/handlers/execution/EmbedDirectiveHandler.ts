@@ -474,13 +474,25 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
        * This ensures consistent handling of embedded content regardless of source.
        */
       // This applies to both transformation mode and normal mode
+      const replacement: TextNode = {
+        type: 'Text',
+        content,
+        location: node.location
+      };
+
+      // In transformation mode, register the replacement
+      if (newState.isTransformationEnabled()) {
+        console.log('DEBUG: EmbedDirectiveHandler - registering transformation:', {
+          nodeLocation: node.location,
+          transformEnabled: newState.isTransformationEnabled(),
+          replacementContent: content.substring(0, 50) + (content.length > 50 ? '...' : '')
+        });
+        newState.transformNode(node, replacement);
+      }
+
       return {
         state: newState, // Return newState to maintain compatibility with existing tests
-        replacement: {
-          type: 'Text',
-          content,
-          location: node.location
-        } as TextNode
+        replacement
       };
     } catch (error: any) {
       // Don't log MeldFileNotFoundError since it will be logged by the CLI

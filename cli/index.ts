@@ -10,7 +10,7 @@ import { loggingConfig } from '@core/config/logging.js';
 import { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
 import { createInterface } from 'readline';
 import { initCommand } from './commands/init.js';
-import { ProcessOptions } from '@core/types/index.js';
+import { ProcessOptions } from '../core/types/index.js';
 import { MeldError, ErrorSeverity } from '@core/errors/MeldError.js';
 import fs from 'fs/promises';
 import path from 'path';
@@ -22,7 +22,7 @@ import { debugTransformCommand } from './commands/debug-transform.js';
 import chalk from 'chalk';
 
 // CLI Options interface
-interface CLIOptions {
+export interface CLIOptions {
   input: string;
   output?: string;
   format?: 'markdown' | 'md' | 'xml';
@@ -49,6 +49,7 @@ interface CLIOptions {
   includeContent?: boolean;
   debugSourceMaps?: boolean; // Flag to display source mapping information
   detailedSourceMaps?: boolean; // Flag to display detailed source mapping information
+  transform?: boolean; // Add transform option
 }
 
 /**
@@ -342,10 +343,13 @@ async function confirmOverwrite(filePath: string): Promise<boolean> {
  * Convert CLI options to API options
  */
 function cliToApiOptions(cliOptions: CLIOptions): ProcessOptions {
+  // Check for environment variable to enable transformation
+  const transformFromEnv = process.env.MELD_TRANSFORM === 'true';
+  
   const options: ProcessOptions = {
-    format: normalizeFormat(cliOptions.format),
+    format: cliOptions.format,
     debug: cliOptions.debug,
-    transformation: true, // Enable transformation by default for CLI usage
+    transformation: transformFromEnv || cliOptions.transform === true, // Use env var or CLI flag
     fs: cliOptions.custom ? undefined : new NodeFileSystem() // Allow custom filesystem in test mode
   };
   

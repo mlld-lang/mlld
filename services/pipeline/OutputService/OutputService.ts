@@ -854,6 +854,14 @@ export class OutputService implements IOutputService {
         const directive = node as DirectiveNode;
         const kind = directive.directive.kind;
 
+        console.log('DEBUG: OutputService processing directive:', {
+          kind,
+          transform: state.isTransformationEnabled(),
+          hasTransformedNodes: !!state.getTransformedNodes(),
+          nodeLocation: node.location,
+          directiveOptions: directive.directive
+        });
+
         // Definition directives always return empty string
         if (['text', 'data', 'path', 'import', 'define'].includes(kind)) {
           return '';
@@ -882,6 +890,22 @@ export class OutputService implements IOutputService {
 
         // Handle other execution directives
         if (['embed'].includes(kind)) {
+          // In non-transformation mode, return placeholder
+          if (!state.isTransformationEnabled()) {
+            return '[directive output placeholder]\n';
+          }
+          // In transformation mode, return the embedded content
+          const transformedNodes = state.getTransformedNodes();
+          if (transformedNodes) {
+            const transformed = transformedNodes.find(n => 
+              n.location?.start.line === node.location?.start.line
+            );
+            if (transformed && transformed.type === 'Text') {
+              const content = (transformed as TextNode).content;
+              return content.endsWith('\n') ? content : content + '\n';
+            }
+          }
+          // If no transformed node found, return placeholder
           return '[directive output placeholder]\n';
         }
 

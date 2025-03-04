@@ -113,7 +113,8 @@ describe('EmbedDirectiveHandler Transformation', () => {
       createChildState: vi.fn().mockReturnValue(childState),
       mergeChildState: vi.fn(),
       clone: vi.fn(),
-      isTransformationEnabled: vi.fn().mockReturnValue(true)
+      isTransformationEnabled: vi.fn().mockReturnValue(true),
+      transformNode: vi.fn()
     } as unknown as IStateService;
 
     stateService = {
@@ -123,7 +124,8 @@ describe('EmbedDirectiveHandler Transformation', () => {
       setCommand: vi.fn(),
       clone: vi.fn().mockReturnValue(clonedState),
       createChildState: vi.fn().mockReturnValue(childState),
-      isTransformationEnabled: vi.fn().mockReturnValue(true)
+      isTransformationEnabled: vi.fn().mockReturnValue(true),
+      transformNode: vi.fn()
     } as unknown as IStateService;
 
     resolutionService = {
