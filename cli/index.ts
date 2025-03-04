@@ -498,11 +498,17 @@ async function processFile(options: CLIOptions): Promise<void> {
   await processFileWithOptions(options, apiOptions);
 }
 
+// Track if an error has been logged to prevent duplicate messages
+let errorLogged = false;
+
 /**
  * Main CLI entry point
  */
 export async function main(fsAdapter?: IFileSystem): Promise<void> {
   process.title = 'meld';
+
+  // Reset errorLogged flag for each invocation of main
+  errorLogged = false;
 
   // Explicitly disable debug mode by default
   process.env.DEBUG = '';
@@ -640,11 +646,8 @@ export async function main(fsAdapter?: IFileSystem): Promise<void> {
       await processFile(options);
     }
   } catch (error) {
-    // Check if this is a MeldError with a custom property to indicate it's been logged
-    const isAlreadyLogged = error instanceof MeldError && (error as any).__logged;
-    
     // Only log if not already logged
-    if (!isAlreadyLogged) {
+    if (!errorLogged) {
       logger.error('CLI execution failed', {
         error: error instanceof Error ? error.message : String(error)
       });
@@ -666,9 +669,7 @@ export async function main(fsAdapter?: IFileSystem): Promise<void> {
       }
       
       // Mark as logged to prevent duplicate logging
-      if (error instanceof MeldError) {
-        (error as any).__logged = true;
-      }
+      errorLogged = true;
     }
     
     // Exit with error code for non-test environments
