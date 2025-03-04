@@ -319,15 +319,94 @@ export class OutputService implements IOutputService {
           }
         });
         
-        // Try again with processed markdown
-        return llmxml.toXML(processedMarkdown);
+        try {
+          // Try again with processed markdown
+          return llmxml.toXML(processedMarkdown);
+        } catch (llmxmlError) {
+          // Now we have a more specific LLMXML error, try to enhance it with source mapping
+          try {
+            const { enhanceMeldErrorWithSourceInfo } = require('@core/utils/sourceMapUtils.js');
+            
+            // Create a Meld error with the LLMXML error details
+            const meldError = new MeldOutputError(
+              `LLMXML parsing error: ${llmxmlError instanceof Error ? llmxmlError.message : String(llmxmlError)}`,
+              'xml',
+              { 
+                cause: llmxmlError instanceof Error ? llmxmlError : undefined,
+                context: {
+                  llmxmlDetails: llmxmlError instanceof Error ? llmxmlError : undefined,
+                  nodeDetails: (llmxmlError as any).details?.node || {}
+                }
+              }
+            );
+            
+            // Enhance with source mapping information
+            const enhancedError = enhanceMeldErrorWithSourceInfo(meldError);
+            
+            // Log the enhanced error for debugging
+            logger.debug('Enhanced LLMXML error with source mapping', {
+              original: llmxmlError,
+              enhanced: enhancedError
+            });
+            
+            throw enhancedError;
+          } catch (enhancementError) {
+            // If the enhancement fails, throw the original error
+            logger.debug('Failed to enhance LLMXML error with source mapping', {
+              error: enhancementError
+            });
+            
+            throw llmxmlError;
+          }
+        }
       }
     } catch (error) {
-      throw new MeldOutputError(
-        'Failed to convert output',
-        'xml',
-        { cause: error instanceof Error ? error : undefined }
-      );
+      // Try to enhance the error with source mapping information
+      try {
+        const { enhanceMeldErrorWithSourceInfo } = require('@core/utils/sourceMapUtils.js');
+        
+        // If it's already a MeldError, try to enhance it directly
+        if (error instanceof MeldError) {
+          const enhancedError = enhanceMeldErrorWithSourceInfo(error);
+          
+          // Log the enhancement attempt
+          logger.debug('Attempted to enhance MeldError with source mapping', {
+            original: error.message,
+            enhanced: enhancedError.message,
+            hasSourceInfo: enhancedError.message !== error.message
+          });
+          
+          throw enhancedError;
+        }
+        
+        // Otherwise, wrap in a MeldOutputError and then enhance
+        const meldError = new MeldOutputError(
+          `Failed to convert output: ${error instanceof Error ? error.message : String(error)}`,
+          'xml',
+          { cause: error instanceof Error ? error : undefined }
+        );
+        
+        const enhancedError = enhanceMeldErrorWithSourceInfo(meldError);
+        
+        logger.debug('Enhanced output error with source mapping', {
+          original: error,
+          enhanced: enhancedError
+        });
+        
+        throw enhancedError;
+      } catch (enhancementError) {
+        // If enhancement fails, throw a standard MeldOutputError
+        logger.debug('Failed to enhance output error with source mapping', {
+          originalError: error,
+          enhancementError
+        });
+        
+        throw new MeldOutputError(
+          'Failed to convert output',
+          'xml',
+          { cause: error instanceof Error ? error : undefined }
+        );
+      }
     }
   }
 

@@ -45,7 +45,7 @@ export class ParserService implements IParserService {
     this.resolutionService = resolutionService;
   }
 
-  private async parseContent(content: string): Promise<MeldNode[]> {
+  private async parseContent(content: string, filePath?: string): Promise<MeldNode[]> {
     try {
       const { parse } = await import('meld-ast');
       const options = {
@@ -61,6 +61,18 @@ export class ParserService implements IParserService {
           }
         }
       };
+
+      // Register the content with source mapping service if a filePath is provided
+      if (filePath) {
+        try {
+          const { registerSource } = require('@core/utils/sourceMapUtils.js');
+          registerSource(filePath, content);
+          logger.debug(`Registered content for source mapping: ${filePath}`);
+        } catch (err) {
+          // Source mapping is optional, so just log a debug message if it fails
+          logger.debug('Source mapping not available, skipping registration', { error: err });
+        }
+      }
 
       const result = await parse(content, options);
       
@@ -79,26 +91,71 @@ export class ParserService implements IParserService {
       return result.ast || [];
     } catch (error) {
       if (isMeldAstError(error)) {
-        // Preserve original error message and location
-        throw new MeldParseError(
+        // Create a MeldParseError with the original error information
+        const parseError = new MeldParseError(
           error.message,
-          error.location || { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } }
+          error.location || { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } },
+          {
+            filePath,
+            context: {
+              originalError: error
+            }
+          }
         );
+        
+        // Try to enhance with source mapping information
+        if (filePath) {
+          try {
+            const { enhanceMeldErrorWithSourceInfo } = require('@core/utils/sourceMapUtils.js');
+            const enhancedError = enhanceMeldErrorWithSourceInfo(parseError);
+            
+            logger.debug('Enhanced parse error with source mapping', {
+              original: parseError.message,
+              enhanced: enhancedError.message
+            });
+            
+            throw enhancedError;
+          } catch (enhancementError) {
+            // If enhancement fails, throw the original error
+            logger.debug('Failed to enhance parse error with source mapping', {
+              error: enhancementError
+            });
+            
+            throw parseError;
+          }
+        }
+        
+        throw parseError;
       }
+      
       // For unknown errors, provide a generic message
-      throw new MeldParseError(
+      const genericError = new MeldParseError(
         'Parse error: Unknown error occurred',
-        { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } }
+        { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } },
+        { filePath }
       );
+      
+      // Try to enhance with source mapping information
+      if (filePath) {
+        try {
+          const { enhanceMeldErrorWithSourceInfo } = require('@core/utils/sourceMapUtils.js');
+          throw enhanceMeldErrorWithSourceInfo(genericError);
+        } catch (enhancementError) {
+          // If enhancement fails, throw the original error
+          throw genericError;
+        }
+      }
+      
+      throw genericError;
     }
   }
 
-  public async parse(content: string): Promise<MeldNode[]> {
-    return this.parseContent(content);
+  public async parse(content: string, filePath?: string): Promise<MeldNode[]> {
+    return this.parseContent(content, filePath);
   }
 
   public async parseWithLocations(content: string, filePath?: string): Promise<MeldNode[]> {
-    const nodes = await this.parseContent(content);
+    const nodes = await this.parseContent(content, filePath);
     if (!filePath) {
       return nodes;
     }

@@ -45,6 +45,7 @@ interface CLIOptions {
   debugTransform?: boolean;
   directiveType?: string;
   includeContent?: boolean;
+  debugSourceMaps?: boolean; // Flag to display source mapping information
 }
 
 /**
@@ -181,6 +182,9 @@ function parseArgs(args: string[]): CLIOptions {
       case '--debug':
       case '-d':
         options.debug = true;
+        break;
+      case '--debug-source-maps':
+        options.debugSourceMaps = true;
         break;
       case '--strict':
         options.strict = true;
@@ -464,7 +468,15 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
     if (process.env.NODE_ENV === 'test') {
       console.error(`Error: ${meldError.message}`);
     } else if (!cliOptions.debug) {
-      console.error(`Error: ${meldError.message}`);
+      // For regular users, we want to show the source location if available
+      if (meldError.filePath && meldError.context?.sourceLocation) {
+        const sourceLocation = meldError.context.sourceLocation;
+        console.error(`Error in ${sourceLocation.filePath}:${sourceLocation.line}: ${meldError.message}`);
+      } else if (meldError.filePath) {
+        console.error(`Error in ${meldError.filePath}: ${meldError.message}`);
+      } else {
+        console.error(`Error: ${meldError.message}`);
+      }
     }
     
     // Rethrow for the main function to handle
@@ -652,9 +664,16 @@ export async function main(fsAdapter?: IFileSystem): Promise<void> {
       // Show full error details in debug mode
       console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
     } else {
-      // Show simplified error in normal mode
+      // Show simplified error in normal mode, with source location if available
       if (error instanceof MeldError) {
-        console.error(`Error: ${error.message}`);
+        if (error.filePath && error.context?.sourceLocation) {
+          const sourceLocation = error.context.sourceLocation;
+          console.error(`Error in ${sourceLocation.filePath}:${sourceLocation.line}: ${error.message}`);
+        } else if (error.filePath) {
+          console.error(`Error in ${error.filePath}: ${error.message}`);
+        } else {
+          console.error(`Error: ${error.message}`);
+        }
       } else {
         console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
       }

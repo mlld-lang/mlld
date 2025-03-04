@@ -111,6 +111,30 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
 
       // Read the file
       const fileContent = await this.fileSystemService.readFile(resolvedFullPath);
+      
+      // Register the source file with source mapping service if available
+      try {
+        const { registerSource, addMapping } = require('@core/utils/sourceMapUtils.js');
+        
+        // Register the source file content
+        registerSource(resolvedFullPath, fileContent);
+        
+        // Add a mapping from the first line of the source file to the location of the import directive
+        if (node.location && node.location.start) {
+          addMapping(
+            resolvedFullPath,
+            1, // Start at line 1 of the imported file
+            1, // Start at column 1
+            node.location.start.line,
+            node.location.start.column
+          );
+          
+          logger.debug(`Added source mapping from ${resolvedFullPath}:1:1 to line ${node.location.start.line}:${node.location.start.column}`);
+        }
+      } catch (err) {
+        // Source mapping is optional, so just log a debug message if it fails
+        logger.debug('Source mapping not available, skipping', { error: err });
+      }
 
       // Parse the file
       const nodes = await this.parserService.parse(fileContent);
