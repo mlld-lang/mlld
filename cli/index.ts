@@ -889,7 +889,7 @@ export async function main(fsAdapter?: IFileSystem): Promise<void> {
               seenErrors.clear(); // Clear all seen errors to be safe
               
               // Use our custom error display function
-              const enhancedErrorDisplay = await displayErrorWithSourceContext(error);
+              const enhancedErrorDisplay = await displayErrorWithSourceContext(error as MeldError);
               
               // Display the enhanced error (use console.log for cleaner output)
               console.log('\n'); // Add a blank line for separation
@@ -899,10 +899,14 @@ export async function main(fsAdapter?: IFileSystem): Promise<void> {
               bypassDeduplication = false;
             } catch (displayError) {
               // If the enhanced display fails, fall back to basic formatting
-              console.error(`\nError in ${error.filePath || 'unknown'}: ${error.message}`);
+              const errorMsg = error instanceof MeldError
+                ? `\nError in ${error.filePath || 'unknown'}: ${error.message}`
+                : `\nError: ${error instanceof Error ? error.message : String(error)}`;
+              
+              console.error(errorMsg);
               
               if (options.debug) {
-                console.error(`\nDebug: Display error: ${displayError}`);
+                console.error(`\nDebug: Display error: ${displayError instanceof Error ? displayError.message : String(displayError)}`);
               }
             }
           } else if (error instanceof Error) {
