@@ -811,12 +811,14 @@ export class ResolutionService implements IResolutionService {
     // Add specific logging for home path resolution
     if (structured.variables?.special?.includes('HOMEPATH')) {
       const homePath = this.pathService.getHomePath();
-      console.log('Resolving home path in structured path:', {
-        raw,
-        homePath,
-        segments: structured.segments,
-        baseDir
-      });
+      if (process.env.DEBUG === 'true') {
+        console.log('Resolving home path in structured path:', {
+          raw,
+          homePath,
+          segments: structured.segments,
+          baseDir
+        });
+      }
     }
     
     try {
@@ -825,21 +827,25 @@ export class ResolutionService implements IResolutionService {
       const resolvedPath = this.pathService.resolvePath(path, baseDir);
       
       // Log the final resolved path for debugging
-      console.log('Path resolved successfully:', {
-        raw,
-        resolvedPath,
-        exists: await this.fileSystemService.exists(resolvedPath)
-      });
+      if (process.env.DEBUG === 'true') {
+        console.log('Path resolved successfully:', {
+          raw,
+          resolvedPath,
+          exists: await this.fileSystemService.exists(resolvedPath)
+        });
+      }
       
       return resolvedPath;
     } catch (error) {
       // Log detailed error information
-      console.error('Path resolution failed:', {
-        raw,
-        structured,
-        baseDir,
-        error: (error as Error).message
-      });
+      if (process.env.DEBUG === 'true') {
+        console.error('Path resolution failed:', {
+          raw,
+          structured,
+          baseDir,
+          error: (error as Error).message
+        });
+      }
       
       // Handle error based on severity
       throw new MeldResolutionError(

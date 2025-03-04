@@ -167,22 +167,27 @@ export class PathService implements IPathService {
   private async validateStructuredPath(pathObj: StructuredPath, location?: Location): Promise<void> {
     const { structured, raw } = pathObj;
 
-    console.log('PathService: validateStructuredPath called for path:', {
-      raw,
-      structuredData: JSON.stringify(structured, null, 2),
-      hasSegments: structured.segments && structured.segments.length > 0,
-      hasVariables: !!structured.variables,
-      specialVars: structured.variables?.special,
-      pathVars: structured.variables?.path,
-      location
-    });
+    if (process.env.DEBUG === 'true') {
+      console.log('PathService: validateStructuredPath called for path:', {
+        raw,
+        structuredData: JSON.stringify(structured, null, 2),
+        hasSegments: structured.segments && structured.segments.length > 0,
+        hasVariables: !!structured.variables,
+        specialVars: structured.variables?.special,
+        pathVars: structured.variables?.path,
+        location
+      });
+    }
 
-    // More detailed dump of the pathObj for debugging
-    console.log('PathService: FULL PATH OBJECT:', JSON.stringify(pathObj, null, 2));
+    if (process.env.DEBUG === 'true') {
+      console.log('PathService: FULL PATH OBJECT:', JSON.stringify(pathObj, null, 2));
+    }
 
     // Check if path is empty
     if (!structured.segments || structured.segments.length === 0) {
-      console.log('PathService: Path has no segments, treating as simple filename');
+      if (process.env.DEBUG === 'true') {
+        console.log('PathService: Path has no segments, treating as simple filename');
+      }
       // Simple filename with no path segments is always valid
       return;
     }
@@ -210,43 +215,53 @@ export class PathService implements IPathService {
       raw.startsWith('"$HOMEPATH') ||
       raw.startsWith('"$~');
     
-    console.log('PathService: Path has special variables:', {
-      hasSpecialVar, 
-      hasSpecialVarInRaw,
-      specialVars: structured.variables?.special
-    });
+    if (process.env.DEBUG === 'true') {
+      console.log('PathService: Path has special variables:', {
+        hasSpecialVar, 
+        hasSpecialVarInRaw,
+        specialVars: structured.variables?.special
+      });
+    }
 
     // Also check for path variables which are valid - safely check length
     const hasPathVar = (structured.variables?.path?.length ?? 0) > 0;
-    console.log('PathService: Path has path variables:', {
-      hasPathVar, 
-      pathVars: structured.variables?.path
-    });
+    if (process.env.DEBUG === 'true') {
+      console.log('PathService: Path has path variables:', {
+        hasPathVar, 
+        pathVars: structured.variables?.path
+      });
+    }
 
     // Special case for simple path without slashes
     const isSimplePath = !raw.includes('/');
     
     // Check for path with slashes
     const hasSlashes = raw.includes('/');
-    console.log('PathService: Path has slashes:', hasSlashes);
+    if (process.env.DEBUG === 'true') {
+      console.log('PathService: Path has slashes:', hasSlashes);
+    }
     
     // If it's a simple path (no slashes), it's always valid
     if (isSimplePath) {
-      console.log('PathService: Simple path without slashes, treating as valid');
+      if (process.env.DEBUG === 'true') {
+        console.log('PathService: Simple path without slashes, treating as valid');
+      }
       return;
     }
     
     // If path has slashes but no special variables or path variables, and isn't marked as cwd
     if (hasSlashes && !hasSpecialVar && !hasSpecialVarInRaw && !hasPathVar && !structured.cwd) {
-      console.error('PathService: Path validation error - path with slashes has no special variables:', {
-        raw,
-        structured: JSON.stringify(structured, null, 2),
-        hasSlashes,
-        hasSpecialVar,
-        hasSpecialVarInRaw,
-        hasPathVar,
-        isCwd: !!structured.cwd
-      });
+      if (process.env.DEBUG === 'true') {
+        console.error('PathService: Path validation error - path with slashes has no special variables:', {
+          raw,
+          structured: JSON.stringify(structured, null, 2),
+          hasSlashes,
+          hasSpecialVar,
+          hasSpecialVarInRaw,
+          hasPathVar,
+          isCwd: !!structured.cwd
+        });
+      }
       
       throw new PathValidationError(
         PathErrorMessages.validation.slashesWithoutPathVariable.message,
@@ -257,10 +272,12 @@ export class PathService implements IPathService {
 
     // Check for dot segments in any part of the path
     if (structured.segments.some(segment => segment === '.' || segment === '..')) {
-      console.error('PathService: Path validation error - path contains dot segments:', {
-        raw,
-        segments: structured.segments
-      });
+      if (process.env.DEBUG === 'true') {
+        console.error('PathService: Path validation error - path contains dot segments:', {
+          raw,
+          segments: structured.segments
+        });
+      }
       
       throw new PathValidationError(
         PathErrorMessages.validation.dotSegments.message,
@@ -271,9 +288,11 @@ export class PathService implements IPathService {
 
     // Check for raw absolute paths
     if (path.isAbsolute(raw)) {
-      console.error('PathService: Path validation error - path is absolute:', {
-        raw
-      });
+      if (process.env.DEBUG === 'true') {
+        console.error('PathService: Path validation error - path is absolute:', {
+          raw
+        });
+      }
       
       throw new PathValidationError(
         PathErrorMessages.validation.rawAbsolutePath.message,
@@ -282,7 +301,9 @@ export class PathService implements IPathService {
       );
     }
     
-    console.log('PathService: Path validation successful for:', raw);
+    if (process.env.DEBUG === 'true') {
+      console.log('PathService: Path validation successful for:', raw);
+    }
   }
 
   /**
@@ -293,22 +314,26 @@ export class PathService implements IPathService {
     const { structured, raw } = pathObj;
 
     // Add detailed logging for structured path resolution
-    console.log('PathService: Resolving structured path:', {
-      raw,
-      structured,
-      baseDir,
-      homePath: this.homePath,
-      projectPath: this.projectPath
-    });
+    if (process.env.DEBUG === 'true') {
+      console.log('PathService: Resolving structured path:', {
+        raw,
+        structured,
+        baseDir,
+        homePath: this.homePath,
+        projectPath: this.projectPath
+      });
+    }
 
     // If there are no segments, it's a simple filename
     if (!structured.segments || structured.segments.length === 0) {
       const resolvedPath = path.normalize(path.join(baseDir || process.cwd(), raw));
-      console.log('PathService: Resolved simple filename:', {
-        raw,
-        baseDir: baseDir || process.cwd(),
-        resolvedPath
-      });
+      if (process.env.DEBUG === 'true') {
+        console.log('PathService: Resolved simple filename:', {
+          raw,
+          baseDir: baseDir || process.cwd(),
+          resolvedPath
+        });
+      }
       return resolvedPath;
     }
 
@@ -318,14 +343,16 @@ export class PathService implements IPathService {
       const segments = structured.segments;
       const resolvedPath = path.normalize(path.join(this.homePath, ...segments));
       
-      console.log('PathService: Resolved home path:', {
-        raw,
-        homePath: this.homePath,
-        segments,
-        resolvedPath,
-        // Use a safer check for file existence in test mode
-        exists: this.testMode ? 'test-mode' : this.fs ? this.fs.exists(resolvedPath) : false
-      });
+      if (process.env.DEBUG === 'true') {
+        console.log('PathService: Resolved home path:', {
+          raw,
+          homePath: this.homePath,
+          segments,
+          resolvedPath,
+          // Use a safer check for file existence in test mode
+          exists: this.testMode ? 'test-mode' : this.fs ? this.fs.exists(resolvedPath) : false
+        });
+      }
       
       return resolvedPath;
     }
@@ -335,12 +362,14 @@ export class PathService implements IPathService {
       const segments = structured.segments;
       const resolvedPath = path.normalize(path.join(this.projectPath, ...segments));
       
-      console.log('PathService: Resolved project path:', {
-        raw,
-        projectPath: this.projectPath,
-        segments,
-        resolvedPath
-      });
+      if (process.env.DEBUG === 'true') {
+        console.log('PathService: Resolved project path:', {
+          raw,
+          projectPath: this.projectPath,
+          segments,
+          resolvedPath
+        });
+      }
       
       return resolvedPath;
     }
@@ -350,12 +379,14 @@ export class PathService implements IPathService {
       // Prioritize the provided baseDir if available
       const resolvedPath = path.normalize(path.join(baseDir || process.cwd(), ...structured.segments));
       
-      console.log('PathService: Resolved current directory path:', {
-        raw,
-        baseDir: baseDir || process.cwd(),
-        segments: structured.segments,
-        resolvedPath
-      });
+      if (process.env.DEBUG === 'true') {
+        console.log('PathService: Resolved current directory path:', {
+          raw,
+          baseDir: baseDir || process.cwd(),
+          segments: structured.segments,
+          resolvedPath
+        });
+      }
       
       return resolvedPath;
     }
@@ -366,22 +397,26 @@ export class PathService implements IPathService {
       // Just return the resolved path
       const resolvedPath = path.normalize(path.join(baseDir || process.cwd(), ...structured.segments));
       
-      console.log('PathService: Resolved path variable path:', {
-        raw,
-        baseDir: baseDir || process.cwd(),
-        segments: structured.segments,
-        resolvedPath
-      });
+      if (process.env.DEBUG === 'true') {
+        console.log('PathService: Resolved path variable path:', {
+          raw,
+          baseDir: baseDir || process.cwd(),
+          segments: structured.segments,
+          resolvedPath
+        });
+      }
       
       return resolvedPath;
     }
 
     // Log unhandled path types for diagnostic purposes
-    console.warn('PathService: Unhandled structured path type:', {
-      raw,
-      structured,
-      baseDir
-    });
+    if (process.env.DEBUG === 'true') {
+      console.warn('PathService: Unhandled structured path type:', {
+        raw,
+        structured,
+        baseDir
+      });
+    }
 
     // At this point, any other path format is invalid - but provide a helpful error
     throw new PathValidationError(
@@ -396,29 +431,37 @@ export class PathService implements IPathService {
   resolvePath(filePath: string | StructuredPath, baseDir?: string): string {
     let structPath: StructuredPath;
     
-    console.log('PathService.resolvePath called with:', {
-      filePath: typeof filePath === 'string' ? filePath : filePath.raw,
-      baseDir,
-      type: typeof filePath
-    });
+    if (process.env.DEBUG === 'true') {
+      console.log('PathService.resolvePath called with:', {
+        filePath: typeof filePath === 'string' ? filePath : filePath.raw,
+        baseDir,
+        type: typeof filePath
+      });
+    }
     
     // If it's already a structured path, use it directly
     if (typeof filePath !== 'string') {
-      console.log('Processing structured path directly:', filePath);
+      if (process.env.DEBUG === 'true') {
+        console.log('Processing structured path directly:', filePath);
+      }
       structPath = filePath;
     } 
     // For string paths, we need a synchronous way to handle them
     else {
-      console.log('Processing string path:', filePath);
+      if (process.env.DEBUG === 'true') {
+        console.log('Processing string path:', filePath);
+      }
       
       // Handle special path prefixes for backward compatibility
       if (filePath.startsWith('$~/') || filePath.startsWith('$HOMEPATH/')) {
         // Add detailed logging for home path resolution
-        console.log('PathService: Resolving home path:', {
-          rawPath: filePath,
-          homePath: this.homePath,
-          segments: filePath.split('/').slice(1).filter(Boolean)
-        });
+        if (process.env.DEBUG === 'true') {
+          console.log('PathService: Resolving home path:', {
+            rawPath: filePath,
+            homePath: this.homePath,
+            segments: filePath.split('/').slice(1).filter(Boolean)
+          });
+        }
         
         // Fix the segment extraction for $~/ paths (currently the $ character is being included)
         let segments;
@@ -430,9 +473,11 @@ export class PathService implements IPathService {
           segments = filePath.substring(10).split('/').filter(Boolean);
         }
         
-        console.log('PathService: Extracted segments:', {
-          segments
-        });
+        if (process.env.DEBUG === 'true') {
+          console.log('PathService: Extracted segments:', {
+            segments
+          });
+        }
         
         structPath = {
           raw: filePath,
@@ -447,10 +492,12 @@ export class PathService implements IPathService {
       } 
       else if (filePath.startsWith('$./') || filePath.startsWith('$PROJECTPATH/')) {
         // Add detailed logging for project path resolution
-        console.log('PathService: Resolving project path:', {
-          rawPath: filePath,
-          projectPath: this.projectPath
-        });
+        if (process.env.DEBUG === 'true') {
+          console.log('PathService: Resolving project path:', {
+            rawPath: filePath,
+            projectPath: this.projectPath
+          });
+        }
         
         // Fix the segment extraction for $./ paths
         let segments;
@@ -462,9 +509,11 @@ export class PathService implements IPathService {
           segments = filePath.substring(13).split('/').filter(Boolean);
         }
         
-        console.log('PathService: Extracted segments:', {
-          segments
-        });
+        if (process.env.DEBUG === 'true') {
+          console.log('PathService: Extracted segments:', {
+            segments
+          });
+        }
         
         structPath = {
           raw: filePath,
@@ -516,14 +565,18 @@ export class PathService implements IPathService {
   private validateStructuredPathSync(pathObj: StructuredPath, location?: Location): void {
     const { structured, raw } = pathObj;
 
-    console.log('VALIDATE: validateStructuredPathSync called with:', {
-      raw,
-      structured
-    });
+    if (process.env.DEBUG === 'true') {
+      console.log('VALIDATE: validateStructuredPathSync called with:', {
+        raw,
+        structured
+      });
+    }
 
     // Check if path is empty
     if (!structured.segments || structured.segments.length === 0) {
-      console.log('VALIDATE: Path has no segments, treating as simple filename');
+      if (process.env.DEBUG === 'true') {
+        console.log('VALIDATE: Path has no segments, treating as simple filename');
+      }
       // Simple filename with no path segments is always valid
       return;
     }
@@ -532,22 +585,30 @@ export class PathService implements IPathService {
     const hasSpecialVar = structured.variables?.special?.some(
       v => v === 'HOMEPATH' || v === 'PROJECTPATH'
     );
-    console.log('VALIDATE: Path has special variables:', hasSpecialVar, structured.variables?.special);
+    if (process.env.DEBUG === 'true') {
+      console.log('VALIDATE: Path has special variables:', hasSpecialVar, structured.variables?.special);
+    }
 
     // Also check for path variables which are valid - safely check length
     const hasPathVar = (structured.variables?.path?.length ?? 0) > 0;
-    console.log('VALIDATE: Path has path variables:', hasPathVar, structured.variables?.path);
+    if (process.env.DEBUG === 'true') {
+      console.log('VALIDATE: Path has path variables:', hasPathVar, structured.variables?.path);
+    }
 
     // Check for path with slashes
     const hasSlashes = raw.includes('/');
-    console.log('VALIDATE: Path has slashes:', hasSlashes);
+    if (process.env.DEBUG === 'true') {
+      console.log('VALIDATE: Path has slashes:', hasSlashes);
+    }
     
     // If path has slashes but no special variables or path variables, and isn't marked as cwd
     if (hasSlashes && !hasSpecialVar && !hasPathVar && !structured.cwd) {
-      console.warn('PathService: Path validation warning - path with slashes has no special variables:', {
-        raw,
-        structured
-      });
+      if (process.env.DEBUG === 'true') {
+        console.warn('PathService: Path validation warning - path with slashes has no special variables:', {
+          raw,
+          structured
+        });
+      }
       
       throw new PathValidationError(
         PathErrorMessages.validation.slashesWithoutPathVariable.message,
@@ -579,41 +640,55 @@ export class PathService implements IPathService {
    * Validate a path against a set of constraints
    */
   async validatePath(filePath: string | StructuredPath, options: PathOptions = {}): Promise<string> {
-    console.log('PathService: validatePath called with:', {
-      filePath: typeof filePath === 'string' ? filePath : filePath.raw,
-      filePathType: typeof filePath,
-      isStructured: typeof filePath === 'object',
-      options,
-      testMode: this.testMode
-    });
+    if (process.env.DEBUG === 'true') {
+      console.log('PathService: validatePath called with:', {
+        filePath: typeof filePath === 'string' ? filePath : filePath.raw,
+        filePathType: typeof filePath,
+        isStructured: typeof filePath === 'object',
+        options,
+        testMode: this.testMode
+      });
+    }
 
     try {
       let structuredPath: StructuredPath;
 
       // Convert string path to structured path if needed
       if (typeof filePath === 'string') {
-        console.log('PathService: Converting string path to structured path:', filePath);
+        if (process.env.DEBUG === 'true') {
+          console.log('PathService: Converting string path to structured path:', filePath);
+        }
         structuredPath = await this.parsePathToStructured(filePath);
-        console.log('PathService: Converted to structured path:', structuredPath);
+        if (process.env.DEBUG === 'true') {
+          console.log('PathService: Converted to structured path:', structuredPath);
+        }
       } else {
         structuredPath = filePath;
-        console.log('PathService: Using provided structured path:', structuredPath);
+        if (process.env.DEBUG === 'true') {
+          console.log('PathService: Using provided structured path:', structuredPath);
+        }
       }
 
       // Validate the structured path
       await this.validateStructuredPath(structuredPath, options?.location);
-      console.log('PathService: Path validation successful');
+      if (process.env.DEBUG === 'true') {
+        console.log('PathService: Path validation successful');
+      }
 
       // Resolve the validated path
       const resolvedPath = this.resolveStructuredPath(structuredPath);
-      console.log('PathService: Path resolved to:', resolvedPath);
+      if (process.env.DEBUG === 'true') {
+        console.log('PathService: Path resolved to:', resolvedPath);
+      }
       
       // Check if path is outside base directory when allowOutsideBaseDir is false
       if (options.allowOutsideBaseDir === false) {
-        console.log('PathService: Checking if path is outside base directory:', {
-          resolvedPath,
-          projectPath: this.projectPath
-        });
+        if (process.env.DEBUG === 'true') {
+          console.log('PathService: Checking if path is outside base directory:', {
+            resolvedPath,
+            projectPath: this.projectPath
+          });
+        }
         
         // For $PROJECTPATH paths, check against project path
         if (structuredPath.raw.startsWith('$PROJECTPATH/') || structuredPath.raw.startsWith('$./')) {
@@ -634,20 +709,28 @@ export class PathService implements IPathService {
 
       // IMPORTANT: Check file existence if required
       if (options.mustExist === true) {
-        console.log('PathService: Checking if file exists (mustExist):', {
-          resolvedPath,
-          testMode: this.testMode,
-          fsAvailable: !!this.fs
-        });
+        if (process.env.DEBUG === 'true') {
+          console.log('PathService: Checking if file exists (mustExist):', {
+            resolvedPath,
+            testMode: this.testMode,
+            fsAvailable: !!this.fs
+          });
+        }
         
         if (this.fs) {
-          console.log('PathService: Using filesystem to check existence');
+          if (process.env.DEBUG === 'true') {
+            console.log('PathService: Using filesystem to check existence');
+          }
           try {
             const exists = await this.fs.exists(resolvedPath);
-            console.log('PathService: File exists check result:', { exists, resolvedPath });
+            if (process.env.DEBUG === 'true') {
+              console.log('PathService: File exists check result:', { exists, resolvedPath });
+            }
             
             if (!exists) {
-              console.log('PathService: File does not exist, throwing error');
+              if (process.env.DEBUG === 'true') {
+                console.log('PathService: File does not exist, throwing error');
+              }
               throw new PathValidationError(
                 `File does not exist: ${resolvedPath}`,
                 PathErrorCode.PATH_NOT_FOUND,
@@ -655,7 +738,9 @@ export class PathService implements IPathService {
               );
             }
           } catch (error) {
-            console.log('PathService: Error checking file existence:', error);
+            if (process.env.DEBUG === 'true') {
+              console.log('PathService: Error checking file existence:', error);
+            }
             throw new PathValidationError(
               `Error checking file existence: ${resolvedPath}`,
               PathErrorCode.PATH_NOT_FOUND,
@@ -664,9 +749,13 @@ export class PathService implements IPathService {
           }
         } else if (this.testMode) {
           // In test mode without fs, simulate validation failure for nonexistent paths
-          console.log('PathService: In test mode without fs, simulating validation');
+          if (process.env.DEBUG === 'true') {
+            console.log('PathService: In test mode without fs, simulating validation');
+          }
           if (resolvedPath.includes('nonexistent')) {
-            console.log('PathService: Simulating nonexistent file failure');
+            if (process.env.DEBUG === 'true') {
+              console.log('PathService: Simulating nonexistent file failure');
+            }
             throw new PathValidationError(
               `File does not exist: ${resolvedPath}`,
               PathErrorCode.PATH_NOT_FOUND,
@@ -678,26 +767,34 @@ export class PathService implements IPathService {
 
       // IMPORTANT: Check file type if required
       if (options.mustBeFile === true || options.mustBeDirectory === true) {
-        console.log('PathService: Checking file type (mustBeFile/mustBeDirectory):', {
-          resolvedPath,
-          mustBeFile: options.mustBeFile,
-          mustBeDirectory: options.mustBeDirectory,
-          testMode: this.testMode,
-          fsAvailable: !!this.fs
-        });
+        if (process.env.DEBUG === 'true') {
+          console.log('PathService: Checking file type (mustBeFile/mustBeDirectory):', {
+            resolvedPath,
+            mustBeFile: options.mustBeFile,
+            mustBeDirectory: options.mustBeDirectory,
+            testMode: this.testMode,
+            fsAvailable: !!this.fs
+          });
+        }
         
         if (this.fs) {
-          console.log('PathService: Using filesystem to check file type');
+          if (process.env.DEBUG === 'true') {
+            console.log('PathService: Using filesystem to check file type');
+          }
           try {
             const stats = await this.fs.stat(resolvedPath);
-            console.log('PathService: File stats:', {
-              isFile: stats.isFile(),
-              isDirectory: stats.isDirectory(),
-              resolvedPath
-            });
+            if (process.env.DEBUG === 'true') {
+              console.log('PathService: File stats:', {
+                isFile: stats.isFile(),
+                isDirectory: stats.isDirectory(),
+                resolvedPath
+              });
+            }
             
             if (options.mustBeFile && !stats.isFile()) {
-              console.log('PathService: Path is not a file, throwing error');
+              if (process.env.DEBUG === 'true') {
+                console.log('PathService: Path is not a file, throwing error');
+              }
               throw new PathValidationError(
                 `Path is not a file: ${resolvedPath}`,
                 PathErrorCode.NOT_A_FILE,
@@ -706,7 +803,9 @@ export class PathService implements IPathService {
             }
             
             if (options.mustBeDirectory && !stats.isDirectory()) {
-              console.log('PathService: Path is not a directory, throwing error');
+              if (process.env.DEBUG === 'true') {
+                console.log('PathService: Path is not a directory, throwing error');
+              }
               throw new PathValidationError(
                 `Path is not a directory: ${resolvedPath}`,
                 PathErrorCode.NOT_A_DIRECTORY,
@@ -714,7 +813,9 @@ export class PathService implements IPathService {
               );
             }
           } catch (error) {
-            console.log('PathService: Error checking file type:', error);
+            if (process.env.DEBUG === 'true') {
+              console.log('PathService: Error checking file type:', error);
+            }
             throw new PathValidationError(
               `Failed to check file type: ${resolvedPath}`,
               PathErrorCode.PATH_NOT_FOUND,
@@ -723,9 +824,13 @@ export class PathService implements IPathService {
           }
         } else if (this.testMode) {
           // In test mode without fs, simulate validation failure based on path
-          console.log('PathService: In test mode without fs, simulating validation');
+          if (process.env.DEBUG === 'true') {
+            console.log('PathService: In test mode without fs, simulating validation');
+          }
           if (options.mustBeFile && resolvedPath.includes('testdir')) {
-            console.log('PathService: Simulating directory not being a file failure');
+            if (process.env.DEBUG === 'true') {
+              console.log('PathService: Simulating directory not being a file failure');
+            }
             throw new PathValidationError(
               `Path is not a file: ${resolvedPath}`,
               PathErrorCode.NOT_A_FILE,
@@ -734,7 +839,9 @@ export class PathService implements IPathService {
           }
           
           if (options.mustBeDirectory && !resolvedPath.includes('testdir')) {
-            console.log('PathService: Simulating file not being a directory failure');
+            if (process.env.DEBUG === 'true') {
+              console.log('PathService: Simulating file not being a directory failure');
+            }
             throw new PathValidationError(
               `Path is not a directory: ${resolvedPath}`,
               PathErrorCode.NOT_A_DIRECTORY,
@@ -746,10 +853,12 @@ export class PathService implements IPathService {
 
       return resolvedPath;
     } catch (error) {
-      console.error('PathService: Path validation failed:', {
-        error: error instanceof Error ? error.message : error,
-        filePath: typeof filePath === 'string' ? filePath : filePath.raw
-      });
+      if (process.env.DEBUG === 'true') {
+        console.error('PathService: Path validation failed:', {
+          error: error instanceof Error ? error.message : error,
+          filePath: typeof filePath === 'string' ? filePath : filePath.raw
+        });
+      }
       throw error;
     }
   }
