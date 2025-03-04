@@ -175,46 +175,65 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
 
     // Track path resolution for finally block
     let resolvedPath: string | undefined;
+    let content: string;
 
     try {
+      // Check if this is a variable reference embed
+      const isVariableReference = typeof path === 'object' && 
+                                  path.isVariableReference === true;
+
+      this.logger.debug(`Processing embed directive with ${isVariableReference ? 'variable reference' : 'file path'}`, {
+        isVariableReference,
+        path: typeof path === 'object' ? JSON.stringify(path) : path
+      });
+
       // Resolve variables in the path
       resolvedPath = await this.resolutionService.resolveInContext(
         path,
         resolutionContext
       );
 
-      // Begin import tracking
-      this.circularityService.beginImport(resolvedPath);
-
-      // Check for circular imports
-      try {
-        if (this.circularityService.isInStack(resolvedPath)) {
-          throw new Error(`Circular import detected: ${resolvedPath}`);
-        }
-      } catch (error: any) {
-        // Circular imports during embedding should be logged but not fail normal operation
-        this.logger.warn(`Circular import detected in embed directive: ${error.message}`, {
-          error,
-          path: resolvedPath,
-          currentFile: context.currentFilePath
+      // If this is a variable reference, use the resolved value directly as content
+      if (isVariableReference) {
+        content = resolvedPath;
+        
+        this.logger.debug(`Using variable reference directly as content`, {
+          content
         });
-      }
+      } else {
+        // Begin import tracking for file paths
+        this.circularityService.beginImport(resolvedPath);
 
-      // Check if the file exists
-      if (!(await this.fileSystemService.exists(resolvedPath))) {
-        throw new MeldFileNotFoundError(
-          resolvedPath,
-          {
-            context: { 
-              directive: this.kind,
-              location: node.location
-            }
+        // Check for circular imports
+        try {
+          if (this.circularityService.isInStack(resolvedPath)) {
+            throw new Error(`Circular import detected: ${resolvedPath}`);
           }
-        );
-      }
+        } catch (error: any) {
+          // Circular imports during embedding should be logged but not fail normal operation
+          this.logger.warn(`Circular import detected in embed directive: ${error.message}`, {
+            error,
+            path: resolvedPath,
+            currentFile: context.currentFilePath
+          });
+        }
 
-      // Read the file content
-      let content = await this.fileSystemService.readFile(resolvedPath);
+        // Check if the file exists
+        if (!(await this.fileSystemService.exists(resolvedPath))) {
+          throw new MeldFileNotFoundError(
+            resolvedPath,
+            {
+              context: { 
+                directive: this.kind,
+                location: node.location
+              }
+            }
+          );
+        }
+
+        // Read the file content
+        content = await this.fileSystemService.readFile(resolvedPath);
+      }
       
       // Extract the requested section if specified
       if (section) {
@@ -354,8 +373,12 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
       throw error;
     } finally {
       // Always end import tracking, even if there was an error
+      // Only do this for file paths, not variable references
       try {
-        if (resolvedPath) {
+        // Check if this was a variable reference (in which case we didn't call beginImport)
+        const isVariableReference = typeof path === 'object' && path.isVariableReference === true;
+        
+        if (resolvedPath && !isVariableReference) {
           this.circularityService.endImport(resolvedPath);
         }
       } catch (error: any) {
