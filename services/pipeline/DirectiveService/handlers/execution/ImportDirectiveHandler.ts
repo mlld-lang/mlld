@@ -137,14 +137,26 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
 
       // Process imports
       if (imports) {
-        // Resolve variables in imports
-        const resolvedImports = await this.resolutionService.resolveInContext(imports, resolutionContext);
-        
-        // Parse the import list
-        const parsedImports = this.parseImportList(resolvedImports);
-        
-        // Process the structured imports
-        this.processStructuredImports(parsedImports, resultState, targetState);
+        // Resolve variables in imports if it's a string
+        if (typeof imports === 'string') {
+          const resolvedImports = await this.resolutionService.resolveInContext(imports, resolutionContext);
+          
+          // Parse the import list
+          const parsedImports = this.parseImportList(resolvedImports);
+          
+          // Process the structured imports
+          this.processStructuredImports(parsedImports, resultState, targetState);
+        } else if (Array.isArray(imports)) {
+          // If imports is already an array of ImportItem objects, use it directly
+          this.processStructuredImports(imports, resultState, targetState);
+        } else {
+          // Handle unexpected type
+          throw new DirectiveError(
+            `Import directive has invalid imports format: ${typeof imports}`,
+            this.kind,
+            DirectiveErrorCode.VALIDATION_FAILED
+          );
+        }
       } else {
         // No import list - import all variables
         this.importAllVariables(resultState, targetState);
@@ -341,10 +353,24 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
     this.processStructuredImports(importItems, sourceState, targetState);
   }
 
-  private parseImportList(importList: string): Array<{ name: string; alias?: string }> {
+  private parseImportList(importList: string | Array<{ name: string; alias?: string }>): Array<{ name: string; alias?: string }> {
     // Handle undefined or null importList
     if (!importList) {
       return [{ name: '*' }]; // Default to importing everything
+    }
+    
+    // If importList is already an array, return it directly
+    if (Array.isArray(importList)) {
+      return importList;
+    }
+    
+    // Ensure importList is a string
+    if (typeof importList !== 'string') {
+      throw new DirectiveError(
+        `Import list must be a string or array, got ${typeof importList}`,
+        this.kind,
+        DirectiveErrorCode.VALIDATION_FAILED
+      );
     }
     
     // Split by commas, but handle potential quoted strings

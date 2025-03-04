@@ -650,7 +650,7 @@ export class PathService implements IPathService {
               console.log('PathService: File does not exist, throwing error');
               throw new PathValidationError(
                 `File does not exist: ${resolvedPath}`,
-                PathErrorCode.FILE_NOT_FOUND,
+                PathErrorCode.PATH_NOT_FOUND,
                 options?.location
               );
             }
@@ -658,7 +658,7 @@ export class PathService implements IPathService {
             console.log('PathService: Error checking file existence:', error);
             throw new PathValidationError(
               `Error checking file existence: ${resolvedPath}`,
-              PathErrorCode.FILE_NOT_FOUND,
+              PathErrorCode.PATH_NOT_FOUND,
               options?.location
             );
           }
@@ -669,7 +669,7 @@ export class PathService implements IPathService {
             console.log('PathService: Simulating nonexistent file failure');
             throw new PathValidationError(
               `File does not exist: ${resolvedPath}`,
-              PathErrorCode.FILE_NOT_FOUND,
+              PathErrorCode.PATH_NOT_FOUND,
               options?.location
             );
           }
@@ -717,7 +717,7 @@ export class PathService implements IPathService {
             console.log('PathService: Error checking file type:', error);
             throw new PathValidationError(
               `Failed to check file type: ${resolvedPath}`,
-              PathErrorCode.FILE_NOT_FOUND,
+              PathErrorCode.PATH_NOT_FOUND,
               options?.location
             );
           }
