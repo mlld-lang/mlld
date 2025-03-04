@@ -520,6 +520,9 @@ const seenErrors = new Set<string>();
 // Flag to bypass the error deduplication for formatted errors
 let bypassDeduplication = false;
 
+// Track error lines for line-by-line deduplication (like fix-cli.js)
+const errorLines = new Set<string>();
+
 // Store the original console.error
 const originalConsoleError = console.error;
 
@@ -535,13 +538,45 @@ console.error = function(...args: any[]) {
   // Convert the arguments to a string for comparison
   const errorMsg = args.join(' ');
   
+  // Line by line deduplication (like fix-cli.js)
+  if (errorMsg.includes('\n')) {
+    // Split multi-line errors and check each line
+    const lines = errorMsg.split('\n');
+    
+    // Only print lines we haven't seen before
+    const uniqueLines = lines.filter(line => {
+      const trimmedLine = line.trim();
+      if (!trimmedLine || errorLines.has(trimmedLine)) {
+        return false;
+      }
+      errorLines.add(trimmedLine);
+      return true;
+    });
+    
+    // If we have unique lines to display, show them
+    if (uniqueLines.length > 0) {
+      originalConsoleError.apply(console, [uniqueLines.join('\n')]);
+    }
+    return;
+  }
+  
+  // For single line errors, use the simple deduplication
   // If we've seen this error before, don't print it
   if (seenErrors.has(errorMsg)) {
+    // Debug statement to see duplicates being caught
+    if (process.env.DEBUG_DUPES === 'true') {
+      originalConsoleError.apply(console, ['DUPLICATE CAUGHT:', errorMsg.substring(0, 50) + '...']);
+    }
     return;
   }
   
   // Add this error to the set of seen errors
   seenErrors.add(errorMsg);
+  
+  // Debug statement to see what errors are being added to the set
+  if (process.env.DEBUG_DUPES === 'true') {
+    originalConsoleError.apply(console, ['ADDED ERROR:', errorMsg.substring(0, 50) + '...']);
+  }
   
   // Call the original console.error
   originalConsoleError.apply(console, args);
@@ -556,8 +591,9 @@ export async function main(fsAdapter?: IFileSystem): Promise<void> {
   // Reset errorLogged flag for each invocation of main
   errorLogged = false;
   
-  // Clear the set of seen errors
+  // Clear the sets of seen errors
   seenErrors.clear();
+  errorLines.clear();
 
   // Explicitly disable debug mode by default
   process.env.DEBUG = '';
@@ -882,28 +918,32 @@ export async function main(fsAdapter?: IFileSystem): Promise<void> {
                 error = fixedPathError;
               }
               
-              // Bypass deduplication for our enhanced display
-              bypassDeduplication = true;
-              
-              // Clear previous errors from the seen set that might conflict
-              seenErrors.clear(); // Clear all seen errors to be safe
-              
-              // Use our custom error display function
+              // Create the enhanced error display
               const enhancedErrorDisplay = await displayErrorWithSourceContext(error as MeldError);
               
-              // Display the enhanced error (use console.log for cleaner output)
-              console.log('\n'); // Add a blank line for separation
-              console.error(enhancedErrorDisplay);
+              // Convert to a consistent format for deduplication
+              const errorKey = error instanceof Error ? `Error: ${error.message}` : `Error: ${String(error)}`;
               
-              // Reset the bypass flag
-              bypassDeduplication = false;
+              // Check if we've seen this error before
+              if (!seenErrors.has(errorKey)) {
+                // This is a new error, add it to our set
+                seenErrors.add(errorKey);
+                
+                // Display the enhanced error with a blank line for separation
+                console.log('\n'); 
+                console.error(enhancedErrorDisplay);
+              }
             } catch (displayError) {
               // If the enhanced display fails, fall back to basic formatting
               const errorMsg = error instanceof MeldError
                 ? `\nError in ${error.filePath || 'unknown'}: ${error.message}`
                 : `\nError: ${error instanceof Error ? error.message : String(error)}`;
               
-              console.error(errorMsg);
+              // Check if we've seen this error before
+              if (!seenErrors.has(errorMsg.trim())) {
+                seenErrors.add(errorMsg.trim());
+                console.error(errorMsg);
+              }
               
               if (options.debug) {
                 console.error(`\nDebug: Display error: ${displayError instanceof Error ? displayError.message : String(displayError)}`);
@@ -911,10 +951,18 @@ export async function main(fsAdapter?: IFileSystem): Promise<void> {
             }
           } else if (error instanceof Error) {
             // For standard Error types
-            console.error(`Error: ${error.message}`);
+            const errorMsg = `Error: ${error.message}`;
+            if (!seenErrors.has(errorMsg)) {
+              seenErrors.add(errorMsg);
+              console.error(errorMsg);
+            }
           } else {
             // For other unknown error types
-            console.error(`Error: ${String(error)}`);
+            const errorMsg = `Error: ${String(error)}`;
+            if (!seenErrors.has(errorMsg)) {
+              seenErrors.add(errorMsg);
+              console.error(errorMsg);
+            }
           }
         } catch (displayError) {
           // Fallback if enhanced display fails

@@ -1,0 +1,5 @@
+>> This is a comment
+
+@embed [non-existent-file.txt]
+
+This should cause a file not found error that we can trace. 

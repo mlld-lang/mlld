@@ -17,6 +17,7 @@
   },
   "scripts": {
     "build": "tsup",
+    "reinstall": "npm run build && npm uninstall meld && npm install -g .",
     "dev": "tsup --watch",
     "test": "vitest run",
     "test:watch": "vitest",
