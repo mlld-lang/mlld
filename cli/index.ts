@@ -513,6 +513,29 @@ async function processFile(options: CLIOptions): Promise<void> {
 // Track if an error has been logged to prevent duplicate messages
 let errorLogged = false;
 
+// Keep track of error messages we've seen
+const seenErrors = new Set<string>();
+
+// Store the original console.error
+const originalConsoleError = console.error;
+
+// Replace console.error with our custom implementation
+console.error = function(...args: any[]) {
+  // Convert the arguments to a string for comparison
+  const errorMsg = args.join(' ');
+  
+  // If we've seen this error before, don't print it
+  if (seenErrors.has(errorMsg)) {
+    return;
+  }
+  
+  // Add this error to the set of seen errors
+  seenErrors.add(errorMsg);
+  
+  // Call the original console.error
+  originalConsoleError.apply(console, args);
+};
+
 /**
  * Main CLI entry point
  */
@@ -521,6 +544,9 @@ export async function main(fsAdapter?: IFileSystem): Promise<void> {
 
   // Reset errorLogged flag for each invocation of main
   errorLogged = false;
+  
+  // Clear the set of seen errors
+  seenErrors.clear();
 
   // Explicitly disable debug mode by default
   process.env.DEBUG = '';
@@ -689,6 +715,12 @@ export async function main(fsAdapter?: IFileSystem): Promise<void> {
       
       // Mark as logged to prevent duplicate logging
       errorLogged = true;
+      
+      // Add a property to the error object to indicate it's been logged
+      // This helps bin/meld.ts avoid duplicate logging
+      if (error && typeof error === 'object') {
+        (error as any).__logged = true;
+      }
     }
     
     // Exit with error code for non-test environments

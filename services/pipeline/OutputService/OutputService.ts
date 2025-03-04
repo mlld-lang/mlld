@@ -5,6 +5,7 @@ import type { MeldNode, TextNode, CodeFenceNode, DirectiveNode } from 'meld-spec
 import { outputLogger as logger } from '@core/utils/logger.js';
 import { MeldOutputError } from '@core/errors/MeldOutputError.js';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
+import { MeldError } from '@core/errors/MeldError.js';
 
 type FormatConverter = (
   nodes: MeldNode[],
@@ -360,7 +361,7 @@ export class OutputService implements IOutputService {
           }
         }
       }
-    } catch (error) {
+    } catch (error: unknown) {
       // Try to enhance the error with source mapping information
       try {
         const { enhanceMeldErrorWithSourceInfo } = require('@core/utils/sourceMapUtils.js');
@@ -402,7 +403,7 @@ export class OutputService implements IOutputService {
         });
         
         throw new MeldOutputError(
-          'Failed to convert output',
+          `Failed to convert output: ${error instanceof Error ? error.message : String(error)}`,
           'xml',
           { cause: error instanceof Error ? error : undefined }
         );

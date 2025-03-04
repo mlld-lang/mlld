@@ -94,9 +94,8 @@ export class ParserService implements IParserService {
         // Create a MeldParseError with the original error information
         const parseError = new MeldParseError(
           error.message,
-          error.location || { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } },
+          error.location || { start: { line: 1, column: 1 }, end: { line: 1, column: 1 }, filePath },
           {
-            filePath,
             context: {
               originalError: error
             }
@@ -131,8 +130,7 @@ export class ParserService implements IParserService {
       // For unknown errors, provide a generic message
       const genericError = new MeldParseError(
         'Parse error: Unknown error occurred',
-        { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } },
-        { filePath }
+        { start: { line: 1, column: 1 }, end: { line: 1, column: 1 }, filePath }
       );
       
       // Try to enhance with source mapping information
