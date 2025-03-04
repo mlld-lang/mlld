@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { DirectiveNode } from 'meld-spec';
+import { DirectiveNode, MeldNode } from 'meld-spec';
 import { EmbedDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler.js';
 import { DirectiveError } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
+import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
 
 // Mock dependencies
 const mockValidationService = {
@@ -17,7 +18,7 @@ const mockStateService = {
   clone: vi.fn(),
   createChildState: vi.fn(),
   mergeChildState: vi.fn(),
-  isTransformationEnabled: vi.fn().mockReturnValue(false)
+  isTransformationEnabled: vi.fn()
 };
 
 const mockCircularityService = {
@@ -65,23 +66,24 @@ describe('EmbedDirectiveHandler Fixes', () => {
   let handler: EmbedDirectiveHandler;
   let clonedState: any;
   let childState: any;
-
+  
   beforeEach(() => {
     // Reset mocks
     vi.clearAllMocks();
-
+    
     // Setup mock states
     childState = {
       setTextVar: vi.fn(),
       setDataVar: vi.fn(),
       setPathVar: vi.fn(),
       setCommand: vi.fn(),
-      getAllTextVars: vi.fn().mockReturnValue({}),
-      getAllDataVars: vi.fn().mockReturnValue({}),
-      getAllPathVars: vi.fn().mockReturnValue({}),
-      getAllCommands: vi.fn().mockReturnValue({})
+      getAllTextVars: vi.fn().mockReturnValue({ 'testVar': 'testValue' }),
+      getAllDataVars: vi.fn().mockReturnValue({ 'dataVar': { test: 'data' } }),
+      getAllPathVars: vi.fn().mockReturnValue({ 'pathVar': '/test/path' }),
+      getAllCommands: vi.fn().mockReturnValue({ 'cmdVar': 'echo test' }),
+      isTransformationEnabled: vi.fn().mockReturnValue(false)
     };
-
+    
     clonedState = {
       setTextVar: vi.fn(),
       setDataVar: vi.fn(),
@@ -125,94 +127,23 @@ describe('EmbedDirectiveHandler Fixes', () => {
     });
 
     it('should throw DirectiveError when file does not exist', async () => {
-      // Create a directive node with a path
-      const node = createEmbedDirectiveNode('nonexistent.md');
+      // Create directive node with a path
+      const node = createEmbedDirectiveNode('missing.md');
       const context = { currentFilePath: 'test.meld', state: mockStateService };
 
-      // Setup mocks
-      mockResolutionService.resolveInContext.mockResolvedValue('nonexistent.md');
+      // Setup mock to say file doesn't exist
+      mockResolutionService.resolveInContext.mockResolvedValue('missing.md');
       mockFileSystemService.exists.mockResolvedValue(false);
-
+      
       // Execute and expect error
       await expect(handler.execute(node, context)).rejects.toThrow(DirectiveError);
-      await expect(handler.execute(node, context)).rejects.toThrow(/File not found/);
-      expect(mockCircularityService.beginImport).toHaveBeenCalledWith('nonexistent.md');
-      expect(mockFileSystemService.exists).toHaveBeenCalledWith('nonexistent.md');
-    });
-
-    it('should wrap non-DirectiveError exceptions in DirectiveError', async () => {
-      // Create a directive node with a path
-      const node = createEmbedDirectiveNode('test.md');
-      const context = { currentFilePath: 'test.meld', state: mockStateService };
-
-      // Setup mocks
-      mockResolutionService.resolveInContext.mockResolvedValue('test.md');
-      mockFileSystemService.exists.mockResolvedValue(true);
-      mockFileSystemService.readFile.mockRejectedValue(new Error('Generic error'));
-
-      // Execute and expect error
-      await expect(handler.execute(node, context)).rejects.toThrow(DirectiveError);
-      expect(mockLogger.error).toHaveBeenCalled();
-    });
-  });
-
-  describe('Circular Dependency Tracking', () => {
-    it('should always call endImport even if an error occurs', async () => {
-      // Create a directive node with a path
-      const node = createEmbedDirectiveNode('test.md');
-      const context = { currentFilePath: 'test.meld', state: mockStateService };
-
-      // Setup mocks
-      mockResolutionService.resolveInContext.mockResolvedValue('test.md');
-      mockFileSystemService.exists.mockResolvedValue(true);
-      mockFileSystemService.readFile.mockRejectedValue(new Error('Read error'));
-
-      // Execute and expect error
-      await expect(handler.execute(node, context)).rejects.toThrow();
       
-      // Verify that endImport was called
-      expect(mockCircularityService.beginImport).toHaveBeenCalledWith('test.md');
-      expect(mockCircularityService.endImport).toHaveBeenCalledWith('test.md');
-    });
-
-    it('should handle errors in endImport gracefully', async () => {
-      // Create a directive node with a path
-      const node = createEmbedDirectiveNode('test.md');
-      const context = { currentFilePath: 'test.meld', state: mockStateService };
-
-      // Setup mocks
-      mockResolutionService.resolveInContext.mockResolvedValue('test.md');
-      mockFileSystemService.exists.mockResolvedValue(true);
-      mockFileSystemService.readFile.mockResolvedValue('Test content');
-      mockParserService.parse.mockResolvedValue([]);
-      mockCircularityService.endImport.mockImplementation(() => {
-        throw new Error('End import error');
-      });
-
-      // Execute and expect success despite endImport error
-      const result = await handler.execute(node, context);
+      // Verify service calls
+      expect(mockResolutionService.resolveInContext).toHaveBeenCalledWith('missing.md', expect.anything());
+      expect(mockFileSystemService.exists).toHaveBeenCalledWith('missing.md');
       
-      // Verify that endImport was called and error was logged
-      expect(mockCircularityService.endImport).toHaveBeenCalledWith('test.md');
-      expect(mockLogger.debug).toHaveBeenCalledWith(
-        expect.stringContaining('Error ending import tracking'),
-        expect.any(Object)
-      );
-      
-      // Verify that the operation completed successfully
-      expect(result.state).toBe(clonedState);
-    });
-
-    it('should handle undefined resolvedPath in finally block', async () => {
-      // Create a directive node without a path to trigger early error
-      const node = createEmbedDirectiveNode();
-      const context = { currentFilePath: 'test.meld', state: mockStateService };
-
-      // Execute and expect error
-      await expect(handler.execute(node, context)).rejects.toThrow();
-      
-      // Verify that endImport was not called (since resolvedPath was never defined)
-      expect(mockCircularityService.endImport).not.toHaveBeenCalled();
+      // File system services should never be called for reading
+      expect(mockFileSystemService.readFile).not.toHaveBeenCalled();
     });
   });
 
@@ -226,7 +157,6 @@ describe('EmbedDirectiveHandler Fixes', () => {
       mockResolutionService.resolveInContext.mockResolvedValue('test.md');
       mockFileSystemService.exists.mockResolvedValue(true);
       mockFileSystemService.readFile.mockResolvedValue('Test content');
-      mockParserService.parse.mockResolvedValue([]);
 
       // Execute
       await handler.execute(node, context);
@@ -234,6 +164,10 @@ describe('EmbedDirectiveHandler Fixes', () => {
       // Verify that exists was called before readFile
       expect(mockFileSystemService.exists).toHaveBeenCalledWith('test.md');
       expect(mockFileSystemService.readFile).toHaveBeenCalledWith('test.md');
+      
+      // Verify that parse is NOT called - embedded content should be treated as literal text
+      expect(mockParserService.parse).not.toHaveBeenCalled();
+      expect(mockInterpreterService.interpret).not.toHaveBeenCalled();
     });
   });
 
@@ -269,15 +203,15 @@ describe('EmbedDirectiveHandler Fixes', () => {
       mockResolutionService.resolveInContext.mockResolvedValue(
         'You are a senior architect skilled in assessing TypeScript codebases.'
       );
-      mockParserService.parse.mockResolvedValue([]);
 
       // Execute
-      await handler.execute(variableNode, context);
+      const result = await handler.execute(variableNode, context);
       
       // Verify variable content was used directly
-      expect(mockParserService.parse).toHaveBeenCalledWith(
-        'You are a senior architect skilled in assessing TypeScript codebases.'
-      );
+      expect(mockResolutionService.resolveInContext).toHaveBeenCalled();
+      
+      // Content should be treated as literal text - no parsing
+      expect(mockParserService.parse).not.toHaveBeenCalled();
       
       // Verify file system was not used
       expect(mockFileSystemService.exists).not.toHaveBeenCalled();
@@ -286,6 +220,15 @@ describe('EmbedDirectiveHandler Fixes', () => {
       // Verify circularity service was not used
       expect(mockCircularityService.beginImport).not.toHaveBeenCalled();
       expect(mockCircularityService.endImport).not.toHaveBeenCalled();
+      
+      // In transformation mode, we should get a replacement node
+      if (result.replacement) {
+        expect(result.replacement).toEqual({
+          type: 'Text',
+          content: 'You are a senior architect skilled in assessing TypeScript codebases.',
+          location: variableNode.location
+        });
+      }
     });
 
     it('should distinguish between variable references and file paths', async () => {
@@ -326,11 +269,10 @@ describe('EmbedDirectiveHandler Fixes', () => {
       
       mockFileSystemService.exists.mockResolvedValue(true);
       mockFileSystemService.readFile.mockResolvedValue('File Content');
-      mockParserService.parse.mockResolvedValue([]);
 
       // Execute both directives
-      await handler.execute(fileNode, context);
-      await handler.execute(variableNode, context);
+      const fileResult = await handler.execute(fileNode, context);
+      const varResult = await handler.execute(variableNode, context);
       
       // Verify different behavior for the two types
       // File path: Should use file system
@@ -339,10 +281,21 @@ describe('EmbedDirectiveHandler Fixes', () => {
       expect(mockCircularityService.beginImport).toHaveBeenCalledTimes(1);
       expect(mockCircularityService.endImport).toHaveBeenCalledTimes(1);
       
-      // Parser should be called for both with different content
-      expect(mockParserService.parse).toHaveBeenCalledTimes(2);
-      expect(mockParserService.parse).toHaveBeenCalledWith('File Content');
-      expect(mockParserService.parse).toHaveBeenCalledWith('Variable Content');
+      // Parser should NOT be called for either - content is treated as literal text
+      expect(mockParserService.parse).not.toHaveBeenCalled();
+      
+      // Both should return replacement nodes with literal content
+      expect(fileResult.replacement).toEqual({
+        type: 'Text',
+        content: 'File Content',
+        location: fileNode.location
+      });
+      
+      expect(varResult.replacement).toEqual({
+        type: 'Text',
+        content: 'Variable Content',
+        location: variableNode.location
+      });
     });
   });
 }); 

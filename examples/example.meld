@@ -26,6 +26,11 @@
 ### Meld Processing Pipeline
 @embed [$./docs/PIPELINE.md]
 
+@embed  [[
+    This text should highlight differently than {{this.variable}} or 
+    $thisPathVariable. 
+]]
+
 ## Codebase
 @run [cpai api cli core services --tree --stdout]
 
