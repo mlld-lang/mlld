@@ -151,7 +151,11 @@ export function enhanceMeldErrorWithSourceInfo(
   const EnhancedErrorConstructor = Object.getPrototypeOf(error).constructor;
   const enhancedError = new EnhancedErrorConstructor(enhancedMessage, newOptions);
   
-  logger.debug(`Enhanced error: "${error.message}" -> "${enhancedError.message}"`);
+  logger.debug(`Enhanced error: "${error.message}" -> "${enhancedError.message}"`, {
+    originalLocation: location,
+    sourceLocation: sourceLocation,
+    filePath: sourceLocation.filePath
+  });
   
   return enhancedError;
 }

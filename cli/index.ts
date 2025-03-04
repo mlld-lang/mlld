@@ -18,6 +18,7 @@ import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js
 import { debugResolutionCommand } from './commands/debug-resolution.js';
 import { debugContextCommand } from './commands/debug-context.js';
 import { debugTransformCommand } from './commands/debug-transform.js';
+import { ErrorDisplayService } from '@services/display/ErrorDisplayService/ErrorDisplayService.js';
 
 // CLI Options interface
 interface CLIOptions {
@@ -690,26 +691,39 @@ export async function main(fsAdapter?: IFileSystem): Promise<void> {
         error: error instanceof Error ? error.message : String(error)
       });
       
+      // Create the error display service
+      const errorDisplayService = new ErrorDisplayService();
+      
       // Display error to user in a clean format
       if (process.env.NODE_ENV === 'test') {
         // Show errors with the "Error:" prefix for test expectations
         console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
-      } else if (options && options.debug) {
-        // Show full error details in debug mode
-        console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
       } else {
-        // Show simplified error in normal mode, with source location if available
-        if (error instanceof MeldError) {
-          if (error.filePath && error.context?.sourceLocation) {
-            const sourceLocation = error.context.sourceLocation;
-            console.error(`Error in ${sourceLocation.filePath}:${sourceLocation.line}: ${error.message}`);
-          } else if (error.filePath) {
-            console.error(`Error in ${error.filePath}: ${error.message}`);
+        try {
+          if (error instanceof MeldError) {
+            // Use the new error display service for both debug and normal mode
+            const enhancedErrorDisplay = await errorDisplayService.enhanceErrorDisplay(error);
+            console.error(enhancedErrorDisplay);
           } else {
-            console.error(`Error: ${error.message}`);
+            // For non-MeldError instances, show a basic error message
+            console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
           }
-        } else {
-          console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+        } catch (displayError) {
+          // Fallback if enhanced display fails
+          logger.error('Error display failed', { 
+            error: displayError instanceof Error ? displayError.message : String(displayError) 
+          });
+          
+          // Display a basic error message as fallback
+          if (error instanceof MeldError) {
+            if (error.filePath) {
+              console.error(`Error in ${error.filePath}: ${error.message}`);
+            } else {
+              console.error(`Error: ${error.message}`);
+            }
+          } else {
+            console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+          }
         }
       }
       

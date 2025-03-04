@@ -20,7 +20,7 @@
 
 ## Documentation
 ### Target UX
-@embed [$./docs/UX.md] 
+@embed [$./docs/UX.md]
 ### Architecture
 @embed [$./docs/ARCHITECTURE.md] 
 ### Meld Processing Pipeline

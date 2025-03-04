@@ -110,7 +110,8 @@ export class ParserService implements IParserService {
             
             logger.debug('Enhanced parse error with source mapping', {
               original: parseError.message,
-              enhanced: enhancedError.message
+              enhanced: enhancedError.message,
+              sourceLocation: enhancedError.context?.sourceLocation
             });
             
             throw enhancedError;
