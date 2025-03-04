@@ -19,10 +19,7 @@
 @embed {{role.architect}}
 
 ## Documentation
-@embed [$PROJECTPATH/examples/embed-content.md # Instructions]
-
-## Test Results
-@run [echo "This is a test output"]
+@embed [$./examples/embed-content.md # Instructions]
 
 ## Your task
 @embed {{task.code_review}}
