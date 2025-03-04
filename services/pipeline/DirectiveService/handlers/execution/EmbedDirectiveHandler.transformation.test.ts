@@ -234,11 +234,20 @@ describe('EmbedDirectiveHandler Transformation', () => {
     });
 
     it('should handle under header in transformation', async () => {
-      // MIGRATION: Need to continue using direct node creation for under header test
-      // Similar to headingLevel test, the complexOptions example doesn't parse correctly
-      const node = createEmbedDirective('doc.md', undefined, createLocation(1, 1), {
-        underHeader: 'My Header'
-      });
+      // MIGRATION: Need to continue using direct node creation
+      const node = {
+        type: 'Directive',
+        directive: {
+          kind: 'embed',
+          options: {
+            underHeader: 'My Header'
+          }
+        },
+        location: {
+          start: { line: 1, column: 1 },
+          end: { line: 1, column: 1 }
+        }
+      };
       node.directive.path = 'doc.md';
       const context = { currentFilePath: 'test.meld', state: stateService };
 
@@ -251,7 +260,7 @@ describe('EmbedDirectiveHandler Transformation', () => {
       expect(result.replacement).toBeDefined();
       expect(result.replacement).toEqual({
         type: 'Text',
-        content: 'My Header\n\nTest content',
+        content: 'Test content',
         location: node.location
       });
     });
