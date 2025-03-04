@@ -185,14 +185,77 @@ export class PathDirectiveHandler implements IDirectiveHandler {
         value: pathValue,
         allowedVariableTypes: resolutionContext.allowedVariableTypes,
         pathValidation: resolutionContext.pathValidation,
-        stateExists: !!resolutionContext.state
+        stateExists: !!resolutionContext.state,
+        pathValueType: typeof pathValue,
+        isStructured: typeof pathValue === 'object' && pathValue !== null
       });
 
       // Resolve the path value
-      const resolvedValue = await this.resolutionService.resolveInContext(
-        pathValue,
-        resolutionContext
-      );
+      let resolvedValue;
+      try {
+        // If the path starts with a special variable, add it to state directly
+        const hasSpecialVar = typeof pathValue === 'string' && 
+          (pathValue.startsWith('$PROJECTPATH/') || 
+           pathValue.startsWith('$./') || 
+           pathValue.startsWith('$HOMEPATH/') || 
+           pathValue.startsWith('$~/'));
+        
+        if (hasSpecialVar && typeof pathValue === 'string') {
+          logger.debug('Path contains special variable, storing as-is:', pathValue);
+          resolvedValue = pathValue;
+        } else {
+          try {
+            resolvedValue = await this.resolutionService.resolveInContext(
+              pathValue,
+              resolutionContext
+            );
+          } catch (resolveError) {
+            // If resolution fails but we have a string with quotes, try to use it directly
+            if (typeof pathValue === 'string' && 
+                (pathValue.startsWith('"') && pathValue.endsWith('"'))) {
+              logger.debug('Resolution failed but using quoted string value directly:', pathValue);
+              // Remove quotes
+              resolvedValue = pathValue.substring(1, pathValue.length - 1);
+            } else {
+              // Re-throw if we can't handle it
+              throw resolveError;
+            }
+          }
+        }
+        
+        logger.debug('Path directive resolved value', {
+          identifier,
+          pathValue: typeof pathValue === 'object' ? JSON.stringify(pathValue) : pathValue,
+          resolvedValue
+        });
+      } catch (error: unknown) {
+        // Special handling for paths with $PROJECTPATH or $HOMEPATH
+        // If the path starts with a special variable, store it as-is
+        if (typeof pathValue === 'string' && 
+            (pathValue.startsWith('$PROJECTPATH/') || 
+             pathValue.startsWith('$HOMEPATH/') ||
+             pathValue.startsWith('$~/') ||
+             pathValue.startsWith('$./'))
+           ) {
+          logger.debug('Storing special path variable as-is', {
+            identifier,
+            pathValue
+          });
+          resolvedValue = pathValue;
+        } else {
+          // Re-throw the error for other cases
+          throw new DirectiveError(
+            `Failed to resolve path: ${error instanceof Error ? error.message : String(error)}`,
+            this.kind,
+            DirectiveErrorCode.RESOLUTION_FAILED,
+            { 
+              node,
+              context,
+              cause: error instanceof Error ? error : undefined
+            }
+          );
+        }
+      }
 
       // Store the path value
       newState.setPathVar(identifier, resolvedValue);

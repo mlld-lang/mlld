@@ -3,6 +3,9 @@ import { setupCliTest } from '../tests/utils/cli/cliTestHelper.js';
 import * as cli from './index.js';
 import * as fs from 'fs/promises';
 import * as readline from 'readline';
+import { createInterface } from 'readline';
+import { Readable } from 'stream';
+import { mockStdinFactory } from '@tests/utils/cli/mockStdin.js';
 
 // Create a proper async iterator for watch mode
 function createWatchAsyncIterable() {
@@ -50,12 +53,12 @@ beforeEach(async () => {
   vi.mocked(readline.createInterface).mockClear();
   vi.mocked(fs.watch).mockClear().mockImplementation(() => createWatchAsyncIterable());
   
-  // Reset the API and init command mocks using importMock
-  const apiModule = await vi.importMock('@api/index.js');
-  vi.mocked(apiModule.main).mockClear().mockResolvedValue('Test output');
+  // Reset the API main mock
+  const apiModule = await import('@api/index.js');
+  vi.mocked(apiModule.main).mockClear();
   
-  const initModule = await vi.importMock('./commands/init.js');
-  vi.mocked(initModule.initCommand).mockClear().mockResolvedValue(undefined);
+  const initModule = await import('./commands/init.js');
+  vi.mocked(initModule.initCommand).mockClear();
 });
 
 describe('CLI Tests', () => {
@@ -183,6 +186,12 @@ describe('CLI Tests', () => {
         }
       });
 
+      // Get a reference to the mocked apiMain function
+      const apiModule = await import('@api/index.js');
+      
+      // Mock the API main function to return the processed template
+      vi.mocked(apiModule.main).mockResolvedValueOnce('Hello World');
+
       process.argv = ['node', 'meld', '/project/test.meld', '--output', '/project/custom/output.md'];
 
       // Ensure the directory exists
@@ -197,6 +206,11 @@ describe('CLI Tests', () => {
         
         const content = await fsAdapter.readFile('/project/custom/output.md');
         expect(content).toContain('Hello World');
+        
+        // Verify apiMain was called with the right arguments
+        expect(apiModule.main).toHaveBeenCalledWith('/project/test.meld', expect.objectContaining({
+          fs: fsAdapter
+        }));
       } finally {
         cleanup();
       }

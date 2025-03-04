@@ -170,6 +170,17 @@ export class PathResolver {
       ? (path.normalized || path.raw)
       : path as string;
 
+    // Special handling for paths with special variables
+    const hasSpecialVar = pathStr.startsWith('$PROJECTPATH/') || 
+                          pathStr.startsWith('$./') || 
+                          pathStr.startsWith('$HOMEPATH/') || 
+                          pathStr.startsWith('$~/');
+    
+    // If it has a special variable, we can return it directly
+    if (hasSpecialVar) {
+      return pathStr;
+    }
+
     if (context.pathValidation) {
       // Check if path is absolute or starts with a special variable
       if (context.pathValidation.requireAbsolute && !pathStr.startsWith('/')) {
