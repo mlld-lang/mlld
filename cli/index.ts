@@ -1007,8 +1007,7 @@ export async function main(fsAdapter?: IFileSystem): Promise<void> {
                 // This is a new error, add it to our set
                 seenErrors.add(errorKey);
                 
-                // Display the enhanced error with a blank line for separation
-                console.log('\n'); 
+                // The service will now display just the filepath and source context
                 console.error(enhancedErrorDisplay);
               }
             } catch (importError) {
