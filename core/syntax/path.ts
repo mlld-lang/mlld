@@ -148,7 +148,7 @@ export const invalid = {
       type: MeldParseError,
       severity: ErrorSeverity.Fatal,
       code: 'INVALID_PATH',
-      message: 'Paths with segments must start with $. or $~'
+      message: 'Paths with segments must start with $. or $~ or $PROJECTPATH or $HOMEPATH'
     }
   )
 };

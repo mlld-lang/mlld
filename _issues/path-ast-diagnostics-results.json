@@ -311,10 +311,79 @@
   "dotSegmentPath": {
     "error": "Parse error: Path cannot contain relative segments ('..' or './')"
   },
-  "embedWithPath": {
-    "error": "Parse error: Path with slashes must be a URL (starting with http:// or https://) or use a special variable (starting with $)"
-  },
-  "importWithPath": {
-    "error": "Parse error: Path with slashes must be a URL (starting with http:// or https://) or use a special variable (starting with $)"
-  }
+  "embedWithPath": [
+    {
+      "type": "Directive",
+      "directive": {
+        "kind": "embed",
+        "path": {
+          "raw": "$./templates/header.md",
+          "normalized": "$PROJECTPATH/templates/header.md",
+          "structured": {
+            "base": "$.",
+            "segments": [
+              "templates",
+              "header.md"
+            ],
+            "variables": {
+              "special": [
+                "PROJECTPATH"
+              ]
+            },
+            "cwd": false
+          }
+        }
+      },
+      "location": {
+        "start": {
+          "line": 1,
+          "column": 2
+        },
+        "end": {
+          "line": 1,
+          "column": 34
+        }
+      }
+    }
+  ],
+  "importWithPath": [
+    {
+      "type": "Directive",
+      "directive": {
+        "kind": "import",
+        "path": {
+          "raw": "$PROJECTPATH/other.meld",
+          "structured": {
+            "base": "$PROJECTPATH",
+            "segments": [
+              "other.meld"
+            ],
+            "variables": {
+              "special": [
+                "PROJECTPATH"
+              ]
+            },
+            "cwd": false
+          },
+          "normalized": "$PROJECTPATH/other.meld"
+        },
+        "imports": [
+          {
+            "name": "*",
+            "alias": null
+          }
+        ]
+      },
+      "location": {
+        "start": {
+          "line": 1,
+          "column": 2
+        },
+        "end": {
+          "line": 1,
+          "column": 36
+        }
+      }
+    }
+  ]
 }

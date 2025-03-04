@@ -4,6 +4,7 @@ import { PathService } from './PathService.js';
 import { PathValidationError, PathErrorCode } from './errors/PathValidationError.js';
 import type { Location } from '@core/types/index.js';
 import type { StructuredPath } from 'meld-spec';
+import { PathErrorMessages } from '@core/errors/messages/paths.js';
 
 describe('PathService Temporary Path Rules', () => {
   let context: TestContext;
@@ -143,7 +144,7 @@ describe('PathService Temporary Path Rules', () => {
     it('should reject paths with .. segments', () => {
       expect(() => service.resolvePath('$./path/../file.meld'))
         .toThrow(new PathValidationError(
-          'Path cannot contain . or .. segments - use $. or $~ to reference project or home directory',
+          PathErrorMessages.validation.dotSegments.message,
           PathErrorCode.CONTAINS_DOT_SEGMENTS
         ));
         
@@ -159,7 +160,7 @@ describe('PathService Temporary Path Rules', () => {
       };
       expect(() => service.resolvePath(structuredPath))
         .toThrow(new PathValidationError(
-          'Path cannot contain . or .. segments - use $. or $~ to reference project or home directory',
+          PathErrorMessages.validation.dotSegments.message,
           PathErrorCode.CONTAINS_DOT_SEGMENTS
         ));
     });
@@ -167,7 +168,7 @@ describe('PathService Temporary Path Rules', () => {
     it('should reject paths with . segments', () => {
       expect(() => service.resolvePath('$./path/./file.meld'))
         .toThrow(new PathValidationError(
-          'Path cannot contain . or .. segments - use $. or $~ to reference project or home directory',
+          PathErrorMessages.validation.dotSegments.message,
           PathErrorCode.CONTAINS_DOT_SEGMENTS
         ));
         
@@ -183,7 +184,7 @@ describe('PathService Temporary Path Rules', () => {
       };
       expect(() => service.resolvePath(structuredPath))
         .toThrow(new PathValidationError(
-          'Path cannot contain . or .. segments - use $. or $~ to reference project or home directory',
+          PathErrorMessages.validation.dotSegments.message,
           PathErrorCode.CONTAINS_DOT_SEGMENTS
         ));
     });
@@ -193,7 +194,7 @@ describe('PathService Temporary Path Rules', () => {
       // so the error code is INVALID_PATH_FORMAT instead of RAW_ABSOLUTE_PATH
       expect(() => service.resolvePath('/absolute/path/file.meld'))
         .toThrow(new PathValidationError(
-          'Paths with segments must start with $. or $~ - use $. for project-relative paths and $~ for home-relative paths',
+          PathErrorMessages.validation.rawAbsolutePath.message,
           PathErrorCode.INVALID_PATH_FORMAT
         ));
         
@@ -207,7 +208,7 @@ describe('PathService Temporary Path Rules', () => {
       };
       expect(() => service.resolvePath(structuredPath))
         .toThrow(new PathValidationError(
-          'Paths with segments must start with $. or $~ - use $. for project-relative paths and $~ for home-relative paths, or use a path variable ($variableName)',
+          PathErrorMessages.validation.rawAbsolutePath.message,
           PathErrorCode.INVALID_PATH_FORMAT
         ));
     });
@@ -215,7 +216,7 @@ describe('PathService Temporary Path Rules', () => {
     it('should reject paths with slashes but no path variable', () => {
       expect(() => service.resolvePath('path/to/file.meld'))
         .toThrow(new PathValidationError(
-          'Paths with segments must start with $. or $~ - use $. for project-relative paths and $~ for home-relative paths',
+          PathErrorMessages.validation.slashesWithoutPathVariable.message,
           PathErrorCode.INVALID_PATH_FORMAT
         ));
         
@@ -229,7 +230,7 @@ describe('PathService Temporary Path Rules', () => {
       };
       expect(() => service.resolvePath(structuredPath))
         .toThrow(new PathValidationError(
-          'Paths with segments must start with $. or $~ - use $. for project-relative paths and $~ for home-relative paths, or use a path variable ($variableName)',
+          PathErrorMessages.validation.slashesWithoutPathVariable.message,
           PathErrorCode.INVALID_PATH_FORMAT
         ));
     });
@@ -243,7 +244,7 @@ describe('PathService Temporary Path Rules', () => {
       } catch (e) {
         const err = e as PathValidationError;
         expect(err.code).toBe(PathErrorCode.CONTAINS_DOT_SEGMENTS);
-        expect(err.message).toContain('use $. or $~ to reference');
+        expect(err.message).toBe(PathErrorMessages.validation.dotSegments.message);
       }
     });
 
@@ -256,7 +257,7 @@ describe('PathService Temporary Path Rules', () => {
         // Note: The current implementation checks for path variables first,
         // so the error code is INVALID_PATH_FORMAT instead of RAW_ABSOLUTE_PATH
         expect(err.code).toBe(PathErrorCode.INVALID_PATH_FORMAT);
-        expect(err.message).toContain('must start with $. or $~');
+        expect(err.message).toBe(PathErrorMessages.validation.rawAbsolutePath.message);
       }
     });
 
@@ -267,7 +268,7 @@ describe('PathService Temporary Path Rules', () => {
       } catch (e) {
         const err = e as PathValidationError;
         expect(err.code).toBe(PathErrorCode.INVALID_PATH_FORMAT);
-        expect(err.message).toContain('must start with $. or $~');
+        expect(err.message).toBe(PathErrorMessages.validation.slashesWithoutPathVariable.message);
       }
     });
   });

@@ -558,7 +558,7 @@ Docs are at $docs
       });
       
       // Directly validate the path
-      await expect(pathService.validatePath(structuredPath)).rejects.toThrow(/Paths with segments must start with \$\./);
+      await expect(pathService.validatePath(structuredPath)).rejects.toThrow(/Paths with segments must start with \$\. or \$~ or \$PROJECTPATH or \$HOMEPATH/);
       
       // Add debugging for the main function call
       try {
@@ -649,7 +649,7 @@ Docs are at $docs
       };
       
       // Directly validate the path
-      await expect(pathService.validatePath(structuredPath)).rejects.toThrow(/Paths with segments must start with \$\./);
+      await expect(pathService.validatePath(structuredPath)).rejects.toThrow(/Paths with segments must start with \$\. or \$~ or \$PROJECTPATH or \$HOMEPATH/);
       
       // Try with transformation enabled to match the first test
       // context.disableTransformation(); // Comment out for debugging

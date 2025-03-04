@@ -210,7 +210,7 @@ export class PathService implements IPathService {
     // Check for raw absolute paths
     if (path.isAbsolute(raw)) {
       throw new PathValidationError(
-        'Raw absolute paths are not allowed - use $. for project-relative paths and $~ for home-relative paths',
+        PathErrorMessages.validation.rawAbsolutePath.message,
         PathErrorCode.RAW_ABSOLUTE_PATH,
         location
       );
@@ -317,7 +317,7 @@ export class PathService implements IPathService {
 
     // At this point, any other path format is invalid - but provide a helpful error
     throw new PathValidationError(
-      `Invalid path format: ${raw} - paths must either be simple filenames, start with $. or $~, or use a path variable ($variableName)`,
+      PathErrorMessages.validation.slashesWithoutPathVariable.message,
       PathErrorCode.INVALID_PATH_FORMAT
     );
   }
@@ -404,7 +404,7 @@ export class PathService implements IPathService {
         // For paths with slashes that don't have special prefixes, 
         // this is invalid in Meld's path rules
         throw new PathValidationError(
-          'Paths with segments must start with $. or $~ - use $. for project-relative paths and $~ for home-relative paths',
+          PathErrorMessages.validation.slashesWithoutPathVariable.message,
           PathErrorCode.INVALID_PATH_FORMAT
         );
       }
@@ -482,7 +482,7 @@ export class PathService implements IPathService {
     // Check for raw absolute paths
     if (path.isAbsolute(raw)) {
       throw new PathValidationError(
-        'Raw absolute paths are not allowed - use $. for project-relative paths and $~ for home-relative paths',
+        PathErrorMessages.validation.rawAbsolutePath.message,
         PathErrorCode.RAW_ABSOLUTE_PATH,
         location
       );
