@@ -504,6 +504,9 @@ async function processFile(options: CLIOptions): Promise<void> {
 export async function main(fsAdapter?: IFileSystem): Promise<void> {
   process.title = 'meld';
 
+  // Explicitly disable debug mode by default
+  process.env.DEBUG = '';
+  
   // Parse command-line arguments
   const args = process.argv.slice(2);
   
@@ -599,7 +602,9 @@ export async function main(fsAdapter?: IFileSystem): Promise<void> {
         (serviceConfig as any).level = 'debug';
       });
     } else if (options.verbose) {
-      logger.level = 'info'; // Show info level messages for verbose
+      // Show info level messages for verbose, but no debug logs
+      logger.level = 'info';
+      process.env.DEBUG = ''; // Explicitly disable DEBUG
     } else {
       // Only show errors by default (no debug logs)
       logger.level = 'error';

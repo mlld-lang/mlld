@@ -12,9 +12,9 @@ const consoleFormat = winston.format.combine(
   winston.format.printf(({ level, message, timestamp, service, ...metadata }) => {
     // In non-debug mode, use more concise output
     if (process.env.DEBUG !== 'true') {
-      // For non-error levels, just show the message
+      // Only show error messages, no debug/info/etc
       if (level !== 'error') {
-        return message;
+        return '';
       }
       // For errors, include minimal context
       return `Error: ${message}`;
