@@ -1,5 +1,5 @@
 >> This is a commment and should be ignored
->> I can write a couple lines of them if I want.
+>> I can write a couple lines of them if I want and no one will ever know.
 
 @import [$./examples/example-import.meld]
 
@@ -16,7 +16,7 @@
 }
 
 ## Your role
-@embed [#{role.architect}]
+@embed [{{role.architect}}]
 
 ## Documentation
 ### Target UX
@@ -33,7 +33,7 @@
 @run [cpai api cli core services --stdout]
 
 ## Test Results
-@run[npm test]
+@run [npm test]
 
 ## Your task
-@embed [#{task.code_review}]
+@embed [{{task.code_review}}]

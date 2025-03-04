@@ -12,4 +12,4 @@
     "security_review": "Carefully review the security of the code and advise on the quality of the security and areas of improvement."
 }
 
-@define echo(value) = @run [echo {{value}}]
+@define echo(var) = @run [echo {{var}}]

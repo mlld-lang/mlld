@@ -5,11 +5,11 @@
 @text title = "Meld API Demo"
 @text author = "Meld Team"
 @text date = "2025-02-25"
-@data metadata = {{
+@data metadata = {
   "version": "1.0.0",
   "description": "A comprehensive demonstration of Meld capabilities",
   "tags": ["demo", "api", "documentation"]
-}}
+}
 
 @text intro_content = [[
 # {{title}}
@@ -23,7 +23,7 @@
 This document demonstrates the core capabilities of Meld, a directive-based scripting language for embedding small "@directives" inside plain text documents.
 ]]
 
-{{intro_content}}
+@embed [{{intro_content}}]
 
 ## Text Variables
 
@@ -42,20 +42,20 @@ You can import things from other meld files like variables and defined commands.
 
 Thenk you can embed them in this one: 
 
-{{task.code_review}}
+@embed [{{task.code_review}}]
 
-@run [$echo({{role.architect}})]
+@run $echo({{role.architect}})
 
 ## Data Variables
 
-@data config = {{
+@data config = {
   "app": {
     "name": "Meld Demo",
     "version": "1.0.0",
     "features": ["text", "data", "path", "import", "embed", "run"]
   },
   "env": "production"
-}}
+}
 
 @text data_content = [[
 Data variables store structured data:
@@ -65,7 +65,7 @@ Data variables store structured data:
 - Features: {{config.app.features}}
 ]]
 
-{{data_content}}
+@embed [{{data_content}}]
 
 ## Path Variables
 
@@ -80,15 +80,15 @@ Path variables must use special variables:
 
 ## Command Execution
 
-@run [echo "This is output from a shell command"]
+@run $echo("This is output from a shell command")
 
 @define greet = @run [echo "Hello from a defined command"]
-@run [$greet]
+@run $greet
 
 @text user = "Alice"
 @define greet_alice = @run [echo "Hello, Alice!"]
 The output of this command will be included in the output:
-@run [$greet_alice]
+@run $greet_alice
 
 ## File Embedding
 
@@ -160,7 +160,7 @@ interpolation: {{greeting}}, {{name}}!
 Data reference: {{config.app.name}}
 ]]
 
-{{template}}
+@embed [{{template}}]
 
 ## Conclusion
 

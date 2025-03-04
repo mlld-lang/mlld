@@ -4,7 +4,7 @@
  * This file demonstrates how to use the Meld API for processing Meld files.
  */
 
-import { main } from '../api/index.js';
+import { main } from '../../api/index.js';
 import * as fs from 'fs';
 import * as path from 'path';
 
