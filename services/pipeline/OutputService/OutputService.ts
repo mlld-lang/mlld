@@ -403,7 +403,7 @@ export class OutputService implements IOutputService {
         });
         
         throw new MeldOutputError(
-          'Failed to convert output',
+          `Failed to convert output: ${error instanceof Error ? error.message : String(error)}`,
           'xml',
           { cause: error instanceof Error ? error : undefined }
         );
