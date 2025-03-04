@@ -249,7 +249,7 @@ Usage: meld debug-resolution [options] <input-file>
 Debug variable resolution in a Meld file.
 
 Options:
-  --var, --variable <name>     Filter to a specific variable
+  --var, --variable <n>     Filter to a specific variable
   --output-format <format>     Output format (json, text) [default: text]
   -w, --watch                  Watch for changes and reprocess
   -v, --verbose                Enable verbose output
@@ -303,7 +303,7 @@ Options:
     console.log('  --debug-context            Debug context boundaries and variable propagation');
     console.log('  --viz-type <type>          Type of visualization (hierarchy, variable-propagation, combined, timeline)');
     console.log('  --root-state-id <id>       Root state ID to start visualization from');
-    console.log('  --variable-name <name>     Variable name to track (required for variable-propagation and timeline)');
+    console.log('  --variable-name <n>     Variable name to track (required for variable-propagation and timeline)');
     console.log('  --output-format <format>   Output format (mermaid, dot, json)');
     console.log('  --no-vars                  Exclude variables from context visualization');
     console.log('  --no-timestamps            Exclude timestamps from visualization');
@@ -520,9 +520,6 @@ const seenErrors = new Set<string>();
 // Flag to bypass the error deduplication for formatted errors
 let bypassDeduplication = false;
 
-// Track error lines for line-by-line deduplication (like fix-cli.js)
-const errorLines = new Set<string>();
-
 // Store the original console.error
 const originalConsoleError = console.error;
 
@@ -538,45 +535,13 @@ console.error = function(...args: any[]) {
   // Convert the arguments to a string for comparison
   const errorMsg = args.join(' ');
   
-  // Line by line deduplication (like fix-cli.js)
-  if (errorMsg.includes('\n')) {
-    // Split multi-line errors and check each line
-    const lines = errorMsg.split('\n');
-    
-    // Only print lines we haven't seen before
-    const uniqueLines = lines.filter(line => {
-      const trimmedLine = line.trim();
-      if (!trimmedLine || errorLines.has(trimmedLine)) {
-        return false;
-      }
-      errorLines.add(trimmedLine);
-      return true;
-    });
-    
-    // If we have unique lines to display, show them
-    if (uniqueLines.length > 0) {
-      originalConsoleError.apply(console, [uniqueLines.join('\n')]);
-    }
-    return;
-  }
-  
-  // For single line errors, use the simple deduplication
   // If we've seen this error before, don't print it
   if (seenErrors.has(errorMsg)) {
-    // Debug statement to see duplicates being caught
-    if (process.env.DEBUG_DUPES === 'true') {
-      originalConsoleError.apply(console, ['DUPLICATE CAUGHT:', errorMsg.substring(0, 50) + '...']);
-    }
     return;
   }
   
   // Add this error to the set of seen errors
   seenErrors.add(errorMsg);
-  
-  // Debug statement to see what errors are being added to the set
-  if (process.env.DEBUG_DUPES === 'true') {
-    originalConsoleError.apply(console, ['ADDED ERROR:', errorMsg.substring(0, 50) + '...']);
-  }
   
   // Call the original console.error
   originalConsoleError.apply(console, args);
@@ -591,9 +556,8 @@ export async function main(fsAdapter?: IFileSystem): Promise<void> {
   // Reset errorLogged flag for each invocation of main
   errorLogged = false;
   
-  // Clear the sets of seen errors
+  // Clear the set of seen errors
   seenErrors.clear();
-  errorLines.clear();
 
   // Explicitly disable debug mode by default
   process.env.DEBUG = '';
@@ -892,37 +856,72 @@ export async function main(fsAdapter?: IFileSystem): Promise<void> {
               if (error.stack) {
                 console.error('  - stack trace available');
               }
+
+              // Add debugging for direct meld-ast errors
+              if ('line' in error && 'column' in error) {
+                console.error('DEBUG: Raw meld-ast error properties:');
+                console.error('  - line:', (error as any).line);
+                console.error('  - column:', (error as any).column);
+                if ('sourceFile' in error) {
+                  console.error('  - sourceFile:', (error as any).sourceFile);
+                }
+              }
             }
           }
           
-          if (error instanceof MeldError) {
-            try {
-              // Always use input file path if available to handle hardcoded paths
-              if (options.input && error.filePath === 'examples/error-test.meld') {
-                // Create a clone of the error with the correct file path
-                const fixedPathError = new MeldError(error.message, {
-                  code: error.code,
-                  severity: error.severity,
-                  filePath: options.input,
-                  context: error.context ? { ...error.context } : {}
-                });
-                
-                // Copy special properties if they exist (like location)
-                for (const prop of ['location', 'details', 'directiveKind']) {
-                  if (prop in error) {
-                    (fixedPathError as any)[prop] = (error as any)[prop];
-                  }
+          // Handle both MeldError and raw errors that might come from meld-ast
+          try {
+            // Always use input file path if available to handle hardcoded paths
+            if (error instanceof MeldError && options.input && error.filePath === 'examples/error-test.meld') {
+              // Create a clone of the error with the correct file path
+              const fixedPathError = new MeldError(error.message, {
+                code: error.code,
+                severity: error.severity,
+                filePath: options.input,
+                context: error.context ? { ...error.context } : {},
+                cause: error.cause
+              });
+              
+              // Copy special properties if they exist (like location)
+              for (const prop of ['location', 'details', 'directiveKind', 'originalError']) {
+                if (prop in error) {
+                  (fixedPathError as any)[prop] = (error as any)[prop];
                 }
-                
-                // Use this error instead
-                error = fixedPathError;
               }
               
-              // Create the enhanced error display
-              const enhancedErrorDisplay = await displayErrorWithSourceContext(error as MeldError);
+              // Use this error instead
+              error = fixedPathError;
+            }
+            
+            // Bypass deduplication for our enhanced display
+            bypassDeduplication = true;
+            
+            // Clear previous errors from the seen set that might conflict
+            seenErrors.clear(); // Clear all seen errors to be safe
+            
+            // Convert to a consistent format for deduplication
+            const errorKey = error instanceof Error ? `Error: ${error.message}` : `Error: ${String(error)}`;
+            
+            // In a real implementation, we would import and use the ErrorDisplayService directly
+            // Here we need to dynamically load it to avoid circular dependencies
+            try {
+              // Dynamic import of the ErrorDisplayService
+              const { container } = await import('@core/di-config.js');
+              const { ErrorDisplayService } = await import('@services/display/ErrorDisplayService/ErrorDisplayService.js');
               
-              // Convert to a consistent format for deduplication
-              const errorKey = error instanceof Error ? `Error: ${error.message}` : `Error: ${String(error)}`;
+              // Create the error display service
+              let errorDisplayService;
+              
+              // Try to get it from the DI container first
+              try {
+                errorDisplayService = container.resolve('ErrorDisplayService');
+              } catch (resolveError) {
+                // Create a new instance if DI fails
+                errorDisplayService = new ErrorDisplayService();
+              }
+              
+              // Use the enhanced error display service which now handles nested errors correctly
+              const enhancedErrorDisplay = await errorDisplayService.enhanceErrorDisplay(error);
               
               // Check if we've seen this error before
               if (!seenErrors.has(errorKey)) {
@@ -933,35 +932,84 @@ export async function main(fsAdapter?: IFileSystem): Promise<void> {
                 console.log('\n'); 
                 console.error(enhancedErrorDisplay);
               }
-            } catch (displayError) {
-              // If the enhanced display fails, fall back to basic formatting
-              const errorMsg = error instanceof MeldError
-                ? `\nError in ${error.filePath || 'unknown'}: ${error.message}`
-                : `\nError: ${error instanceof Error ? error.message : String(error)}`;
+            } catch (importError) {
+              // If dynamic import fails, fall back to our simple display function
+              if (options.debug) {
+                console.error('DEBUG: Failed to load ErrorDisplayService:', importError);
+              }
+              
+              // Use our custom error display function as fallback
+              const enhancedErrorDisplay = await displayErrorWithSourceContext(error instanceof MeldError ? error : new MeldError(
+                error instanceof Error ? error.message : String(error),
+                {
+                  filePath: options.input,
+                  cause: error,
+                  context: {
+                    // Copy line/column from meld-ast errors if available
+                    sourceLocation: ('line' in error && 'column' in error) ? {
+                      filePath: ('sourceFile' in error) ? (error as any).sourceFile : options.input,
+                      line: (error as any).line,
+                      column: (error as any).column
+                    } : undefined
+                  }
+                }
+              ));
+              
+              // Check if we've seen this error before
+              if (!seenErrors.has(errorKey)) {
+                // This is a new error, add it to our set
+                seenErrors.add(errorKey);
+                
+                // Display the enhanced error with a blank line for separation
+                console.log('\n'); 
+                console.error(enhancedErrorDisplay);
+              }
+            }
+            
+            // Reset the bypass flag
+            bypassDeduplication = false;
+          } catch (displayError) {
+            // If the enhanced display fails, fall back to basic formatting
+            if (error instanceof MeldError) {
+              const errorMsg = `\nError in ${error.filePath || 'unknown'}: ${error.message}`;
               
               // Check if we've seen this error before
               if (!seenErrors.has(errorMsg.trim())) {
                 seenErrors.add(errorMsg.trim());
                 console.error(errorMsg);
               }
+            } else if (error instanceof Error) {
+              // Check for meld-ast error properties
+              if ('line' in error && 'column' in error) {
+                const filePath = ('sourceFile' in error) ? (error as any).sourceFile : options.input;
+                const errorMsg = `\nError in ${filePath}:${(error as any).line}:${(error as any).column}: ${error.message}`;
+                
+                // Check if we've seen this error before
+                if (!seenErrors.has(errorMsg.trim())) {
+                  seenErrors.add(errorMsg.trim());
+                  console.error(errorMsg);
+                }
+              } else {
+                const errorMsg = `\nError: ${error.message}`;
+                
+                // Check if we've seen this error before
+                if (!seenErrors.has(errorMsg.trim())) {
+                  seenErrors.add(errorMsg.trim());
+                  console.error(errorMsg);
+                }
+              }
+            } else {
+              const errorMsg = `\nError: ${String(error)}`;
               
-              if (options.debug) {
-                console.error(`\nDebug: Display error: ${displayError instanceof Error ? displayError.message : String(displayError)}`);
+              // Check if we've seen this error before
+              if (!seenErrors.has(errorMsg.trim())) {
+                seenErrors.add(errorMsg.trim());
+                console.error(errorMsg);
               }
             }
-          } else if (error instanceof Error) {
-            // For standard Error types
-            const errorMsg = `Error: ${error.message}`;
-            if (!seenErrors.has(errorMsg)) {
-              seenErrors.add(errorMsg);
-              console.error(errorMsg);
-            }
-          } else {
-            // For other unknown error types
-            const errorMsg = `Error: ${String(error)}`;
-            if (!seenErrors.has(errorMsg)) {
-              seenErrors.add(errorMsg);
-              console.error(errorMsg);
+            
+            if (options.debug) {
+              console.error(`\nDebug: Display error: ${displayError instanceof Error ? displayError.message : String(displayError)}`);
             }
           }
         } catch (displayError) {
@@ -982,6 +1030,10 @@ export async function main(fsAdapter?: IFileSystem): Promise<void> {
             } else {
               console.error(`Error: ${error.message}`);
             }
+          } else if (error instanceof Error && 'line' in error && 'column' in error) {
+            // Handle raw meld-ast errors
+            const filePath = ('sourceFile' in error) ? (error as any).sourceFile : options.input;
+            console.error(`Error in ${filePath}:${(error as any).line}:${(error as any).column}: ${error.message}`);
           } else {
             console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
           }
@@ -1014,4 +1066,4 @@ if (require.main === module) {
     // Don't log the error again since it's already logged in the main function
     process.exit(1);
   });
-} 
+}

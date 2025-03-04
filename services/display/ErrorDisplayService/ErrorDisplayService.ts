@@ -414,61 +414,96 @@ export class ErrorDisplayService implements IErrorDisplayService {
   
   /**
    * Extract location information from different error types
+   * Also recursively searches nested error objects to find location information
    */
   private extractLocationFromError(error: MeldError): { filePath: string, line: number, column: number } | null {
+    // Initialize with default values
+    let location: { filePath: string, line: number, column: number } | null = null;
+    
     // Get file path from the error
     let filePath: string | undefined = error.filePath;
     
-    // Handle different error types to extract location information
-    if (error instanceof MeldParseError) {
-      // For parse errors, use the location field
-      if (error.location) {
-        return {
-          filePath: error.location.filePath || filePath || '',
-          line: error.location.start.line,
-          column: error.location.start.column
-        };
+    // Helper to recursively search for location in the error chain
+    const searchErrorChain = (err: any): void => {
+      if (!err) return;
+      
+      // Handle different error types to extract location information
+      if (err instanceof MeldParseError) {
+        // For parse errors, use the location field
+        if (err.location) {
+          location = {
+            filePath: err.location.filePath || filePath || '',
+            line: err.location.start.line,
+            column: err.location.start.column
+          };
+          return; // Found location, stop searching
+        }
+      } else if (err instanceof MeldInterpreterError) {
+        // For interpreter errors, use the location field
+        if (err.location) {
+          location = {
+            filePath: err.location.filePath || filePath || '',
+            line: err.location.line,
+            column: err.location.column
+          };
+          return; // Found location, stop searching
+        }
+      } else if (err instanceof MeldResolutionError) {
+        // For resolution errors, check details.location
+        if (err.details?.location) {
+          location = {
+            filePath: err.details.location.filePath || filePath || '',
+            line: err.details.location.start.line,
+            column: err.details.location.start.column
+          };
+          return; // Found location, stop searching
+        }
+      } else if (err instanceof MeldDirectiveError) {
+        // For directive errors, use the location field
+        if (err.location) {
+          location = {
+            filePath: err.location.filePath || filePath || '',
+            line: err.location.line,
+            column: err.location.column
+          };
+          return; // Found location, stop searching
+        }
       }
-    } else if (error instanceof MeldInterpreterError) {
-      // For interpreter errors, use the location field
-      if (error.location) {
-        return {
-          filePath: error.location.filePath || filePath || '',
-          line: error.location.line,
-          column: error.location.column
+      
+      // Check for any direct line and column properties (might come from meld-ast)
+      if (err.line !== undefined && err.column !== undefined) {
+        // This checks direct line/column properties that might be on error objects
+        // particularly from the meld-ast library
+        location = {
+          filePath: err.sourceFile || err.filePath || filePath || '',
+          line: err.line,
+          column: err.column
         };
+        return; // Found location, stop searching
       }
-    } else if (error instanceof MeldResolutionError) {
-      // For resolution errors, check details.location
-      if (error.details?.location) {
-        return {
-          filePath: error.details.location.filePath || filePath || '',
-          line: error.details.location.start.line,
-          column: error.details.location.start.column
+      
+      // Check the context field for source location information
+      if (err.context?.sourceLocation) {
+        location = {
+          filePath: err.context.sourceLocation.filePath || filePath || '',
+          line: err.context.sourceLocation.line,
+          column: err.context.sourceLocation.column
         };
+        return; // Found location, stop searching
       }
-    } else if (error instanceof MeldDirectiveError) {
-      // For directive errors, use the location field
-      if (error.location) {
-        return {
-          filePath: error.location.filePath || filePath || '',
-          line: error.location.line,
-          column: error.location.column
-        };
-      }
-    }
+      
+      // Continue searching in any nested error objects
+      if (err.originalError) searchErrorChain(err.originalError);
+      if (err.cause) searchErrorChain(err.cause);
+      if (err.previous) searchErrorChain(err.previous);
+      if (err.parent) searchErrorChain(err.parent);
+    };
     
-    // Check the context field for source location information
-    if (error.context?.sourceLocation) {
-      return {
-        filePath: error.context.sourceLocation.filePath || filePath || '',
-        line: error.context.sourceLocation.line,
-        column: error.context.sourceLocation.column
-      };
-    }
+    // Start searching from the error object
+    searchErrorChain(error);
     
-    // If we have a file path but no line/column, use defaults
-    if (filePath) {
+    // If we didn't find a location but have a file path, use defaults
+    if (!location && filePath) {
       return {
         filePath,
         line: 1,
@@ -476,8 +511,7 @@ export class ErrorDisplayService implements IErrorDisplayService {
       };
     }
     
-    // No location information available
-    return null;
+    return location;
   }
   
   /**
@@ -606,6 +640,7 @@ export class ErrorDisplayService implements IErrorDisplayService {
 
   /**
    * Enhance an error with source mapping information if available
+   * Adds improved support for handling nested errors from meld-ast
    */
   async enhanceErrorDisplay(error: unknown): Promise<string> {
     // 1. Convert unknown errors to MeldError
@@ -614,6 +649,11 @@ export class ErrorDisplayService implements IErrorDisplayService {
     if (error instanceof MeldError) {
       // Use the error directly if it's already a MeldError
       meldError = error;
+      
+      // Add the original error as the cause to preserve it for extraction
+      if (error.originalError && !error.cause) {
+        meldError.cause = error.originalError;
+      }
     } else if (error instanceof Error) {
       // For standard Error instances, wrap them and preserve the stack
       meldError = new MeldError(error.message, { 
@@ -624,9 +664,20 @@ export class ErrorDisplayService implements IErrorDisplayService {
         }
       });
       
-      // Try to extract file path, line, and column from stack trace
+      // Copy any location properties directly from the original error
+      // This helps with errors from meld-ast which might have line/column
+      if ('line' in error && 'column' in error) {
+        if (!meldError.context) meldError.context = {};
+        meldError.context.sourceLocation = {
+          filePath: (error as any).sourceFile || (error as any).filePath || '',
+          line: (error as any).line,
+          column: (error as any).column
+        };
+      }
+      
+      // Try to extract file path, line, and column from stack trace as backup
       const stackInfo = this.extractInfoFromStack(error.stack);
-      if (stackInfo) {
+      if (stackInfo && !meldError.context?.sourceLocation) {
         if (!meldError.context) meldError.context = {};
         meldError.context.sourceLocation = {
           filePath: stackInfo.filePath,
@@ -641,10 +692,14 @@ export class ErrorDisplayService implements IErrorDisplayService {
 
     // 2. Try different strategies to get location information
     
-    // First check if we already have a location on the error itself
+    // First check if we already have a location on the error or nested errors
     let location = this.extractLocationFromError(meldError);
     if (location) {
-      // We found location directly in the error, use it for display
+      // Update the error with the extracted location to ensure it's used in display
+      if (!meldError.context) meldError.context = {};
+      meldError.context.sourceLocation = location;
+      
+      // We found location directly in the error or nested errors, use it for display
       return this.displayErrorWithSourceContext(meldError);
     }
     
