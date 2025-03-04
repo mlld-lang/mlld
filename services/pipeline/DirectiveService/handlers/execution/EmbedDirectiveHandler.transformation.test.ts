@@ -323,30 +323,26 @@ describe('EmbedDirectiveHandler Transformation', () => {
     });
     
     it('should handle data variable field embeds in transformation mode', async () => {
-      // Use the centralized example for data variable field embedding
-      const example = embedDirectiveExamples.atomic.withDataVariableContent;
-      const nodes = await parserService.parse(example.code);
+      // Create a variable reference embed directly instead of trying to parse the example
+      const variablePath = {
+        raw: '{{role.architect}}',
+        isVariableReference: true,
+        variable: {
+          type: 'DataVar',
+          identifier: 'role',
+          fields: [{ type: 'field', value: 'architect' }]
+        }
+      };
       
-      // Find the embed directive node (should be the second node)
-      const embedNode = nodes.find(n => n.type === 'Directive' && 
-                                       (n as any).directive?.kind === 'embed');
-      
-      if (!embedNode) {
-        throw new Error('Failed to find embed directive in example');
-      }
-      
-      // Make sure the directive has isVariableReference set
-      if ((embedNode as any).directive && (embedNode as any).directive.path) {
-        (embedNode as any).directive.path = {
-          raw: '{{role.architect}}',
-          isVariableReference: true,
-          variable: {
-            type: 'DataVar',
-            identifier: 'role',
-            fields: [{ type: 'field', value: 'architect' }]
-          }
-        };
-      }
+      // Create the directive node with the variable reference path
+      const embedNode = {
+        type: 'Directive',
+        directive: {
+          kind: 'embed',
+          path: variablePath
+        },
+        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 20 } }
+      } as DirectiveNode;
       
       const context = { 
         currentFilePath: 'test.meld', 
@@ -358,7 +354,7 @@ describe('EmbedDirectiveHandler Transformation', () => {
       vi.mocked(resolutionService.resolveInContext)
         .mockResolvedValue('You are a senior architect skilled in TypeScript.');
       
-      const result = await handler.execute(embedNode as DirectiveNode, context);
+      const result = await handler.execute(embedNode, context);
       
       // Should use variable value directly
       expect(result.replacement).toBeDefined();
