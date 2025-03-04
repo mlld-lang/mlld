@@ -16,7 +16,7 @@
 }
 
 ## Your role
-@embed [{{role.architect}}]
+@embed {{role.architect}}
 
 ## Documentation
 ### Target UX
@@ -36,4 +36,4 @@
 @run [npm test]
 
 ## Your task
-@embed [{{task.code_review}}]
+@embed {{task.code_review}}

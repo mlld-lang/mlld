@@ -6,9 +6,9 @@
 
 >> Skip embed variables for now
 >> ## Your role
->> @embed [[{{role.architect}}]]
+>> @embed {{role.architect}}
 
->> @embed [[{{imported_title}}]]
+>> @embed {{imported_title}}
 
 ## Documentation
 ### Target UX
@@ -29,4 +29,4 @@
 
 >> Skip embed variables for now 
 >> ## Your task
->> @embed [{{task.code_review}}]
+>> @embed {{task.code_review}}
