@@ -51,39 +51,16 @@ export class ErrorDisplayService implements IErrorDisplayService {
 
   /**
    * Format a basic error message without source context
+   * Simplified to remove error type labels and just show the location
    */
   formatError(error: MeldError): string {
-    // Get error type label based on error class
-    const errorTypeLabel = this.getErrorTypeLabel(error);
-
-    // Get severity color based on error severity
-    const severityColor = this.getSeverityColor(error.severity);
-
     // Format file path if available
-    const filePathStr = error.filePath ? ` in ${chalk.cyan(error.filePath)}` : '';
-    
-    // Base error message
-    const baseMessage = `${severityColor(errorTypeLabel)}: ${error.message}${filePathStr}`;
-    
-    // Add specialized formatting for different error types
-    if (error instanceof MeldResolutionError) {
-      return this.formatResolutionError(error, baseMessage);
-    } else if (error instanceof MeldImportError) {
-      return this.formatImportError(error, baseMessage);
-    } else if (error instanceof MeldDirectiveError) {
-      return this.formatDirectiveError(error, baseMessage);
-    } else if (error instanceof CorePathValidationError) {
-      return this.formatPathValidationError(error, baseMessage);
-    } else if (error instanceof MeldFileSystemError) {
-      return this.formatFileSystemError(error, baseMessage);
-    } else if (error instanceof MeldFileNotFoundError) {
-      return this.formatFileNotFoundError(error, baseMessage);
-    } else if (error instanceof MeldOutputError) {
-      return this.formatOutputError(error, baseMessage);
+    if (error.filePath) {
+      return chalk.dim(`    at ${chalk.cyan(error.filePath)}`);
     }
     
-    // Default formatting for other error types
-    return baseMessage;
+    // Fall back to a minimal error format if no file path is available
+    return chalk.dim(`    at unknown location`);
   }
   
   /**
@@ -372,24 +349,11 @@ export class ErrorDisplayService implements IErrorDisplayService {
         }
       }
       
-      // Build the complete error message with context
-      const errorTypeLabel = this.getErrorTypeLabel(error);
-      const severityColor = this.getSeverityColor(error.severity);
-      
+      // Build the complete error message with context - SIMPLIFIED VERSION
+      // Skip error type labels and just show the location information
       const errorHeader = [
-        // Format with error type and code if available
-        error.code 
-          ? `${severityColor(errorTypeLabel)} ${chalk.dim(`[${error.code}]`)}: ${error.message}`
-          : `${severityColor(errorTypeLabel)}: ${error.message}`,
         chalk.dim(`    at ${chalk.cyan(filePath)}:${chalk.yellow(line.toString())}:${chalk.yellow(column.toString())}`)
       ];
-      
-      // Add specialized error details based on error type
-      const errorDetails = this.getErrorDetails(error);
-      if (errorDetails.length > 0) {
-        errorHeader.push('');
-        errorHeader.push(...errorDetails.map(detail => chalk.dim(detail)));
-      }
       
       // Add the code context with line numbers and highlighting
       const codeContext = [];
@@ -740,7 +704,12 @@ export class ErrorDisplayService implements IErrorDisplayService {
       // Continue to fallback methods if source mapping fails
     }
     
-    // 3. If all else fails, just format the error without source context
+    // 3. If all else fails, just format the error without source context,
+    // but still prioritize showing just location information
+    if (meldError.filePath) {
+      return chalk.dim(`    at ${chalk.cyan(meldError.filePath)}`);
+    }
+    
     return this.formatError(meldError);
   }
   
