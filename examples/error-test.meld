@@ -1,0 +1,19 @@
+@text greeting = "Hello, world!"
+
+>> This file contains intentional errors for testing error display
+
+@data badJson = {
+  "key": "value",
+  "broken": syntax_error
+}
+
+@define myFunction(param) {
+  @text computed = "Processed: ${param"
+  @run [echo {{computed}}]
+}
+
+@import [non-existent-file.meld]
+
+@embed [missing-file.md]
+
+@myFunction("test")

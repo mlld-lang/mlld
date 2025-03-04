@@ -107,15 +107,15 @@ export class ErrorDisplayService implements IErrorDisplayService {
     // Ensure column is within bounds (1-based in source maps, 0-based for string ops)
     column = Math.max(0, Math.min(column - 1, sourceLine.length));
     
-    // Create highlighted code line
+    // Create highlighted code line with bounds checking
     const beforeError = sourceLine.substring(0, column);
-    const errorPart = sourceLine.substring(column, column + length);
-    const afterError = sourceLine.substring(column + length);
+    const errorPart = sourceLine.substring(column, Math.min(column + length, sourceLine.length));
+    const afterError = sourceLine.substring(Math.min(column + length, sourceLine.length));
     
-    const codeLine = chalk.white(beforeError) + chalk.bgRed(errorPart) + chalk.white(afterError);
+    const codeLine = chalk.white(beforeError) + chalk.bgRed.white(errorPart) + chalk.white(afterError);
     
     // Create pointer line with caret
-    const pointerLine = ' '.repeat(column) + chalk.red('^'.repeat(Math.max(1, length)));
+    const pointerLine = ' '.repeat(column) + chalk.red('^'.repeat(Math.max(1, errorPart.length)));
     
     return { codeLine, pointerLine };
   }
