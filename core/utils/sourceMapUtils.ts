@@ -14,29 +14,51 @@ import { logger } from './logger.js';
  * @returns Location object or null if not found
  */
 export function extractErrorLocation(error: Error): { line: number; column: number } | null {
-  // Try to find line and column in the error message using common patterns
+  // First, check if the error message contains multiple line/column references
+  // (e.g., "Directive error (embed): ... at line 29, column 2 at line 29, column 2")
+  // This happens with nested errors, and we want the last (most specific) one
+  let matches = [];
+  const errorMsg = error.message || '';
+  
+  // Common patterns to extract line/column information
   const lineColPatterns = [
-    /(?:at|on|in|line)\s+(?:line\s+)?(\d+)(?:,\s+column\s+|:)(\d+)/i,  // "at line 10:20" or "line 10, column 20"
-    /line\s+(\d+)(?:\s+|,\s+)(?:column|col|position|char|character)\s+(\d+)/i,  // "line 10 column 20"
-    /\[(\d+),\s*(\d+)\]/,  // "[10, 20]"
-    /\((\d+):(\d+)\)/  // "(10:20)"
+    /(?:at|on|in|line)\s+(?:line\s+)?(\d+)(?:,\s+column\s+|:)(\d+)/gi,  // "at line 10:20" or "line 10, column 20"
+    /line\s+(\d+)(?:\s+|,\s+)(?:column|col|position|char|character)\s+(\d+)/gi,  // "line 10 column 20"
+    /\[(\d+),\s*(\d+)\]/g,  // "[10, 20]"
+    /\((\d+):(\d+)\)/g  // "(10:20)"
   ];
   
+  // Try to find all matches in the error message
   for (const pattern of lineColPatterns) {
-    const match = error.message.match(pattern);
-    if (match && match.length >= 3) {
-      const line = parseInt(match[1], 10);
-      const column = parseInt(match[2], 10);
-      
-      // Validate numbers are reasonable
-      if (!isNaN(line) && !isNaN(column) && line > 0 && column >= 0) {
-        logger.debug(`Extracted location from error message: ${line}:${column}`, { 
-          message: error.message,
-          pattern: pattern.toString()
-        });
-        return { line, column };
+    let match;
+    // Reset the regex to start from the beginning
+    pattern.lastIndex = 0;
+    
+    while ((match = pattern.exec(errorMsg)) !== null) {
+      if (match && match.length >= 3) {
+        const line = parseInt(match[1], 10);
+        const column = parseInt(match[2], 10);
+        
+        // Validate numbers are reasonable
+        if (!isNaN(line) && !isNaN(column) && line > 0 && column >= 0) {
+          matches.push({ line, column, index: match.index });
+        }
       }
     }
+  }
+  
+  // If we found multiple matches, prefer the last one (most specific)
+  if (matches.length > 0) {
+    // Sort by position in the string (later matches are more specific)
+    matches.sort((a, b) => b.index - a.index);
+    const lastMatch = matches[0];
+    
+    logger.debug(`Extracted location from error message: ${lastMatch.line}:${lastMatch.column} (from ${matches.length} matches)`, { 
+      message: error.message,
+      allMatches: matches.map(m => `${m.line}:${m.column}`)
+    });
+    
+    return { line: lastMatch.line, column: lastMatch.column };
   }
   
   logger.debug(`Could not extract location from error message: ${error.message}`);

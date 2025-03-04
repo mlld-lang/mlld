@@ -466,8 +466,46 @@ export class ErrorDisplayService implements IErrorDisplayService {
     // Start searching from the error object
     searchErrorChain(error);
     
-    // If we didn't find a location but have a file path, use defaults
+    // If we didn't find a location but have a file path and there's a line/column in the error message
+    // Try to extract line/column information from the error message itself
+    const errorMsg = error.message || '';
+    const lineColMatch = errorMsg.match(/(?:at|on|in|line)\s+(\d+)(?:,\s+column\s+|:|,\s+col(?:umn)?\s+)(\d+)/i);
+    if (!location && filePath && lineColMatch) {
+      return {
+        filePath,
+        line: parseInt(lineColMatch[1], 10),
+        column: parseInt(lineColMatch[2], 10)
+      };
+    }
+    
+    // If we still didn't find a location and have node.location from the error and a file path
+    if (!location && filePath && error.location) {
+      if (error.location.start) {
+        return {
+          filePath,
+          line: error.location.start.line,
+          column: error.location.start.column
+        };
+      } else if (error.location.line && error.location.column) {
+        return {
+          filePath,
+          line: error.location.line,
+          column: error.location.column
+        };
+      }
+    }
+    
+    // Last resort: if we have a file path but no location, use defaults
     if (!location && filePath) {
+      // Check if the error has line and column as direct properties
+      if (typeof error.line === 'number' && typeof error.column === 'number') {
+        return {
+          filePath,
+          line: error.line,
+          column: error.column
+        };
+      }
+      
       return {
         filePath,
         line: 1,
@@ -656,7 +694,32 @@ export class ErrorDisplayService implements IErrorDisplayService {
 
     // 2. Try different strategies to get location information
     
-    // First check if we already have a location on the error or nested errors
+    // Check for location in directive errors
+    if (meldError instanceof MeldDirectiveError && meldError.location) {
+      if (!meldError.context) meldError.context = {};
+      meldError.context.sourceLocation = {
+        filePath: meldError.location.filePath || meldError.filePath || '',
+        line: meldError.location.line,
+        column: meldError.location.column
+      };
+      
+      return this.displayErrorWithSourceContext(meldError);
+    }
+    
+    // Extract line and column directly from error message
+    const lineColumnFromMessage = extractErrorLocation(meldError);
+    if (lineColumnFromMessage && meldError.filePath) {
+      if (!meldError.context) meldError.context = {};
+      meldError.context.sourceLocation = {
+        filePath: meldError.filePath,
+        line: lineColumnFromMessage.line,
+        column: lineColumnFromMessage.column
+      };
+      
+      return this.displayErrorWithSourceContext(meldError);
+    }
+    
+    // Check if we already have a location on the error or nested errors
     let location = this.extractLocationFromError(meldError);
     if (location) {
       // Update the error with the extracted location to ensure it's used in display
@@ -702,6 +765,41 @@ export class ErrorDisplayService implements IErrorDisplayService {
     } catch (mappingError) {
       console.error("Error during source mapping:", mappingError);
       // Continue to fallback methods if source mapping fails
+    }
+    
+    // Try to handle composite error messages with recursive extraction
+    if (meldError.message.includes('at line') && meldError.message.includes('column')) {
+      const nestedLocations = [];
+      // Extract all line/column references from the message
+      let errorMsg = meldError.message;
+      const pattern = /(?:at|on|in|line)\s+(?:line\s+)?(\d+)(?:,\s+column\s+|:)(\d+)/gi;
+      let match;
+      
+      while ((match = pattern.exec(errorMsg)) !== null) {
+        if (match && match.length >= 3) {
+          const line = parseInt(match[1], 10);
+          const column = parseInt(match[2], 10);
+          if (!isNaN(line) && !isNaN(column)) {
+            nestedLocations.push({ line, column, index: match.index });
+          }
+        }
+      }
+      
+      // If we found multiple locations, use the last one (most specific)
+      if (nestedLocations.length > 0 && meldError.filePath) {
+        // Sort by position in the string (later matches are more specific)
+        nestedLocations.sort((a, b) => b.index - a.index);
+        const lastMatch = nestedLocations[0];
+        
+        if (!meldError.context) meldError.context = {};
+        meldError.context.sourceLocation = {
+          filePath: meldError.filePath,
+          line: lastMatch.line,
+          column: lastMatch.column
+        };
+        
+        return this.displayErrorWithSourceContext(meldError);
+      }
     }
     
     // 3. If all else fails, just format the error without source context,

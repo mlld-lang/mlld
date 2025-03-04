@@ -55,14 +55,51 @@ export class SourceMapService {
    * @returns Original source location or null if not found
    */
   findOriginalLocation(combinedLine: number, combinedColumn: number): SourceLocation | null {
-    // Find the closest mapping that's less than or equal to the target line
+    // First, look for an exact line match (most accurate)
+    const exactLineMatches = this.mappings.filter(mapping => 
+      mapping.combined.line === combinedLine
+    );
+    
+    if (exactLineMatches.length > 0) {
+      // Find the best column match for this line
+      let bestMapping = exactLineMatches[0];
+      let bestColumnDistance = Math.abs(exactLineMatches[0].combined.column - combinedColumn);
+      
+      for (const mapping of exactLineMatches) {
+        const distance = Math.abs(mapping.combined.column - combinedColumn);
+        if (distance < bestColumnDistance) {
+          bestColumnDistance = distance;
+          bestMapping = mapping;
+        }
+      }
+      
+      // Calculate original column by adding the column offset
+      const originalColumn = bestMapping.source.column + (combinedColumn - bestMapping.combined.column);
+      
+      const result = {
+        filePath: bestMapping.source.filePath,
+        line: bestMapping.source.line,
+        column: Math.max(1, originalColumn) // Ensure column is at least 1
+      };
+      
+      logger.debug(`Exact line match: ${combinedLine}:${combinedColumn} -> ${result.filePath}:${result.line}:${result.column}`);
+      return result;
+    }
+    
+    // If no exact match, find the closest mapping that's less than or equal to the target line
+    // This handles cases where we're in the middle of a block of embedded content
     let bestMapping = null;
     let bestDistance = Infinity;
+    
+    // Try to find mappings within a reasonable range (within 10 lines)
+    const MAX_LINE_DISTANCE = 10;
     
     for (const mapping of this.mappings) {
       if (mapping.combined.line <= combinedLine) {
         const distance = combinedLine - mapping.combined.line;
-        if (distance < bestDistance) {
+        
+        // Only consider mappings that are within a reasonable range
+        if (distance <= MAX_LINE_DISTANCE && distance < bestDistance) {
           bestDistance = distance;
           bestMapping = mapping;
         }
@@ -73,7 +110,7 @@ export class SourceMapService {
       // Calculate the original line by adding the line offset to the source line
       const originalLine = bestMapping.source.line + (combinedLine - bestMapping.combined.line);
       
-      // For column, only use the original column if we're on the exact same line
+      // For column, use a sensible default if we're not on the exact mapping line
       const originalColumn = combinedLine === bestMapping.combined.line
         ? bestMapping.source.column + (combinedColumn - bestMapping.combined.column)
         : combinedColumn;
@@ -81,11 +118,39 @@ export class SourceMapService {
       const result = {
         filePath: bestMapping.source.filePath,
         line: originalLine,
-        column: originalColumn
+        column: Math.max(1, originalColumn) // Ensure column is at least 1
       };
       
       logger.debug(`Mapped location ${combinedLine}:${combinedColumn} -> ${result.filePath}:${result.line}:${result.column}`);
+      return result;
+    }
+    
+    // If still no match found, look for the closest mapping that's greater than the target line
+    // This handles cases where we're at the beginning of a file with no mappings yet
+    bestMapping = null;
+    bestDistance = Infinity;
+    
+    for (const mapping of this.mappings) {
+      if (mapping.combined.line > combinedLine) {
+        const distance = mapping.combined.line - combinedLine;
+        if (distance < bestDistance && distance <= MAX_LINE_DISTANCE) {
+          bestDistance = distance;
+          bestMapping = mapping;
+        }
+      }
+    }
+    
+    if (bestMapping) {
+      // Since we're before the mapping, use source line 1 and adjust based on distance
+      const originalLine = Math.max(1, bestMapping.source.line - bestDistance);
       
+      const result = {
+        filePath: bestMapping.source.filePath,
+        line: originalLine,
+        column: combinedColumn // Use the original column
+      };
+      
+      logger.debug(`Nearest forward mapping: ${combinedLine}:${combinedColumn} -> ${result.filePath}:${result.line}:${result.column}`);
       return result;
     }
     

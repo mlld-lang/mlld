@@ -285,17 +285,34 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
           // Register the source file content
           registerSource(resolvedPath, content);
           
-          // Add a mapping from the first line of the source file to the location of the embed directive
+          // Create mappings for every line in the embedded file
           if (node.location && node.location.start) {
-            addMapping(
-              resolvedPath,
-              1, // Start at line 1 of the embedded file
-              1, // Start at column 1
-              node.location.start.line,
-              node.location.start.column
-            );
+            const contentLines = content.split('\n');
+            const directiveLine = node.location.start.line;
+            const directiveColumn = node.location.start.column;
             
-            this.logger.debug(`Added source mapping from ${resolvedPath}:1:1 to line ${node.location.start.line}:${node.location.start.column}`);
+            // Create mappings for each line in the embedded content
+            contentLines.forEach((line, index) => {
+              // Map each line from the source file to its position in the combined output
+              // Line numbers are 1-based in source maps
+              const sourceLine = index + 1;
+              const targetLine = directiveLine + index;
+              
+              // For the first line, use the directive column as offset
+              // For subsequent lines, start at column 1
+              const sourceColumn = 1;
+              const targetColumn = index === 0 ? directiveColumn : 1;
+              
+              addMapping(
+                resolvedPath,
+                sourceLine,
+                sourceColumn,
+                targetLine,
+                targetColumn
+              );
+            });
+            
+            this.logger.debug(`Added source mappings for ${resolvedPath} (${contentLines.length} lines) starting at line ${directiveLine}:${directiveColumn}`);
           }
         } catch (err) {
           // Source mapping is optional, so just log a debug message if it fails
