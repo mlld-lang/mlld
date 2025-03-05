@@ -236,6 +236,26 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
           content
         });
         
+        // Fix for variable reference path prefixing issue
+        // If content has the format "examples/..." (or any folder prefix), we need to extract just the value
+        if (content && typeof content === 'string' && content.includes('/')) {
+          const splitParts = content.split('/');
+          if (splitParts.length > 1) {
+            this.logger.debug('Detected possible file path prefix in variable content', {
+              original: content,
+              splitParts
+            });
+            
+            // Take only the last part which should be the actual content
+            content = splitParts[splitParts.length - 1];
+            
+            this.logger.debug('Removed file path prefix from variable content', {
+              original: resolvedPath,
+              fixed: content
+            });
+          }
+        }
+        
         // We never parse variable references in the actual implementation
         this.logger.debug('Not parsing variable reference content (standard behavior)');
       } 
