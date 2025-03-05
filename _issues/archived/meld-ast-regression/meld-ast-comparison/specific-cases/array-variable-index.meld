@@ -1,5 +1,0 @@
-
-@data fruits = ["apple", "banana", "cherry"]
-@data index = 1
-
-Using variable index: {{fruits[index]}}

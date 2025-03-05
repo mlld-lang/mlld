@@ -1,6 +1,0 @@
-@text greeting = "Hello, world\!"
-
-@data invalid = {
-  "key": "value",
-  "broken": syntax error here
-}
