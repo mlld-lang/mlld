@@ -1010,6 +1010,10 @@ export class OutputService implements IOutputService {
         }
 
         return '';
+      case 'Comment':
+        // Comments should be ignored in the output
+        logger.debug('Ignoring comment node in output');
+        return '';
       default:
         throw new MeldOutputError(`Unknown node type: ${node.type}`, 'markdown');
     }
