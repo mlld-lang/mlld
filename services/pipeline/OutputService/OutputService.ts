@@ -854,7 +854,7 @@ export class OutputService implements IOutputService {
         const directive = node as DirectiveNode;
         const kind = directive.directive.kind;
 
-        console.log('DEBUG: OutputService processing directive:', {
+        logger.debug('OutputService processing directive:', {
           kind,
           transform: state.isTransformationEnabled(),
           hasTransformedNodes: !!state.getTransformedNodes(),
@@ -873,18 +873,68 @@ export class OutputService implements IOutputService {
           if (!state.isTransformationEnabled()) {
             return '[run directive output placeholder]\n';
           }
+          
           // In transformation mode, return the command output
           const transformedNodes = state.getTransformedNodes();
-          if (transformedNodes) {
-            const transformed = transformedNodes.find(n => 
+          if (transformedNodes && transformedNodes.length > 0) {
+            // First try exact line match (original behavior)
+            const exactMatch = transformedNodes.find(n => 
               n.location?.start.line === node.location?.start.line
             );
-            if (transformed && transformed.type === 'Text') {
-              const content = (transformed as TextNode).content;
+            
+            logger.debug('Looking for transformed run directive node', {
+              directiveLine: node.location?.start.line,
+              transformedNodeCount: transformedNodes.length,
+              foundExactMatch: !!exactMatch,
+              command: directive.directive.command
+            });
+            
+            if (exactMatch && exactMatch.type === 'Text') {
+              const content = (exactMatch as TextNode).content;
+              return content.endsWith('\n') ? content : content + '\n';
+            }
+            
+            // If exact match not found, try to find the closest matching node
+            // This handles cases where line numbers have shifted during transformation
+            let closestNode: MeldNode | null = null;
+            let smallestLineDiff = Number.MAX_SAFE_INTEGER;
+            
+            for (const transformedNode of transformedNodes) {
+              if (transformedNode.type === 'Text' && 
+                  node.location?.start.line && 
+                  transformedNode.location?.start.line) {
+                
+                const lineDiff = Math.abs(
+                  transformedNode.location.start.line - node.location.start.line
+                );
+                
+                // Update closest node if this one is closer
+                if (lineDiff < smallestLineDiff) {
+                  smallestLineDiff = lineDiff;
+                  closestNode = transformedNode;
+                }
+              }
+            }
+            
+            // Use the closest node if it's within a reasonable range (5 lines)
+            if (closestNode && smallestLineDiff <= 5) {
+              logger.debug('Found closest transformed node for run directive', {
+                originalLine: node.location?.start.line,
+                closestNodeLine: closestNode.location?.start.line,
+                lineDifference: smallestLineDiff,
+                nodeType: closestNode.type
+              });
+              
+              const content = (closestNode as TextNode).content;
               return content.endsWith('\n') ? content : content + '\n';
             }
           }
+          
           // If no transformed node found, return placeholder
+          logger.warn('No transformed node found for run directive', {
+            directiveLine: node.location?.start.line,
+            command: directive.directive.command
+          });
           return '[run directive output placeholder]\n';
         }
 
@@ -894,18 +944,68 @@ export class OutputService implements IOutputService {
           if (!state.isTransformationEnabled()) {
             return '[directive output placeholder]\n';
           }
+          
           // In transformation mode, return the embedded content
           const transformedNodes = state.getTransformedNodes();
-          if (transformedNodes) {
-            const transformed = transformedNodes.find(n => 
+          if (transformedNodes && transformedNodes.length > 0) {
+            // First try exact line match (original behavior)
+            const exactMatch = transformedNodes.find(n => 
               n.location?.start.line === node.location?.start.line
             );
-            if (transformed && transformed.type === 'Text') {
-              const content = (transformed as TextNode).content;
+            
+            logger.debug('Looking for transformed embed node', {
+              directiveLine: node.location?.start.line,
+              transformedNodeCount: transformedNodes.length,
+              foundExactMatch: !!exactMatch,
+              transformedNodeLines: transformedNodes.map(n => n.location?.start.line)
+            });
+            
+            if (exactMatch && exactMatch.type === 'Text') {
+              const content = (exactMatch as TextNode).content;
+              return content.endsWith('\n') ? content : content + '\n';
+            }
+            
+            // If exact match not found, try to find the closest matching node
+            // This handles cases where line numbers have shifted during transformation
+            let closestNode: MeldNode | null = null;
+            let smallestLineDiff = Number.MAX_SAFE_INTEGER;
+            
+            for (const transformedNode of transformedNodes) {
+              if (transformedNode.type === 'Text' && 
+                  node.location?.start.line && 
+                  transformedNode.location?.start.line) {
+                
+                const lineDiff = Math.abs(
+                  transformedNode.location.start.line - node.location.start.line
+                );
+                
+                // Update closest node if this one is closer
+                if (lineDiff < smallestLineDiff) {
+                  smallestLineDiff = lineDiff;
+                  closestNode = transformedNode;
+                }
+              }
+            }
+            
+            // Use the closest node if it's within a reasonable range (5 lines)
+            if (closestNode && smallestLineDiff <= 5) {
+              logger.debug('Found closest transformed node for embed directive', {
+                originalLine: node.location?.start.line,
+                closestNodeLine: closestNode.location?.start.line,
+                lineDifference: smallestLineDiff,
+                nodeType: closestNode.type
+              });
+              
+              const content = (closestNode as TextNode).content;
               return content.endsWith('\n') ? content : content + '\n';
             }
           }
+          
           // If no transformed node found, return placeholder
+          logger.warn('No transformed node found for embed directive', {
+            directiveLine: node.location?.start.line,
+            directivePath: directive.directive.path
+          });
           return '[directive output placeholder]\n';
         }
 
