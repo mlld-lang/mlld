@@ -23,7 +23,19 @@ const IGNORED_DIRS = [
 const IGNORED_PATTERNS = [
   '*.log',
   '*.tmp',
-  '.DS_Store'
+  '.DS_Store',
+  // Meld document files that should be kept in dev branches but removed from main
+  '_meld/**/*.md',
+  '_meld/**/*.meld',
+  '_meld/**/*.meld.md',
+  '**/*.meld',
+  // Preserve documentation in docs/ and userdocs/ folders
+  'dev/**/*.md',
+  'dev/**/*.meld',
+  'dev/**/*.meld.md',
+  'tmp/**/*.md',
+  'tmp/**/*.meld',
+  'tmp/**/*.meld.md'
 ];
 
 // Utility function to run git commands
