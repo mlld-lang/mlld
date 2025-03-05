@@ -40,20 +40,20 @@ try {
   console.log(`Public branch ${PUBLIC_BRANCH} doesn't exist on remote yet.`);
 }
 
-// Check if public branch exists
-let publicBranchExists = false;
-try {
-  execSync(`git branch --list ${PUBLIC_BRANCH}`, { stdio: 'pipe' }).toString().trim() !== '';
-  publicBranchExists = true;
-} catch (e) {
-  console.log(`Public branch ${PUBLIC_BRANCH} doesn't exist yet. Will create it.`);
-}
+// Check if local public branch exists
+const branchOutput = execSync(`git branch --list ${PUBLIC_BRANCH}`, { stdio: 'pipe' }).toString().trim();
+const publicBranchExists = branchOutput.includes(PUBLIC_BRANCH);
 
-// If public branch exists, check it out, otherwise create it
+// If public branch exists locally, check it out, otherwise create it
 if (publicBranchExists) {
+  console.log(`Local ${PUBLIC_BRANCH} branch exists. Checking it out...`);
   git(`checkout ${PUBLIC_BRANCH}`);
-  git(`reset --hard origin/${PUBLIC_BRANCH}`);
+  // Reset to origin/public only if it exists remotely
+  if (publicBranchExistsOnRemote) {
+    git(`reset --hard origin/${PUBLIC_BRANCH}`);
+  }
 } else {
+  console.log(`Creating new ${PUBLIC_BRANCH} branch from ${DEVELOPMENT_BRANCH}...`);
   // Create a new branch from development
   git(`checkout -b ${PUBLIC_BRANCH} origin/${DEVELOPMENT_BRANCH}`);
 }
