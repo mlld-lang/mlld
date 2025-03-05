@@ -206,7 +206,7 @@ There appears to be a disconnect in the transformation process:
 
 ## Root Cause Analysis
 
-After comparing the `RunDirectiveHandler` with the `EmbedDirectiveHandler` and examining the `InterpreterService` handling, the likely issue is:
+After comparing the `RunDirectiveHandler` with the `EmbedDirectiveHandler` and examining the `InterpreterService` handling, we've identified several contributing factors:
 
 1. **Different execution patterns**: The `RunDirectiveHandler` explicitly calls `clonedState.transformNode(node, replacement)` before returning, while the `EmbedDirectiveHandler` does not.
 
@@ -223,13 +223,77 @@ After comparing the `RunDirectiveHandler` with the `EmbedDirectiveHandler` and e
    );
    ```
 
-## Proposed Fix
+6. **Path resolution in tests**: We encountered unexpected path validation issues in our tests. The test environment enforces strict path validation requiring specific prefixes:
+   - Tests fail with: "Paths with segments must start with $. or $~ or $PROJECTPATH or $HOMEPATH"
+   - Attempted fixes changing from `@embed [$./embedded.md]` to `@embed [$PROJECTPATH/embedded.md]` didn't resolve the issues
+   - This appears to be a regression or a test environment configuration issue, as test paths previously worked
 
-Based on the findings, there are two approaches to fix the issue:
+7. **Direct console.log usage**: We found direct `console.log` statements in the code instead of proper logger calls, creating noisy output and potentially complicating debug efforts.
 
-### Approach 1: Modify EmbedDirectiveHandler
+## Attempted Solutions and Findings
 
-Add explicit transformation in the `EmbedDirectiveHandler.execute` method:
+We've attempted several fixes to address this issue:
+
+### 1. Replace console.log with proper logger
+
+```typescript
+// In transformation mode, register the replacement
+if (newState.isTransformationEnabled()) {
+  // Apply the transformation to the node
+  this.logger.debug('Registering transformation for embed directive', {
+    nodeLocation: node.location,
+    transformEnabled: newState.isTransformationEnabled(),
+    contentPreview: content.substring(0, 50) + (content.length > 50 ? '...' : '')
+  });
+  newState.transformNode(node, replacement);
+}
+```
+
+### 2. Enhanced node matching in OutputService
+
+Improved the algorithm to handle cases where node positions shift:
+
+```typescript
+// First try by exact line match
+const transformed = transformedNodes.find(n => 
+  n.location?.start.line === node.location?.start.line
+);
+
+// If found by line match and it's a Text node, use it
+if (transformed && transformed.type === 'Text') {
+  logger.debug('Found transformed node by line match', {
+    nodeType: transformed.type,
+    nodeLocation: transformed.location,
+    content: (transformed as TextNode).content?.substring(0, 50)
+  });
+  const content = (transformed as TextNode).content;
+  return content.endsWith('\n') ? content : content + '\n';
+}
+
+// If not found by line match, try a broader search
+// This handles cases where line numbers might have shifted
+for (const t of transformedNodes) {
+  if (t.type === 'Text' && node.location && t.location) {
+    // Look for nodes with content that are within 5 lines of the original
+    if (Math.abs(t.location.start.line - node.location.start.line) <= 5) {
+      const content = (t as TextNode).content;
+      return content.endsWith('\n') ? content : content + '\n';
+    }
+  }
+}
+```
+
+While these changes improved the code quality, they did not fully resolve the issue. We encountered unexpected path validation errors in our tests that prevented us from verifying the effectiveness of these changes. 
+
+## Recommended Next Steps
+
+Based on our findings, we recommend:
+
+1. **Fix path validation issues first**: Resolve the test path validation errors to enable proper testing
+
+2. **Compare with RunDirectiveHandler**: Investigate why RunDirectiveHandler's transformation works while EmbedDirectiveHandler's doesn't, despite both using similar approaches
+
+3. **Implement explicit transformation**: Use the approach from RunDirectiveHandler in EmbedDirectiveHandler:
 
 ```typescript
 // Create replacement node
@@ -250,26 +314,14 @@ return {
 };
 ```
 
-### Approach 2: Add Special Handling in InterpreterService
-
-Extend the special handling for imports to include embed directives:
+4. **Add embed special handling in InterpreterService**: Consider adding special handling for embed directives in InterpreterService:
 
 ```typescript
 // Special handling for imports and embeds in transformation mode
 if ((isImportDirective || directiveNode.directive.kind === 'embed') && 
     currentState.isTransformationEnabled && 
     currentState.isTransformationEnabled()) {
-  try {
-    logger.debug(`${directiveNode.directive.kind} directive in transformation mode, copying variables to original state`);
-    
-    this.stateVariableCopier.copyAllVariables(currentState, originalState, {
-      skipExisting: false,
-      trackContextBoundary: false,
-      trackVariableCrossing: false
-    });
-  } catch (e) {
-    logger.debug(`Error copying variables from ${directiveNode.directive.kind} to original state`, { error: e });
-  }
+  // Copy variables and handle transformations
 }
 ```
 
