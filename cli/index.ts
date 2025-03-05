@@ -49,7 +49,7 @@ export interface CLIOptions {
   includeContent?: boolean;
   debugSourceMaps?: boolean; // Flag to display source mapping information
   detailedSourceMaps?: boolean; // Flag to display detailed source mapping information
-  transform?: boolean; // Add transform option
+  // No transform options - transformation is always enabled
 }
 
 /**
@@ -227,6 +227,8 @@ function parseArgs(args: string[]): CLIOptions {
       case '--include-content':
         options.includeContent = true;
         break;
+      // Transformation is always enabled by default
+      // No transform flags needed
       default:
         if (!arg.startsWith('-') && !options.input) {
           options.input = arg;
@@ -343,13 +345,12 @@ async function confirmOverwrite(filePath: string): Promise<boolean> {
  * Convert CLI options to API options
  */
 function cliToApiOptions(cliOptions: CLIOptions): ProcessOptions {
-  // Check for environment variable to enable transformation
-  const transformFromEnv = process.env.MELD_TRANSFORM === 'true';
-  
+  // Always use transformation mode
   const options: ProcessOptions = {
     format: normalizeFormat(cliOptions.format),
     debug: cliOptions.debug,
-    transformation: transformFromEnv || cliOptions.transform === true, // Use env var or CLI flag
+    // Always transform by default
+    transformation: true,
     fs: cliOptions.custom ? undefined : new NodeFileSystem() // Allow custom filesystem in test mode
   };
   
