@@ -226,7 +226,8 @@ After comparing the `RunDirectiveHandler` with the `EmbedDirectiveHandler` and e
 6. **Path resolution in tests**: We encountered unexpected path validation issues in our tests. The test environment enforces strict path validation requiring specific prefixes:
    - Tests fail with: "Paths with segments must start with $. or $~ or $PROJECTPATH or $HOMEPATH"
    - Attempted fixes changing from `@embed [$./embedded.md]` to `@embed [$PROJECTPATH/embedded.md]` didn't resolve the issues
-   - This appears to be a regression or a test environment configuration issue, as test paths previously worked
+   - This could be a file existence issue - we may need to reference the existing embedded.md in tests/test-files/ instead
+   - The TestContext file system may need specific initialization for these test files
 
 7. **Direct console.log usage**: We found direct `console.log` statements in the code instead of proper logger calls, creating noisy output and potentially complicating debug efforts.
 
@@ -285,13 +286,25 @@ for (const t of transformedNodes) {
 
 While these changes improved the code quality, they did not fully resolve the issue. We encountered unexpected path validation errors in our tests that prevented us from verifying the effectiveness of these changes. 
 
+## Confirmation of Core Issue
+
+We've confirmed a key part of the issue through direct testing:
+
+1. **File not found errors are clear**: When a file doesn't exist, we get a proper "File not found" error
+2. **Transformation is happening**: Using `debug-transform` shows the embed directive IS being transformed
+3. **OutputService issue**: However, the placeholder still appears in the output
+
+This confirms our hypothesis that the issue is in how transformed nodes are being handled by the OutputService, not in the transformation itself.
+
 ## Recommended Next Steps
 
 Based on our findings, we recommend:
 
-1. **Fix path validation issues first**: Resolve the test path validation errors to enable proper testing
+1. **Fix OutputService node lookup**: Enhance the transformed node lookup algorithm in OutputService
 
-2. **Compare with RunDirectiveHandler**: Investigate why RunDirectiveHandler's transformation works while EmbedDirectiveHandler's doesn't, despite both using similar approaches
+2. **Investigate node location changes**: Debug why the transformed node isn't being found at the expected location
+
+3. **Compare with RunDirectiveHandler**: Investigate why RunDirectiveHandler's transformation is visible in output while EmbedDirectiveHandler's isn't, despite both being transformed
 
 3. **Implement explicit transformation**: Use the approach from RunDirectiveHandler in EmbedDirectiveHandler:
 
