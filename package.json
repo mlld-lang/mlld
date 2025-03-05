@@ -40,7 +40,8 @@
     "debug:test-fixed-context": "npm run build && node dist/cli.cjs debug-context test-files/debug-test-fixed.meld --variable-name testVar --viz-type variable-propagation",
     "debug:test-fixed-transform": "npm run build && node dist/cli.cjs debug-transform test-files/debug-test-fixed.meld",
     "prepare-public": "node scripts/prepare-public.js",
-    "sync-dev": "node scripts/sync-dev-branch.js"
+    "sync-dev": "node scripts/sync-dev-branch.js",
+    "sync-main-to-dev": "node scripts/sync-main-to-dev.js"
   },
   "repository": {
     "type": "git",
