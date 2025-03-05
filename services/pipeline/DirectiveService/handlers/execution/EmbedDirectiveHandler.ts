@@ -482,7 +482,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
 
       // In transformation mode, register the replacement
       if (newState.isTransformationEnabled()) {
-        console.log('DEBUG: EmbedDirectiveHandler - registering transformation:', {
+        this.logger.debug('EmbedDirectiveHandler - registering transformation:', {
           nodeLocation: node.location,
           transformEnabled: newState.isTransformationEnabled(),
           replacementContent: content.substring(0, 50) + (content.length > 50 ? '...' : '')
