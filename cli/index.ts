@@ -347,7 +347,7 @@ function cliToApiOptions(cliOptions: CLIOptions): ProcessOptions {
   const transformFromEnv = process.env.MELD_TRANSFORM === 'true';
   
   const options: ProcessOptions = {
-    format: cliOptions.format,
+    format: normalizeFormat(cliOptions.format),
     debug: cliOptions.debug,
     transformation: transformFromEnv || cliOptions.transform === true, // Use env var or CLI flag
     fs: cliOptions.custom ? undefined : new NodeFileSystem() // Allow custom filesystem in test mode
