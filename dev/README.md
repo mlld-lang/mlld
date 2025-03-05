@@ -12,13 +12,12 @@ This directory contains development-only resources, documentation, and utilities
 Meld uses a "clean repository" approach to separate development resources from the public-facing code. This means:
 
 1. The `dev` branch contains all development resources, including this directory
-2. The `main` branch is the stable branch with only necessary code
-3. The `public` branch is automatically generated without development resources
+2. The `main` branch is the clean, public-facing branch without development resources
 
-To create or update the public branch, run:
+To create or update the clean main branch from dev, run:
 
 ```
-npm run prepare-public
+npm run prepare-main
 ```
 
 ## Development Guidelines

@@ -2,7 +2,8 @@
 
 /**
  * This script syncs the dev branch with main
- * It should be used when main has been updated and we want to bring those changes into dev
+ * It should be used when main (the clean, public branch) has been updated separately and we want
+ * to bring those changes into dev (the full development branch)
  */
 
 const { execSync } = require('child_process');

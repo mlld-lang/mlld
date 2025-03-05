@@ -39,7 +39,7 @@
     "debug:test-fixed": "npm run build && node dist/cli.cjs debug-resolution test-files/debug-test-fixed.meld",
     "debug:test-fixed-context": "npm run build && node dist/cli.cjs debug-context test-files/debug-test-fixed.meld --variable-name testVar --viz-type variable-propagation",
     "debug:test-fixed-transform": "npm run build && node dist/cli.cjs debug-transform test-files/debug-test-fixed.meld",
-    "prepare-public": "node scripts/prepare-public.js",
+    "prepare-main": "node scripts/prepare-main.js",
     "sync-dev": "node scripts/sync-dev-branch.js",
     "sync-main-to-dev": "node scripts/sync-main-to-dev.js"
   },

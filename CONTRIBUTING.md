@@ -6,9 +6,8 @@ Thank you for your interest in contributing to Meld! We welcome contributions fr
 
 We use a specific branch structure to keep development organized:
 
-- `dev`: The main development branch where all feature and bugfix branches are merged
-- `main`: The stable branch that represents the public-facing version of the codebase
-- `public`: A clean branch for public consumption, without development files and directories
+- `dev`: The full development branch where all feature and bugfix branches are merged. This branch contains all development resources, documentation, and test files.
+- `main`: The clean, public-facing branch without development files and directories. This is what users see and interact with.
 
 ## Development Setup
 
@@ -58,22 +57,22 @@ We have several debug commands available:
 
 ## Creating a Clean Public Version
 
-To create or update the clean public branch:
+To create or update the clean main branch from dev:
 
 ```
-npm run prepare-public
+npm run prepare-main
 ```
 
-This will create a `public` branch that excludes development files and directories.
+This will update the `main` branch to be a clean version that excludes development files and directories.
 
 ## Pull Request Process
 
 1. Update the README.md or documentation with details of changes if appropriate
 2. Update the tests to cover your changes
-3. Make sure your PR targets the `dev` branch, not `main` or `public`
+3. Make sure your PR targets the `dev` branch, not `main`
 4. Your PR needs to pass all CI checks before it can be merged
 5. A maintainer will review your PR and may suggest changes
-6. Once approved, your PR will be merged to `dev` and later promoted to `main`
+6. Once approved, your PR will be merged to `dev` and later the changes will be promoted to `main` using the prepare-main script
 
 ## Reporting Bugs
 

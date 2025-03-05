@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 
 /**
- * This script syncs the current branch with the dev branch
- * It's useful for keeping topic branches up to date with the latest development changes
+ * This script syncs the current feature branch with the dev branch
+ * It's useful for keeping feature branches up to date with the latest development changes
+ * 
+ * Note: The 'dev' branch is our full development branch with all resources
  */
 
 const { execSync } = require('child_process');

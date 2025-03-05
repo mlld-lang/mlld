@@ -7,8 +7,8 @@
     "tmp",
     "error-display-demo"
   ],
-  "protectedBranches": ["main", "public"],
-  "publicBranch": "public",
+  "protectedBranches": ["main"],
+  "publicBranch": "main",
   "developmentBranch": "dev",
   "ignorePatterns": [
     "*.log",
