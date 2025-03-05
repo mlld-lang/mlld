@@ -1,8 +1,0 @@
-
-@data users = [
-  { name: "Alice", hobbies: ["reading", "hiking"] },
-  { name: "Bob", hobbies: ["gaming", "cooking"] }
-]
-
-User 1: {{users[0].name}} - {{users[0].hobbies[0]}}
-User 2: {{users[1].name}} - {{users[1].hobbies[1]}}
