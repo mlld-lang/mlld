@@ -37,17 +37,22 @@ pids
 .env.test.local
 .env.production.local 
 
-# Documentation (allow specific docs only)
-/*.md
-!README.md
-!LICENSE.md
-!CONTRIBUTING.md
-!CODE_OF_CONDUCT.md
+# Documentation in root (only for main branch)
+# Note: In dev branches, we want to include all documentation files
+# These will be removed by the prepare-main.js script when creating the main branch
+# /*.md
+# !README.md
+# !LICENSE.md
+# !CONTRIBUTING.md
+# !RELEASE_GUIDE.md
+# !CODE_OF_CONDUCT.md
 
-# Development folders (working files, not for public release)
-/_meld/
-/dev/
-/tmp/
+# Development folders (working files, included in dev branch but excluded from main)
+# Note: These directories are managed by the prepare-main.js script
+# They are tracked in the dev branch but removed when creating the main branch
+# /_meld/
+# /dev/
+# /tmp/
 
 # Example outputs
 examples/*.xml

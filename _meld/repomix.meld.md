@@ -1,0 +1,1 @@
+@cmd[repomix --include services/resolution/ResolutionService.ts,services/resolution/PathResolver.ts,services/resolution/VariableReferenceResolver.ts,services/parser/ParserService.ts,services/pipeline/DirectiveHandlers/PathDirectiveHandler.ts,services/pipeline/DirectiveValidators/PathDirectiveValidator.ts,core/types/dependencies.ts -o relevant-code.xml]
