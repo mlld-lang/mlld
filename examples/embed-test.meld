@@ -1,0 +1,19 @@
+@text title = "Embed Directive Test"
+
+# {{title}}
+
+This is a test file for embed directives.
+
+## First embed:
+
+@embed [embed-content.md]
+
+## Text in between embeds
+
+This text is between embeds and will cause line numbers to shift.
+
+## Second embed (with custom section):
+
+@embed [embed-content.md # Section Two]
+
+## End of file
