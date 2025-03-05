@@ -41,7 +41,11 @@
     "debug:test-fixed-transform": "npm run build && node dist/cli.cjs debug-transform test-files/debug-test-fixed.meld",
     "prepare-main": "node scripts/prepare-main.js",
     "sync-dev": "node scripts/sync-dev-branch.js",
-    "sync-main-to-dev": "node scripts/sync-main-to-dev.js"
+    "sync-main-to-dev": "node scripts/sync-main-to-dev.js",
+    "bump": "node scripts/bump-version.js",
+    "bump:patch": "node scripts/bump-version.js patch",
+    "bump:minor": "node scripts/bump-version.js minor",
+    "bump:major": "node scripts/bump-version.js major"
   },
   "repository": {
     "type": "git",
