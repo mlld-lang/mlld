@@ -29,7 +29,16 @@ function git(command) {
 
 // Make sure we have latest changes
 git(`fetch origin ${DEVELOPMENT_BRANCH}`);
-git(`fetch origin ${PUBLIC_BRANCH}`);
+
+// Check if public branch exists on remote
+let publicBranchExistsOnRemote = false;
+try {
+  execSync(`git ls-remote --heads origin ${PUBLIC_BRANCH}`, { stdio: 'pipe' }).toString().trim() !== '';
+  publicBranchExistsOnRemote = true;
+  git(`fetch origin ${PUBLIC_BRANCH}`);
+} catch (e) {
+  console.log(`Public branch ${PUBLIC_BRANCH} doesn't exist on remote yet.`);
+}
 
 // Check if public branch exists
 let publicBranchExists = false;
