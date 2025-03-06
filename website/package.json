@@ -3,9 +3,10 @@
   "version": "1.0.0",
   "description": "Meld Documentation Site",
   "scripts": {
-    "dev": "eleventy --serve",
-    "build": "eleventy",
-    "clean": "rm -rf _site"
+    "dev": "node src/convertDocs.js && eleventy --serve",
+    "build": "node src/convertDocs.js && eleventy",
+    "clean": "rm -rf _site src/docs",
+    "convert-docs": "node src/convertDocs.js"
   },
   "dependencies": {
     "@11ty/eleventy": "^2.0.1",

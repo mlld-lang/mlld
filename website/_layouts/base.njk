@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{{ title }} - Meld Documentation</title>
+  <title>{% if title %}{{ title }} - meld{% else %}meld - prompt scripting for plaintext maximalists{% endif %}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Tektur:wght@800&family=Cousine:wght@400;700&display=swap" rel="stylesheet">
@@ -13,23 +13,28 @@
 </head>
 <body>
   <header>
-    <nav>
-      <a href="/" class="logo">Meld</a>
-      <div class="nav-links">
-        <a href="/docs/introduction/">Introduction</a>
-        <a href="/docs/cli-usage/">CLI Usage</a>
-        <a href="/docs/sdk-usage/">SDK Usage</a>
-        <a href="/docs/directives/">Directives</a>
-      </div>
-    </nav>
+    <div class="container">
+      <a href="/" class="logo">meld</a>
+      <nav>
+        <ul>
+          <li><a href="/" {{ "/" | isActive(page.url) }}>Home</a></li>
+          <li><a href="/docs/introduction/" {{ "/docs/introduction/" | isActive(page.url) }}>Docs</a></li>
+          <li><a href="https://github.com/yourusername/meld">GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
   </header>
 
   <main>
-    {{ content | safe }}
+    <div class="container">
+      {{ content | safe }}
+    </div>
   </main>
 
   <footer>
-    <p>&copy; {{ page.date.getFullYear() }} Meld. <a href="https://github.com/meld-cp/meld">GitHub</a></p>
+    <div class="container">
+      <p>&copy; {% year %} meld - <a href="https://github.com/yourusername/meld">GitHub</a></p>
+    </div>
   </footer>
 </body>
 </html>
