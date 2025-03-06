@@ -224,19 +224,8 @@ export class CLIService implements ICLIService {
       this.debug(`confirmOverwrite: file does not exist, no need to overwrite`);
       return { outputPath, shouldOverwrite: true };
     }
-
-    // For .md files, auto-redirect to .o.md unless -o is specified
-    if (outputPath.endsWith('.md') && !this.cmdOptions.output) {
-      const newOutputPath = outputPath.replace(/\.md$/, '.o.md');
-      this.debug(`confirmOverwrite: auto-redirecting to ${newOutputPath}`);
-      
-      // Check if the new path exists
-      if (!(await this.fileSystemService.exists(newOutputPath))) {
-        return { outputPath: newOutputPath, shouldOverwrite: true };
-      }
-    }
     
-    // If not auto-redirect or output is specified, prompt for overwrite
+    // Prompt for overwrite
     const response = await this.promptService.getText(
       `File ${outputPath} already exists. Overwrite? [Y/n] `, 
       'y'
@@ -246,22 +235,37 @@ export class CLIService implements ICLIService {
     
     if (response.toLowerCase() === 'n') {
       this.debug('confirmOverwrite: user declined overwrite');
-      
-      // Generate incremental filename (file-1.md, file-2.md, etc.)
-      const ext = this.pathService.extname(outputPath);
-      const basePath = outputPath.slice(0, -ext.length);
-      let counter = 1;
-      let newPath = `${basePath}-${counter}${ext}`;
-      
-      while (this.fileSystemService.existsSync(newPath)) {
-        counter++;
-        newPath = `${basePath}-${counter}${ext}`;
-      }
-      
-      return { outputPath: newPath, shouldOverwrite: true };
+      return this.findAvailableIncrementalFilename(outputPath);
     }
     
     return { outputPath, shouldOverwrite: true };
+  }
+
+  /**
+   * Finds an available incremental filename (file-1.ext, file-2.ext, etc.)
+   * @param outputPath The original output path
+   * @returns An object with the available output path and shouldOverwrite=true
+   */
+  private async findAvailableIncrementalFilename(outputPath: string): Promise<{ outputPath: string; shouldOverwrite: boolean }> {
+    console.log('Finding incremental filename for:', outputPath);
+    const ext = extname(outputPath); // Use Node.js path module
+    console.log('Extension:', ext);
+    const basePath = outputPath.slice(0, -ext.length);
+    console.log('Base path:', basePath);
+    let counter = 1;
+    let newPath = `${basePath}-${counter}${ext}`;
+    console.log('Trying path:', newPath);
+    
+    while (await this.fileSystemService.exists(newPath)) {
+      console.log(`Path ${newPath} exists, incrementing counter`);
+      counter++;
+      newPath = `${basePath}-${counter}${ext}`;
+      console.log('Trying next path:', newPath);
+    }
+    
+    console.log('Found available path:', newPath);
+    logger.info(`Using incremental filename: ${newPath}`);
+    return { outputPath: newPath, shouldOverwrite: true };
   }
 
   /**
@@ -438,34 +442,16 @@ export class CLIService implements ICLIService {
     }
     
     const inputPath = options.input;
-    const inputExt = '.mld';
+    const inputExt = extname(inputPath); // Use Node.js path module
     const outputExt = this.getOutputExtension(options.format || 'md');
     
-    // Check if the input path ends with .mld extension
-    if (inputPath.endsWith(inputExt)) {
-      // Default behavior: replace .mld with the output extension
-      const outputPath = inputPath.substring(0, inputPath.length - inputExt.length) + outputExt;
-      
-      // For .md output that would overwrite input, use .o.md extension by default
-      // This specifically handles the case where input file might be .md and output would also be .md
-      const resolvedInputPath = await this.pathService.resolvePath(inputPath);
-      const resolvedOutputPath = await this.pathService.resolvePath(outputPath);
-      
-      if (outputExt === '.md' && 
-          await this.fileSystemService.exists(resolvedOutputPath) && 
-          resolvedOutputPath === resolvedInputPath) {
-        // Add .o.md suffix to avoid overwriting
-        const modifiedPath = resolvedOutputPath.replace(outputExt, '.o.md');
-        logger.info(`Preventing overwrite of input file, using: ${modifiedPath}`);
-        return modifiedPath;
-      }
-      
-      return resolvedOutputPath;
-    } else {
-      // If input doesn't end with .mld, just append the output extension
-      const outputPath = inputPath + outputExt;
-      return this.pathService.resolvePath(outputPath);
-    }
+    // Extract the base filename without extension
+    const basePath = inputPath.substring(0, inputPath.length - inputExt.length);
+    
+    // Always append .o.{format} for default behavior
+    const outputPath = `${basePath}.o${outputExt}`;
+    
+    return this.pathService.resolvePath(outputPath);
   }
 
   private showHelp() {

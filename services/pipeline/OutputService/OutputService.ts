@@ -286,9 +286,20 @@ export class OutputService implements IOutputService {
   ): Promise<string> {
     try {
       // First convert to markdown since XML is based on markdown
-      const markdown = await this.convertToMarkdown(nodes, state, options);
+      let markdown;
+      
+      // If formatOptions.markdown is provided, use it directly
+      if (options?.formatOptions?.markdown) {
+        markdown = options.formatOptions.markdown as string;
+      } else {
+        // Otherwise, convert nodes to markdown
+        markdown = await this.convertToMarkdown(nodes, state, options);
+      }
+      
+      // Log the markdown for debugging
+      logger.debug('Converting markdown to XML', { markdown });
 
-      // Use llmxml directly with version 1.3.0+ which handles JSON content properly
+      // Use llmxml directly with version 1.3.0+
       const { createLLMXML } = await import('llmxml');
       const llmxml = createLLMXML({
         defaultFuzzyThreshold: 0.7,
@@ -299,115 +310,20 @@ export class OutputService implements IOutputService {
         warningLevel: 'all'
       });
       
-      try {
-        return llmxml.toXML(markdown);
-      } catch (error) {
-        // If conversion fails due to non-string values, try to convert any JSON objects
-        // in the markdown to string before passing to llmxml again
-        logger.warn('First attempt to convert to XML failed, attempting to preprocess markdown', {
-          error: error instanceof Error ? error.message : String(error)
-        });
-        
-        // Try to find and stringify any JSON objects in the markdown
-        const processedMarkdown = markdown.replace(/```json\n([\s\S]*?)```/g, (match, jsonContent) => {
-          try {
-            // Parse and stringify the JSON to ensure it's valid
-            const parsed = JSON.parse(jsonContent);
-            return '```json\n' + JSON.stringify(parsed, null, 2) + '\n```';
-          } catch (jsonError) {
-            // If parsing fails, return the original content
-            return match;
-          }
-        });
-        
-        try {
-          // Try again with processed markdown
-          return llmxml.toXML(processedMarkdown);
-        } catch (llmxmlError) {
-          // Now we have a more specific LLMXML error, try to enhance it with source mapping
-          try {
-            const { enhanceMeldErrorWithSourceInfo } = require('@core/utils/sourceMapUtils.js');
-            
-            // Create a Meld error with the LLMXML error details
-            const meldError = new MeldOutputError(
-              `LLMXML parsing error: ${llmxmlError instanceof Error ? llmxmlError.message : String(llmxmlError)}`,
-              'xml',
-              { 
-                cause: llmxmlError instanceof Error ? llmxmlError : undefined,
-                context: {
-                  llmxmlDetails: llmxmlError instanceof Error ? llmxmlError : undefined,
-                  nodeDetails: (llmxmlError as any).details?.node || {}
-                }
-              }
-            );
-            
-            // Enhance with source mapping information
-            const enhancedError = enhanceMeldErrorWithSourceInfo(meldError);
-            
-            // Log the enhanced error for debugging
-            logger.debug('Enhanced LLMXML error with source mapping', {
-              original: llmxmlError,
-              enhanced: enhancedError
-            });
-            
-            throw enhancedError;
-          } catch (enhancementError) {
-            // If the enhancement fails, throw the original error
-            logger.debug('Failed to enhance LLMXML error with source mapping', {
-              error: enhancementError
-            });
-            
-            throw llmxmlError;
-          }
-        }
-      }
-    } catch (error: unknown) {
-      // Try to enhance the error with source mapping information
-      try {
-        const { enhanceMeldErrorWithSourceInfo } = require('@core/utils/sourceMapUtils.js');
-        
-        // If it's already a MeldError, try to enhance it directly
-        if (error instanceof MeldError) {
-          const enhancedError = enhanceMeldErrorWithSourceInfo(error);
-          
-          // Log the enhancement attempt
-          logger.debug('Attempted to enhance MeldError with source mapping', {
-            original: error.message,
-            enhanced: enhancedError.message,
-            hasSourceInfo: enhancedError.message !== error.message
-          });
-          
-          throw enhancedError;
-        }
-        
-        // Otherwise, wrap in a MeldOutputError and then enhance
-        const meldError = new MeldOutputError(
-          `Failed to convert output: ${error instanceof Error ? error.message : String(error)}`,
-          'xml',
-          { cause: error instanceof Error ? error : undefined }
-        );
-        
-        const enhancedError = enhanceMeldErrorWithSourceInfo(meldError);
-        
-        logger.debug('Enhanced output error with source mapping', {
-          original: error,
-          enhanced: enhancedError
-        });
-        
-        throw enhancedError;
-      } catch (enhancementError) {
-        // If enhancement fails, throw a standard MeldOutputError
-        logger.debug('Failed to enhance output error with source mapping', {
-          originalError: error,
-          enhancementError
-        });
-        
-        throw new MeldOutputError(
-          `Failed to convert output: ${error instanceof Error ? error.message : String(error)}`,
-          'xml',
-          { cause: error instanceof Error ? error : undefined }
-        );
-      }
+      // Convert markdown to XML using llmxml
+      const xmlResult = await llmxml.toXML(markdown);
+      logger.debug('Successfully converted to XML', { xmlLength: xmlResult.length });
+      return xmlResult;
+    } catch (error) {
+      logger.error('Error in convertToXML', {
+        error: error instanceof Error ? error.message : String(error)
+      });
+      
+      throw new MeldOutputError(
+        `Failed to convert output to XML: ${error instanceof Error ? error.message : String(error)}`,
+        'xml',
+        { cause: error instanceof Error ? error : undefined }
+      );
     }
   }
 

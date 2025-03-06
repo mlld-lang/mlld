@@ -82,40 +82,54 @@ export class NodeFileSystem implements IFileSystem {
     // Debug logging to help troubleshoot command execution issues
     console.debug(`DEBUG: Executing command: "${command}"`);
 
-    // Special handling for oneshot commands with nested quotes
-    if (command.startsWith('oneshot')) {
+    // Helper function to safely escape shell special characters in commands
+    const escapeShellArg = (arg: string): string => {
+      // Wrap in single quotes and escape any single quotes inside
+      return `'${arg.replace(/'/g, "'\\''")}'`;
+    };
+
+    // Special handling for oneshot and other commands that need to preserve multi-line content
+    if (command.startsWith('oneshot') || command.includes('\n')) {
       try {
-        // Extract the command and its arguments for direct execution
+        // Extract the command and its arguments
         const cmdParts = command.match(/^(\S+)\s+(.*)$/);
         
         if (cmdParts) {
-          const cmd = cmdParts[1]; // 'oneshot'
-          let args = cmdParts[2];  // The quoted arguments
+          const cmd = cmdParts[1]; // Command name (e.g., 'oneshot')
+          let args = cmdParts[2].trim();  // The arguments
           
-          // Create a process directly (without shell) to avoid quote issues
+          // If args are wrapped in quotes, remove them for direct passing
+          if ((args.startsWith('"') && args.endsWith('"')) || 
+              (args.startsWith("'") && args.endsWith("'"))) {
+            args = args.substring(1, args.length - 1);
+          }
+          
+          // Create a process directly (without shell) to avoid quote and newline issues
           const { spawn } = require('child_process');
-          const process = spawn(cmd, [args.replace(/^"|"$/g, '')], {
-            cwd: options?.cwd
-          });
-          
           return new Promise((resolve) => {
+            const childProcess = spawn(cmd, [args], {
+              cwd: options?.cwd || process.cwd(),
+              // Do NOT use a shell to avoid syntax errors with special characters
+              shell: false,
+            });
+            
             let stdout = '';
             let stderr = '';
             
-            process.stdout.on('data', (data: Buffer | string) => {
+            childProcess.stdout.on('data', (data: Buffer | string) => {
               const chunk = data.toString();
               stdout += chunk;
               console.log(chunk);
             });
             
-            process.stderr.on('data', (data: Buffer | string) => {
+            childProcess.stderr.on('data', (data: Buffer | string) => {
               const chunk = data.toString();
               stderr += chunk;
               console.error(chunk);
             });
             
-            process.on('close', (code: number | null) => {
-              if (code !== 0) {
+            childProcess.on('close', (code: number | null) => {
+              if (code !== 0 && code !== null) {
                 stderr += `\nCommand exited with code ${code}`;
                 console.error(`Command failed with exit code ${code}`);
               }
@@ -124,27 +138,74 @@ export class NodeFileSystem implements IFileSystem {
           });
         }
       } catch (err) {
-        console.error('Error executing oneshot command:', err);
+        console.error('Error executing command with multi-line content:', err);
         return { stdout: '', stderr: String(err) };
       }
     }
 
-    // For all other commands, use exec with Promise
+    // For all other commands, use exec with Promise and proper escaping
     try {
       const { promisify } = require('util');
       const { exec } = require('child_process');
       const execAsync = promisify(exec);
 
-      const { stdout, stderr } = await execAsync(command, {
-        cwd: options?.cwd || process.cwd(),
-        maxBuffer: 10 * 1024 * 1024 // 10MB buffer to handle large outputs
-      });
+      // If command contains shell special characters that might cause syntax errors
+      // (parentheses, quotes, etc.), properly escape it or use spawn instead of shell exec
+      const hasShellSpecialChars = /[()\&\|;\<\>\$\`\\"]/.test(command);
+      
+      let result;
+      if (hasShellSpecialChars) {
+        // For commands with special characters, we need to be careful with escaping
+        // Extract the command and arguments
+        const parts: string[] = command.split(/\s+/);
+        const cmd: string = parts[0] || '';
+        const args: string[] = parts.length > 1 ? parts.slice(1) : [];
+        
+        // Use spawn directly to avoid shell parsing issues
+        const { spawn } = require('child_process');
+        const result = await new Promise((resolve) => {
+          const childProcess = spawn(cmd, args, {
+            cwd: options?.cwd || process.cwd(),
+            // Use shell: false to avoid shell parsing issues
+            shell: false
+          });
+          
+          let stdout = '';
+          let stderr = '';
+          
+          childProcess.stdout.on('data', (data: Buffer | string) => {
+            const chunk = data.toString();
+            stdout += chunk;
+            console.log(chunk);
+          });
+          
+          childProcess.stderr.on('data', (data: Buffer | string) => {
+            const chunk = data.toString();
+            stderr += chunk;
+            console.error(chunk);
+          });
+          
+          childProcess.on('close', (code: number | null) => {
+            if (code !== 0 && code !== null) {
+              stderr += `\nCommand exited with code ${code}`;
+              console.error(`Command failed with exit code ${code}`);
+            }
+            resolve({ stdout, stderr });
+          });
+        });
+      } else {
+        // For simple commands without special characters, use exec
+        result = await execAsync(command, {
+          cwd: options?.cwd || process.cwd(),
+          maxBuffer: 10 * 1024 * 1024 // 10MB buffer to handle large outputs
+        });
+      }
 
       // Log the output to console
-      if (stdout) console.log(stdout);
-      if (stderr) console.error(stderr);
+      if (result.stdout) console.log(result.stdout);
+      if (result.stderr) console.error(result.stderr);
 
-      return { stdout, stderr };
+      return result;
     } catch (error) {
       // Handle command execution errors
       const err = error as any;

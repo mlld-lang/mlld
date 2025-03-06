@@ -26,7 +26,13 @@ This PR completes phases 4 and 5 of the TSyringe dependency injection (DI) refac
 - Created detailed plan for Phase 6 (finalization) in `_issues/features/tsyringe-phase6.md`
 
 ## Next Steps
-Phase 6 will finalize the DI implementation by removing the feature flag, removing the ServiceProvider adapter, cleaning up legacy initialization code, and adding comprehensive DI-specific tests.
+Phase 6 will be merging the current active dev branch into the tsyringe branch and solving any merge conflicts that arise.
+
+Phase 7 will review our current test infrastructure and make a careful plan for how we must migrate 
+
+Phase 8 will perform that test migration methodically and deliberately, ensuring all tests still pass before moving on to updating the next test.
+
+Phase 9 will finalize the DI implementation by removing the feature flag, removing the ServiceProvider adapter, cleaning up legacy initialization code, and adding comprehensive DI-specific tests.
 
 ## Related Issues
 Addresses phases 4-5 of the TSyringe refactoring plan.

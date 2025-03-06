@@ -1,5 +1,5 @@
 # Chaining LLM Requests Example
-@import [role] from [imports.meld]
+@import [role] from [imports.mld]
 
 @text tests = @run [npm test]
 @text res = @run [oneshot "What's broken here? {{tests}}"]

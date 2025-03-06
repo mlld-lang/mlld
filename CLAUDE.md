@@ -22,6 +22,10 @@ npm run dev          # Build in watch mode
 - **Tests**: Organize with setup/cleanup pattern, mock process.exit in CLI tests
 - **CLI Testing**: Use setupCliTest() helper for consistent CLI test setup
 
+# Tests
+
+To ensure consistency in writing tests, please refer to `docs/dev/TESTS.md` and refer to how other tests are using mocks and `TestContext`.
+
 # Additional reading
 
 Useful context can be found in these files:

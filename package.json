@@ -1,6 +1,6 @@
 {
   "name": "meld",
-  "version": "10.1.0",
+  "version": "10.2.3",
   "description": "meld interpreter, cli, and api --- NOTE: If you're looking for the old 'meld' package for aspect oriented programming, you'll want to pin your version to <2.0.0",
   "main": "dist/index.cjs",
   "module": "dist/index.mjs",
@@ -25,7 +25,7 @@
     "lint": "eslint . --ext .ts",
     "clean": "rimraf dist",
     "prepublishOnly": "npm run clean && npm run build",
-    "postinstall": "node scripts/install-warning.js",
+    "postinstall": "node scripts/install-warning.js && node scripts/ensure-dependencies.js",
     "ast": "npx ts-node scripts/ast-diagnostics.mjs",
     "var-ast": "npx ts-node scripts/variable-ast-analysis.mjs",
     "meld": "node scripts/process-meld.js",
