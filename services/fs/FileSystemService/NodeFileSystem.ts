@@ -67,6 +67,8 @@ export class NodeFileSystem implements IFileSystem {
   }
 
   async executeCommand(command: string, options?: { cwd?: string }): Promise<{ stdout: string; stderr: string }> {
+    console.log(`Running \`${command}\``);
+    
     // If in test environment, use a simple mock behavior
     if (this.isTestEnvironment) {
       const trimmedCommand = command.trim();
@@ -76,6 +78,9 @@ export class NodeFileSystem implements IFileSystem {
       }
       return { stdout: `Mock output for command: ${command}`, stderr: '' };
     }
+
+    // Debug logging to help troubleshoot command execution issues
+    console.debug(`DEBUG: Executing command: "${command}"`);
 
     // Special handling for oneshot commands with nested quotes
     if (command.startsWith('oneshot')) {
@@ -97,13 +102,13 @@ export class NodeFileSystem implements IFileSystem {
             let stdout = '';
             let stderr = '';
             
-            process.stdout.on('data', (data: Buffer) => {
+            process.stdout.on('data', (data: Buffer | string) => {
               const chunk = data.toString();
               stdout += chunk;
               console.log(chunk);
             });
             
-            process.stderr.on('data', (data: Buffer) => {
+            process.stderr.on('data', (data: Buffer | string) => {
               const chunk = data.toString();
               stderr += chunk;
               console.error(chunk);
@@ -120,11 +125,16 @@ export class NodeFileSystem implements IFileSystem {
         }
       } catch (err) {
         console.error('Error executing oneshot command:', err);
+        return { stdout: '', stderr: String(err) };
       }
     }
 
-    // For all other commands, use execAsync
+    // For all other commands, use exec with Promise
     try {
+      const { promisify } = require('util');
+      const { exec } = require('child_process');
+      const execAsync = promisify(exec);
+
       const { stdout, stderr } = await execAsync(command, {
         cwd: options?.cwd || process.cwd(),
         maxBuffer: 10 * 1024 * 1024 // 10MB buffer to handle large outputs
@@ -139,6 +149,10 @@ export class NodeFileSystem implements IFileSystem {
       // Handle command execution errors
       const err = error as any;
       console.error(`Command failed with exit code ${err.code}`);
+      
+      if (err.stdout) console.log(err.stdout);
+      if (err.stderr) console.error(err.stderr);
+      
       return {
         stdout: err.stdout || '',
         stderr: (err.stderr || '') + `\nCommand exited with code ${err.code}`
