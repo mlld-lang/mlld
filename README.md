@@ -41,10 +41,8 @@ meld input.mld --stdout
 
 ### Supported File Extensions
 
-- `.mld`: Standard Meld files
-- `.mld.md`: Meld files with Markdown content
-- `.mll`: Alternative extension for Meld files
-- `.mll.md`: Alternative extension for Meld Markdown files
+- `.mld` is standard `.mld.md` is another option.
+- `.md`: Meld can just interpret regular old markdown files with added meld syntax, too.
 
 ## Writing Meld Files
 
