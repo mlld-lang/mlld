@@ -47,7 +47,7 @@ export async function runMeld(
   
   // Default options
   const defaultOptions: ProcessOptions = {
-    format: 'md',
+    format: 'markdown',
     transformation: true,
     fs: memoryFS
   };
@@ -91,7 +91,7 @@ export async function runMeld(
       : ast;
     
     // Convert to desired format
-    let converted = await services.output.convert(nodesToProcess, resultState, mergedOptions.format || 'md');
+    let converted = await services.output.convert(nodesToProcess, resultState, mergedOptions.format || 'markdown');
     
     // Post-process the output in transformation mode
     if (resultState.isTransformationEnabled()) {
