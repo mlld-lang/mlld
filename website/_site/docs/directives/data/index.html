@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>@data Directive - meld</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Tektur:wght@800&family=Cousine:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="/js/theme.js" defer></script>
+  <script src="/js/terminal.js" defer></script>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <a href="/" class="logo">meld</a>
+      <nav>
+        <ul>
+          <li><a href="/" >Home</a></li>
+          <li><a href="/docs/introduction/" >Docs</a></li>
+          <li><a href="https://github.com/yourusername/meld">GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="container">
+      
+<div class="docs-layout">
+  <aside class="docs-sidebar">
+    <nav>
+      <h3>Documentation</h3>
+      <ul class="nav-list">
+        <li><a href="/docs/introduction/" >Introduction</a></li>
+        <li><a href="/docs/cli-usage/" >CLI Usage</a></li>
+        <li><a href="/docs/sdk-usage/" >SDK Usage</a></li>
+        <li><a href="/docs/variables/" >Variables</a></li>
+        <li><a href="/docs/error-handling/" >Error Handling</a></li>
+        <li><a href="/docs/grammar-reference/" >Grammar Reference</a></li>
+      </ul>
+      
+      <h3>Directives</h3>
+      <ul class="nav-list">
+        <li><a href="/docs/directives/" >Overview</a></li>
+        <li><a href="/docs/directives/data/" aria-current=&quot;page&quot;>@data</a></li>
+        <li><a href="/docs/directives/define/" >@define</a></li>
+        <li><a href="/docs/directives/embed/" >@embed</a></li>
+        <li><a href="/docs/directives/import/" >@import</a></li>
+        <li><a href="/docs/directives/path/" >@path</a></li>
+        <li><a href="/docs/directives/run/" >@run</a></li>
+        <li><a href="/docs/directives/text/" >@text</a></li>
+      </ul>
+    </nav>
+  </aside>
+  
+  <div class="docs-content">
+    <h1>@data Directive</h1>
+<p>The <code>@data</code> directive defines a structured data variable that can store objects, arrays, or other complex data types.</p>
+<h2 id="syntax" tabindex="-1"><a class="header-anchor" href="#syntax">Syntax</a></h2>
+<pre><code class="language-meld">@data identifier = value
+</code></pre>
+<p>Where:</p>
+<ul>
+<li><code>identifier</code> is the variable name (must be a valid identifier)</li>
+<li><code>value</code> can be an object literal, array literal, string literal, or the result of an <code>@embed</code>, <code>@run</code>, or <code>@call</code> directive</li>
+</ul>
+<h2 id="identifier-requirements" tabindex="-1"><a class="header-anchor" href="#identifier-requirements">Identifier Requirements</a></h2>
+<ul>
+<li>Must start with a letter or underscore</li>
+<li>Can contain letters, numbers, and underscores</li>
+<li>Case-sensitive</li>
+<li>Cannot be empty</li>
+</ul>
+<h2 id="supported-data-types" tabindex="-1"><a class="header-anchor" href="#supported-data-types">Supported Data Types</a></h2>
+<p>The @data directive supports all standard JSON data types:</p>
+<ul>
+<li>Objects (key-value pairs)</li>
+<li>Arrays</li>
+<li>Strings</li>
+<li>Numbers</li>
+<li>Booleans</li>
+<li>null</li>
+</ul>
+<h2 id="object-and-array-literals" tabindex="-1"><a class="header-anchor" href="#object-and-array-literals">Object and Array Literals</a></h2>
+<p>Data objects can be defined using object literal syntax:</p>
+<pre><code class="language-meld">@data config = {{ name: &quot;test&quot;, version: 1 }}
+</code></pre>
+<p>For multi-line objects:</p>
+<pre><code class="language-meld">@data user = {{
+  name: &quot;Alice&quot;,
+  id: 123,
+  roles: [&quot;admin&quot;, &quot;editor&quot;],
+  settings: {
+    theme: &quot;dark&quot;,
+    notifications: true
+  }
+}}
+</code></pre>
+<p>Arrays can be defined as well:</p>
+<pre><code class="language-meld">@data colors = [&quot;red&quot;, &quot;green&quot;, &quot;blue&quot;]
+</code></pre>
+<h2 id="variable-interpolation-in-data" tabindex="-1"><a class="header-anchor" href="#variable-interpolation-in-data">Variable Interpolation in Data</a></h2>
+<p>Data structures can contain variable references in both keys and values:</p>
+<pre><code class="language-meld">@text name = &quot;John&quot;
+@text keyName = &quot;username&quot;
+@data user = {{
+  {{keyName}}: {{name}},    # Dynamic key name
+  id: 123,
+  active: true
+}}
+</code></pre>
+<h2 id="referencing-data-variables" tabindex="-1"><a class="header-anchor" href="#referencing-data-variables">Referencing Data Variables</a></h2>
+<p>Data variables are referenced using the <code>#{identifier}</code> syntax:</p>
+<pre><code class="language-meld">@data user = {{ name: &quot;Alice&quot;, id: 123 }}
+@text greeting = `Hello, #{user.name}!`
+</code></pre>
+<p>You can access nested fields using dot notation:</p>
+<pre><code class="language-meld">@data config = {{ 
+  app: { 
+    name: &quot;MyApp&quot;,
+    version: &quot;1.0.0&quot;
+  }
+}}
+@text appInfo = `App: #{config.app.name} v#{config.app.version}`
+</code></pre>
+<h2 id="json-string-format" tabindex="-1"><a class="header-anchor" href="#json-string-format">JSON String Format</a></h2>
+<p>Values can also be provided as JSON strings which are parsed:</p>
+<pre><code class="language-meld">@data config = '{&quot;key&quot;: &quot;value&quot;}'
+</code></pre>
+<h2 id="examples" tabindex="-1"><a class="header-anchor" href="#examples">Examples</a></h2>
+<p>Basic data variable:</p>
+<pre><code class="language-meld">@data settings = {{ 
+  darkMode: true,
+  fontSize: 16
+}}
+</code></pre>
+<p>Using variables in data:</p>
+<pre><code class="language-meld">@text name = &quot;John&quot;
+@data user = {{ 
+  username: {{name}},
+  active: true 
+}}
+</code></pre>
+<p>Using command output as data:</p>
+<pre><code class="language-meld">@data gitInfo = @run [git log -1 --format=&quot;%H,%an,%ae,%s&quot;]
+</code></pre>
+<h2 id="error-handling" tabindex="-1"><a class="header-anchor" href="#error-handling">Error Handling</a></h2>
+<p>The following errors are possible with data directives:</p>
+<ul>
+<li>JSON parsing errors (if value is invalid JSON)</li>
+<li>Variable resolution errors</li>
+<li>Execution errors when using @run or @embed as sources</li>
+</ul>
+<h2 id="notes" tabindex="-1"><a class="header-anchor" href="#notes">Notes</a></h2>
+<ul>
+<li>Field access is only available for data variables</li>
+<li>Data variables can be formatted with the <code>&gt;&gt;</code> operator</li>
+<li>Simple data values are automatically converted to text when used in string contexts</li>
+<li>Entire objects/arrays are converted to JSON strings when used in text contexts</li>
+<li>Schema validation is planned but not yet implemented</li>
+</ul>
+
+  </div>
+</div>
+    </div>
+  </main>
+
+  <footer>
+    <div class="container">
+      <p>&copy; 2025 meld - <a href="https://github.com/yourusername/meld">GitHub</a></p>
+    </div>
+  </footer>
+</body>
+</html>

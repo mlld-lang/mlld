@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>meld - prompt scripting for plaintext maximalists</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Tektur:wght@800&family=Cousine:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="/js/theme.js" defer></script>
+  <script src="/js/terminal.js" defer></script>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <a href="/" class="logo">meld</a>
+      <nav>
+        <ul>
+          <li><a href="/" aria-current=&quot;page&quot;>Home</a></li>
+          <li><a href="/docs/introduction/" >Docs</a></li>
+          <li><a href="https://github.com/yourusername/meld">GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="container">
+      
+<section class="hero">
+  <div class="hero-content">
+    <h1 class="hero-logo">meld</h1>
+    <p class="tagline">modular prompt scripting for<br> people tired of repeating themselves</p>
+  </div>
+  
+  <div class="hero-terminal-container">
+    <div class="hero-terminal">
+      <div class="terminal-content">
+        <!-- Terminal content will be populated by JavaScript -->
+      </div>
+    </div>
+    
+    <div class="terminal-tabs">
+      <a href="#" class="terminal-tab" data-tab="tab1">Basic Usage</a>
+      <a href="#" class="terminal-tab" data-tab="tab2">Command Help</a>
+      <a href="#" class="terminal-tab" data-tab="tab3">Template Example</a>
+    </div>
+  </div>
+</section>
+
+<section>
+  <p>Meld is a document templating language designed for creating modular prompts and dynamic text content. It processes special directives while preserving the rest of your document exactly as written.</p>
+  
+  <div class="features">
+    <div class="feature">
+      <h3>Simple & Predictable</h3>
+      <p>Clear syntax boundaries that don't interfere with your markdown. No complex programming knowledge required.</p>
+    </div>
+    
+    <div class="feature">
+      <h3>Modular by Design</h3>
+      <p>Import and embed external files. Define reusable commands. Create templates with variable interpolation.</p>
+    </div>
+    
+    <div class="feature">
+      <h3>Dynamic Content</h3>
+      <p>Execute shell commands and capture their output. Access environment variables. Process data from various sources.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>How It Works</h2>
+  
+  <p>Meld processes special directives in your documents while preserving all other content exactly as written. This makes it perfect for building modular prompts and templates.</p>
+  
+  <div class="example">
+    <div class="example-header">Example: Template with Variables</div>
+<pre><code>---
+! Define some variables
+@define name = "World"
+@define greeting = "Hello"
+
+! Use the variables in text
+{{ greeting }}, {{ name }}!
+
+! Execute a command and capture its output
+@run date
+Today is: {{ output }}
+</code></pre>
+  </div>
+  
+  <div class="example">
+    <div class="example-header">Example: Importing Content</div>
+<pre><code>---
+! Include content from other files
+@import intro.md
+@import examples/basic.md
+
+! Only import a section from another file
+@import examples/advanced.md#section2
+
+! Add dynamic data
+@data users = [
+  { "name": "Alice", "role": "Admin" },
+  { "name": "Bob", "role": "User" }
+]
+
+
+{{#each users}}
+- {{name}}: {{role}}
+{{/each}}
+
+</code></pre>
+  </div>
+</section>
+
+<section>
+  <h2>Use Cases</h2>
+  
+  <ul>
+    <li><strong>LLM Prompting</strong> - Build complex, modular prompts for AI systems</li>
+    <li><strong>Documentation</strong> - Create documentation with dynamic examples and content</li>
+    <li><strong>Content Generation</strong> - Generate template-based content with variable substitution</li>
+    <li><strong>Data Transformation</strong> - Transform structured data into readable documents</li>
+  </ul>
+  
+  <p>Meld provides both a command-line interface for simple file processing and a JavaScript/TypeScript SDK for integration into your applications.</p>
+  
+  <div class="cta-link">
+    <a href="/docs/introduction/">Read the Introduction →</a>
+  </div>
+</section>
+    </div>
+  </main>
+
+  <footer>
+    <div class="container">
+      <p>&copy; 2025 meld - <a href="https://github.com/yourusername/meld">GitHub</a></p>
+    </div>
+  </footer>
+</body>
+</html>

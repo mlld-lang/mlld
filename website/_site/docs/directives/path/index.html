@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>@path Directive - meld</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Tektur:wght@800&family=Cousine:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="/js/theme.js" defer></script>
+  <script src="/js/terminal.js" defer></script>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <a href="/" class="logo">meld</a>
+      <nav>
+        <ul>
+          <li><a href="/" >Home</a></li>
+          <li><a href="/docs/introduction/" >Docs</a></li>
+          <li><a href="https://github.com/yourusername/meld">GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="container">
+      
+<div class="docs-layout">
+  <aside class="docs-sidebar">
+    <nav>
+      <h3>Documentation</h3>
+      <ul class="nav-list">
+        <li><a href="/docs/introduction/" >Introduction</a></li>
+        <li><a href="/docs/cli-usage/" >CLI Usage</a></li>
+        <li><a href="/docs/sdk-usage/" >SDK Usage</a></li>
+        <li><a href="/docs/variables/" >Variables</a></li>
+        <li><a href="/docs/error-handling/" >Error Handling</a></li>
+        <li><a href="/docs/grammar-reference/" >Grammar Reference</a></li>
+      </ul>
+      
+      <h3>Directives</h3>
+      <ul class="nav-list">
+        <li><a href="/docs/directives/" >Overview</a></li>
+        <li><a href="/docs/directives/data/" >@data</a></li>
+        <li><a href="/docs/directives/define/" >@define</a></li>
+        <li><a href="/docs/directives/embed/" >@embed</a></li>
+        <li><a href="/docs/directives/import/" >@import</a></li>
+        <li><a href="/docs/directives/path/" aria-current=&quot;page&quot;>@path</a></li>
+        <li><a href="/docs/directives/run/" >@run</a></li>
+        <li><a href="/docs/directives/text/" >@text</a></li>
+      </ul>
+    </nav>
+  </aside>
+  
+  <div class="docs-content">
+    <h1>@path Directive</h1>
+<p>The <code>@path</code> directive defines filesystem path variables that can be used in <code>@embed</code> and <code>@run</code> commands.</p>
+<h2 id="syntax" tabindex="-1"><a class="header-anchor" href="#syntax">Syntax</a></h2>
+<pre><code class="language-meld">@path identifier = &quot;$HOMEPATH/path&quot;
+@path identifier = &quot;$~/path&quot;
+@path identifier = &quot;$PROJECTPATH/path&quot;
+@path identifier = &quot;$./path&quot;
+</code></pre>
+<p>Where:</p>
+<ul>
+<li><code>identifier</code> is the variable name (must be a valid identifier)</li>
+<li>Path must start with either <code>$HOMEPATH</code>, <code>$~</code>, <code>$PROJECTPATH</code>, or <code>$.</code></li>
+<li>Path segments are separated by forward slashes</li>
+<li>Path must be quoted (single, double, or backtick quotes)</li>
+</ul>
+<h2 id="identifier-requirements" tabindex="-1"><a class="header-anchor" href="#identifier-requirements">Identifier Requirements</a></h2>
+<ul>
+<li>Must start with a letter or underscore</li>
+<li>Can contain letters, numbers, and underscores</li>
+<li>Case-sensitive</li>
+<li>Cannot be empty</li>
+</ul>
+<h2 id="path-value-rules" tabindex="-1"><a class="header-anchor" href="#path-value-rules">Path Value Rules</a></h2>
+<ul>
+<li>Must not be empty</li>
+<li>Cannot contain null bytes</li>
+<li>Cannot contain <code>.</code> or <code>..</code> directory segments (use <code>$.</code> or <code>$~</code> instead)</li>
+<li>Raw absolute paths (e.g., <code>/usr/local/bin</code>) are not allowed</li>
+<li>Simple filenames with no slashes are allowed without special prefixes</li>
+</ul>
+<h2 id="special-path-variables" tabindex="-1"><a class="header-anchor" href="#special-path-variables">Special Path Variables</a></h2>
+<p>Meld provides two special path variables:</p>
+<ul>
+<li><code>$HOMEPATH</code> or <code>$~</code>: Refers to the user's home directory</li>
+<li><code>$PROJECTPATH</code> or <code>$.</code>: Refers to the current project root directory</li>
+</ul>
+<p>All paths with slashes must be rooted in a $path variable (including global $HOMEPATH and $PROJECTPATH path variables).</p>
+<h2 id="referencing-path-variables" tabindex="-1"><a class="header-anchor" href="#referencing-path-variables">Referencing Path Variables</a></h2>
+<p>Path variables are referenced using the <code>$identifier</code> syntax:</p>
+<pre><code class="language-meld">@path docs = &quot;$PROJECTPATH/docs&quot;
+@embed [$docs/guide.md]
+</code></pre>
+<p>Path variables can be used:</p>
+<ul>
+<li>Inside square brackets <code>[...]</code> for paths and commands</li>
+<li>After a space in command arguments</li>
+<li>With additional path segments appended using <code>/</code></li>
+</ul>
+<h2 id="examples" tabindex="-1"><a class="header-anchor" href="#examples">Examples</a></h2>
+<p>Basic path variables:</p>
+<pre><code class="language-meld">@path docs = &quot;$PROJECTPATH/docs&quot;
+@path configs = &quot;$PROJECTPATH/configs&quot;
+@path home = &quot;$HOMEPATH/meld&quot;
+</code></pre>
+<p>Using path variables in commands:</p>
+<pre><code class="language-meld">@path src = &quot;$PROJECTPATH/src&quot;
+@run [ls -la $src]
+</code></pre>
+<p>Embedding files with path variables:</p>
+<pre><code class="language-meld">@path templates = &quot;$PROJECTPATH/templates&quot;
+@embed [$templates/header.md]
+</code></pre>
+<p>Using path segments:</p>
+<pre><code class="language-meld">@path src = &quot;$PROJECTPATH/src&quot;
+@embed [$src/components/button.js]
+</code></pre>
+<h2 id="error-handling" tabindex="-1"><a class="header-anchor" href="#error-handling">Error Handling</a></h2>
+<p>The following errors are possible with path directives:</p>
+<ul>
+<li><code>INVALID_PATH_FORMAT</code>: Path with slashes that doesn't use <code>$.</code> or <code>$~</code></li>
+<li><code>CONTAINS_DOT_SEGMENTS</code>: Path contains <code>.</code> or <code>..</code> segments</li>
+<li><code>RAW_ABSOLUTE_PATH</code>: Path is absolute but doesn't use <code>$.</code> or <code>$~</code></li>
+<li><code>INVALID_PATH</code>: Path is empty or malformed</li>
+<li><code>NULL_BYTE</code>: Path contains null bytes</li>
+</ul>
+<h2 id="variables-in-paths" tabindex="-1"><a class="header-anchor" href="#variables-in-paths">Variables in Paths</a></h2>
+<p>Paths can include variables, which are resolved during execution:</p>
+<pre><code class="language-meld">@text dir = &quot;docs&quot;
+@path docs = &quot;$PROJECTPATH/{{dir}}&quot;
+</code></pre>
+<h2 id="notes" tabindex="-1"><a class="header-anchor" href="#notes">Notes</a></h2>
+<ul>
+<li>Path variables cannot use field access or formatting</li>
+<li>All paths with slashes must be rooted in a $path variable (including global $HOMEPATH and $PROJECTPATH path variables)</li>
+<li>Relative paths are not allowed for security reasons</li>
+<li>Path variables are distinct from text and data variables</li>
+<li>In test mode, existence checks can be bypassed</li>
+</ul>
+
+  </div>
+</div>
+    </div>
+  </main>
+
+  <footer>
+    <div class="container">
+      <p>&copy; 2025 meld - <a href="https://github.com/yourusername/meld">GitHub</a></p>
+    </div>
+  </footer>
+</body>
+</html>

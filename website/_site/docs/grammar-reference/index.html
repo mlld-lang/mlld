@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Meld Grammar Reference - meld</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Tektur:wght@800&family=Cousine:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="/js/theme.js" defer></script>
+  <script src="/js/terminal.js" defer></script>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <a href="/" class="logo">meld</a>
+      <nav>
+        <ul>
+          <li><a href="/" >Home</a></li>
+          <li><a href="/docs/introduction/" >Docs</a></li>
+          <li><a href="https://github.com/yourusername/meld">GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="container">
+      
+<div class="docs-layout">
+  <aside class="docs-sidebar">
+    <nav>
+      <h3>Documentation</h3>
+      <ul class="nav-list">
+        <li><a href="/docs/introduction/" >Introduction</a></li>
+        <li><a href="/docs/cli-usage/" >CLI Usage</a></li>
+        <li><a href="/docs/sdk-usage/" >SDK Usage</a></li>
+        <li><a href="/docs/variables/" >Variables</a></li>
+        <li><a href="/docs/error-handling/" >Error Handling</a></li>
+        <li><a href="/docs/grammar-reference/" aria-current=&quot;page&quot;>Grammar Reference</a></li>
+      </ul>
+      
+      <h3>Directives</h3>
+      <ul class="nav-list">
+        <li><a href="/docs/directives/" >Overview</a></li>
+        <li><a href="/docs/directives/data/" >@data</a></li>
+        <li><a href="/docs/directives/define/" >@define</a></li>
+        <li><a href="/docs/directives/embed/" >@embed</a></li>
+        <li><a href="/docs/directives/import/" >@import</a></li>
+        <li><a href="/docs/directives/path/" >@path</a></li>
+        <li><a href="/docs/directives/run/" >@run</a></li>
+        <li><a href="/docs/directives/text/" >@text</a></li>
+      </ul>
+    </nav>
+  </aside>
+  
+  <div class="docs-content">
+    <h1>Meld Grammar Reference</h1>
+<p>This document provides a comprehensive reference for the Meld syntax.</p>
+<h2 id="core-tokens" tabindex="-1"><a class="header-anchor" href="#core-tokens">Core Tokens</a></h2>
+<h3 id="directives" tabindex="-1"><a class="header-anchor" href="#directives">Directives</a></h3>
+<p>Directives must appear at start of line (no indentation):</p>
+<pre><code>@embed    - Include content from files
+@run      - Execute shell commands
+@import   - Import variables and commands from other Meld files
+@define   - Create reusable commands
+@text     - Define text variables
+@path     - Define filesystem path variables
+@data     - Define structured data variables
+</code></pre>
+<h3 id="comments" tabindex="-1"><a class="header-anchor" href="#comments">Comments</a></h3>
+<p>Lines that begin with <code>&gt;&gt; </code> (two greater-than signs followed by a space) are treated as comments:</p>
+<pre><code class="language-meld">&gt;&gt; This is a comment
+&gt;&gt; Comments must start at beginning of line (no indentation)
+@text message = &quot;Hello&quot;  &gt;&gt; Invalid - comments must be on their own line
+</code></pre>
+<ul>
+<li>Must appear at start of line (no indentation)</li>
+<li>Everything after <code>&gt;&gt; </code> on that line is ignored</li>
+<li>Cannot be added to the end of directive lines</li>
+<li>Preserves comments exactly as written</li>
+</ul>
+<h3 id="delimiters" tabindex="-1"><a class="header-anchor" href="#delimiters">Delimiters</a></h3>
+<pre><code>[ ]     Command/path boundaries
+[[ ]]   Multi-line command boundaries
+{ }     Function embed boundaries
+{{ }}   Multi-line object boundaries
+#       Section marker
+=       Assignment (requires spaces on both sides)
+.       Metadata/field accessor
+,       List separator
+&gt;&gt;      Format operator
+()      Command parameter list
+:       Schema reference operator (optional)
+++      String concatenation operator (requires spaces on both sides)
+</code></pre>
+<h3 id="string-values" tabindex="-1"><a class="header-anchor" href="#string-values">String Values</a></h3>
+<ul>
+<li>Must be quoted with ', &quot;, or `</li>
+<li>Quotes must match (no mixing)</li>
+<li>Backslashes and quotes within strings are treated as literal characters</li>
+<li>Single-line strings (', &quot;) cannot contain newlines</li>
+<li>Template literals (<code>) can interpolate variables: </code>Hello {{name}}`</li>
+<li>Multi-line strings use [[<code>and</code>]] delimiters</li>
+</ul>
+<h3 id="identifiers" tabindex="-1"><a class="header-anchor" href="#identifiers">Identifiers</a></h3>
+<ul>
+<li>Must start with letter or underscore</li>
+<li>Can contain letters, numbers, underscore</li>
+<li>Case-sensitive</li>
+<li>Cannot be empty</li>
+</ul>
+<h2 id="variable-types" tabindex="-1"><a class="header-anchor" href="#variable-types">Variable Types</a></h2>
+<h3 id="path-variables" tabindex="-1"><a class="header-anchor" href="#path-variables">Path Variables</a></h3>
+<p>Syntax: <code>$identifier</code></p>
+<pre><code class="language-meld">$path                # Reference a path variable
+$HOMEPATH or $~      # Special path variable for home directory
+$PROJECTPATH or $.   # Special path variable for project root
+</code></pre>
+<h3 id="text-variables" tabindex="-1"><a class="header-anchor" href="#text-variables">Text Variables</a></h3>
+<p>Syntax: <code>{identifier}}</code></p>
+<pre><code class="language-meld">{{textvar}}                    # Text variable reference
+{{textvar&gt;&gt;(format)}}         # Formatted text variable
+</code></pre>
+<h3 id="data-variables" tabindex="-1"><a class="header-anchor" href="#data-variables">Data Variables</a></h3>
+<p>Syntax: <code>#{identifier}</code></p>
+<pre><code class="language-meld">#{datavar}                    # Data variable reference
+#{datavar.field}             # Data variable field access
+#{datavar.field&gt;&gt;(format)}   # Formatted data field access
+</code></pre>
+<h2 id="code-fences" tabindex="-1"><a class="header-anchor" href="#code-fences">Code Fences</a></h2>
+<p>Triple backticks that:</p>
+<ul>
+<li>Must appear at start of line</li>
+<li>Can optionally be followed by a language identifier</li>
+<li>Must be closed with exactly the same number of backticks</li>
+<li>Content inside is treated as literal text</li>
+<li>Support nesting with different numbers of backticks</li>
+</ul>
+<p>Example:</p>
+<pre><code class="language-meld">​```python
+def hello():
+    print(&quot;Hi&quot;)  # @text directives here are preserved as-is
+​```
+</code></pre>
+<h2 id="directive-patterns" tabindex="-1"><a class="header-anchor" href="#directive-patterns">Directive Patterns</a></h2>
+<h3 id="embed" tabindex="-1"><a class="header-anchor" href="#embed">@embed</a></h3>
+<pre><code class="language-meld">@embed [path]
+@embed [path # section_text]
+@embed [path] as ###                    # ### parsed as count of # chars
+@embed [path # section_text] as ###
+@embed [path] under header_text
+</code></pre>
+<h3 id="run" tabindex="-1"><a class="header-anchor" href="#run">@run</a></h3>
+<pre><code class="language-meld">@run [command_text]
+@run [command_text] under header_text
+@run [$command({{textvar1}}, {{textvar2}})]
+</code></pre>
+<h3 id="import" tabindex="-1"><a class="header-anchor" href="#import">@import</a></h3>
+<pre><code class="language-meld">@import [path]
+</code></pre>
+<h3 id="define" tabindex="-1"><a class="header-anchor" href="#define">@define</a></h3>
+<pre><code class="language-meld">@define identifier = @run [content]
+@define command(param1, param2) = @run [content {{param1}} {{param2}}]
+@define command.risk = &quot;description&quot;
+@define command.about = &quot;description&quot;
+@define command.meta = &quot;description&quot;
+</code></pre>
+<h3 id="text" tabindex="-1"><a class="header-anchor" href="#text">@text</a></h3>
+<pre><code class="language-meld">@text identifier = &quot;value&quot;
+@text identifier = @embed [content]
+@text identifier = @run [command]
+</code></pre>
+<h3 id="path" tabindex="-1"><a class="header-anchor" href="#path">@path</a></h3>
+<pre><code class="language-meld">@path identifier = &quot;$HOMEPATH/path&quot;
+@path identifier = &quot;$~/path&quot;
+@path identifier = &quot;$PROJECTPATH/path&quot;
+@path identifier = &quot;$./path&quot;
+</code></pre>
+<h3 id="data" tabindex="-1"><a class="header-anchor" href="#data">@data</a></h3>
+<pre><code class="language-meld">@data identifier = value
+@data identifier : schema = value
+</code></pre>
+<h2 id="string-concatenation" tabindex="-1"><a class="header-anchor" href="#string-concatenation">String Concatenation</a></h2>
+<p>Uses the <code>++</code> operator with required spaces on both sides:</p>
+<pre><code class="language-meld">@text greeting = &quot;Hello&quot; ++ &quot; &quot; ++ &quot;World&quot;
+@text message = {{intro}} ++ {{body}}
+</code></pre>
+<h2 id="template-literals" tabindex="-1"><a class="header-anchor" href="#template-literals">Template Literals</a></h2>
+<p>Delimited by backticks (`):</p>
+<pre><code class="language-meld">`Hello {{name}}!`                        # Text variable
+`Config: #{config.name}`                # Data variable with field
+`{{greeting}}, your ID is #{user.id}`    # Mixed variables
+</code></pre>
+<p>Multi-line template literals:</p>
+<pre><code class="language-meld">@text prompt = [[`
+  System: {{role}}
+  
+  Context:
+  #{context.data}
+  
+  User: {{username}}
+`]]
+</code></pre>
+<h2 id="variable-interpolation-rules" tabindex="-1"><a class="header-anchor" href="#variable-interpolation-rules">Variable Interpolation Rules</a></h2>
+<p>Variable references are allowed in:</p>
+<ul>
+<li>Inside square brackets [...] for paths and commands</li>
+<li>Inside object literals {{...}} and single-line objects</li>
+<li>Inside template literals (backtick strings) for string interpolation</li>
+<li>Inside directive values after = (including object literals and template literals)</li>
+</ul>
+<p>They are NOT allowed in:</p>
+<ul>
+<li>Plain text lines</li>
+<li>Regular string literals (use template literals instead)</li>
+<li>Outside of the contexts listed above</li>
+</ul>
+<p>Rules for specific variable types:</p>
+<ul>
+<li>Path variables ($path) only allowed in path contexts</li>
+<li>Text variables ({{text}}) allowed in all interpolation contexts</li>
+<li>Data variables ({{data}}) allowed in all interpolation contexts except command parameters</li>
+</ul>
+
+  </div>
+</div>
+    </div>
+  </main>
+
+  <footer>
+    <div class="container">
+      <p>&copy; 2025 meld - <a href="https://github.com/yourusername/meld">GitHub</a></p>
+    </div>
+  </footer>
+</body>
+</html>

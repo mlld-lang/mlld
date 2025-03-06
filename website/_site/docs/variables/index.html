@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Variables in Meld - meld</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Tektur:wght@800&family=Cousine:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="/js/theme.js" defer></script>
+  <script src="/js/terminal.js" defer></script>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <a href="/" class="logo">meld</a>
+      <nav>
+        <ul>
+          <li><a href="/" >Home</a></li>
+          <li><a href="/docs/introduction/" >Docs</a></li>
+          <li><a href="https://github.com/yourusername/meld">GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="container">
+      
+<div class="docs-layout">
+  <aside class="docs-sidebar">
+    <nav>
+      <h3>Documentation</h3>
+      <ul class="nav-list">
+        <li><a href="/docs/introduction/" >Introduction</a></li>
+        <li><a href="/docs/cli-usage/" >CLI Usage</a></li>
+        <li><a href="/docs/sdk-usage/" >SDK Usage</a></li>
+        <li><a href="/docs/variables/" aria-current=&quot;page&quot;>Variables</a></li>
+        <li><a href="/docs/error-handling/" >Error Handling</a></li>
+        <li><a href="/docs/grammar-reference/" >Grammar Reference</a></li>
+      </ul>
+      
+      <h3>Directives</h3>
+      <ul class="nav-list">
+        <li><a href="/docs/directives/" >Overview</a></li>
+        <li><a href="/docs/directives/data/" >@data</a></li>
+        <li><a href="/docs/directives/define/" >@define</a></li>
+        <li><a href="/docs/directives/embed/" >@embed</a></li>
+        <li><a href="/docs/directives/import/" >@import</a></li>
+        <li><a href="/docs/directives/path/" >@path</a></li>
+        <li><a href="/docs/directives/run/" >@run</a></li>
+        <li><a href="/docs/directives/text/" >@text</a></li>
+      </ul>
+    </nav>
+  </aside>
+  
+  <div class="docs-content">
+    <h1>Variables in Meld</h1>
+<p>Meld has three distinct types of variables, each with its own syntax and usage patterns.</p>
+<h2 id="variable-types" tabindex="-1"><a class="header-anchor" href="#variable-types">Variable Types</a></h2>
+<h3 id="path-variables" tabindex="-1"><a class="header-anchor" href="#path-variables">Path Variables</a></h3>
+<p>Path variables are used for filesystem paths and command arguments:</p>
+<pre><code class="language-meld">$path                # Reference a path variable
+$HOMEPATH or $~      # Special path variable for home directory
+$PROJECTPATH or $.   # Special path variable for project root
+</code></pre>
+<ul>
+<li>Must be defined with <code>@path</code> directive</li>
+<li>All paths must be absolute (via $HOMEPATH or $PROJECTPATH)</li>
+<li>Used primarily inside <code>[]</code> brackets</li>
+<li>Cannot use field access or formatting</li>
+<li>Path segments are separated by forward slashes</li>
+</ul>
+<p>Example:</p>
+<pre><code class="language-meld">@path docs = &quot;$PROJECTPATH/docs&quot;
+@embed [$docs/guide.md]
+</code></pre>
+<h3 id="text-variables" tabindex="-1"><a class="header-anchor" href="#text-variables">Text Variables</a></h3>
+<p>Text variables store unstructured text:</p>
+<pre><code class="language-meld">{{variable}}            # Reference a text variable
+{{variable&gt;&gt;(format)}}  # Reference with formatting
+</code></pre>
+<ul>
+<li>Defined with <code>@text</code> directive</li>
+<li>No field access (text is atomic)</li>
+<li>Environment variables ({{ENV_*}}) are a special case of text variables</li>
+</ul>
+<p>Example:</p>
+<pre><code class="language-meld">@text greeting = &quot;Hello&quot;
+@text name = &quot;World&quot;
+@text message = `{{greeting}}, {{name}}!`
+</code></pre>
+<h3 id="data-variables" tabindex="-1"><a class="header-anchor" href="#data-variables">Data Variables</a></h3>
+<p>Data variables store structured data:</p>
+<pre><code class="language-meld">{{variable}}                   # Reference a data variable
+{{variable.field}}            # Access a field in a data variable
+{{variable.field&gt;&gt;(format)}}  # Reference with formatting
+</code></pre>
+<ul>
+<li>Defined with <code>@data</code> directive</li>
+<li>Support field access ({{<a href="http://config.name">config.name</a>}})</li>
+<li>Fields can be nested ({{<a href="http://config.user.name">config.user.name</a>}})</li>
+<li>Can be formatted with <code>&gt;&gt;</code></li>
+</ul>
+<p>Example:</p>
+<pre><code class="language-meld">@data user = {{ name: &quot;Alice&quot;, id: 123 }}
+@text greeting = `Hello, {{user.name}}! Your ID is {{user.id}}.`
+</code></pre>
+<h2 id="variable-type-conversion" tabindex="-1"><a class="header-anchor" href="#variable-type-conversion">Variable Type Conversion</a></h2>
+<p>Variables can be converted between types automatically in many contexts:</p>
+<h3 id="data-to-text-conversion" tabindex="-1"><a class="header-anchor" href="#data-to-text-conversion">Data to Text Conversion</a></h3>
+<ul>
+<li>Simple values (strings, numbers) convert directly to text</li>
+<li>Objects and arrays convert to JSON string representation</li>
+</ul>
+<pre><code class="language-meld">@data config = {{ name: &quot;test&quot;, version: 1 }}
+@text simple = `Name: {{config.name}}`          # Outputs: Name: test
+@text object = `Config: {{config}}`             # Outputs: Config: {&quot;name&quot;:&quot;test&quot;,&quot;version&quot;:1}
+</code></pre>
+<h3 id="text-in-data-contexts" tabindex="-1"><a class="header-anchor" href="#text-in-data-contexts">Text in Data Contexts</a></h3>
+<ul>
+<li>Text variables can be used as values in data structures</li>
+<li>Text variables can also be used as object keys</li>
+</ul>
+<pre><code class="language-meld">@text name = &quot;Alice&quot;
+@text key = &quot;username&quot;
+
+@data user = {{
+  {{key}}: {{name}},              # Dynamic key from text
+  id: 123,
+  settings: {
+    displayName: {{name}}        # Nested text value
+  }
+}}
+</code></pre>
+<h2 id="where-variables-can-be-used" tabindex="-1"><a class="header-anchor" href="#where-variables-can-be-used">Where Variables Can Be Used</a></h2>
+<p>Variable references are allowed in:</p>
+<ul>
+<li>Inside square brackets <code>[...]</code> for paths and commands</li>
+<li>Inside object literals <code>{{...}}</code> and single-line objects</li>
+<li>Inside template literals (backtick strings) for string interpolation</li>
+<li>Inside directive values after <code>=</code></li>
+</ul>
+<p>They are NOT allowed in:</p>
+<ul>
+<li>Plain text lines</li>
+<li>Regular string literals (use template literals instead)</li>
+<li>Outside of specific interpolation contexts</li>
+</ul>
+<h2 id="string-concatenation" tabindex="-1"><a class="header-anchor" href="#string-concatenation">String Concatenation</a></h2>
+<p>You can concatenate strings using the <code>++</code> operator:</p>
+<pre><code class="language-meld">@text greeting = &quot;Hello&quot; ++ &quot; &quot; ++ &quot;World&quot;
+@text message = {{intro}} ++ {{body}}
+</code></pre>
+<ul>
+<li>Requires spaces on both sides of <code>++</code></li>
+<li>Can concatenate string literals, template literals, and text variables</li>
+<li>Cannot concatenate across multiple lines</li>
+</ul>
+
+  </div>
+</div>
+    </div>
+  </main>
+
+  <footer>
+    <div class="container">
+      <p>&copy; 2025 meld - <a href="https://github.com/yourusername/meld">GitHub</a></p>
+    </div>
+  </footer>
+</body>
+</html>

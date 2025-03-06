@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>@embed Directive - meld</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Tektur:wght@800&family=Cousine:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="/js/theme.js" defer></script>
+  <script src="/js/terminal.js" defer></script>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <a href="/" class="logo">meld</a>
+      <nav>
+        <ul>
+          <li><a href="/" >Home</a></li>
+          <li><a href="/docs/introduction/" >Docs</a></li>
+          <li><a href="https://github.com/yourusername/meld">GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="container">
+      
+<div class="docs-layout">
+  <aside class="docs-sidebar">
+    <nav>
+      <h3>Documentation</h3>
+      <ul class="nav-list">
+        <li><a href="/docs/introduction/" >Introduction</a></li>
+        <li><a href="/docs/cli-usage/" >CLI Usage</a></li>
+        <li><a href="/docs/sdk-usage/" >SDK Usage</a></li>
+        <li><a href="/docs/variables/" >Variables</a></li>
+        <li><a href="/docs/error-handling/" >Error Handling</a></li>
+        <li><a href="/docs/grammar-reference/" >Grammar Reference</a></li>
+      </ul>
+      
+      <h3>Directives</h3>
+      <ul class="nav-list">
+        <li><a href="/docs/directives/" >Overview</a></li>
+        <li><a href="/docs/directives/data/" >@data</a></li>
+        <li><a href="/docs/directives/define/" >@define</a></li>
+        <li><a href="/docs/directives/embed/" aria-current=&quot;page&quot;>@embed</a></li>
+        <li><a href="/docs/directives/import/" >@import</a></li>
+        <li><a href="/docs/directives/path/" >@path</a></li>
+        <li><a href="/docs/directives/run/" >@run</a></li>
+        <li><a href="/docs/directives/text/" >@text</a></li>
+      </ul>
+    </nav>
+  </aside>
+  
+  <div class="docs-content">
+    <h1>@embed Directive</h1>
+<p>The <code>@embed</code> directive includes content from external files into your Meld document.</p>
+<h2 id="syntax" tabindex="-1"><a class="header-anchor" href="#syntax">Syntax</a></h2>
+<pre><code class="language-meld">@embed [path]
+@embed [path # section_text]
+@embed [path] as ###
+@embed [path # section_text] as ###
+@embed [path] under header_text
+</code></pre>
+<p>Where:</p>
+<ul>
+<li><code>path</code> is the path to the file to embed (can use path variables)</li>
+<li><code>section_text</code> is optional text that identifies a specific section to extract</li>
+<li><code>###</code> is an optional heading level (number of # characters) for the embedded content</li>
+<li><code>header_text</code> is optional text to use as a header for the embedded content</li>
+</ul>
+<h2 id="path-specification" tabindex="-1"><a class="header-anchor" href="#path-specification">Path Specification</a></h2>
+<p>The path can be:</p>
+<ul>
+<li>An absolute path using <code>$HOMEPATH</code> or <code>$PROJECTPATH</code></li>
+<li>A path variable: <code>@embed [$docs/guide.md]</code></li>
+</ul>
+<h2 id="section-extraction" tabindex="-1"><a class="header-anchor" href="#section-extraction">Section Extraction</a></h2>
+<p>You can extract specific sections from Markdown files using the <code>#</code> symbol:</p>
+<pre><code class="language-meld">@embed [guide.md # Getting Started]
+</code></pre>
+<p>This will extract only the section titled &quot;Getting Started&quot; from <a href="http://guide.md">guide.md</a>.</p>
+<h2 id="heading-level-adjustment" tabindex="-1"><a class="header-anchor" href="#heading-level-adjustment">Heading Level Adjustment</a></h2>
+<p>You can adjust the heading level of embedded content using the <code>as</code> keyword:</p>
+<pre><code class="language-meld">@embed [guide.md] as ###
+</code></pre>
+<p>This will increase all headings by the specified number of <code>#</code> characters.</p>
+<h2 id="adding-headers" tabindex="-1"><a class="header-anchor" href="#adding-headers">Adding Headers</a></h2>
+<p>You can add a header to embedded content using the <code>under</code> keyword:</p>
+<pre><code class="language-meld">@embed [code.js] under Example Code
+</code></pre>
+<p>This will add a header &quot;Example Code&quot; above the embedded content.</p>
+<h2 id="variable-support" tabindex="-1"><a class="header-anchor" href="#variable-support">Variable Support</a></h2>
+<p>Path, section, and header parameters can all contain variables:</p>
+<pre><code class="language-meld">@text section = &quot;Getting Started&quot;
+@text header = &quot;Code Example&quot;
+@embed [$docs/guide.md # {{section}}] under {{header}}
+</code></pre>
+<h2 id="error-handling" tabindex="-1"><a class="header-anchor" href="#error-handling">Error Handling</a></h2>
+<p>The implementation handles these error scenarios:</p>
+<ul>
+<li>Missing/empty path parameter</li>
+<li>File not found</li>
+<li>Section not found in target file</li>
+<li>Invalid heading level (must be 1-6)</li>
+<li>Invalid parameter types</li>
+<li>Circular file inclusions</li>
+</ul>
+<h2 id="examples" tabindex="-1"><a class="header-anchor" href="#examples">Examples</a></h2>
+<p>Basic file embedding:</p>
+<pre><code class="language-meld">@embed [&quot;$PROJECTPATH/README.md&quot;]
+</code></pre>
+<p>Embedding with path variables:</p>
+<pre><code class="language-meld">@path docs = &quot;$PROJECTPATH/docs&quot;
+@embed [$docs/guide.md]
+</code></pre>
+<p>Embedding specific sections:</p>
+<pre><code class="language-meld">@embed [$docs/api.md # Authentication]
+</code></pre>
+<p>Adjusting heading levels:</p>
+<pre><code class="language-meld">@embed [$docs/guide.md] as ##
+</code></pre>
+<p>Adding headers:</p>
+<pre><code class="language-meld">@embed [$src/example.js] under Code Example
+</code></pre>
+<h2 id="notes" tabindex="-1"><a class="header-anchor" href="#notes">Notes</a></h2>
+<ul>
+<li>Missing files will generate fatal errors</li>
+<li>The <code>#</code> section identifier looks for heading text matching exactly</li>
+<li>For non-markdown files, the entire file content is embedded</li>
+<li>If the section is not found, a warning will be generated</li>
+<li>The implementation protects against circular file inclusions</li>
+</ul>
+
+  </div>
+</div>
+    </div>
+  </main>
+
+  <footer>
+    <div class="container">
+      <p>&copy; 2025 meld - <a href="https://github.com/yourusername/meld">GitHub</a></p>
+    </div>
+  </footer>
+</body>
+</html>

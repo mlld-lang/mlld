@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ title }} - Meld Documentation</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Tektur:wght@800&family=Cousine:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="/js/theme.js" defer></script>
+  <script src="/js/terminal.js" defer></script>
+</head>
+<body>
+  <header>
+    <nav>
+      <a href="/" class="logo">Meld</a>
+      <div class="nav-links">
+        <a href="/docs/introduction/">Introduction</a>
+        <a href="/docs/cli-usage/">CLI Usage</a>
+        <a href="/docs/sdk-usage/">SDK Usage</a>
+        <a href="/docs/directives/">Directives</a>
+      </div>
+    </nav>
+  </header>
+
+  <main>
+    {{ content | safe }}
+  </main>
+
+  <footer>
+    <p>&copy; {{ page.date.getFullYear() }} Meld. <a href="https://github.com/meld-cp/meld">GitHub</a></p>
+  </footer>
+</body>
+</html>

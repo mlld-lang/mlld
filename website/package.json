@@ -1,0 +1,17 @@
+{
+  "name": "meld-docs",
+  "version": "1.0.0",
+  "description": "Meld Documentation Site",
+  "scripts": {
+    "dev": "eleventy --serve",
+    "build": "eleventy",
+    "clean": "rm -rf _site"
+  },
+  "dependencies": {
+    "@11ty/eleventy": "^2.0.1",
+    "@11ty/eleventy-navigation": "^0.3.5",
+    "@11ty/eleventy-plugin-syntaxhighlight": "^5.0.0",
+    "markdown-it": "^14.0.0",
+    "markdown-it-anchor": "^8.6.7"
+  }
+}
