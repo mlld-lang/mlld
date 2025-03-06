@@ -3,7 +3,6 @@ layout: docs.njk
 title: "@embed Directive"
 ---
 
-{% raw %}
 # @embed Directive
 
 The `@embed` directive includes content from external files into your Meld document.
@@ -115,4 +114,3 @@ Adding headers:
 - For non-markdown files, the entire file content is embedded
 - If the section is not found, a warning will be generated
 - The implementation protects against circular file inclusions
-{% endraw %}

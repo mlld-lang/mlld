@@ -3,7 +3,6 @@ layout: docs.njk
 title: "Error Handling in Meld"
 ---
 
-{% raw %}
 # Error Handling in Meld
 
 Meld has a structured approach to error handling, categorizing errors into different severity levels.
@@ -76,4 +75,3 @@ Meld attempts to recover from non-fatal errors by:
 - Handle optional data fields gracefully
 - Check for environment variables before using them
 - Test Meld scripts with error cases to ensure proper handling
-{% endraw %}

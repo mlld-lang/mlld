@@ -3,7 +3,6 @@ layout: docs.njk
 title: "@define Directive"
 ---
 
-{% raw %}
 # @define Directive
 
 The `@define` directive creates reusable commands that can be referenced in `@run` directives.
@@ -116,4 +115,3 @@ The implementation handles these error scenarios:
 - Command parameters are required when calling the command
 - Commands can only be used within @run directives
 - Metadata fields are restricted to specific field names
-{% endraw %}

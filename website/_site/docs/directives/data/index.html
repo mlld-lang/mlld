@@ -17,9 +17,9 @@
       <a href="/" class="logo">meld</a>
       <nav>
         <ul>
-          <li><a href="/" >Home</a></li>
+          <li><a href="/" aria-current=&quot;page&quot;>Home</a></li>
           <li><a href="/docs/introduction/" >Docs</a></li>
-          <li><a href="https://github.com/yourusername/meld">GitHub</a></li>
+          <li><a href="https://github.com/meldorg/meld">GitHub</a></li>
         </ul>
       </nav>
     </div>
@@ -43,7 +43,7 @@
       
       <h3>Directives</h3>
       <ul class="nav-list">
-        <li><a href="/docs/directives/" >Overview</a></li>
+        <li><a href="/docs/directives/" aria-current=&quot;page&quot;>Overview</a></li>
         <li><a href="/docs/directives/data/" aria-current=&quot;page&quot;>@data</a></li>
         <li><a href="/docs/directives/define/" >@define</a></li>
         <li><a href="/docs/directives/embed/" >@embed</a></li>
@@ -56,9 +56,9 @@
   </aside>
   
   <div class="docs-content">
-    <h1>@data Directive</h1>
+    <h1 id="%40data-directive" tabindex="-1">@data Directive</h1>
 <p>The <code>@data</code> directive defines a structured data variable that can store objects, arrays, or other complex data types.</p>
-<h2 id="syntax" tabindex="-1"><a class="header-anchor" href="#syntax">Syntax</a></h2>
+<h2 id="syntax" tabindex="-1">Syntax</h2>
 <pre><code class="language-meld">@data identifier = value
 </code></pre>
 <p>Where:</p>
@@ -66,14 +66,14 @@
 <li><code>identifier</code> is the variable name (must be a valid identifier)</li>
 <li><code>value</code> can be an object literal, array literal, string literal, or the result of an <code>@embed</code>, <code>@run</code>, or <code>@call</code> directive</li>
 </ul>
-<h2 id="identifier-requirements" tabindex="-1"><a class="header-anchor" href="#identifier-requirements">Identifier Requirements</a></h2>
+<h2 id="identifier-requirements" tabindex="-1">Identifier Requirements</h2>
 <ul>
 <li>Must start with a letter or underscore</li>
 <li>Can contain letters, numbers, and underscores</li>
 <li>Case-sensitive</li>
 <li>Cannot be empty</li>
 </ul>
-<h2 id="supported-data-types" tabindex="-1"><a class="header-anchor" href="#supported-data-types">Supported Data Types</a></h2>
+<h2 id="supported-data-types" tabindex="-1">Supported Data Types</h2>
 <p>The @data directive supports all standard JSON data types:</p>
 <ul>
 <li>Objects (key-value pairs)</li>
@@ -83,7 +83,7 @@
 <li>Booleans</li>
 <li>null</li>
 </ul>
-<h2 id="object-and-array-literals" tabindex="-1"><a class="header-anchor" href="#object-and-array-literals">Object and Array Literals</a></h2>
+<h2 id="object-and-array-literals" tabindex="-1">Object and Array Literals</h2>
 <p>Data objects can be defined using object literal syntax:</p>
 <pre><code class="language-meld">@data config = {{ name: &quot;test&quot;, version: 1 }}
 </code></pre>
@@ -101,7 +101,7 @@
 <p>Arrays can be defined as well:</p>
 <pre><code class="language-meld">@data colors = [&quot;red&quot;, &quot;green&quot;, &quot;blue&quot;]
 </code></pre>
-<h2 id="variable-interpolation-in-data" tabindex="-1"><a class="header-anchor" href="#variable-interpolation-in-data">Variable Interpolation in Data</a></h2>
+<h2 id="variable-interpolation-in-data" tabindex="-1">Variable Interpolation in Data</h2>
 <p>Data structures can contain variable references in both keys and values:</p>
 <pre><code class="language-meld">@text name = &quot;John&quot;
 @text keyName = &quot;username&quot;
@@ -111,10 +111,10 @@
   active: true
 }}
 </code></pre>
-<h2 id="referencing-data-variables" tabindex="-1"><a class="header-anchor" href="#referencing-data-variables">Referencing Data Variables</a></h2>
-<p>Data variables are referenced using the <code>#{identifier}</code> syntax:</p>
+<h2 id="referencing-data-variables" tabindex="-1">Referencing Data Variables</h2>
+<p>Data variables are referenced using the <code>{{identifier}}</code> syntax:</p>
 <pre><code class="language-meld">@data user = {{ name: &quot;Alice&quot;, id: 123 }}
-@text greeting = `Hello, #{user.name}!`
+@text greeting = `Hello, {{user.name}}!`
 </code></pre>
 <p>You can access nested fields using dot notation:</p>
 <pre><code class="language-meld">@data config = {{ 
@@ -123,13 +123,20 @@
     version: &quot;1.0.0&quot;
   }
 }}
-@text appInfo = `App: #{config.app.name} v#{config.app.version}`
+@text appInfo = `App: {{config.app.name}} v{{config.app.version}}`
 </code></pre>
-<h2 id="json-string-format" tabindex="-1"><a class="header-anchor" href="#json-string-format">JSON String Format</a></h2>
+<h3 id="accessing-array-elements" tabindex="-1">Accessing Array Elements</h3>
+<p>Use dot notation to access array elements:</p>
+<pre><code class="language-meld">@data fruits = [&quot;apple&quot;, &quot;banana&quot;, &quot;cherry&quot;]
+@text favorite = `My favorite fruit is {{fruits.0}}`
+@text list = `Items: {{fruits.0}}, {{fruits.1}}, and {{fruits.2}}`
+</code></pre>
+<p>Note: Currently, only dot notation is supported for array access. Bracket notation (<code>fruits[0]</code>) is not supported.</p>
+<h2 id="json-string-format" tabindex="-1">JSON String Format</h2>
 <p>Values can also be provided as JSON strings which are parsed:</p>
 <pre><code class="language-meld">@data config = '{&quot;key&quot;: &quot;value&quot;}'
 </code></pre>
-<h2 id="examples" tabindex="-1"><a class="header-anchor" href="#examples">Examples</a></h2>
+<h2 id="examples" tabindex="-1">Examples</h2>
 <p>Basic data variable:</p>
 <pre><code class="language-meld">@data settings = {{ 
   darkMode: true,
@@ -146,14 +153,14 @@
 <p>Using command output as data:</p>
 <pre><code class="language-meld">@data gitInfo = @run [git log -1 --format=&quot;%H,%an,%ae,%s&quot;]
 </code></pre>
-<h2 id="error-handling" tabindex="-1"><a class="header-anchor" href="#error-handling">Error Handling</a></h2>
+<h2 id="error-handling" tabindex="-1">Error Handling</h2>
 <p>The following errors are possible with data directives:</p>
 <ul>
 <li>JSON parsing errors (if value is invalid JSON)</li>
 <li>Variable resolution errors</li>
 <li>Execution errors when using @run or @embed as sources</li>
 </ul>
-<h2 id="notes" tabindex="-1"><a class="header-anchor" href="#notes">Notes</a></h2>
+<h2 id="notes" tabindex="-1">Notes</h2>
 <ul>
 <li>Field access is only available for data variables</li>
 <li>Data variables can be formatted with the <code>&gt;&gt;</code> operator</li>
@@ -169,7 +176,7 @@
 
   <footer>
     <div class="container">
-      <p>&copy; 2025 meld - <a href="https://github.com/yourusername/meld">GitHub</a></p>
+      <p>&copy; 2025 meld - <a href="https://github.com/meldorg/meld">GitHub</a></p>
     </div>
   </footer>
 </body>

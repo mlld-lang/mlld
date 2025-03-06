@@ -17,9 +17,9 @@
       <a href="/" class="logo">meld</a>
       <nav>
         <ul>
-          <li><a href="/" >Home</a></li>
+          <li><a href="/" aria-current=&quot;page&quot;>Home</a></li>
           <li><a href="/docs/introduction/" >Docs</a></li>
-          <li><a href="https://github.com/yourusername/meld">GitHub</a></li>
+          <li><a href="https://github.com/meldorg/meld">GitHub</a></li>
         </ul>
       </nav>
     </div>
@@ -43,7 +43,7 @@
       
       <h3>Directives</h3>
       <ul class="nav-list">
-        <li><a href="/docs/directives/" >Overview</a></li>
+        <li><a href="/docs/directives/" aria-current=&quot;page&quot;>Overview</a></li>
         <li><a href="/docs/directives/data/" >@data</a></li>
         <li><a href="/docs/directives/define/" >@define</a></li>
         <li><a href="/docs/directives/embed/" >@embed</a></li>
@@ -56,9 +56,9 @@
   </aside>
   
   <div class="docs-content">
-    <h1>@import Directive</h1>
+    <h1 id="%40import-directive" tabindex="-1">@import Directive</h1>
 <p>The <code>@import</code> directive allows you to import variables and commands from other Meld files.</p>
-<h2 id="syntax" tabindex="-1"><a class="header-anchor" href="#syntax">Syntax</a></h2>
+<h2 id="syntax" tabindex="-1">Syntax</h2>
 <p>Modern syntax:</p>
 <pre><code class="language-meld">@import [path.meld]                           # Import all variables
 @import [*] from [path.meld]                  # Import all variables (equivalent)
@@ -75,7 +75,7 @@
 <li><code>var1</code>, <code>var2</code> are variable names to import</li>
 <li><code>alias1</code> is an alternative name to use for the imported variable</li>
 </ul>
-<h2 id="import-behavior" tabindex="-1"><a class="header-anchor" href="#import-behavior">Import Behavior</a></h2>
+<h2 id="import-behavior" tabindex="-1">Import Behavior</h2>
 <p>When you import a Meld file:</p>
 <ul>
 <li>All variables and commands defined in the imported file become available</li>
@@ -84,7 +84,7 @@
 <li>Imported files can import other files (nesting is supported)</li>
 <li>Circular imports are detected and will generate errors</li>
 </ul>
-<h2 id="supported-variable-types" tabindex="-1"><a class="header-anchor" href="#supported-variable-types">Supported Variable Types</a></h2>
+<h2 id="supported-variable-types" tabindex="-1">Supported Variable Types</h2>
 <p>The directive can import all types of variables:</p>
 <ul>
 <li>Text variables</li>
@@ -92,13 +92,13 @@
 <li>Path variables</li>
 <li>Command variables</li>
 </ul>
-<h2 id="path-specification" tabindex="-1"><a class="header-anchor" href="#path-specification">Path Specification</a></h2>
+<h2 id="path-specification" tabindex="-1">Path Specification</h2>
 <p>The path can be:</p>
 <ul>
 <li>An absolute path using <code>$HOMEPATH</code> or <code>$PROJECTPATH</code></li>
 <li>A path variable: <code>@import [$utils]</code></li>
 </ul>
-<h2 id="selective-imports-and-aliases" tabindex="-1"><a class="header-anchor" href="#selective-imports-and-aliases">Selective Imports and Aliases</a></h2>
+<h2 id="selective-imports-and-aliases" tabindex="-1">Selective Imports and Aliases</h2>
 <p>Specify selective imports using a comma-separated list:</p>
 <pre><code class="language-meld">@import [var1, var2, var3] from [path.meld]
 </code></pre>
@@ -108,7 +108,7 @@
 <p>Alternative alias syntax with colon:</p>
 <pre><code class="language-meld">@import [var1:myVar1, var2:myVar2] from [path.meld]
 </code></pre>
-<h2 id="examples" tabindex="-1"><a class="header-anchor" href="#examples">Examples</a></h2>
+<h2 id="examples" tabindex="-1">Examples</h2>
 <p>Basic import:</p>
 <pre><code class="language-meld">@import [&quot;$PROJECTPATH/utils.meld&quot;]
 </code></pre>
@@ -128,7 +128,7 @@
 @text message = `Hello, {{importedName}}!`
 @run [$importedCommand({{param}})]
 </code></pre>
-<h2 id="error-handling" tabindex="-1"><a class="header-anchor" href="#error-handling">Error Handling</a></h2>
+<h2 id="error-handling" tabindex="-1">Error Handling</h2>
 <p>The implementation handles various error scenarios:</p>
 <ul>
 <li>File not found errors</li>
@@ -137,7 +137,7 @@
 <li>Variable not found errors</li>
 <li>Parsing errors in imported files</li>
 </ul>
-<h2 id="notes" tabindex="-1"><a class="header-anchor" href="#notes">Notes</a></h2>
+<h2 id="notes" tabindex="-1">Notes</h2>
 <ul>
 <li>Imported files must be valid Meld files</li>
 <li>Missing import files will generate fatal errors</li>
@@ -154,7 +154,7 @@
 
   <footer>
     <div class="container">
-      <p>&copy; 2025 meld - <a href="https://github.com/yourusername/meld">GitHub</a></p>
+      <p>&copy; 2025 meld - <a href="https://github.com/meldorg/meld">GitHub</a></p>
     </div>
   </footer>
 </body>

@@ -3,7 +3,6 @@ layout: docs.njk
 title: "Meld CLI Usage"
 ---
 
-{% raw %}
 # Meld CLI Usage
 
 The Meld CLI provides a simple way to process Meld files from the command line.
@@ -129,4 +128,3 @@ ENV_TOKEN=12345 meld script.meld
 ## Project Path
 
 The special `$PROJECTPATH` or `$.` variable refers to the directory where the Meld CLI is executed. All relative paths in Meld scripts are resolved relative to this directory.
-{% endraw %}

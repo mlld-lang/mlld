@@ -3,7 +3,6 @@ layout: docs.njk
 title: "Meld Documentation"
 ---
 
-{% raw %}
 # Meld Documentation
 
 Meld is a simple scripting language designed to work within markdown-like documents. It processes special `@directive` lines while preserving all other content as-is.
@@ -27,4 +26,3 @@ If you're integrating Meld into your application, see the [SDK Usage](./sdk-usag
 ## Implementation Notes
 
 This documentation is based on the actual implementation of Meld. The directive handlers, variable resolvers, and error handling mechanisms described here match the codebase's functionality. If you encounter any discrepancies or have questions about specific features, please refer to the tests in the repository for detailed examples of supported functionality.
-{% endraw %}

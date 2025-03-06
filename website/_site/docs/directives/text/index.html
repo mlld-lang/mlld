@@ -17,9 +17,9 @@
       <a href="/" class="logo">meld</a>
       <nav>
         <ul>
-          <li><a href="/" >Home</a></li>
+          <li><a href="/" aria-current=&quot;page&quot;>Home</a></li>
           <li><a href="/docs/introduction/" >Docs</a></li>
-          <li><a href="https://github.com/yourusername/meld">GitHub</a></li>
+          <li><a href="https://github.com/meldorg/meld">GitHub</a></li>
         </ul>
       </nav>
     </div>
@@ -43,7 +43,7 @@
       
       <h3>Directives</h3>
       <ul class="nav-list">
-        <li><a href="/docs/directives/" >Overview</a></li>
+        <li><a href="/docs/directives/" aria-current=&quot;page&quot;>Overview</a></li>
         <li><a href="/docs/directives/data/" >@data</a></li>
         <li><a href="/docs/directives/define/" >@define</a></li>
         <li><a href="/docs/directives/embed/" >@embed</a></li>
@@ -56,9 +56,9 @@
   </aside>
   
   <div class="docs-content">
-    <h1>@text Directive</h1>
+    <h1 id="%40text-directive" tabindex="-1">@text Directive</h1>
 <p>The <code>@text</code> directive defines a text variable that can store string values.</p>
-<h2 id="syntax" tabindex="-1"><a class="header-anchor" href="#syntax">Syntax</a></h2>
+<h2 id="syntax" tabindex="-1">Syntax</h2>
 <pre><code class="language-meld">@text identifier = &quot;value&quot;
 @text identifier = @embed [content]
 @text identifier = @run [command]
@@ -68,14 +68,14 @@
 <li><code>identifier</code> is the variable name (must be a valid identifier)</li>
 <li><code>value</code> can be a quoted string, the result of an <code>@embed</code> directive, or the result of an <code>@run</code> directive</li>
 </ul>
-<h2 id="identifier-requirements" tabindex="-1"><a class="header-anchor" href="#identifier-requirements">Identifier Requirements</a></h2>
+<h2 id="identifier-requirements" tabindex="-1">Identifier Requirements</h2>
 <ul>
 <li>Must start with a letter or underscore</li>
 <li>Can contain letters, numbers, and underscores</li>
 <li>Case-sensitive</li>
 <li>Cannot be empty</li>
 </ul>
-<h2 id="string-values" tabindex="-1"><a class="header-anchor" href="#string-values">String Values</a></h2>
+<h2 id="string-values" tabindex="-1">String Values</h2>
 <p>Text values can be defined using different quote styles:</p>
 <pre><code class="language-meld">@text simple = &quot;Plain string&quot;       # Double quotes
 @text also_simple = 'Single quotes' # Single quotes
@@ -88,18 +88,18 @@
   string with {{variables}}
 `]]
 </code></pre>
-<h2 id="referencing-text-variables" tabindex="-1"><a class="header-anchor" href="#referencing-text-variables">Referencing Text Variables</a></h2>
+<h2 id="referencing-text-variables" tabindex="-1">Referencing Text Variables</h2>
 <p>Text variables are referenced using the <code>{{identifier}}</code> syntax:</p>
 <pre><code class="language-meld">@text name = &quot;World&quot;
 @text greeting = `Hello, {{name}}!`
 </code></pre>
-<h2 id="variable-interpolation" tabindex="-1"><a class="header-anchor" href="#variable-interpolation">Variable Interpolation</a></h2>
+<h2 id="variable-interpolation" tabindex="-1">Variable Interpolation</h2>
 <p>Template literals (using backticks) support variable interpolation:</p>
 <ul>
 <li>Text variables: <code>Hello, {{name}}!</code></li>
 <li>Nested variables: <code>Hello, {{user.{{userType}}}}</code></li>
 </ul>
-<h2 id="string-concatenation" tabindex="-1"><a class="header-anchor" href="#string-concatenation">String Concatenation</a></h2>
+<h2 id="string-concatenation" tabindex="-1">String Concatenation</h2>
 <pre><code class="language-meld">@text first = &quot;Hello&quot;
 @text second = &quot;World&quot;
 @text message = {{first}} ++ &quot; &quot; ++ {{second}}
@@ -109,7 +109,7 @@
 <li>Joins string parts without adding spaces between them</li>
 <li>Cannot concatenate across multiple lines</li>
 </ul>
-<h2 id="examples" tabindex="-1"><a class="header-anchor" href="#examples">Examples</a></h2>
+<h2 id="examples" tabindex="-1">Examples</h2>
 <p>Basic text variable:</p>
 <pre><code class="language-meld">@text title = &quot;My Document&quot;
 @text author = &quot;Jane Smith&quot;
@@ -120,14 +120,14 @@
 <p>Embedding file content:</p>
 <pre><code class="language-meld">@text header = @embed [header.md]
 </code></pre>
-<h2 id="error-handling" tabindex="-1"><a class="header-anchor" href="#error-handling">Error Handling</a></h2>
+<h2 id="error-handling" tabindex="-1">Error Handling</h2>
 <ul>
 <li>Empty values are not allowed</li>
 <li>Quotes must match (no mixing of quote types)</li>
 <li>Circular references in variables will be detected and prevented</li>
 <li>Variable resolution has a maximum depth (10 levels) to prevent infinite recursion</li>
 </ul>
-<h2 id="notes" tabindex="-1"><a class="header-anchor" href="#notes">Notes</a></h2>
+<h2 id="notes" tabindex="-1">Notes</h2>
 <ul>
 <li>Text variables cannot have field access (use data variables for structured data)</li>
 <li>Text variables can be used in template strings, commands, and data structures</li>
@@ -141,7 +141,7 @@
 
   <footer>
     <div class="container">
-      <p>&copy; 2025 meld - <a href="https://github.com/yourusername/meld">GitHub</a></p>
+      <p>&copy; 2025 meld - <a href="https://github.com/meldorg/meld">GitHub</a></p>
     </div>
   </footer>
 </body>

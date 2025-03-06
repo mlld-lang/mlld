@@ -17,9 +17,9 @@
       <a href="/" class="logo">meld</a>
       <nav>
         <ul>
-          <li><a href="/" >Home</a></li>
+          <li><a href="/" aria-current=&quot;page&quot;>Home</a></li>
           <li><a href="/docs/introduction/" >Docs</a></li>
-          <li><a href="https://github.com/yourusername/meld">GitHub</a></li>
+          <li><a href="https://github.com/meldorg/meld">GitHub</a></li>
         </ul>
       </nav>
     </div>
@@ -56,9 +56,9 @@
   </aside>
   
   <div class="docs-content">
-    <h1>Meld CLI Usage</h1>
+    <h1 id="meld-cli-usage" tabindex="-1">Meld CLI Usage</h1>
 <p>The Meld CLI provides a simple way to process Meld files from the command line.</p>
-<h2 id="installation" tabindex="-1"><a class="header-anchor" href="#installation">Installation</a></h2>
+<h2 id="installation" tabindex="-1">Installation</h2>
 <p>Install Meld globally to use the CLI:</p>
 <pre><code class="language-bash">npm install -g meld
 </code></pre>
@@ -66,7 +66,7 @@
 <pre><code class="language-bash">npm install meld
 npx meld &lt;options&gt;
 </code></pre>
-<h2 id="basic-usage" tabindex="-1"><a class="header-anchor" href="#basic-usage">Basic Usage</a></h2>
+<h2 id="basic-usage" tabindex="-1">Basic Usage</h2>
 <p>Process a Meld file with default options:</p>
 <pre><code class="language-bash">meld input.meld
 </code></pre>
@@ -76,8 +76,8 @@ npx meld &lt;options&gt;
 <li>Generate output in XML format</li>
 <li>Save to a file with the same name but extension changed to <code>.llm</code></li>
 </ul>
-<h2 id="command-line-options" tabindex="-1"><a class="header-anchor" href="#command-line-options">Command Line Options</a></h2>
-<h3 id="output-format" tabindex="-1"><a class="header-anchor" href="#output-format">Output Format</a></h3>
+<h2 id="command-line-options" tabindex="-1">Command Line Options</h2>
+<h3 id="output-format" tabindex="-1">Output Format</h3>
 <p>Specify the output format with the <code>--format</code> or <code>-f</code> option:</p>
 <pre><code class="language-bash">meld input.meld --format md
 </code></pre>
@@ -86,20 +86,20 @@ npx meld &lt;options&gt;
 <li><code>xml</code> (default) - Outputs in XML format</li>
 <li><code>md</code> - Outputs in Markdown format</li>
 </ul>
-<h3 id="output-file" tabindex="-1"><a class="header-anchor" href="#output-file">Output File</a></h3>
+<h3 id="output-file" tabindex="-1">Output File</h3>
 <p>Specify the output file with the <code>--output</code> or <code>-o</code> option:</p>
 <pre><code class="language-bash">meld input.meld --output output.llm
 </code></pre>
 <p>By default, the output file uses the input filename with a new extension.</p>
-<h3 id="output-to-console" tabindex="-1"><a class="header-anchor" href="#output-to-console">Output to Console</a></h3>
+<h3 id="output-to-console" tabindex="-1">Output to Console</h3>
 <p>Print to stdout instead of writing to a file with the <code>--stdout</code> option:</p>
 <pre><code class="language-bash">meld input.meld --stdout
 </code></pre>
-<h3 id="combined-options" tabindex="-1"><a class="header-anchor" href="#combined-options">Combined Options</a></h3>
+<h3 id="combined-options" tabindex="-1">Combined Options</h3>
 <p>You can combine multiple options:</p>
 <pre><code class="language-bash">meld input.meld --format md --output custom.md --stdout
 </code></pre>
-<h2 id="file-extensions" tabindex="-1"><a class="header-anchor" href="#file-extensions">File Extensions</a></h2>
+<h2 id="file-extensions" tabindex="-1">File Extensions</h2>
 <p>Meld supports several file extensions:</p>
 <ul>
 <li><code>.meld</code> - Standard Meld files</li>
@@ -107,7 +107,7 @@ npx meld &lt;options&gt;
 <li><code>.mll</code> - Alternative extension for Meld files</li>
 <li><code>.mll.md</code> - Alternative extension for Meld Markdown files</li>
 </ul>
-<h2 id="examples" tabindex="-1"><a class="header-anchor" href="#examples">Examples</a></h2>
+<h2 id="examples" tabindex="-1">Examples</h2>
 <p>Process a Meld file with default options:</p>
 <pre><code class="language-bash">meld document.meld
 </code></pre>
@@ -123,14 +123,14 @@ npx meld &lt;options&gt;
 <p>Process a Meld file with multiple options:</p>
 <pre><code class="language-bash">meld document.meld --format md --output result.md --stdout
 </code></pre>
-<h2 id="environment-variables" tabindex="-1"><a class="header-anchor" href="#environment-variables">Environment Variables</a></h2>
+<h2 id="environment-variables" tabindex="-1">Environment Variables</h2>
 <p>Meld scripts can access environment variables using the <code>{{ENV_NAME}}</code> syntax:</p>
 <pre><code class="language-meld">@text token = &quot;{{ENV_TOKEN}}&quot;
 </code></pre>
 <p>You can set these when running the CLI:</p>
 <pre><code class="language-bash">ENV_TOKEN=12345 meld script.meld
 </code></pre>
-<h2 id="project-path" tabindex="-1"><a class="header-anchor" href="#project-path">Project Path</a></h2>
+<h2 id="project-path" tabindex="-1">Project Path</h2>
 <p>The special <code>$PROJECTPATH</code> or <code>$.</code> variable refers to the directory where the Meld CLI is executed. All relative paths in Meld scripts are resolved relative to this directory.</p>
 
   </div>
@@ -140,7 +140,7 @@ npx meld &lt;options&gt;
 
   <footer>
     <div class="container">
-      <p>&copy; 2025 meld - <a href="https://github.com/yourusername/meld">GitHub</a></p>
+      <p>&copy; 2025 meld - <a href="https://github.com/meldorg/meld">GitHub</a></p>
     </div>
   </footer>
 </body>

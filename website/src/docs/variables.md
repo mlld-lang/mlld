@@ -3,7 +3,6 @@ layout: docs.njk
 title: "Variables in Meld"
 ---
 
-{% raw %}
 # Variables in Meld
 
 Meld has three distinct types of variables, each with its own syntax and usage patterns.
@@ -73,6 +72,18 @@ Example:
 @text greeting = `Hello, {{user.name}}! Your ID is {{user.id}}.`
 ```
 
+### Array Access
+
+When working with arrays, use dot notation to access array elements by index:
+
+```meld
+@data items = ["apple", "banana", "cherry"]
+@text first = `First item: {{items.0}}`
+@text second = `Second item: {{items.1}}`
+```
+
+Note: Currently, only dot notation is supported for array access. Bracket notation (`items[0]`) is not supported.
+
 ## Variable Type Conversion
 
 Variables can be converted between types automatically in many contexts:
@@ -131,4 +142,3 @@ You can concatenate strings using the `++` operator:
 - Requires spaces on both sides of `++`
 - Can concatenate string literals, template literals, and text variables
 - Cannot concatenate across multiple lines
-{% endraw %}

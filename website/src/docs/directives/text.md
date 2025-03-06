@@ -3,7 +3,6 @@ layout: docs.njk
 title: "@text Directive"
 ---
 
-{% raw %}
 # @text Directive
 
 The `@text` directive defines a text variable that can store string values.
@@ -105,4 +104,3 @@ Embedding file content:
 - Text variables cannot have field access (use data variables for structured data)
 - Text variables can be used in template strings, commands, and data structures
 - Only backtick strings support variable interpolation
-{% endraw %}

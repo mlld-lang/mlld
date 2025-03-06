@@ -3,7 +3,6 @@ layout: docs.njk
 title: "@import Directive"
 ---
 
-{% raw %}
 # @import Directive
 
 The `@import` directive allows you to import variables and commands from other Meld files.
@@ -117,4 +116,3 @@ The implementation handles various error scenarios:
 - Imported files can have their own imports (nesting is supported)
 - Variables with the same name will be overwritten (last imported wins)
 - Circular imports are detected and will generate errors
-{% endraw %}

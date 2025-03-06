@@ -17,9 +17,9 @@
       <a href="/" class="logo">meld</a>
       <nav>
         <ul>
-          <li><a href="/" >Home</a></li>
+          <li><a href="/" aria-current=&quot;page&quot;>Home</a></li>
           <li><a href="/docs/introduction/" >Docs</a></li>
-          <li><a href="https://github.com/yourusername/meld">GitHub</a></li>
+          <li><a href="https://github.com/meldorg/meld">GitHub</a></li>
         </ul>
       </nav>
     </div>
@@ -43,7 +43,7 @@
       
       <h3>Directives</h3>
       <ul class="nav-list">
-        <li><a href="/docs/directives/" >Overview</a></li>
+        <li><a href="/docs/directives/" aria-current=&quot;page&quot;>Overview</a></li>
         <li><a href="/docs/directives/data/" >@data</a></li>
         <li><a href="/docs/directives/define/" >@define</a></li>
         <li><a href="/docs/directives/embed/" aria-current=&quot;page&quot;>@embed</a></li>
@@ -56,9 +56,9 @@
   </aside>
   
   <div class="docs-content">
-    <h1>@embed Directive</h1>
+    <h1 id="%40embed-directive" tabindex="-1">@embed Directive</h1>
 <p>The <code>@embed</code> directive includes content from external files into your Meld document.</p>
-<h2 id="syntax" tabindex="-1"><a class="header-anchor" href="#syntax">Syntax</a></h2>
+<h2 id="syntax" tabindex="-1">Syntax</h2>
 <pre><code class="language-meld">@embed [path]
 @embed [path # section_text]
 @embed [path] as ###
@@ -72,34 +72,34 @@
 <li><code>###</code> is an optional heading level (number of # characters) for the embedded content</li>
 <li><code>header_text</code> is optional text to use as a header for the embedded content</li>
 </ul>
-<h2 id="path-specification" tabindex="-1"><a class="header-anchor" href="#path-specification">Path Specification</a></h2>
+<h2 id="path-specification" tabindex="-1">Path Specification</h2>
 <p>The path can be:</p>
 <ul>
 <li>An absolute path using <code>$HOMEPATH</code> or <code>$PROJECTPATH</code></li>
 <li>A path variable: <code>@embed [$docs/guide.md]</code></li>
 </ul>
-<h2 id="section-extraction" tabindex="-1"><a class="header-anchor" href="#section-extraction">Section Extraction</a></h2>
+<h2 id="section-extraction" tabindex="-1">Section Extraction</h2>
 <p>You can extract specific sections from Markdown files using the <code>#</code> symbol:</p>
 <pre><code class="language-meld">@embed [guide.md # Getting Started]
 </code></pre>
 <p>This will extract only the section titled &quot;Getting Started&quot; from <a href="http://guide.md">guide.md</a>.</p>
-<h2 id="heading-level-adjustment" tabindex="-1"><a class="header-anchor" href="#heading-level-adjustment">Heading Level Adjustment</a></h2>
+<h2 id="heading-level-adjustment" tabindex="-1">Heading Level Adjustment</h2>
 <p>You can adjust the heading level of embedded content using the <code>as</code> keyword:</p>
 <pre><code class="language-meld">@embed [guide.md] as ###
 </code></pre>
 <p>This will increase all headings by the specified number of <code>#</code> characters.</p>
-<h2 id="adding-headers" tabindex="-1"><a class="header-anchor" href="#adding-headers">Adding Headers</a></h2>
+<h2 id="adding-headers" tabindex="-1">Adding Headers</h2>
 <p>You can add a header to embedded content using the <code>under</code> keyword:</p>
 <pre><code class="language-meld">@embed [code.js] under Example Code
 </code></pre>
 <p>This will add a header &quot;Example Code&quot; above the embedded content.</p>
-<h2 id="variable-support" tabindex="-1"><a class="header-anchor" href="#variable-support">Variable Support</a></h2>
+<h2 id="variable-support" tabindex="-1">Variable Support</h2>
 <p>Path, section, and header parameters can all contain variables:</p>
 <pre><code class="language-meld">@text section = &quot;Getting Started&quot;
 @text header = &quot;Code Example&quot;
 @embed [$docs/guide.md # {{section}}] under {{header}}
 </code></pre>
-<h2 id="error-handling" tabindex="-1"><a class="header-anchor" href="#error-handling">Error Handling</a></h2>
+<h2 id="error-handling" tabindex="-1">Error Handling</h2>
 <p>The implementation handles these error scenarios:</p>
 <ul>
 <li>Missing/empty path parameter</li>
@@ -109,7 +109,7 @@
 <li>Invalid parameter types</li>
 <li>Circular file inclusions</li>
 </ul>
-<h2 id="examples" tabindex="-1"><a class="header-anchor" href="#examples">Examples</a></h2>
+<h2 id="examples" tabindex="-1">Examples</h2>
 <p>Basic file embedding:</p>
 <pre><code class="language-meld">@embed [&quot;$PROJECTPATH/README.md&quot;]
 </code></pre>
@@ -126,7 +126,7 @@
 <p>Adding headers:</p>
 <pre><code class="language-meld">@embed [$src/example.js] under Code Example
 </code></pre>
-<h2 id="notes" tabindex="-1"><a class="header-anchor" href="#notes">Notes</a></h2>
+<h2 id="notes" tabindex="-1">Notes</h2>
 <ul>
 <li>Missing files will generate fatal errors</li>
 <li>The <code>#</code> section identifier looks for heading text matching exactly</li>
@@ -142,7 +142,7 @@
 
   <footer>
     <div class="container">
-      <p>&copy; 2025 meld - <a href="https://github.com/yourusername/meld">GitHub</a></p>
+      <p>&copy; 2025 meld - <a href="https://github.com/meldorg/meld">GitHub</a></p>
     </div>
   </footer>
 </body>

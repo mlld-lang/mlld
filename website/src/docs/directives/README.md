@@ -3,7 +3,6 @@ layout: docs.njk
 title: "Meld Directives"
 ---
 
-{% raw %}
 # Meld Directives
 
 Directives are the core building blocks of Meld. They always start with an `@` symbol and must appear at the beginning of a line (no indentation). Each directive has a specific purpose and syntax.
@@ -41,4 +40,3 @@ Where:
 ## Next Steps
 
 For detailed information on each directive, follow the links above or explore the individual documentation files.
-{% endraw %}

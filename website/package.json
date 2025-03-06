@@ -1,7 +1,7 @@
 {
   "name": "meld-docs",
   "version": "1.0.0",
-  "description": "Meld Documentation Site",
+  "description": "Documentation site for Meld",
   "scripts": {
     "dev": "node src/convertDocs.js && eleventy --serve",
     "build": "node src/convertDocs.js && eleventy",
@@ -9,10 +9,8 @@
     "convert-docs": "node src/convertDocs.js"
   },
   "dependencies": {
-    "@11ty/eleventy": "^2.0.1",
-    "@11ty/eleventy-navigation": "^0.3.5",
-    "@11ty/eleventy-plugin-syntaxhighlight": "^5.0.0",
-    "markdown-it": "^14.0.0",
+    "@11ty/eleventy": "^3.0.0",
+    "markdown-it": "^13.0.2",
     "markdown-it-anchor": "^8.6.7"
   }
 }

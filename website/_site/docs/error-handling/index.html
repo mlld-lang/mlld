@@ -17,9 +17,9 @@
       <a href="/" class="logo">meld</a>
       <nav>
         <ul>
-          <li><a href="/" >Home</a></li>
+          <li><a href="/" aria-current=&quot;page&quot;>Home</a></li>
           <li><a href="/docs/introduction/" >Docs</a></li>
-          <li><a href="https://github.com/yourusername/meld">GitHub</a></li>
+          <li><a href="https://github.com/meldorg/meld">GitHub</a></li>
         </ul>
       </nav>
     </div>
@@ -56,10 +56,10 @@
   </aside>
   
   <div class="docs-content">
-    <h1>Error Handling in Meld</h1>
+    <h1 id="error-handling-in-meld" tabindex="-1">Error Handling in Meld</h1>
 <p>Meld has a structured approach to error handling, categorizing errors into different severity levels.</p>
-<h2 id="error-categories" tabindex="-1"><a class="header-anchor" href="#error-categories">Error Categories</a></h2>
-<h3 id="fatal-errors-halt-execution" tabindex="-1"><a class="header-anchor" href="#fatal-errors-halt-execution">Fatal Errors (Halt Execution)</a></h3>
+<h2 id="error-categories" tabindex="-1">Error Categories</h2>
+<h3 id="fatal-errors-(halt-execution)" tabindex="-1">Fatal Errors (Halt Execution)</h3>
 <p>These errors stop Meld execution immediately:</p>
 <ul>
 <li>Missing or inaccessible referenced files</li>
@@ -70,7 +70,7 @@
 <li>Missing required command parameters</li>
 <li>Invalid path references (not using $HOMEPATH/$PROJECTPATH)</li>
 </ul>
-<h3 id="warning-errors-continue-with-warning" tabindex="-1"><a class="header-anchor" href="#warning-errors-continue-with-warning">Warning Errors (Continue with Warning)</a></h3>
+<h3 id="warning-errors-(continue-with-warning)" tabindex="-1">Warning Errors (Continue with Warning)</h3>
 <p>These issues generate warnings but allow execution to continue:</p>
 <ul>
 <li>Missing optional fields in data structures (returns empty string)</li>
@@ -78,7 +78,7 @@
 <li>Command execution that produces stderr but exits with code 0</li>
 <li>Fields accessed on non-existent data paths (returns empty string)</li>
 </ul>
-<h3 id="silent-operation-no-errorwarning" tabindex="-1"><a class="header-anchor" href="#silent-operation-no-errorwarning">Silent Operation (No Error/Warning)</a></h3>
+<h3 id="silent-operation-(no-error%2Fwarning)" tabindex="-1">Silent Operation (No Error/Warning)</h3>
 <p>These situations don't generate errors or warnings:</p>
 <ul>
 <li>Expected stderr output from successfully running commands</li>
@@ -86,33 +86,33 @@
 <li>Type coercion in string concatenation</li>
 <li>Normal command output to stderr</li>
 </ul>
-<h2 id="common-error-scenarios" tabindex="-1"><a class="header-anchor" href="#common-error-scenarios">Common Error Scenarios</a></h2>
-<h3 id="file-system-errors" tabindex="-1"><a class="header-anchor" href="#file-system-errors">File System Errors</a></h3>
+<h2 id="common-error-scenarios" tabindex="-1">Common Error Scenarios</h2>
+<h3 id="file-system-errors" tabindex="-1">File System Errors</h3>
 <ul>
 <li><strong>Missing Files</strong>: When an <code>@embed</code> or <code>@import</code> directive references a non-existent file</li>
 <li><strong>Path Validation</strong>: When paths don't use <code>$HOMEPATH</code> or <code>$PROJECTPATH</code></li>
 <li><strong>File Permission Issues</strong>: When Meld can't read a referenced file</li>
 </ul>
-<h3 id="syntax-errors" tabindex="-1"><a class="header-anchor" href="#syntax-errors">Syntax Errors</a></h3>
+<h3 id="syntax-errors" tabindex="-1">Syntax Errors</h3>
 <ul>
 <li><strong>Invalid Directive Syntax</strong>: Malformed directives or missing required components</li>
 <li><strong>Invalid Variable References</strong>: Using variables that haven't been defined</li>
 <li><strong>Quoting Issues</strong>: Mismatched quotes or invalid string formats</li>
 </ul>
-<h3 id="execution-errors" tabindex="-1"><a class="header-anchor" href="#execution-errors">Execution Errors</a></h3>
+<h3 id="execution-errors" tabindex="-1">Execution Errors</h3>
 <ul>
 <li><strong>Command Failures</strong>: When an <code>@run</code> command exits with a non-zero status</li>
 <li><strong>Circular Imports</strong>: When Meld detects circular file imports</li>
 <li><strong>Type Mismatches</strong>: Using the wrong variable type in a context</li>
 </ul>
-<h2 id="error-recovery" tabindex="-1"><a class="header-anchor" href="#error-recovery">Error Recovery</a></h2>
+<h2 id="error-recovery" tabindex="-1">Error Recovery</h2>
 <p>Meld attempts to recover from non-fatal errors by:</p>
 <ul>
 <li>Substituting empty strings for missing data fields</li>
 <li>Continuing past warnings when possible</li>
 <li>Providing detailed error messages with line numbers and context</li>
 </ul>
-<h2 id="best-practices" tabindex="-1"><a class="header-anchor" href="#best-practices">Best Practices</a></h2>
+<h2 id="best-practices" tabindex="-1">Best Practices</h2>
 <ul>
 <li>Always check that referenced files exist</li>
 <li>Use path variables consistently</li>
@@ -129,7 +129,7 @@
 
   <footer>
     <div class="container">
-      <p>&copy; 2025 meld - <a href="https://github.com/yourusername/meld">GitHub</a></p>
+      <p>&copy; 2025 meld - <a href="https://github.com/meldorg/meld">GitHub</a></p>
     </div>
   </footer>
 </body>

@@ -3,7 +3,6 @@ layout: docs.njk
 title: "@data Directive"
 ---
 
-{% raw %}
 # @data Directive
 
 The `@data` directive defines a structured data variable that can store objects, arrays, or other complex data types.
@@ -79,11 +78,11 @@ Data structures can contain variable references in both keys and values:
 
 ## Referencing Data Variables
 
-Data variables are referenced using the `#{identifier}` syntax:
+Data variables are referenced using the `{{identifier}}` syntax:
 
 ```meld
 @data user = {{ name: "Alice", id: 123 }}
-@text greeting = `Hello, #{user.name}!`
+@text greeting = `Hello, {{user.name}}!`
 ```
 
 You can access nested fields using dot notation:
@@ -95,8 +94,20 @@ You can access nested fields using dot notation:
     version: "1.0.0"
   }
 }}
-@text appInfo = `App: #{config.app.name} v#{config.app.version}`
+@text appInfo = `App: {{config.app.name}} v{{config.app.version}}`
 ```
+
+### Accessing Array Elements
+
+Use dot notation to access array elements:
+
+```meld
+@data fruits = ["apple", "banana", "cherry"]
+@text favorite = `My favorite fruit is {{fruits.0}}`
+@text list = `Items: {{fruits.0}}, {{fruits.1}}, and {{fruits.2}}`
+```
+
+Note: Currently, only dot notation is supported for array access. Bracket notation (`fruits[0]`) is not supported.
 
 ## JSON String Format
 
@@ -144,4 +155,3 @@ The following errors are possible with data directives:
 - Simple data values are automatically converted to text when used in string contexts
 - Entire objects/arrays are converted to JSON strings when used in text contexts
 - Schema validation is planned but not yet implemented
-{% endraw %}

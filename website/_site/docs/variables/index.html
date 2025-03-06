@@ -17,9 +17,9 @@
       <a href="/" class="logo">meld</a>
       <nav>
         <ul>
-          <li><a href="/" >Home</a></li>
+          <li><a href="/" aria-current=&quot;page&quot;>Home</a></li>
           <li><a href="/docs/introduction/" >Docs</a></li>
-          <li><a href="https://github.com/yourusername/meld">GitHub</a></li>
+          <li><a href="https://github.com/meldorg/meld">GitHub</a></li>
         </ul>
       </nav>
     </div>
@@ -56,10 +56,10 @@
   </aside>
   
   <div class="docs-content">
-    <h1>Variables in Meld</h1>
+    <h1 id="variables-in-meld" tabindex="-1">Variables in Meld</h1>
 <p>Meld has three distinct types of variables, each with its own syntax and usage patterns.</p>
-<h2 id="variable-types" tabindex="-1"><a class="header-anchor" href="#variable-types">Variable Types</a></h2>
-<h3 id="path-variables" tabindex="-1"><a class="header-anchor" href="#path-variables">Path Variables</a></h3>
+<h2 id="variable-types" tabindex="-1">Variable Types</h2>
+<h3 id="path-variables" tabindex="-1">Path Variables</h3>
 <p>Path variables are used for filesystem paths and command arguments:</p>
 <pre><code class="language-meld">$path                # Reference a path variable
 $HOMEPATH or $~      # Special path variable for home directory
@@ -76,7 +76,7 @@ $PROJECTPATH or $.   # Special path variable for project root
 <pre><code class="language-meld">@path docs = &quot;$PROJECTPATH/docs&quot;
 @embed [$docs/guide.md]
 </code></pre>
-<h3 id="text-variables" tabindex="-1"><a class="header-anchor" href="#text-variables">Text Variables</a></h3>
+<h3 id="text-variables" tabindex="-1">Text Variables</h3>
 <p>Text variables store unstructured text:</p>
 <pre><code class="language-meld">{{variable}}            # Reference a text variable
 {{variable&gt;&gt;(format)}}  # Reference with formatting
@@ -91,7 +91,7 @@ $PROJECTPATH or $.   # Special path variable for project root
 @text name = &quot;World&quot;
 @text message = `{{greeting}}, {{name}}!`
 </code></pre>
-<h3 id="data-variables" tabindex="-1"><a class="header-anchor" href="#data-variables">Data Variables</a></h3>
+<h3 id="data-variables" tabindex="-1">Data Variables</h3>
 <p>Data variables store structured data:</p>
 <pre><code class="language-meld">{{variable}}                   # Reference a data variable
 {{variable.field}}            # Access a field in a data variable
@@ -107,9 +107,16 @@ $PROJECTPATH or $.   # Special path variable for project root
 <pre><code class="language-meld">@data user = {{ name: &quot;Alice&quot;, id: 123 }}
 @text greeting = `Hello, {{user.name}}! Your ID is {{user.id}}.`
 </code></pre>
-<h2 id="variable-type-conversion" tabindex="-1"><a class="header-anchor" href="#variable-type-conversion">Variable Type Conversion</a></h2>
+<h3 id="array-access" tabindex="-1">Array Access</h3>
+<p>When working with arrays, use dot notation to access array elements by index:</p>
+<pre><code class="language-meld">@data items = [&quot;apple&quot;, &quot;banana&quot;, &quot;cherry&quot;]
+@text first = `First item: {{items.0}}`
+@text second = `Second item: {{items.1}}`
+</code></pre>
+<p>Note: Currently, only dot notation is supported for array access. Bracket notation (<code>items[0]</code>) is not supported.</p>
+<h2 id="variable-type-conversion" tabindex="-1">Variable Type Conversion</h2>
 <p>Variables can be converted between types automatically in many contexts:</p>
-<h3 id="data-to-text-conversion" tabindex="-1"><a class="header-anchor" href="#data-to-text-conversion">Data to Text Conversion</a></h3>
+<h3 id="data-to-text-conversion" tabindex="-1">Data to Text Conversion</h3>
 <ul>
 <li>Simple values (strings, numbers) convert directly to text</li>
 <li>Objects and arrays convert to JSON string representation</li>
@@ -118,7 +125,7 @@ $PROJECTPATH or $.   # Special path variable for project root
 @text simple = `Name: {{config.name}}`          # Outputs: Name: test
 @text object = `Config: {{config}}`             # Outputs: Config: {&quot;name&quot;:&quot;test&quot;,&quot;version&quot;:1}
 </code></pre>
-<h3 id="text-in-data-contexts" tabindex="-1"><a class="header-anchor" href="#text-in-data-contexts">Text in Data Contexts</a></h3>
+<h3 id="text-in-data-contexts" tabindex="-1">Text in Data Contexts</h3>
 <ul>
 <li>Text variables can be used as values in data structures</li>
 <li>Text variables can also be used as object keys</li>
@@ -134,7 +141,7 @@ $PROJECTPATH or $.   # Special path variable for project root
   }
 }}
 </code></pre>
-<h2 id="where-variables-can-be-used" tabindex="-1"><a class="header-anchor" href="#where-variables-can-be-used">Where Variables Can Be Used</a></h2>
+<h2 id="where-variables-can-be-used" tabindex="-1">Where Variables Can Be Used</h2>
 <p>Variable references are allowed in:</p>
 <ul>
 <li>Inside square brackets <code>[...]</code> for paths and commands</li>
@@ -148,7 +155,7 @@ $PROJECTPATH or $.   # Special path variable for project root
 <li>Regular string literals (use template literals instead)</li>
 <li>Outside of specific interpolation contexts</li>
 </ul>
-<h2 id="string-concatenation" tabindex="-1"><a class="header-anchor" href="#string-concatenation">String Concatenation</a></h2>
+<h2 id="string-concatenation" tabindex="-1">String Concatenation</h2>
 <p>You can concatenate strings using the <code>++</code> operator:</p>
 <pre><code class="language-meld">@text greeting = &quot;Hello&quot; ++ &quot; &quot; ++ &quot;World&quot;
 @text message = {{intro}} ++ {{body}}
@@ -166,7 +173,7 @@ $PROJECTPATH or $.   # Special path variable for project root
 
   <footer>
     <div class="container">
-      <p>&copy; 2025 meld - <a href="https://github.com/yourusername/meld">GitHub</a></p>
+      <p>&copy; 2025 meld - <a href="https://github.com/meldorg/meld">GitHub</a></p>
     </div>
   </footer>
 </body>

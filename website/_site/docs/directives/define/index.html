@@ -17,9 +17,9 @@
       <a href="/" class="logo">meld</a>
       <nav>
         <ul>
-          <li><a href="/" >Home</a></li>
+          <li><a href="/" aria-current=&quot;page&quot;>Home</a></li>
           <li><a href="/docs/introduction/" >Docs</a></li>
-          <li><a href="https://github.com/yourusername/meld">GitHub</a></li>
+          <li><a href="https://github.com/meldorg/meld">GitHub</a></li>
         </ul>
       </nav>
     </div>
@@ -43,7 +43,7 @@
       
       <h3>Directives</h3>
       <ul class="nav-list">
-        <li><a href="/docs/directives/" >Overview</a></li>
+        <li><a href="/docs/directives/" aria-current=&quot;page&quot;>Overview</a></li>
         <li><a href="/docs/directives/data/" >@data</a></li>
         <li><a href="/docs/directives/define/" aria-current=&quot;page&quot;>@define</a></li>
         <li><a href="/docs/directives/embed/" >@embed</a></li>
@@ -56,9 +56,9 @@
   </aside>
   
   <div class="docs-content">
-    <h1>@define Directive</h1>
+    <h1 id="%40define-directive" tabindex="-1">@define Directive</h1>
 <p>The <code>@define</code> directive creates reusable commands that can be referenced in <code>@run</code> directives.</p>
-<h2 id="syntax" tabindex="-1"><a class="header-anchor" href="#syntax">Syntax</a></h2>
+<h2 id="syntax" tabindex="-1">Syntax</h2>
 <pre><code class="language-meld">@define command = @run [content]
 @define command(param1, param2) = @run [content {{param1}} {{param2}}]
 
@@ -72,14 +72,14 @@
 <li><code>content</code> is the command content (following @run patterns)</li>
 <li>Field metadata is limited to specific fields (.about, .meta)</li>
 </ul>
-<h2 id="identifier-requirements" tabindex="-1"><a class="header-anchor" href="#identifier-requirements">Identifier Requirements</a></h2>
+<h2 id="identifier-requirements" tabindex="-1">Identifier Requirements</h2>
 <ul>
 <li>Command names must start with a letter or underscore</li>
 <li>Can contain letters, numbers, and underscores</li>
 <li>Case-sensitive</li>
 <li>Cannot be empty</li>
 </ul>
-<h2 id="command-parameters" tabindex="-1"><a class="header-anchor" href="#command-parameters">Command Parameters</a></h2>
+<h2 id="command-parameters" tabindex="-1">Command Parameters</h2>
 <p>Parameters are defined in parentheses and must be referenced in the command body:</p>
 <pre><code class="language-meld">@define greet(name) = @run [echo &quot;Hello, {{name}}!&quot;]
 </code></pre>
@@ -95,13 +95,13 @@
 <pre><code class="language-meld">@text user = &quot;Alice&quot;
 @run [$greet({{user}})]
 </code></pre>
-<h2 id="command-body-requirements" tabindex="-1"><a class="header-anchor" href="#command-body-requirements">Command Body Requirements</a></h2>
+<h2 id="command-body-requirements" tabindex="-1">Command Body Requirements</h2>
 <ul>
 <li>The right-hand side must be an @run directive, not other directive types</li>
 <li>The command itself is the content inside the @run brackets</li>
 <li>Empty commands are technically allowed but will result in empty content</li>
 </ul>
-<h2 id="command-metadata" tabindex="-1"><a class="header-anchor" href="#command-metadata">Command Metadata</a></h2>
+<h2 id="command-metadata" tabindex="-1">Command Metadata</h2>
 <p>You can add metadata to commands using the field syntax:</p>
 <pre><code class="language-meld">@define listFiles(dir) = @run [ls -la {{dir}}]
 @define listFiles.about = &quot;Lists all files in the specified directory&quot;
@@ -111,7 +111,7 @@
 <li><code>.about</code> - Command description</li>
 <li><code>.meta</code> - Additional metadata</li>
 </ul>
-<h2 id="examples" tabindex="-1"><a class="header-anchor" href="#examples">Examples</a></h2>
+<h2 id="examples" tabindex="-1">Examples</h2>
 <p>Basic command definition:</p>
 <pre><code class="language-meld">@define sayHello = @run [echo &quot;Hello, World!&quot;]
 @run [$sayHello]
@@ -130,7 +130,7 @@
 <pre><code class="language-meld">@define runScript(script) = @run [bash {{script}}]
 @define runScript.about = &quot;Executes a bash script&quot;
 </code></pre>
-<h2 id="error-handling" tabindex="-1"><a class="header-anchor" href="#error-handling">Error Handling</a></h2>
+<h2 id="error-handling" tabindex="-1">Error Handling</h2>
 <p>The implementation handles these error scenarios:</p>
 <ul>
 <li>Invalid directive structure</li>
@@ -140,7 +140,7 @@
 <li>Undeclared parameters (used but not defined)</li>
 <li>Invalid metadata fields</li>
 </ul>
-<h2 id="notes" tabindex="-1"><a class="header-anchor" href="#notes">Notes</a></h2>
+<h2 id="notes" tabindex="-1">Notes</h2>
 <ul>
 <li>The right-hand side of @define must be an @run directive</li>
 <li>Cannot use other directives (@embed, @text, etc.) as the command body</li>
@@ -156,7 +156,7 @@
 
   <footer>
     <div class="container">
-      <p>&copy; 2025 meld - <a href="https://github.com/yourusername/meld">GitHub</a></p>
+      <p>&copy; 2025 meld - <a href="https://github.com/meldorg/meld">GitHub</a></p>
     </div>
   </footer>
 </body>

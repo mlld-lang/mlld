@@ -2,8 +2,13 @@ const fs = require('fs');
 const path = require('path');
 
 // Source and destination directories
-const sourceDir = path.join(__dirname, '../userdocs');
-const outputDir = path.join(__dirname, '../src/docs');
+const sourceDir = path.join(__dirname, '../../docs');
+const outputDir = path.join(__dirname, 'docs');
+
+// Skip the dev directory
+function shouldSkipFile(filePath) {
+  return filePath.includes('/dev/');
+}
 
 // Ensure output directory exists
 if (!fs.existsSync(outputDir)) {
@@ -12,6 +17,12 @@ if (!fs.existsSync(outputDir)) {
 
 // Function to convert a file
 function convertFile(filePath) {
+  // Skip files in the dev directory
+  if (shouldSkipFile(filePath)) {
+    console.log(`Skipping dev file: ${filePath}`);
+    return;
+  }
+
   const relativePath = path.relative(sourceDir, filePath);
   const outputPath = path.join(outputDir, relativePath);
   
@@ -31,17 +42,13 @@ function convertFile(filePath) {
   // Escape special characters in YAML by wrapping title in quotes
   title = title.replace(/"/g, '\\"'); // Escape double quotes if present
   
-  // Add a raw tag at the beginning and end of the content to prevent Nunjucks from processing
-  // any template tags in the markdown content
-  const processedContent = '{% raw %}\n' + content + '\n{% endraw %}';
-  
   // Add frontmatter
   const newContent = `---
 layout: docs.njk
 title: "${title}"
 ---
 
-${processedContent}`;
+${content}`;
   
   // Write to destination
   fs.writeFileSync(outputPath, newContent);

@@ -3,7 +3,6 @@ layout: docs.njk
 title: "@run Directive"
 ---
 
-{% raw %}
 # @run Directive
 
 The `@run` directive executes shell commands and includes their output in your Meld document.
@@ -111,4 +110,3 @@ Using defined commands:
 - The directive doesn't have built-in timeout mechanisms for long-running commands
 - Command output is always converted to string (binary output may not be properly handled)
 - The directive does not support interactive commands that require user input
-{% endraw %}

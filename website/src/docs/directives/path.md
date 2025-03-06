@@ -3,7 +3,6 @@ layout: docs.njk
 title: "@path Directive"
 ---
 
-{% raw %}
 # @path Directive
 
 The `@path` directive defines filesystem path variables that can be used in `@embed` and `@run` commands.
@@ -113,4 +112,3 @@ Paths can include variables, which are resolved during execution:
 - Relative paths are not allowed for security reasons
 - Path variables are distinct from text and data variables
 - In test mode, existence checks can be bypassed
-{% endraw %}

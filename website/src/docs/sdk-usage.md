@@ -3,7 +3,6 @@ layout: docs.njk
 title: "Meld SDK Usage"
 ---
 
-{% raw %}
 # Meld SDK Usage
 
 The Meld SDK allows you to integrate Meld processing into your JavaScript or TypeScript applications.
@@ -210,4 +209,3 @@ try {
   console.error('Error processing Meld file:', error.message);
 }
 ```
-{% endraw %}

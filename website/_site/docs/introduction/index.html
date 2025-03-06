@@ -17,9 +17,9 @@
       <a href="/" class="logo">meld</a>
       <nav>
         <ul>
-          <li><a href="/" >Home</a></li>
+          <li><a href="/" aria-current=&quot;page&quot;>Home</a></li>
           <li><a href="/docs/introduction/" aria-current=&quot;page&quot;>Docs</a></li>
-          <li><a href="https://github.com/yourusername/meld">GitHub</a></li>
+          <li><a href="https://github.com/meldorg/meld">GitHub</a></li>
         </ul>
       </nav>
     </div>
@@ -56,18 +56,18 @@
   </aside>
   
   <div class="docs-content">
-    <h1>Introduction to Meld</h1>
+    <h1 id="introduction-to-meld" tabindex="-1">Introduction to Meld</h1>
 <p>Meld is a simple and constrained scripting language designed for use within markdown-like documents. It allows you to create dynamic content by interpreting special directive lines while preserving all other content as-is.</p>
-<h2 id="core-concepts" tabindex="-1"><a class="header-anchor" href="#core-concepts">Core Concepts</a></h2>
+<h2 id="core-concepts" tabindex="-1">Core Concepts</h2>
 <p>Meld works by processing only lines that begin with directives (like <code>@text</code>, <code>@run</code>, etc.) while treating all other content as literal text. This makes it ideal for creating dynamic, templated documents.</p>
-<h3 id="key-features" tabindex="-1"><a class="header-anchor" href="#key-features">Key Features</a></h3>
+<h3 id="key-features" tabindex="-1">Key Features</h3>
 <ul>
 <li>Simple, predictable syntax with clear boundaries</li>
 <li>Focused on markdown integration and content generation</li>
 <li>Support for variables, file imports, and command execution</li>
 <li>Preserves existing content structure</li>
 </ul>
-<h2 id="basic-example" tabindex="-1"><a class="header-anchor" href="#basic-example">Basic Example</a></h2>
+<h2 id="basic-example" tabindex="-1">Basic Example</h2>
 <pre><code class="language-meld">@text name = &quot;World&quot;
 @path docs = &quot;$PROJECTPATH/docs&quot;
 
@@ -85,7 +85,7 @@ Hello, {{name}}!
 <li>Embeds content from an external file</li>
 <li>Runs a shell command and includes its output</li>
 </ol>
-<h2 id="next-steps" tabindex="-1"><a class="header-anchor" href="#next-steps">Next Steps</a></h2>
+<h2 id="next-steps" tabindex="-1">Next Steps</h2>
 <ul>
 <li>Learn about <a href="./variables.md">variables and interpolation</a></li>
 <li>Explore the <a href="./directives/README.md">directives</a> available in Meld</li>
@@ -99,7 +99,7 @@ Hello, {{name}}!
 
   <footer>
     <div class="container">
-      <p>&copy; 2025 meld - <a href="https://github.com/yourusername/meld">GitHub</a></p>
+      <p>&copy; 2025 meld - <a href="https://github.com/meldorg/meld">GitHub</a></p>
     </div>
   </footer>
 </body>

@@ -17,9 +17,9 @@
       <a href="/" class="logo">meld</a>
       <nav>
         <ul>
-          <li><a href="/" >Home</a></li>
+          <li><a href="/" aria-current=&quot;page&quot;>Home</a></li>
           <li><a href="/docs/introduction/" >Docs</a></li>
-          <li><a href="https://github.com/yourusername/meld">GitHub</a></li>
+          <li><a href="https://github.com/meldorg/meld">GitHub</a></li>
         </ul>
       </nav>
     </div>
@@ -56,14 +56,14 @@
   </aside>
   
   <div class="docs-content">
-    <h1>Meld SDK Usage</h1>
+    <h1 id="meld-sdk-usage" tabindex="-1">Meld SDK Usage</h1>
 <p>The Meld SDK allows you to integrate Meld processing into your JavaScript or TypeScript applications.</p>
-<h2 id="installation" tabindex="-1"><a class="header-anchor" href="#installation">Installation</a></h2>
+<h2 id="installation" tabindex="-1">Installation</h2>
 <pre><code class="language-bash">npm install meld
 </code></pre>
-<h2 id="core-functions" tabindex="-1"><a class="header-anchor" href="#core-functions">Core Functions</a></h2>
+<h2 id="core-functions" tabindex="-1">Core Functions</h2>
 <p>The SDK provides three main functions for working with Meld content:</p>
-<h3 id="parse-meld-content" tabindex="-1"><a class="header-anchor" href="#parse-meld-content">Parse Meld Content</a></h3>
+<h3 id="parse-meld-content" tabindex="-1">Parse Meld Content</h3>
 <p>Parse raw Meld content into an Abstract Syntax Tree (AST):</p>
 <pre><code class="language-typescript">import { parseMeld } from 'meld';
 
@@ -75,7 +75,7 @@ Hello, {{name}}!
 const nodes = parseMeld(content);
 </code></pre>
 <p>The parsed AST contains nodes representing directives and text content, which can be further processed or manipulated.</p>
-<h3 id="interpret-meld-ast" tabindex="-1"><a class="header-anchor" href="#interpret-meld-ast">Interpret Meld AST</a></h3>
+<h3 id="interpret-meld-ast" tabindex="-1">Interpret Meld AST</h3>
 <p>Interpret parsed AST nodes with optional initial state:</p>
 <pre><code class="language-typescript">import { interpretMeld, InterpreterState } from 'meld';
 
@@ -87,7 +87,7 @@ initialState.setText('greeting', 'Hi');
 const finalState = interpretMeld(nodes, initialState);
 </code></pre>
 <p>Interpretation executes directives, resolves variables, and produces a final state containing all defined variables and the processed content.</p>
-<h3 id="run-meld-files" tabindex="-1"><a class="header-anchor" href="#run-meld-files">Run Meld Files</a></h3>
+<h3 id="run-meld-files" tabindex="-1">Run Meld Files</h3>
 <p>Convenience function to read and interpret Meld files in one step:</p>
 <pre><code class="language-typescript">import { runMeld } from 'meld';
 
@@ -106,7 +106,7 @@ console.log(state.getVariables());
 // Use the formatted output
 console.log(output);
 </code></pre>
-<h2 id="working-with-state" tabindex="-1"><a class="header-anchor" href="#working-with-state">Working with State</a></h2>
+<h2 id="working-with-state" tabindex="-1">Working with State</h2>
 <p>The <code>InterpreterState</code> class manages variables, commands, and content during interpretation:</p>
 <pre><code class="language-typescript">import { InterpreterState } from 'meld';
 
@@ -128,7 +128,7 @@ const docsPath = state.getPath('docs');
 // Get all variables
 const variables = state.getVariables();
 </code></pre>
-<h2 id="error-handling" tabindex="-1"><a class="header-anchor" href="#error-handling">Error Handling</a></h2>
+<h2 id="error-handling" tabindex="-1">Error Handling</h2>
 <p>The SDK provides specialized error types for robust error handling:</p>
 <pre><code class="language-typescript">import { 
   parseMeld, 
@@ -156,8 +156,8 @@ try {
   }
 }
 </code></pre>
-<h2 id="advanced-usage" tabindex="-1"><a class="header-anchor" href="#advanced-usage">Advanced Usage</a></h2>
-<h3 id="custom-format-handlers" tabindex="-1"><a class="header-anchor" href="#custom-format-handlers">Custom Format Handlers</a></h3>
+<h2 id="advanced-usage" tabindex="-1">Advanced Usage</h2>
+<h3 id="custom-format-handlers" tabindex="-1">Custom Format Handlers</h3>
 <p>You can register custom format handlers for variable formatting:</p>
 <pre><code class="language-typescript">import { registerFormatHandler } from 'meld';
 
@@ -171,7 +171,7 @@ registerFormatHandler('uppercase', (value) =&gt; {
 // @text greeting = `Hello, {{name&gt;&gt;(uppercase)}}!`
 // Result: &quot;Hello, ALICE!&quot;
 </code></pre>
-<h3 id="file-system-customization" tabindex="-1"><a class="header-anchor" href="#file-system-customization">File System Customization</a></h3>
+<h3 id="file-system-customization" tabindex="-1">File System Customization</h3>
 <p>You can provide custom file system handlers for testing or special environments:</p>
 <pre><code class="language-typescript">import { runMeld, createMemoryFileSystem } from 'meld';
 
@@ -186,7 +186,7 @@ const { state, output } = await runMeld('path/to/file.meld', {
   fileSystem: memfs
 });
 </code></pre>
-<h2 id="integration-example" tabindex="-1"><a class="header-anchor" href="#integration-example">Integration Example</a></h2>
+<h2 id="integration-example" tabindex="-1">Integration Example</h2>
 <p>Here's a complete example of integrating Meld into an application:</p>
 <pre><code class="language-typescript">import { parseMeld, interpretMeld, InterpreterState } from 'meld';
 import * as fs from 'fs';
@@ -229,7 +229,7 @@ try {
 
   <footer>
     <div class="container">
-      <p>&copy; 2025 meld - <a href="https://github.com/yourusername/meld">GitHub</a></p>
+      <p>&copy; 2025 meld - <a href="https://github.com/meldorg/meld">GitHub</a></p>
     </div>
   </footer>
 </body>
