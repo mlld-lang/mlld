@@ -115,35 +115,37 @@ export class TextDirectiveHandler implements IDirectiveHandler {
         );
       }
 
-      // 3. Get identifier and value from directive
-      const { identifier, value } = node.directive;
-
-      // 4. Handle the value based on its type
+      // 3. Get identifier from directive
+      const { identifier } = node.directive;
+      
+      // 4. Handle different types of text directives
       let resolvedValue: string;
-
+      
       // Create a resolution context that includes the parent state to access variables from previous directives
       const resolutionContext = ResolutionContextFactory.forTextDirective(
         context.currentFilePath,
         context.parentState || newState
       );
 
-      // Log the resolution context
-      logger.debug('Created resolution context for text directive', {
-        currentFilePath: resolutionContext.currentFilePath,
-        allowedVariableTypes: resolutionContext.allowedVariableTypes,
-        stateIsPresent: !!resolutionContext.state,
-        parentStateExists: !!context.parentState,
-        value: value
-      });
-
-      // Check for string concatenation first
-      if (this.stringConcatenationHandler.hasConcatenation(value)) {
+      // Handle @text with @run value
+      if (node.directive.source === 'run' && node.directive.run) {
+        // For @run source, execute the command
+        const runDirective = {
+          type: 'Directive',
+          directive: {
+            kind: 'run',
+            command: node.directive.run.command
+          },
+          location: node.location
+        };
+        
         try {
-          resolvedValue = await this.stringConcatenationHandler.resolveConcatenation(value, resolutionContext);
+          // Use the resolution service to resolve the command
+          resolvedValue = await this.resolutionService.resolveInContext(`@run [${node.directive.run.command}]`, resolutionContext);
         } catch (error) {
           if (error instanceof ResolutionError) {
             throw new DirectiveError(
-              'Failed to resolve string concatenation',
+              'Failed to resolve @run command in text directive',
               this.kind,
               DirectiveErrorCode.RESOLUTION_FAILED,
               {
@@ -157,17 +159,17 @@ export class TextDirectiveHandler implements IDirectiveHandler {
           }
           throw error;
         }
-      } else if (this.stringLiteralHandler.isStringLiteral(value)) {
-        // For string literals, strip the quotes and handle escapes
-        resolvedValue = this.stringLiteralHandler.parseLiteral(value);
-      } else {
-        // For values with variables, resolve them using the resolution service
+      }
+      // Handle @text with @embed value
+      else if (node.directive.source === 'embed' && node.directive.embed) {
+        // For @embed source, resolve the embed
         try {
-          resolvedValue = await this.resolutionService.resolveInContext(value, resolutionContext);
+          // Use the resolution service to resolve the embed
+          resolvedValue = await this.resolutionService.resolveInContext(`@embed [${node.directive.embed.path}${node.directive.embed.section ? ' # ' + node.directive.embed.section : ''}]`, resolutionContext);
         } catch (error) {
           if (error instanceof ResolutionError) {
             throw new DirectiveError(
-              'Failed to resolve variables in text directive',
+              'Failed to resolve @embed in text directive',
               this.kind,
               DirectiveErrorCode.RESOLUTION_FAILED,
               {
@@ -180,6 +182,66 @@ export class TextDirectiveHandler implements IDirectiveHandler {
             );
           }
           throw error;
+        }
+      }
+      // Handle regular @text with value
+      else {
+        const { value } = node.directive;
+        
+        // Log the resolution context
+        logger.debug('Created resolution context for text directive', {
+          currentFilePath: resolutionContext.currentFilePath,
+          allowedVariableTypes: resolutionContext.allowedVariableTypes,
+          stateIsPresent: !!resolutionContext.state,
+          parentStateExists: !!context.parentState,
+          value: value
+        });
+
+        // Check for string concatenation first
+        if (this.stringConcatenationHandler.hasConcatenation(value)) {
+          try {
+            resolvedValue = await this.stringConcatenationHandler.resolveConcatenation(value, resolutionContext);
+          } catch (error) {
+            if (error instanceof ResolutionError) {
+              throw new DirectiveError(
+                'Failed to resolve string concatenation',
+                this.kind,
+                DirectiveErrorCode.RESOLUTION_FAILED,
+                {
+                  node,
+                  context,
+                  cause: error,
+                  location: node.location,
+                  severity: DirectiveErrorSeverity[DirectiveErrorCode.RESOLUTION_FAILED]
+                }
+              );
+            }
+            throw error;
+          }
+        } else if (this.stringLiteralHandler.isStringLiteral(value)) {
+          // For string literals, strip the quotes and handle escapes
+          resolvedValue = this.stringLiteralHandler.parseLiteral(value);
+        } else {
+          // For values with variables, resolve them using the resolution service
+          try {
+            resolvedValue = await this.resolutionService.resolveInContext(value, resolutionContext);
+          } catch (error) {
+            if (error instanceof ResolutionError) {
+              throw new DirectiveError(
+                'Failed to resolve variables in text directive',
+                this.kind,
+                DirectiveErrorCode.RESOLUTION_FAILED,
+                {
+                  node,
+                  context,
+                  cause: error,
+                  location: node.location,
+                  severity: DirectiveErrorSeverity[DirectiveErrorCode.RESOLUTION_FAILED]
+                }
+              );
+            }
+            throw error;
+          }
         }
       }
 

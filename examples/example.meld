@@ -20,11 +20,11 @@
 
 ## Documentation
 ### Target UX
-@embed [$./docs/UX.md]
+@embed [$./docs/dev/UX.md]
 ### Architecture
-@embed [$./docs/ARCHITECTURE.md] 
+@embed [$./docs/dev/ARCHITECTURE.md] 
 ### Meld Processing Pipeline
-@embed [$./docs/PIPELINE.md]
+@embed [$./docs/dev/PIPELINE.md]
 
 ## Test Results
 @run [npm test]

@@ -67,6 +67,21 @@ export function validateTextDirective(node: DirectiveNode): void {
     }
   }
   
+  // Check if this is a text directive with @run or @embed source
+  // In this case, the value property might not be set, but source and run/embed properties are
+  if (directive.source === 'run' && directive.run) {
+    // This is a text directive with @run value
+    // No need to validate the value property
+    return;
+  }
+  
+  if (directive.source === 'embed' && directive.embed) {
+    // This is a text directive with @embed value
+    // No need to validate the value property
+    return;
+  }
+  
+  // For all other cases, validate the value property
   // Validate value
   if (directive.value === undefined || directive.value === '') {
     throw new MeldDirectiveError(
@@ -199,6 +214,48 @@ export function validateTextDirective(node: DirectiveNode): void {
           }
         );
       }
+    }
+    // For @embed directive, basic validation
+    else if (directive.value.startsWith('@embed')) {
+      // Extract the part after @embed and check it has a path in [] brackets
+      const valueAfterEmbed = directive.value.substring('@embed'.length).trim();
+      
+      // Check if it has properly formatted path in brackets
+      if (!valueAfterEmbed.startsWith('[') || !valueAfterEmbed.includes(']')) {
+        throw new MeldDirectiveError(
+          'Invalid @embed format in text directive. Must be "@embed [path]"',
+          'text',
+          {
+            location: convertLocation(node.location?.start),
+            code: DirectiveErrorCode.VALIDATION_FAILED,
+            severity: ErrorSeverity.Fatal
+          }
+        );
+      }
+      
+      // No need to validate the content inside the brackets in detail here
+      // The EmbedDirectiveHandler will do that when processing
+    }
+    // For @run directive, basic validation
+    else if (directive.value.startsWith('@run')) {
+      // Extract the part after @run and check it has a command in [] brackets
+      const valueAfterRun = directive.value.substring('@run'.length).trim();
+      
+      // Check if it has properly formatted command in brackets
+      if (!valueAfterRun.startsWith('[') || !valueAfterRun.includes(']')) {
+        throw new MeldDirectiveError(
+          'Invalid @run format in text directive. Must be "@run [command]"',
+          'text',
+          {
+            location: convertLocation(node.location?.start),
+            code: DirectiveErrorCode.VALIDATION_FAILED,
+            severity: ErrorSeverity.Fatal
+          }
+        );
+      }
+      
+      // No need to validate the content inside the brackets in detail here
+      // The RunDirectiveHandler will do that when processing
     }
   } else {
     // It's a literal string value
