@@ -1,6 +1,6 @@
 {
   "name": "meld",
-  "version": "10.1.2",
+  "version": "10.2.1",
   "description": "meld interpreter, cli, and api --- NOTE: If you're looking for the old 'meld' package for aspect oriented programming, you'll want to pin your version to <2.0.0",
   "main": "dist/index.cjs",
   "module": "dist/index.mjs",

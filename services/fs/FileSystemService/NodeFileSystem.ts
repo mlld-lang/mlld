@@ -106,30 +106,30 @@ export class NodeFileSystem implements IFileSystem {
           
           // Create a process directly (without shell) to avoid quote and newline issues
           const { spawn } = require('child_process');
-          const process = spawn(cmd, [args], {
-            cwd: options?.cwd || process.cwd(),
-            // Do NOT use a shell to avoid syntax errors with special characters
-            shell: false,
-          });
-          
           return new Promise((resolve) => {
+            const childProcess = spawn(cmd, [args], {
+              cwd: options?.cwd || process.cwd(),
+              // Do NOT use a shell to avoid syntax errors with special characters
+              shell: false,
+            });
+            
             let stdout = '';
             let stderr = '';
             
-            process.stdout.on('data', (data: Buffer | string) => {
+            childProcess.stdout.on('data', (data: Buffer | string) => {
               const chunk = data.toString();
               stdout += chunk;
               console.log(chunk);
             });
             
-            process.stderr.on('data', (data: Buffer | string) => {
+            childProcess.stderr.on('data', (data: Buffer | string) => {
               const chunk = data.toString();
               stderr += chunk;
               console.error(chunk);
             });
             
-            process.on('close', (code: number | null) => {
-              if (code !== 0) {
+            childProcess.on('close', (code: number | null) => {
+              if (code !== 0 && code !== null) {
                 stderr += `\nCommand exited with code ${code}`;
                 console.error(`Command failed with exit code ${code}`);
               }
@@ -151,20 +151,20 @@ export class NodeFileSystem implements IFileSystem {
 
       // If command contains shell special characters that might cause syntax errors
       // (parentheses, quotes, etc.), properly escape it or use spawn instead of shell exec
-      const hasShellSpecialChars = /[()&|;<>$`\\"]/.test(command);
+      const hasShellSpecialChars = /[()\&\|;\<\>\$\`\\"]/.test(command);
       
       let result;
       if (hasShellSpecialChars) {
         // For commands with special characters, we need to be careful with escaping
         // Extract the command and arguments
-        const parts = command.split(/\s+/);
-        const cmd = parts[0];
-        const args = parts.slice(1);
+        const parts: string[] = command.split(/\s+/);
+        const cmd: string = parts[0] || '';
+        const args: string[] = parts.length > 1 ? parts.slice(1) : [];
         
         // Use spawn directly to avoid shell parsing issues
         const { spawn } = require('child_process');
-        result = await new Promise((resolve) => {
-          const process = spawn(cmd, args, {
+        const result = await new Promise((resolve) => {
+          const childProcess = spawn(cmd, args, {
             cwd: options?.cwd || process.cwd(),
             // Use shell: false to avoid shell parsing issues
             shell: false
@@ -173,20 +173,20 @@ export class NodeFileSystem implements IFileSystem {
           let stdout = '';
           let stderr = '';
           
-          process.stdout.on('data', (data: Buffer | string) => {
+          childProcess.stdout.on('data', (data: Buffer | string) => {
             const chunk = data.toString();
             stdout += chunk;
             console.log(chunk);
           });
           
-          process.stderr.on('data', (data: Buffer | string) => {
+          childProcess.stderr.on('data', (data: Buffer | string) => {
             const chunk = data.toString();
             stderr += chunk;
             console.error(chunk);
           });
           
-          process.on('close', (code: number | null) => {
-            if (code !== 0) {
+          childProcess.on('close', (code: number | null) => {
+            if (code !== 0 && code !== null) {
               stderr += `\nCommand exited with code ${code}`;
               console.error(`Command failed with exit code ${code}`);
             }

@@ -128,3 +128,15 @@ High - This addresses a potential data loss issue and improves user experience.
 ## Related Issues
 
 - None 
+
+## Resolution
+
+✅ Fixed in v10.2.0
+
+### Changes Made:
+- Updated `determineOutputPath` method to always use `.o.{format}` extension for output files (e.g., `.o.md` or `.o.xml`)
+- Simplified the `confirmOverwrite` method to handle file conflicts consistently
+- Implemented the `findAvailableIncrementalFilename` method to generate incremental filenames (e.g., `file-1.o.md`, `file-2.o.md`) when a file exists and the user declines to overwrite it
+- Fixed a bug in file path handling by using the Node.js `extname` function for proper extension detection
+
+The fix ensures source files are never accidentally overwritten and provides a consistent and predictable naming convention for output files. 

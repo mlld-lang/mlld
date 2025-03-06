@@ -90,8 +90,11 @@ export async function runMeld(
       ? resultState.getTransformedNodes()
       : ast;
     
+    // Make sure format is properly set (normalize 'md' to 'markdown', etc.)
+    const outputFormat = normalizeFormat(mergedOptions.format || 'markdown');
+    
     // Convert to desired format
-    let converted = await services.output.convert(nodesToProcess, resultState, mergedOptions.format || 'markdown');
+    let converted = await services.output.convert(nodesToProcess, resultState, outputFormat);
     
     // Post-process the output in transformation mode
     if (resultState.isTransformationEnabled()) {
@@ -115,6 +118,28 @@ export async function runMeld(
     // For non-Error objects, convert to string
     throw new Error(`Error processing meld content: ${String(error)}`);
   }
+}
+
+/**
+ * Normalize format string to supported format
+ */
+function normalizeFormat(format: string): 'markdown' | 'xml' {
+  // Normalize format aliases
+  if (format === 'md') {
+    return 'markdown';
+  }
+  
+  if (format === 'llmxml') {
+    return 'xml';
+  }
+  
+  // Ensure 'xml' is properly handled
+  if (format === 'xml') {
+    return 'xml';
+  }
+  
+  // Default to markdown for unsupported formats
+  return 'markdown';
 }
 
 // Default export for ease of use

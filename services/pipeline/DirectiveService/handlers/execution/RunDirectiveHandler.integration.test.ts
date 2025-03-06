@@ -4,7 +4,7 @@ import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js
 // This test focuses directly on the NodeFileSystem executeCommand implementation
 // to verify the fixes for shell command syntax errors and multi-line content handling
 describe('NodeFileSystem Shell Command Fixes Integration', () => {
-  let originalExecuteCommand: any;
+  let originalExecuteCommand: typeof NodeFileSystem.prototype.executeCommand;
   
   beforeEach(() => {
     // Store original executeCommand method to restore later

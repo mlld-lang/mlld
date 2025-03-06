@@ -57,7 +57,7 @@ describe('NodeFileSystem', () => {
       // Create a temporary function to check if executeCommand is properly handling
       // parentheses by testing if the command is routed to spawn instead of exec
       let wasSpawnCalled = false;
-      let execCommand = '';
+      let execCommand: string = '';
       
       // Override the executeCommand function to check what would happen without executing
       NodeFileSystem.prototype.executeCommand = async function(command: string, options?: { cwd?: string }) {

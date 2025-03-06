@@ -5,6 +5,20 @@ All notable changes to the Meld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.2.1] - 2025-03-06
+
+### Added
+- Improved output filename handling with consistent `.o.{format}` extension pattern
+- Added automatic incremental filename generation when output file exists and user declines overwrite
+- Enhanced XML output format with direct integration with the llmxml library
+
+### Fixed
+- Fixed XML output format not generating proper XML tags via CLI and API
+- Fixed potential source file overwriting issues with improved naming conventions
+- Simplified XML conversion to directly leverage the llmxml library without unnecessary fallbacks
+- Improved filename conflict resolution with user prompts and incremental naming
+- Added tests to verify XML output format works correctly, especially with JSON content
+
 ## [10.1.2] - 2025-03-06
 
 ### Fixed
