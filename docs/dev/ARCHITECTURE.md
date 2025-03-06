@@ -1,11 +1,5 @@
 # Meld Architecture
 
-## IMPORTANT
-
-Meld has an incredibly robust architecture. 
-
-KEY PRINCIPLE: If something ideally _should_ be abstracted out in a clean way in an ideal case, it likely _already is_. So don't assume it's not and reimplement work and add complexity that might have already be handled by another part of the codebase.
-
 ## INTRODUCTION
 
 Meld is a specialized, directive-based scripting language designed for embedding small "@directives" inside an otherwise plain text (e.g., Markdown-like) document. The code in this repository implements:
