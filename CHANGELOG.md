@@ -5,7 +5,14 @@ All notable changes to the Meld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [10.2.1] - 2025-03-06
+## [10.2.3] - 2025-03-06
+
+### Fixed
+- Fixed CLI output filename handling to consistently use `.o.{format}` extension pattern
+- Fixed XML format handling to properly identify and use XML format instead of defaulting to markdown
+- Updated filename generation logic to prevent source file overwriting issues
+
+## [10.2.2] - 2025-03-06
 
 ### Added
 - Improved output filename handling with consistent `.o.{format}` extension pattern

@@ -64,7 +64,7 @@ function normalizeFormat(format?: string): 'markdown' | 'xml' {
     case 'markdown':
       return 'markdown';
     case 'xml':
-      return 'markdown'; // Default to markdown for XML format
+      return 'xml'; // Return 'xml' for XML format
     default:
       return 'markdown';
   }
@@ -545,10 +545,16 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
       let outputPath = cliOptions.output;
       
       if (!outputPath) {
-        // If no output path specified, use input path with new extension
-        const inputExt = '.meld';
+        // If no output path specified, use input path with .o.{format} extension pattern
+        const inputPath = cliOptions.input;
+        const inputExt = path.extname(inputPath);
         const outputExt = getOutputExtension(normalizeFormat(cliOptions.format));
-        outputPath = cliOptions.input.replace(new RegExp(`${inputExt}$`), outputExt);
+        
+        // Extract the base filename without extension
+        const basePath = inputPath.substring(0, inputPath.length - inputExt.length);
+        
+        // Always append .o.{format} for default behavior
+        outputPath = `${basePath}.o${outputExt}`;
       } else if (!outputPath.includes('.')) {
         // If output path has no extension, add default extension
         outputPath += getOutputExtension(normalizeFormat(cliOptions.format));
