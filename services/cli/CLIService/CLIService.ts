@@ -12,13 +12,27 @@ import { version } from '@core/version.js';
 import { createInterface } from 'readline';
 import { dirname, basename, extname } from 'path';
 import { join } from 'path';
-import { IParserService } from '@services/pipeline/ParserService/IParserService.js';
+import { IParserService } from '@services/parser/ParserService/IParserService.js';
 import { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
-import { IOutputService } from '@services/pipeline/OutputService/IOutputService.js';
+import { IOutputService } from '@services/output/OutputService/IOutputService.js';
 import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import { IPathService } from '@services/fs/PathService/IPathService.js';
 import { IStateService } from '@services/state/StateService/IStateService.js';
-import { ProcessOptions } from '@core/types/index.js';
+import { ProcessOptions } from '@api/types.js';
+import readline from 'readline';
+
+/**
+ * Interface for a service that handles user prompts
+ */
+export interface IPromptService {
+  /**
+   * Gets text input from the user
+   * @param prompt The prompt to display to the user
+   * @param defaultValue Optional default value to use if the user presses Enter without input
+   * @returns The user's input
+   */
+  getText(prompt: string, defaultValue?: string): Promise<string>;
+}
 
 export interface CLIOptions {
   input?: string;
@@ -38,14 +52,52 @@ export interface ICLIService {
 }
 
 export class CLIService implements ICLIService {
+  private parserService: IParserService;
+  private interpreterService: IInterpreterService;
+  private outputService: IOutputService;
+  private fileSystemService: IFileSystemService;
+  private pathService: IPathService;
+  private stateService: IStateService;
+  private promptService: IPromptService;
+  private flags: Record<string, string | boolean | undefined> = {};
+  private cmdOptions: ProcessOptions = {
+    output: ''
+  };
+
   constructor(
     private parserService: IParserService,
     private interpreterService: IInterpreterService,
     private outputService: IOutputService,
     private fileSystemService: IFileSystemService,
     private pathService: IPathService,
-    private stateService: IStateService
-  ) {}
+    private stateService: IStateService,
+    promptService?: IPromptService
+  ) {
+    this.parserService = parserService;
+    this.interpreterService = interpreterService;
+    this.outputService = outputService;
+    this.fileSystemService = fileSystemService;
+    this.pathService = pathService;
+    this.stateService = stateService;
+    
+    // Use the provided prompt service or create a default one
+    this.promptService = promptService || {
+      getText: async (prompt: string, defaultValue?: string): Promise<string> => {
+        return new Promise((resolve) => {
+          const rl = readline.createInterface({
+            input: process.stdin,
+            output: process.stdout
+          });
+          
+          rl.question(prompt, (answer) => {
+            rl.close();
+            // If the user just pressed Enter and we have a default value, use that
+            resolve(answer.trim() || defaultValue || '');
+          });
+        });
+      }
+    };
+  }
 
   private normalizeFormat(format: string): 'markdown' | 'xml' {
     format = format.toLowerCase();
@@ -160,22 +212,56 @@ export class CLIService implements ICLIService {
     };
   }
 
-  private async confirmOverwrite(path: string): Promise<boolean> {
-    if (!await this.fileSystemService.exists(path)) {
-      return true;
+  /**
+   * Confirms whether a file should be overwritten
+   */
+  async confirmOverwrite(outputPath: string): Promise<{ outputPath: string; shouldOverwrite: boolean }> {
+    this.debug(`confirmOverwrite: ${outputPath}`);
+    
+    // Check if file exists
+    const exists = await this.fileSystemService.exists(outputPath);
+    if (!exists) {
+      this.debug(`confirmOverwrite: file does not exist, no need to overwrite`);
+      return { outputPath, shouldOverwrite: true };
     }
 
-    const rl = createInterface({
-      input: process.stdin,
-      output: process.stdout
-    });
-
-    return new Promise((resolve) => {
-      rl.question(`File ${path} already exists. Overwrite? [Y/n] `, (answer) => {
-        rl.close();
-        resolve(answer.toLowerCase() !== 'n');
-      });
-    });
+    // For .md files, auto-redirect to .o.md unless -o is specified
+    if (outputPath.endsWith('.md') && !this.cmdOptions.output) {
+      const newOutputPath = outputPath.replace(/\.md$/, '.o.md');
+      this.debug(`confirmOverwrite: auto-redirecting to ${newOutputPath}`);
+      
+      // Check if the new path exists
+      if (!(await this.fileSystemService.exists(newOutputPath))) {
+        return { outputPath: newOutputPath, shouldOverwrite: true };
+      }
+    }
+    
+    // If not auto-redirect or output is specified, prompt for overwrite
+    const response = await this.promptService.getText(
+      `File ${outputPath} already exists. Overwrite? [Y/n] `, 
+      'y'
+    );
+    
+    this.debug(`confirmOverwrite: user response: ${response}`);
+    
+    if (response.toLowerCase() === 'n') {
+      this.debug('confirmOverwrite: user declined overwrite');
+      
+      // Generate incremental filename (file-1.md, file-2.md, etc.)
+      const ext = this.pathService.extname(outputPath);
+      const basePath = outputPath.slice(0, -ext.length);
+      let counter = 1;
+      let newPath = `${basePath}-${counter}${ext}`;
+      
+      while (this.fileSystemService.existsSync(newPath)) {
+        counter++;
+        newPath = `${basePath}-${counter}${ext}`;
+      }
+      
+      return { outputPath: newPath, shouldOverwrite: true };
+    }
+    
+    return { outputPath, shouldOverwrite: true };
   }
 
   /**
@@ -292,9 +378,15 @@ export class CLIService implements ICLIService {
       } else {
         // Check if output file exists and prompt for overwrite if needed
         if (await this.fileSystemService.exists(outputPath) && !options.force) {
-          const shouldOverwrite = await this.confirmOverwrite(outputPath);
+          const { outputPath: confirmedOutputPath, shouldOverwrite } = await this.confirmOverwrite(outputPath);
           if (!shouldOverwrite) {
-            logger.info('Operation cancelled by user');
+            // Instead of cancelling, use an incremental filename
+            const alternateOutputPath = await this.findAvailableIncrementalFilename(confirmedOutputPath);
+            logger.info('Using alternative filename instead of overwriting', { path: alternateOutputPath });
+            
+            // Write to the alternate file
+            await this.fileSystemService.writeFile(alternateOutputPath, outputContent);
+            console.log(`Output written to ${alternateOutputPath}`);
             return;
           }
         }
@@ -345,8 +437,24 @@ export class CLIService implements ICLIService {
     
     // Check if the input path ends with .meld extension
     if (inputPath.endsWith(inputExt)) {
+      // Default behavior: replace .meld with the output extension
       const outputPath = inputPath.substring(0, inputPath.length - inputExt.length) + outputExt;
-      return this.pathService.resolvePath(outputPath);
+      
+      // For .md output that would overwrite input, use .o.md extension by default
+      // This specifically handles the case where input file might be .md and output would also be .md
+      const resolvedInputPath = await this.pathService.resolvePath(inputPath);
+      const resolvedOutputPath = await this.pathService.resolvePath(outputPath);
+      
+      if (outputExt === '.md' && 
+          await this.fileSystemService.exists(resolvedOutputPath) && 
+          resolvedOutputPath === resolvedInputPath) {
+        // Add .o.md suffix to avoid overwriting
+        const modifiedPath = resolvedOutputPath.replace(outputExt, '.o.md');
+        logger.info(`Preventing overwrite of input file, using: ${modifiedPath}`);
+        return modifiedPath;
+      }
+      
+      return resolvedOutputPath;
     } else {
       // If input doesn't end with .meld, just append the output extension
       const outputPath = inputPath + outputExt;
@@ -370,5 +478,15 @@ Options:
   -h, --help             Display this help message
   -V, --version          Display version information
     `);
+  }
+
+  /**
+   * Log debug messages if verbose mode is enabled
+   * @param message Message to log
+   */
+  private debug(message: string): void {
+    if (this.cmdOptions.verbose) {
+      console.log(`DEBUG: ${message}`);
+    }
   }
 } 

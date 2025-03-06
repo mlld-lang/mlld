@@ -20,6 +20,7 @@ import { debugResolutionCommand } from './commands/debug-resolution.js';
 import { debugContextCommand } from './commands/debug-context.js';
 import { debugTransformCommand } from './commands/debug-transform.js';
 import chalk from 'chalk';
+import { existsSync } from 'fs';
 
 // CLI Options interface
 export interface CLIOptions {
@@ -322,23 +323,129 @@ Options:
 /**
  * Prompt for file overwrite confirmation
  */
-async function confirmOverwrite(filePath: string): Promise<boolean> {
+async function confirmOverwrite(filePath: string): Promise<{ outputPath: string; shouldOverwrite: boolean }> {
   // In test mode, always return true to allow overwriting
   if (process.env.NODE_ENV === 'test') {
-    return true;
+    return { outputPath: filePath, shouldOverwrite: true };
   }
   
-  const rl = createInterface({
-    input: process.stdin,
-    output: process.stdout
-  });
-
-  return new Promise((resolve) => {
-    rl.question(`File ${filePath} already exists. Overwrite? [Y/n] `, (answer) => {
-      rl.close();
-      resolve(answer.toLowerCase() !== 'n');
+  // Get the current CLI options from the outer scope
+  const cliOptions = getCurrentCLIOptions();
+  
+  // For .md files, auto-redirect to .o.md unless explicitly set with -o
+  if (filePath.endsWith(".md") && !cliOptions.output) {
+    console.log("Auto-redirecting .md file to prevent overwrite");
+    const baseName = filePath.slice(0, -3); // Remove .md extension
+    const newOutputPath = `${baseName}.o.md`;
+    if (!(await fs.access(newOutputPath).then(() => true).catch(() => false))) {
+      return { outputPath: newOutputPath, shouldOverwrite: true };
+    }
+  }
+  
+  // Check if we can use raw mode (might not be available in all environments)
+  const canUseRawMode = process.stdin.isTTY && typeof process.stdin.setRawMode === 'function';
+  
+  // If raw mode isn't available, fall back to readline
+  if (!canUseRawMode) {
+    const rl = createInterface({
+      input: process.stdin,
+      output: process.stdout
     });
+
+    return new Promise((resolve) => {
+      rl.question(`File ${filePath} already exists. Overwrite? [Y/n] `, (answer) => {
+        rl.close();
+        
+        // If user doesn't want to overwrite, find an incremental filename
+        if (answer.toLowerCase() === 'n') {
+          const newPath = findAvailableIncrementalFilename(filePath);
+          console.log(`Using alternative filename: ${newPath}`);
+          resolve({ outputPath: newPath, shouldOverwrite: true });
+        } else {
+          resolve({ outputPath: filePath, shouldOverwrite: true });
+        }
+      });
+    });
+  }
+  
+  // Use raw mode to detect a single keypress
+  process.stdin.setRawMode(true);
+  process.stdin.resume();
+  process.stdin.setEncoding('utf8');
+  
+  process.stdout.write(`File ${filePath} already exists. Overwrite? [Y/n] `);
+  
+  return new Promise((resolve) => {
+    const onKeypress = (key: string) => {
+      // Ctrl-C
+      if (key === '\u0003') {
+        process.stdout.write('\n');
+        process.exit(0);
+      }
+      
+      // Convert to lowercase for comparison
+      const keyLower = key.toLowerCase();
+      
+      // Only process y, n, or enter (which is '\r' in raw mode)
+      if (keyLower === 'y' || keyLower === 'n' || key === '\r') {
+        // Echo the key (since raw mode doesn't show keystrokes)
+        process.stdout.write(key === '\r' ? 'y\n' : `${key}\n`);
+        
+        // Restore the terminal to cooked mode
+        process.stdin.setRawMode(false);
+        process.stdin.pause();
+        process.stdin.removeListener('data', onKeypress);
+        
+        // If user doesn't want to overwrite or pressed Enter (default to Y), find an incremental filename
+        if (keyLower === 'n') {
+          const newPath = findAvailableIncrementalFilename(filePath);
+          console.log(`Using alternative filename: ${newPath}`);
+          resolve({ outputPath: newPath, shouldOverwrite: true });
+        } else {
+          resolve({ outputPath: filePath, shouldOverwrite: true });
+        }
+      }
+    };
+    
+    // Listen for keypresses
+    process.stdin.on('data', onKeypress);
   });
+}
+
+// Store the current CLI options for access by other functions
+let currentCLIOptions: CLIOptions | null = null;
+
+function getCurrentCLIOptions(): CLIOptions {
+  if (!currentCLIOptions) {
+    throw new Error('CLI options not initialized');
+  }
+  return currentCLIOptions;
+}
+
+function setCurrentCLIOptions(options: CLIOptions): void {
+  currentCLIOptions = options;
+}
+
+/**
+ * Finds an available filename by appending an incremental number
+ * If file.md exists, tries file-1.md, file-2.md, etc.
+ */
+function findAvailableIncrementalFilename(filePath: string): string {
+  // Extract the base name and extension
+  const lastDotIndex = filePath.lastIndexOf('.');
+  const baseName = lastDotIndex !== -1 ? filePath.slice(0, lastDotIndex) : filePath;
+  const extension = lastDotIndex !== -1 ? filePath.slice(lastDotIndex) : '';
+  
+  // Try incremental filenames until we find one that doesn't exist
+  let counter = 1;
+  let newPath = `${baseName}-${counter}${extension}`;
+  
+  while (existsSync(newPath)) {
+    counter++;
+    newPath = `${baseName}-${counter}${extension}`;
+  }
+  
+  return newPath;
 }
 
 /**
@@ -455,11 +562,13 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
           // Check if file exists first
           const fileExists = await fs.exists(outputPath);
           if (fileExists) {
-            const shouldOverwrite = await confirmOverwrite(outputPath);
+            const { outputPath: confirmedPath, shouldOverwrite } = await confirmOverwrite(outputPath);
             if (!shouldOverwrite) {
               logger.info('Operation cancelled by user');
               return;
             }
+            // Update the output path with the confirmed path
+            outputPath = confirmedPath;
           }
           await fs.writeFile(outputPath, result);
           logger.info('Successfully wrote output file using custom filesystem', { path: outputPath });
@@ -470,11 +579,13 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
       // Standard file system operations
       const fileExists = await fs.access(outputPath).then(() => true).catch(() => false);
       if (fileExists) {
-        const shouldOverwrite = await confirmOverwrite(outputPath);
+        const { outputPath: confirmedPath, shouldOverwrite } = await confirmOverwrite(outputPath);
         if (!shouldOverwrite) {
           logger.info('Operation cancelled by user');
           return;
         }
+        // Update the output path with the confirmed path
+        outputPath = confirmedPath;
       }
       
       await fs.writeFile(outputPath, result);
@@ -636,24 +747,16 @@ export async function main(fsAdapter?: any): Promise<void> {
   // Define options outside try block so it's accessible in catch block
   let options: CLIOptions = {
     input: '',
-    format: 'markdown',
-    strict: false
   };
   
   try {
-    // Check for command before parsing
-    let command: string | undefined;
-    if (args.length > 0 && !args[0].startsWith('-') && 
-        (args[0] === 'init' || 
-         args[0] === 'debug-resolution' || 
-         args[0] === 'debug-context' || 
-         args[0] === 'debug-transform')) {
-      command = args[0];
-    }
-    
+    // Parse command-line arguments
     options = parseArgs(args);
-
-    // Handle version flag first, before any logging
+    
+    // Store the current CLI options for access by other functions
+    setCurrentCLIOptions(options);
+    
+    // Handle version flag
     if (options.version) {
       console.log(`meld version ${version}`);
       return;
@@ -661,18 +764,18 @@ export async function main(fsAdapter?: any): Promise<void> {
 
     // Handle help flag
     if (options.help) {
-      displayHelp(command);
+      displayHelp(args[0]);
       return;
     }
     
     // Handle init command
-    if (command === 'init' || options.input === 'init') {
+    if (options.input === 'init') {
       await initCommand();
       return;
     }
     
     // Handle debug-resolution command
-    if (command === 'debug-resolution' || options.debugResolution) {
+    if (options.debugResolution) {
       try {
         await debugResolutionCommand({
           filePath: options.input,
@@ -688,7 +791,7 @@ export async function main(fsAdapter?: any): Promise<void> {
     }
 
     // Handle debug-context command
-    if (command === 'debug-context' || options.debugContext) {
+    if (options.debugContext) {
       await debugContextCommand({
         filePath: options.input,
         variableName: options.variableName,
@@ -704,7 +807,7 @@ export async function main(fsAdapter?: any): Promise<void> {
     }
 
     // Handle debug-transform command
-    if (command === 'debug-transform' || options.debugTransform) {
+    if (options.debugTransform) {
       await debugTransformCommand({
         filePath: options.input,
         directiveType: options.directiveType,

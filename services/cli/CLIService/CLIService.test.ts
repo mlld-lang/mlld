@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { CLIService } from './CLIService.js';
+import { CLIService, IPromptService } from './CLIService.js';
 import { TestContext } from '@tests/utils/index.js';
 import { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 import { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
@@ -21,6 +21,11 @@ vi.mock('@api/index.js', () => ({
 
 // Mock console.log
 const consoleLog = vi.spyOn(console, 'log');
+
+// Create a mock prompt service
+const mockPromptService: IPromptService = {
+  getText: vi.fn()
+};
 
 const defaultOptions = {
   input: 'test.meld',
@@ -82,6 +87,10 @@ describe('CLIService', () => {
   let mockLogger: Logger;
 
   beforeEach(async () => {
+    // Reset the mock state
+    vi.clearAllMocks();
+    vi.mocked(mockPromptService.getText).mockReset();
+    
     context = new TestContext();
     await context.initialize();
 
@@ -159,7 +168,8 @@ describe('CLIService', () => {
       mockOutputService,
       mockFileSystemService,
       mockPathService,
-      mockStateService
+      mockStateService,
+      mockPromptService
     );
 
     // Set up test files
@@ -319,44 +329,14 @@ describe('CLIService', () => {
       await mockFileSystemService.writeFile('test.meld', 'input content');
       await mockFileSystemService.writeFile('test.xml', 'existing content');
       
-      // Mock the readline interface properly
-      const mockQuestion = vi.fn().mockImplementation((_, cb) => cb('y'));
-      vi.mocked(readline.createInterface).mockReturnValueOnce({
-        question: mockQuestion,
-        close: vi.fn(),
-        // Add required properties to satisfy the Interface type
-        terminal: null,
-        line: '',
-        cursor: 0,
-        getPrompt: vi.fn(),
-        setPrompt: vi.fn(),
-        prompt: vi.fn(),
-        write: vi.fn(),
-        pause: vi.fn(),
-        resume: vi.fn(),
-        on: vi.fn(),
-        once: vi.fn(),
-        off: vi.fn(),
-        removeListener: vi.fn(),
-        addListener: vi.fn(),
-        emit: vi.fn(),
-        eventNames: vi.fn(),
-        getMaxListeners: vi.fn(),
-        listenerCount: vi.fn(),
-        listeners: vi.fn(),
-        prependListener: vi.fn(),
-        prependOnceListener: vi.fn(),
-        rawListeners: vi.fn(),
-        removeAllListeners: vi.fn(),
-        setMaxListeners: vi.fn()
-      } as unknown as readline.Interface);
-
+      // Mock the prompt service to return 'y'
+      vi.mocked(mockPromptService.getText).mockResolvedValueOnce('y');
+      
       await service.run(args);
       
-      expect(readline.createInterface).toHaveBeenCalled();
-      expect(mockQuestion).toHaveBeenCalledWith(
+      expect(mockPromptService.getText).toHaveBeenCalledWith(
         'File test.xml already exists. Overwrite? [Y/n] ',
-        expect.any(Function)
+        'y'
       );
     });
 
