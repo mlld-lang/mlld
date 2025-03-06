@@ -73,11 +73,11 @@ Data structures can contain variable references in both keys and values:
 
 ## Referencing Data Variables
 
-Data variables are referenced using the `#{identifier}` syntax:
+Data variables are referenced using the `{{identifier}}` syntax:
 
 ```meld
 @data user = {{ name: "Alice", id: 123 }}
-@text greeting = `Hello, #{user.name}!`
+@text greeting = `Hello, {{user.name}}!`
 ```
 
 You can access nested fields using dot notation:
@@ -89,8 +89,20 @@ You can access nested fields using dot notation:
     version: "1.0.0"
   }
 }}
-@text appInfo = `App: #{config.app.name} v#{config.app.version}`
+@text appInfo = `App: {{config.app.name}} v{{config.app.version}}`
 ```
+
+### Accessing Array Elements
+
+Use dot notation to access array elements:
+
+```meld
+@data fruits = ["apple", "banana", "cherry"]
+@text favorite = `My favorite fruit is {{fruits.0}}`
+@text list = `Items: {{fruits.0}}, {{fruits.1}}, and {{fruits.2}}`
+```
+
+Note: Currently, only dot notation is supported for array access. Bracket notation (`fruits[0]`) is not supported.
 
 ## JSON String Format
 

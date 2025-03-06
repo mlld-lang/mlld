@@ -77,7 +77,7 @@ $PROJECTPATH or $.   # Special path variable for project root
 
 ### Text Variables
 
-Syntax: `{identifier}}`
+Syntax: `{{identifier}}`
 ```meld
 {{textvar}}                    # Text variable reference
 {{textvar>>(format)}}         # Formatted text variable
@@ -85,11 +85,12 @@ Syntax: `{identifier}}`
 
 ### Data Variables
 
-Syntax: `#{identifier}`
+Syntax: `{{identifier}}`
 ```meld
-#{datavar}                    # Data variable reference
-#{datavar.field}             # Data variable field access
-#{datavar.field>>(format)}   # Formatted data field access
+{{datavar}}                    # Data variable reference
+{{datavar.field}}             # Data variable field access
+{{datavar.0}}                 # Array element access (use dot notation)
+{{datavar.field>>(format)}}   # Formatted data field access
 ```
 
 ## Code Fences
@@ -183,8 +184,8 @@ Uses the `++` operator with required spaces on both sides:
 Delimited by backticks (`):
 ```meld
 `Hello {{name}}!`                        # Text variable
-`Config: #{config.name}`                # Data variable with field
-`{{greeting}}, your ID is #{user.id}`    # Mixed variables
+`Config: {{config.name}}`                # Data variable with field
+`{{greeting}}, your ID is {{user.id}}`    # Mixed variables
 ```
 
 Multi-line template literals:
@@ -193,7 +194,7 @@ Multi-line template literals:
   System: {{role}}
   
   Context:
-  #{context.data}
+  {{context.data}}
   
   User: {{username}}
 `]]

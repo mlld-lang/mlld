@@ -67,6 +67,18 @@ Example:
 @text greeting = `Hello, {{user.name}}! Your ID is {{user.id}}.`
 ```
 
+### Array Access
+
+When working with arrays, use dot notation to access array elements by index:
+
+```meld
+@data items = ["apple", "banana", "cherry"]
+@text first = `First item: {{items.0}}`
+@text second = `Second item: {{items.1}}`
+```
+
+Note: Currently, only dot notation is supported for array access. Bracket notation (`items[0]`) is not supported.
+
 ## Variable Type Conversion
 
 Variables can be converted between types automatically in many contexts:
