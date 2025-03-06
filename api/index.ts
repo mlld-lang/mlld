@@ -21,6 +21,16 @@ export * from '@core/errors/MeldInterpreterError.js';
 export * from '@core/errors/MeldParseError.js';
 import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
 
+// Import simple API helpers
+import { runMeld as runMeldImpl, MemoryFileSystem } from './run-meld.js';
+
+// Re-export runMeld as both named and default export for ease of use
+export { runMeld } from './run-meld.js';
+export { MemoryFileSystem } from './run-meld.js';
+
+// Default export of runMeld for simplicity
+export default runMeldImpl;
+
 // Import service classes
 import { InterpreterService } from '@services/pipeline/InterpreterService/InterpreterService.js';
 import { ParserService } from '@services/pipeline/ParserService/ParserService.js';
@@ -68,7 +78,7 @@ type RequiredServices = {
   debug?: StateDebuggerService;
 };
 
-function createDefaultServices(options: ProcessOptions): Services & RequiredServices {
+export function createDefaultServices(options: ProcessOptions): Services & RequiredServices {
   // 1. FileSystemService (base dependency)
   const pathOps = new PathOperationsService();
   // If options.fs is provided, use it; otherwise create a new NodeFileSystem

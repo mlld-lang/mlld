@@ -44,6 +44,33 @@ meld input.mld --stdout
 - `.mld` is standard `.mld.md` is another option.
 - `.md`: Meld can just interpret regular old markdown files with added meld syntax, too.
 
+## JavaScript API
+
+Meld has a fairly extensive js API which give access to its AST, interpreted variables, etc., but it's not documented yet. However, here's meld's simple API for processing content directly:
+
+```javascript
+// ES Module import
+import runMeld from 'meld';
+
+// Process meld content
+const meldContent = `
+  @text greeting = "Hello"
+  @text name = "World"
+  
+  ${greeting}, ${name}!
+`;
+
+// Simple usage
+const result = await runMeld(meldContent);
+console.log(result); // "Hello, World!"
+
+// With options
+const xmlResult = await runMeld(meldContent, {
+  format: 'xml',
+  transformation: true
+});
+```
+
 ## Writing Meld Files
 
 Meld is a simple scripting language designed to work within markdown-like documents. It processes special `@directive` lines while preserving all other content as-is.
