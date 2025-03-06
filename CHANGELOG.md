@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Simplified XML conversion to directly leverage the llmxml library without unnecessary fallbacks
 - Improved filename conflict resolution with user prompts and incremental naming
 - Added tests to verify XML output format works correctly, especially with JSON content
+- Fixed TypeScript build error by properly awaiting async llmxml.toXML call
 
 ## [10.1.2] - 2025-03-06
 

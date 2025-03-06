@@ -311,7 +311,7 @@ export class OutputService implements IOutputService {
       });
       
       // Convert markdown to XML using llmxml
-      const xmlResult = llmxml.toXML(markdown);
+      const xmlResult = await llmxml.toXML(markdown);
       logger.debug('Successfully converted to XML', { xmlLength: xmlResult.length });
       return xmlResult;
     } catch (error) {

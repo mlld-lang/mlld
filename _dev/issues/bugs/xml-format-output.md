@@ -105,7 +105,7 @@ High - This is a core functionality issue affecting a main feature of the produc
 
 ## Resolution
 
-✅ Fixed in v10.2.0
+✅ Fixed in v10.2.1
 
 ### Changes Made:
 - Simplified the `convertToXML` method in `OutputService.ts` to directly use the llmxml library without complex fallbacks
@@ -113,6 +113,7 @@ High - This is a core functionality issue affecting a main feature of the produc
 - Improved error handling in the XML conversion process
 - Added tests to verify XML output format works correctly, especially with JSON content
 - Ensured compatibility with llmxml's XML format
+- Fixed TypeScript build error by properly awaiting the async `llmxml.toXML()` call
 
 The fix ensures that XML output is properly generated both via the CLI (`--format xml`) and the API (`{ format: 'xml' }`), with proper XML tags. The implementation now relies directly on the llmxml library to produce the XML output, with any formatting issues to be addressed in that library directly rather than through fallback mechanisms in Meld.
 
