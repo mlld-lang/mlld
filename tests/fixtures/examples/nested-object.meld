@@ -1,0 +1,15 @@
+@data nested = {
+  "users": [
+    { 
+      "name": "Alice", 
+      "hobbies": ["reading", "hiking"] 
+    },
+    { 
+      "name": "Bob", 
+      "hobbies": ["gaming", "cooking"] 
+    }
+  ]
+}
+
+Name: {{nested.users.0.name}}
+Hobby: {{nested.users.0.hobbies.0}} 
