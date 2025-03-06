@@ -107,7 +107,7 @@ export class CLIService implements ICLIService {
         return 'markdown';
       case 'xml':
       default:
-        throw new Error(`Invalid format: ${format}. Must be 'markdown', 'md', or 'xml'`);
+        return 'markdown';
     }
   }
 
@@ -336,6 +336,12 @@ export class CLIService implements ICLIService {
       version,
       options
     });
+    
+    // Store the options for later use
+    this.cmdOptions = {
+      ...this.cmdOptions,
+      output: options.output
+    };
 
     try {
       // Check if input file exists
@@ -365,7 +371,7 @@ export class CLIService implements ICLIService {
       const outputContent = await this.outputService.convert(
         ast, // Pass the AST as the first parameter
         this.stateService, // Pass the state service as the second parameter
-        options.format || 'xml', // Pass the format as the third parameter
+        options.format || 'md', // Pass the format as the third parameter
         { // Pass the options as the fourth parameter
           preserveMarkdown: options.format === 'markdown'
         }
@@ -432,12 +438,12 @@ export class CLIService implements ICLIService {
     }
     
     const inputPath = options.input;
-    const inputExt = '.meld';
-    const outputExt = this.getOutputExtension(options.format || 'xml');
+    const inputExt = '.mld';
+    const outputExt = this.getOutputExtension(options.format || 'md');
     
-    // Check if the input path ends with .meld extension
+    // Check if the input path ends with .mld extension
     if (inputPath.endsWith(inputExt)) {
-      // Default behavior: replace .meld with the output extension
+      // Default behavior: replace .mld with the output extension
       const outputPath = inputPath.substring(0, inputPath.length - inputExt.length) + outputExt;
       
       // For .md output that would overwrite input, use .o.md extension by default
@@ -456,7 +462,7 @@ export class CLIService implements ICLIService {
       
       return resolvedOutputPath;
     } else {
-      // If input doesn't end with .meld, just append the output extension
+      // If input doesn't end with .mld, just append the output extension
       const outputPath = inputPath + outputExt;
       return this.pathService.resolvePath(outputPath);
     }

@@ -17,7 +17,7 @@ export class ProjectPathResolver {
     'Gemfile',
     'composer.json',
     'go.mod',
-    '.meld'
+    '.mld'
   ];
 
   /**

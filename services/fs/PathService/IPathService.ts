@@ -64,11 +64,11 @@ export interface PathOptions {
  * 
  * 1. Simple paths (no slashes):
  *    - Allowed only when path contains no slashes
- *    - Example: file.meld
+ *    - Example: file.mld
  * 
  * 2. Paths with slashes:
  *    - Must start with $. (alias for $PROJECTPATH) or $~ (alias for $HOMEPATH)
- *    - Example: $./path/to/file.meld or $~/path/to/file.meld
+ *    - Example: $./path/to/file.mld or $~/path/to/file.mld
  * 
  * 3. Forbidden:
  *    - Parent directory references (..)

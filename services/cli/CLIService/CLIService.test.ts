@@ -28,7 +28,7 @@ const mockPromptService: IPromptService = {
 };
 
 const defaultOptions = {
-  input: 'test.meld',
+  input: 'test.mld',
   format: 'xml' as const
 };
 
@@ -43,7 +43,7 @@ const createAsyncIterable = () => {
             callCount++;
             return { 
               done: false, 
-              value: { filename: 'test.meld', eventType: 'change' } 
+              value: { filename: 'test.mld', eventType: 'change' } 
             };
           }
           
@@ -174,7 +174,7 @@ describe('CLIService', () => {
 
     // Set up test files
     const textExample = textDirectiveExamples.atomic.simpleString;
-    await context.fs.writeFile('test.meld', textExample.code);
+    await context.fs.writeFile('test.mld', textExample.code);
 
     // Initialize mock logger
     mockLogger = {
@@ -196,7 +196,7 @@ describe('CLIService', () => {
 
   describe('Format Conversion', () => {
     it('should output xml format by default', async () => {
-      const args = ['node', 'meld', 'test.meld', '--stdout'];
+      const args = ['node', 'meld', 'test.mld', '--stdout'];
       await expect(service.run(args)).resolves.not.toThrow();
       expect(mockOutputService.convert).toHaveBeenCalledWith(
         expect.any(Array),
@@ -207,7 +207,7 @@ describe('CLIService', () => {
     });
 
     it('should handle format aliases correctly', async () => {
-      const args = ['node', 'meld', 'test.meld', '--format', 'markdown', '--stdout'];
+      const args = ['node', 'meld', 'test.mld', '--format', 'markdown', '--stdout'];
       await expect(service.run(args)).resolves.not.toThrow();
       expect(mockOutputService.convert).toHaveBeenCalledWith(
         expect.any(Array),
@@ -218,7 +218,7 @@ describe('CLIService', () => {
     });
 
     it('should preserve markdown with markdown format', async () => {
-      const args = ['node', 'meld', 'test.meld', '--format', 'markdown', '--stdout'];
+      const args = ['node', 'meld', 'test.mld', '--format', 'markdown', '--stdout'];
       await expect(service.run(args)).resolves.not.toThrow();
       expect(mockOutputService.convert).toHaveBeenCalledWith(
         expect.any(Array),
@@ -240,14 +240,14 @@ describe('CLIService', () => {
 
     it('should respect --stdout option', async () => {
       const consoleLog = vi.spyOn(console, 'log');
-      const args = ['node', 'meld', 'test.meld', '--stdout'];
+      const args = ['node', 'meld', 'test.mld', '--stdout'];
       await service.run(args);
       expect(consoleLog).toHaveBeenCalledWith('test output');
       consoleLog.mockRestore();
     });
 
     it('should use default output path when not specified', async () => {
-      const args = ['node', 'meld', 'test.meld'];
+      const args = ['node', 'meld', 'test.mld'];
       await expect(service.run(args)).resolves.not.toThrow();
       expect(mockOutputService.convert).toHaveBeenCalledWith(
         expect.any(Array),
@@ -260,7 +260,7 @@ describe('CLIService', () => {
     it('should handle project path option', async () => {
       // We no longer support --project-path option for security reasons
       // Instead, we test that the project path is resolved correctly
-      const args = ['node', 'meld', 'test.meld'];
+      const args = ['node', 'meld', 'test.mld'];
       await service.run(args);
       expect(mockPathService.resolveProjectPath).toHaveBeenCalled();
       const state = mockStateService.createChildState();
@@ -269,7 +269,7 @@ describe('CLIService', () => {
     });
 
     it('should handle home path option', async () => {
-      const args = ['node', 'meld', 'test.meld', '--home-path', '/home'];
+      const args = ['node', 'meld', 'test.mld', '--home-path', '/home'];
       await service.run(args);
       const state = mockStateService.createChildState();
       expect(state.setPathVar).toHaveBeenCalledWith('HOMEPATH', '/home');
@@ -277,7 +277,7 @@ describe('CLIService', () => {
     });
 
     it('should handle verbose option', async () => {
-      const args = ['node', 'meld', 'test.meld', '--verbose'];
+      const args = ['node', 'meld', 'test.mld', '--verbose'];
       await service.run(args);
       // Verify logging behavior if needed
     });
@@ -286,19 +286,19 @@ describe('CLIService', () => {
   describe('File Handling', () => {
     it('should handle missing input files', async () => {
       mockFileSystemService.exists = vi.fn().mockResolvedValue(false);
-      const args = ['node', 'meld', 'nonexistent.meld', '--stdout'];
+      const args = ['node', 'meld', 'nonexistent.mld', '--stdout'];
       await expect(service.run(args)).rejects.toThrow('File not found');
     });
 
     it('should handle write errors', async () => {
       mockFileSystemService.writeFile = vi.fn().mockRejectedValue(new Error('Write error'));
-      const args = ['node', 'meld', 'test.meld', '--output', 'output.md'];
+      const args = ['node', 'meld', 'test.mld', '--output', 'output.md'];
       await expect(service.run(args)).rejects.toThrow('Write error');
     });
 
     it('should handle read errors', async () => {
       mockFileSystemService.readFile = vi.fn().mockRejectedValue(new Error('Read error'));
-      const args = ['node', 'meld', 'test.meld', '--stdout'];
+      const args = ['node', 'meld', 'test.mld', '--stdout'];
       await expect(service.run(args)).rejects.toThrow('Read error');
     });
   });
@@ -306,28 +306,28 @@ describe('CLIService', () => {
   describe('Error Handling', () => {
     it('should handle parser errors', async () => {
       mockParserService.parse = vi.fn().mockRejectedValue(new Error('Parse error'));
-      const args = ['node', 'meld', 'test.meld', '--stdout'];
+      const args = ['node', 'meld', 'test.mld', '--stdout'];
       await expect(service.run(args)).rejects.toThrow('Parse error');
     });
 
     it('should handle interpreter errors', async () => {
       mockInterpreterService.interpret = vi.fn().mockRejectedValue(new Error('Interpret error'));
-      const args = ['node', 'meld', 'test.meld', '--stdout'];
+      const args = ['node', 'meld', 'test.mld', '--stdout'];
       await expect(service.run(args)).rejects.toThrow('Interpret error');
     });
 
     it('should handle output conversion errors', async () => {
       mockOutputService.convert = vi.fn().mockRejectedValue(new Error('Convert error'));
-      const args = ['node', 'meld', 'test.meld', '--stdout'];
+      const args = ['node', 'meld', 'test.mld', '--stdout'];
       await expect(service.run(args)).rejects.toThrow('Convert error');
     });
   });
 
   describe('File Overwrite Handling', () => {
     it('should prompt for overwrite when file exists', async () => {
-      const args = ['node', 'meld', 'test.meld'];
-      await mockFileSystemService.writeFile('test.meld', 'input content');
-      await mockFileSystemService.writeFile('test.xml', 'existing content');
+      const args = ['node', 'meld', 'test.mld', '--output', 'test.md'];
+      await mockFileSystemService.writeFile('test.mld', 'input content');
+      await mockFileSystemService.writeFile('test.md', 'existing content');
       
       // Mock the prompt service to return 'y'
       vi.mocked(mockPromptService.getText).mockResolvedValueOnce('y');
@@ -335,14 +335,14 @@ describe('CLIService', () => {
       await service.run(args);
       
       expect(mockPromptService.getText).toHaveBeenCalledWith(
-        'File test.xml already exists. Overwrite? [Y/n] ',
+        'File test.md already exists. Overwrite? [Y/n] ',
         'y'
       );
     });
 
     it('should handle explicit output paths appropriately', async () => {
       // Create a mock input file path
-      const inputPath = '/project/input.meld';
+      const inputPath = '/project/input.mld';
       
       // Mock the exists function to return true for the input path
       mockFileSystemService.exists = vi.fn().mockImplementation(async (path) => {
