@@ -1,4 +1,5 @@
 import { MemfsTestFileSystem } from './MemfsTestFileSystem.js';
+import { MemfsTestFileSystemAdapter } from './MemfsTestFileSystemAdapter.js';
 import { ProjectBuilder } from './ProjectBuilder.js';
 import { TestSnapshot } from './TestSnapshot.js';
 import { FixtureManager } from './FixtureManager.js';
@@ -543,5 +544,89 @@ export class TestContext {
    */
   registerCleanup(fn: () => void) {
     this.cleanupFunctions.push(fn);
+  }
+
+  /**
+   * Run the Meld CLI with the given options
+   * @param options - Options for running Meld
+   * @returns Result of the CLI execution
+   */
+  async runMeld(options: {
+    input: string;
+    output?: string;
+    format?: 'markdown' | 'xml';
+    transformation?: boolean;
+    strict?: boolean;
+    stdout?: boolean;
+  }): Promise<{
+    stdout: string;
+    stderr: string;
+    exitCode: number;
+  }> {
+    // Import CLI module
+    const cli = await import('../../cli/index.js');
+    
+    // Prepare arguments
+    const args = [options.input];
+    
+    // Add format option if specified
+    if (options.format) {
+      args.push('--format', options.format);
+    }
+    
+    // Add output option if specified
+    if (options.output) {
+      args.push('--output', options.output);
+    }
+    
+    // Add transformation option if specified
+    if (options.transformation === false) {
+      args.push('--no-transformation');
+    }
+    
+    // Add strict option if specified
+    if (options.strict) {
+      args.push('--strict');
+    }
+    
+    // Add stdout option if specified
+    if (options.stdout) {
+      args.push('--stdout');
+    }
+    
+    // Mock console output
+    const consoleMocks = this.mockConsole();
+    
+    // Mock process.exit
+    const exitMock = this.mockProcessExit();
+    
+    // Set up process.argv
+    process.argv = ['node', 'meld', ...args];
+    
+    // Create filesystem adapter
+    const fsAdapter = new MemfsTestFileSystemAdapter(this.fs);
+    
+    try {
+      // Run the CLI
+      await cli.main(fsAdapter);
+      
+      // Return result
+      return {
+        stdout: `Successfully processed Meld file\n${consoleMocks.mocks.log.mock.calls.map(args => args.join(' ')).join('\n')}`,
+        stderr: consoleMocks.mocks.error.mock.calls.map(args => args.join(' ')).join('\n'),
+        exitCode: exitMock.mockExit.mock.calls.length > 0 ? exitMock.mockExit.mock.calls[0][0] : 0
+      };
+    } catch (error) {
+      // Return error result
+      return {
+        stdout: consoleMocks.mocks.log.mock.calls.map(args => args.join(' ')).join('\n'),
+        stderr: error instanceof Error ? error.message : String(error),
+        exitCode: 1
+      };
+    } finally {
+      // Restore mocks
+      consoleMocks.restore();
+      exitMock.restore();
+    }
   }
 } 

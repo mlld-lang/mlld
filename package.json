@@ -1,7 +1,7 @@
 {
   "name": "meld",
-  "version": "10.2.3",
-  "description": "meld interpreter, cli, and api --- NOTE: If you're looking for the old 'meld' package for aspect oriented programming, you'll want to pin your version to <2.0.0",
+  "version": "10.2.4",
+  "description": "Meld: A template language for LLM prompts",
   "main": "dist/index.cjs",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",

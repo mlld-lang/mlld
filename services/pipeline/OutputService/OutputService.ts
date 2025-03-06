@@ -765,7 +765,8 @@ export class OutputService implements IOutputService {
         }
       case 'CodeFence':
         const fence = node as CodeFenceNode;
-        return `\`\`\`${fence.language || ''}\n${fence.content}\n\`\`\`\n`;
+        // The content already includes the codefence markers, so we use it as-is
+        return fence.content;
       case 'Directive':
         const directive = node as DirectiveNode;
         const kind = directive.directive.kind;
@@ -936,12 +937,20 @@ export class OutputService implements IOutputService {
   }
 
   private async nodeToXML(node: MeldNode, state: IStateService): Promise<string> {
-    // Use the same logic as markdown for now since we want consistent behavior
+    // We need to handle CodeFence nodes explicitly to avoid double-rendering the codefence markers
+    if (node.type === 'CodeFence') {
+      const fence = node as CodeFenceNode;
+      // The content already includes the codefence markers, so we use it as-is
+      return fence.content;
+    }
+    
+    // For other node types, use the same logic as markdown for consistent behavior
     return this.nodeToMarkdown(node, state);
   }
 
   private codeFenceToMarkdown(node: CodeFenceNode): string {
-    return `\`\`\`${node.language || ''}\n${node.content}\n\`\`\`\n`;
+    // The content already includes the codefence markers, so we use it as-is
+    return node.content;
   }
 
   private codeFenceToXML(node: CodeFenceNode): string {

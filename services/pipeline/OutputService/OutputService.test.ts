@@ -339,13 +339,17 @@ describe('OutputService', () => {
     });
 
     it('should preserve code fence content', async () => {
+      // In our updated implementation, the code fence markers are already part of the content
+      // so we need to include them in the test data
+      const fenceContent = '```typescript\nconst x = 1;\n```';
       const nodes: MeldNode[] = [
-        createCodeFenceNode('const x = 1;', 'typescript', createLocation(1, 1))
+        createCodeFenceNode(fenceContent, 'typescript', createLocation(1, 1))
       ];
 
       const output = await service.convert(nodes, state, 'xml');
       expect(output).toContain('const x = 1;');
-      expect(output).toContain('typescript');
+      // The language is now included in the fence content itself, not added separately
+      expect(output).toContain('```typescript');
     });
 
     it('should handle directives according to type', async () => {
@@ -452,9 +456,13 @@ describe('OutputService', () => {
     });
 
     it('should preserve code fences in both modes', async () => {
+      // In our updated implementation, the code fence markers are already part of the content
+      // so we need to include them in the test data
+      const fenceContent = '```js\nconst greeting = \'Hello, world!\';\nconsole.log(greeting);\n```';
+      
       // Create a code fence node using the proper factory function
       const codeFenceNode = createCodeFenceNode(
-        'const greeting = \'Hello, world!\';\nconsole.log(greeting);',
+        fenceContent,
         'js',
         createLocation(1, 1)
       );
@@ -470,6 +478,7 @@ describe('OutputService', () => {
       
       let output = await service.convert(originalNodes, state, 'markdown');
       expect(output).to.include('Before');
+      // The fence markers are now part of the content, not added by the converter
       expect(output).to.include('```js');
       expect(output).to.include('const greeting = \'Hello, world!\';');
       expect(output).to.include('console.log(greeting);');
@@ -482,6 +491,7 @@ describe('OutputService', () => {
       
       output = await service.convert(originalNodes, state, 'markdown');
       expect(output).to.include('Before');
+      // The fence markers are now part of the content, not added by the converter
       expect(output).to.include('```js');
       expect(output).to.include('const greeting = \'Hello, world!\';');
       expect(output).to.include('console.log(greeting);');
@@ -564,5 +574,71 @@ describe('OutputService', () => {
     // Arrange
     const runExample = runDirectiveExamples.atomic.simple;
     // ... existing code ...
+  });
+
+  describe('Regression Tests', () => {
+    it('should not duplicate code fence markers in markdown output (regression #10.2.4)', async () => {
+      // This tests the fix for the codefence duplication bug in version 10.2.4
+      // Arrange: Set up a code fence node with content that already includes the fence markers
+      const content = '```javascript\nconst name = "Claude";\nconst greet = () => `Hello, ${name}`;\n```';
+      const nodes: MeldNode[] = [
+        createCodeFenceNode(content, 'javascript', createLocation(1, 1))
+      ];
+
+      // Act: Convert to markdown
+      const output = await service.convert(nodes, state, 'markdown');
+
+      // Assert: Check that the output doesn't have duplicated fence markers
+      // The output should contain the content exactly as-is, without adding extra ```
+      expect(output).toBe(content);
+      // Make sure it contains the code inside
+      expect(output).toContain('const name = "Claude";');
+      // Make sure it has exactly one opening and one closing fence marker
+      const fenceMarkerCount = (output.match(/```/g) || []).length;
+      expect(fenceMarkerCount).toBe(2); // Opening and closing, not 4 (which would indicate duplication)
+    });
+
+    it('should not duplicate code fence markers in XML output (regression #10.2.4)', async () => {
+      // This tests the fix for the codefence duplication bug in version 10.2.4
+      // Arrange: Set up a code fence node with content that already includes the fence markers
+      const content = '```typescript\ninterface User { name: string; age: number; }\n```';
+      const nodes: MeldNode[] = [
+        createCodeFenceNode(content, 'typescript', createLocation(1, 1))
+      ];
+
+      // Act: Convert to XML
+      const output = await service.convert(nodes, state, 'xml');
+
+      // Assert: Check that the output doesn't have duplicated fence markers
+      // The output should contain the content exactly as-is, without adding extra ```
+      expect(output).toBe(content);
+      // Make sure it contains the code inside
+      expect(output).toContain('interface User');
+      // Make sure it has exactly one opening and one closing fence marker
+      const fenceMarkerCount = (output.match(/```/g) || []).length;
+      expect(fenceMarkerCount).toBe(2); // Opening and closing, not 4 (which would indicate duplication)
+    });
+
+    it('should handle a document with mixed content and code fences (regression #10.2.4)', async () => {
+      // This tests that code fence markers are not duplicated in a mixed document
+      const codeFenceContent = '```javascript\nconst greeting = () => "Hello";\n```';
+      const nodes: MeldNode[] = [
+        createTextNode('Text before code\n', createLocation(1, 1)),
+        createCodeFenceNode(codeFenceContent, 'javascript', createLocation(2, 1)),
+        createTextNode('\nText after code', createLocation(4, 1))
+      ];
+
+      // Act: Convert to markdown
+      const output = await service.convert(nodes, state, 'markdown');
+
+      // Assert: Check the output structure
+      expect(output).toContain('Text before code\n');
+      expect(output).toContain(codeFenceContent);
+      expect(output).toContain('\nText after code');
+      
+      // Check for no duplication of fence markers
+      const fenceMarkerCount = (output.match(/```/g) || []).length;
+      expect(fenceMarkerCount).toBe(2); // Only the ones in the original content
+    });
   });
 }); 

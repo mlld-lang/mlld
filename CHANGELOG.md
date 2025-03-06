@@ -5,6 +5,13 @@ All notable changes to the Meld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.2.4] - 2025-03-06
+
+### Fixed
+- Fixed code fence duplication bug in output formats
+- Updated OutputService to handle code fence nodes correctly without adding extra fence markers
+- Modified unit tests to match the new code fence handling behavior
+
 ## [10.2.3] - 2025-03-06
 
 ### Fixed
