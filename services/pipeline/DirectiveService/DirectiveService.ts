@@ -89,13 +89,18 @@ export class DirectiveService implements IDirectiveService {
    */
   public registerDefaultHandlers(): void {
     // Definition handlers
-    this.registerHandler(
-      new TextDirectiveHandler(
-        this.validationService!,
-        this.stateService!,
-        this.resolutionService!
-      )
+    const textHandler = new TextDirectiveHandler(
+      this.validationService!,
+      this.stateService!,
+      this.resolutionService!
     );
+    
+    // Set FileSystemService if available
+    if (this.fileSystemService) {
+      textHandler.setFileSystemService(this.fileSystemService);
+    }
+    
+    this.registerHandler(textHandler);
 
     this.registerHandler(
       new DataDirectiveHandler(

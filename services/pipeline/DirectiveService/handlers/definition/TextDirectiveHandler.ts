@@ -11,6 +11,7 @@ import { StringConcatenationHandler } from '@services/resolution/ResolutionServi
 import { VariableReferenceResolver } from '@services/resolution/ResolutionService/resolvers/VariableReferenceResolver.js';
 import { ResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
+import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 
 /**
  * Handler for @text directives
@@ -21,6 +22,7 @@ export class TextDirectiveHandler implements IDirectiveHandler {
   private stringLiteralHandler: StringLiteralHandler;
   private stringConcatenationHandler: StringConcatenationHandler;
   private variableReferenceResolver: VariableReferenceResolver;
+  private fileSystemService?: IFileSystemService;
 
   constructor(
     private validationService: IValidationService,
@@ -33,6 +35,10 @@ export class TextDirectiveHandler implements IDirectiveHandler {
     // Note: We'll rely on ResolutionService.ts for variable resolution rather than initializing a separate resolver
     // The ResolutionService has its own VariableReferenceResolver
     this.variableReferenceResolver = null as any; // We won't use this directly
+  }
+
+  setFileSystemService(fileSystemService: IFileSystemService): void {
+    this.fileSystemService = fileSystemService;
   }
 
   /**
@@ -130,18 +136,43 @@ export class TextDirectiveHandler implements IDirectiveHandler {
       // Handle @text with @run value
       if (node.directive.source === 'run' && node.directive.run) {
         // For @run source, execute the command
-        const runDirective = {
-          type: 'Directive',
-          directive: {
-            kind: 'run',
-            command: node.directive.run.command
-          },
-          location: node.location
-        };
-        
         try {
-          // Use the resolution service to resolve the command
-          resolvedValue = await this.resolutionService.resolveInContext(`@run [${node.directive.run.command}]`, resolutionContext);
+          // First resolve any variables in the command string itself
+          const commandWithResolvedVars = await this.resolutionService.resolveInContext(
+            node.directive.run.command, 
+            resolutionContext
+          );
+          
+          // We need to use the FileSystemService if available to directly execute the command
+          // Otherwise fall back to the resolution service
+          if (this.fileSystemService) {
+            // Execute the command directly using FileSystemService
+            const { stdout } = await this.fileSystemService.executeCommand(
+              commandWithResolvedVars,
+              { cwd: this.fileSystemService.getCwd() }
+            );
+            
+            // Use stdout as the direct resolved value
+            resolvedValue = stdout;
+            
+            logger.debug('Directly executed command for @text directive', {
+              originalCommand: node.directive.run.command,
+              resolvedCommand: commandWithResolvedVars,
+              output: resolvedValue
+            });
+          } else {
+            // Fall back to resolution service (though this will include the @run syntax)
+            resolvedValue = await this.resolutionService.resolveInContext(
+              `@run [${commandWithResolvedVars}]`, 
+              resolutionContext
+            );
+            
+            logger.debug('Resolved @run command in text directive via resolution service', {
+              originalCommand: node.directive.run.command,
+              resolvedCommand: commandWithResolvedVars,
+              output: resolvedValue
+            });
+          }
         } catch (error) {
           if (error instanceof ResolutionError) {
             throw new DirectiveError(
