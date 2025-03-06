@@ -18,6 +18,8 @@ import {
   expectValidationError,
   expectValidationToThrowWithDetails
 } from '@tests/utils/errorTestUtils.js';
+import { textDirectiveExamples } from '@core/syntax/index.js';
+import { getExample, getInvalidExample } from '@tests/utils/syntax-test-helpers.js';
 
 describe('ValidationService', () => {
   let service: ValidationService;
@@ -68,35 +70,30 @@ describe('ValidationService', () => {
     it('should throw on missing name with Fatal severity', async () => {
       const node = createTextDirective('', 'Hello', createLocation(1, 1));
       
-      await expect(async () => {
-        await service.validate(node);
-      }).rejects.toThrow(MeldDirectiveError);
-      
       try {
         await service.validate(node);
+        fail('Expected an error to be thrown');
       } catch (error) {
         expect(error).toBeInstanceOf(MeldDirectiveError);
         const directiveError = error as MeldDirectiveError;
-        expect(directiveError.directiveKind).toBe('text');
         expect(directiveError.code).toBe(DirectiveErrorCode.VALIDATION_FAILED);
+        expect(directiveError.directiveKind).toBe('text');
         expect(directiveError.severity).toBe(ErrorSeverity.Fatal);
+        expect(directiveError.message.toLowerCase()).toContain('identifier');
       }
     });
     
     it('should throw on missing value with Fatal severity', async () => {
       const node = createTextDirective('greeting', '', createLocation(1, 1));
       
-      await expect(async () => {
-        await service.validate(node);
-      }).rejects.toThrow(MeldDirectiveError);
-      
       try {
         await service.validate(node);
+        fail('Expected an error to be thrown');
       } catch (error) {
         expect(error).toBeInstanceOf(MeldDirectiveError);
         const directiveError = error as MeldDirectiveError;
-        expect(directiveError.directiveKind).toBe('text');
         expect(directiveError.code).toBe(DirectiveErrorCode.VALIDATION_FAILED);
+        expect(directiveError.directiveKind).toBe('text');
         expect(directiveError.severity).toBe(ErrorSeverity.Fatal);
         expect(directiveError.message.toLowerCase()).toContain('value');
       }
@@ -113,6 +110,62 @@ describe('ValidationService', () => {
           severity: ErrorSeverity.Fatal,
           directiveKind: 'text',
           messageContains: 'identifier'
+        }
+      );
+    });
+
+    it('should validate a text directive with @embed value', async () => {
+      const example = textDirectiveExamples.atomic.withEmbedValue;
+      const node = createTextDirective('instructions', '@embed [$./path.md]', createLocation(1, 1));
+      await expect(service.validate(node)).resolves.not.toThrow();
+    });
+
+    it('should validate a text directive with @embed value with section', async () => {
+      const example = textDirectiveExamples.atomic.withEmbedValueAndSection;
+      const node = createTextDirective('instructions', '@embed [$./path.md # Section]', createLocation(1, 1));
+      await expect(service.validate(node)).resolves.not.toThrow();
+    });
+
+    it('should validate a text directive with @run value', async () => {
+      const example = textDirectiveExamples.atomic.withRunValue;
+      const node = createTextDirective('result', '@run [echo "Hello"]', createLocation(1, 1));
+      await expect(service.validate(node)).resolves.not.toThrow();
+    });
+
+    it('should validate a text directive with @run value with variables', async () => {
+      const example = textDirectiveExamples.atomic.withRunValueAndVariables;
+      const node = createTextDirective('result', '@run [oneshot "What\'s broken here? {{tests}}"]', createLocation(1, 1));
+      await expect(service.validate(node)).resolves.not.toThrow();
+    });
+
+    it('should throw on invalid @embed format (missing brackets)', async () => {
+      const example = textDirectiveExamples.invalid.invalidEmbedFormat;
+      const node = createTextDirective('instructions', '@embed path.md', createLocation(1, 1));
+      
+      await expectToThrowWithConfig(
+        async () => service.validate(node),
+        {
+          type: 'MeldDirectiveError',
+          code: DirectiveErrorCode.VALIDATION_FAILED,
+          severity: ErrorSeverity.Fatal,
+          directiveKind: 'text',
+          messageContains: 'embed format'
+        }
+      );
+    });
+
+    it('should throw on invalid @run format (missing brackets)', async () => {
+      const example = textDirectiveExamples.invalid.invalidRunFormat;
+      const node = createTextDirective('result', '@run echo "Hello"', createLocation(1, 1));
+      
+      await expectToThrowWithConfig(
+        async () => service.validate(node),
+        {
+          type: 'MeldDirectiveError',
+          code: DirectiveErrorCode.VALIDATION_FAILED,
+          severity: ErrorSeverity.Fatal,
+          directiveKind: 'text',
+          messageContains: 'run format'
         }
       );
     });

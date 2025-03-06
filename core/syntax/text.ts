@@ -49,6 +49,26 @@ export const atomic = {
   var1: createExample(
     'Variable with numeric name',
     `@text var1 = "Value 1"`
+  ),
+
+  withEmbedValue: createExample(
+    'Text directive with embed value',
+    `@text instructions = @embed [$./path.md]`
+  ),
+
+  withEmbedValueAndSection: createExample(
+    'Text directive with embed value and section',
+    `@text instructions = @embed [$./path.md # Instructions]`
+  ),
+
+  withRunValue: createExample(
+    'Text directive with run value',
+    `@text result = @run [echo "Hello World"]`
+  ),
+
+  withRunValueAndVariables: createExample(
+    'Text directive with run value and variables',
+    `@text result = @run [oneshot "What's broken here? {{tests}}"]`
   )
 };
 
@@ -159,6 +179,28 @@ export const invalid = {
       severity: ErrorSeverity.Fatal,
       code: 'SYNTAX_ERROR',
       message: 'Invalid variable name'
+    }
+  ),
+
+  invalidEmbedFormat: createInvalidExample(
+    'Invalid embed format without brackets',
+    `@text instructions = @embed path.md`,
+    {
+      type: MeldParseError,
+      severity: ErrorSeverity.Fatal,
+      code: 'SYNTAX_ERROR',
+      message: 'Invalid embed format'
+    }
+  ),
+
+  invalidRunFormat: createInvalidExample(
+    'Invalid run format without brackets',
+    `@text result = @run echo "Hello"`,
+    {
+      type: MeldParseError,
+      severity: ErrorSeverity.Fatal,
+      code: 'SYNTAX_ERROR', 
+      message: 'Invalid run format'
     }
   )
 };

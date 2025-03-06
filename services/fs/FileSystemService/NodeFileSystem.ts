@@ -2,7 +2,10 @@ import * as fs from 'fs-extra';
 import { watch } from 'fs/promises';
 import type { IFileSystem } from './IFileSystem.js';
 import type { Stats } from 'fs';
-import { spawn } from 'child_process';
+import { spawn, exec } from 'child_process';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
 
 /**
  * Adapter to use Node's fs-extra as our IFileSystem implementation
@@ -74,69 +77,72 @@ export class NodeFileSystem implements IFileSystem {
       return { stdout: `Mock output for command: ${command}`, stderr: '' };
     }
 
-    // Only use the streaming approach in non-test environments
-    return new Promise((resolve, reject) => {
-      // Split the command into the executable and arguments
-      const args = command.split(/\s+/);
-      const cmd = args.shift() || '';
-      
-      // Create a process with the command
-      const process = spawn(cmd, args, {
-        cwd: options?.cwd,
-        shell: true, // Use shell for complex commands with pipes, etc.
-      });
-      
-      let stdoutData = '';
-      let stderrData = '';
-      
-      // Handle stdout data
-      process.stdout.on('data', (data) => {
-        const chunk = data.toString();
-        stdoutData += chunk;
+    // Special handling for oneshot commands with nested quotes
+    if (command.startsWith('oneshot')) {
+      try {
+        // Extract the command and its arguments for direct execution
+        const cmdParts = command.match(/^(\S+)\s+(.*)$/);
         
-        // Only print to console in non-test environments
-        if (!this.isTestEnvironment) {
-          console.log(chunk);
-        }
-      });
-      
-      // Handle stderr data and display it immediately
-      process.stderr.on('data', (data) => {
-        const chunk = data.toString();
-        stderrData += chunk;
-        
-        // Only print to console in non-test environments
-        if (!this.isTestEnvironment) {
-          console.error(chunk);
-        }
-      });
-      
-      // Handle process completion
-      process.on('close', (code) => {
-        if (code === 0 || code === null) {
-          resolve({
-            stdout: stdoutData,
-            stderr: stderrData
+        if (cmdParts) {
+          const cmd = cmdParts[1]; // 'oneshot'
+          let args = cmdParts[2];  // The quoted arguments
+          
+          // Create a process directly (without shell) to avoid quote issues
+          const { spawn } = require('child_process');
+          const process = spawn(cmd, [args.replace(/^"|"$/g, '')], {
+            cwd: options?.cwd
           });
-        } else {
-          // For test compatibility, we reject with an error on non-zero exit codes
-          if (this.isTestEnvironment) {
-            reject(new Error(`Command failed with exit code ${code}: ${command}`));
-          } else {
-            // In non-test environments, we still resolve but include the error info
-            console.error(`Command failed with exit code ${code}`);
-            resolve({
-              stdout: stdoutData,
-              stderr: stderrData + `\nCommand exited with code ${code}`
+          
+          return new Promise((resolve) => {
+            let stdout = '';
+            let stderr = '';
+            
+            process.stdout.on('data', (data: Buffer) => {
+              const chunk = data.toString();
+              stdout += chunk;
+              console.log(chunk);
             });
-          }
+            
+            process.stderr.on('data', (data: Buffer) => {
+              const chunk = data.toString();
+              stderr += chunk;
+              console.error(chunk);
+            });
+            
+            process.on('close', (code: number | null) => {
+              if (code !== 0) {
+                stderr += `\nCommand exited with code ${code}`;
+                console.error(`Command failed with exit code ${code}`);
+              }
+              resolve({ stdout, stderr });
+            });
+          });
         }
+      } catch (err) {
+        console.error('Error executing oneshot command:', err);
+      }
+    }
+
+    // For all other commands, use execAsync
+    try {
+      const { stdout, stderr } = await execAsync(command, {
+        cwd: options?.cwd || process.cwd(),
+        maxBuffer: 10 * 1024 * 1024 // 10MB buffer to handle large outputs
       });
-      
-      // Handle process errors
-      process.on('error', (err) => {
-        reject(new Error(`Failed to start command: ${err.message}`));
-      });
-    });
+
+      // Log the output to console
+      if (stdout) console.log(stdout);
+      if (stderr) console.error(stderr);
+
+      return { stdout, stderr };
+    } catch (error) {
+      // Handle command execution errors
+      const err = error as any;
+      console.error(`Command failed with exit code ${err.code}`);
+      return {
+        stdout: err.stdout || '',
+        stderr: (err.stderr || '') + `\nCommand exited with code ${err.code}`
+      };
+    }
   }
 } 
