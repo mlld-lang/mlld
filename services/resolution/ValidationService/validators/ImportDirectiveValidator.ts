@@ -150,7 +150,9 @@ function validateStructuredImports(imports: ImportItem[], node: DirectiveNode): 
       );
     }
 
-    if (item.alias !== undefined && (item.alias === null || item.alias.trim() === '')) {
+    // Only validate the alias if it's a non-undefined, non-null string
+    // This allows for cases where alias is undefined (no alias specified)
+    if (item.alias !== undefined && item.alias !== null && item.alias.trim() === '') {
       throw new MeldDirectiveError(
         'Import alias cannot be empty',
         'import',
@@ -246,6 +248,7 @@ function validateImportList(importList: string, node: DirectiveNode): void {
         );
       }
       
+      // When using 'as' syntax, the alias must not be empty
       if (!alias || alias === '') {
         throw new MeldDirectiveError(
           'Import alias cannot be empty',

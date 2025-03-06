@@ -1148,226 +1148,230 @@ When transformation mode is enabled, the pipeline handles directives and variabl
    - Provides path utilities
    - Manages path transformations
 ## Test Results
-> meld@10.0.0 test
+> meld@10.0.1 test
 > vitest run
  RUN  v2.1.9 /Users/adam/dev/meld
- ✓ tests/utils/debug/StateVisualizationService/StateVisualizationService.test.ts (26 tests) 18ms
+ ✓ tests/utils/debug/StateVisualizationService/StateVisualizationService.test.ts (26 tests) 16ms
 stdout | services/state/StateService/StateService.test.ts > StateService > State Tracking > should track state lineage
 Initial State: graph TD;
 After Creating Child: graph TD;
-    0336e6a4-de2f-435d-8aeb-8a71679b8fa2 -->|parent-child| parent-child style="solid,#000000";
+    736c3842-1086-4f7c-b558-3e1c25769104 -->|parent-child| parent-child style="solid,#000000";
 After Creating Grandchild: graph TD;
-    0336e6a4-de2f-435d-8aeb-8a71679b8fa2 -->|parent-child| parent-child style="solid,#000000";
-    19348c93-78fa-43e9-8374-c2cfda504df3 -->|parent-child| parent-child style="solid,#000000";
+    736c3842-1086-4f7c-b558-3e1c25769104 -->|parent-child| parent-child style="solid,#000000";
+    4adaeab0-bf86-4b77-8862-22d3fd9d5633 -->|parent-child| parent-child style="solid,#000000";
 State Lineage: [
-  '8b3dcbbc-eddf-4a2a-a03a-64ce059a6d27',
-  '0336e6a4-de2f-435d-8aeb-8a71679b8fa2',
-  '19348c93-78fa-43e9-8374-c2cfda504df3'
+  'eb64eb11-6c88-49b7-8247-fe1c42e6a4af',
+  '736c3842-1086-4f7c-b558-3e1c25769104',
+  '4adaeab0-bf86-4b77-8862-22d3fd9d5633'
 ]
-State Transitions: Complete Debug Report: Debug Session Report (3051445c-beb0-4f7b-ba67-f47e2ad9cd04)
+State Transitions: Complete Debug Report: Debug Session Report (74706113-09c5-45f6-8d1d-cb4f58109af8)
 Duration: 0.003s
 Diagnostics: Metrics:
 Snapshots:
  ✓ services/state/StateService/StateService.test.ts (39 tests) 19ms
- ✓ services/pipeline/DirectiveService/handlers/definition/DefineDirectiveHandler.test.ts (20 tests) 31ms
- ✓ services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler.test.ts (14 tests) 76ms
- ✓ services/pipeline/DirectiveService/handlers/execution/ImportDirectiveHandler.test.ts (16 tests | 2 skipped) 89ms
+ ✓ services/pipeline/DirectiveService/handlers/definition/DefineDirectiveHandler.test.ts (20 tests) 51ms
+ ✓ services/pipeline/DirectiveService/handlers/execution/ImportDirectiveHandler.test.ts (16 tests | 2 skipped) 68ms
+ ✓ services/pipeline/DirectiveService/handlers/definition/DataDirectiveHandler.test.ts (14 tests) 88ms
+ ✓ services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler.test.ts (14 tests) 99ms
 stdout | services/pipeline/OutputService/OutputService.test.ts > OutputService > XML Output > should preserve text content
-[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T00:56:03.655Z"}
+[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T05:44:10.006Z"}
 stdout | services/pipeline/OutputService/OutputService.test.ts > OutputService > XML Output > should preserve code fence content
-[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T00:56:03.663Z"}
+[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T05:44:10.013Z"}
 stdout | services/pipeline/OutputService/OutputService.test.ts > OutputService > XML Output > should handle directives according to type
-[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T00:56:03.666Z"}
+[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T05:44:10.030Z"}
 stdout | services/pipeline/OutputService/OutputService.test.ts > OutputService > XML Output > should handle directives according to type
-[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T00:56:03.668Z"}
+[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T05:44:10.035Z"}
 stdout | services/pipeline/OutputService/OutputService.test.ts > OutputService > XML Output > should preserve state variables when requested
-[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T00:56:03.672Z"}
- ✓ services/pipeline/DirectiveService/handlers/definition/DataDirectiveHandler.test.ts (14 tests) 136ms
-stdout | services/pipeline/InterpreterService/InterpreterService.integration.test.ts > InterpreterService Integration > State management > handles state rollback on merge errors
-stdout | api/integration.test.ts > API Integration Tests > Variable Definitions and References > should handle text variable definitions and references
-[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T00:56:03.697Z"}
-stdout | services/pipeline/InterpreterService/InterpreterService.integration.test.ts > InterpreterService Integration > Error handling > provides location information in errors
-stdout | services/pipeline/InterpreterService/InterpreterService.integration.test.ts > InterpreterService Integration > Error handling > maintains state consistency after errors
-stdout | services/pipeline/InterpreterService/InterpreterService.integration.test.ts > InterpreterService Integration > Error handling > includes state context in interpreter errors
-stdout | services/pipeline/InterpreterService/InterpreterService.integration.test.ts > InterpreterService Integration > Error handling > rolls back state on directive errors
+[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T05:44:10.038Z"}
 stdout | services/pipeline/OutputService/OutputService.test.ts > OutputService > Transformation Mode > should handle XML output in both modes
-[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T00:56:03.739Z"}
+[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T05:44:10.054Z"}
 stdout | services/pipeline/OutputService/OutputService.test.ts > OutputService > Transformation Mode > should handle XML output in both modes
-[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T00:56:03.775Z"}
+[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T05:44:10.057Z"}
 stdout | services/pipeline/OutputService/OutputService.test.ts > OutputService > Error Handling > should throw MeldOutputError for unknown node types
 stdout | services/pipeline/OutputService/OutputService.test.ts > OutputService > Error Handling > should wrap errors from format converters
 stdout | services/pipeline/OutputService/OutputService.test.ts > OutputService > Error Handling > should preserve MeldOutputError when thrown from converters
- ✓ services/pipeline/OutputService/OutputService.test.ts (24 tests) 238ms
+ ✓ services/pipeline/OutputService/OutputService.test.ts (24 tests) 179ms
+stdout | services/pipeline/InterpreterService/InterpreterService.integration.test.ts > InterpreterService Integration > State management > handles state rollback on merge errors
+stdout | api/integration.test.ts > API Integration Tests > Variable Definitions and References > should handle text variable definitions and references
+[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T05:44:10.056Z"}
 stdout | api/integration.test.ts > API Integration Tests > Variable Definitions and References > should handle data variable definitions and field access
-[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T00:56:03.793Z"}
+[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T05:44:10.092Z"}
+stdout | services/pipeline/InterpreterService/InterpreterService.integration.test.ts > InterpreterService Integration > Error handling > provides location information in errors
 stdout | api/integration.test.ts > API Integration Tests > Variable Definitions and References > should handle complex nested data structures
-[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T00:56:03.824Z"}
- ✓ services/pipeline/InterpreterService/InterpreterService.integration.test.ts (24 tests | 3 skipped) 292ms
+[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T05:44:10.119Z"}
 stdout | api/integration.test.ts > API Integration Tests > Variable Definitions and References > should handle template literals in text directives
+stdout | services/pipeline/InterpreterService/InterpreterService.integration.test.ts > InterpreterService Integration > Error handling > maintains state consistency after errors
 stdout | api/integration.test.ts > API Integration Tests > Variable Definitions and References > should handle template literals in text directives
-[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T00:56:03.847Z"}
+[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T05:44:10.140Z"}
+stdout | services/pipeline/InterpreterService/InterpreterService.integration.test.ts > InterpreterService Integration > Error handling > includes state context in interpreter errors
 stdout | api/integration.test.ts > API Integration Tests > Path Handling > should handle path variables with special $PROJECTPATH syntax
-[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T00:56:03.907Z"}
+[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T05:44:10.177Z"}
+stdout | services/pipeline/InterpreterService/InterpreterService.integration.test.ts > InterpreterService Integration > Error handling > rolls back state on directive errors
 stdout | api/integration.test.ts > API Integration Tests > Path Handling > should handle path variables with special $PROJECTPATH syntax
-[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T00:56:03.917Z"}
+[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T05:44:10.183Z"}
 stdout | api/integration.test.ts > API Integration Tests > Path Handling > should handle path variables with special $PROJECTPATH syntax
-[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T00:56:03.929Z"}
+[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T05:44:10.197Z"}
 stdout | api/integration.test.ts > API Integration Tests > Path Handling > should handle path variables with special $PROJECTPATH syntax
-[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T00:56:03.939Z"}
+[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T05:44:10.227Z"}
 stdout | api/integration.test.ts > API Integration Tests > Path Handling > should handle path variables with special $. alias syntax
-[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T00:56:03.951Z"}
+[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T05:44:10.247Z"}
 stdout | api/integration.test.ts > API Integration Tests > Path Handling > should handle path variables with special $HOMEPATH syntax
-[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T00:56:03.959Z"}
+[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T05:44:10.257Z"}
 stdout | api/integration.test.ts > API Integration Tests > Path Handling > should handle path variables with special $~ alias syntax
-[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T00:56:03.969Z"}
+[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T05:44:10.273Z"}
+ ✓ services/pipeline/InterpreterService/InterpreterService.integration.test.ts (24 tests | 3 skipped) 405ms
 stdout | api/integration.test.ts > API Integration Tests > Path Handling > should reject invalid path formats (raw absolute paths)
-[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T00:56:03.978Z"}
+[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T05:44:10.286Z"}
 stdout | api/integration.test.ts > API Integration Tests > Path Handling > should reject invalid path formats (relative paths with dot segments)
-[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T00:56:03.986Z"}
+[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T05:44:10.297Z"}
 stdout | api/integration.test.ts > API Integration Tests > Import Handling > should handle simple imports
-[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T00:56:03.999Z"}
+[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T05:44:10.316Z"}
 stdout | api/integration.test.ts > API Integration Tests > Import Handling > should handle nested imports with proper scope inheritance
-[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T00:56:04.082Z"}
- ✓ api/integration.test.ts (14 tests) 523ms
- ✓ services/resolution/ValidationService/ValidationService.test.ts (38 tests) 26ms
+[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T05:44:10.339Z"}
+ ✓ api/integration.test.ts (14 tests) 441ms
 stdout | tests/debug/import-debug.test.ts > Import Directive Debug > should transform import directive and resolve variables
+ ✓ services/resolution/ValidationService/ValidationService.test.ts (38 tests) 13ms
 stdout | tests/utils/debug/StateTrackingService/StateTrackingService.test.ts > StateTrackingService > Merge Operations > should handle merge target relationships
-Created source state: 6db2008c-5dda-4576-8f4d-d85ee0f020ac
-Created target state: 87c5865a-c7db-4f92-9a17-92de745402ee
-Created parent state: 60473d63-a912-4226-8cff-556e8a89f7a7
+Created source state: 046f4b7f-af34-43e4-be6d-77f54dadde17
+Created target state: 16f72723-7195-4496-b996-36d4700696a0
+Created parent state: 40130c1b-3ae6-4ee2-a4f7-3d53714ccc3a
 Initial States: graph TD;
 Added parent-child relationship: {
-  parent: '60473d63-a912-4226-8cff-556e8a89f7a7',
-  child: '87c5865a-c7db-4f92-9a17-92de745402ee',
+  parent: '40130c1b-3ae6-4ee2-a4f7-3d53714ccc3a',
+  child: '16f72723-7195-4496-b996-36d4700696a0',
   parentMetadata: {
-    id: '60473d63-a912-4226-8cff-556e8a89f7a7',
+    id: '40130c1b-3ae6-4ee2-a4f7-3d53714ccc3a',
     source: 'new',
     parentId: undefined,
     filePath: undefined,
     transformationEnabled: true,
-    createdAt: 1741222564166
+    createdAt: 1741239850452
   },
   childMetadata: {
-    id: '87c5865a-c7db-4f92-9a17-92de745402ee',
+    id: '16f72723-7195-4496-b996-36d4700696a0',
     source: 'new',
-    parentId: '60473d63-a912-4226-8cff-556e8a89f7a7',
+    parentId: '40130c1b-3ae6-4ee2-a4f7-3d53714ccc3a',
     filePath: undefined,
     transformationEnabled: true,
-    createdAt: 1741222564166
+    createdAt: 1741239850452
   },
   parentRelationships: [
     {
-      targetId: '87c5865a-c7db-4f92-9a17-92de745402ee',
+      targetId: '16f72723-7195-4496-b996-36d4700696a0',
       type: 'parent-child'
     }
   ],
   childRelationships: []
 }
 After Parent-Child Relationship: graph TD;
-    87c5865a-c7db-4f92-9a17-92de745402ee -->|parent-child| parent-child style="solid,#000000";
+    16f72723-7195-4496-b996-36d4700696a0 -->|parent-child| parent-child style="solid,#000000";
 Added merge-target relationship: {
-  source: '6db2008c-5dda-4576-8f4d-d85ee0f020ac',
-  target: '87c5865a-c7db-4f92-9a17-92de745402ee',
+  source: '046f4b7f-af34-43e4-be6d-77f54dadde17',
+  target: '16f72723-7195-4496-b996-36d4700696a0',
   sourceMetadata: {
-    id: '6db2008c-5dda-4576-8f4d-d85ee0f020ac',
+    id: '046f4b7f-af34-43e4-be6d-77f54dadde17',
     source: 'new',
-    parentId: '60473d63-a912-4226-8cff-556e8a89f7a7',
+    parentId: '40130c1b-3ae6-4ee2-a4f7-3d53714ccc3a',
     filePath: undefined,
     transformationEnabled: true,
-    createdAt: 1741222564165
+    createdAt: 1741239850452
   },
   targetMetadata: {
-    id: '87c5865a-c7db-4f92-9a17-92de745402ee',
+    id: '16f72723-7195-4496-b996-36d4700696a0',
     source: 'new',
-    parentId: '60473d63-a912-4226-8cff-556e8a89f7a7',
+    parentId: '40130c1b-3ae6-4ee2-a4f7-3d53714ccc3a',
     filePath: undefined,
     transformationEnabled: true,
-    createdAt: 1741222564166
+    createdAt: 1741239850452
   },
   sourceRelationships: [
     {
-      targetId: '87c5865a-c7db-4f92-9a17-92de745402ee',
+      targetId: '16f72723-7195-4496-b996-36d4700696a0',
       type: 'merge-target'
     }
   ],
   targetRelationships: []
 }
 After Merge-Target Relationship: graph TD;
-    87c5865a-c7db-4f92-9a17-92de745402ee -->|parent-child| parent-child style="solid,#000000";
-    6db2008c-5dda-4576-8f4d-d85ee0f020ac -->|parent-child| parent-child style="solid,#000000";
+    16f72723-7195-4496-b996-36d4700696a0 -->|parent-child| parent-child style="solid,#000000";
+    046f4b7f-af34-43e4-be6d-77f54dadde17 -->|parent-child| parent-child style="solid,#000000";
 State Transitions: State Lineage: {
-  sourceId: '6db2008c-5dda-4576-8f4d-d85ee0f020ac',
-  targetId: '87c5865a-c7db-4f92-9a17-92de745402ee',
-  parentId: '60473d63-a912-4226-8cff-556e8a89f7a7',
+  sourceId: '046f4b7f-af34-43e4-be6d-77f54dadde17',
+  targetId: '16f72723-7195-4496-b996-36d4700696a0',
+  parentId: '40130c1b-3ae6-4ee2-a4f7-3d53714ccc3a',
   lineage: [
-    '60473d63-a912-4226-8cff-556e8a89f7a7',
-    '87c5865a-c7db-4f92-9a17-92de745402ee',
-    '6db2008c-5dda-4576-8f4d-d85ee0f020ac'
+    '40130c1b-3ae6-4ee2-a4f7-3d53714ccc3a',
+    '16f72723-7195-4496-b996-36d4700696a0',
+    '046f4b7f-af34-43e4-be6d-77f54dadde17'
   ],
   sourceMetadata: {
-    id: '6db2008c-5dda-4576-8f4d-d85ee0f020ac',
+    id: '046f4b7f-af34-43e4-be6d-77f54dadde17',
     source: 'new',
-    parentId: '60473d63-a912-4226-8cff-556e8a89f7a7',
+    parentId: '40130c1b-3ae6-4ee2-a4f7-3d53714ccc3a',
     filePath: undefined,
     transformationEnabled: true,
-    createdAt: 1741222564165
+    createdAt: 1741239850452
   },
   targetMetadata: {
-    id: '87c5865a-c7db-4f92-9a17-92de745402ee',
+    id: '16f72723-7195-4496-b996-36d4700696a0',
     source: 'new',
-    parentId: '60473d63-a912-4226-8cff-556e8a89f7a7',
+    parentId: '40130c1b-3ae6-4ee2-a4f7-3d53714ccc3a',
     filePath: undefined,
     transformationEnabled: true,
-    createdAt: 1741222564166
+    createdAt: 1741239850452
   },
   parentMetadata: {
-    id: '60473d63-a912-4226-8cff-556e8a89f7a7',
+    id: '40130c1b-3ae6-4ee2-a4f7-3d53714ccc3a',
     source: 'new',
     parentId: undefined,
     filePath: undefined,
     transformationEnabled: true,
-    createdAt: 1741222564166
+    createdAt: 1741239850452
   },
   sourceRelationships: [
     {
-      targetId: '87c5865a-c7db-4f92-9a17-92de745402ee',
+      targetId: '16f72723-7195-4496-b996-36d4700696a0',
       type: 'merge-target'
     }
   ],
   targetRelationships: [],
   parentRelationships: [
     {
-      targetId: '87c5865a-c7db-4f92-9a17-92de745402ee',
+      targetId: '16f72723-7195-4496-b996-36d4700696a0',
       type: 'parent-child'
     }
   ]
 }
-Complete Debug Report: Debug Session Report (40eeb704-c8db-415b-b2a3-7d8af9cc6320)
+Complete Debug Report: Debug Session Report (fb2123a0-12f1-476a-8aeb-e6e0ecd591db)
 Duration: 0.004s
 Diagnostics: Metrics:
 Snapshots:
  ✓ tests/utils/debug/StateTrackingService/StateTrackingService.test.ts (14 tests) 15ms
+stdout | tests/debug/import-debug.test.ts > Import Directive Debug > should transform import directive and resolve variables
+[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T05:44:10.465Z"}
+ ✓ tests/debug/import-debug.test.ts (1 test) 116ms
 stdout | services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler.test.ts > RunDirectiveHandler > error handling > should handle validation errors
 stdout | services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler.test.ts > RunDirectiveHandler > error handling > should handle resolution errors
 stdout | services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler.test.ts > RunDirectiveHandler > error handling > should handle command execution errors
- ✓ services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler.test.ts (10 tests) 27ms
-stdout | tests/debug/import-debug.test.ts > Import Directive Debug > should transform import directive and resolve variables
-[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T00:56:04.218Z"}
- ✓ tests/debug/import-debug.test.ts (1 test) 111ms
- ✓ services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler.transformation.test.ts (9 tests) 74ms
+ ✓ services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler.test.ts (10 tests) 16ms
+ ✓ services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler.transformation.test.ts (9 tests) 70ms
 stdout | cli/cli.test.ts > CLI Tests > Argument Parsing Tests > should handle invalid argument combinations
 stdout | cli/cli.test.ts > CLI Tests > Argument Parsing Tests > should handle missing required arguments
 stdout | cli/cli.test.ts > CLI Tests > File I/O Tests > should handle error for file not found
-stdout | cli/cli.test.ts > CLI Tests > File I/O Tests > should handle permission issues for reading files
-stdout | cli/cli.test.ts > CLI Tests > Error Handling Tests > should format error messages clearly
 stdout | services/resolution/ResolutionService/ResolutionService.test.ts > ResolutionService > extractSection > should extract section by heading
-[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"none"},"timestamp":"2025-03-06T00:56:04.483Z"}
+[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"none"},"timestamp":"2025-03-06T05:44:10.637Z"}
 stdout | services/resolution/ResolutionService/ResolutionService.test.ts > ResolutionService > extractSection > should include content until next heading of same or higher level
-[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"none"},"timestamp":"2025-03-06T00:56:04.505Z"}
- ✓ cli/cli.test.ts (14 tests | 4 skipped) 168ms
+[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"none"},"timestamp":"2025-03-06T05:44:10.662Z"}
+stdout | cli/cli.test.ts > CLI Tests > File I/O Tests > should handle permission issues for reading files
 stdout | services/resolution/ResolutionService/ResolutionService.test.ts > ResolutionService > extractSection > should throw when section is not found
-[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"none"},"timestamp":"2025-03-06T00:56:04.508Z"}
- ✓ services/resolution/ResolutionService/ResolutionService.test.ts (19 tests) 122ms
+[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"none"},"timestamp":"2025-03-06T05:44:10.684Z"}
+ ✓ services/resolution/ResolutionService/ResolutionService.test.ts (19 tests) 166ms
+stdout | cli/cli.test.ts > CLI Tests > Error Handling Tests > should format error messages clearly
+ ✓ cli/cli.test.ts (14 tests | 4 skipped) 133ms
+stdout | services/pipeline/InterpreterService/InterpreterService.unit.test.ts > InterpreterService Unit > child context creation > handles errors in child context creation
+ ✓ services/pipeline/InterpreterService/InterpreterService.unit.test.ts (22 tests) 36ms
+ ✓ services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler.test.ts (9 tests) 23ms
+ ✓ services/pipeline/DirectiveService/handlers/execution/ImportDirectiveHandler.transformation.test.ts (4 tests) 39ms
 stdout | services/cli/CLIService/CLIService.test.ts > CLIService > Format Conversion > should output xml format by default
 stdout | services/cli/CLIService/CLIService.test.ts > CLIService > Format Conversion > should handle format aliases correctly
 stdout | services/cli/CLIService/CLIService.test.ts > CLIService > Format Conversion > should preserve markdown with markdown format
@@ -1384,65 +1388,61 @@ stdout | services/cli/CLIService/CLIService.test.ts > CLIService > Error Handlin
 stdout | services/cli/CLIService/CLIService.test.ts > CLIService > Error Handling > should handle output conversion errors
 stdout | services/cli/CLIService/CLIService.test.ts > CLIService > File Overwrite Handling > should prompt for overwrite when file exists
 stdout | services/cli/CLIService/CLIService.test.ts > CLIService > File Overwrite Handling > should handle explicit output paths appropriately
- ✓ services/cli/CLIService/CLIService.test.ts (18 tests) 110ms
-stdout | services/pipeline/InterpreterService/InterpreterService.unit.test.ts > InterpreterService Unit > child context creation > handles errors in child context creation
- ✓ services/pipeline/InterpreterService/InterpreterService.unit.test.ts (22 tests) 32ms
- ✓ services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler.test.ts (9 tests) 24ms
+ ✓ services/cli/CLIService/CLIService.test.ts (18 tests) 114ms
  ✓ services/resolution/ResolutionService/resolvers/PathResolver.test.ts (20 tests) 11ms
- ✓ services/pipeline/DirectiveService/handlers/execution/ImportDirectiveHandler.transformation.test.ts (4 tests) 42ms
- ✓ tests/utils/debug/StateVisualizationService/TestVisualizationManager.test.ts (17 tests) 27ms
- ✓ services/fs/PathService/PathService.test.ts (17 tests) 66ms
- ✓ tests/utils/debug/TestOutputFilterService/TestOutputFilterService.test.ts (17 tests) 7ms
- ✓ services/resolution/ResolutionService/resolvers/StringConcatenationHandler.test.ts (13 tests) 11ms
- ✓ tests/embed-directive-fixes.test.ts (5 tests) 7ms
- ✓ services/fs/PathService/PathService.tmp.test.ts (14 tests) 28ms
+ ✓ services/fs/PathService/PathService.test.ts (17 tests) 72ms
+ ✓ tests/utils/debug/StateVisualizationService/TestVisualizationManager.test.ts (17 tests) 58ms
+ ✓ tests/utils/debug/TestOutputFilterService/TestOutputFilterService.test.ts (17 tests) 8ms
+ ✓ services/resolution/ResolutionService/resolvers/StringConcatenationHandler.test.ts (13 tests) 9ms
 stdout | api/api.test.ts > SDK Integration Tests > Service Management > should create services in correct initialization order
-[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T00:56:05.105Z"}
+[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T05:44:11.331Z"}
 stdout | api/api.test.ts > SDK Integration Tests > Service Management > should allow service injection through options
-[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T00:56:05.116Z"}
- ✓ services/resolution/ResolutionService/resolvers/DataResolver.test.ts (12 tests) 10ms
+[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T05:44:11.371Z"}
+ ✓ services/fs/PathService/PathService.tmp.test.ts (14 tests) 40ms
 stdout | api/api.test.ts > SDK Integration Tests > Transformation Mode > should enable transformation through options
-[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T00:56:05.129Z"}
+[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T05:44:11.390Z"}
+ ✓ services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler.command.test.ts (5 tests) 7ms
 stdout | api/api.test.ts > SDK Integration Tests > Transformation Mode > should respect existing transformation state
-[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T00:56:05.137Z"}
+[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T05:44:11.403Z"}
+ ✓ tests/embed-directive-fixes.test.ts (5 tests) 7ms
 stdout | api/api.test.ts > SDK Integration Tests > Transformation Mode > should handle execution directives correctly
-[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T00:56:05.145Z"}
+[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T05:44:11.412Z"}
+ ✓ services/resolution/ResolutionService/resolvers/DataResolver.test.ts (12 tests) 9ms
 stdout | api/api.test.ts > SDK Integration Tests > Transformation Mode > should handle complex meld content with mixed directives
-[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T00:56:05.173Z"}
+[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T05:44:11.440Z"}
 stdout | api/api.test.ts > SDK Integration Tests > Debug Mode > should enable debug mode through options
-[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T00:56:05.186Z"}
+[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T05:44:11.458Z"}
 stdout | api/api.test.ts > SDK Integration Tests > Format Conversion > should handle definition directives correctly
-[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T00:56:05.196Z"}
- ✓ tests/utils/debug/StateDebuggerService/StateDebuggerService.test.ts (15 tests) 44ms
+[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T05:44:11.466Z"}
 stdout | api/api.test.ts > SDK Integration Tests > Format Conversion > should handle execution directives correctly
-[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T00:56:05.228Z"}
- ✓ cli/commands/debug-context.test.ts (3 tests) 7ms
+[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T05:44:11.480Z"}
 stdout | api/api.test.ts > SDK Integration Tests > Format Conversion > should handle complex meld content with mixed directives
-[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T00:56:05.238Z"}
+[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T05:44:11.494Z"}
 stdout | api/api.test.ts > SDK Integration Tests > Error Handling > should handle missing files correctly
 stdout | api/api.test.ts > SDK Integration Tests > Full Pipeline Integration > should handle the complete parse -> interpret -> convert pipeline
-[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T00:56:05.284Z"}
+[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T05:44:11.513Z"}
 stdout | api/api.test.ts > SDK Integration Tests > Full Pipeline Integration > should preserve state and content in transformation mode
-[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T00:56:05.296Z"}
+[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T05:44:11.524Z"}
 stdout | api/api.test.ts > SDK Integration Tests > Examples > should run api-demo-simple.meld example file
-[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T00:56:05.304Z"}
- ✓ api/api.test.ts (18 tests | 2 skipped) 289ms
- ✓ services/resolution/ResolutionService/resolvers/StringLiteralHandler.test.ts (17 tests) 18ms
- ✓ services/state/utilities/StateVariableCopier.test.ts (8 tests) 10ms
- ✓ services/resolution/ResolutionService/resolvers/CommandResolver.test.ts (12 tests) 58ms
- ✓ tests/output-service-embed-transformation.test.ts (5 tests) 8ms
- ✓ tests/pipeline/pipelineValidation.test.ts (8 tests) 17ms
- ✓ services/pipeline/ParserService/ParserService.test.ts (16 tests) 51ms
- ✓ services/state/StateService/StateFactory.test.ts (10 tests) 6ms
+[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T05:44:11.598Z"}
+ ✓ api/api.test.ts (18 tests | 2 skipped) 364ms
+ ✓ tests/utils/debug/StateDebuggerService/StateDebuggerService.test.ts (15 tests) 16ms
+ ✓ cli/commands/debug-context.test.ts (3 tests) 5ms
+ ✓ services/resolution/ResolutionService/resolvers/StringLiteralHandler.test.ts (17 tests) 16ms
+ ✓ tests/output-service-embed-transformation.test.ts (5 tests) 6ms
+ ✓ tests/pipeline/pipelineValidation.test.ts (8 tests) 18ms
+ ✓ services/state/utilities/StateVariableCopier.test.ts (8 tests) 15ms
+ ✓ services/pipeline/ParserService/ParserService.test.ts (16 tests) 59ms
+ ✓ services/resolution/ResolutionService/resolvers/CommandResolver.test.ts (12 tests) 68ms
+ ✓ services/state/StateService/StateFactory.test.ts (10 tests) 7ms
 stdout | services/resolution/ResolutionService/resolvers/VariableReferenceResolver.test.ts > VariableReferenceResolver > resolve > should handle environment variables
 stdout | services/resolution/ResolutionService/resolvers/VariableReferenceResolver.test.ts > VariableReferenceResolver > resolve > should throw for undefined variables
- ✓ services/resolution/ResolutionService/resolvers/VariableReferenceResolver.test.ts (15 tests) 31ms
- ✓ services/pipeline/DirectiveService/handlers/definition/PathDirectiveHandler.test.ts (6 tests) 46ms
+ ✓ services/resolution/ResolutionService/resolvers/VariableReferenceResolver.test.ts (15 tests) 38ms
  ✓ services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler.integration.test.ts (8 tests | 3 skipped) 7ms
- ✓ tests/embed-directive-transformation-fixes.test.ts (4 tests) 8ms
- ✓ services/resolution/ResolutionService/resolvers/TextResolver.test.ts (11 tests) 7ms
- ✓ cli/commands/debug-transform.test.ts (3 tests) 6ms
- ✓ tests/utils/tests/ErrorTestUtils.test.ts (12 tests) 6ms
+ ✓ services/pipeline/DirectiveService/handlers/definition/PathDirectiveHandler.test.ts (6 tests) 65ms
+ ✓ tests/embed-directive-transformation-fixes.test.ts (4 tests) 7ms
+ ✓ services/resolution/ResolutionService/resolvers/TextResolver.test.ts (11 tests) 10ms
+ ✓ tests/utils/tests/ErrorTestUtils.test.ts (12 tests) 9ms
 stdout | tests/utils/tests/TestSnapshot.test.ts > TestSnapshot > directory-specific snapshots > returns empty snapshot for non-existent directory
 stdout | tests/utils/tests/TestSnapshot.test.ts > TestSnapshot > snapshot comparison > detects added files
 Added files: [ '/new.txt' ]
@@ -1457,67 +1457,75 @@ Multiple changes - modified: [ '/modify.txt' ]
 stdout | tests/utils/tests/TestSnapshot.test.ts > TestSnapshot > error handling > handles comparison with empty snapshots
 Empty snapshot diff1 added: [ '/file.txt' ]
 Empty snapshot diff2 removed: [ '/file.txt' ]
- ✓ tests/utils/tests/TestSnapshot.test.ts (13 tests) 41ms
+ ✓ cli/commands/debug-transform.test.ts (3 tests) 8ms
+ ✓ tests/utils/tests/TestSnapshot.test.ts (13 tests) 63ms
 stdout | services/state/StateEventService/StateInstrumentation.test.ts > State Instrumentation > Error Handling > should handle errors in event handlers without affecting others
- ✓ services/state/StateEventService/StateInstrumentation.test.ts (7 tests) 28ms
-stdout | tests/utils/tests/TestContext.test.ts > TestContext > xml conversion > converts content to xml
-[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T00:56:06.311Z"}
-stdout | tests/utils/tests/TestContext.test.ts > TestContext > cleanup > cleans up resources properly
-Cleanup completed
-Re-initialized file system
-File exists after cleanup: false
- ✓ tests/utils/tests/TestContext.test.ts (11 tests) 140ms
+ ✓ services/state/StateEventService/StateInstrumentation.test.ts (7 tests) 24ms
 stdout | services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler.transformation.test.ts > RunDirectiveHandler Transformation > transformation behavior > should preserve error handling during transformation
  ✓ services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler.transformation.test.ts (5 tests) 11ms
 stdout | cli/commands/init.test.ts > initCommand > should create a meld.json file with custom project root
 Meld project initialized successfully.
 Project root set to: undefined
  ✓ cli/commands/init.test.ts (4 tests | 1 skipped) 5ms
- ✓ tests/utils/debug/StateHistoryService/StateHistoryService.test.ts (9 tests) 8ms
 stdout | services/pipeline/DirectiveService/DirectiveService.test.ts > DirectiveService > Directive processing > Import directives > should detect circular imports
- ✓ services/pipeline/DirectiveService/DirectiveService.test.ts (9 tests) 142ms
- ✓ tests/variable-index-debug.test.ts (3 tests) 7ms
- ✓ services/sourcemap/SourceMapService.test.ts (10 tests) 9ms
+ ✓ services/pipeline/DirectiveService/DirectiveService.test.ts (9 tests) 113ms
+ ✓ tests/utils/debug/StateHistoryService/StateHistoryService.test.ts (9 tests) 9ms
+ ✓ services/sourcemap/SourceMapService.test.ts (10 tests) 6ms
+stdout | tests/utils/tests/TestContext.test.ts > TestContext > xml conversion > converts content to xml
+[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T05:44:12.808Z"}
+stdout | tests/utils/tests/TestContext.test.ts > TestContext > cleanup > cleans up resources properly
+Cleanup completed
+Re-initialized file system
+File exists after cleanup: false
+ ✓ tests/utils/tests/TestContext.test.ts (11 tests) 140ms
 stdout | services/fs/FileSystemService/FileSystemService.test.ts > FileSystemService > File operations > throws MeldError when reading non-existent file
+ ✓ tests/variable-index-debug.test.ts (3 tests) 5ms
+stdout | services/fs/FileSystemService/FileSystemService.test.ts > FileSystemService > Directory operations > throws MeldError when reading non-existent directory
+ ✓ services/fs/FileSystemService/FileSystemService.test.ts (17 tests) 189ms
 stdout | services/state/StateService/migration.test.ts > State Migration > error handling > should handle migration errors gracefully
  ✓ services/state/StateService/migration.test.ts (8 tests) 8ms
-stdout | services/fs/FileSystemService/FileSystemService.test.ts > FileSystemService > Directory operations > throws MeldError when reading non-existent directory
- ✓ services/fs/FileSystemService/FileSystemService.test.ts (17 tests) 258ms
- ✓ tests/utils/debug/VariableResolutionTracker/VariableResolutionTracker.test.ts (14 tests) 7ms
- ✓ tests/utils/tests/ProjectBuilder.test.ts (10 tests) 30ms
- ✓ services/fs/ProjectPathResolver.test.ts (5 tests) 4ms
+ ✓ services/fs/ProjectPathResolver.test.ts (5 tests) 8ms
 stdout | tests/utils/tests/MemfsTestFileSystem.test.ts > MemfsTestFileSystem > error handling > throws when reading non-existent file
 stdout | tests/utils/tests/MemfsTestFileSystem.test.ts > MemfsTestFileSystem > error handling > throws when getting stats of non-existent path
- ✓ tests/utils/tests/MemfsTestFileSystem.test.ts (14 tests) 48ms
- ✓ services/resolution/ValidationService/validators/FuzzyMatchingValidator.test.ts (6 tests | 3 skipped) 4ms
  ✓ tests/utils/tests/FixtureManager.test.ts (9 tests) 8ms
+ ✓ tests/utils/tests/MemfsTestFileSystem.test.ts (14 tests) 21ms
+ ✓ tests/utils/tests/ProjectBuilder.test.ts (10 tests) 21ms
+ ✓ tests/utils/debug/VariableResolutionTracker/VariableResolutionTracker.test.ts (14 tests) 7ms
  ✓ tests/utils/fs/MockCommandExecutor.test.ts (7 tests) 6ms
- ✓ services/resolution/ResolutionService/resolvers/ContentResolver.test.ts (5 tests) 6ms
- ✓ services/state/StateService/StateService.transformation.test.ts (8 tests) 8ms
+ ✓ services/resolution/ValidationService/validators/FuzzyMatchingValidator.test.ts (6 tests | 3 skipped) 4ms
+ ✓ services/resolution/ResolutionService/resolvers/ContentResolver.test.ts (5 tests) 11ms
+ ✓ services/state/StateService/StateService.transformation.test.ts (8 tests) 5ms
 stdout | services/state/StateEventService/StateEventService.test.ts > StateEventService > should continue processing handlers after error
- ✓ services/state/StateEventService/StateEventService.test.ts (8 tests) 24ms
-stdout | tests/specific-variable-resolution.test.ts > Variable Resolution Specific Tests > should handle nested object data structures with variable references
-[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T00:56:07.320Z"}
-stdout | services/resolution/CircularityService/CircularityService.test.ts > CircularityService > Circular import detection > should detect direct circular imports
-stdout | services/resolution/CircularityService/CircularityService.test.ts > CircularityService > Circular import detection > should detect indirect circular imports
-stdout | services/resolution/CircularityService/CircularityService.test.ts > CircularityService > Circular import detection > should include import chain in error
- ✓ services/resolution/CircularityService/CircularityService.test.ts (10 tests) 8ms
-stdout | tests/specific-variable-resolution.test.ts > Variable Resolution Specific Tests > should handle array access in variable references
-[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T00:56:07.360Z"}
-stdout | tests/specific-variable-resolution.test.ts > Variable Resolution Specific Tests > should format output with variable references
-[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T00:56:07.381Z"}
- ✓ tests/specific-variable-resolution.test.ts (3 tests) 201ms
- ✓ tests/comment-handling-fix.test.ts (3 tests) 66ms
+ ✓ services/state/StateEventService/StateEventService.test.ts (8 tests) 28ms
 stdout | tests/cli/cli-error-handling.test.ts > CLI Error Handling > Using standalone utilities > should handle permissive mode for missing variables
 stdout | tests/cli/cli-error-handling.test.ts > CLI Error Handling > Using standalone utilities > should throw errors in strict mode
 stdout | tests/cli/cli-error-handling.test.ts > CLI Error Handling > Using TestContext > should handle multiple errors in permissive mode
- ✓ tests/cli/cli-error-handling.test.ts (3 tests) 91ms
+stdout | tests/cli/cli-error-handling.test.ts > CLI Error Handling > Using TestContext > should handle multiple errors in permissive mode
+ ✓ tests/cli/cli-error-handling.test.ts (3 tests) 64ms
+stdout | tests/specific-variable-resolution.test.ts > Variable Resolution Specific Tests > should handle nested object data structures with variable references
+[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T05:44:13.829Z"}
+ ✓ tests/comment-handling-fix.test.ts (3 tests) 58ms
+stdout | tests/specific-variable-resolution.test.ts > Variable Resolution Specific Tests > should handle array access in variable references
+[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T05:44:13.845Z"}
 stdout | api/resolution-debug.test.ts > Variable Resolution Debug Tests > should handle simple text variables
-[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T00:56:07.507Z"}
+[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T05:44:13.848Z"}
+stdout | tests/specific-variable-resolution.test.ts > Variable Resolution Specific Tests > should format output with variable references
+[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T05:44:13.868Z"}
+ ✓ tests/specific-variable-resolution.test.ts (3 tests) 163ms
 stdout | tests/embed-line-number-fix.test.ts > Embed Directive Line Number Mismatch Fix > should replace embed directive with content even if line numbers shift
-[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"none"},"timestamp":"2025-03-06T00:56:07.545Z"}
+[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"none"},"timestamp":"2025-03-06T05:44:13.864Z"}
+stdout | services/resolution/CircularityService/CircularityService.test.ts > CircularityService > Circular import detection > should detect direct circular imports
+stdout | services/resolution/CircularityService/CircularityService.test.ts > CircularityService > Circular import detection > should detect indirect circular imports
+stdout | services/resolution/CircularityService/CircularityService.test.ts > CircularityService > Circular import detection > should include import chain in error
+ ✓ services/resolution/CircularityService/CircularityService.test.ts (10 tests) 10ms
 stdout | api/resolution-debug.test.ts > Variable Resolution Debug Tests > should handle basic array access with dot notation
-[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T00:56:07.558Z"}
+[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T05:44:13.882Z"}
+stdout | api/resolution-debug.test.ts > Variable Resolution Debug Tests > should handle object array access with dot notation
+[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T05:44:13.911Z"}
+ ✓ tests/embed-line-number-fix.test.ts (2 tests) 195ms
+stdout | api/resolution-debug.test.ts > Variable Resolution Debug Tests > should handle complex nested arrays
+[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T05:44:13.939Z"}
+ ✓ api/resolution-debug.test.ts (4 tests) 202ms
 stdout | tests/sourcemap/sourcemap-integration.test.ts > Source Mapping Integration > Errors in imported files are reported with correct source location
 Error type: MeldParseError
 Error properties: [
@@ -1531,39 +1539,33 @@ Error properties: [
 ]
 Error message: Parse error: Parse error: Expected "$", "[", "{{", or whitespace but "p" found. at line 4, column 9
 Got expected error when processing invalid file: Parse error: Parse error: Expected "$", "[", "{{", or whitespace but "p" found. at line 4, column 9
- ✓ tests/sourcemap/sourcemap-integration.test.ts (2 tests) 16ms
-stdout | api/resolution-debug.test.ts > Variable Resolution Debug Tests > should handle object array access with dot notation
-[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T00:56:07.607Z"}
- ✓ tests/embed-line-number-fix.test.ts (2 tests) 248ms
-stdout | api/resolution-debug.test.ts > Variable Resolution Debug Tests > should handle complex nested arrays
-[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T00:56:07.631Z"}
- ✓ api/resolution-debug.test.ts (4 tests) 293ms
+ ✓ tests/sourcemap/sourcemap-integration.test.ts (2 tests) 47ms
  ↓ tests/utils/examples/RunDirectiveCommandMock.test.ts (3 tests | 3 skipped)
- ✓ tests/embed-transformation-variable-fix.test.ts (1 test) 43ms
- ✓ services/fs/FileSystemService/PathOperationsService.test.ts (8 tests) 3ms
-stdout | tests/transformation-debug.test.ts > Transformation Debug Tests > should transform simple text variables without newlines
-[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T00:56:07.892Z"}
-stdout | tests/transformation-debug.test.ts > Transformation Debug Tests > should transform array access with dot notation
-[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T00:56:07.930Z"}
- ✓ tests/transformation-debug.test.ts (2 tests) 126ms
+ ✓ services/fs/FileSystemService/PathOperationsService.test.ts (8 tests) 5ms
+ ✓ tests/embed-transformation-variable-fix.test.ts (1 test) 48ms
 stdout | tests/embed-transformation-e2e.test.ts > Embed Directive Transformation E2E > should replace embed directive with section content in transformation mode
-[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"none"},"timestamp":"2025-03-06T00:56:07.943Z"}
- ✓ tests/embed-transformation-e2e.test.ts (3 tests) 209ms
-stdout | tests/specific-nested-array.test.ts > Nested Arrays Specific Test > should handle nested array access correctly
-[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T00:56:08.012Z"}
- ✓ tests/specific-nested-array.test.ts (1 test) 122ms
- ✓ _dev/scripts/debug/debug-parser.test.ts (1 test) 29ms
+[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"none"},"timestamp":"2025-03-06T05:44:14.359Z"}
+ ✓ tests/embed-transformation-e2e.test.ts (3 tests) 146ms
+ ✓ _dev/scripts/debug/debug-parser.test.ts (1 test) 31ms
+stdout | tests/transformation-debug.test.ts > Transformation Debug Tests > should transform simple text variables without newlines
+[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T05:44:14.447Z"}
+stdout | tests/transformation-debug.test.ts > Transformation Debug Tests > should transform array access with dot notation
+[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T05:44:14.491Z"}
+ ✓ tests/transformation-debug.test.ts (2 tests) 168ms
 stdout | api/nested-array.test.ts > Nested Array Access Tests > should handle nested array access with dot notation
-[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T00:56:08.115Z"}
- ✓ api/nested-array.test.ts (1 test) 96ms
+[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T05:44:14.492Z"}
+ ✓ api/nested-array.test.ts (1 test) 141ms
+stdout | tests/specific-nested-array.test.ts > Nested Arrays Specific Test > should handle nested array access correctly
+[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T05:44:14.515Z"}
+ ✓ tests/specific-nested-array.test.ts (1 test) 160ms
 stdout | api/array-access.test.ts > Array Access Tests > should handle direct array access with dot notation
-[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T00:56:08.140Z"}
- ✓ api/array-access.test.ts (1 test) 90ms
- Test Files  81 passed | 1 skipped (82)
-      Tests  844 passed | 13 skipped | 8 todo (865)
-   Start at  16:56:02
-   Duration  5.54s (transform 1.40s, setup 21.33s, collect 3.00s, tests 5.40s, environment 9ms, prepare 5.06s)
-(node:45640) MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 11 warning listeners added to [EventEmitter]. MaxListeners is 10. Use emitter.setMaxListeners() to increase limit
+[32minfo[39m: LLMXML instance created {"options":{"defaultFuzzyThreshold":0.7,"includeHlevel":false,"includeTitle":false,"tagFormat":"PascalCase","verbose":false,"warningLevel":"all"},"timestamp":"2025-03-06T05:44:14.527Z"}
+ ✓ api/array-access.test.ts (1 test) 123ms
+ Test Files  82 passed | 1 skipped (83)
+      Tests  849 passed | 13 skipped | 8 todo (870)
+   Start at  21:44:08
+   Duration  5.69s (transform 1.71s, setup 22.04s, collect 3.20s, tests 5.30s, environment 10ms, prepare 5.57s)
+(node:74318) MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 11 warning listeners added to [EventEmitter]. MaxListeners is 10. Use emitter.setMaxListeners() to increase limit
 (Use `node --trace-warnings ...` to show where the warning was created)
 stderr | services/resolution/ResolutionService/resolvers/StringConcatenationHandler.test.ts > StringConcatenationHandler > hasConcatenation > should fall back to regex detection when AST parsing fails
 Failed to check concatenation with AST, falling back to regex: Error: Parse error
@@ -1612,7 +1614,7 @@ Failed to parse concatenation with AST, falling back to manual parsing: Error: P
     at runSuite (file:///Users/adam/dev/meld/node_modules/@vitest/runner/dist/index.js:1205:15)
     at runSuite (file:///Users/adam/dev/meld/node_modules/@vitest/runner/dist/index.js:1205:15)
     at runFiles (file:///Users/adam/dev/meld/node_modules/@vitest/runner/dist/index.js:1262:5)
-(node:45693) MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 11 warning listeners added to [EventEmitter]. MaxListeners is 10. Use emitter.setMaxListeners() to increase limit
+(node:74374) MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 11 warning listeners added to [EventEmitter]. MaxListeners is 10. Use emitter.setMaxListeners() to increase limit
 (Use `node --trace-warnings ...` to show where the warning was created)
 stderr | services/resolution/ResolutionService/resolvers/StringLiteralHandler.test.ts > StringLiteralHandler > isStringLiteral > should fall back to regex when AST parsing fails
 Failed to check string literal with AST, falling back to manual check: Error: Parse error

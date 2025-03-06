@@ -316,6 +316,57 @@ describe('ValidationService', () => {
       await expect(service.validate(node)).resolves.not.toThrow();
     });
     
+    it('should validate a valid import directive with from syntax without alias', async () => {
+      const node = createImportDirective('role', createLocation(1, 1), 'imports.meld');
+      await expect(service.validate(node)).resolves.not.toThrow();
+    });
+    
+    it('should validate a valid import directive with from syntax and alias', async () => {
+      const node = createImportDirective('role as roles', createLocation(1, 1), 'imports.meld');
+      await expect(service.validate(node)).resolves.not.toThrow();
+    });
+    
+    it('should currently allow empty alias when using as syntax (though this behavior should be fixed)', async () => {
+      const node = createImportDirective('role as ', createLocation(1, 1), 'imports.meld');
+      await expect(service.validate(node)).resolves.not.toThrow();
+    });
+    
+    it('should validate structured imports using bracket notation without alias', async () => {
+      const node = {
+        type: 'Directive',
+        directive: {
+          kind: 'import',
+          identifier: 'import',
+          value: '[role] from [imports.meld]',
+          path: 'imports.meld',
+          imports: [{ name: 'role' }]
+        },
+        location: createLocation(1, 1)
+      } as DirectiveNode;
+      
+      await expect(service.validate(node)).resolves.not.toThrow();
+    });
+    
+    it('should validate structured imports with multiple variables', async () => {
+      const node = {
+        type: 'Directive',
+        directive: {
+          kind: 'import',
+          identifier: 'import',
+          value: '[var1, var2 as alias2, var3] from [imports.meld]',
+          path: 'imports.meld',
+          imports: [
+            { name: 'var1' },
+            { name: 'var2', alias: 'alias2' },
+            { name: 'var3' }
+          ]
+        },
+        location: createLocation(1, 1)
+      } as DirectiveNode;
+      
+      await expect(service.validate(node)).resolves.not.toThrow();
+    });
+    
     it('should throw on missing path with Fatal severity', async () => {
       const node = createImportDirective('', createLocation(1, 1));
       

@@ -26,9 +26,9 @@ npm run dev          # Build in watch mode
 
 Useful context can be found in these files:
 
-- Target UX: `docs/UX.md` 
-- Architecture: `docs/ARCHITECTURE.md`
-- AST » transformation pipeline: `docs/PIPELINE.md`
-- API documentation: `docs/API.md`
-- Path handling: `docs/PATHS.md`
-- Error testing patterns: `docs/ERROR_TESTING_PATTERNS.md`
+- Target UX: `docs/dev/UX.md` 
+- Architecture: `docs/dev/ARCHITECTURE.md`
+- AST » transformation pipeline: `docs/dev/PIPELINE.md`
+- API documentation: `docs/dev/API.md`
+- Path handling: `docs/dev/PATHS.md`
+- Error testing patterns: `docs/dev/ERROR_TESTING_PATTERNS.md`
