@@ -177,12 +177,14 @@ export class DirectiveService implements IDirectiveService {
   - ✅ ValidationService (already complete)
 - Migrated core pipeline services:
   - ✅ FileSystemService (already complete)
+  - ✅ ParserService
 - Started tracking migration progress by service
 
 ## Next Steps
 
 1. Continue with Core Pipeline services:
-   - [ ] ParserService
+   - [ ] InterpreterService
+   - [ ] DirectiveService
 2. Document patterns as we go for service-specific requirements
 3. Track progress and update documentation regularly
 
