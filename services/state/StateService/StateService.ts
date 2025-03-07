@@ -59,13 +59,19 @@ export class StateService implements IStateService {
       // Legacy mode - initialize with basic factory
       this.stateFactory = new StateFactory();
       
-      // If only eventService was provided in legacy mode
-      if (parentState === undefined && eventService) {
-        this.eventService = eventService;
+      // Legacy constructor overloading - handle various parameters
+      if (eventService && !trackingService && !parentState) {
+        // Handle StateService(eventService) legacy signature
+        this.eventService = eventService as IStateEventService;
+        this.initializeState();
+      } else if (eventService && !trackingService && parentState) {
+        // Handle StateService(parentState) legacy signature
+        // In this case eventService is actually the parentState
+        this.initializeState(eventService as unknown as IStateService);
+      } else {
+        // Default case or explicit initialize() call later
+        this.initializeState(parentState as IStateService);
       }
-      
-      // Initialize with parent if provided
-      this.initializeState(parentState as IStateService);
     }
   }
   

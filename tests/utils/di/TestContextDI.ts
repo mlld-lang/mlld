@@ -11,11 +11,13 @@ import { CircularityService } from '@services/resolution/CircularityService/Circ
 import { ParserService } from '@services/pipeline/ParserService/ParserService';
 import { StateEventService } from '@services/state/StateEventService/StateEventService';
 import { StateService } from '@services/state/StateService/StateService';
+import { StateFactory } from '@services/state/StateService/StateFactory';
 import { InterpreterService } from '@services/pipeline/InterpreterService/InterpreterService';
 import { DirectiveService } from '@services/pipeline/DirectiveService/DirectiveService';
 import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService';
 import { OutputService } from '@services/pipeline/OutputService/OutputService';
 import { TestDebuggerService } from '../debug/TestDebuggerService';
+import { StateTrackingService } from '../debug/StateTrackingService/StateTrackingService';
 
 import type { IOutputService } from '@services/pipeline/OutputService/IOutputService';
 import type { IDirectiveService } from '@services/pipeline/DirectiveService/IDirectiveService';
@@ -99,7 +101,8 @@ export class TestContextDI extends TestContext {
     const circularity = new CircularityService();
     const parser = new ParserService();
     const eventService = new StateEventService();
-    const state = new StateService(eventService);
+    const stateFactory = new StateFactory();
+    const state = new StateService(stateFactory, eventService);
     const interpreter = new InterpreterService();
     const directive = new DirectiveService();
     const resolution = new ResolutionService(state, filesystem, parser, path);
@@ -114,6 +117,7 @@ export class TestContextDI extends TestContext {
     this.container.registerMock('CircularityService', circularity);
     this.container.registerMock('ParserService', parser);
     this.container.registerMock('StateEventService', eventService);
+    this.container.registerMock('StateFactory', stateFactory);
     this.container.registerMock('StateService', state);
     this.container.registerMock('InterpreterService', interpreter);
     this.container.registerMock('DirectiveService', directive);
@@ -135,6 +139,11 @@ export class TestContextDI extends TestContext {
     this.container.registerMock('IResolutionService', resolution);
     this.container.registerMock('IOutputService', output);
     this.container.registerMock('IStateDebuggerService', debugger_);
+    
+    // Register state tracking service if needed
+    if (this.services.debug?.tracking) {
+      this.container.registerMock('IStateTrackingService', this.services.debug.tracking);
+    }
     
     // Initialize the services that need explicit initialization
     path.initialize(filesystem, parser);
