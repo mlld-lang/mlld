@@ -18,8 +18,8 @@ This phase focuses on creating the foundation for the TSyringe migration by clea
 - ✅ Refactor StateService constructor
 - ✅ Refactor ResolutionService constructor
 - ✅ Refactor OutputService constructor
-- ⬜ Refactor FileSystemService constructor
-- ⬜ Refactor DirectiveService constructor
+- ✅ FileSystemService constructor (already follows pattern)
+- ⬜ Refactor DirectiveService constructor (complex circular dependencies)
 - ⬜ Refactor remaining service constructors
 
 **Pattern to Follow**:
@@ -79,14 +79,16 @@ private initializeFromParams(factory?: SomeFactory, dependency?: IDependency): v
 ## Current Status
 
 - Constructor simplification has been completed for StateService, ResolutionService, and OutputService
+- FileSystemService constructor was already following the appropriate pattern
+- DirectiveService has been identified as requiring more careful handling due to circular dependencies
 - Basic documentation has been created but needs expansion
 - Test helper improvements have not yet started
 
 ## Next Steps
 
-1. Complete the constructor simplification for FileSystemService
-2. Begin implementing test helper improvements
-3. Expand documentation with more examples
+1. Begin implementing test helper improvements (Phase 2)
+2. Create a plan for handling the more complex DirectiveService refactoring
+3. Expand documentation with more examples of the patterns discovered
 
 ## Related Documents
 
