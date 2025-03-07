@@ -9,6 +9,8 @@ export { default as TestContainerHelper } from './TestContainerHelper';
 export * from './TestContextDI';
 export * from './TestServiceUtilities';
 export { default as TestServiceUtilities } from './TestServiceUtilities';
+export * from './CircularDependencyTestHelper';
+export { default as CircularDependencyTestHelper } from './CircularDependencyTestHelper';
 
 // Keep backward compatibility
 export * from './MockServices';

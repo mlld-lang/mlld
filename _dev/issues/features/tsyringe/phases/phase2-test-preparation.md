@@ -138,17 +138,18 @@ describe('ServiceName', () => {
 - ✅ Enhanced TestContextDI with robust container scopes, improved cleanup, and better error messages 
 - ✅ Created TestServiceUtilities for consistent service access in both DI and non-DI modes
 - ✅ Added diagnostic tools and isolation utilities for test environment
-- ❌ No formal categorization of tests by DI dependency yet
+- ✅ Completed formal categorization of tests by DI dependency
 - ✅ Documented testing patterns for DI in code examples and provided reusable utilities
+- ✅ Added CircularDependencyTestHelper for testing circular dependencies
 
 ## Next Steps
 
 1. ✅ Enhance TestContextDI to provide a solid foundation (COMPLETED)
 2. ✅ Create test migration utilities to aid in the process (COMPLETED)
-3. ⏳ Begin categorizing tests based on DI dependency (NEXT PRIORITY)
-4. ✅ Establish and document testing patterns (MOSTLY COMPLETED)
-5. ⏳ Add specific utility for testing circular dependencies
-6. ⏳ Start using the new utilities to migrate existing tests
+3. ✅ Begin categorizing tests based on DI dependency (COMPLETED)
+4. ✅ Establish and document testing patterns (COMPLETED)
+5. ✅ Add specific utility for testing circular dependencies (COMPLETED)
+6. ⏳ Start using the new utilities to migrate existing tests (NEXT PRIORITY)
 
 ## Related Documents
 
