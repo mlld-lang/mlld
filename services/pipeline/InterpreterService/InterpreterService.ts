@@ -7,7 +7,7 @@ import { MeldInterpreterError, type InterpreterLocation } from '@core/errors/Mel
 import { MeldError, ErrorSeverity } from '@core/errors/MeldError.js';
 import { StateVariableCopier } from '@services/state/utilities/StateVariableCopier.js';
 import { Service } from '@core/ServiceProvider.js';
-import { inject, delay } from 'tsyringe';
+import { inject, injectable, delay } from 'tsyringe';
 
 const DEFAULT_OPTIONS: Required<Omit<InterpreterOptions, 'initialState' | 'errorHandler'>> = {
   filePath: '',
@@ -33,6 +33,7 @@ function getErrorMessage(error: unknown): string {
 /**
  * Service for interpreting Meld AST and executing directives
  */
+@injectable()
 @Service({
   description: 'Service for interpreting Meld AST nodes and executing directives',
   dependencies: [

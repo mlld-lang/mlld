@@ -178,12 +178,27 @@ export class DirectiveService implements IDirectiveService {
 - Migrated core pipeline services:
   - ✅ FileSystemService (already complete)
   - ✅ ParserService
+  - ✅ InterpreterService
 - Started tracking migration progress by service
+
+### Notes on InterpreterService Migration
+
+The InterpreterService already had most of the DI infrastructure in place:
+- It already used the `@inject()` decorator for constructor parameters
+- It had the `@Service()` decorator with proper metadata
+- It already handled circular dependencies with DirectiveService using setTimeout
+
+To complete the migration, we:
+1. Added the `@injectable()` decorator to the class
+2. Updated the unit tests to support both DI and non-DI modes
+3. Updated integration tests to run in both modes, verifying the service works correctly
+4. Verified DI container properly resolved circular dependencies between InterpreterService and DirectiveService
+
+The InterpreterService required special handling due to its circular dependency with DirectiveService. It uses setTimeout in its constructor to delay the assignment of dependencies, allowing the circular dependency to be resolved.
 
 ## Next Steps
 
 1. Continue with Core Pipeline services:
-   - [ ] InterpreterService
    - [ ] DirectiveService
 2. Document patterns as we go for service-specific requirements
 3. Track progress and update documentation regularly

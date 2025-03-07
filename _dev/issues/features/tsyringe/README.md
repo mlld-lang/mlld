@@ -75,7 +75,7 @@ Our migration strategy follows these key principles:
   - [x] Migrate ValidationService (already had TSyringe support)
   - [x] Migrate FileSystemService (already had TSyringe support)
   - [x] Migrate ParserService
-  - [ ] Migrate InterpreterService 
+  - [x] Migrate InterpreterService 
   - [ ] Migrate DirectiveService
   - [ ] And other services according to dependency order
 

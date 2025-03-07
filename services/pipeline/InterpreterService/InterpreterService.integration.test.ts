@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { TestContext } from '@tests/utils/index.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { MeldInterpreterError } from '@core/errors/MeldInterpreterError.js';
 import { DirectiveError } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { MeldImportError } from '@core/errors/MeldImportError.js';
@@ -18,12 +19,22 @@ import {
 import { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
 import { InterpreterService } from '@services/pipeline/InterpreterService/InterpreterService.js';
 
-describe('InterpreterService Integration', () => {
-  let context: TestContext;
+// Run integration tests for both DI and non-DI modes
+describe.each([
+  { useDI: false, name: 'without DI' },
+  { useDI: true, name: 'with DI' }
+])('InterpreterService Integration $name', ({ useDI }) => {
+  let context: TestContext | TestContextDI;
 
   beforeEach(async () => {
-    context = new TestContext();
-    await context.initialize();
+    // Initialize context based on DI mode
+    if (useDI) {
+      context = new TestContextDI();
+      await (context as TestContextDI).initialize(true); // true = use DI
+    } else {
+      context = new TestContext();
+      await context.initialize();
+    }
     await context.fixtures.load('interpreterTestProject');
   });
 

@@ -8,19 +8,17 @@ import { MeldNode, DirectiveNode as MeldDirective, TextNode, SourceLocation } fr
 import { IInterpreterService } from './IInterpreterService.js';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { createService } from '@core/ServiceProvider.js';
+import { container } from 'tsyringe';
 
 // Mock dependencies
-vi.mock('../../DirectiveService/DirectiveService');
-vi.mock('../../StateService/StateService');
+vi.mock('@services/pipeline/DirectiveService/DirectiveService.js');
+vi.mock('@services/state/StateService/StateService.js');
 
 describe('InterpreterService Unit', () => {
-  // For unit tests, temporarily skip the DI tests until we have better mock configuration
-  // Ideally we would run both, but since these are unit tests with heavy mocking,
-  // we'll focus on the non-DI path for now
+  // Run tests for both DI and non-DI modes
   describe.each([
     { useDI: false, name: 'without DI' },
-    // Temporarily commenting out DI mode for unit tests due to mock configuration challenges
-    // { useDI: true, name: 'with DI' }
+    { useDI: true, name: 'with DI' }
   ])('$name', ({ useDI }) => {
     let context: TestContextDI;
     let service: IInterpreterService;
@@ -97,15 +95,35 @@ describe('InterpreterService Unit', () => {
         parentState: undefined
       } as unknown as Mocked<StateService>;
 
-      // Initialize context
-      context = TestContextDI.withoutDI();
-      
-      // Since we're only running non-DI tests for now, initialize manually
-      service = new InterpreterService();
-      service.initialize(mockDirectiveService, mockStateService);
+      // Use DI or direct initialization based on test configuration
+      if (useDI) {
+        // Set up the DI container with our mocks
+        container.registerInstance('IDirectiveService', mockDirectiveService);
+        container.registerInstance('IStateService', mockStateService);
+        
+        // Initialize context with DI
+        context = TestContextDI.withDI();
+        
+        // Use the container to resolve the service
+        service = container.resolve(InterpreterService);
+        
+        // Need to give the service a moment to initialize via setTimeout
+        await new Promise(resolve => setTimeout(resolve, 10));
+      } else {
+        // Initialize context without DI
+        context = TestContextDI.withoutDI();
+        
+        // Manual initialization
+        service = new InterpreterService();
+        service.initialize(mockDirectiveService, mockStateService);
+      }
     });
 
     afterEach(async (): Promise<void> => {
+      // Clean up container registrations to prevent test interference
+      if (useDI) {
+        container.clearInstances();
+      }
       await context.cleanup();
     });
 
