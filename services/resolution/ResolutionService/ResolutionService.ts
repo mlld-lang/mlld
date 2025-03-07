@@ -131,22 +131,98 @@ export class ResolutionService implements IResolutionService {
   private contentResolver: ContentResolver;
   private variableReferenceResolver: VariableReferenceResolver;
   private resolutionTracker?: VariableResolutionTracker;
+  
+  private stateService: IStateService;
+  private fileSystemService: IFileSystemService;
+  private parserService: IParserService;
+  private pathService: IPathService;
 
+  /**
+   * Creates a new ResolutionService instance with dependency injection
+   * 
+   * @param stateService Service for accessing state variables
+   * @param fileSystemService Service for file operations
+   * @param parserService Service for parsing Meld text
+   * @param pathService Service for path resolution
+   */
   constructor(
-    private stateService: IStateService,
-    private fileSystemService: IFileSystemService,
-    private parserService: IParserService,
-    private pathService: IPathService
+    @inject('IStateService') stateService?: IStateService,
+    @inject('IFileSystemService') fileSystemService?: IFileSystemService,
+    @inject('IParserService') parserService?: IParserService,
+    @inject('IPathService') pathService?: IPathService
   ) {
-    this.textResolver = new TextResolver(stateService);
-    this.dataResolver = new DataResolver(stateService);
-    this.pathResolver = new PathResolver(stateService);
-    this.commandResolver = new CommandResolver(stateService);
-    this.contentResolver = new ContentResolver(stateService);
+    this.initializeFromParams(stateService, fileSystemService, parserService, pathService);
+  }
+  
+  /**
+   * Initialize this service with the given parameters
+   * Handles both DI and non-DI mode initialization
+   */
+  private initializeFromParams(
+    stateService?: IStateService,
+    fileSystemService?: IFileSystemService,
+    parserService?: IParserService,
+    pathService?: IPathService
+  ): void {
+    // Check if we're in DI mode by verifying all dependencies exist
+    if (stateService && fileSystemService && parserService && pathService) {
+      this.initializeDIMode(stateService, fileSystemService, parserService, pathService);
+    } else {
+      // In legacy non-DI mode, require at least the state service
+      if (!stateService) {
+        throw new Error('StateService is required for ResolutionService');
+      }
+      this.initializeLegacyMode(stateService, fileSystemService, parserService, pathService);
+    }
+  }
+  
+  /**
+   * Initialize in DI mode with explicit dependencies
+   */
+  private initializeDIMode(
+    stateService: IStateService,
+    fileSystemService: IFileSystemService,
+    parserService: IParserService,
+    pathService: IPathService
+  ): void {
+    this.stateService = stateService;
+    this.fileSystemService = fileSystemService;
+    this.parserService = parserService;
+    this.pathService = pathService;
+    
+    this.initializeResolvers();
+  }
+  
+  /**
+   * Initialize in legacy non-DI mode
+   */
+  private initializeLegacyMode(
+    stateService: IStateService,
+    fileSystemService?: IFileSystemService,
+    parserService?: IParserService,
+    pathService?: IPathService
+  ): void {
+    this.stateService = stateService;
+    this.fileSystemService = fileSystemService || {} as IFileSystemService;
+    this.parserService = parserService || {} as IParserService;
+    this.pathService = pathService || {} as IPathService;
+    
+    this.initializeResolvers();
+  }
+  
+  /**
+   * Initialize the resolver components used by this service
+   */
+  private initializeResolvers(): void {
+    this.textResolver = new TextResolver(this.stateService);
+    this.dataResolver = new DataResolver(this.stateService);
+    this.pathResolver = new PathResolver(this.stateService);
+    this.commandResolver = new CommandResolver(this.stateService);
+    this.contentResolver = new ContentResolver(this.stateService);
     this.variableReferenceResolver = new VariableReferenceResolver(
-      stateService,
+      this.stateService,
       this,
-      parserService
+      this.parserService
     );
   }
 

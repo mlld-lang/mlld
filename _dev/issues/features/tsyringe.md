@@ -57,16 +57,18 @@ We are following a phased approach:
 - DI container configuration in di-config.ts
 - Service decorator implementation
 - Refactored StateService constructor for better clarity
+- Refactored ResolutionService constructor with DI support
+- Documented initialization patterns in service-initialization-patterns.md
+- Updated DI documentation with constructor simplification pattern
 
 ### In Progress
 - [ ] Constructor simplification for key services (see [constructor-simplification.md](./constructor-simplification.md))
 - [ ] Migration planning and documentation
-- [ ] Document patterns for service initialization
 
 ### Up Next
-- [ ] Refactor ResolutionService constructor using the same pattern
 - [ ] Refactor OutputService constructor using the same pattern
-- [ ] Update DI documentation
+- [ ] Refactor FileSystemService constructor using the same pattern
+- [ ] Refactor DirectiveService constructor using the same pattern
 - [ ] Create test helpers for DI mode
 
 Note: Path normalization was initially considered as part of this work but has been separated into its own future task. See [path-normalization.md](./path-normalization.md) for details.

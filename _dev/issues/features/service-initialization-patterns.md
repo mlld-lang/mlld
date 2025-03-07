@@ -94,6 +94,22 @@ The StateService was refactored to use this pattern. The key improvements were:
 3. Making parameter overloading logic more explicit
 4. Improving documentation throughout
 
+### ResolutionService
+
+The ResolutionService presented a different case:
+
+1. It didn't previously use dependency injection annotations
+2. It required all dependencies to function properly
+3. It creates multiple child objects (resolvers) during initialization
+
+The key improvements from the refactoring:
+
+1. Added proper DI annotations with @inject
+2. Split initialization logic into clear, separate methods
+3. Added better error handling for missing dependencies
+4. Extracted resolver creation to a separate method
+5. Improved documentation
+
 ## Other Patterns
 
 ### Initialization Order
