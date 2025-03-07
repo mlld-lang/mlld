@@ -57,14 +57,16 @@ We are following a phased approach:
 - Service decorator implementation
 
 ### In Progress
-- [ ] Path normalization utility (see [tsyringe-first-task.md](./tsyringe-first-task.md))
-- [ ] Constructor simplification for key services
+- [ ] Constructor simplification for key services (see [constructor-simplification.md](./constructor-simplification.md))
+- [ ] Migration planning and documentation
 
 ### Up Next
-- [ ] Create standardized path normalization utility
-- [ ] Update TestSnapshot to use the normalization utility
-- [ ] Refactor StateService constructor for better clarity
+- [ ] Refactor StateService constructor for better clarity 
+- [ ] Document patterns for service initialization
 - [ ] Update DI documentation
+- [ ] Create test helpers for DI mode
+
+Note: Path normalization was initially considered as part of this work but has been separated into its own future task. See [path-normalization.md](./path-normalization.md) for details.
 
 ### Future Work
 - [ ] Enhance test helpers for DI/non-DI compatibility
