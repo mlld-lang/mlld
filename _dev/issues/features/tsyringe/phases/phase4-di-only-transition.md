@@ -161,15 +161,34 @@ try {
 - No opt-in mechanism for DI-only mode exists
 - No formal tracking of test migration status
 - No automated verification tools
+- Utility services (SourceMapService) now support DI with backward compatibility
+- Logger services still need to be migrated before transition
+
+### Handling Utility Services
+
+Utility services like SourceMapService, Logger, and others require special consideration during the transition to DI-only mode:
+
+1. **Maintain Backward Compatibility**: Even in DI-only mode, legacy code will still import singleton instances directly
+2. **Container Registration**: All utility services must be properly registered in the DI container
+3. **Service Resolution**: DI-compatible services should resolve utility services from the container
+4. **Testing Strategy**: Tests should gradually transition to using container-resolved instances
+
+During Phase 4, we'll need to:
+- Ensure all utility services have interfaces and proper TSyringe decorators
+- Register all utility services in the DI container
+- Update dependent services to inject these utilities rather than importing them
+- Extend the test helpers to properly handle utility services in DI-only mode
 
 ## Next Steps
 
-1. Create the DI-only mode opt-in mechanism
-2. Begin migrating tests in manageable batches
-3. Implement tracking for migration progress
-4. Create automated verification tools
+1. Complete migration of remaining utility services (Logger utilities)
+2. Create the DI-only mode opt-in mechanism
+3. Begin migrating tests in manageable batches
+4. Implement tracking for migration progress
+5. Create automated verification tools
 
 ## Related Documents
 
 - [DI Documentation](../reference/di-documentation.md)
-- [Service Initialization Patterns](../reference/service-initialization-patterns.md) 
+- [Service Initialization Patterns](../reference/service-initialization-patterns.md)
+- [Utility Services Migration](../reference/utility-services-migration.md) 

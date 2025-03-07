@@ -181,23 +181,72 @@ export class SomeService implements ISomeService {
 - Performance is satisfactory
 - All edge cases are handled correctly
 
+## Special Considerations for Utility Services
+
+Utility services like SourceMapService and Logger require special handling during the cleanup phase:
+
+1. **Update Exported Singletons**: Modify exported singleton instances to use the container
+   ```typescript
+   // Before
+   export const sourceMapService = new SourceMapService();
+   
+   // After
+   export const sourceMapService = container.resolve<ISourceMapService>('ISourceMapService');
+   ```
+
+2. **Update Service Registration**: Register the singleton instance in the container
+   ```typescript
+   // For backward compatibility, register the existing instance
+   container.registerInstance<ISourceMapService>('ISourceMapService', sourceMapService);
+   ```
+
+3. **Gradually Update Imports**: Identify and update imports across the codebase
+   ```typescript
+   // Before
+   import { sourceMapService } from '@core/utils/SourceMapService.js';
+   
+   // After (option 1 - keep backward compatibility)
+   import { sourceMapService } from '@core/utils/SourceMapService.js';
+   
+   // After (option 2 - fully embrace DI)
+   @inject('ISourceMapService') private sourceMapService: ISourceMapService
+   ```
+
+4. **Final Cleanup**: Once all dependent code uses DI, simplify the utility service exports
+   ```typescript
+   // Final form
+   @injectable()
+   @singleton()
+   @Service()
+   export class SourceMapService implements ISourceMapService {
+     // Implementation
+   }
+   
+   // Export removed or replaced with container resolution
+   ```
+
 ## Current Status
 
 - Dual-mode support is still present throughout the codebase
 - Many services have complex initialization logic
 - Legacy `initialize()` methods are still used
 - Documentation references both DI and non-DI approaches
+- Utility services require special handling for backward compatibility
+- SourceMapService migration provides a pattern for other utility services
 
 ## Next Steps
 
 1. Ensure all tests can run in DI-only mode before starting this phase
-2. Begin by updating `shouldUseDI()` to always return true
-3. Simplify service constructors one at a time
-4. Remove legacy initialization methods
-5. Update documentation
-6. Perform final verification
+2. Complete migration of all utility services (Logger, etc.)
+3. Begin by updating `shouldUseDI()` to always return true
+4. Simplify service constructors one at a time
+5. Remove legacy initialization methods
+6. Update utility service exports to use container
+7. Update documentation
+8. Perform final verification
 
 ## Related Documents
 
 - [Service Initialization Patterns](../reference/service-initialization-patterns.md)
-- [DI Documentation](../reference/di-documentation.md) 
+- [DI Documentation](../reference/di-documentation.md)
+- [Utility Services Migration](../reference/utility-services-migration.md)
