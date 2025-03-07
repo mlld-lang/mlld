@@ -4,7 +4,7 @@ The Meld CLI provides a simple way to process Meld files from the command line.
 
 ## Installation
 
-Install Meld globally to use the CLI:
+Install globally to use the CLI:
 
 ```bash
 npm install -g meld
