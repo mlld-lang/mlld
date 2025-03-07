@@ -22,7 +22,6 @@ Our migration strategy follows these key principles:
 ## Phase-by-Phase Migration Plan
 
 ### Phase 1: Foundation and Cleanup (Partially Completed)
-- Path normalization utilities
 - Constructor simplification
 - Documentation updates
 - [Details in phase1-cleanup.md](./phases/phase1-cleanup.md)
@@ -59,10 +58,9 @@ Our migration strategy follows these key principles:
 - Service decorator implementation
 - Multiple services decorated with `@Service()`
 - Tests for decorated services updated to work with both modes
-- Path normalization utilities created
 
 ### In Progress
-- [ ] Constructor simplification for remaining services
+- [ ] Constructor simplification for remaining services (OutputService completed)
 - [ ] Refining test infrastructure
 
 ### Up Next
@@ -73,7 +71,6 @@ Our migration strategy follows these key principles:
 
 - [Service Initialization Patterns](./reference/service-initialization-patterns.md) - Common patterns in the codebase
 - [Constructor Simplification](./reference/constructor-simplification.md) - Strategy for refactoring constructors
-- [Path Normalization](./reference/path-normalization.md) - Standards for path handling
 - [DI Documentation](./reference/di-documentation.md) - Guidelines for using DI
 
 ## Implementation Guidelines
