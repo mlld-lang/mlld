@@ -2,13 +2,24 @@
 
 This document tracks technical debt and improvements needed after the initial TSyringe dependency injection implementation. It focuses on areas where we took expedient shortcuts to make tests pass but should implement more robust solutions.
 
+## Implementation Plan
+
+We're taking a methodical approach to cleaning up the TSyringe implementation. See the following documents for details:
+
+- [**tsyringe.md**](./tsyringe.md) - Main entry point and progress tracker
+- [**tsyringe-cleanup-approach.md**](./tsyringe-cleanup-approach.md) - The overall migration strategy 
+- [**tsyringe-cleanup-revised.md**](./tsyringe-cleanup-revised.md) - Specific cleanup tasks that preserve dual-mode functionality
+- [**tsyringe-first-task.md**](./tsyringe-first-task.md) - Detailed implementation guide for path normalization
+- [**constructor-simplification.md**](./constructor-simplification.md) - Strategy for simplifying service constructors
+
 ## Prioritized Action Items
 
 Based on our comprehensive review, these issues should be addressed in the following priority order:
 
-### Critical (Must Fix Before Merge)
-1. **Dual-Mode Service Pattern** - Simplify the complex conditional logic in service constructors
-2. **Path Normalization** - Fix the brittle test suite detection and path handling approach
+### Phase 1: Cleanup Tasks (Current Focus)
+1. **Path Normalization** - Create standardized utilities without breaking existing functionality
+2. **Constructor Simplification** - Clean up service constructors while preserving dual-mode support
+3. **Documentation** - Improve DI documentation
 
 ### High Priority (Should Fix Before Release)
 1. **Documentation** - Create comprehensive guides for developers on DI usage
