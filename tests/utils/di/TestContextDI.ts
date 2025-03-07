@@ -6,6 +6,7 @@ import { MemfsTestFileSystem } from '../MemfsTestFileSystem';
 import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService';
 import { FileSystemService } from '@services/fs/FileSystemService/FileSystemService';
 import { PathService } from '@services/fs/PathService/PathService';
+import { ProjectPathResolver } from '@services/fs/ProjectPathResolver';
 import { ValidationService } from '@services/resolution/ValidationService/ValidationService';
 import { CircularityService } from '@services/resolution/CircularityService/CircularityService';
 import { ParserService } from '@services/pipeline/ParserService/ParserService';
@@ -95,8 +96,13 @@ export class TestContextDI extends TestContext {
     
     // Create service instances manually first
     const pathOps = new PathOperationsService();
-    const filesystem = new FileSystemService(pathOps, this.fs);
-    const path = new PathService();
+    const filesystem = new FileSystemService(pathOps, null, this.fs);
+    
+    // Create the ProjectPathResolver separately
+    const projectPathResolver = new ProjectPathResolver();
+    
+    // Create PathService with its dependencies
+    const path = new PathService(filesystem, null, projectPathResolver);
     const validation = new ValidationService();
     const circularity = new CircularityService();
     const parser = new ParserService();
@@ -119,6 +125,7 @@ export class TestContextDI extends TestContext {
     this.container.registerMock('PathOperationsService', pathOps);
     this.container.registerMock('FileSystemService', filesystem);
     this.container.registerMock('PathService', path);
+    this.container.registerMock('ProjectPathResolver', projectPathResolver);
     this.container.registerMock('ValidationService', validation);
     this.container.registerMock('CircularityService', circularity);
     this.container.registerMock('ParserService', parser);
@@ -154,8 +161,8 @@ export class TestContextDI extends TestContext {
     this.container.registerMock('IOutputService', output);
     this.container.registerMock('IStateDebuggerService', debugger_);
     
-    // Initialize the services that need explicit initialization
-    path.initialize(filesystem, parser);
+    // Initialize services that need explicit initialization
+    // ProjectPathResolver is already passed via constructor
     path.enableTestMode();
     // For TestContextDI.test.ts, we need to set the path to /project to match expectations
     path.setProjectPath('/project');

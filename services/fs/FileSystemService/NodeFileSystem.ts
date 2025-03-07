@@ -4,12 +4,18 @@ import type { IFileSystem } from './IFileSystem.js';
 import type { Stats } from 'fs';
 import { spawn, exec } from 'child_process';
 import { promisify } from 'util';
+import { injectable } from 'tsyringe';
+import { Service } from '../../../core/ServiceProvider';
 
 const execAsync = promisify(exec);
 
 /**
  * Adapter to use Node's fs-extra as our IFileSystem implementation
  */
+@injectable()
+@Service({
+  description: 'Node.js filesystem implementation'
+})
 export class NodeFileSystem implements IFileSystem {
   // Environmental check to determine if we're in a testing environment
   isTestEnvironment = process.env.NODE_ENV === 'test' || Boolean(process.env.VITEST);

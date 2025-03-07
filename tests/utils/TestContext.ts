@@ -11,6 +11,7 @@ import { ValidationService } from '@services/resolution/ValidationService/Valida
 import { StateService } from '@services/state/StateService/StateService.js';
 import { StateFactory } from '@services/state/StateService/StateFactory.js';
 import { PathService } from '@services/fs/PathService/PathService.js';
+import { ProjectPathResolver } from '@services/fs/ProjectPathResolver.js';
 import { CircularityService } from '@services/resolution/CircularityService/CircularityService.js';
 import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService.js';
 import { FileSystemService } from '@services/fs/FileSystemService/FileSystemService.js';
@@ -117,12 +118,14 @@ export class TestContext {
 
     // Initialize services
     const pathOps = new PathOperationsService();
-    const filesystem = new FileSystemService(pathOps, this.fs);
+    const filesystem = new FileSystemService(pathOps, null, this.fs);
     const validation = new ValidationService();
-    const path = new PathService();
     
-    // Initialize PathService first
-    path.initialize(filesystem);
+    // Create ProjectPathResolver
+    const projectPathResolver = new ProjectPathResolver();
+    
+    // Create PathService with its dependencies
+    const path = new PathService(filesystem, null, projectPathResolver);
     path.enableTestMode();
     path.setProjectPath('/project');
     

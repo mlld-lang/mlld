@@ -11,9 +11,12 @@ import { ParserService } from '../services/pipeline/ParserService/ParserService.
 import { InterpreterService } from '../services/pipeline/InterpreterService/InterpreterService.js';
 import { DirectiveService } from '../services/pipeline/DirectiveService/DirectiveService.js';
 import { PathService } from '../services/fs/PathService/PathService.js';
+import { ProjectPathResolver } from '../services/fs/ProjectPathResolver.js';
 import { ErrorDisplayService } from '../services/display/ErrorDisplayService/ErrorDisplayService.js';
 import { ValidationService } from '../services/resolution/ValidationService/ValidationService.js';
 import { StateTrackingService } from '../tests/utils/debug/StateTrackingService/StateTrackingService.js';
+import { PathOperationsService } from '../services/fs/FileSystemService/PathOperationsService.js';
+import { NodeFileSystem } from '../services/fs/FileSystemService/NodeFileSystem.js';
 
 /**
  * This file contains the configuration for dependency injection using tsyringe.
@@ -63,4 +66,15 @@ container.register('IErrorDisplayService', { useToken: 'ErrorDisplayService' });
 
 // ValidationService
 container.register('ValidationService', { useClass: ValidationService });
-container.register('IValidationService', { useToken: 'ValidationService' }); 
+container.register('IValidationService', { useToken: 'ValidationService' });
+
+// ProjectPathResolver
+container.register(ProjectPathResolver, { useClass: ProjectPathResolver });
+
+// PathOperationsService
+container.register('PathOperationsService', { useClass: PathOperationsService });
+container.register('IPathOperationsService', { useToken: 'PathOperationsService' });
+
+// NodeFileSystem
+container.register('NodeFileSystem', { useClass: NodeFileSystem });
+container.register('IFileSystem', { useToken: 'NodeFileSystem' }); 

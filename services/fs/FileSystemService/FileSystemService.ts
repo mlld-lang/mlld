@@ -10,6 +10,8 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import { MeldFileSystemError } from '@core/errors/MeldFileSystemError.js';
 import { IPathService } from '../PathService/IPathService.js';
+import { injectable, inject } from 'tsyringe';
+import { Service } from '../../../core/ServiceProvider';
 
 const execAsync = promisify(exec);
 
@@ -20,15 +22,23 @@ interface FileOperationContext {
   [key: string]: unknown;
 }
 
+@injectable()
+@Service({
+  description: 'Service for file system operations'
+})
 export class FileSystemService implements IFileSystemService {
   private fs: IFileSystem;
   private pathService?: IPathService;
 
   constructor(
-    private readonly pathOps: IPathOperationsService,
-    fileSystem?: IFileSystem
+    @inject('IPathOperationsService') private readonly pathOps: IPathOperationsService,
+    @inject('IPathService') pathService: IPathService | null = null,
+    @inject('IFileSystem') fileSystem: IFileSystem | null = null
   ) {
     this.fs = fileSystem || new NodeFileSystem();
+    if (pathService) {
+      this.pathService = pathService;
+    }
   }
 
   setFileSystem(fileSystem: IFileSystem): void {
@@ -39,13 +49,16 @@ export class FileSystemService implements IFileSystemService {
     return this.fs;
   }
 
+  /**
+   * @deprecated Use constructor injection instead
+   */
   setPathService(pathService: IPathService): void {
     this.pathService = pathService;
   }
 
   private resolvePath(filePath: string): string {
     // If we have a PathService, use it for resolving paths
-    if (this.pathService) {
+    if (this.pathService && typeof this.pathService.resolvePath === 'function') {
       return this.pathService.resolvePath(filePath);
     }
     

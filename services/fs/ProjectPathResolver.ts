@@ -1,9 +1,11 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { injectable } from 'tsyringe';
 
 /**
  * Service for securely resolving project paths
  */
+@injectable()
 export class ProjectPathResolver {
   // Common project markers in order of specificity
   private static PROJECT_MARKERS = [

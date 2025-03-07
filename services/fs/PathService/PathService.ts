@@ -13,15 +13,18 @@ import {
   PathErrorMessages 
 } from '../../../core/errors';
 import { Service } from '../../../core/ServiceProvider';
+import { injectable, inject } from 'tsyringe';
+import { container } from 'tsyringe';
 
 /**
  * Service for validating and normalizing paths
  */
+@injectable()
 @Service({
   description: 'Service for validating and normalizing paths according to Meld rules'
 })
 export class PathService implements IPathService {
-  private fs: IFileSystemService | null = null;
+  private fs: IFileSystemService;
   private parser: IParserService | null = null;
   private testMode: boolean = false;
   private homePath: string;
@@ -29,18 +32,36 @@ export class PathService implements IPathService {
   private projectPathResolver: ProjectPathResolver;
   private projectPathResolved: boolean = false;
 
-  constructor() {
+  constructor(
+    @inject('IFileSystemService') fileSystem: IFileSystemService,
+    @inject('IParserService') parser: IParserService | null = null,
+    @inject(ProjectPathResolver) private projectPathResolver: ProjectPathResolver
+  ) {
     const homeEnv = process.env.HOME || process.env.USERPROFILE;
     if (!homeEnv && !this.testMode) {
       throw new Error('Unable to determine home directory: HOME or USERPROFILE environment variables are not set');
     }
     this.homePath = homeEnv || '';
     this.projectPath = process.cwd();
-    this.projectPathResolver = new ProjectPathResolver();
+    
+    // Store services
+    this.fs = fileSystem;
+    if (parser) {
+      this.parser = parser;
+    }
+    
+    if (process.env.DEBUG === 'true') {
+      console.log('PathService: Initialized with filesystem and parser:', {
+        hasFileSystem: !!this.fs,
+        hasParser: !!this.parser,
+        testMode: this.testMode
+      });
+    }
   }
 
   /**
    * Initialize the path service with a file system service
+   * @deprecated Use constructor injection instead
    */
   initialize(fileSystem: IFileSystemService, parser?: IParserService): void {
     // Make sure we always have a file system reference
@@ -131,7 +152,7 @@ export class PathService implements IPathService {
     }
 
     // Use the resolver to find the project path
-    const cwd = this.fs ? this.fs.getCwd() : process.cwd();
+    const cwd = this.fs.getCwd();
     const resolvedPath = await this.projectPathResolver.resolveProjectRoot(cwd);
     this.projectPath = resolvedPath;
     this.projectPathResolved = true;
@@ -878,15 +899,10 @@ export class PathService implements IPathService {
 
       // IMPORTANT: Check file existence if required
       if (options.mustExist === true) {
-        if (!this.fs) {
-          throw new Error('FileSystemService is required for existence checks');
-        }
-        
         if (process.env.DEBUG === 'true') {
           console.log('PathService: Checking if file exists (mustExist):', {
             resolvedPath,
-            testMode: this.testMode,
-            fsAvailable: !!this.fs
+            testMode: this.testMode
           });
         }
         
@@ -924,9 +940,6 @@ export class PathService implements IPathService {
 
       // IMPORTANT: Check file type if required
       if (options.mustBeFile === true || options.mustBeDirectory === true) {
-        if (!this.fs) {
-          throw new Error('FileSystemService is required for file type checks');
-        }
         
         if (process.env.DEBUG === 'true') {
           console.log('PathService: Checking file type (mustBeFile/mustBeDirectory):', {
