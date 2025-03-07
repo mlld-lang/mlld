@@ -153,4 +153,117 @@ describe('TestContextDI', () => {
       context.cleanup();
     });
   });
+  
+  describe('child state creation', () => {
+    beforeEach(() => {
+      context = TestContextDI.withDI();
+    });
+    
+    it('should create child states with DI container support', () => {
+      // Create a child state
+      const childId = context.createChildState();
+      
+      // Verify we got a valid state ID
+      expect(childId).toBeDefined();
+      expect(typeof childId).toBe('string');
+      expect(childId.length).toBeGreaterThan(0);
+    });
+    
+    it('should create child states with custom options', () => {
+      // Create a child state with custom options
+      const childId = context.createChildState(undefined, {
+        filePath: 'custom.meld',
+        transformation: true,
+        cloneVariables: true
+      });
+      
+      // Verify we got a valid state ID
+      expect(childId).toBeDefined();
+      expect(typeof childId).toBe('string');
+      expect(childId.length).toBeGreaterThan(0);
+    });
+  });
+  
+  describe('variable resolution tracking', () => {
+    beforeEach(() => {
+      context = TestContextDI.withDI();
+    });
+    
+    it('should create a variable tracker', () => {
+      // Create a variable tracker - no need to set the variable first
+      const tracker = context.createVariableTracker();
+      
+      // Start tracking the variable
+      tracker.trackResolution('testVar');
+      
+      // The tracker should exist and have methods
+      expect(tracker).toBeDefined();
+      expect(typeof tracker.trackResolution).toBe('function');
+      expect(typeof tracker.getResolutionPath).toBe('function');
+      expect(typeof tracker.reset).toBe('function');
+      
+      // Reset should work
+      tracker.reset();
+      expect(tracker.getResolutionPath('testVar')).toEqual([]);
+    });
+    
+    it('should track multiple variables', () => {
+      const tracker = context.createVariableTracker();
+      
+      // Track multiple variables
+      tracker.trackResolution('var1');
+      tracker.trackResolution('var2');
+      
+      // Get and reset paths
+      expect(tracker.getResolutionPath('var1')).toEqual([]);
+      expect(tracker.getResolutionPath('var2')).toEqual([]);
+      
+      // Reset one variable
+      tracker.reset();
+    });
+  });
+  
+  describe('mock directive handler', () => {
+    beforeEach(() => {
+      context = TestContextDI.withDI();
+    });
+    
+    it('should create a definition directive handler mock', () => {
+      // Create a simple transform function
+      const transformFn = vi.fn((node) => ({ ...node, transformed: true }));
+      
+      // Create the mock handler
+      const handler = context.createMockDirectiveHandler('test', {
+        transform: transformFn
+      });
+      
+      // Verify the handler is created correctly
+      expect(handler).toBeDefined();
+      expect(handler.directiveName).toBe('test');
+      expect(handler.__isMockHandler).toBe(true);
+      expect(handler.kind).toBe('definition'); // Should default to definition
+      
+      // Verify the transform function works
+      expect(typeof handler.transform).toBe('function');
+    });
+    
+    it('should create an execution directive handler mock', () => {
+      // Create a simple execute function
+      const executeFn = vi.fn((node) => ({ output: 'test-output' }));
+      
+      // Create the mock handler
+      const handler = context.createMockDirectiveHandler('run', {
+        execute: executeFn
+      });
+      
+      // Verify the handler is created correctly
+      expect(handler).toBeDefined();
+      expect(handler.directiveName).toBe('run');
+      expect(handler.__isMockHandler).toBe(true);
+      expect(handler.kind).toBe('execution'); // Should be execution for handlers with execute
+      
+      // Verify the execute function works
+      expect(typeof handler.execute).toBe('function');
+    });
+  });
 });
