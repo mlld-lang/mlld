@@ -18,9 +18,7 @@ describe('DirectiveService', () => {
 
     beforeEach(async () => {
       // Initialize test context with the right DI mode
-      context = useDI
-        ? TestContextDI.withDI()
-        : TestContextDI.withoutDI();
+      context = TestContextDI.create({ useDI });
       
       // Load test fixtures (common for both modes)
       await context.fixtures.load('directiveTestProject');
@@ -47,18 +45,12 @@ describe('DirectiveService', () => {
         }
       }
       
-      // Get or create the service using the appropriate method
+      // Create or get the service based on mode
       if (useDI) {
-        // When using DI, resolve the service from the container
-        service = context.container.resolve<IDirectiveService>('IDirectiveService');
-        
-        // In DI mode, make sure the service is properly initialized
-        if (!service.getSupportedDirectives || service.getSupportedDirectives().length === 0) {
-          console.log('DirectiveService not fully initialized in DI mode, registering handlers manually');
-          service.registerDefaultHandlers();
-        }
+        // In DI mode, get from container
+        service = context.resolve<IDirectiveService>('IDirectiveService');
       } else {
-        // When not using DI, create and initialize the service manually
+        // In non-DI mode, create and initialize manually
         service = new DirectiveService();
         service.initialize(
           context.services.validation,
@@ -70,6 +62,16 @@ describe('DirectiveService', () => {
           context.services.circularity,
           context.services.resolution
         );
+      }
+      
+      // In both modes, we need to make sure handlers are registered
+      if (!service.getSupportedDirectives || service.getSupportedDirectives().length === 0) {
+        console.log('DirectiveService not fully initialized, registering handlers');
+        
+        // Register handlers (should be a no-op in DI mode if already done)
+        if (typeof service.registerDefaultHandlers === 'function') {
+          service.registerDefaultHandlers();
+        }
       }
     });
 

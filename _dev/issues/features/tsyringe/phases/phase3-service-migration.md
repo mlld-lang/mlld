@@ -199,9 +199,25 @@ The InterpreterService required special handling due to its circular dependency 
 ## Next Steps
 
 1. Continue with Core Pipeline services:
-   - [ ] DirectiveService
+   - [x] DirectiveService
+   - [ ] OutputService
+   - [ ] ResolutionService
 2. Document patterns as we go for service-specific requirements
 3. Track progress and update documentation regularly
+
+### Notes on DirectiveService Migration
+
+The DirectiveService already had most of the TSyringe infrastructure in place:
+- It was already using the `@inject()` decorator for parameters
+- It had the `@Service()` decorator with appropriate metadata
+
+To complete the migration, we:
+1. Added the `@injectable()` decorator to the class
+2. Marked the InterpreterService dependency as circular in the metadata
+3. Updated the test to properly support both DI and non-DI modes
+4. Used setTimeout for the circular dependency with InterpreterService (similar to how InterpreterService handles it)
+
+The DirectiveService has a circular dependency with InterpreterService, which required special handling. Each service has to set up the other's reference in a setTimeout call to allow both to be fully initialized.
 
 ## Related Documents
 

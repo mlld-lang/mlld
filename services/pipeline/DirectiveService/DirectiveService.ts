@@ -14,7 +14,7 @@ import { DirectiveError, DirectiveErrorCode, DirectiveErrorSeverity } from './er
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 import type { ILogger } from './handlers/execution/EmbedDirectiveHandler.js';
 import { Service } from '@core/ServiceProvider.js';
-import { inject, delay } from 'tsyringe';
+import { inject, delay, injectable } from 'tsyringe';
 
 // Import all handlers
 import { TextDirectiveHandler } from './handlers/definition/TextDirectiveHandler.js';
@@ -40,6 +40,7 @@ export class MeldLLMXMLError extends Error {
 /**
  * Service responsible for handling directives
  */
+@injectable()
 @Service({
   description: 'Service responsible for handling and processing directives',
   dependencies: [
@@ -48,7 +49,7 @@ export class MeldLLMXMLError extends Error {
     { token: 'IPathService', name: 'pathService' },
     { token: 'IFileSystemService', name: 'fileSystemService' },
     { token: 'IParserService', name: 'parserService' },
-    { token: 'IInterpreterService', name: 'interpreterService' },
+    { token: 'IInterpreterService', name: 'interpreterService', circular: true },
     { token: 'ICircularityService', name: 'circularityService' },
     { token: 'IResolutionService', name: 'resolutionService' }
   ]
@@ -204,6 +205,7 @@ export class DirectiveService implements IDirectiveService {
 
   /**
    * Register all default directive handlers
+   * This is public to allow tests to explicitly initialize handlers in both DI and non-DI modes
    */
   public registerDefaultHandlers(): void {
     // Add debug logging to help diagnose DI issues

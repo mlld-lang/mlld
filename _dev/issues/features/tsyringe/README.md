@@ -76,7 +76,7 @@ Our migration strategy follows these key principles:
   - [x] Migrate FileSystemService (already had TSyringe support)
   - [x] Migrate ParserService
   - [x] Migrate InterpreterService 
-  - [ ] Migrate DirectiveService
+  - [x] Migrate DirectiveService
   - [ ] And other services according to dependency order
 
 ## Reference Documentation
