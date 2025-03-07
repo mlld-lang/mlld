@@ -137,17 +137,34 @@ export class TestContextDI extends TestContext {
     this.container.registerMock('IStateDebuggerService', debugger_);
     
     // Initialize the services that need explicit initialization
-    path.initialize(filesystem);
+    path.initialize(filesystem, parser);
     path.enableTestMode();
-    path.setProjectPath('/project');
+    path.setProjectPath('/project/root');
     
-    // Make FileSystemService use PathService for path resolution
+    // Set up the FileSystemService to bypass path resolution in test mode
+    // This is a workaround for the circular dependency between PathService and FileSystemService in tests
+    // We're creating a special override of the resolvePath method that works directly with the test filesystem
+    const originalResolvePathMethod = (filesystem as any).resolvePath;
+    (filesystem as any).resolvePath = function(filePath: string): string {
+      // If the path starts with $PROJECTPATH, resolve directly to /project/root/...
+      if (filePath.startsWith('$PROJECTPATH/')) {
+        return `/project/root/${filePath.substring(13)}`;
+      }
+      // If the path starts with $HOMEPATH, resolve directly to /home/user/...
+      if (filePath.startsWith('$HOMEPATH/')) {
+        return `/home/user/${filePath.substring(10)}`;
+      }
+      // Otherwise use the original method
+      return originalResolvePathMethod.call(this, filePath);
+    };
+    
+    // Also set PathService on the FileSystemService (but our override will be used in tests)
     filesystem.setPathService(path);
     
     // Initialize state service
     state.setCurrentFilePath('test.meld');
     state.enableTransformation(true);
-    state.setPathVar('PROJECTPATH', '/project');
+    state.setPathVar('PROJECTPATH', '/project/root');
     state.setPathVar('HOMEPATH', '/home/user');
     
     // Initialize resolution service
