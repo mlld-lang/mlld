@@ -205,8 +205,10 @@ The InterpreterService required special handling due to its circular dependency 
    - [ ] CLIService
    - [ ] Utility services:
      - [x] SourceMapService (in core/utils/SourceMapService.ts)
-     - [ ] Logger class (in core/utils/simpleLogger.ts)
-     - [ ] createServiceLogger function (in core/utils/logger.ts)
+     - [ ] Logger utilities:
+       - [ ] Create ILogger interface
+       - [ ] Apply TSyringe decorators to Logger class in simpleLogger.ts
+       - [ ] Transform createServiceLogger in logger.ts to be DI-compatible
 2. Document patterns as we go for service-specific requirements
 3. Track progress and update documentation regularly
 
