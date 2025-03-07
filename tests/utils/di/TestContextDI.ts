@@ -102,8 +102,13 @@ export class TestContextDI extends TestContext {
     const parser = new ParserService();
     const eventService = new StateEventService();
     const stateFactory = new StateFactory();
+    
+    // Create tracking service before state service since it's a dependency
     const trackingService = new StateTrackingService();
+    
+    // Properly pass tracking service to state service
     const state = new StateService(stateFactory, eventService, trackingService);
+    
     const interpreter = new InterpreterService();
     const directive = new DirectiveService();
     const resolution = new ResolutionService(state, filesystem, parser, path);
@@ -119,13 +124,16 @@ export class TestContextDI extends TestContext {
     this.container.registerMock('ParserService', parser);
     this.container.registerMock('StateEventService', eventService);
     this.container.registerMock('StateFactory', stateFactory);
+    
+    // StateTrackingService must be registered before StateService
+    this.container.registerMock('StateTrackingService', trackingService);
     this.container.registerMock('StateService', state);
+    
     this.container.registerMock('InterpreterService', interpreter);
     this.container.registerMock('DirectiveService', directive);
     this.container.registerMock('ResolutionService', resolution);
     this.container.registerMock('OutputService', output);
     this.container.registerMock('StateDebuggerService', debugger_);
-    this.container.registerMock('StateTrackingService', trackingService);
 
     // Register by interfaces
     this.container.registerMock('IPathOperationsService', pathOps);
@@ -135,13 +143,16 @@ export class TestContextDI extends TestContext {
     this.container.registerMock('ICircularityService', circularity);
     this.container.registerMock('IParserService', parser);
     this.container.registerMock('IStateEventService', eventService);
+    
+    // IStateTrackingService must be registered before IStateService
+    this.container.registerMock('IStateTrackingService', trackingService);
     this.container.registerMock('IStateService', state);
+    
     this.container.registerMock('IInterpreterService', interpreter);
     this.container.registerMock('IDirectiveService', directive);
     this.container.registerMock('IResolutionService', resolution);
     this.container.registerMock('IOutputService', output);
     this.container.registerMock('IStateDebuggerService', debugger_);
-    this.container.registerMock('IStateTrackingService', trackingService);
     
     // Initialize the services that need explicit initialization
     path.initialize(filesystem, parser);

@@ -1,6 +1,7 @@
 import { stateLogger as logger } from '@core/utils/logger.js';
 import type { IStateTrackingService, StateMetadata, StateRelationship } from './IStateTrackingService.js';
 import { v4 as uuidv4 } from 'uuid';
+import { Service } from '@core/ServiceProvider.js';
 
 /**
  * @package
@@ -10,6 +11,9 @@ import { v4 as uuidv4 } from 'uuid';
  * Provides state instance tracking, relationship management, and metadata storage.
  * Uses UUIDs for state identification and maintains relationship graphs.
  */
+@Service({
+  description: 'Service for tracking state instances and their relationships'
+})
 export class StateTrackingService implements IStateTrackingService {
   private states: Map<string, StateMetadata>;
   private relationships: Map<string, StateRelationship[]>;

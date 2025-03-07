@@ -13,6 +13,7 @@ import { DirectiveService } from '../services/pipeline/DirectiveService/Directiv
 import { PathService } from '../services/fs/PathService/PathService.js';
 import { ErrorDisplayService } from '../services/display/ErrorDisplayService/ErrorDisplayService.js';
 import { ValidationService } from '../services/resolution/ValidationService/ValidationService.js';
+import { StateTrackingService } from '../tests/utils/debug/StateTrackingService/StateTrackingService.js';
 
 /**
  * This file contains the configuration for dependency injection using tsyringe.
@@ -33,6 +34,8 @@ container.register('IStateService', { useToken: 'StateService' });
 container.register('StateFactory', { useClass: StateFactory });
 container.register('StateEventService', { useClass: StateEventService });
 container.register('IStateEventService', { useToken: 'StateEventService' });
+container.register('StateTrackingService', { useClass: StateTrackingService });
+container.register('IStateTrackingService', { useToken: 'StateTrackingService' });
 
 // FileSystemService
 container.register('FileSystemService', { useClass: FileSystemService });

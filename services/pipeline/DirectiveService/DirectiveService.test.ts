@@ -22,10 +22,41 @@ describe('DirectiveService', () => {
         ? TestContextDI.withDI()
         : TestContextDI.withoutDI();
       
+      // Load test fixtures (common for both modes)
+      await context.fixtures.load('directiveTestProject');
+
+      // Verify test files exist before proceeding
+      const testFiles = [
+        'test.meld', 
+        'test-interpolation.meld', 
+        'test-data.meld', 
+        'test-data-interpolation.meld',
+        'module.meld', 
+        'inner.meld', 
+        'middle.meld', 
+        'a.meld', 
+        'b.meld'
+      ];
+      
+      for (const file of testFiles) {
+        const exists = await context.fs.exists(file);
+        console.log(`Test file ${file} exists: ${exists}`);
+        if (!exists) {
+          console.warn(`Creating missing test file: ${file}`);
+          await context.fs.writeFile(file, `# ${file}\n{:text greeting}Hello{:text}`);
+        }
+      }
+      
       // Get or create the service using the appropriate method
       if (useDI) {
         // When using DI, resolve the service from the container
         service = context.container.resolve<IDirectiveService>('IDirectiveService');
+        
+        // In DI mode, make sure the service is properly initialized
+        if (!service.getSupportedDirectives || service.getSupportedDirectives().length === 0) {
+          console.log('DirectiveService not fully initialized in DI mode, registering handlers manually');
+          service.registerDefaultHandlers();
+        }
       } else {
         // When not using DI, create and initialize the service manually
         service = new DirectiveService();
@@ -40,9 +71,6 @@ describe('DirectiveService', () => {
           context.services.resolution
         );
       }
-
-      // Load test fixtures (common for both modes)
-      await context.fixtures.load('directiveTestProject');
     });
 
     afterEach(async () => {

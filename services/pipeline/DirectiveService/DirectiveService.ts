@@ -142,27 +142,45 @@ export class DirectiveService implements IDirectiveService {
    * Register all default directive handlers
    */
   public registerDefaultHandlers(): void {
-    // Definition handlers
-    const textHandler = new TextDirectiveHandler(
-      this.validationService!,
-      this.stateService!,
-      this.resolutionService!
-    );
-    
-    // Set FileSystemService if available
-    if (this.fileSystemService) {
-      textHandler.setFileSystemService(this.fileSystemService);
-    }
-    
-    this.registerHandler(textHandler);
+    // Add debug logging to help diagnose DI issues
+    this.logger.debug('Registering default handlers', {
+      hasValidationService: !!this.validationService,
+      hasStateService: !!this.stateService,
+      hasResolutionService: !!this.resolutionService,
+      hasFileSystemService: !!this.fileSystemService,
+      stateTransformationEnabled: this.stateService?.isTransformationEnabled?.(),
+      state: this.stateService ? {
+        hasTrackingService: !!(this.stateService as any).trackingService,
+        hasEventService: !!(this.stateService as any).eventService
+      } : 'undefined'
+    });
 
-    this.registerHandler(
-      new DataDirectiveHandler(
+    try {
+      // Definition handlers
+      const textHandler = new TextDirectiveHandler(
         this.validationService!,
         this.stateService!,
         this.resolutionService!
-      )
-    );
+      );
+      
+      // Set FileSystemService if available
+      if (this.fileSystemService) {
+        textHandler.setFileSystemService(this.fileSystemService);
+      }
+      
+      this.registerHandler(textHandler);
+
+      this.registerHandler(
+        new DataDirectiveHandler(
+          this.validationService!,
+          this.stateService!,
+          this.resolutionService!
+        )
+      );
+    } catch (error) {
+      this.logger.error('Error registering directive handlers', { error });
+      throw error;
+    }
 
     this.registerHandler(
       new PathDirectiveHandler(
