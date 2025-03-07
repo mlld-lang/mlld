@@ -18,6 +18,7 @@ import { CircularityService } from '../services/resolution/CircularityService/Ci
 import { StateTrackingService } from '../tests/utils/debug/StateTrackingService/StateTrackingService.js';
 import { PathOperationsService } from '../services/fs/FileSystemService/PathOperationsService.js';
 import { NodeFileSystem } from '../services/fs/FileSystemService/NodeFileSystem.js';
+import { SourceMapService } from '../core/utils/SourceMapService.js';
 
 /**
  * This file contains the configuration for dependency injection using tsyringe.
@@ -82,4 +83,8 @@ container.register('IPathOperationsService', { useToken: 'PathOperationsService'
 
 // NodeFileSystem
 container.register('NodeFileSystem', { useClass: NodeFileSystem });
-container.register('IFileSystem', { useToken: 'NodeFileSystem' }); 
+container.register('IFileSystem', { useToken: 'NodeFileSystem' });
+
+// SourceMapService
+container.register('SourceMapService', { useClass: SourceMapService });
+container.register('ISourceMapService', { useToken: 'SourceMapService' });
