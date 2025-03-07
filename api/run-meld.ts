@@ -58,6 +58,11 @@ export async function runMeld(
   // Always use the memory filesystem
   mergedOptions.fs = memoryFS;
   
+  // Check if DI should be explicitly enabled or disabled for this call
+  if (mergedOptions.useDI !== undefined) {
+    process.env.USE_DI = mergedOptions.useDI ? 'true' : 'false';
+  }
+  
   // Create services
   const services = createDefaultServices(mergedOptions);
   

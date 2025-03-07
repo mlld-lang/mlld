@@ -71,4 +71,6 @@ export interface ProcessOptions {
   fs?: NodeFileSystem;
   /** Optional service overrides */
   services?: Partial<Services>;
+  /** Controls whether dependency injection should be used */
+  useDI?: boolean;
 } 
