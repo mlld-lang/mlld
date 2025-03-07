@@ -1,57 +1,70 @@
-# Implement TSyringe DI Refactoring - Phases 6-7 Completion
+# Implement TSyringe DI Refactoring - Phase 9: Final Review and Integration
 
-This PR completes Phases 6 and 7 of the TSyringe dependency injection (DI) refactoring, focusing on Test Infrastructure DI Support and Entry Point Integration.
+This document outlines the final phases of the TSyringe dependency injection (DI) refactoring, focusing on review, integration testing, and preparation for merge to main.
 
-## Changes
+## Completed Phase 8: Service Mock Updates
+- Added `@injectable()` decorator to mock services
+- Created DI-compatible versions of all mock services
+- Added TestContainerHelper utilities
+- Enhanced TestContextDI with additional capabilities
+- Fixed failing tests related to path normalization in test snapshots
+- Ensured all tests pass with both DI enabled and disabled
 
-### Phase 7: Entry Point Integration
-- Updated API entry points to properly use DI container
-- Added CLI option `--use-di` and `--no-di` for toggling DI mode
-- Updated ProcessOptions type to include useDI option
-- Updated help text to document DI options
-- Included support for custom filesystem registration with DI
-- Ensured both API and CLI entry points support DI and non-DI modes
+## Phase 9: Code Review and Integration
 
-### Phase 6: Test Infrastructure DI Support Completion
-- Added `@injectable()` decorator to all remaining directive handlers:
-  - ImportDirectiveHandler
-  - RunDirectiveHandler
-- Added `@Service()` decorator with descriptions to provide better metadata
-- Updated constructor parameters with `@inject()` decorators for proper DI container resolution in:
-  - ValidationService 
-  - CircularityService
-  - Multiple DirectiveHandlers (Data, Define, Path, Embed, Import, Run)
-- Registered CircularityService in the DI container in core/di-config.ts
-- Fixed import orders and maintained consistent code style across files
-- Verified all tests pass with USE_DI=true environment flag
+### Code Review Tasks
+- [ ] Review all modified code in the tsyringe branch
+- [ ] Identify expedient but non-ideal fixes (e.g., hardcoded values, special cases)
+- [ ] Find areas where we took shortcuts to make tests pass but should implement proper solutions
+- [ ] Document these issues in _dev/issues/features/tsyringe-cleanup.md (created)
+- [ ] Classify issues as "must fix before merge" vs "can fix later"
 
-## Implementation Details
-- Used consistent token naming matching existing patterns (e.g., 'IValidationService')
-- Maintained backward compatibility with non-DI mode
-- Followed the established pattern for service registration in di-config.ts
-- Used proper decorator syntax for class and constructor parameter decoration
-- Implemented runtime detection of DI mode via environment variable
-- Added support for toggling DI mode from CLI and API options
+### Integration Testing
+- [ ] Run comprehensive integration tests across the entire codebase
+- [ ] Test with real filesystem operations
+- [ ] Test with CLI commands
+- [ ] Test with various meld file formats
+- [ ] Verify all error handling still works correctly
+- [ ] Ensure no regressions in functionality
 
-## Testing
-- All tests pass with both `USE_DI=true` and `USE_DI=false`
-- Validated specific directive handler tests with USE_DI=true
-- Verified all integration tests continue to pass
-- Tested entry point integration with DI enabled
+### Performance Verification
+- [ ] Compare performance metrics before and after DI implementation
+- [ ] Identify any performance bottlenecks introduced by DI
+- [ ] Optimize critical paths if necessary
 
-## Previous Phases
-### Phase 4: Handle Circular Dependencies
-- Implemented handling for circular dependencies between DirectiveService and InterpreterService
-- Added lazy loading to ensure proper initialization
-- Updated key services with constructor injection
+## Phase 10: Documentation and Clean-up
 
-### Phase 5: Entry Point and Bootstrap Refactoring
-- Refactored main entry points to use the DI container
-- Added conditional service creation for backward compatibility
+### Documentation Updates
+- [ ] Update architecture documentation to reflect DI approach
+- [ ] Document how to create new services with TSyringe
+- [ ] Add examples of common DI patterns
+- [ ] Document testing patterns for services with dependencies
 
-## Next Steps
-- Phase 8: Service Mock Updates for DI compatibility
-- Phase 9: Final Cleanup and Documentation
+### Code Clean-up
+- [ ] Address critical issues from the code review
+- [ ] Remove any temporary compatibility code
+- [ ] Ensure consistent DI pattern usage across codebase
+- [ ] Clean up test container setup code for consistency
+- [ ] Remove redundant initialize() calls
+- [ ] Prepare for feature flag removal in future
+
+## Phase 11: Branch Merge and Release
+
+### Pre-Merge Tasks
+- [ ] Final full test suite run
+- [ ] Code review by team members
+- [ ] Update change log with DI migration details
+
+### Merge and Release
+- [ ] Merge tsyringe branch into main
+- [ ] Create a new release version
+- [ ] Tag release in git
+- [ ] Update package.json version
+
+### Post-Release
+- [ ] Verify the released version works correctly
+- [ ] Monitor for any issues related to the DI migration
+- [ ] Plan follow-up tasks for remaining issues in tsyringe-cleanup.md
 
 ## Related Issues
-Addresses Phases 6-7 of the TSyringe refactoring plan, focusing on Test Infrastructure DI Support and Entry Point Integration.
+- Added tsyringe-cleanup.md to track technical debt and future improvements

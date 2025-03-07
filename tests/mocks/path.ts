@@ -1,5 +1,7 @@
 import { vi } from 'vitest';
 import type { PlatformPath } from 'path';
+import { injectable } from 'tsyringe';
+import { Service } from '@core/ServiceProvider';
 
 /**
  * Path mock configuration options
@@ -43,6 +45,61 @@ interface PathMock {
   matchesGlob: (path: string, pattern: string) => boolean;
   posix: PathMock;
   win32: PathMock;
+}
+
+/**
+ * Injectable path mock service for DI compatibility
+ */
+@injectable()
+@Service('MockPathService for testing')
+export class MockPathService {
+  private options: PathMockOptions;
+  private mockInstance: PathMock | null = null;
+  
+  constructor(options: PathMockOptions = {}) {
+    this.options = options;
+  }
+  
+  /**
+   * Initialize the mock path service
+   */
+  async initialize(): Promise<PathMock> {
+    if (!this.mockInstance) {
+      this.mockInstance = await createPathMock(this.options);
+    }
+    return this.mockInstance;
+  }
+  
+  /**
+   * Get the mock instance
+   */
+  getMock(): PathMock {
+    if (!this.mockInstance) {
+      throw new Error('MockPathService not initialized');
+    }
+    return this.mockInstance;
+  }
+  
+  /**
+   * Reset the mock instance
+   */
+  async reset(): Promise<void> {
+    this.mockInstance = await createPathMock(this.options);
+  }
+  
+  /**
+   * Create a Windows-specific path mock
+   */
+  async createWindowsMock(): Promise<PathMock> {
+    return createPathMock({ ...this.options, platform: 'win32' });
+  }
+  
+  /**
+   * Create a POSIX-specific path mock
+   */
+  async createPosixMock(): Promise<PathMock> {
+    return createPathMock({ ...this.options, platform: 'darwin' });
+  }
 }
 
 /**
@@ -284,6 +341,13 @@ export const pathTestUtils = {
   resetMocks: (mock: any) => {
     Object.assign(mock, createPathMock());
   },
+  
+  /**
+   * Creates a DI-compatible MockPathService
+   */
+  createMockPathService: (options: PathMockOptions = {}) => {
+    return new MockPathService(options);
+  }
 };
 
 // Export a default instance for direct imports, using the current platform
