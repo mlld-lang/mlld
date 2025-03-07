@@ -6,6 +6,8 @@ import type { Location, Position } from '@core/types/index.js';
 import { IStateService } from '@services/state/StateService/IStateService.js';
 import { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import type { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
+import { injectable, inject } from 'tsyringe';
+import { Service } from '@core/ServiceProvider.js';
 
 // Define our own ParseError type since it's not exported from meld-ast
 interface ParseError {
@@ -36,13 +38,20 @@ function isMeldAstError(error: unknown): error is MeldAstError {
   );
 }
 
+@injectable()
+@Service({
+  description: 'Service responsible for parsing Meld syntax into AST nodes'
+})
 export class ParserService implements IParserService {
   private resolutionService?: IResolutionService;
 
-  constructor(resolutionService?: IResolutionService) {
+  constructor(@inject('IResolutionService') resolutionService?: IResolutionService) {
     this.resolutionService = resolutionService;
   }
 
+  /**
+   * @deprecated Use constructor injection instead
+   */
   setResolutionService(resolutionService: IResolutionService): void {
     this.resolutionService = resolutionService;
   }

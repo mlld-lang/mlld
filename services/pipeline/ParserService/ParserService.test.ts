@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { ParserService } from './ParserService.js';
 import { MeldParseError } from '@core/errors/MeldParseError.js';
 import type { MeldNode, DirectiveNode, TextNode, CodeFenceNode } from 'meld-spec';
@@ -10,6 +10,8 @@ import {
   contentExamples 
 } from '@core/syntax/index.js';
 import { getExample, getInvalidExample } from '@tests/utils/syntax-test-helpers.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
+import { container } from 'tsyringe';
 
 // Define a type that combines the meld-spec Location with our filePath
 type LocationWithFilePath = {
@@ -49,11 +51,48 @@ function hasFilePath(location: any): location is LocationWithFilePath {
   );
 }
 
-describe('ParserService', () => {
+// Create a mock ResolutionService for testing
+const mockResolutionService = {
+  resolveInContext: async (value: string, context: any) => {
+    // For testing purposes, just return the value
+    return value;
+  }
+};
+
+// Run tests with both DI and non-DI modes
+describe.each([
+  { useDI: true, name: 'with DI' },
+  { useDI: false, name: 'without DI' }
+])('ParserService %s', ({ useDI }) => {
   let service: ParserService;
+  let testContext: TestContextDI;
 
   beforeEach(() => {
-    service = new ParserService();
+    // Save original DI setting
+    const originalDISetting = process.env.USE_DI;
+    
+    // Set up DI mode for tests
+    if (useDI) {
+      process.env.USE_DI = 'true';
+      testContext = TestContextDI.withDI();
+      
+      // Register mock services in the container
+      container.registerInstance('IResolutionService', mockResolutionService);
+      
+      // Resolve service from container
+      service = container.resolve(ParserService);
+    } else {
+      process.env.USE_DI = 'false';
+      testContext = TestContextDI.withoutDI();
+      service = new ParserService();
+    }
+    
+    // Restore original DI setting
+    process.env.USE_DI = originalDISetting;
+  });
+  
+  afterEach(async () => {
+    await testContext?.cleanup();
   });
 
   describe('parse', () => {
