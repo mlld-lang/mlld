@@ -6,6 +6,8 @@ import type { IStateService } from '@services/state/StateService/IStateService.j
 import { MeldInterpreterError, type InterpreterLocation } from '@core/errors/MeldInterpreterError.js';
 import { MeldError, ErrorSeverity } from '@core/errors/MeldError.js';
 import { StateVariableCopier } from '@services/state/utilities/StateVariableCopier.js';
+import { Service } from '@core/ServiceProvider.js';
+import { inject, delay } from 'tsyringe';
 
 const DEFAULT_OPTIONS: Required<Omit<InterpreterOptions, 'initialState' | 'errorHandler'>> = {
   filePath: '',
@@ -28,11 +30,37 @@ function getErrorMessage(error: unknown): string {
   return 'Unknown error';
 }
 
+/**
+ * Service for interpreting Meld AST and executing directives
+ */
+@Service({
+  description: 'Service for interpreting Meld AST nodes and executing directives',
+  dependencies: [
+    { token: 'IDirectiveService', name: 'directiveService' },
+    { token: 'IStateService', name: 'stateService' }
+  ]
+})
 export class InterpreterService implements IInterpreterService {
   private directiveService?: IDirectiveService;
   private stateService?: IStateService;
   private initialized = false;
   private stateVariableCopier = new StateVariableCopier();
+
+  constructor(
+    @inject(delay(() => 'IDirectiveService')) directiveService?: IDirectiveService,
+    @inject('IStateService') stateService?: IStateService
+  ) {
+    // Handle DI constructor injection
+    if (directiveService && stateService) {
+      // Use setTimeout to handle circular dependency with DirectiveService
+      setTimeout(() => {
+        this.directiveService = directiveService;
+        this.stateService = stateService;
+        this.initialized = true;
+        logger.debug('InterpreterService initialized via DI');
+      }, 0);
+    }
+  }
 
   public canHandleTransformations(): boolean {
     return true;
@@ -46,7 +74,7 @@ export class InterpreterService implements IInterpreterService {
     this.stateService = stateService;
     this.initialized = true;
 
-    logger.debug('InterpreterService initialized');
+    logger.debug('InterpreterService initialized manually');
   }
 
   /**

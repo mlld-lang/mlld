@@ -13,6 +13,8 @@ import { IResolutionService } from '@services/resolution/ResolutionService/IReso
 import { DirectiveError, DirectiveErrorCode, DirectiveErrorSeverity } from './errors/DirectiveError.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 import type { ILogger } from './handlers/execution/EmbedDirectiveHandler.js';
+import { Service } from '@core/ServiceProvider.js';
+import { inject, delay } from 'tsyringe';
 
 // Import all handlers
 import { TextDirectiveHandler } from './handlers/definition/TextDirectiveHandler.js';
@@ -38,22 +40,74 @@ export class MeldLLMXMLError extends Error {
 /**
  * Service responsible for handling directives
  */
+@Service({
+  description: 'Service responsible for handling and processing directives',
+  dependencies: [
+    { token: 'IValidationService', name: 'validationService' },
+    { token: 'IStateService', name: 'stateService' },
+    { token: 'IPathService', name: 'pathService' },
+    { token: 'IFileSystemService', name: 'fileSystemService' },
+    { token: 'IParserService', name: 'parserService' },
+    { token: 'IInterpreterService', name: 'interpreterService' },
+    { token: 'ICircularityService', name: 'circularityService' },
+    { token: 'IResolutionService', name: 'resolutionService' }
+  ]
+})
 export class DirectiveService implements IDirectiveService {
-  private validationService?: IValidationService;
-  private stateService?: IStateService;
-  private pathService?: IPathService;
-  private fileSystemService?: IFileSystemService;
-  private parserService?: IParserService;
-  private interpreterService?: IInterpreterService;
-  private circularityService?: ICircularityService;
-  private resolutionService?: IResolutionService;
+  private validationService: IValidationService;
+  private stateService: IStateService;
+  private pathService: IPathService;
+  private fileSystemService: IFileSystemService;
+  private parserService: IParserService;
+  private interpreterService?: IInterpreterService; // Will be set by updateInterpreterService for circular dependency
+  private circularityService: ICircularityService;
+  private resolutionService: IResolutionService;
   private initialized = false;
   private logger: ILogger;
 
   private handlers: Map<string, IDirectiveHandler> = new Map();
 
-  constructor(logger?: ILogger) {
+  constructor(
+    @inject('IValidationService') validationService?: IValidationService,
+    @inject('IStateService') stateService?: IStateService,
+    @inject('IPathService') pathService?: IPathService,
+    @inject('IFileSystemService') fileSystemService?: IFileSystemService,
+    @inject('IParserService') parserService?: IParserService,
+    @inject(delay(() => 'IInterpreterService')) interpreterService?: IInterpreterService,
+    @inject('ICircularityService') circularityService?: ICircularityService,
+    @inject('IResolutionService') resolutionService?: IResolutionService,
+    logger?: ILogger
+  ) {
     this.logger = logger || directiveLogger;
+    
+    // Store services if provided via DI
+    if (validationService && stateService && pathService && 
+        fileSystemService && parserService && 
+        circularityService && resolutionService) {
+      
+      this.validationService = validationService;
+      this.stateService = stateService;
+      this.pathService = pathService;
+      this.fileSystemService = fileSystemService;
+      this.parserService = parserService;
+      this.circularityService = circularityService;
+      this.resolutionService = resolutionService;
+      
+      // Handle the circular dependency with InterpreterService
+      // We'll set this later in updateInterpreterService()
+      // but use the delay-injected service if available
+      if (interpreterService) {
+        // Use setTimeout to ensure all services are fully initialized
+        setTimeout(() => {
+          this.interpreterService = interpreterService;
+          this.initialized = true;
+          this.registerDefaultHandlers();
+          this.logger.debug('DirectiveService initialized via DI', {
+            handlers: Array.from(this.handlers.keys())
+          });
+        }, 0);
+      }
+    }
   }
 
   initialize(
@@ -79,7 +133,7 @@ export class DirectiveService implements IDirectiveService {
     // Register default handlers
     this.registerDefaultHandlers();
 
-    this.logger.debug('DirectiveService initialized', {
+    this.logger.debug('DirectiveService initialized manually', {
       handlers: Array.from(this.handlers.keys())
     });
   }
