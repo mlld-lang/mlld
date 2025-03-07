@@ -12,10 +12,14 @@ import {
   MeldFileNotFoundError, 
   PathErrorMessages 
 } from '../../../core/errors';
+import { Service } from '../../../core/ServiceProvider';
 
 /**
  * Service for validating and normalizing paths
  */
+@Service({
+  description: 'Service for validating and normalizing paths according to Meld rules'
+})
 export class PathService implements IPathService {
   private fs: IFileSystemService | null = null;
   private parser: IParserService | null = null;
