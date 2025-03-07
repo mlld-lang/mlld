@@ -186,7 +186,9 @@ describe('TestContainerHelper', () => {
     
     it('should use fallback class if provided and token is not registered', () => {
       // Try to resolve a service that isn't registered
-      const service = containerHelper.resolve<MockTestService>('UnregisteredService', MockTestService);
+      const service = containerHelper.resolve<MockTestService>('UnregisteredService', {
+        fallbackClass: MockTestService
+      });
       
       // Should get an instance of the fallback class
       expect(service).toBeInstanceOf(MockTestService);

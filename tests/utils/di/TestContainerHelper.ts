@@ -12,14 +12,21 @@ import { shouldUseDI } from '../../../core/ServiceProvider';
  */
 export class TestContainerHelper {
   private childContainer: DependencyContainer;
+  private registeredTokens: Set<InjectionToken<any>> = new Set();
+  private isIsolated: boolean = false;
   
-  constructor() {
-    // Create a child container for test isolation
-    this.childContainer = container.createChildContainer();
+  /**
+   * Create a new TestContainerHelper
+   * @param existingContainer Optional existing container to use
+   */
+  constructor(existingContainer?: DependencyContainer) {
+    // Use existing container or create a child container for test isolation
+    this.childContainer = existingContainer || container.createChildContainer();
   }
   
   /**
    * Gets the test container instance
+   * @returns The DependencyContainer for this helper
    */
   getContainer(): DependencyContainer {
     return this.childContainer;
@@ -30,11 +37,35 @@ export class TestContainerHelper {
    * 
    * @param token The token to register (class, string, or symbol)
    * @param mockImpl The mock implementation to use
+   * @param options Additional registration options
    */
-  registerMock<T>(token: InjectionToken<T>, mockImpl: T): void {
-    // Only register if DI is enabled
-    if (shouldUseDI()) {
+  registerMock<T>(
+    token: InjectionToken<T>, 
+    mockImpl: T, 
+    options: {
+      /**
+       * Force registration even if DI is disabled
+       */
+      force?: boolean;
+      
+      /**
+       * Whether to track this registration for reporting
+       */
+      track?: boolean;
+    } = {}
+  ): void {
+    // Default options
+    const force = options.force === true;
+    const track = options.track !== false;
+    
+    // Only register if DI is enabled or forced
+    if (shouldUseDI() || force) {
       this.childContainer.registerInstance(token, mockImpl);
+      
+      // Track registration for diagnostics and cleanup
+      if (track) {
+        this.registeredTokens.add(token);
+      }
     }
   }
   
@@ -43,28 +74,106 @@ export class TestContainerHelper {
    * 
    * @param token The token to register
    * @param mockClass The mock class to register
+   * @param options Additional registration options
    */
-  registerMockClass<T>(token: InjectionToken<T>, mockClass: new (...args: any[]) => T): void {
-    // Only register if DI is enabled
-    if (shouldUseDI()) {
+  registerMockClass<T>(
+    token: InjectionToken<T>, 
+    mockClass: new (...args: any[]) => T,
+    options: {
+      /**
+       * Force registration even if DI is disabled
+       */
+      force?: boolean;
+      
+      /**
+       * Whether to track this registration for reporting
+       */
+      track?: boolean;
+    } = {}
+  ): void {
+    // Default options
+    const force = options.force === true;
+    const track = options.track !== false;
+    
+    // Only register if DI is enabled or forced
+    if (shouldUseDI() || force) {
       this.childContainer.register(token, { useClass: mockClass });
+      
+      // Track registration for diagnostics and cleanup
+      if (track) {
+        this.registeredTokens.add(token);
+      }
+    }
+  }
+  
+  /**
+   * Registers a factory function to create a service
+   * 
+   * @param token The token to register
+   * @param factory The factory function to use
+   * @param options Additional registration options
+   */
+  registerFactory<T>(
+    token: InjectionToken<T>,
+    factory: () => T,
+    options: {
+      /**
+       * Force registration even if DI is disabled
+       */
+      force?: boolean;
+      
+      /**
+       * Whether to track this registration for reporting
+       */
+      track?: boolean;
+    } = {}
+  ): void {
+    // Default options
+    const force = options.force === true;
+    const track = options.track !== false;
+    
+    // Only register if DI is enabled or forced
+    if (shouldUseDI() || force) {
+      this.childContainer.register(token, { useFactory: factory });
+      
+      // Track registration for diagnostics and cleanup
+      if (track) {
+        this.registeredTokens.add(token);
+      }
     }
   }
   
   /**
    * Registers a service class with a parent container
-   * This is used for registering real services that should be available in the child container
+   * This is used for registering real services that should be available to all child containers
    * 
    * @param token The token to register
    * @param serviceClass The service class to register
+   * @param options Additional registration options
    */
   registerParentService<T>(
     token: InjectionToken<T>,
-    serviceClass: new (...args: any[]) => T
+    serviceClass: new (...args: any[]) => T,
+    options: {
+      /**
+       * Force registration even if DI is disabled
+       */
+      force?: boolean;
+    } = {}
   ): void {
-    if (shouldUseDI()) {
-      // Register with the parent container to ensure it's available to all child containers
-      container.register(token, { useClass: serviceClass });
+    // Default options
+    const force = options.force === true;
+    
+    // Only register if DI is enabled or forced
+    if (shouldUseDI() || force) {
+      // Don't register with parent if this is an isolated container
+      if (this.isIsolated) {
+        this.childContainer.register(token, { useClass: serviceClass });
+        this.registeredTokens.add(token);
+      } else {
+        // Register with the parent container to ensure it's available to all child containers
+        container.register(token, { useClass: serviceClass });
+      }
     }
   }
   
@@ -73,19 +182,62 @@ export class TestContainerHelper {
    */
   reset(): void {
     // Create a new child container to reset all registrations
-    this.childContainer = container.createChildContainer();
+    if (this.isIsolated) {
+      // For isolated containers, create a new isolated container
+      this.childContainer = TestContainerHelper.createIsolatedContainer().getContainer();
+    } else {
+      // For normal containers, create a new child container
+      this.childContainer = container.createChildContainer();
+    }
+    
+    // Clear tracked registrations
+    this.registeredTokens.clear();
   }
   
   /**
    * Resolves a service from the container
    * 
    * @param token The token to resolve
-   * @param fallbackClass Optional fallback class to use if the token is not registered
+   * @param options Options for resolution
    * @returns The resolved service
    */
-  resolve<T>(token: InjectionToken<T>, fallbackClass?: new (...args: any[]) => T): T {
+  resolve<T>(
+    token: InjectionToken<T>, 
+    options: {
+      /**
+       * Fallback class to use if the token is not registered
+       */
+      fallbackClass?: new (...args: any[]) => T;
+      
+      /**
+       * Whether to throw an error if DI is disabled
+       */
+      throwIfDisabled?: boolean;
+      
+      /**
+       * Error message to show if resolution fails
+       */
+      errorMessage?: string;
+    } = {}
+  ): T {
+    // Default options
+    const throwIfDisabled = options.throwIfDisabled !== false;
+    const fallbackClass = options.fallbackClass;
+    const errorMessage = options.errorMessage || 
+      `Cannot resolve service '${String(token)}' from container`;
+    
     if (!shouldUseDI()) {
-      throw new Error(`Cannot resolve services in tests when DI is disabled`);
+      if (throwIfDisabled) {
+        throw new Error(`Cannot resolve services in tests when DI is disabled`);
+      }
+      
+      // If we have a fallback class, use it
+      if (fallbackClass) {
+        return new fallbackClass();
+      }
+      
+      // Otherwise return null
+      return null as unknown as T;
     }
     
     try {
@@ -97,6 +249,13 @@ export class TestContainerHelper {
         this.registerMockClass(token, fallbackClass);
         return this.childContainer.resolve<T>(token);
       }
+      
+      // Provide a more descriptive error message
+      if (error instanceof Error) {
+        throw new Error(`${errorMessage}: ${error.message}`);
+      }
+      
+      // Re-throw the original error
       throw error;
     }
   }
@@ -115,6 +274,15 @@ export class TestContainerHelper {
   }
   
   /**
+   * Gets all registered tokens for diagnostic purposes
+   * 
+   * @returns Array of registered tokens
+   */
+  getRegisteredTokens(): InjectionToken<any>[] {
+    return Array.from(this.registeredTokens);
+  }
+  
+  /**
    * Creates a factory function for creating a TestContainerHelper
    * This is useful for beforeEach/afterEach test setup
    */
@@ -123,15 +291,34 @@ export class TestContainerHelper {
   }
   
   /**
-   * Creates a setup helper for vitest tests
+   * Creates an isolated container that doesn't inherit from the global container
+   * This is useful for tests that need complete isolation
    */
-  static createTestSetup(): {
+  static createIsolatedContainer(): TestContainerHelper {
+    // Create a new container that doesn't inherit from the global one
+    const isolatedContainer = new TestContainerHelper();
+    isolatedContainer.isIsolated = true;
+    return isolatedContainer;
+  }
+  
+  /**
+   * Creates a setup helper for vitest tests
+   * @param options Options for the test setup
+   */
+  static createTestSetup(options: {
+    /**
+     * Create an isolated container instead of a child container
+     */
+    isolated?: boolean;
+  } = {}): {
     setupDI: () => TestContainerHelper;
     resetDI: (helper: TestContainerHelper) => void;
   } {
     return {
       setupDI: () => {
-        return TestContainerHelper.createTestContainer();
+        return options.isolated 
+          ? TestContainerHelper.createIsolatedContainer()
+          : TestContainerHelper.createTestContainer();
       },
       resetDI: (helper: TestContainerHelper) => {
         helper.reset();

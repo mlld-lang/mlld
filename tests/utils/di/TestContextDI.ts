@@ -1,7 +1,12 @@
-import { container, DependencyContainer } from 'tsyringe';
+import { container, DependencyContainer, InjectionToken } from 'tsyringe';
 import { TestContext } from '../TestContext';
 import { TestContainerHelper } from './TestContainerHelper';
-import { shouldUseDI, Service } from '../../../core/ServiceProvider';
+import { 
+  shouldUseDI, 
+  Service, 
+  resolveService, 
+  registerServiceInstance 
+} from '../../../core/ServiceProvider';
 import { MemfsTestFileSystem } from '../MemfsTestFileSystem';
 import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService';
 import { FileSystemService } from '@services/fs/FileSystemService/FileSystemService';
@@ -34,6 +39,36 @@ import type { IStateEventService } from '@services/state/StateEventService/IStat
 import type { IStateDebuggerService } from '../debug/StateDebuggerService/IStateDebuggerService';
 
 /**
+ * Options for creating a TestContextDI instance
+ */
+export interface TestContextDIOptions {
+  /**
+   * Directory to look for test fixtures
+   */
+  fixturesDir?: string;
+  
+  /**
+   * Explicitly set DI mode (overrides environment variable)
+   */
+  useDI?: boolean;
+  
+  /**
+   * Existing container to use (for child scopes)
+   */
+  container?: DependencyContainer;
+  
+  /**
+   * Create isolated container (prevents modifications to global container)
+   */
+  isolatedContainer?: boolean;
+  
+  /**
+   * Auto-initialize services (true by default)
+   */
+  autoInit?: boolean;
+}
+
+/**
  * TestContextDI extends TestContext to provide DI capabilities for tests
  * Depending on the USE_DI environment variable, it will use either:
  * - Traditional manual initialization (USE_DI=false)
@@ -46,14 +81,30 @@ export class TestContextDI extends TestContext {
   public readonly container: TestContainerHelper;
 
   /**
+   * Tracks whether this context is using DI
+   */
+  public readonly useDI: boolean;
+
+  /**
+   * Tracks registered mock services for cleanup
+   */
+  private registeredMocks: Set<string> = new Set();
+
+  /**
+   * Tracks child contexts for cleanup
+   */
+  private childContexts: TestContextDI[] = [];
+
+  /**
+   * Tracks if this context has been cleaned up
+   */
+  private isCleanedUp: boolean = false;
+
+  /**
    * Create a new TestContextDI instance
    * @param options Options for test context initialization
    */
-  constructor(options: {
-    fixturesDir?: string;
-    useDI?: boolean;
-    container?: DependencyContainer;
-  } = {}) {
+  constructor(options: TestContextDIOptions = {}) {
     // Call parent constructor, will initialize services manually
     super(options.fixturesDir);
 
@@ -62,14 +113,75 @@ export class TestContextDI extends TestContext {
       process.env.USE_DI = options.useDI ? 'true' : 'false';
     }
 
-    // Create container helper
-    this.container = options.container
-      ? new TestContainerHelper()
-      : TestContainerHelper.createTestContainer();
+    // Set useDI property for easy access
+    this.useDI = shouldUseDI();
 
-    // Initialize DI only if enabled
-    if (shouldUseDI()) {
+    // Create appropriate container helper
+    if (options.container) {
+      // Use existing container (for child scopes)
+      this.container = new TestContainerHelper(options.container);
+    } else if (options.isolatedContainer) {
+      // Create an isolated container that won't affect the global one
+      this.container = TestContainerHelper.createIsolatedContainer();
+    } else {
+      // Create a standard child container
+      this.container = TestContainerHelper.createTestContainer();
+    }
+
+    // Initialize immediately if auto-init is enabled (default) and DI is enabled
+    if ((options.autoInit !== false) && this.useDI) {
       this.initializeWithDI();
+    }
+  }
+
+  /**
+   * Create a TestContextDI instance with common options
+   * @param options Options for test context initialization
+   */
+  static create(options: TestContextDIOptions = {}): TestContextDI {
+    return new TestContextDI(options);
+  }
+
+  /**
+   * Resolves a service by token
+   * Works in both DI and non-DI modes for consistent API
+   * 
+   * @param token The token to resolve
+   * @param fallback Optional fallback to use if service isn't found (non-DI mode)
+   * @returns The resolved service
+   */
+  resolve<T>(token: string | InjectionToken<T>, fallback?: T): T {
+    if (this.isCleanedUp) {
+      throw new Error(`Cannot resolve service '${String(token)}' - context has been cleaned up`);
+    }
+
+    if (this.useDI) {
+      // In DI mode, resolve from container
+      return this.container.resolve<T>(token);
+    } else {
+      // In non-DI mode, check the services object
+      if (typeof token === 'string') {
+        const lowerToken = token.toLowerCase();
+        // Handle interface token format (IServiceName)
+        const serviceName = token.startsWith('I') 
+          ? lowerToken.substring(1) 
+          : lowerToken;
+        
+        // Check if the service exists on the services object
+        if (serviceName in this.services) {
+          return (this.services as any)[serviceName] as T;
+        }
+      }
+      
+      // If fallback is provided, use it
+      if (fallback !== undefined) {
+        return fallback;
+      }
+      
+      throw new Error(
+        `Cannot resolve service '${String(token)}' in non-DI mode. ` +
+        `Make sure the service is registered or provide a fallback.`
+      );
     }
   }
 
@@ -245,24 +357,170 @@ export class TestContextDI extends TestContext {
   }
 
   /**
-   * Register a mock service implementation with the container
-   * This is useful for tests that want to override service behavior
+   * Register a mock service implementation
+   * Works in both DI and non-DI modes for consistent API
    * 
    * @param token The service token to mock
    * @param mockImplementation The mock implementation
+   * @param options Optional registration options
    */
-  registerMock<T>(token: string, mockImplementation: T): void {
-    this.container.registerMock(token, mockImplementation);
-
-    // If there's an interface token, register that too
-    if (!token.startsWith('I')) {
-      this.container.registerMock(`I${token}`, mockImplementation);
+  registerMock<T>(
+    token: string | InjectionToken<T>, 
+    mockImplementation: T,
+    options: {
+      /**
+       * Register interface token automatically (e.g., IServiceName)
+       */
+      registerInterface?: boolean;
+      
+      /**
+       * Skip updating the services object (DI only use case)
+       */
+      skipServicesUpdate?: boolean;
+      
+      /**
+       * Description for debugging purposes
+       */
+      description?: string;
+    } = {}
+  ): void {
+    if (this.isCleanedUp) {
+      throw new Error(`Cannot register mock '${String(token)}' - context has been cleaned up`);
     }
-
+    
+    // Default options
+    const registerInterface = options.registerInterface !== false;
+    const skipServicesUpdate = options.skipServicesUpdate === true;
+    
+    // Track for cleanup
+    if (typeof token === 'string') {
+      this.registeredMocks.add(token);
+      
+      // Also track interface token if we're registering it
+      if (registerInterface && !token.startsWith('I')) {
+        this.registeredMocks.add(`I${token}`);
+      }
+    }
+    
+    if (this.useDI) {
+      // In DI mode, register with the container
+      this.container.registerMock(token, mockImplementation);
+      
+      // If there's an interface token, register that too
+      if (registerInterface && typeof token === 'string' && !token.startsWith('I')) {
+        this.container.registerMock(`I${token}`, mockImplementation);
+      }
+    }
+    
     // Update the services object for compatibility with non-DI tests
-    if (token in this.services) {
-      (this.services as any)[token.toLowerCase()] = mockImplementation;
+    // and for consistency in mixed mode
+    if (!skipServicesUpdate && typeof token === 'string') {
+      const serviceName = token.startsWith('I') 
+        ? token.substring(1).toLowerCase() 
+        : token.toLowerCase();
+      
+      if (serviceName in this.services) {
+        (this.services as any)[serviceName] = mockImplementation;
+      }
     }
+  }
+  
+  /**
+   * Registers a mock service class
+   * Works in both DI and non-DI modes for consistent API
+   * 
+   * @param token The token to register
+   * @param MockClass The mock class to register
+   * @param options Optional registration options
+   */
+  registerMockClass<T>(
+    token: string | InjectionToken<T>,
+    MockClass: new (...args: any[]) => T,
+    options: {
+      /**
+       * Register interface token automatically (e.g., IServiceName)
+       */
+      registerInterface?: boolean;
+      
+      /**
+       * Arguments to pass to the constructor in non-DI mode
+       */
+      constructorArgs?: any[];
+      
+      /**
+       * Skip updating the services object (DI only use case)
+       */
+      skipServicesUpdate?: boolean;
+    } = {}
+  ): T {
+    if (this.isCleanedUp) {
+      throw new Error(`Cannot register mock class '${String(token)}' - context has been cleaned up`);
+    }
+    
+    // Default options
+    const registerInterface = options.registerInterface !== false;
+    const constructorArgs = options.constructorArgs || [];
+    const skipServicesUpdate = options.skipServicesUpdate === true;
+    
+    // Create instance differently based on DI mode
+    let instance: T;
+    
+    if (this.useDI) {
+      // In DI mode, register class with the container
+      this.container.registerMockClass(token, MockClass);
+      
+      // If there's an interface token, register that too
+      if (registerInterface && typeof token === 'string' && !token.startsWith('I')) {
+        this.container.registerMockClass(`I${token}`, MockClass);
+      }
+      
+      // Resolve the instance from the container
+      instance = this.container.resolve<T>(token);
+    } else {
+      // In non-DI mode, manually create instance
+      instance = new MockClass(...constructorArgs);
+    }
+    
+    // Update the services object for compatibility if not skipped
+    if (!skipServicesUpdate && typeof token === 'string') {
+      const serviceName = token.startsWith('I') 
+        ? token.substring(1).toLowerCase() 
+        : token.toLowerCase();
+      
+      if (serviceName in this.services) {
+        (this.services as any)[serviceName] = instance;
+      }
+    }
+    
+    return instance;
+  }
+  
+  /**
+   * Registers multiple mocks at once
+   * This is useful for setting up a test environment with many mocks
+   * 
+   * @param mocks Map of token -> mock implementation
+   * @param options Options for registration
+   */
+  registerMocks<T extends Record<string, any>>(
+    mocks: T,
+    options: {
+      /**
+       * Register interface tokens automatically (e.g., IServiceName)
+       */
+      registerInterfaces?: boolean;
+    } = {}
+  ): void {
+    if (this.isCleanedUp) {
+      throw new Error('Cannot register mocks - context has been cleaned up');
+    }
+    
+    // Register each mock
+    Object.entries(mocks).forEach(([token, implementation]) => {
+      this.registerMock(token, implementation, {
+        registerInterface: options.registerInterfaces !== false
+      });
+    });
   }
   
   /**
@@ -346,17 +604,55 @@ export class TestContextDI extends TestContext {
    * Creates a new scope in the DI container
    * This is useful for tests that need isolation between test cases
    * 
+   * @param options Additional options for the child scope
    * @returns A new TestContextDI with a child container
    */
-  createChildScope(): TestContextDI {
-    // Create a new child container
-    const childContainer = this.container.getContainer().createChildContainer();
+  createChildScope(options: Partial<TestContextDIOptions> = {}): TestContextDI {
+    if (this.isCleanedUp) {
+      throw new Error('Cannot create child scope - context has been cleaned up');
+    }
     
-    // Create a new TestContextDI with the child container
-    return new TestContextDI({
-      useDI: shouldUseDI(),
-      container: childContainer
+    // Create a child container
+    const childContainer = this.useDI 
+      ? this.container.getContainer().createChildContainer()
+      : undefined;
+      
+    // Create new test context with options
+    const childContext = new TestContextDI({
+      useDI: this.useDI,
+      container: childContainer,
+      ...options
     });
+    
+    // Track the child context for cleanup
+    this.childContexts.push(childContext);
+    
+    return childContext;
+  }
+  
+  /**
+   * Creates an isolated scope that doesn't affect the parent container
+   * This is useful for tests that need complete isolation
+   * 
+   * @param options Additional options for the isolated scope
+   * @returns A new TestContextDI with an isolated container
+   */
+  createIsolatedScope(options: Partial<TestContextDIOptions> = {}): TestContextDI {
+    if (this.isCleanedUp) {
+      throw new Error('Cannot create isolated scope - context has been cleaned up');
+    }
+    
+    // Create new test context with isolated container
+    const isolatedContext = new TestContextDI({
+      useDI: this.useDI,
+      isolatedContainer: true,
+      ...options
+    });
+    
+    // Track the isolated context for cleanup
+    this.childContexts.push(isolatedContext);
+    
+    return isolatedContext;
   }
   
   /**
@@ -444,20 +740,22 @@ export class TestContextDI extends TestContext {
 
   /**
    * Factory method to create a TestContextDI with DI enabled
+   * @param options Additional options for context creation
    */
-  static withDI(fixturesDir?: string): TestContextDI {
+  static withDI(options: Partial<Omit<TestContextDIOptions, 'useDI'>> = {}): TestContextDI {
     return new TestContextDI({
-      fixturesDir,
+      ...options,
       useDI: true
     });
   }
 
   /**
    * Factory method to create a TestContextDI with DI disabled
+   * @param options Additional options for context creation
    */
-  static withoutDI(fixturesDir?: string): TestContextDI {
+  static withoutDI(options: Partial<Omit<TestContextDIOptions, 'useDI'>> = {}): TestContextDI {
     return new TestContextDI({
-      fixturesDir,
+      ...options,
       useDI: false
     });
   }
@@ -475,6 +773,10 @@ export class TestContextDI extends TestContext {
     execute?: (node: any, state: any) => any;
     validate?: (node: any) => boolean | { valid: boolean; errors?: string[] };
   }): any {
+    if (this.isCleanedUp) {
+      throw new Error(`Cannot create mock directive handler '${directiveName}' - context has been cleaned up`);
+    }
+    
     // Create a basic handler object with proper handler structure
     const handler = {
       directiveName,
@@ -488,19 +790,19 @@ export class TestContextDI extends TestContext {
     (handler as any).__isMockHandler = true;
     
     try {
-      if (shouldUseDI()) {
+      if (this.useDI) {
         // In DI mode, register the handler with the container
         this.container.registerMock(`${directiveName}DirectiveHandler`, handler);
         
         // Also register it with the directive service if available
-        const directiveService = this.container.resolve('DirectiveService');
-        if (directiveService && typeof directiveService.registerHandler === 'function') {
-          try {
+        try {
+          const directiveService = this.resolve<IDirectiveService>('IDirectiveService');
+          if (directiveService && typeof directiveService.registerHandler === 'function') {
             directiveService.registerHandler(directiveName, handler);
-          } catch (error) {
-            // If registering fails, log the error but continue
-            console.error(`Error registering handler for ${directiveName}:`, error);
           }
+        } catch (error) {
+          // If resolving or registering fails, log the error but continue
+          console.error(`Error registering handler for ${directiveName} with directive service:`, error);
         }
       } else if (this.services.directive && typeof this.services.directive.registerHandler === 'function') {
         // In non-DI mode, register directly with the directive service if available
@@ -511,20 +813,95 @@ export class TestContextDI extends TestContext {
           console.error(`Error registering handler for ${directiveName}:`, error);
         }
       }
+      
+      // Track this handler for cleanup
+      this.registeredMocks.add(`${directiveName}DirectiveHandler`);
     } catch (error) {
-      // Ignore registration errors - the handler object is still returned
-      console.error(`Error during mock directive handler creation:`, error);
+      // Provide better error message but still return the handler
+      console.error(`Error during mock directive handler creation for ${directiveName}:`, error);
     }
     
     return handler;
   }
+  
+  /**
+   * Creates a diagnostic report of the current context
+   * Useful for debugging test setup issues
+   * 
+   * @returns A diagnostic report object
+   */
+  createDiagnosticReport(): {
+    useDI: boolean;
+    registeredMocks: string[];
+    childContexts: number;
+    services: string[];
+    containerState: { registeredTokens: string[] } | undefined;
+    isCleanedUp: boolean;
+  } {
+    const registeredServices = Object.keys(this.services);
+    
+    let containerState;
+    if (this.useDI) {
+      try {
+        // Get tokens from container if possible
+        const tokens = this.container.getRegisteredTokens();
+        containerState = {
+          registeredTokens: tokens.filter(t => typeof t === 'string') as string[]
+        };
+      } catch (error) {
+        containerState = undefined;
+      }
+    }
+    
+    return {
+      useDI: this.useDI,
+      registeredMocks: Array.from(this.registeredMocks),
+      childContexts: this.childContexts.length,
+      services: registeredServices,
+      containerState,
+      isCleanedUp: this.isCleanedUp
+    };
+  }
 
   /**
-   * Clean up resources, including the container
+   * Clean up resources, including the container and child contexts
+   * This ensures proper cleanup to prevent memory leaks and test isolation issues
    */
   async cleanup(): Promise<void> {
-    await super.cleanup();
-    // Reset the container
-    this.container.reset();
+    // Skip if already cleaned up
+    if (this.isCleanedUp) {
+      return;
+    }
+    
+    this.isCleanedUp = true;
+    
+    // Clean up child contexts first
+    await Promise.all(
+      this.childContexts.map(async (child) => {
+        if (!child.isCleanedUp) {
+          await child.cleanup();
+        }
+      })
+    );
+    
+    // Clear the child contexts array
+    this.childContexts = [];
+    
+    try {
+      // Call parent cleanup
+      await super.cleanup();
+    } catch (error) {
+      console.error('Error during parent context cleanup:', error);
+    }
+    
+    try {
+      // Reset the container last to ensure all services are disposed
+      this.container.reset();
+    } catch (error) {
+      console.error('Error during container reset:', error);
+    }
+    
+    // Clear the registered mocks set
+    this.registeredMocks.clear();
   }
 }

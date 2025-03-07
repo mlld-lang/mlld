@@ -61,10 +61,13 @@ Our migration strategy follows these key principles:
 
 ### In Progress
 - [x] Constructor simplification for key services (Phase 1 completed) 
-- [ ] Refining test infrastructure (Phase 2 starting)
+- [x] Test infrastructure enhancement (Phase 2 mostly completed)
+- [ ] Categorizing tests by DI dependency (Phase 2 continuing)
 
 ### Up Next
-- [ ] Complete Phase 2: Test infrastructure enhancement
+- [ ] Complete remaining Phase 2 tasks:
+  - [ ] Categorize tests by DI dependency
+  - [ ] Create specific utilities for circular dependency testing
 - [ ] Begin Phase 3: Service migration
 
 ## Reference Documentation
