@@ -21,8 +21,8 @@ Our migration strategy follows these key principles:
 
 ## Phase-by-Phase Migration Plan
 
-### Phase 1: Foundation and Cleanup (Partially Completed)
-- Constructor simplification
+### Phase 1: Foundation and Cleanup (✅ Completed)
+- Constructor simplification for key services
 - Documentation updates
 - [Details in phase1-cleanup.md](./phases/phase1-cleanup.md)
 
@@ -60,8 +60,8 @@ Our migration strategy follows these key principles:
 - Tests for decorated services updated to work with both modes
 
 ### In Progress
-- [ ] Constructor simplification for remaining services (OutputService completed)
-- [ ] Refining test infrastructure
+- [x] Constructor simplification for key services (Phase 1 completed) 
+- [ ] Refining test infrastructure (Phase 2 starting)
 
 ### Up Next
 - [ ] Complete Phase 2: Test infrastructure enhancement
