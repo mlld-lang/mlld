@@ -7,6 +7,7 @@ import { MeldOutputError } from '@core/errors/MeldOutputError.js';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
 import { MeldError } from '@core/errors/MeldError.js';
 import { inject, injectable } from 'tsyringe';
+import { Service } from '@core/ServiceProvider.js';
 
 type FormatConverter = (
   nodes: MeldNode[],
@@ -21,6 +22,13 @@ const DEFAULT_OPTIONS: Required<OutputOptions> = {
 };
 
 @injectable()
+@Service({
+  description: 'Service responsible for converting Meld nodes to different output formats',
+  dependencies: [
+    { token: 'IStateService', name: 'state' },
+    { token: 'IResolutionService', name: 'resolutionService' }
+  ]
+})
 export class OutputService implements IOutputService {
   private formatters = new Map<string, FormatConverter>();
   private state: IStateService | undefined;

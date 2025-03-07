@@ -1,8 +1,9 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { ResolutionService } from './ResolutionService.js';
 import { IStateService } from '@services/state/StateService/IStateService.js';
 import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import { IParserService } from '@services/pipeline/ParserService/IParserService.js';
+import { IPathService } from '@services/fs/PathService/IPathService.js';
 import { ResolutionContext } from './IResolutionService.js';
 import { ResolutionError } from './errors/ResolutionError.js';
 import type { MeldNode, DirectiveNode, TextNode } from 'meld-spec';
@@ -16,6 +17,8 @@ import {
 // Import run examples directly
 import runDirectiveExamplesModule from '@core/syntax/run.js';
 import { createExample, createInvalidExample, createNodeFromExample } from '@core/syntax/helpers';
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
+import { container } from 'tsyringe';
 
 // Use the correctly imported run directive examples
 const runDirectiveExamples = runDirectiveExamplesModule;
@@ -30,14 +33,21 @@ vi.mock('@core/utils/logger', () => ({
   }
 }));
 
-describe('ResolutionService', () => {
+// Run tests in both DI and non-DI modes
+describe.each([
+  { useDI: false, name: 'without DI' },
+  { useDI: true, name: 'with DI' }
+])('ResolutionService $name', ({ useDI }) => {
   let service: ResolutionService;
   let stateService: IStateService;
   let fileSystemService: IFileSystemService;
   let parserService: IParserService;
+  let pathService: IPathService;
   let context: ResolutionContext;
+  let testContext: TestContextDI;
 
   beforeEach(() => {
+    // Create mock services
     stateService = {
       getTextVar: vi.fn(),
       getDataVar: vi.fn(),
@@ -54,11 +64,35 @@ describe('ResolutionService', () => {
       parse: vi.fn(),
     } as unknown as IParserService;
 
-    service = new ResolutionService(
-      stateService,
-      fileSystemService,
-      parserService
-    );
+    pathService = {
+      getHomePath: vi.fn().mockReturnValue('/home/user'),
+      dirname: vi.fn(p => p.substring(0, p.lastIndexOf('/') || 0)),
+      resolvePath: vi.fn(p => typeof p === 'string' ? p : p.raw),
+    } as unknown as IPathService;
+
+    // Create test context with appropriate DI mode
+    if (useDI) {
+      testContext = TestContextDI.withDI();
+      
+      // Register mock services with the container
+      container.registerInstance('IStateService', stateService);
+      container.registerInstance('IFileSystemService', fileSystemService);
+      container.registerInstance('IParserService', parserService);
+      container.registerInstance('IPathService', pathService);
+      
+      // Resolve service from the container
+      service = container.resolve(ResolutionService);
+    } else {
+      testContext = TestContextDI.withoutDI();
+      
+      // Create service manually
+      service = new ResolutionService(
+        stateService,
+        fileSystemService,
+        parserService,
+        pathService
+      );
+    }
 
     context = {
       currentFilePath: 'test.meld',
@@ -70,6 +104,13 @@ describe('ResolutionService', () => {
       },
       state: stateService
     };
+  });
+  
+  afterEach(async () => {
+    if (useDI) {
+      container.clearInstances();
+    }
+    await testContext.cleanup();
   });
 
   describe('resolveInContext', () => {

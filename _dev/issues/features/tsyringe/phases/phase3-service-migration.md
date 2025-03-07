@@ -200,8 +200,9 @@ The InterpreterService required special handling due to its circular dependency 
 
 1. Continue with Core Pipeline services:
    - [x] DirectiveService
-   - [ ] OutputService
-   - [ ] ResolutionService
+   - [x] OutputService
+   - [x] ResolutionService
+   - [ ] Continue with remaining services
 2. Document patterns as we go for service-specific requirements
 3. Track progress and update documentation regularly
 
@@ -218,6 +219,26 @@ To complete the migration, we:
 4. Used setTimeout for the circular dependency with InterpreterService (similar to how InterpreterService handles it)
 
 The DirectiveService has a circular dependency with InterpreterService, which required special handling. Each service has to set up the other's reference in a setTimeout call to allow both to be fully initialized.
+
+### Notes on OutputService Migration
+
+The OutputService already had the `@injectable()` decorator in place, making the migration straightforward:
+1. Added the `@Service()` decorator with appropriate metadata
+2. The constructor was already using `@inject()` for its parameters
+3. Updated the test to support both DI and non-DI modes
+4. Verified tests pass in both modes
+
+The OutputService has a well-structured constructor with proper dependency injection support and an initialization pattern that works in both modes.
+
+### Notes on ResolutionService Migration
+
+The ResolutionService already had the `@singleton()` decorator in place:
+1. Added the `@Service()` decorator with detailed metadata
+2. The constructor was already using `@inject()` properly
+3. Updated the test to support both DI and non-DI modes
+4. Verified all tests pass in both modes
+
+The ResolutionService uses the standard dual-mode pattern with `initializeFromParams` that checks if all dependencies are provided before proceeding with DI mode.
 
 ## Related Documents
 

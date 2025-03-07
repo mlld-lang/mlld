@@ -66,8 +66,9 @@ Our migration strategy follows these key principles:
 - [x] Phase 3: Service migration (in progress)
   - [x] Created service dependency map for prioritized migration
   - [x] Migrated foundation services (PathOperationsService, ProjectPathResolver, StateFactory, StateEventService, StateService, ValidationService)
-  - [x] Started migrating Core Pipeline services (FileSystemService, ParserService)
-  - [ ] Continuing with remaining Core Pipeline services
+  - [x] Migrated Core Pipeline services (FileSystemService, ParserService, InterpreterService, DirectiveService)
+  - [x] Migrated OutputService and ResolutionService
+  - [ ] Continuing with remaining services
 
 ### Up Next
 - [ ] Complete remaining Phase 3 tasks:
@@ -77,6 +78,8 @@ Our migration strategy follows these key principles:
   - [x] Migrate ParserService
   - [x] Migrate InterpreterService 
   - [x] Migrate DirectiveService
+  - [x] Migrate OutputService
+  - [x] Migrate ResolutionService
   - [ ] And other services according to dependency order
 
 ## Reference Documentation

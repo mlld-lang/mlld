@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { OutputService } from './OutputService.js';
 import { MeldOutputError } from '@core/errors/MeldOutputError.js';
 import type { MeldNode } from 'meld-spec';
@@ -19,6 +19,8 @@ import {
 // Import run examples directly
 import runDirectiveExamplesModule from '@core/syntax/run.js';
 import { createNodeFromExample } from '@core/syntax/helpers';
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
+import { container } from 'tsyringe';
 
 // Use the correctly imported run directive examples
 const runDirectiveExamples = runDirectiveExamplesModule;
@@ -230,16 +232,45 @@ class MockResolutionService implements IResolutionService {
   detectCircularReferences(): Promise<void> { return Promise.resolve(); }
 }
 
-describe('OutputService', () => {
+// Run tests in both DI and non-DI modes
+describe.each([
+  { useDI: false, name: 'without DI' },
+  { useDI: true, name: 'with DI' }
+])('OutputService $name', ({ useDI }) => {
   let service: OutputService;
   let state: IStateService;
   let resolutionService: IResolutionService;
+  let testContext: TestContextDI;
 
   beforeEach(() => {
+    // Create mock services
     state = new MockStateService();
     resolutionService = new MockResolutionService();
-    service = new OutputService();
-    service.initialize(state, resolutionService);
+    
+    // Set up test context and service based on DI mode
+    if (useDI) {
+      testContext = TestContextDI.withDI();
+      
+      // Register dependencies with the container
+      container.registerInstance('IStateService', state);
+      container.registerInstance('IResolutionService', resolutionService);
+      
+      // Resolve service from container
+      service = container.resolve(OutputService);
+    } else {
+      testContext = TestContextDI.withoutDI();
+      
+      // Create and initialize service manually
+      service = new OutputService();
+      service.initialize(state, resolutionService);
+    }
+  });
+  
+  afterEach(async () => {
+    if (useDI) {
+      container.clearInstances();
+    }
+    await testContext.cleanup();
   });
 
   describe('Format Registration', () => {

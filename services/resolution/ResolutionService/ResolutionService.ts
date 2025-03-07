@@ -17,6 +17,7 @@ import { ErrorSeverity } from '@core/errors/MeldError.js';
 import { inject, singleton } from 'tsyringe';
 import { IPathService } from '@services/fs/PathService/IPathService.js';
 import { VariableResolutionTracker, ResolutionTrackingConfig } from '@tests/utils/debug/VariableResolutionTracker/index.js';
+import { Service } from '@core/ServiceProvider.js';
 
 /**
  * Interface matching the StructuredPath expected from meld-spec
@@ -123,6 +124,15 @@ function isHeadingTextNode(node: MeldNode): node is TextNode {
  * Service responsible for resolving variables, commands, and paths in different contexts
  */
 @singleton()
+@Service({
+  description: 'Service responsible for resolving variables, commands, and paths',
+  dependencies: [
+    { token: 'IStateService', name: 'stateService' },
+    { token: 'IFileSystemService', name: 'fileSystemService' },
+    { token: 'IParserService', name: 'parserService' },
+    { token: 'IPathService', name: 'pathService' }
+  ]
+})
 export class ResolutionService implements IResolutionService {
   private textResolver: TextResolver;
   private dataResolver: DataResolver;
