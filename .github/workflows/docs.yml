@@ -1,4 +1,4 @@
-name: Deploy Docs
+ name: Deploy Docs
 
 on:
   push:
@@ -8,6 +8,10 @@ on:
       - 'docs/**'
       - 'website/**'
       - '.github/workflows/docs.yml'
+
+# Add permissions configuration here
+permissions:
+  contents: write
 
 jobs:
   build-and-deploy:
@@ -33,6 +37,10 @@ jobs:
 
       - name: Create .nojekyll file
         run: touch website/_site/.nojekyll
+        
+      # Add CNAME file for custom domain
+      - name: Create CNAME file
+        run: echo "meld.sh" > website/_site/CNAME
 
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v3
