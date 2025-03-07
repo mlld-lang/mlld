@@ -10,7 +10,7 @@ This phase focuses on creating the foundation for the TSyringe migration by clea
 
 ## Tasks
 
-### 1. Constructor Simplification (In Progress)
+### 1. Constructor Simplification (Complete)
 
 **Objective**: Refactor service constructors to be more readable while preserving dual-mode functionality.
 
@@ -19,8 +19,8 @@ This phase focuses on creating the foundation for the TSyringe migration by clea
 - ✅ Refactor ResolutionService constructor
 - ✅ Refactor OutputService constructor
 - ✅ FileSystemService constructor (already follows pattern)
-- ⬜ Refactor DirectiveService constructor (complex circular dependencies)
-- ⬜ Refactor remaining service constructors
+- ✅ Refactor DirectiveService constructor (handled circular dependencies)
+- ✅ Remaining service constructors (already follow pattern or will be addressed in Phase 3)
 
 **Pattern to Follow**:
 ```typescript
@@ -78,17 +78,20 @@ private initializeFromParams(factory?: SomeFactory, dependency?: IDependency): v
 
 ## Current Status
 
-- Constructor simplification has been completed for StateService, ResolutionService, and OutputService
-- FileSystemService constructor was already following the appropriate pattern
-- DirectiveService has been identified as requiring more careful handling due to circular dependencies
+- Constructor simplification has been completed for all key services:
+  - StateService: Refactored to use the dual-mode pattern
+  - ResolutionService: Refactored to use the dual-mode pattern
+  - OutputService: Refactored to use the dual-mode pattern
+  - FileSystemService: Already following the appropriate pattern
+  - DirectiveService: Refactored while preserving circular dependency handling with InterpreterService
 - Basic documentation has been created but needs expansion
-- Test helper improvements have not yet started
+- Phase 1 is now complete and we're ready to move to Phase 2
 
 ## Next Steps
 
 1. Begin implementing test helper improvements (Phase 2)
-2. Create a plan for handling the more complex DirectiveService refactoring
-3. Expand documentation with more examples of the patterns discovered
+2. Document the patterns discovered during Phase 1, especially around circular dependency handling
+3. Begin planning for incremental service migration in Phase 3
 
 ## Related Documents
 
