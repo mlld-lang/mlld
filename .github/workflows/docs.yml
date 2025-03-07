@@ -48,3 +48,4 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: website/_site
           publish_branch: gh-pages
+          force_orphan: true  # Create a fresh deployment without commit history
