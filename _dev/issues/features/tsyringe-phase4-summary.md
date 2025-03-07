@@ -87,7 +87,19 @@ Phase 4 of the TSyringe dependency injection migration focused on implementing c
 - The DirectiveService and InterpreterService have a circular dependency where each needs a reference to the other.
 - Solved using tsyringe's `@delay()` decorator to defer injection and `setTimeout()` to ensure all services are initialized before use.
 
-### 2. Maintaining Backward Compatibility
+### 2. Path Service Testing
+
+A significant challenge was fixing the PathService tests, which failed in both DI and non-DI modes due to:
+- Circular dependency between PathService and FileSystemService 
+- Inconsistent test environment setup
+- Issues with file system operations in test mode
+
+These were resolved by:
+- Creating a special test mode path validation that bypassed file system operations
+- Adding direct path resolution in tests to avoid circular dependencies
+- Improving test setup to ensure consistency across modes
+
+### 3. Maintaining Backward Compatibility
 
 - Preserved the existing `initialize()` method pattern for backward compatibility:
   ```typescript
