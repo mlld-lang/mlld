@@ -18,6 +18,7 @@ We are taking a **methodical, incremental approach** to cleaning up this technic
 * [**tsyringe-cleanup-revised.md**](./tsyringe-cleanup-revised.md) - Specific cleanup tasks that preserve dual-mode functionality
 * [**tsyringe-first-task.md**](./tsyringe-first-task.md) - Detailed implementation guide for path normalization
 * [**constructor-simplification.md**](./constructor-simplification.md) - Strategy for simplifying service constructors
+* [**service-initialization-patterns.md**](./service-initialization-patterns.md) - Documented patterns from the refactoring work
 
 ## Migration Approach
 
@@ -55,14 +56,16 @@ We are following a phased approach:
 - Initial TSyringe implementation with dual-mode support
 - DI container configuration in di-config.ts
 - Service decorator implementation
+- Refactored StateService constructor for better clarity
 
 ### In Progress
 - [ ] Constructor simplification for key services (see [constructor-simplification.md](./constructor-simplification.md))
 - [ ] Migration planning and documentation
+- [ ] Document patterns for service initialization
 
 ### Up Next
-- [ ] Refactor StateService constructor for better clarity 
-- [ ] Document patterns for service initialization
+- [ ] Refactor ResolutionService constructor using the same pattern
+- [ ] Refactor OutputService constructor using the same pattern
 - [ ] Update DI documentation
 - [ ] Create test helpers for DI mode
 

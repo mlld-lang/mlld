@@ -40,40 +40,81 @@ export class StateService implements IStateService {
   private eventService?: IStateEventService;
   private trackingService?: IStateTrackingService;
 
-  constructor(
-    @inject(StateFactory) stateFactory?: StateFactory,
-    @inject('IStateEventService') eventService?: IStateEventService,
-    @inject('IStateTrackingService') trackingService?: IStateTrackingService,
-    parentState?: IStateService
-  ) {
-    // Handle constructor for both DI and non-DI modes
-    if (stateFactory) {
-      // DI mode or manual initialization with factory
-      this.stateFactory = stateFactory;
-      this.eventService = eventService;
-      this.trackingService = trackingService;
-      
-      // Initialize new state
-      this.initializeState(parentState);
-    } else {
-      // Legacy mode - initialize with basic factory
-      this.stateFactory = new StateFactory();
-      
-      // Legacy constructor overloading - handle various parameters
-      if (eventService && !trackingService && !parentState) {
-        // Handle StateService(eventService) legacy signature
-        this.eventService = eventService as IStateEventService;
-        this.initializeState();
-      } else if (eventService && !trackingService && parentState) {
-        // Handle StateService(parentState) legacy signature
-        // In this case eventService is actually the parentState
-        this.initializeState(eventService as unknown as IStateService);
-      } else {
-        // Default case or explicit initialize() call later
-        this.initializeState(parentState as IStateService);
-      }
-    }
+  /**
+ * Creates a new StateService instance
+ * Supports both DI mode and legacy non-DI mode
+ * 
+ * @param stateFactory State factory for creating states (injected in DI mode)
+ * @param eventService Event service for state events (injected in DI mode)
+ * @param trackingService Tracking service for debugging (injected in DI mode)
+ * @param parentState Optional parent state to inherit from
+ */
+constructor(
+  @inject(StateFactory) stateFactory?: StateFactory,
+  @inject('IStateEventService') eventService?: IStateEventService,
+  @inject('IStateTrackingService') trackingService?: IStateTrackingService,
+  parentState?: IStateService
+) {
+  this.initializeFromParams(stateFactory, eventService, trackingService, parentState);
+}
+
+/**
+ * Initialize this service with the given parameters
+ * Handles both DI and non-DI mode initialization
+ */
+private initializeFromParams(
+  stateFactory?: StateFactory,
+  eventService?: IStateEventService | IStateService, // Could be event service or parent state in legacy mode
+  trackingService?: IStateTrackingService,
+  parentState?: IStateService
+): void {
+  if (stateFactory) {
+    this.initializeDIMode(stateFactory, eventService as IStateEventService, trackingService, parentState);
+  } else {
+    this.initializeLegacyMode(eventService, trackingService, parentState);
   }
+}
+
+/**
+ * Initialize in DI mode with explicit dependencies
+ */
+private initializeDIMode(
+  stateFactory: StateFactory,
+  eventService?: IStateEventService,
+  trackingService?: IStateTrackingService,
+  parentState?: IStateService
+): void {
+  this.stateFactory = stateFactory;
+  this.eventService = eventService;
+  this.trackingService = trackingService;
+  this.initializeState(parentState);
+}
+
+/**
+ * Initialize in legacy non-DI mode with parameter overloading
+ */
+private initializeLegacyMode(
+  eventServiceOrParent?: IStateEventService | IStateService,
+  trackingService?: IStateTrackingService,
+  explicitParentState?: IStateService
+): void {
+  // Create default factory
+  this.stateFactory = new StateFactory();
+  
+  // Handle different legacy constructor signatures
+  if (eventServiceOrParent && !trackingService && !explicitParentState) {
+    // Case: StateService(eventService)
+    this.eventService = eventServiceOrParent as IStateEventService;
+    this.initializeState();
+  } else if (eventServiceOrParent && !trackingService && explicitParentState) {
+    // Case: StateService(parentState)
+    // In this case eventServiceOrParent is actually the parentState
+    this.initializeState(eventServiceOrParent as IStateService);
+  } else {
+    // Default case or explicit initialize() call later
+    this.initializeState(explicitParentState as IStateService);
+  }
+}
   
   /**
    * Initialize the service (legacy mode) or re-initialize (DI mode)

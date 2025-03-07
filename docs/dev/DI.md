@@ -159,6 +159,74 @@ context.container.registerMockClass('IServiceName', MockClass);
 
 ## Common Patterns
 
+### Dual-Mode Constructor Pattern
+
+Meld services need to support both DI and non-DI modes. The recommended pattern is:
+
+```typescript
+/**
+ * Constructor with DI annotations
+ */
+constructor(
+  @inject(SomeFactory) factory?: SomeFactory,
+  @inject('IService1') service1?: IService1,
+  @inject('IService2') service2?: IService2
+) {
+  this.initializeFromParams(factory, service1, service2);
+}
+
+/**
+ * Helper that chooses initialization path
+ */
+private initializeFromParams(
+  factory?: SomeFactory,
+  service1?: IService1,
+  service2?: IService2
+): void {
+  if (factory) {
+    this.initializeDIMode(factory, service1, service2);
+  } else {
+    this.initializeLegacyMode(service1, service2);
+  }
+}
+
+/**
+ * DI mode initialization
+ */
+private initializeDIMode(
+  factory: SomeFactory,
+  service1?: IService1,
+  service2?: IService2
+): void {
+  this.factory = factory;
+  this.service1 = service1;
+  this.service2 = service2;
+  // Additional initialization
+}
+
+/**
+ * Legacy mode initialization
+ */
+private initializeLegacyMode(
+  service1?: IService1,
+  service2?: IService2
+): void {
+  // Create default dependencies
+  this.factory = new SomeFactory();
+  
+  // Additional initialization
+}
+```
+
+This pattern:
+1. Keeps the constructor simple
+2. Clearly separates DI and non-DI initialization logic
+3. Makes maintenance easier
+4. Preserves dual-mode functionality
+5. Provides a clear path to eventually remove legacy mode
+
+See `_dev/issues/features/service-initialization-patterns.md` for more examples.
+
 ### Factory Pattern
 
 For services that need complex initialization or multiple instances:
