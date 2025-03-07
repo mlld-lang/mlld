@@ -5,7 +5,7 @@ import type { StateNode, CommandDefinition } from './types.js';
 import { StateFactory } from './StateFactory.js';
 import type { IStateEventService, StateEvent } from '../StateEventService/IStateEventService.js';
 import type { IStateTrackingService } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
-import { inject, container } from 'tsyringe';
+import { inject, container, injectable } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
 
 // Helper function to check if DI should be used
@@ -23,6 +23,7 @@ function getContainer() {
  * 
  * Handles variables, imports, commands, nodes, and state transformations
  */
+@injectable()
 @Service({
   description: 'Service responsible for managing state in Meld files'
 })
