@@ -141,9 +141,36 @@ After all consumers have been updated to support DI resolution:
 
 For each utility service:
 
-- [ ] Create interface defining the public API
-- [ ] Add TSyringe decorators without changing exports
-- [ ] Add dual-mode tests verifying both DI and direct instantiation
-- [ ] Document the migration strategy for the specific service
+- [x] Create interface defining the public API (SourceMapService)
+- [x] Add TSyringe decorators without changing exports (SourceMapService)
+- [x] Add dual-mode tests verifying both DI and direct instantiation (SourceMapService)
+- [x] Document the migration strategy for the specific service (SourceMapService)
+- [ ] Update DI container registration in di-config.ts (SourceMapService completed)
+- [ ] Create interface for Logger
+- [ ] Add TSyringe decorators to Logger classes
+- [ ] Transform createServiceLogger to be DI-compatible
 - [ ] Gradually update consumers to support DI resolution
 - [ ] Eventually register the singleton with the container
+
+## Completed Migrations
+
+### SourceMapService
+
+The SourceMapService was successfully migrated following these steps:
+
+1. **Added Interface**: Created `ISourceMapService` to define the public API
+2. **Added Decorators**: Applied `@injectable()`, `@singleton()`, and `@Service()` decorators
+3. **Maintained Singleton**: Kept the exported `sourceMapService` instance unchanged
+4. **Added DI Registration**: Updated di-config.ts to register both class and interface
+5. **Verified Tests**: Confirmed tests pass in both DI and non-DI modes
+
+Key insights from the SourceMapService migration:
+
+1. The service had no dependencies, making it an easier first utility to migrate
+2. Tests already had a framework for both DI and non-DI testing
+3. Resolution in di-config.ts used the pattern:
+   ```typescript
+   container.register('SourceMapService', { useClass: SourceMapService });
+   container.register('ISourceMapService', { useToken: 'SourceMapService' });
+   ```
+4. The `@Service({ providedIn: 'root' })` decorator properly set up the service for DI
