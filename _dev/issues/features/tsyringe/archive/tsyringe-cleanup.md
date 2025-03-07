@@ -9,7 +9,6 @@ We're taking a methodical approach to cleaning up the TSyringe implementation. S
 - [**tsyringe.md**](./tsyringe.md) - Main entry point and progress tracker
 - [**tsyringe-cleanup-approach.md**](./tsyringe-cleanup-approach.md) - The overall migration strategy 
 - [**tsyringe-cleanup-revised.md**](./tsyringe-cleanup-revised.md) - Specific cleanup tasks that preserve dual-mode functionality
-- [**tsyringe-first-task.md**](./tsyringe-first-task.md) - Detailed implementation guide for path normalization
 - [**constructor-simplification.md**](./constructor-simplification.md) - Strategy for simplifying service constructors
 
 ## Prioritized Action Items
