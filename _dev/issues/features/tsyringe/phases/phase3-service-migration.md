@@ -204,7 +204,7 @@ The InterpreterService required special handling due to its circular dependency 
    - [x] ResolutionService
    - [ ] CLIService
    - [ ] Utility services:
-     - [ ] SourceMapService (in core/utils/SourceMapService.ts)
+     - [x] SourceMapService (in core/utils/SourceMapService.ts)
      - [ ] Logger class (in core/utils/simpleLogger.ts)
      - [ ] createServiceLogger function (in core/utils/logger.ts)
 2. Document patterns as we go for service-specific requirements
@@ -260,6 +260,26 @@ The ResolutionService already had the `@singleton()` decorator in place:
 4. Verified all tests pass in both modes
 
 The ResolutionService uses the standard dual-mode pattern with `initializeFromParams` that checks if all dependencies are provided before proceeding with DI mode.
+
+### Notes on SourceMapService Migration
+
+The SourceMapService is a utility service with a unique migration approach:
+
+1. Added the required TSyringe decorators to the class:
+   - Added `@injectable()` and `@singleton()` decorators
+   - Added the `@Service()` decorator with `providedIn: 'root'` metadata
+   - Added an ISourceMapService interface to support DI resolution
+
+2. Applied the utility service migration pattern:
+   - Maintained the exported singleton instance for backward compatibility
+   - Added the service to the DI container in di-config.ts
+   - Registered both the class and interface tokens
+
+3. Test support:
+   - Tests already had both DI and non-DI modes
+   - Verified that all existing tests pass with the updated implementation
+
+The SourceMapService follows our revised utility service migration approach, maintaining backward compatibility while enabling DI resolution. Since this service has no dependencies of its own, its migration was simpler than what we'll encounter with the Logger services.
 
 ### Notes on CLIService Migration (Pending)
 
