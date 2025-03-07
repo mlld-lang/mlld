@@ -167,18 +167,24 @@ export class DirectiveService implements IDirectiveService {
 
 ## Current Status
 
-- Several services have been decorated with `@Service()`
-- Some services have been migrated to support both modes
-- No comprehensive tracking of migration status
-- No prioritized order for remaining services
+- Created service dependency map and migration order
+- Migrated foundation services with minimal dependencies:
+  - ✅ PathOperationsService (already complete)
+  - ✅ ProjectPathResolver
+  - ✅ StateFactory
+  - ✅ StateEventService
+- Started tracking migration progress by service
 
 ## Next Steps
 
-1. Create service dependency map and migration order
-2. Begin with foundation services (minimal dependencies)
-3. Progress to intermediate services
-4. Finally tackle complex services with circular dependencies
-5. Track progress and update documentation regularly
+1. Continue with foundation services:
+   - [ ] StateService - depends on StateFactory and StateEventService
+   - [ ] ValidationService - depends on StateService
+2. Move on to Core Pipeline services:
+   - [ ] FileSystemService
+   - [ ] ParserService
+3. Document patterns as we go for service-specific requirements
+4. Track progress and update documentation regularly
 
 ## Related Documents
 

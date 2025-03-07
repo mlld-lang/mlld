@@ -1,13 +1,29 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { StateFactory } from './StateFactory.js';
-import type { StateNode } from './types.js';
+import type { StateNode, IStateFactory } from './types.js';
+import { TestContextDI } from '../../../tests/utils/di/TestContextDI';
+import { createService } from '../../../core/ServiceProvider';
 
 describe('StateFactory', () => {
-  let factory: StateFactory;
+  // Define tests for both DI and non-DI modes
+  describe.each([
+    { useDI: true, name: 'with DI' },
+    { useDI: false, name: 'without DI' },
+  ])('$name', ({ useDI }) => {
+    let factory: IStateFactory;
+    let context: TestContextDI;
 
-  beforeEach(() => {
-    factory = new StateFactory();
-  });
+    beforeEach(() => {
+      // Create test context with appropriate DI setting
+      context = useDI 
+        ? TestContextDI.withDI() 
+        : TestContextDI.withoutDI();
+      
+      // Get service instance using the appropriate mode
+      factory = useDI
+        ? context.container.resolve<IStateFactory>('IStateFactory')
+        : createService(StateFactory);
+    });
 
   describe('createState', () => {
     it('should create an empty state', () => {
@@ -221,5 +237,10 @@ describe('StateFactory', () => {
       // Verify values are copied, not referenced
       expect(updated.variables.text).not.toBe(initial.variables.text);
     });
+  });
+  
+  afterEach(async () => {
+    await context.cleanup();
+  });
   });
 }); 

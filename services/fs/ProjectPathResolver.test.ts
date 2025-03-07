@@ -2,17 +2,34 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { ProjectPathResolver } from './ProjectPathResolver.js';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { TestContextDI } from '../../tests/utils/di/TestContextDI';
+import { createService } from '../../core/ServiceProvider';
 
 // Mock fs and path modules
 vi.mock('fs/promises');
 vi.mock('path');
 
 describe('ProjectPathResolver', () => {
-  let resolver: ProjectPathResolver;
-  
-  beforeEach(() => {
-    resolver = new ProjectPathResolver();
-    vi.resetAllMocks();
+  // Define tests for both DI and non-DI modes
+  describe.each([
+    { useDI: true, name: 'with DI' },
+    { useDI: false, name: 'without DI' },
+  ])('$name', ({ useDI }) => {
+    let resolver: ProjectPathResolver;
+    let context: TestContextDI;
+    
+    beforeEach(() => {
+      // Create test context with appropriate DI setting
+      context = useDI 
+        ? TestContextDI.withDI() 
+        : TestContextDI.withoutDI();
+      
+      // Get service instance using the appropriate mode
+      resolver = useDI
+        ? context.container.resolve<ProjectPathResolver>('ProjectPathResolver')
+        : createService(ProjectPathResolver);
+        
+      vi.resetAllMocks();
     
     // Setup path mocks with default implementations
     vi.mocked(path.join).mockImplementation((...args) => args.join('/'));
@@ -114,5 +131,10 @@ describe('ProjectPathResolver', () => {
     
     const result = await resolver.resolveProjectRoot('/current/dir');
     expect(result).toBe('/current/dir');
+  });
+
+  afterEach(async () => {
+    await context.cleanup();
+  });
   });
 }); 

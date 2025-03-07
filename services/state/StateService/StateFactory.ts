@@ -2,10 +2,12 @@ import type { StateNode, StateNodeOptions, IStateFactory, StateOperation } from 
 import { stateLogger as logger } from '@core/utils/logger.js';
 import { randomUUID } from 'crypto';
 import { Service } from '@core/ServiceProvider.js';
+import { injectable } from 'tsyringe';
 
 /**
  * Factory for creating and managing immutable state objects
  */
+@injectable()
 @Service({
   description: 'Factory for creating and managing immutable state objects'
 })

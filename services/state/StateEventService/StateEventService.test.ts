@@ -1,13 +1,29 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { StateEventService } from './StateEventService.js';
-import type { StateEvent, StateEventHandler } from './IStateEventService.js';
+import type { StateEvent, StateEventHandler, IStateEventService } from './IStateEventService.js';
+import { TestContextDI } from '../../../tests/utils/di/TestContextDI';
+import { createService } from '../../../core/ServiceProvider';
 
 describe('StateEventService', () => {
-  let service: StateEventService;
+  // Define tests for both DI and non-DI modes
+  describe.each([
+    { useDI: true, name: 'with DI' },
+    { useDI: false, name: 'without DI' },
+  ])('$name', ({ useDI }) => {
+    let service: IStateEventService;
+    let context: TestContextDI;
 
-  beforeEach(() => {
-    service = new StateEventService();
-  });
+    beforeEach(() => {
+      // Create test context with appropriate DI setting
+      context = useDI 
+        ? TestContextDI.withDI() 
+        : TestContextDI.withoutDI();
+      
+      // Get service instance using the appropriate mode
+      service = useDI
+        ? context.container.resolve<IStateEventService>('IStateEventService')
+        : createService(StateEventService);
+    });
 
   it('should register and emit events', async () => {
     const handler = vi.fn();
@@ -144,5 +160,10 @@ describe('StateEventService', () => {
     expect(handlers[0].handler).toBe(handler1);
     expect(handlers[1].handler).toBe(handler2);
     expect(handlers[1].options).toBe(options);
+  });
+  
+  afterEach(async () => {
+    await context.cleanup();
+  });
   });
 }); 
