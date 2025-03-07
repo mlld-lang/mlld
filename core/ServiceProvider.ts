@@ -6,8 +6,23 @@
  * It supports both modes of operation based on the USE_DI environment variable.
  */
 
-import { container } from 'tsyringe';
+import { container, injectable, ClassProvider, InjectionToken } from 'tsyringe';
 import 'reflect-metadata';
+
+/**
+ * Metadata key for storing service dependencies
+ */
+const SERVICE_METADATA_KEY = Symbol('service:metadata');
+
+/**
+ * Interface for service metadata
+ */
+export interface ServiceMetadata {
+  name: string;
+  interfaceName?: string;
+  description?: string;
+  dependencies?: Array<{ token: string | symbol; name: string }>;
+}
 
 /**
  * Determines if DI should be used based on the USE_DI environment variable
@@ -43,9 +58,9 @@ export function createService<T, D extends any[]>(
  * @param token The token to resolve
  * @returns The resolved service
  */
-export function resolveService<T>(token: string): T {
+export function resolveService<T>(token: string | InjectionToken<T>): T {
   if (!shouldUseDI()) {
-    throw new Error(`Cannot resolve service by token '${token}' when DI is disabled`);
+    throw new Error(`Cannot resolve service by token '${String(token)}' when DI is disabled`);
   }
   return container.resolve<T>(token);
 }
@@ -56,7 +71,7 @@ export function resolveService<T>(token: string): T {
  * @param token The token to register
  * @param useValue The implementation to use
  */
-export function registerServiceInstance<T>(token: string, useValue: T): void {
+export function registerServiceInstance<T>(token: string | InjectionToken<T>, useValue: T): void {
   if (shouldUseDI()) {
     container.registerInstance(token, useValue);
   }
@@ -69,7 +84,7 @@ export function registerServiceInstance<T>(token: string, useValue: T): void {
  * @param factory The factory function
  */
 export function registerServiceFactory<T>(
-  token: string,
+  token: string | InjectionToken<T>,
   factory: () => T
 ): void {
   if (shouldUseDI()) {
@@ -78,11 +93,55 @@ export function registerServiceFactory<T>(
 }
 
 /**
+ * Registers a service class in the container
+ * 
+ * @param token The token to register
+ * @param serviceClass The service class to register
+ */
+export function registerServiceClass<T>(
+  token: string | InjectionToken<T>,
+  serviceClass: new (...args: any[]) => T
+): void {
+  if (shouldUseDI()) {
+    container.register(token, { useClass: serviceClass });
+  }
+}
+
+/**
+ * Gets the service metadata for a class
+ * 
+ * @param target The class to get metadata for
+ * @returns The service metadata
+ */
+export function getServiceMetadata(target: any): ServiceMetadata | undefined {
+  return Reflect.getMetadata(SERVICE_METADATA_KEY, target);
+}
+
+/**
  * Creates a wrapper for a service class that can be used in both DI and legacy modes.
  * In DI mode, it's the decorator to use for service registration
+ * 
+ * @param options Optional metadata for the service
  */
-export function Service() {
+export function Service(options: Partial<ServiceMetadata> = {}) {
   return function(target: any) {
+    // Make the class injectable to ensure it works with tsyringe
+    injectable()(target);
+    
+    // Extract the service name and interface name
+    const name = target.name;
+    const interfaceName = name.charAt(0) !== 'I' ? `I${name}` : undefined;
+    
+    // Create metadata for the service
+    const metadata: ServiceMetadata = {
+      name,
+      interfaceName,
+      ...options
+    };
+    
+    // Store metadata on the class
+    Reflect.defineMetadata(SERVICE_METADATA_KEY, metadata, target);
+    
     // Register this class with tsyringe regardless of DI mode
     // This ensures classes are registered at definition time, not at runtime
     // which is important for tests that toggle DI mode
@@ -91,12 +150,11 @@ export function Service() {
     container.register(target, { useClass: target });
     
     // Also register by name for string token resolution
-    const name = target.name;
     container.register(name, { useClass: target });
     
     // If there's an interface token like "IServiceName", register that too
-    if (name.charAt(0) !== 'I') {
-      container.register(`I${name}`, { useClass: target });
+    if (interfaceName) {
+      container.register(interfaceName, { useClass: target });
     }
     
     // No modification to the class

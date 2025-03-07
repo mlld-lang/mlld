@@ -4,10 +4,13 @@ import {
   resolveService,
   registerServiceInstance,
   registerServiceFactory,
+  registerServiceClass,
   Service,
-  shouldUseDI
+  shouldUseDI,
+  getServiceMetadata,
+  ServiceMetadata
 } from './ServiceProvider';
-import { injectable } from 'tsyringe';
+import { injectable, InjectionToken } from 'tsyringe';
 
 // Mock classes for testing
 @injectable()
@@ -26,6 +29,20 @@ class DecoratedTestService {
   }
 }
 
+@Service({
+  description: 'A test service with metadata',
+  dependencies: [
+    { token: 'TestService', name: 'testService' }
+  ]
+})
+class MetadataTestService {
+  constructor(private testService?: TestService) {}
+  
+  getValue(): string {
+    return this.testService ? this.testService.getValue() + '-with-metadata' : 'no-dependency';
+  }
+}
+
 class LegacyService {
   private dep: TestService;
   
@@ -35,6 +52,21 @@ class LegacyService {
 
   getValue(): string {
     return this.dep.getValue() + '-legacy';
+  }
+}
+
+// Test inheritance with the Service decorator
+@Service()
+class BaseService {
+  getBaseValue(): string {
+    return 'base-value';
+  }
+}
+
+@Service()
+class DerivedService extends BaseService {
+  getDerivedValue(): string {
+    return 'derived-value';
   }
 }
 
@@ -132,6 +164,37 @@ describe('ServiceProvider', () => {
       expect(() => resolveService<DecoratedTestService>('DecoratedTestService'))
         .toThrow("Cannot resolve service by token 'DecoratedTestService' when DI is disabled");
     });
+    
+    it('should store metadata on the class', () => {
+      const metadata = getServiceMetadata(MetadataTestService);
+      expect(metadata).toBeDefined();
+      expect(metadata?.name).toBe('MetadataTestService');
+      expect(metadata?.interfaceName).toBe('IMetadataTestService');
+      expect(metadata?.description).toBe('A test service with metadata');
+      expect(metadata?.dependencies).toBeDefined();
+      expect(metadata?.dependencies?.length).toBe(1);
+      expect(metadata?.dependencies?.[0].token).toBe('TestService');
+      expect(metadata?.dependencies?.[0].name).toBe('testService');
+    });
+    
+    it('should work with inheritance', () => {
+      process.env.USE_DI = 'true';
+      
+      // Get an instance of the derived class
+      const derived = createService(DerivedService);
+      
+      // It should have methods from both base and derived classes
+      expect(derived.getBaseValue()).toBe('base-value');
+      expect(derived.getDerivedValue()).toBe('derived-value');
+      
+      // Should be able to resolve by derived class name
+      const byDerivedName = resolveService<DerivedService>('DerivedService');
+      expect(byDerivedName).toBeInstanceOf(DerivedService);
+      
+      // Should be able to resolve by derived interface name
+      const byDerivedInterface = resolveService<DerivedService>('IDerivedService');
+      expect(byDerivedInterface).toBeInstanceOf(DerivedService);
+    });
   });
   
   describe('registerServiceInstance', () => {
@@ -142,6 +205,17 @@ describe('ServiceProvider', () => {
       registerServiceInstance('TestInstance', testInstance);
       
       const resolved = resolveService<TestService>('TestInstance');
+      expect(resolved).toBe(testInstance); // Should be the exact same instance
+    });
+    
+    it('should support registering with InjectionToken', () => {
+      process.env.USE_DI = 'true';
+      
+      const token: InjectionToken<TestService> = Symbol('TestService');
+      const testInstance = new TestService();
+      registerServiceInstance(token, testInstance);
+      
+      const resolved = resolveService<TestService>(token);
       expect(resolved).toBe(testInstance); // Should be the exact same instance
     });
     
@@ -187,6 +261,59 @@ describe('ServiceProvider', () => {
       // Should throw since we can't resolve services by token when DI is disabled
       expect(() => resolveService<TestService>('TestFactory'))
         .toThrow("Cannot resolve service by token 'TestFactory' when DI is disabled");
+    });
+  });
+  
+  describe('registerServiceClass', () => {
+    it('should register a class with the container when DI is enabled', () => {
+      process.env.USE_DI = 'true';
+      
+      class CustomService {
+        getValue() { return 'custom-value'; }
+      }
+      
+      registerServiceClass('CustomService', CustomService);
+      
+      const resolved = resolveService<CustomService>('CustomService');
+      expect(resolved).toBeInstanceOf(CustomService);
+      expect(resolved.getValue()).toBe('custom-value');
+    });
+    
+    it('should do nothing when DI is disabled', () => {
+      delete process.env.USE_DI;
+      
+      class CustomService {
+        getValue() { return 'custom-value'; }
+      }
+      
+      registerServiceClass('CustomService', CustomService);
+      
+      // Should throw since we can't resolve services by token when DI is disabled
+      expect(() => resolveService<CustomService>('CustomService'))
+        .toThrow("Cannot resolve service by token 'CustomService' when DI is disabled");
+    });
+  });
+  
+  describe('getServiceMetadata', () => {
+    it('should return undefined for non-service classes', () => {
+      class NonServiceClass {}
+      
+      const metadata = getServiceMetadata(NonServiceClass);
+      expect(metadata).toBeUndefined();
+    });
+    
+    it('should return metadata for service classes', () => {
+      const metadata = getServiceMetadata(DecoratedTestService);
+      expect(metadata).toBeDefined();
+      expect(metadata?.name).toBe('DecoratedTestService');
+      expect(metadata?.interfaceName).toBe('IDecoratedTestService');
+    });
+    
+    it('should return detailed metadata when provided', () => {
+      const metadata = getServiceMetadata(MetadataTestService);
+      expect(metadata).toBeDefined();
+      expect(metadata?.description).toBe('A test service with metadata');
+      expect(metadata?.dependencies?.length).toBe(1);
     });
   });
 });
