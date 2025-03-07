@@ -174,17 +174,16 @@ export class DirectiveService implements IDirectiveService {
   - ✅ StateFactory
   - ✅ StateEventService
   - ✅ StateService
+  - ✅ ValidationService (already complete)
 - Started tracking migration progress by service
 
 ## Next Steps
 
-1. Continue with foundation services:
-   - [ ] ValidationService - depends on StateService
-2. Move on to Core Pipeline services:
+1. Move on to Core Pipeline services:
    - [ ] FileSystemService
    - [ ] ParserService
-3. Document patterns as we go for service-specific requirements
-4. Track progress and update documentation regularly
+2. Document patterns as we go for service-specific requirements
+3. Track progress and update documentation regularly
 
 ## Related Documents
 

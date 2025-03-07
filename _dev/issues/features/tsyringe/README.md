@@ -65,13 +65,13 @@ Our migration strategy follows these key principles:
 - [x] Categorizing tests by DI dependency (Phase 2 completed)
 - [x] Phase 3: Service migration (in progress)
   - [x] Created service dependency map for prioritized migration
-  - [x] Migrated foundation services (PathOperationsService, ProjectPathResolver, StateFactory, StateEventService, StateService)
-  - [ ] Continuing with remaining foundation services
+  - [x] Migrated foundation services (PathOperationsService, ProjectPathResolver, StateFactory, StateEventService, StateService, ValidationService)
+  - [ ] Continuing with Core Pipeline services
 
 ### Up Next
 - [ ] Complete remaining Phase 3 tasks:
   - [x] Migrate StateService
-  - [ ] Migrate ValidationService
+  - [x] Migrate ValidationService (already had TSyringe support)
   - [ ] Migrate FileSystemService
   - [ ] Migrate ParserService
   - [ ] And other services according to dependency order
