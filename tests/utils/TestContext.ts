@@ -9,6 +9,7 @@ import { InterpreterService } from '@services/pipeline/InterpreterService/Interp
 import { DirectiveService } from '@services/pipeline/DirectiveService/DirectiveService.js';
 import { ValidationService } from '@services/resolution/ValidationService/ValidationService.js';
 import { StateService } from '@services/state/StateService/StateService.js';
+import { StateFactory } from '@services/state/StateService/StateFactory.js';
 import { PathService } from '@services/fs/PathService/PathService.js';
 import { CircularityService } from '@services/resolution/CircularityService/CircularityService.js';
 import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService.js';
@@ -135,8 +136,10 @@ export class TestContext {
     // Initialize event service
     const eventService = new StateEventService();
     
-    // Initialize state service
-    const state = new StateService(eventService);
+    // Initialize state service (using legacy constructor form)
+    let stateFactory = new StateFactory();
+    const state = new StateService();
+    state.initialize(eventService);
     state.setCurrentFilePath('test.meld'); // Set initial file path
     state.enableTransformation(true);
     

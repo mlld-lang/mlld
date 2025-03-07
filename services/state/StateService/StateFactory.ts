@@ -1,7 +1,14 @@
 import type { StateNode, StateNodeOptions, IStateFactory, StateOperation } from './types.js';
 import { stateLogger as logger } from '@core/utils/logger.js';
 import { randomUUID } from 'crypto';
+import { Service } from '@core/ServiceProvider.js';
 
+/**
+ * Factory for creating and managing immutable state objects
+ */
+@Service({
+  description: 'Factory for creating and managing immutable state objects'
+})
 export class StateFactory implements IStateFactory {
   private operations: StateOperation[] = [];
 

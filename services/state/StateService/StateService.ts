@@ -5,10 +5,30 @@ import type { StateNode, CommandDefinition } from './types.js';
 import { StateFactory } from './StateFactory.js';
 import type { IStateEventService, StateEvent } from '../StateEventService/IStateEventService.js';
 import type { IStateTrackingService } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
+import { inject, container } from 'tsyringe';
+import { Service } from '@core/ServiceProvider.js';
 
+// Helper function to check if DI should be used
+function shouldUseDI(): boolean {
+  return process.env.USE_DI === 'true';
+}
+
+// Helper function to get the container
+function getContainer() {
+  return container;
+}
+
+/**
+ * Service for managing state in Meld files
+ * 
+ * Handles variables, imports, commands, nodes, and state transformations
+ */
+@Service({
+  description: 'Service responsible for managing state in Meld files'
+})
 export class StateService implements IStateService {
   private stateFactory: StateFactory;
-  private currentState: StateNode;
+  private currentState!: StateNode;
   private _isImmutable: boolean = false;
   private _transformationEnabled: boolean = false;
   private _transformationOptions: TransformationOptions = {
@@ -20,8 +40,52 @@ export class StateService implements IStateService {
   private eventService?: IStateEventService;
   private trackingService?: IStateTrackingService;
 
-  constructor(parentState?: IStateService) {
-    this.stateFactory = new StateFactory();
+  constructor(
+    @inject(StateFactory) stateFactory?: StateFactory,
+    @inject('IStateEventService') eventService?: IStateEventService,
+    @inject('IStateTrackingService') trackingService?: IStateTrackingService,
+    parentState?: IStateService
+  ) {
+    // Handle constructor for both DI and non-DI modes
+    if (stateFactory) {
+      // DI mode or manual initialization with factory
+      this.stateFactory = stateFactory;
+      this.eventService = eventService;
+      this.trackingService = trackingService;
+      
+      // Initialize new state
+      this.initializeState(parentState);
+    } else {
+      // Legacy mode - initialize with basic factory
+      this.stateFactory = new StateFactory();
+      
+      // If only eventService was provided in legacy mode
+      if (parentState === undefined && eventService) {
+        this.eventService = eventService;
+      }
+      
+      // Initialize with parent if provided
+      this.initializeState(parentState as IStateService);
+    }
+  }
+  
+  /**
+   * Initialize the service (legacy mode) or re-initialize (DI mode)
+   * Can be used to reset the service to initial state
+   */
+  initialize(eventService?: IStateEventService, parentState?: IStateService): void {
+    if (eventService) {
+      this.eventService = eventService;
+    }
+    
+    // Re-initialize the state
+    this.initializeState(parentState);
+  }
+
+  /**
+   * Initialize the state, either as a fresh state or as a child of a parent state
+   */
+  private initializeState(parentState?: IStateService): void {
     this.currentState = this.stateFactory.createState({
       source: 'new',
       parentState: parentState ? (parentState as StateService).currentState : undefined
@@ -30,10 +94,10 @@ export class StateService implements IStateService {
     // If parent has services, inherit them
     if (parentState) {
       const parent = parentState as StateService;
-      if (parent.eventService) {
+      if (!this.eventService && parent.eventService) {
         this.eventService = parent.eventService;
       }
-      if (parent.trackingService) {
+      if (!this.trackingService && parent.trackingService) {
         this.trackingService = parent.trackingService;
       }
     }
@@ -362,7 +426,19 @@ export class StateService implements IStateService {
   }
 
   createChildState(): IStateService {
-    const child = new StateService(this);
+    // In TSyringe mode, we need to use different instantiation approaches
+    // based on whether DI is being used or not
+    let child: StateService;
+    
+    if (shouldUseDI()) {
+      // In DI mode, resolve from container, then set parent
+      const container = getContainer();
+      child = container.resolve(StateService);
+      child.initializeState(this);
+    } else {
+      // In non-DI mode, create directly with parent
+      child = new StateService(this.stateFactory, this.eventService, this.trackingService, this);
+    }
     
     // Copy transformation state
     child._transformationEnabled = this._transformationEnabled;
@@ -419,7 +495,17 @@ export class StateService implements IStateService {
   }
 
   clone(): IStateService {
-    const cloned = new StateService();
+    // Create a new state service instance based on DI mode
+    let cloned: StateService;
+    
+    if (shouldUseDI()) {
+      // In DI mode, resolve from container
+      const container = getContainer();
+      cloned = container.resolve(StateService);
+    } else {
+      // In non-DI mode, create directly
+      cloned = new StateService(this.stateFactory, this.eventService, this.trackingService);
+    }
     
     // Create a completely new state without parent reference
     cloned.currentState = this.stateFactory.createState({
@@ -452,11 +538,11 @@ export class StateService implements IStateService {
       });
     }
 
-    // Copy service references
-    if (this.eventService) {
+    // Copy service references (if not already set via DI)
+    if (this.eventService && !cloned.eventService) {
       cloned.setEventService(this.eventService);
     }
-    if (this.trackingService) {
+    if (this.trackingService && !cloned.trackingService) {
       cloned.setTrackingService(this.trackingService);
       
       // Register the cloned state with tracking service
@@ -616,5 +702,24 @@ export class StateService implements IStateService {
 
   hasTransformationSupport(): boolean {
     return true;
+  }
+  
+  /**
+   * Reset the state service to initial state
+   * Used primarily for testing
+   */
+  reset(): void {
+    // Reset to a fresh state
+    this.initializeState();
+    
+    // Reset flags
+    this._isImmutable = false;
+    this._transformationEnabled = false;
+    this._transformationOptions = {
+      variables: false,
+      directives: false,
+      commands: false,
+      imports: false
+    };
   }
 } 

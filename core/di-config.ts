@@ -4,6 +4,8 @@ import { container } from 'tsyringe';
 // Import all service classes that need explicit registration
 import { ResolutionService } from '../services/resolution/ResolutionService/ResolutionService.js';
 import { StateService } from '../services/state/StateService/StateService.js';
+import { StateFactory } from '../services/state/StateService/StateFactory.js';
+import { StateEventService } from '../services/state/StateEventService/StateEventService.js';
 import { FileSystemService } from '../services/fs/FileSystemService/FileSystemService.js';
 import { ParserService } from '../services/pipeline/ParserService/ParserService.js';
 import { InterpreterService } from '../services/pipeline/InterpreterService/InterpreterService.js';
@@ -25,9 +27,12 @@ import { ValidationService } from '../services/resolution/ValidationService/Vali
 container.register('ResolutionService', { useClass: ResolutionService });
 container.register('IResolutionService', { useToken: 'ResolutionService' });
 
-// StateService
+// StateService ecosystem
 container.register('StateService', { useClass: StateService });
 container.register('IStateService', { useToken: 'StateService' });
+container.register('StateFactory', { useClass: StateFactory });
+container.register('StateEventService', { useClass: StateEventService });
+container.register('IStateEventService', { useToken: 'StateEventService' });
 
 // FileSystemService
 container.register('FileSystemService', { useClass: FileSystemService });
