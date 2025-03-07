@@ -130,6 +130,68 @@ After all consumers have been updated to support DI resolution:
 2. Used by nearly every file in the codebase
 3. Requires special handling for the createServiceLogger factory function
 
+#### Planned Migration Approach for Logger Services
+
+The Logger migration will be more complex than SourceMapService due to:
+
+1. **Multiple Exported Instances**: The main `logger` plus numerous service-specific loggers
+2. **Factory Function**: The `createServiceLogger` function creates new instances
+3. **Different Logger Types**: Both Winston logger and simple Logger class
+4. **Extended Usage**: Imported in nearly every file in the codebase
+
+Our migration approach will be:
+
+1. **Create Interfaces**:
+   ```typescript
+   export interface ILogger {
+     error(message: string, context?: Record<string, unknown>): void;
+     warn(message: string, context?: Record<string, unknown>): void;
+     info(message: string, context?: Record<string, unknown>): void;
+     debug(message: string, context?: Record<string, unknown>): void;
+     trace(message: string, context?: Record<string, unknown>): void;
+     level: string;
+   }
+   ```
+
+2. **Add TSyringe Decorators**:
+   ```typescript
+   @injectable()
+   @singleton()
+   @Service({
+     providedIn: 'root'
+   })
+   class Logger implements ILogger {
+     // Existing implementation
+   }
+   ```
+
+3. **Transform Factory Function**:
+   ```typescript
+   @injectable()
+   export class LoggerFactory {
+     // Factory method that can be injected
+     createServiceLogger(serviceName: string): ILogger {
+       // Implementation
+     }
+   }
+   ```
+
+4. **Register in Container**:
+   ```typescript
+   // Register main logger
+   container.register('Logger', { useValue: logger });
+   container.register('ILogger', { useToken: 'Logger' });
+   
+   // Register service loggers
+   container.register('StateLogger', { useValue: stateLogger });
+   // Other service loggers...
+   
+   // Register factory
+   container.register('LoggerFactory', { useClass: LoggerFactory });
+   ```
+
+5. **Maintain Backward Compatibility**: Keep all exports unchanged
+
 ## Best Practices
 
 1. **Never Break Tests**: Always ensure tests pass after each change
