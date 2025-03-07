@@ -6,6 +6,8 @@
  */
 
 import { logger } from './logger.js';
+import { injectable, singleton } from 'tsyringe';
+import { Service } from '@core/ServiceProvider.js';
 
 export interface SourceLocation {
   filePath: string;
@@ -14,9 +16,26 @@ export interface SourceLocation {
 }
 
 /**
+ * Interface for the SourceMapService to enable DI resolution
+ */
+export interface ISourceMapService {
+  registerSource(filePath: string, content: string): void;
+  addMapping(source: SourceLocation, combinedLine: number, combinedColumn: number): void;
+  findOriginalLocation(combinedLine: number, combinedColumn: number): SourceLocation | null;
+  getDebugInfo(): string;
+  getDetailedDebugInfo(): string;
+  reset(): void;
+}
+
+/**
  * Service for tracking and resolving source maps between original and combined files
  */
-export class SourceMapService {
+@injectable()
+@singleton()
+@Service({
+  providedIn: 'root'
+})
+export class SourceMapService implements ISourceMapService {
   private sources = new Map<string, string[]>();
   private mappings: Array<{
     source: SourceLocation;
@@ -234,4 +253,5 @@ export class SourceMapService {
 }
 
 // Create a singleton instance for use throughout the app
+// This export maintains backward compatibility
 export const sourceMapService = new SourceMapService();

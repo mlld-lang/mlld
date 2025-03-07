@@ -210,6 +210,23 @@ The InterpreterService required special handling due to its circular dependency 
 2. Document patterns as we go for service-specific requirements
 3. Track progress and update documentation regularly
 
+### Revised Migration Approach
+
+During our migration attempt for SourceMapService and Logger, we encountered significant test failures. This revealed that these core utility services are used extensively throughout the codebase, and their migration requires special care.
+
+**Key Lessons Learned:**
+1. Utility services like SourceMapService and Logger are foundational and used widely
+2. These services don't follow the same initialization patterns as other services
+3. Direct replacement of singleton exports breaks tests relying on the exact exported instances
+4. A more gradual approach is needed for these specific services
+
+**Revised Strategy for Utility Services:**
+1. Create DI-compatible versions that extend the original classes
+2. Maintain the original exported singletons for backward compatibility
+3. Add the decorator and interface but don't change existing exports
+4. After all tests pass, introduce DI resolution gradually in consumer services
+5. Only replace the exported singleton once all dependent services use DI resolution
+
 ### Notes on DirectiveService Migration
 
 The DirectiveService already had most of the TSyringe infrastructure in place:
@@ -243,6 +260,19 @@ The ResolutionService already had the `@singleton()` decorator in place:
 4. Verified all tests pass in both modes
 
 The ResolutionService uses the standard dual-mode pattern with `initializeFromParams` that checks if all dependencies are provided before proceeding with DI mode.
+
+### Notes on CLIService Migration (Pending)
+
+The CLIService represents a significant migration challenge due to:
+1. It's the main user-facing service with multiple dependencies
+2. It has a unique initialization pattern compared to other services
+3. It's tested extensively in both unit and integration tests
+
+Our approach for CLIService will be:
+1. Add TSyringe decorators without changing existing initialization
+2. Create dual-mode test support with both direct instantiation and DI resolution
+3. Verify all CLI tests pass with the updated implementation
+4. Document specific patterns used for CLI service migration
 
 ## Related Documents
 
