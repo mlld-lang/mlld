@@ -1,4 +1,4 @@
-import * as fs from 'fs-extra';
+import * as fsExtra from 'fs-extra';
 import { filesystemLogger as logger } from '@core/utils/logger.js';
 import { IFileSystemService } from './IFileSystemService.js';
 import { IPathOperationsService } from './IPathOperationsService.js';
@@ -131,7 +131,7 @@ export class FileSystemService implements IFileSystemService {
     }
   }
 
-  async stat(filePath: string): Promise<fs.Stats> {
+  async stat(filePath: string): Promise<fsExtra.Stats> {
     const resolvedPath = this.resolvePath(filePath);
     
     const context: FileOperationContext = {

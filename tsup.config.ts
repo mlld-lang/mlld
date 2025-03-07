@@ -30,9 +30,20 @@ export default defineConfig([
       'marked',
       'minimatch',
       'winston',
-      'yargs'
+      'yargs',
+      'fs',
+      'fs-extra',
+      'graceful-fs',
+      'path',
+      'util',
+      'child_process',
+      'crypto',
+      'fs/promises'
     ],
-    esbuildOptions(options) {
+    noExternal: [
+      // If there are any dependencies that should be bundled, list them here
+    ],
+    esbuildOptions(options, { format }) {
       options.alias = {
         '@core': './core',
         '@services': './services',
@@ -48,6 +59,13 @@ export default defineConfig([
         ...options.define,
         '__VERSION__': `"${packageJson.version}"`
       };
+      
+      options.platform = 'node';
+      
+      if (format === 'esm') {
+        options.mainFields = ['module', 'main'];
+        options.conditions = ['import', 'module', 'require', 'default'];
+      }
     }
   },
   // CLI build - CJS only
@@ -74,7 +92,15 @@ export default defineConfig([
       'marked',
       'minimatch',
       'winston',
-      'yargs'
+      'yargs',
+      'fs',
+      'fs-extra',
+      'graceful-fs',
+      'path',
+      'util',
+      'child_process',
+      'crypto',
+      'fs/promises'
     ],
     banner: {
       js: '#!/usr/bin/env node'
@@ -95,6 +121,8 @@ export default defineConfig([
         ...options.define,
         '__VERSION__': `"${packageJson.version}"`
       };
+      
+      options.platform = 'node';
     }
   }
 ]); 

@@ -1,4 +1,4 @@
-import * as fs from 'fs-extra';
+import * as fsExtra from 'fs-extra';
 import { watch } from 'fs/promises';
 import type { IFileSystem } from './IFileSystem.js';
 import type { Stats } from 'fs';
@@ -15,32 +15,32 @@ export class NodeFileSystem implements IFileSystem {
   isTestEnvironment = process.env.NODE_ENV === 'test' || Boolean(process.env.VITEST);
 
   async readFile(path: string): Promise<string> {
-    return fs.readFile(path, 'utf-8');
+    return fsExtra.readFile(path, 'utf-8');
   }
 
   async writeFile(path: string, content: string): Promise<void> {
-    await fs.writeFile(path, content, 'utf-8');
+    await fsExtra.writeFile(path, content, 'utf-8');
   }
 
   async exists(path: string): Promise<boolean> {
-    return fs.pathExists(path);
+    return fsExtra.pathExists(path);
   }
 
   async stat(path: string): Promise<Stats> {
-    return fs.stat(path);
+    return fsExtra.stat(path);
   }
 
   async readDir(path: string): Promise<string[]> {
-    return fs.readdir(path);
+    return fsExtra.readdir(path);
   }
 
   async mkdir(path: string): Promise<void> {
-    await fs.mkdir(path, { recursive: true });
+    await fsExtra.mkdir(path, { recursive: true });
   }
 
   async isDirectory(path: string): Promise<boolean> {
     try {
-      const stats = await fs.stat(path);
+      const stats = await fsExtra.stat(path);
       return stats.isDirectory();
     } catch (error) {
       if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
@@ -52,7 +52,7 @@ export class NodeFileSystem implements IFileSystem {
 
   async isFile(path: string): Promise<boolean> {
     try {
-      const stats = await fs.stat(path);
+      const stats = await fsExtra.stat(path);
       return stats.isFile();
     } catch (error) {
       if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
