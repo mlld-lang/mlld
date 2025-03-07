@@ -198,11 +198,15 @@ The InterpreterService required special handling due to its circular dependency 
 
 ## Next Steps
 
-1. Continue with Core Pipeline services:
+1. Continue with remaining services:
    - [x] DirectiveService
    - [x] OutputService
    - [x] ResolutionService
-   - [ ] Continue with remaining services
+   - [ ] CLIService
+   - [ ] Utility services:
+     - [ ] SourceMapService (in core/utils/SourceMapService.ts)
+     - [ ] Logger class (in core/utils/simpleLogger.ts)
+     - [ ] createServiceLogger function (in core/utils/logger.ts)
 2. Document patterns as we go for service-specific requirements
 3. Track progress and update documentation regularly
 

@@ -80,7 +80,11 @@ Our migration strategy follows these key principles:
   - [x] Migrate DirectiveService
   - [x] Migrate OutputService
   - [x] Migrate ResolutionService
-  - [ ] And other services according to dependency order
+  - [ ] Migrate CLIService
+  - [ ] Migrate utility services:
+    - [ ] SourceMapService (in core/utils)
+    - [ ] Logger/createServiceLogger (in core/utils)
+  - [ ] Prepare for Phase 4 (DI-only mode transition)
 
 ## Reference Documentation
 
