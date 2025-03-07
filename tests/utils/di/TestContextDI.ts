@@ -102,7 +102,8 @@ export class TestContextDI extends TestContext {
     const parser = new ParserService();
     const eventService = new StateEventService();
     const stateFactory = new StateFactory();
-    const state = new StateService(stateFactory, eventService);
+    const trackingService = new StateTrackingService();
+    const state = new StateService(stateFactory, eventService, trackingService);
     const interpreter = new InterpreterService();
     const directive = new DirectiveService();
     const resolution = new ResolutionService(state, filesystem, parser, path);
@@ -124,6 +125,7 @@ export class TestContextDI extends TestContext {
     this.container.registerMock('ResolutionService', resolution);
     this.container.registerMock('OutputService', output);
     this.container.registerMock('StateDebuggerService', debugger_);
+    this.container.registerMock('StateTrackingService', trackingService);
 
     // Register by interfaces
     this.container.registerMock('IPathOperationsService', pathOps);
@@ -139,11 +141,7 @@ export class TestContextDI extends TestContext {
     this.container.registerMock('IResolutionService', resolution);
     this.container.registerMock('IOutputService', output);
     this.container.registerMock('IStateDebuggerService', debugger_);
-    
-    // Register state tracking service if needed
-    if (this.services.debug?.tracking) {
-      this.container.registerMock('IStateTrackingService', this.services.debug.tracking);
-    }
+    this.container.registerMock('IStateTrackingService', trackingService);
     
     // Initialize the services that need explicit initialization
     path.initialize(filesystem, parser);
