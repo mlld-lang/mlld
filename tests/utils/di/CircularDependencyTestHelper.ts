@@ -49,9 +49,20 @@ export class CircularDependencyTestHelper {
     const containerHelper = new TestContainerHelper(container);
     
     // Register with factory functions that use getters for lazy resolution
-    containerHelper.registerMockClass('IServiceD', ServiceD);
     containerHelper.registerMockClass('IServiceE', ServiceE);
-    containerHelper.registerMockClass('IDependencyHelper', CircularDependencyResolver);
+    containerHelper.registerMockClass('IServiceD', ServiceD);
+    
+    // Register the resolver with a factory to ensure proper initialization order
+    containerHelper.registerFactory('IDependencyHelper', () => {
+      const serviceD = containerHelper.resolve<IServiceD>('IServiceD');
+      const serviceE = containerHelper.resolve<IServiceE>('IServiceE');
+      
+      // Create the resolver and manually set up the circular reference
+      const resolver = new CircularDependencyResolver(serviceD, serviceE);
+      serviceE.useD(serviceD);
+      
+      return resolver;
+    });
   }
 
   /**
@@ -60,6 +71,24 @@ export class CircularDependencyTestHelper {
   static testLazyCircularDependencies(container: DependencyContainer): boolean {
     try {
       const helper = new TestContainerHelper(container);
+      
+      // Get all the services explicitly to make sure they're created properly
+      const serviceD = helper.resolve<IServiceD>('IServiceD');
+      const serviceE = helper.resolve<IServiceE>('IServiceE');
+      
+      // Make sure E knows about D
+      if (!serviceE.getD()) {
+        console.error('ServiceE does not have a reference to ServiceD');
+        return false;
+      }
+      
+      // Make sure D knows about E
+      if (serviceD.getE() !== serviceE) {
+        console.error('ServiceD does not have the correct reference to ServiceE');
+        return false;
+      }
+      
+      // Now resolve the helper and check
       const resolver = helper.resolve<CircularDependencyResolver>('IDependencyHelper');
       return resolver.canResolveCircularDependencies();
     } catch (error) {
@@ -200,11 +229,10 @@ class ServiceE implements IServiceE {
 @injectable()
 class CircularDependencyResolver {
   constructor(
-    @inject('IServiceD') private serviceD: IServiceD,
-    @inject('IServiceE') private serviceE: IServiceE
+    private serviceD: IServiceD,
+    private serviceE: IServiceE
   ) {
-    // Set up the circular reference after construction
-    this.serviceE.useD(this.serviceD);
+    // The circular reference should be set up by the factory
   }
   
   canResolveCircularDependencies(): boolean {
@@ -213,8 +241,17 @@ class CircularDependencyResolver {
       const eFromD = this.serviceD.getE();
       const dFromE = this.serviceE.getD();
       
+      console.log('Circular dependency test:', {
+        eFromD: !!eFromD,
+        dFromE: !!dFromE,
+        eFromDMatch: eFromD === this.serviceE,
+        dFromEMatch: dFromE === this.serviceD
+      });
+      
       return (
-        eFromD === this.serviceE &&
+        !!eFromD && 
+        !!dFromE && 
+        eFromD === this.serviceE && 
         dFromE === this.serviceD
       );
     } catch (error) {
