@@ -7,6 +7,8 @@ import { ResolutionContextFactory } from '@services/resolution/ResolutionService
 import { DirectiveError, DirectiveErrorCode, DirectiveErrorSeverity } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { directiveLogger as logger } from '@core/utils/logger';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
+import { inject, injectable } from 'tsyringe';
+import { Service } from '@core/ServiceProvider.js';
 
 // Updated to match meld-ast 1.6.1 structure exactly
 interface StructuredPath {
@@ -33,13 +35,18 @@ interface PathDirective extends DirectiveData {
  * Handler for @path directives
  * Stores path values in state after resolving variables
  */
+
+@injectable()
+@Service({
+  description: 'Handler for @path directives'
+})
 export class PathDirectiveHandler implements IDirectiveHandler {
   readonly kind = 'path';
 
   constructor(
-    private validationService: IValidationService,
-    private stateService: IStateService,
-    private resolutionService: IResolutionService
+    @inject('IValidationService') private validationService: IValidationService,
+    @inject('IStateService') private stateService: IStateService,
+    @inject('IResolutionService') private resolutionService: IResolutionService
   ) {}
 
   async execute(node: DirectiveNode, context: DirectiveContext): Promise<IStateService> {

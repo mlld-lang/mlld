@@ -15,18 +15,24 @@ import { ResolutionContextFactory } from '@services/resolution/ResolutionService
 import { directiveLogger as logger } from '@core/utils/logger.js';
 import { DirectiveError, DirectiveErrorCode, DirectiveErrorSeverity } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
+import { inject, injectable } from 'tsyringe';
+import { Service } from '@core/ServiceProvider.js';
 
 /**
  * Handler for @data directives
  * Stores data values in state after resolving variables and processing embedded content
  */
+@injectable()
+@Service({
+  description: 'Handler for @data directives'
+})
 export class DataDirectiveHandler implements IDirectiveHandler {
   readonly kind = 'data';
 
   constructor(
-    private validationService: IValidationService,
-    private stateService: IStateService,
-    private resolutionService: IResolutionService
+    @inject('IValidationService') private validationService: IValidationService,
+    @inject('IStateService') private stateService: IStateService,
+    @inject('IResolutionService') private resolutionService: IResolutionService
   ) {}
 
   public async execute(node: DirectiveNode, context: DirectiveContext): Promise<IStateService> {

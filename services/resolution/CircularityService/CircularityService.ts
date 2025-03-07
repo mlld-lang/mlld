@@ -2,7 +2,9 @@ import { ICircularityService } from './ICircularityService.js';
 import { MeldImportError } from '@core/errors/MeldImportError.js';
 import { importLogger as logger } from '@core/utils/logger.js';
 import { Service } from '../../../core/ServiceProvider';
+import { injectable } from 'tsyringe';
 
+@injectable()
 @Service({
   description: 'Service for tracking and detecting circular imports in Meld files'
 })

@@ -15,6 +15,8 @@ import { IStateTrackingService } from '@tests/utils/debug/StateTrackingService/I
 import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
 import { StateVariableCopier } from '@services/state/utilities/StateVariableCopier.js';
+import { inject, injectable } from 'tsyringe';
+import { Service } from '@core/ServiceProvider.js';
 
 // Define the embed directive parameters interface
 interface EmbedDirectiveParams {
@@ -56,6 +58,10 @@ export interface ILogger {
  * IMPORTANT: In all cases, embedded content is treated as literal text
  * and is NOT parsed for directives or other Meld syntax.
  */
+@injectable()
+@Service({
+  description: 'Handler for @embed directives'
+})
 export class EmbedDirectiveHandler implements IDirectiveHandler {
   readonly kind = 'embed';
   private debugEnabled: boolean = false;
@@ -63,15 +69,15 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
   private stateVariableCopier: StateVariableCopier;
 
   constructor(
-    private validationService: IValidationService,
-    private resolutionService: IResolutionService,
-    private stateService: IStateService,
-    private circularityService: ICircularityService,
-    private fileSystemService: IFileSystemService,
-    private parserService: IParserService,
-    private interpreterService: IInterpreterService,
+    @inject('IValidationService') private validationService: IValidationService,
+    @inject('IResolutionService') private resolutionService: IResolutionService,
+    @inject('IStateService') private stateService: IStateService,
+    @inject('ICircularityService') private circularityService: ICircularityService,
+    @inject('IFileSystemService') private fileSystemService: IFileSystemService,
+    @inject('IParserService') private parserService: IParserService,
+    @inject('IInterpreterService') private interpreterService: IInterpreterService,
     private logger: ILogger = embedLogger,
-    trackingService?: IStateTrackingService
+    @inject('StateTrackingService') trackingService?: IStateTrackingService
   ) {
     this.stateTrackingService = trackingService;
     this.debugEnabled = !!trackingService && (process.env.MELD_DEBUG === 'true');
