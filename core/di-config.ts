@@ -10,6 +10,7 @@ import { InterpreterService } from '../services/pipeline/InterpreterService/Inte
 import { DirectiveService } from '../services/pipeline/DirectiveService/DirectiveService.js';
 import { PathService } from '../services/fs/PathService/PathService.js';
 import { ErrorDisplayService } from '../services/display/ErrorDisplayService/ErrorDisplayService.js';
+import { ValidationService } from '../services/resolution/ValidationService/ValidationService.js';
 
 /**
  * This file contains the configuration for dependency injection using tsyringe.
@@ -50,4 +51,8 @@ container.register('IPathService', { useToken: 'PathService' });
 
 // ErrorDisplayService
 container.register('ErrorDisplayService', { useClass: ErrorDisplayService });
-container.register('IErrorDisplayService', { useToken: 'ErrorDisplayService' }); 
+container.register('IErrorDisplayService', { useToken: 'ErrorDisplayService' });
+
+// ValidationService
+container.register('ValidationService', { useClass: ValidationService });
+container.register('IValidationService', { useToken: 'ValidationService' }); 

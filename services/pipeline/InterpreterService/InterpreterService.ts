@@ -47,7 +47,7 @@ export class InterpreterService implements IInterpreterService {
   private stateVariableCopier = new StateVariableCopier();
 
   constructor(
-    @inject(delay(() => 'IDirectiveService')) directiveService?: IDirectiveService,
+    @inject('IDirectiveService') directiveService?: IDirectiveService,
     @inject('IStateService') stateService?: IStateService
   ) {
     // Handle DI constructor injection

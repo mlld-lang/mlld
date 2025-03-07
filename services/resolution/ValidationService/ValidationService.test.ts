@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { ValidationService } from './ValidationService.js';
 import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import type { DirectiveNode } from 'meld-spec';
@@ -20,12 +20,40 @@ import {
 } from '@tests/utils/errorTestUtils.js';
 import { textDirectiveExamples } from '@core/syntax/index.js';
 import { getExample, getInvalidExample } from '@tests/utils/syntax-test-helpers.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
+import { shouldUseDI } from '@core/ServiceProvider.js';
 
-describe('ValidationService', () => {
+// Run all tests with both DI enabled and disabled
+describe.each([
+  { useDI: true, name: 'with DI' },
+  { useDI: false, name: 'without DI' }
+])('ValidationService $name', ({ useDI }) => {
   let service: ValidationService;
+  let context: TestContextDI;
   
   beforeEach(() => {
-    service = new ValidationService();
+    // Save original DI setting
+    const originalDISetting = process.env.USE_DI;
+    
+    // Create test context with the appropriate DI setting
+    context = useDI 
+      ? TestContextDI.withDI() 
+      : TestContextDI.withoutDI();
+      
+    // Get service from container or create manually
+    if (useDI) {
+      service = context.container.resolve('ValidationService');
+    } else {
+      service = new ValidationService();
+    }
+    
+    // Restore original DI setting after test
+    process.env.USE_DI = originalDISetting;
+  });
+  
+  afterEach(async () => {
+    // Clean up test context
+    await context?.cleanup();
   });
   
   describe('Service initialization', () => {

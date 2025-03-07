@@ -4,6 +4,7 @@ import { IValidationService } from './IValidationService.js';
 import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
 import { DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
+import { Service } from '@core/ServiceProvider.js';
 
 // Import default validators
 import { validateTextDirective } from './validators/TextDirectiveValidator.js';
@@ -30,6 +31,9 @@ export const ValidationErrorSeverity: Record<DirectiveErrorCode, ErrorSeverity> 
   [DirectiveErrorCode.SECTION_NOT_FOUND]: ErrorSeverity.Recoverable
 };
 
+@Service({
+  description: 'Service responsible for validating directives against their schemas'
+})
 export class ValidationService implements IValidationService {
   private validators = new Map<string, (node: DirectiveNode) => Promise<void>>();
   

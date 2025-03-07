@@ -54,14 +54,14 @@ export class MeldLLMXMLError extends Error {
   ]
 })
 export class DirectiveService implements IDirectiveService {
-  private validationService: IValidationService;
-  private stateService: IStateService;
-  private pathService: IPathService;
-  private fileSystemService: IFileSystemService;
-  private parserService: IParserService;
+  private validationService!: IValidationService;
+  private stateService!: IStateService;
+  private pathService!: IPathService;
+  private fileSystemService!: IFileSystemService;
+  private parserService!: IParserService;
   private interpreterService?: IInterpreterService; // Will be set by updateInterpreterService for circular dependency
-  private circularityService: ICircularityService;
-  private resolutionService: IResolutionService;
+  private circularityService!: ICircularityService;
+  private resolutionService!: IResolutionService;
   private initialized = false;
   private logger: ILogger;
 
@@ -73,7 +73,7 @@ export class DirectiveService implements IDirectiveService {
     @inject('IPathService') pathService?: IPathService,
     @inject('IFileSystemService') fileSystemService?: IFileSystemService,
     @inject('IParserService') parserService?: IParserService,
-    @inject(delay(() => 'IInterpreterService')) interpreterService?: IInterpreterService,
+    @inject('IInterpreterService') interpreterService?: IInterpreterService,
     @inject('ICircularityService') circularityService?: ICircularityService,
     @inject('IResolutionService') resolutionService?: IResolutionService,
     logger?: ILogger
