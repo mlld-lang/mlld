@@ -12,8 +12,10 @@ import { PathService } from '@services/fs/PathService/PathService.js';
 import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService.js';
 import { mockProcessExit } from './mockProcessExit.js';
 import { mockConsole } from './mockConsole.js';
+import { vi } from 'vitest';
 import { ReturnType } from 'vitest';
 import * as path from 'path';
+import { ServiceMediator } from '@services/mediator/ServiceMediator.js';
 
 /**
  * Options for setting up a CLI test
@@ -62,12 +64,21 @@ export function setupCliTest(options: CliTestOptions = {}): CliTestResult {
   const context = new TestContext();
   const fsAdapter = new MemfsTestFileSystemAdapter(context.fs);
   const pathOps = new PathOperationsService();
-  const fileSystemService = new FileSystemService(pathOps, fsAdapter);
-  const pathService = new PathService();
+  
+  // Create a service mediator to break circular dependencies
+  const serviceMediator = new ServiceMediator();
+  
+  // Create services with the mediator
+  const fileSystemService = new FileSystemService(pathOps, serviceMediator, fsAdapter);
+  const pathService = new PathService(serviceMediator);
   
   // Initialize services
   pathService.initialize(fileSystemService);
   pathService.enableTestMode();
+  
+  // Connect services through the mediator
+  serviceMediator.setFileSystemService(fileSystemService);
+  serviceMediator.setPathService(pathService);
   
   // Add spy for getFileSystem method to track calls
   vi.spyOn(fileSystemService, 'getFileSystem');

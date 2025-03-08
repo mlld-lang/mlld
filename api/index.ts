@@ -13,6 +13,7 @@ export * from '@services/fs/FileSystemService/FileSystemService.js';
 export * from '@services/fs/FileSystemService/PathOperationsService.js';
 export * from '@services/pipeline/OutputService/OutputService.js';
 export * from '@services/resolution/CircularityService/CircularityService.js';
+export * from '@services/mediator/ServiceMediator.js';
 
 // Core types and errors
 export * from '@core/types/index.js';
@@ -43,6 +44,7 @@ import { FileSystemService } from '@services/fs/FileSystemService/FileSystemServ
 import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService.js';
 import { OutputService } from '@services/pipeline/OutputService/OutputService.js';
 import { CircularityService } from '@services/resolution/CircularityService/CircularityService.js';
+import { ServiceMediator } from '@services/mediator/ServiceMediator.js';
 import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
 import { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
 import { StateDebuggerService } from '@tests/utils/debug/StateDebuggerService/StateDebuggerService.js';
@@ -156,20 +158,23 @@ export function createDefaultServices(options: ProcessOptions): Services & Requi
     return services;
   } else {
     // Legacy non-DI service creation
+    // Create a service mediator to break circular dependencies
+    const serviceMediator = new ServiceMediator();
+    
     // 1. FileSystemService (base dependency)
     const pathOps = new PathOperationsService();
     // If options.fs is provided, use it; otherwise create a new NodeFileSystem
     const fs: IFileSystem = options.fs || new NodeFileSystem();
-    const filesystem = new FileSystemService(pathOps, fs);
+    const filesystem = new FileSystemService(pathOps, serviceMediator, fs);
     filesystem.setFileSystem(fs);
 
     // 2. PathService (depends on filesystem)
-    const path = new PathService();
+    const path = new PathService(serviceMediator);
     path.initialize(filesystem);
 
     // 3. State Management Services
     const eventService = new StateEventService();
-    const state = new StateService();
+    const state = new StateService(undefined, undefined, eventService, serviceMediator);
     state.setEventService(eventService);
     
     // Initialize special path variables
@@ -177,12 +182,19 @@ export function createDefaultServices(options: ProcessOptions): Services & Requi
     state.setPathVar('HOMEPATH', process.env.HOME || process.env.USERPROFILE || '/home');
 
     // 4. ParserService (independent)
-    const parser = new ParserService();
+    const parser = new ParserService(serviceMediator);
 
     // 5. Resolution Layer Services
-    const resolution = new ResolutionService(state, filesystem, parser, path);
+    const resolution = new ResolutionService(state, filesystem, path, serviceMediator);
     const validation = new ValidationService();
     const circularity = new CircularityService();
+    
+    // Connect services through the mediator
+    serviceMediator.setFileSystemService(filesystem);
+    serviceMediator.setPathService(path);
+    serviceMediator.setParserService(parser);
+    serviceMediator.setResolutionService(resolution);
+    serviceMediator.setStateService(state);
 
     // 6. Pipeline Orchestration (handle circular dependency)
     const directive = new DirectiveService();
