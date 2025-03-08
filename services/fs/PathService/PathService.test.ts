@@ -336,6 +336,10 @@ describe('PathService', () => {
       // Create test file
       await context.fs.writeFile('/project/root/test.txt', 'test');
       
+      // Create a direct connection between the PathService and parserService
+      // This simulates the behavior that happens in the non-DI initialization
+      (service as any).parserService = parserService;
+      
       // Turn off test mode to ensure parser is used
       service.disableTestMode();
       
