@@ -1046,6 +1046,21 @@ export class VariableReferenceResolver {
         }
       }
       
+      // If context state doesn't have it, use the mediator or state service
+      let value: string | undefined;
+      
+      if (this.serviceMediator) {
+        // Use mediator to access state service (avoids circular dependencies)
+        value = this.serviceMediator.getTextVar(varName);
+      } else if (this.stateService) {
+        // Fallback to direct state service access
+        value = this.stateService.getTextVar(varName);
+      }
+      
+      if (value !== undefined) {
+        return value;
+      }
+      
       // If not found and strict mode is enabled, throw an error
       if (context.strict) {
         throw new MeldResolutionError(
@@ -1083,6 +1098,21 @@ export class VariableReferenceResolver {
         if (value !== undefined) {
           return value;
         }
+      }
+      
+      // If context state doesn't have it, use the mediator or state service
+      let value: any;
+      
+      if (this.serviceMediator) {
+        // Use mediator to access state service (avoids circular dependencies)
+        value = this.serviceMediator.getDataVar(varName);
+      } else if (this.stateService) {
+        // Fallback to direct state service access
+        value = this.stateService.getDataVar(varName);
+      }
+      
+      if (value !== undefined) {
+        return value;
       }
       
       // If not found and strict mode is enabled, throw an error

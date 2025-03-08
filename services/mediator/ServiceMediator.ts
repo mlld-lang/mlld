@@ -3,7 +3,9 @@ import { IParserService } from '../pipeline/ParserService/IParserService.js';
 import { IResolutionService, ResolutionContext } from '../resolution/ResolutionService/IResolutionService.js';
 import { IFileSystemService } from '../fs/FileSystemService/IFileSystemService.js';
 import { IPathService } from '../fs/PathService/IPathService.js';
+import { IStateService } from '../state/StateService/IStateService.js';
 import { Service } from '@core/ServiceProvider.js';
+import { IServiceMediator } from './IServiceMediator.js';
 
 /**
  * ServiceMediator acts as a central point for breaking circular dependencies between services.
@@ -14,11 +16,12 @@ import { Service } from '@core/ServiceProvider.js';
 @Service({
   description: 'Mediator service that breaks circular dependencies between core services'
 })
-export class ServiceMediator {
+export class ServiceMediator implements IServiceMediator {
   private parserService?: IParserService;
   private resolutionService?: IResolutionService;
   private fileSystemService?: IFileSystemService;
   private pathService?: IPathService;
+  private stateService?: IStateService;
 
   // Setters for each service
   setParserService(service: IParserService): void {
@@ -35,6 +38,10 @@ export class ServiceMediator {
   
   setPathService(service: IPathService): void {
     this.pathService = service;
+  }
+  
+  setStateService(service: IStateService): void {
+    this.stateService = service;
   }
 
   // Mediated methods for parser ↔ resolution interaction
@@ -116,5 +123,73 @@ export class ServiceMediator {
       throw new Error('FileSystemService not initialized in mediator');
     }
     return this.fileSystemService.exists(path);
+  }
+  
+  // Mediated methods for state ↔ resolution interactions
+  
+  /**
+   * Gets a text variable from the state service
+   * This method is used by the resolution service to access text variables
+   */
+  getTextVar(name: string): string | undefined {
+    if (!this.stateService) {
+      throw new Error('StateService not initialized in mediator');
+    }
+    return this.stateService.getTextVar(name);
+  }
+  
+  /**
+   * Gets a data variable from the state service
+   * This method is used by the resolution service to access data variables
+   */
+  getDataVar(name: string): unknown {
+    if (!this.stateService) {
+      throw new Error('StateService not initialized in mediator');
+    }
+    return this.stateService.getDataVar(name);
+  }
+  
+  /**
+   * Gets a path variable from the state service
+   * This method is used by the resolution service to access path variables
+   */
+  getPathVar(name: string): string | undefined {
+    if (!this.stateService) {
+      throw new Error('StateService not initialized in mediator');
+    }
+    return this.stateService.getPathVar(name);
+  }
+  
+  /**
+   * Gets all text variables from the state service
+   * This method is used by the resolution service to access all text variables
+   */
+  getAllTextVars(): Map<string, string> {
+    if (!this.stateService) {
+      throw new Error('StateService not initialized in mediator');
+    }
+    return this.stateService.getAllTextVars();
+  }
+  
+  /**
+   * Gets all data variables from the state service
+   * This method is used by the resolution service to access all data variables
+   */
+  getAllDataVars(): Map<string, unknown> {
+    if (!this.stateService) {
+      throw new Error('StateService not initialized in mediator');
+    }
+    return this.stateService.getAllDataVars();
+  }
+  
+  /**
+   * Gets all path variables from the state service
+   * This method is used by the resolution service to access all path variables
+   */
+  getAllPathVars(): Map<string, string> {
+    if (!this.stateService) {
+      throw new Error('StateService not initialized in mediator');
+    }
+    return this.stateService.getAllPathVars();
   }
 }

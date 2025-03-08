@@ -7,6 +7,7 @@ import type { IStateEventService, StateEvent } from '../StateEventService/IState
 import type { IStateTrackingService } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
 import { inject, container, injectable } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
+import { IServiceMediator } from '@services/mediator/IServiceMediator.js';
 
 // Helper function to check if DI should be used
 function shouldUseDI(): boolean {
@@ -40,6 +41,7 @@ export class StateService implements IStateService {
   };
   private eventService?: IStateEventService;
   private trackingService?: IStateTrackingService;
+  private serviceMediator?: IServiceMediator;
 
   /**
  * Creates a new StateService instance
@@ -48,15 +50,17 @@ export class StateService implements IStateService {
  * @param stateFactory State factory for creating states (injected in DI mode)
  * @param eventService Event service for state events (injected in DI mode)
  * @param trackingService Tracking service for debugging (injected in DI mode)
+ * @param serviceMediator Service mediator for breaking circular dependencies
  * @param parentState Optional parent state to inherit from
  */
 constructor(
   @inject(StateFactory) stateFactory?: StateFactory,
   @inject('IStateEventService') eventService?: IStateEventService,
   @inject('IStateTrackingService') trackingService?: IStateTrackingService,
+  @inject('IServiceMediator') serviceMediator?: IServiceMediator,
   parentState?: IStateService
 ) {
-  this.initializeFromParams(stateFactory, eventService, trackingService, parentState);
+  this.initializeFromParams(stateFactory, eventService, trackingService, serviceMediator, parentState);
 }
 
 /**
@@ -67,12 +71,13 @@ private initializeFromParams(
   stateFactory?: StateFactory,
   eventService?: IStateEventService | IStateService, // Could be event service or parent state in legacy mode
   trackingService?: IStateTrackingService,
+  serviceMediator?: IServiceMediator,
   parentState?: IStateService
 ): void {
   if (stateFactory) {
-    this.initializeDIMode(stateFactory, eventService as IStateEventService, trackingService, parentState);
+    this.initializeDIMode(stateFactory, eventService as IStateEventService, trackingService, serviceMediator, parentState);
   } else {
-    this.initializeLegacyMode(eventService, trackingService, parentState);
+    this.initializeLegacyMode(eventService, trackingService, serviceMediator, parentState);
   }
 }
 
@@ -83,11 +88,19 @@ private initializeDIMode(
   stateFactory: StateFactory,
   eventService?: IStateEventService,
   trackingService?: IStateTrackingService,
+  serviceMediator?: IServiceMediator,
   parentState?: IStateService
 ): void {
   this.stateFactory = stateFactory;
   this.eventService = eventService;
   this.trackingService = trackingService;
+  this.serviceMediator = serviceMediator;
+  
+  // Register this service with the mediator if available
+  if (this.serviceMediator) {
+    this.serviceMediator.setStateService(this);
+  }
+  
   this.initializeState(parentState);
 }
 
@@ -97,17 +110,26 @@ private initializeDIMode(
 private initializeLegacyMode(
   eventServiceOrParent?: IStateEventService | IStateService,
   trackingService?: IStateTrackingService,
+  serviceMediator?: IServiceMediator,
   explicitParentState?: IStateService
 ): void {
   // Create default factory
   this.stateFactory = new StateFactory();
   
+  // Store the service mediator
+  this.serviceMediator = serviceMediator;
+  
+  // Register this service with the mediator if available
+  if (this.serviceMediator) {
+    this.serviceMediator.setStateService(this);
+  }
+  
   // Handle different legacy constructor signatures
-  if (eventServiceOrParent && !trackingService && !explicitParentState) {
+  if (eventServiceOrParent && !trackingService && !serviceMediator && !explicitParentState) {
     // Case: StateService(eventService)
     this.eventService = eventServiceOrParent as IStateEventService;
     this.initializeState();
-  } else if (eventServiceOrParent && !trackingService && explicitParentState) {
+  } else if (eventServiceOrParent && !trackingService && !serviceMediator && explicitParentState) {
     // Case: StateService(parentState)
     // In this case eventServiceOrParent is actually the parentState
     this.initializeState(eventServiceOrParent as IStateService);

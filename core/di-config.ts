@@ -60,6 +60,12 @@ const pathService = new PathService();
 const parserService = new ParserService();
 const resolutionService = new ResolutionService();
 
+// Create StateService with early initialization
+// This is needed because ResolutionService depends on StateService
+const stateFactory = new StateFactory();
+container.registerInstance(StateFactory, stateFactory);
+const stateService = new StateService(stateFactory, undefined, undefined, serviceMediator);
+
 // Register instances of services with circular dependencies
 container.registerInstance('FileSystemService', fileSystemService);
 container.registerInstance('IFileSystemService', fileSystemService);
@@ -69,19 +75,20 @@ container.registerInstance('ParserService', parserService);
 container.registerInstance('IParserService', parserService);
 container.registerInstance('ResolutionService', resolutionService);
 container.registerInstance('IResolutionService', resolutionService);
+container.registerInstance('StateService', stateService);
+container.registerInstance('IStateService', stateService);
 
 // Connect services through the mediator
 serviceMediator.setFileSystemService(fileSystemService);
 serviceMediator.setPathService(pathService);
 serviceMediator.setParserService(parserService);
 serviceMediator.setResolutionService(resolutionService);
+serviceMediator.setStateService(stateService);
 
 // Register remaining services using class registrations
 // These services don't have circular dependencies
 
-// StateService ecosystem
-container.register('StateService', { useClass: StateService });
-container.register('IStateService', { useToken: 'StateService' });
+// StateService ecosystem (other components)
 container.register('StateFactory', { useClass: StateFactory });
 container.register('StateEventService', { useClass: StateEventService });
 container.register('IStateEventService', { useToken: 'StateEventService' });
