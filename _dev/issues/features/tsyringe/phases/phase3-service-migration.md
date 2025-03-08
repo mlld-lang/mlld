@@ -167,19 +167,28 @@ export class DirectiveService implements IDirectiveService {
 
 ## Current Status
 
-- Created service dependency map and migration order
-- Migrated foundation services with minimal dependencies:
-  - ✅ PathOperationsService (already complete)
+- ✅ Created service dependency map and migration order
+- ✅ Migrated foundation services with minimal dependencies:
+  - ✅ PathOperationsService
   - ✅ ProjectPathResolver
   - ✅ StateFactory
   - ✅ StateEventService
   - ✅ StateService
-  - ✅ ValidationService (already complete)
-- Migrated core pipeline services:
-  - ✅ FileSystemService (already complete)
+  - ✅ ValidationService
+- ✅ Migrated core pipeline services:
+  - ✅ FileSystemService
   - ✅ ParserService
   - ✅ InterpreterService
-- Started tracking migration progress by service
+  - ✅ DirectiveService
+  - ✅ OutputService
+  - ✅ ResolutionService
+- ✅ Migrated utility services:
+  - ✅ SourceMapService
+  - ✅ Logger utilities (LoggerFactory, SimpleLogger)
+- ✅ Migrated CLI services:
+  - ✅ CLIService
+  - ✅ DefaultPromptService
+- ✅ Phase 3 complete: All services now support TSyringe dependency injection
 
 ### Notes on InterpreterService Migration
 
@@ -198,19 +207,19 @@ The InterpreterService required special handling due to its circular dependency 
 
 ## Next Steps
 
-1. Continue with remaining services:
-   - [x] DirectiveService
-   - [x] OutputService
-   - [x] ResolutionService
-   - [ ] CLIService
-   - [ ] Utility services:
-     - [x] SourceMapService (in core/utils/SourceMapService.ts)
-     - [ ] Logger utilities:
-       - [ ] Create ILogger interface
-       - [ ] Apply TSyringe decorators to Logger class in simpleLogger.ts
-       - [ ] Transform createServiceLogger in logger.ts to be DI-compatible
-2. Document patterns as we go for service-specific requirements
-3. Track progress and update documentation regularly
+1. ✅ Phase 3 is now complete!
+2. All services have been migrated to support TSyringe dependency injection
+3. Proceed to Phase 4: DI-Only Transition:
+   - Create opt-in mechanisms for DI-only mode
+   - Begin migrating tests to use DI-only mode
+   - Update documentation with Phase 4 progress
+4. Continue documenting patterns for both implementation and testing
+5. Address remaining issues with dependency injection in CLIService
+   - Fixed the `@delay()` decorator issue which was causing test failures
+   - Identified the root cause: delayed initialization conflicts with test expectations of immediate availability
+   - Modified the constructor to initialize properties immediately for direct constructor usage
+   - Kept setTimeout approach for handling circular dependencies with DI
+   - All tests now pass successfully with this dual-mode initialization approach
 
 ### Revised Migration Approach
 
@@ -283,18 +292,56 @@ The SourceMapService is a utility service with a unique migration approach:
 
 The SourceMapService follows our revised utility service migration approach, maintaining backward compatibility while enabling DI resolution. Since this service has no dependencies of its own, its migration was simpler than what we'll encounter with the Logger services.
 
-### Notes on CLIService Migration (Pending)
+### Notes on Logger Utilities Migration
 
-The CLIService represents a significant migration challenge due to:
-1. It's the main user-facing service with multiple dependencies
-2. It has a unique initialization pattern compared to other services
-3. It's tested extensively in both unit and integration tests
+The Logger utilities presented a complex migration challenge due to:
 
-Our approach for CLIService will be:
-1. Add TSyringe decorators without changing existing initialization
-2. Create dual-mode test support with both direct instantiation and DI resolution
-3. Verify all CLI tests pass with the updated implementation
-4. Document specific patterns used for CLI service migration
+1. **Multiple Logger Types**: Both Winston-based loggers (logger.ts) and a simple Logger class (simpleLogger.ts)
+2. **Factory Pattern**: The `createServiceLogger` function that creates service-specific loggers
+3. **Numerous Singleton Exports**: Many exported logger instances used throughout the codebase
+4. **No Standard Initialization**: Non-standard initialization compared to other services
+
+To address these challenges, we:
+
+1. **Created Interfaces**: Added `ILogger` for Winston loggers and `ISimpleLogger` for the simple logger
+2. **Converted Factory to Class**: Transformed the `createServiceLogger` function into a `LoggerFactory` class
+3. **Added TSyringe Decorators**: Applied `@injectable()`, `@singleton()`, and `@Service()` decorators
+4. **Maintained All Exports**: Kept all existing exported logger instances for backward compatibility
+5. **DI Container Registration**: Registered all logger instances in the DI container with appropriate tokens
+
+The Logger migration uses the same pattern established with SourceMapService:
+- Maintain existing exported singleton instances to preserve backward compatibility
+- Add DI support through interfaces and decorators
+- Register instances in the DI container for future DI resolution
+
+Key insights from the Logger migration:
+1. Factory functions can be transformed into injectable classes
+2. Multiple exported instances from the same module can all be registered in the DI container
+3. The migration can be done without disrupting existing code that imports the logger instances directly
+
+### Notes on CLIService Migration
+
+The CLIService migration presented several challenges:
+1. It's a main user-facing service with multiple dependencies (6 service dependencies plus an optional prompt service)
+2. It has unique prompt handling with optional dependency injection
+3. It's extensively tested in both unit and integration tests
+
+Our migration approach for CLIService included:
+1. Extracting interfaces to separate files for improved organization and clearer DI
+2. Creating a default implementation of IPromptService to separate concerns
+3. Adding TSyringe decorators to enable DI while maintaining backward compatibility:
+   - Added `@injectable()` and `@Service()` with detailed dependency metadata
+   - Used `@inject()` and `@delay()` for all service dependencies to prevent circular dependency issues
+   - Used optional parameters to support both DI and non-DI modes
+4. Adding initialization guard pattern with `ensureInitialized()` to verify services are properly set up
+5. Updating the implementation to use non-null assertions where necessary
+6. Registering both the service class and interface in the DI container
+
+Key insights from the CLIService migration:
+1. Complex services with many dependencies benefit from using the `@delay()` decorator
+2. Extracting small helper classes (like DefaultPromptService) can simplify the main service
+3. The initialization guard pattern helps prevent runtime errors from uninitialized services
+4. Using the TSyringe method pattern of marked optional parameters that become required at runtime with assertions
 
 ## Related Documents
 

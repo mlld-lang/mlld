@@ -18,7 +18,26 @@ import { CircularityService } from '../services/resolution/CircularityService/Ci
 import { StateTrackingService } from '../tests/utils/debug/StateTrackingService/StateTrackingService.js';
 import { PathOperationsService } from '../services/fs/FileSystemService/PathOperationsService.js';
 import { NodeFileSystem } from '../services/fs/FileSystemService/NodeFileSystem.js';
-import { SourceMapService } from '../core/utils/SourceMapService.js';
+import { SourceMapService, sourceMapService } from '../core/utils/SourceMapService.js';
+import { CLIService, DefaultPromptService } from '../services/cli/CLIService/CLIService.js';
+import { 
+  LoggerFactory, 
+  logger as mainLogger, 
+  stateLogger,
+  parserLogger,
+  interpreterLogger,
+  filesystemLogger,
+  validationLogger,
+  outputLogger,
+  pathLogger,
+  directiveLogger,
+  circularityLogger,
+  resolutionLogger,
+  importLogger,
+  cliLogger,
+  embedLogger
+} from '../core/utils/logger.js';
+import { Logger, fsLogger } from '../core/utils/simpleLogger.js';
 
 /**
  * This file contains the configuration for dependency injection using tsyringe.
@@ -88,3 +107,39 @@ container.register('IFileSystem', { useToken: 'NodeFileSystem' });
 // SourceMapService
 container.register('SourceMapService', { useClass: SourceMapService });
 container.register('ISourceMapService', { useToken: 'SourceMapService' });
+
+// Logger Factory
+container.register('LoggerFactory', { useClass: LoggerFactory });
+container.register('ILoggerFactory', { useToken: 'LoggerFactory' });
+
+// Main Winston Logger
+container.register('MainLogger', { useValue: mainLogger });
+container.register('ILogger', { useToken: 'MainLogger' });
+
+// Service-specific Winston Loggers
+container.register('StateLogger', { useValue: stateLogger });
+container.register('ParserLogger', { useValue: parserLogger });
+container.register('InterpreterLogger', { useValue: interpreterLogger });
+container.register('FilesystemLogger', { useValue: filesystemLogger });
+container.register('ValidationLogger', { useValue: validationLogger });
+container.register('OutputLogger', { useValue: outputLogger });
+container.register('PathLogger', { useValue: pathLogger });
+container.register('DirectiveLogger', { useValue: directiveLogger });
+container.register('CircularityLogger', { useValue: circularityLogger });
+container.register('ResolutionLogger', { useValue: resolutionLogger });
+container.register('ImportLogger', { useValue: importLogger });
+container.register('CliLogger', { useValue: cliLogger });
+container.register('EmbedLogger', { useValue: embedLogger });
+
+// Simple logger
+container.register('SimpleLogger', { useClass: Logger });
+container.register('ISimpleLogger', { useToken: 'SimpleLogger' });
+container.register('FSSimpleLogger', { useValue: fsLogger });
+
+// CLIService
+container.register('CLIService', { useClass: CLIService });
+container.register('ICLIService', { useToken: 'CLIService' });
+
+// DefaultPromptService
+container.register('DefaultPromptService', { useClass: DefaultPromptService });
+container.register('IPromptService', { useClass: DefaultPromptService });

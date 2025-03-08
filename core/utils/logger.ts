@@ -1,6 +1,28 @@
 import winston from 'winston';
 import path from 'path';
 import { loggingConfig } from '@core/config/logging.js';
+import { injectable, singleton } from 'tsyringe';
+import { Service } from '@core/ServiceProvider.js';
+import fs from 'fs';
+
+/**
+ * Interface for the standard Logger to enable DI resolution
+ */
+export interface ILogger {
+  error(message: string, context?: Record<string, unknown>): void;
+  warn(message: string, context?: Record<string, unknown>): void;
+  info(message: string, context?: Record<string, unknown>): void;
+  debug(message: string, context?: Record<string, unknown>): void;
+  trace(message: string, context?: Record<string, unknown>): void;
+  level: string;
+}
+
+/**
+ * Interface for the LoggerFactory to enable DI resolution
+ */
+export interface ILoggerFactory {
+  createServiceLogger(serviceName: keyof typeof loggingConfig.services): winston.Logger;
+}
 
 // Add colors to Winston
 winston.addColors(loggingConfig.colors);
@@ -54,6 +76,84 @@ const getLogLevel = () => {
   // Otherwise use the default level
   return loggingConfig.defaultLevel;
 };
+
+/**
+ * Factory service for creating Winston loggers
+ */
+@injectable()
+@singleton()
+@Service({
+  providedIn: 'root'
+})
+export class LoggerFactory implements ILoggerFactory {
+  /**
+   * Create a service-specific logger
+   * @param serviceName The name of the service to create a logger for
+   * @returns A Winston logger configured for the specified service
+   */
+  createServiceLogger(serviceName: keyof typeof loggingConfig.services): winston.Logger {
+    const serviceConfig = loggingConfig.services[serviceName];
+    
+    // Determine the service-specific log level based on environment variables
+    const getServiceLogLevel = () => {
+      // Explicit LOG_LEVEL takes precedence
+      if (process.env.LOG_LEVEL) {
+        return process.env.LOG_LEVEL;
+      }
+      
+      // During tests, respect TEST_LOG_LEVEL or default to error for minimal output
+      if (process.env.NODE_ENV === 'test') {
+        return process.env.TEST_LOG_LEVEL || 'error';
+      }
+      
+      // In debug mode use debug level
+      if (process.env.DEBUG === 'true') {
+        return 'debug';
+      }
+      
+      // Otherwise use the service's configured level
+      return serviceConfig.level;
+    };
+    
+    const logger = winston.createLogger({
+      level: getServiceLogLevel(),
+      format: winston.format.combine(
+        winston.format.timestamp(),
+        winston.format.json()
+      ),
+      defaultMeta: { service: serviceName },
+      transports: [
+        // Only use console transport outside of tests
+        ...(process.env.NODE_ENV === 'test' ? [] : [
+          new winston.transports.Console({
+            format: consoleFormat,
+            level: getServiceLogLevel()
+          })
+        ])
+      ]
+    });
+
+    // Add a method to update the log level
+    let currentLevel = serviceConfig.level;
+    Object.defineProperty(logger, 'level', {
+      get() {
+        return currentLevel;
+      },
+      set(newLevel: string) {
+        currentLevel = newLevel;
+        logger.transports.forEach(transport => {
+          transport.level = newLevel;
+        });
+      }
+    });
+
+    return logger;
+  }
+}
+
+// Singleton instance for backward compatibility
+export const loggerFactory = new LoggerFactory();
+
 // Create the logger instance
 export const logger = winston.createLogger({
   level: getLogLevel(),
@@ -85,77 +185,12 @@ export const logger = winston.createLogger({
   ]
 });
 
-// Export the Logger interface for type safety
-export interface Logger {
-  error(message: string, context?: Record<string, unknown>): void;
-  warn(message: string, context?: Record<string, unknown>): void;
-  info(message: string, context?: Record<string, unknown>): void;
-  debug(message: string, context?: Record<string, unknown>): void;
-  trace(message: string, context?: Record<string, unknown>): void;
-  level: string;
-}
-
-// Create a service-specific logger factory
+// Backward compatibility function for creating service loggers
 export function createServiceLogger(serviceName: keyof typeof loggingConfig.services): winston.Logger {
-  const serviceConfig = loggingConfig.services[serviceName];
-  
-  // Determine the service-specific log level based on environment variables
-  const getServiceLogLevel = () => {
-    // Explicit LOG_LEVEL takes precedence
-    if (process.env.LOG_LEVEL) {
-      return process.env.LOG_LEVEL;
-    }
-    
-    // During tests, respect TEST_LOG_LEVEL or default to error for minimal output
-    if (process.env.NODE_ENV === 'test') {
-      return process.env.TEST_LOG_LEVEL || 'error';
-    }
-    
-    // In debug mode use debug level
-    if (process.env.DEBUG === 'true') {
-      return 'debug';
-    }
-    
-    // Otherwise use the service's configured level
-    return serviceConfig.level;
-  };
-  const logger = winston.createLogger({
-    level: getServiceLogLevel(),
-    format: winston.format.combine(
-      winston.format.timestamp(),
-      winston.format.json()
-    ),
-    defaultMeta: { service: serviceName },
-    transports: [
-      // Only use console transport outside of tests
-      ...(process.env.NODE_ENV === 'test' ? [] : [
-        new winston.transports.Console({
-          format: consoleFormat,
-          level: getServiceLogLevel()
-        })
-      ])
-    ]
-  });
-
-  // Add a method to update the log level
-  let currentLevel = serviceConfig.level;
-  Object.defineProperty(logger, 'level', {
-    get() {
-      return currentLevel;
-    },
-    set(newLevel: string) {
-      currentLevel = newLevel;
-      logger.transports.forEach(transport => {
-        transport.level = newLevel;
-      });
-    }
-  });
-
-  return logger;
+  return loggerFactory.createServiceLogger(serviceName);
 }
 
 // Ensure logs directory exists
-import fs from 'fs';
 if (!fs.existsSync(loggingConfig.files.directory)) {
   fs.mkdirSync(loggingConfig.files.directory);
 }

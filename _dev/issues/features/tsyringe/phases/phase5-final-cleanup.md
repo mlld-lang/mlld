@@ -232,12 +232,17 @@ Utility services like SourceMapService and Logger require special handling durin
 - Legacy `initialize()` methods are still used
 - Documentation references both DI and non-DI approaches
 - Utility services require special handling for backward compatibility
-- SourceMapService migration provides a pattern for other utility services
+- Utility service migrations completed:
+  - ✅ SourceMapService - provides a pattern for other utility services
+  - ✅ Logger utilities - including both Winston and simple loggers
+  - ✅ LoggerFactory - transformed from a factory function
 
 ## Next Steps
 
 1. Ensure all tests can run in DI-only mode before starting this phase
-2. Complete migration of all utility services (Logger, etc.)
+2. ✅ Complete migration of all utility services:
+   - ✅ SourceMapService
+   - ✅ Logger utilities
 3. Begin by updating `shouldUseDI()` to always return true
 4. Simplify service constructors one at a time
 5. Remove legacy initialization methods

@@ -32,7 +32,7 @@ Our migration strategy follows these key principles:
 - Categorize tests by DI dependency
 - [Details in phase2-test-preparation.md](./phases/phase2-test-preparation.md)
 
-### Phase 3: Incremental Service Migration
+### Phase 3: Incremental Service Migration (✅ Completed)
 - Update one service at a time to prefer DI 
 - Ensure tests pass after each change
 - Track progress service by service
@@ -58,39 +58,44 @@ Our migration strategy follows these key principles:
 - Service decorator implementation
 - Multiple services decorated with `@Service()`
 - Tests for decorated services updated to work with both modes
+- ✅ Phase 1: Foundation and Cleanup completed
+- ✅ Phase 2: Test Infrastructure Enhancement completed
+- ✅ Phase 3: Incremental Service Migration completed
+  - All services now support TSyringe dependency injection
+  - Core services (DirectiveService, InterpreterService, etc.)
+  - Utility services (SourceMapService, Logger utilities)
+  - CLIService and DefaultPromptService
 
 ### In Progress
 - [x] Constructor simplification for key services (Phase 1 completed) 
 - [x] Test infrastructure enhancement (Phase 2 completed)
 - [x] Categorizing tests by DI dependency (Phase 2 completed)
-- [x] Phase 3: Service migration (in progress)
+- [x] Phase 3: Service migration (✅ Completed)
   - [x] Created service dependency map for prioritized migration
   - [x] Migrated foundation services (PathOperationsService, ProjectPathResolver, StateFactory, StateEventService, StateService, ValidationService)
   - [x] Migrated Core Pipeline services (FileSystemService, ParserService, InterpreterService, DirectiveService)
   - [x] Migrated OutputService and ResolutionService
-  - [ ] Continuing with remaining services
+  - [x] Migrated utility services (SourceMapService, Logger utilities)
+  - [x] Migrated CLIService and provided DefaultPromptService
+- [ ] Phase 4: DI-Only Mode Transition (starting)
+  - [ ] Creating opt-in mechanism for DI-only mode in tests
+  - [x] Fixed CLIService dependency injection issues with constructor initialization
+  - [x] All tests now passing - Phase 3 fully complete!
 
 ### Up Next
-- [ ] Complete remaining Phase 3 tasks:
-  - [x] Migrate StateService
-  - [x] Migrate ValidationService (already had TSyringe support)
-  - [x] Migrate FileSystemService (already had TSyringe support)
-  - [x] Migrate ParserService
-  - [x] Migrate InterpreterService 
-  - [x] Migrate DirectiveService
-  - [x] Migrate OutputService
-  - [x] Migrate ResolutionService
-  - [ ] Migrate CLIService
-  - [ ] Migrate utility services:
-    - [ ] SourceMapService (in core/utils)
-    - [ ] Logger/createServiceLogger (in core/utils)
-  - [ ] Prepare for Phase 4 (DI-only mode transition)
+- [ ] Implement Phase 4 tasks:
+  - [ ] Create MIGRATE_TO_DI_ONLY flag for tests to opt into DI-only mode
+  - [ ] Update TestContextDI to support this flag
+  - [ ] Create tracking for test migration progress
+  - [ ] Start migrating tests to DI-only mode in batches
+  - [ ] Create automated verification tools for DI compatibility
 
 ## Reference Documentation
 
 - [Service Initialization Patterns](./reference/service-initialization-patterns.md) - Common patterns in the codebase
 - [Constructor Simplification](./reference/constructor-simplification.md) - Strategy for refactoring constructors
 - [DI Documentation](./reference/di-documentation.md) - Guidelines for using DI
+- [Utility Services Migration](./reference/utility-services-migration.md) - Strategy for migrating utility services
 
 ## Implementation Guidelines
 

@@ -157,12 +157,23 @@ try {
 
 ## Current Status
 
+- Phase 3 (Service Migration) is now complete! 🎉
+- All services now support TSyringe dependency injection:
+  - Core services (DirectiveService, InterpreterService, etc.)
+  - Utility services (SourceMapService, Loggers)
+  - CLIService and all its dependencies
+- ✅ All tests are now passing with our CLIService fix:
+  - Modified the constructor to properly initialize the service immediately for direct instantiation
+  - Kept the setTimeout approach for resolving circular dependencies
+  - Fixed the root issue that delayed initialization was causing tests to fail
+- The key insight was to distinguish between two initialization paths:
+  1. Direct constructor instantiation in tests: requires immediate property initialization
+  2. DI container instantiation: can use delayed initialization for circular dependencies
+- Some test warnings still exist from StringConcatenationHandler but they are expected fallback mechanisms, not actual failures
 - Dual-mode support is still required for many tests
-- No opt-in mechanism for DI-only mode exists
+- No opt-in mechanism for DI-only mode exists yet
 - No formal tracking of test migration status
 - No automated verification tools
-- Utility services (SourceMapService) now support DI with backward compatibility
-- Logger services still need to be migrated before transition
 
 ### Handling Utility Services
 
@@ -181,11 +192,16 @@ During Phase 4, we'll need to:
 
 ## Next Steps
 
-1. Complete migration of remaining utility services (Logger utilities)
-2. Create the DI-only mode opt-in mechanism
-3. Begin migrating tests in manageable batches
-4. Implement tracking for migration progress
-5. Create automated verification tools
+1. ✅ Phase 3 (Service Migration) is now complete:
+   - ✅ All core services migrated
+   - ✅ All utility services migrated
+   - ✅ CLIService migration completed
+2. Start Phase 4 implementation:
+   - [ ] Create the DI-only mode opt-in mechanism for tests
+   - [ ] Define batches of tests for migration
+   - [ ] Begin migrating tests to DI-only mode
+   - [ ] Implement tracking for migration progress
+   - [ ] Create automated verification tools
 
 ## Related Documents
 

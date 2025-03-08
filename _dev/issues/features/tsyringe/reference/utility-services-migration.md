@@ -207,12 +207,19 @@ For each utility service:
 - [x] Add TSyringe decorators without changing exports (SourceMapService)
 - [x] Add dual-mode tests verifying both DI and direct instantiation (SourceMapService)
 - [x] Document the migration strategy for the specific service (SourceMapService)
-- [ ] Update DI container registration in di-config.ts (SourceMapService completed)
-- [ ] Create interface for Logger
-- [ ] Add TSyringe decorators to Logger classes
-- [ ] Transform createServiceLogger to be DI-compatible
-- [ ] Gradually update consumers to support DI resolution
-- [ ] Eventually register the singleton with the container
+- [x] Update DI container registration in di-config.ts (SourceMapService completed)
+- [x] Create interface for Logger (ILogger and ISimpleLogger)
+- [x] Add TSyringe decorators to Logger classes
+- [x] Transform createServiceLogger to be DI-compatible (LoggerFactory class)
+- [x] Register all logger instances in the DI container
+- [x] Extract CLIService interfaces to separate file
+- [x] Create DefaultPromptService implementation
+- [x] Apply TSyringe decorators to CLIService
+- [x] Register CLIService in the DI container
+- [ ] **Phase 4 Tasks:**
+  - [ ] Gradually update consumers to support DI resolution
+  - [ ] Eventually register the singleton with the container
+  - [ ] Create DI-only mode opt-in mechanism for tests
 
 ## Completed Migrations
 
@@ -236,3 +243,74 @@ Key insights from the SourceMapService migration:
    container.register('ISourceMapService', { useToken: 'SourceMapService' });
    ```
 4. The `@Service({ providedIn: 'root' })` decorator properly set up the service for DI
+
+### Logger Services
+
+The Logger services were successfully migrated using a more complex approach:
+
+1. **Added Interfaces**: 
+   - Created `ILogger` for Winston loggers
+   - Created `ISimpleLogger` for the simple logger implementation 
+   - Created `ILoggerFactory` for the factory service
+
+2. **Transformed Factory Function**: 
+   - Converted the `createServiceLogger` function into a `LoggerFactory` class
+   - Applied TSyringe decorators to make it injectable and singleton
+   - Maintained backward compatibility with the original function
+
+3. **Decorated Classes**: 
+   - Applied `@injectable()`, `@singleton()`, and `@Service()` decorators to the Logger class
+
+4. **Registered All Instances**: 
+   - Registered the main logger as 'MainLogger' and 'ILogger'
+   - Registered each service logger with a unique token (StateLogger, ParserLogger, etc.)
+   - Registered the LoggerFactory for DI resolution
+   - Registered the simple logger as 'SimpleLogger' and 'ISimpleLogger'
+
+5. **Maintained Backward Compatibility**:
+   - Kept all existing exported logger instances unchanged
+   - Maintained the original createServiceLogger function that uses the factory
+
+Key insights from the Logger services migration:
+
+1. Factory functions can be transformed into injectable classes while maintaining the original function for backward compatibility
+2. Multiple instances from the same module can be registered with unique tokens in the DI container
+3. Both simple and complex logger implementations can use the same pattern
+4. The interfaces clearly define the public API that other services can depend on
+
+### CLIService Migration
+
+The CLIService was successfully migrated as the final service in Phase 3:
+
+1. **Interface Extraction**:
+   - Moved interfaces to ICLIService.ts for better organization
+   - Created a proper IPromptService interface for user interaction
+   - Updated CLIOptions interface to match actual implementation
+
+2. **Default Service Implementation**:
+   - Created a DefaultPromptService class to handle user prompts
+   - Extracted this from the inline implementation in the constructor
+   - Registered this in the DI container for reuse
+
+3. **Applied TSyringe Decorators**:
+   - Added `@injectable()` and detailed `@Service()` decorator with dependencies
+   - Used `@inject()` with six service dependencies
+   - Applied `@delay()` to all dependencies to prevent circular dependency issues
+
+4. **Maintained Dual-Mode Support**:
+   - Used optional parameters that support both DI and manual initialization
+   - Added an initialize() method for backward compatibility
+   - Implemented an ensureInitialized() safety check before operations
+   - Used non-null assertions (!) for services after initialization check
+
+5. **DI Container Registration**:
+   - Registered CLIService with both class and interface tokens
+   - Registered DefaultPromptService as the implementation for IPromptService
+
+Key insights from the CLIService migration:
+
+1. Services with many dependencies benefit from clear organization of interfaces
+2. The `@delay()` decorator is essential for services with many complex dependencies
+3. An initialization guard pattern (ensureInitialized) helps prevent runtime errors
+4. Extracting small helper classes can simplify the main service
+5. Non-null assertions are a clean pattern when using an initialization guard
