@@ -88,13 +88,13 @@ Our migration strategy follows these key principles:
 
 ### Current Work Focus
 1. **Implementing Service Mediator Pattern**
-   - [ ] Create ServiceMediator class
-   - [ ] Update core services to use the mediator
-   - [ ] Revise di-config.ts to use this approach
+   - [x] Create ServiceMediator class
+   - [x] Update core services to use the mediator
+   - [x] Revise di-config.ts to use this approach
 
 2. **Enhancing Test Framework**
-   - [ ] Improve test cleanup procedures
-   - [ ] Add better memory management
+   - [x] Improve test cleanup procedures
+   - [x] Add better memory management
    - [ ] Create specialized test helpers for transformation tests
 
 3. **Specific Test Fixes**
@@ -114,39 +114,38 @@ Our migration strategy follows these key principles:
 - Opt-in mechanism for DI-only mode in tests
 - Test migration tracking system and verification tools
 
+### What We've Done
+
+1. ✅ Created the ServiceMediator class in services/mediator/ServiceMediator.ts
+2. ✅ Updated di-config.ts to use the mediator pattern
+3. ✅ Modified the ResolutionService to use the mediator instead of direct ParserService reference
+4. ✅ Modified the PathService and FileSystemService to use the mediator
+5. ✅ Enhanced test setup for better memory management in tests/setup.ts
+6. ✅ Updated TestContext and TestContextDI to use the mediator
+
 ### Next Steps (Prioritized)
 
 #### Immediate Actions (Next 1-2 Days)
-1. Create the basic `ServiceMediator` class:
+1. Fix the PathService tests to work with the new mediator-based approach:
+   - Add missing methods like join, dirname, basename that are referenced in tests
+   - Fix validatePath implementation to properly reject invalid paths
+   - Update tests to work with the new API surface
+
+2. Create a comprehensive test suite for the ServiceMediator:
    ```typescript
-   // services/mediator/ServiceMediator.ts
-   @singleton()
-   export class ServiceMediator {
-     private parserService?: IParserService;
-     private resolutionService?: IResolutionService;
+   // tests/services/mediator/ServiceMediator.test.ts
+   describe('ServiceMediator', () => {
+     it('should properly connect services with circular dependencies', () => {
+       // Test code
+     });
      
-     setParserService(service: IParserService): void {
-       this.parserService = service;
-     }
-     
-     setResolutionService(service: IResolutionService): void {
-       this.resolutionService = service;
-     }
-     
-     // Add initial mediator methods for parser ↔ resolution
-   }
+     it('should properly forward method calls between services', () => {
+       // Test code
+     });
+   });
    ```
 
-2. Update di-config.ts to use the mediator for ParserService and ResolutionService:
-   ```typescript
-   // Register the mediator first
-   const serviceMediator = new ServiceMediator();
-   container.registerInstance('ServiceMediator', serviceMediator);
-   
-   // Update the creation and linking of these services
-   ```
-
-3. Modify the ResolutionService to use the mediator instead of direct ParserService reference
+3. Fix other failing tests that rely on the old API
 
 #### Short-Term Actions (Next Week)
 - [ ] Complete the ServiceMediator implementation for all circular dependencies

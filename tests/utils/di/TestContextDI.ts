@@ -15,6 +15,7 @@ import { ProjectPathResolver } from '@services/fs/ProjectPathResolver';
 import { ValidationService } from '@services/resolution/ValidationService/ValidationService';
 import { CircularityService } from '@services/resolution/CircularityService/CircularityService';
 import { ParserService } from '@services/pipeline/ParserService/ParserService';
+import { ServiceMediator } from '@services/mediator/index.js';
 import { StateEventService } from '@services/state/StateEventService/StateEventService';
 import { StateService } from '@services/state/StateService/StateService';
 import { StateFactory } from '@services/state/StateService/StateFactory';
@@ -206,18 +207,27 @@ export class TestContextDI extends TestContext {
     // Since we're in a test context and can't modify the service classes to add @injectable
     // decorators, we'll register existing service instances rather than classes
     
+    // Create ServiceMediator to manage circular dependencies
+    const mediator = new ServiceMediator();
+    
     // Create service instances manually first
     const pathOps = new PathOperationsService();
-    const filesystem = new FileSystemService(pathOps, null, this.fs);
     
     // Create the ProjectPathResolver separately
     const projectPathResolver = new ProjectPathResolver();
     
-    // Create PathService with its dependencies
-    const path = new PathService(filesystem, null, projectPathResolver);
+    // Create services with circular dependencies first
+    const filesystem = new FileSystemService(pathOps, mediator, this.fs);
+    const path = new PathService(mediator, projectPathResolver);
+    const parser = new ParserService(mediator);
+    
+    // Connect services through the mediator
+    mediator.setFileSystemService(filesystem);
+    mediator.setPathService(path);
+    mediator.setParserService(parser);
+    
     const validation = new ValidationService();
     const circularity = new CircularityService();
-    const parser = new ParserService();
     const eventService = new StateEventService();
     const stateFactory = new StateFactory();
     
@@ -229,11 +239,16 @@ export class TestContextDI extends TestContext {
     
     const interpreter = new InterpreterService();
     const directive = new DirectiveService();
-    const resolution = new ResolutionService(state, filesystem, parser, path);
+    const resolution = new ResolutionService(state, filesystem, path, mediator);
+    
+    // Register resolution service with the mediator
+    mediator.setResolutionService(resolution);
     const output = new OutputService();
     const debugger_ = new TestDebuggerService(state);
     
     // Register service instances with the container
+    this.container.registerMock('ServiceMediator', mediator);
+    this.container.registerMock('IServiceMediator', mediator);
     this.container.registerMock('PathOperationsService', pathOps);
     this.container.registerMock('FileSystemService', filesystem);
     this.container.registerMock('PathService', path);

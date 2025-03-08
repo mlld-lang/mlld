@@ -20,6 +20,7 @@ import { PathOperationsService } from '../services/fs/FileSystemService/PathOper
 import { NodeFileSystem } from '../services/fs/FileSystemService/NodeFileSystem.js';
 import { SourceMapService, sourceMapService } from '../core/utils/SourceMapService.js';
 import { CLIService, DefaultPromptService } from '../services/cli/CLIService/CLIService.js';
+import { ServiceMediator } from '../services/mediator/ServiceMediator.js';
 import { 
   LoggerFactory, 
   logger as mainLogger, 
@@ -45,12 +46,38 @@ import { Logger, fsLogger } from '../core/utils/simpleLogger.js';
  * that use dependency injection decorators.
  */
 
-// Register all services that need explicit registration in the DI container
-// This allows resolving services both by class and by string token
+// First, register the ServiceMediator to break circular dependencies
+const serviceMediator = new ServiceMediator();
+container.registerInstance('ServiceMediator', serviceMediator);
+container.registerInstance('IServiceMediator', serviceMediator);
 
-// ResolutionService
-container.register('ResolutionService', { useClass: ResolutionService });
-container.register('IResolutionService', { useToken: 'ResolutionService' });
+// Create instances of services with circular dependencies first
+// so we can connect them through the mediator
+
+// Create minimal instances of core services with circular dependencies
+const fileSystemService = new FileSystemService();
+const pathService = new PathService();
+const parserService = new ParserService();
+const resolutionService = new ResolutionService();
+
+// Register instances of services with circular dependencies
+container.registerInstance('FileSystemService', fileSystemService);
+container.registerInstance('IFileSystemService', fileSystemService);
+container.registerInstance('PathService', pathService);
+container.registerInstance('IPathService', pathService);
+container.registerInstance('ParserService', parserService);
+container.registerInstance('IParserService', parserService);
+container.registerInstance('ResolutionService', resolutionService);
+container.registerInstance('IResolutionService', resolutionService);
+
+// Connect services through the mediator
+serviceMediator.setFileSystemService(fileSystemService);
+serviceMediator.setPathService(pathService);
+serviceMediator.setParserService(parserService);
+serviceMediator.setResolutionService(resolutionService);
+
+// Register remaining services using class registrations
+// These services don't have circular dependencies
 
 // StateService ecosystem
 container.register('StateService', { useClass: StateService });
@@ -61,14 +88,6 @@ container.register('IStateEventService', { useToken: 'StateEventService' });
 container.register('StateTrackingService', { useClass: StateTrackingService });
 container.register('IStateTrackingService', { useToken: 'StateTrackingService' });
 
-// FileSystemService
-container.register('FileSystemService', { useClass: FileSystemService });
-container.register('IFileSystemService', { useToken: 'FileSystemService' });
-
-// ParserService
-container.register('ParserService', { useClass: ParserService });
-container.register('IParserService', { useToken: 'ParserService' });
-
 // InterpreterService
 container.register('InterpreterService', { useClass: InterpreterService });
 container.register('IInterpreterService', { useToken: 'InterpreterService' });
@@ -76,10 +95,6 @@ container.register('IInterpreterService', { useToken: 'InterpreterService' });
 // DirectiveService
 container.register('DirectiveService', { useClass: DirectiveService });
 container.register('IDirectiveService', { useToken: 'DirectiveService' });
-
-// PathService
-container.register('PathService', { useClass: PathService });
-container.register('IPathService', { useToken: 'PathService' });
 
 // ErrorDisplayService
 container.register('ErrorDisplayService', { useClass: ErrorDisplayService });

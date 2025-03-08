@@ -9,7 +9,6 @@ import { ContentResolver } from './resolvers/ContentResolver.js';
 import { VariableReferenceResolver } from './resolvers/VariableReferenceResolver.js';
 import { resolutionLogger as logger } from '@core/utils/logger.js';
 import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
-import { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 import type { MeldNode, DirectiveNode, TextNode, DirectiveKind, CodeFenceNode } from 'meld-spec';
 import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
 import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
@@ -18,6 +17,7 @@ import { inject, singleton } from 'tsyringe';
 import { IPathService } from '@services/fs/PathService/IPathService.js';
 import { VariableResolutionTracker, ResolutionTrackingConfig } from '@tests/utils/debug/VariableResolutionTracker/index.js';
 import { Service } from '@core/ServiceProvider.js';
+import { IServiceMediator } from '@services/mediator/index.js';
 
 /**
  * Interface matching the StructuredPath expected from meld-spec
@@ -144,24 +144,24 @@ export class ResolutionService implements IResolutionService {
   
   private stateService: IStateService;
   private fileSystemService: IFileSystemService;
-  private parserService: IParserService;
   private pathService: IPathService;
+  private serviceMediator?: IServiceMediator;
 
   /**
    * Creates a new ResolutionService instance with dependency injection
    * 
    * @param stateService Service for accessing state variables
    * @param fileSystemService Service for file operations
-   * @param parserService Service for parsing Meld text
    * @param pathService Service for path resolution
+   * @param serviceMediator Service mediator for breaking circular dependencies
    */
   constructor(
     @inject('IStateService') stateService?: IStateService,
-    @inject('IFileSystemService') fileSystemService?: IFileSystemService,
-    @inject('IParserService') parserService?: IParserService,
-    @inject('IPathService') pathService?: IPathService
+    @inject('IFileSystemService') fileSystemService?: IFileSystemService, 
+    @inject('IPathService') pathService?: IPathService,
+    @inject('IServiceMediator') serviceMediator?: IServiceMediator
   ) {
-    this.initializeFromParams(stateService, fileSystemService, parserService, pathService);
+    this.initializeFromParams(stateService, fileSystemService, pathService, serviceMediator);
   }
   
   /**
@@ -171,18 +171,18 @@ export class ResolutionService implements IResolutionService {
   private initializeFromParams(
     stateService?: IStateService,
     fileSystemService?: IFileSystemService,
-    parserService?: IParserService,
-    pathService?: IPathService
+    pathService?: IPathService,
+    serviceMediator?: IServiceMediator
   ): void {
     // Check if we're in DI mode by verifying all dependencies exist
-    if (stateService && fileSystemService && parserService && pathService) {
-      this.initializeDIMode(stateService, fileSystemService, parserService, pathService);
+    if (stateService && fileSystemService && pathService && serviceMediator) {
+      this.initializeDIMode(stateService, fileSystemService, pathService, serviceMediator);
     } else {
       // In legacy non-DI mode, require at least the state service
       if (!stateService) {
         throw new Error('StateService is required for ResolutionService');
       }
-      this.initializeLegacyMode(stateService, fileSystemService, parserService, pathService);
+      this.initializeLegacyMode(stateService, fileSystemService, pathService, serviceMediator);
     }
   }
   
@@ -192,13 +192,16 @@ export class ResolutionService implements IResolutionService {
   private initializeDIMode(
     stateService: IStateService,
     fileSystemService: IFileSystemService,
-    parserService: IParserService,
-    pathService: IPathService
+    pathService: IPathService,
+    serviceMediator: IServiceMediator
   ): void {
     this.stateService = stateService;
     this.fileSystemService = fileSystemService;
-    this.parserService = parserService;
     this.pathService = pathService;
+    this.serviceMediator = serviceMediator;
+    
+    // Register this service with the mediator
+    this.serviceMediator.setResolutionService(this);
     
     this.initializeResolvers();
   }
@@ -209,13 +212,18 @@ export class ResolutionService implements IResolutionService {
   private initializeLegacyMode(
     stateService: IStateService,
     fileSystemService?: IFileSystemService,
-    parserService?: IParserService,
-    pathService?: IPathService
+    pathService?: IPathService,
+    serviceMediator?: IServiceMediator
   ): void {
     this.stateService = stateService;
     this.fileSystemService = fileSystemService || {} as IFileSystemService;
-    this.parserService = parserService || {} as IParserService;
     this.pathService = pathService || {} as IPathService;
+    this.serviceMediator = serviceMediator;
+    
+    // Register this service with the mediator if available
+    if (this.serviceMediator) {
+      this.serviceMediator.setResolutionService(this);
+    }
     
     this.initializeResolvers();
   }
@@ -232,7 +240,7 @@ export class ResolutionService implements IResolutionService {
     this.variableReferenceResolver = new VariableReferenceResolver(
       this.stateService,
       this,
-      this.parserService
+      this.serviceMediator // Pass the mediator instead of parser service
     );
   }
 
@@ -241,8 +249,17 @@ export class ResolutionService implements IResolutionService {
    */
   private async parseForResolution(value: string): Promise<MeldNode[]> {
     try {
-      const nodes = await this.parserService.parse(value);
-      return nodes || [];
+      // Use the mediator to get AST nodes if available
+      if (this.serviceMediator) {
+        const nodes = await this.serviceMediator.parseForResolution(value);
+        return nodes || [];
+      }
+      
+      // Fallback for backward compatibility during transition
+      logger.warn('No mediator available for parsing - falling back to direct import');
+      const { parse } = await import('meld-ast');
+      const result = await parse(value, { trackLocations: true });
+      return result.ast || [];
     } catch (error) {
       // If parsing fails, treat the value as literal text
       return [{

@@ -18,6 +18,7 @@ import { FileSystemService } from '@services/fs/FileSystemService/FileSystemServ
 import { OutputService } from '@services/pipeline/OutputService/OutputService.js';
 import { OutputFormat } from '@services/pipeline/OutputService/IOutputService.js';
 import { StateTrackingService } from './debug/StateTrackingService/StateTrackingService.js';
+import { ServiceMediator } from '@services/mediator/index.js';
 import { StateVisualizationService } from './debug/StateVisualizationService/StateVisualizationService.js';
 import { StateDebuggerService } from './debug/StateDebuggerService/StateDebuggerService.js';
 import { StateHistoryService } from './debug/StateHistoryService/StateHistoryService.js';
@@ -118,21 +119,27 @@ export class TestContext {
 
     // Initialize services
     const pathOps = new PathOperationsService();
-    const filesystem = new FileSystemService(pathOps, null, this.fs);
     const validation = new ValidationService();
     
     // Create ProjectPathResolver
     const projectPathResolver = new ProjectPathResolver();
     
-    // Create PathService with its dependencies
-    const path = new PathService(filesystem, null, projectPathResolver);
-    path.enableTestMode();
-    path.setProjectPath('/project');
+    // Create ServiceMediator to manage circular dependencies
+    const mediator = new ServiceMediator();
     
-    // Make FileSystemService use PathService for path resolution
-    filesystem.setPathService(path);
+    // Create services with circular dependencies first
+    const filesystem = new FileSystemService(pathOps, mediator, this.fs);
+    const path = new PathService(mediator, projectPathResolver);
+    const parser = new ParserService(mediator);
     
-    const parser = new ParserService();
+    // Set test mode for PathService
+    path.setTestMode(true);
+    
+    // Connect services through the mediator
+    mediator.setFileSystemService(filesystem);
+    mediator.setPathService(path);
+    mediator.setParserService(parser);
+    
     const circularity = new CircularityService();
     const interpreter = new InterpreterService();
 
@@ -151,7 +158,8 @@ export class TestContext {
     state.setPathVar('HOMEPATH', '/home/user');
     
     // Initialize resolution service
-    const resolution = new ResolutionService(state, filesystem, parser, path);
+    const resolution = new ResolutionService(state, filesystem, path, mediator);
+    mediator.setResolutionService(resolution);
 
     // Initialize debugger service
     const debuggerService = new TestDebuggerService(state);
