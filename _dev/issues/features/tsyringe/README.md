@@ -104,7 +104,7 @@ Our migration strategy follows these key principles:
      - [x] PathOperationsService.test.ts
      - [x] FileSystemService.test.ts
      - [x] NodeFileSystem.test.ts
-     - [x] PathService.test.ts
+     - [x] PathService.test.ts - Fixed with comprehensive implementation of missing methods and proper error handling
 
 ### Completed Work
 - Initial TSyringe implementation with dual-mode support
@@ -126,10 +126,13 @@ Our migration strategy follows these key principles:
 ### Next Steps (Prioritized)
 
 #### Immediate Actions (Next 1-2 Days)
-1. Fix the PathService tests to work with the new mediator-based approach:
-   - Add missing methods like join, dirname, basename that are referenced in tests
-   - Fix validatePath implementation to properly reject invalid paths
-   - Update tests to work with the new API surface
+1. ✅ Fixed the PathService tests to work with the new mediator-based approach:
+   - ✅ Added missing methods (join, dirname, basename, etc.) that are referenced in tests
+   - ✅ Fixed validatePath implementation to properly reject invalid paths
+   - ✅ Updated the PathValidationError class to handle all test cases
+   - ✅ Added proper error messages for path validation
+   - ✅ Fixed structured path validation to check for illegal segments
+   - ✅ Updated tests to work with the new API surface
 
 2. Create a comprehensive test suite for the ServiceMediator:
    ```typescript
