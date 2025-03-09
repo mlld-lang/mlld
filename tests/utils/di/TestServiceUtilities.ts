@@ -15,7 +15,7 @@ import { TestContextDI } from './TestContextDI';
  * @param options Options for service resolution
  * @returns The resolved service
  */
-export function getService<T>(
+export async function getService<T>(
   context: TestContextDI,
   token: string | InjectionToken<T>,
   options: {
@@ -40,13 +40,13 @@ export function getService<T>(
      */
     required?: boolean;
   } = {}
-): T | null {
+): Promise<T | null> {
   // Set default options
   const required = options.required !== false;
   
   try {
     // Try to resolve the service using the context's resolve method
-    return context.resolve(token, options.fallback);
+    return await context.resolve(token, options.fallback);
   } catch (error) {
     // If we have a fallback class, create an instance
     if (options.fallbackClass) {
@@ -68,6 +68,48 @@ export function getService<T>(
     }
     
     // Otherwise return null
+    return null;
+  }
+}
+
+/**
+ * Synchronous version of getService for backward compatibility
+ * DEPRECATED: Use async getService instead for new code
+ */
+export function getServiceSync<T>(
+  context: TestContextDI,
+  token: string | InjectionToken<T>,
+  options: {
+    fallbackClass?: new (...args: any[]) => T;
+    fallbackArgs?: any[];
+    fallback?: T;
+    required?: boolean;
+  } = {}
+): T | null {
+  // Set default options
+  const required = options.required !== false;
+  
+  try {
+    // Use the synchronous resolve method
+    return context.resolveSync(token, options.fallback);
+  } catch (error) {
+    // Handle fallbacks same as async version
+    if (options.fallbackClass) {
+      const instance = new options.fallbackClass(...(options.fallbackArgs || []));
+      return instance;
+    }
+    
+    if (options.fallback !== undefined) {
+      return options.fallback;
+    }
+    
+    if (required) {
+      throw new Error(
+        `Failed to resolve service '${String(token)}': ${error.message}\n` +
+        `Consider providing a fallback class or value.`
+      );
+    }
+    
     return null;
   }
 }
@@ -98,24 +140,32 @@ export function createServiceMock<T>(
  * @param factory A factory function that receives the context and creates a service
  * @returns The created service
  */
-export function createService<T>(
+export async function createService<T>(
   context: TestContextDI,
-  factory: (ctx: TestContextDI) => T
-): T {
-  // Create the service using the factory
-  const service = factory(context);
-  return service;
+  factory: (ctx: TestContextDI) => T | Promise<T>
+): Promise<T> {
+  return await factory(context);
 }
 
 /**
- * Creates a diagnostic report for the test context
- * Useful for debugging test setup issues
+ * Synchronous version of createService for backward compatibility
+ * DEPRECATED: Use async createService instead for new code
+ */
+export function createServiceSync<T>(
+  context: TestContextDI,
+  factory: (ctx: TestContextDI) => T
+): T {
+  return factory(context);
+}
+
+/**
+ * Creates a diagnostic report for troubleshooting test issues
  * 
  * @param context The test context
- * @param options Options for diagnostic reporting
- * @returns A formatted diagnostic string
+ * @param options Options for the report
+ * @returns A string with diagnostic information
  */
-export function createDiagnosticReport(
+export async function createDiagnosticReport(
   context: TestContextDI,
   options: {
     /**
@@ -133,50 +183,79 @@ export function createDiagnosticReport(
      */
     includeMocks?: boolean;
   } = {}
-): string {
-  // Get diagnostic info from context
-  const report = context.createDiagnosticReport();
+): Promise<string> {
+  // Default options
+  const includeContainerState = options.includeContainerState !== false;
+  const includeServices = options.includeServices !== false;
+  const includeMocks = options.includeMocks !== false;
   
-  // Format the report based on options
-  let output = `Test Context Diagnostic Report\n`;
-  output += `============================\n`;
-  output += `DI Mode: ${report.useDI ? 'Enabled' : 'Disabled'}\n`;
-  output += `Cleaned Up: ${report.isCleanedUp ? 'Yes' : 'No'}\n`;
-  output += `Child Contexts: ${report.childContexts}\n`;
+  // Build report
+  let report = '--- DIAGNOSTIC REPORT ---\n\n';
   
-  // Include registered mocks if requested
-  if (options.includeMocks !== false && report.registeredMocks.length > 0) {
-    output += `\nRegistered Mocks (${report.registeredMocks.length}):\n`;
-    report.registeredMocks.forEach(mock => {
-      output += `  - ${mock}\n`;
-    });
+  // Basic info
+  report += `DI Mode: ${shouldUseDI() ? 'enabled' : 'disabled'}\n`;
+  report += `Context Type: ${context.constructor.name}\n`;
+  
+  // Container state (for DI mode)
+  if (includeContainerState && context.useDI) {
+    report += '\nContainer State:\n';
+    
+    // Get registered tokens
+    const tokens = context.container.getRegisteredTokens();
+    
+    report += `Registered Tokens (${tokens.length}):\n`;
+    
+    for (const token of tokens) {
+      const tokenName = typeof token === 'string' ? token : token.toString();
+      report += `- ${tokenName}\n`;
+      
+      try {
+        // Try to resolve the service to check if it's available
+        const service = await context.resolve(token);
+        report += `  ✓ Resolved: ${service.constructor.name}\n`;
+      } catch (error) {
+        report += `  ✗ Resolution Failed: ${error.message}\n`;
+      }
+    }
   }
   
-  // Include services if requested
-  if (options.includeServices && report.services.length > 0) {
-    output += `\nServices (${report.services.length}):\n`;
-    report.services.forEach(service => {
-      output += `  - ${service}\n`;
-    });
+  // Services object (for non-DI mode or diagnostics)
+  if (includeServices) {
+    report += '\nServices Object:\n';
+    
+    // Get all property names of the services object
+    const serviceNames = Object.keys(context.services);
+    
+    report += `Services (${serviceNames.length}):\n`;
+    
+    for (const name of serviceNames) {
+      const service = (context.services as any)[name];
+      report += `- ${name}: ${service ? service.constructor.name : 'undefined'}\n`;
+    }
   }
   
-  // Include container state if requested and available
-  if (options.includeContainerState && report.containerState) {
-    output += `\nContainer Tokens (${report.containerState.registeredTokens.length}):\n`;
-    report.containerState.registeredTokens
-      .sort() // Sort alphabetically for easier reading
-      .forEach(token => {
-        output += `  - ${token}\n`;
-      });
+  // Registered mocks
+  if (includeMocks && context.registeredMocks && context.registeredMocks.size > 0) {
+    report += '\nRegistered Mocks:\n';
+    
+    // Try to access registered mocks if available
+    const mocks = [...context.registeredMocks];
+    
+    report += `Mocks (${mocks.length}):\n`;
+    
+    for (const mock of mocks) {
+      report += `- ${mock}\n`;
+    }
   }
   
-  return output;
+  return report;
 }
 
 /**
- * Creates a test setup helper for vitest tests
+ * Creates a test setup helper
  * 
- * @returns A helper object with setup/teardown functions
+ * @param options Options for the test setup
+ * @returns An object with setup and cleanup functions
  */
 export function createTestSetup(options: {
   /**
@@ -199,16 +278,28 @@ export function createTestSetup(options: {
    */
   cleanup: (context: TestContextDI) => Promise<void>;
 } {
-  // Allow explicit setting, otherwise use environment variable
-  const useDI = options.useDI !== undefined ? options.useDI : shouldUseDI();
-  
   return {
     setup: () => {
-      return new TestContextDI({
-        useDI,
+      // Save current environment
+      const originalDI = process.env.USE_DI;
+      
+      // Set environment based on options
+      if (options.useDI !== undefined) {
+        process.env.USE_DI = options.useDI ? 'true' : 'false';
+      }
+      
+      // Create context
+      const context = new TestContextDI({
+        useDI: options.useDI,
         isolatedContainer: options.isolatedContainer
       });
+      
+      // Restore environment
+      process.env.USE_DI = originalDI;
+      
+      return context;
     },
+    
     cleanup: async (context: TestContextDI) => {
       await context.cleanup();
     }
@@ -252,8 +343,10 @@ export function testInBothModes(
 
 export default {
   getService,
+  getServiceSync,
   createServiceMock,
   createService,
+  createServiceSync,
   createDiagnosticReport,
   createTestSetup,
   testInBothModes

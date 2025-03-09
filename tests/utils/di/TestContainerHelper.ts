@@ -195,6 +195,27 @@ export class TestContainerHelper {
   }
   
   /**
+   * Clears all instances in the container without creating a new container
+   * This is used for test cleanup and is less destructive than reset()
+   */
+  clearInstances(): void {
+    try {
+      // For DI containers, we can clear registrations by creating a new container
+      if (this.isIsolated) {
+        // For isolated containers, create a new isolated container
+        this.childContainer = TestContainerHelper.createIsolatedContainer().getContainer();
+      } else {
+        // For normal containers, create a new child container
+        this.childContainer = container.createChildContainer();
+      }
+      
+      // Don't clear tracked registrations since we want to preserve registration info
+    } catch (error) {
+      console.warn('Failed to clear container instances:', error);
+    }
+  }
+  
+  /**
    * Resolves a service from the container
    * 
    * @param token The token to resolve

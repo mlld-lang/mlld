@@ -5,11 +5,11 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { CliService } from '../../services/cli/CliService';
-import { FileSystemAdapter } from '../../services/fs/FileSystemAdapter';
-import { mockArgv } from '../utils';
-import { TestContext } from '../utils/tests/TestContext';
-import { getMockConsole } from '../utils/tests/ConsoleMocks';
+import { CLIService } from '../../services/cli/CLIService/CLIService.js';
+import { FileSystemAdapter } from '../../services/fs/FileSystemAdapter.js';
+import { mockArgv } from '../utils/index.js';
+import { TestContext } from '../utils/index.js';
+import { getMockConsole } from '../utils/tests/ConsoleMocks.js';
 import fs from 'fs';
 import path from 'path';
 import { ensureDir } from 'fs-extra';
@@ -67,7 +67,7 @@ describe('CLI Error Handling', () => {
       });
       
       // Create a new CLI instance
-      const cli = new CliService();
+      const cli = new CLIService();
       
       try {
         const cmdLine = process.argv.join(' ');
@@ -137,7 +137,7 @@ describe('CLI Error Handling', () => {
       });
       
       // Create a new CLI instance
-      const cli = new CliService();
+      const cli = new CLIService();
       
       try {
         const cmdLine = process.argv.join(' ');

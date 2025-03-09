@@ -21,6 +21,10 @@ export interface IServiceMediator {
   parseForResolution(content: string, filePath?: string): Promise<any[]>;
   parseWithLocationsForResolution(content: string, filePath?: string): Promise<any[]>;
   
+  // Field access resolution
+  resolveFieldAccess(variable: string, field: string, context: ResolutionContext): Promise<unknown>;
+  debugFieldAccess(variable: string, context: ResolutionContext): unknown;
+  
   // FileSystem ↔ Path mediation
   resolvePath(path: string): string;
   normalizePath(path: string): string;

@@ -401,7 +401,8 @@ Content 2`;
         }
       };
       
-      vi.mocked(parserService.parse).mockResolvedValue([node]);
+      // Mock the parseForResolution method directly on the service
+      vi.spyOn(service, 'parseForResolution').mockResolvedValue([node]);
 
       await expect(service.validateResolution('{{greeting}}', context))
         .rejects
@@ -423,7 +424,8 @@ Content 2`;
         }
       };
       
-      vi.mocked(parserService.parse).mockResolvedValue([node]);
+      // Mock the parseForResolution method directly on the service
+      vi.spyOn(service, 'parseForResolution').mockResolvedValue([node]);
 
       await expect(service.validateResolution('{{user}}', context))
         .rejects
@@ -444,7 +446,8 @@ Content 2`;
         }
       };
       
-      vi.mocked(parserService.parse).mockResolvedValue([node]);
+      // Mock the parseForResolution method directly on the service
+      vi.spyOn(service, 'parseForResolution').mockResolvedValue([node]);
 
       await expect(service.validateResolution('$home', context))
         .rejects
@@ -467,7 +470,8 @@ Content 2`;
         }
       };
       
-      vi.mocked(parserService.parse).mockResolvedValue([node]);
+      // Mock the parseForResolution method directly on the service
+      vi.spyOn(service, 'parseForResolution').mockResolvedValue([node]);
 
       await expect(service.validateResolution('$greet()', context))
         .rejects

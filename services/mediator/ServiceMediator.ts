@@ -54,7 +54,69 @@ export class ServiceMediator implements IServiceMediator {
     if (!this.resolutionService) {
       throw new Error('ResolutionService not initialized in mediator');
     }
+
+    // First, ensure this variable passes validation in the given context
+    try {
+      await this.resolutionService.validateResolution(variable, context);
+    } catch (error) {
+      // Log and rethrow validation errors
+      console.error('Validation error in resolveVariableForParser:', error);
+      throw error;
+    }
+
     return this.resolutionService.resolveInContext(variable, context);
+  }
+
+  /**
+   * Resolves field access for complex variables 
+   * This method is used to access fields within data variables
+   */
+  async resolveFieldAccess(variable: string, field: string, context: ResolutionContext): Promise<unknown> {
+    if (!this.resolutionService) {
+      throw new Error('ResolutionService not initialized in mediator');
+    }
+    
+    // First check if parent variable is allowed in this context
+    try {
+      await this.resolutionService.validateResolution(variable, context);
+    } catch (error) {
+      console.error('Validation error in resolveFieldAccess:', error);
+      throw error;
+    }
+    
+    if (!this.stateService) {
+      throw new Error('StateService not initialized in mediator');
+    }
+    
+    // Get the data variable
+    const data = this.stateService.getDataVar(variable);
+    if (!data || typeof data !== 'object' || data === null) {
+      throw new Error(`Cannot access field '${field}' of non-object variable '${variable}'`);
+    }
+    
+    // Return the field value
+    return (data as Record<string, unknown>)[field];
+  }
+
+  /**
+   * Debug helper for field access problems
+   * This helps diagnose issues with field access in tests
+   */
+  debugFieldAccess(variable: string, context: ResolutionContext): unknown {
+    if (!this.stateService) {
+      throw new Error('StateService not initialized in mediator');
+    }
+    
+    // Log context and available variables
+    console.log('Debug field access:', {
+      variable,
+      context,
+      textVars: [...this.stateService.getAllTextVars().entries()],
+      dataVars: [...this.stateService.getAllDataVars().entries()].map(([k,v]) => [k, typeof v]),
+      pathVars: [...this.stateService.getAllPathVars().entries()]
+    });
+    
+    return this.stateService.getDataVar(variable);
   }
 
   /**

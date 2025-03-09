@@ -5,6 +5,8 @@ import { DirectiveError, DirectiveErrorCode } from './errors/DirectiveError.js';
 import type { DirectiveNode } from 'meld-spec';
 import { IDirectiveService } from './IDirectiveService.js';
 import { createService } from '@core/ServiceProvider.js';
+import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
+import { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
 
 // Main test suite for DirectiveService
 describe('DirectiveService', () => {
@@ -47,12 +49,11 @@ describe('DirectiveService', () => {
       
       // Create or get the service based on mode
       if (useDI) {
-        // In DI mode, get from container
-        service = context.resolve<IDirectiveService>('IDirectiveService');
-      } else {
-        // In non-DI mode, create and initialize manually
-        service = new DirectiveService();
-        service.initialize(
+        // In DI mode, register the necessary dependencies
+        context.registerMock('IFileSystem', new NodeFileSystem());
+        
+        // Create the service manually to ensure proper initialization
+        const directiveService = new DirectiveService(
           context.services.validation,
           context.services.state,
           context.services.path,
@@ -62,16 +63,45 @@ describe('DirectiveService', () => {
           context.services.circularity,
           context.services.resolution
         );
-      }
-      
-      // In both modes, we need to make sure handlers are registered
-      if (!service.getSupportedDirectives || service.getSupportedDirectives().length === 0) {
-        console.log('DirectiveService not fully initialized, registering handlers');
         
-        // Register handlers (should be a no-op in DI mode if already done)
-        if (typeof service.registerDefaultHandlers === 'function') {
-          service.registerDefaultHandlers();
-        }
+        // Make sure the service is initialized before registering handlers
+        // This is important because registerDefaultHandlers checks for initialization
+        directiveService.initialize(
+          context.services.validation,
+          context.services.state,
+          context.services.path,
+          context.services.filesystem,
+          context.services.parser,
+          context.services.interpreter,
+          context.services.circularity,
+          context.services.resolution
+        );
+        
+        // Now register the handlers
+        directiveService.registerDefaultHandlers();
+        
+        // Register the service in the context
+        context.registerMock('IDirectiveService', directiveService);
+        
+        service = directiveService;
+      } else {
+        // In non-DI mode, create and initialize manually
+        const directiveService = new DirectiveService();
+        directiveService.initialize(
+          context.services.validation,
+          context.services.state,
+          context.services.path,
+          context.services.filesystem,
+          context.services.parser,
+          context.services.interpreter,
+          context.services.circularity,
+          context.services.resolution
+        );
+        
+        // Now register the handlers
+        directiveService.registerDefaultHandlers();
+        
+        service = directiveService;
       }
     });
 

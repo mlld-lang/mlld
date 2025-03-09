@@ -67,6 +67,11 @@ export interface TestContextDIOptions {
    * Auto-initialize services (true by default)
    */
   autoInit?: boolean;
+
+  /**
+   * Force DI-only mode (ensure all services use DI)
+   */
+  diOnlyMode?: boolean;
 }
 
 /**
@@ -87,6 +92,11 @@ export class TestContextDI extends TestContext {
   public readonly useDI: boolean;
 
   /**
+   * Tracks whether this context is in DI-only mode
+   */
+  public readonly diOnlyMode: boolean;
+
+  /**
    * Tracks registered mock services for cleanup
    */
   private registeredMocks: Set<string> = new Set();
@@ -102,6 +112,11 @@ export class TestContextDI extends TestContext {
   private isCleanedUp: boolean = false;
 
   /**
+   * Initialization promise to ensure async initialization completes
+   */
+  private initPromise: Promise<void> | null = null;
+
+  /**
    * Create a new TestContextDI instance
    * @param options Options for test context initialization
    */
@@ -109,13 +124,21 @@ export class TestContextDI extends TestContext {
     // Call parent constructor, will initialize services manually
     super(options.fixturesDir);
 
-    // Override environment variable if specified
-    if (options.useDI !== undefined) {
+    // Handle DI-only mode setting (highest priority)
+    this.diOnlyMode = !!options.diOnlyMode;
+    
+    // Set environment variables for DI modes
+    if (this.diOnlyMode) {
+      // DI-only mode forces both flags to true
+      process.env.MIGRATE_TO_DI_ONLY = 'true';
+      process.env.USE_DI = 'true';
+    } else if (options.useDI !== undefined) {
+      // Regular mode uses provided useDI setting if available
       process.env.USE_DI = options.useDI ? 'true' : 'false';
     }
 
     // Set useDI property for easy access
-    this.useDI = shouldUseDI();
+    this.useDI = this.diOnlyMode || shouldUseDI();
 
     // Create appropriate container helper
     if (options.container) {
@@ -131,8 +154,32 @@ export class TestContextDI extends TestContext {
 
     // Initialize immediately if auto-init is enabled (default) and DI is enabled
     if ((options.autoInit !== false) && this.useDI) {
-      this.initializeWithDI();
+      this.initPromise = this.initializeWithDIAsync();
     }
+  }
+
+  /**
+   * Create a TestContextDI instance with DI enabled
+   * @param options Options for test context initialization
+   */
+  static withDI(options: Omit<TestContextDIOptions, 'useDI'> = {}): TestContextDI {
+    return new TestContextDI({ ...options, useDI: true });
+  }
+
+  /**
+   * Create a TestContextDI instance with DI disabled
+   * @param options Options for test context initialization
+   */
+  static withoutDI(options: Omit<TestContextDIOptions, 'useDI'> = {}): TestContextDI {
+    return new TestContextDI({ ...options, useDI: false });
+  }
+
+  /**
+   * Create a TestContextDI instance with DI-only mode
+   * @param options Options for test context initialization
+   */
+  static withDIOnlyMode(options: Omit<TestContextDIOptions, 'diOnlyMode' | 'useDI'> = {}): TestContextDI {
+    return new TestContextDI({ ...options, diOnlyMode: true });
   }
 
   /**
@@ -151,9 +198,14 @@ export class TestContextDI extends TestContext {
    * @param fallback Optional fallback to use if service isn't found (non-DI mode)
    * @returns The resolved service
    */
-  resolve<T>(token: string | InjectionToken<T>, fallback?: T): T {
+  async resolve<T>(token: string | InjectionToken<T>, fallback?: T): Promise<T> {
     if (this.isCleanedUp) {
       throw new Error(`Cannot resolve service '${String(token)}' - context has been cleaned up`);
+    }
+
+    // Wait for initialization to complete
+    if (this.initPromise) {
+      await this.initPromise;
     }
 
     if (this.useDI) {
@@ -187,7 +239,63 @@ export class TestContextDI extends TestContext {
   }
 
   /**
-   * Initialize services with dependency injection
+   * Synchronous version of resolve for backward compatibility
+   * Use async resolve method for new code if possible
+   */
+  resolveSync<T>(token: string | InjectionToken<T>, fallback?: T): T {
+    if (this.isCleanedUp) {
+      throw new Error(`Cannot resolve service '${String(token)}' - context has been cleaned up`);
+    }
+
+    if (this.initPromise && !this.initialized) {
+      console.warn('Warning: Synchronous resolve called before initialization is complete. This may cause race conditions.');
+    }
+
+    if (this.useDI) {
+      // In DI mode, resolve from container
+      return this.container.resolve<T>(token);
+    } else {
+      // Non-DI case is the same as before
+      if (typeof token === 'string') {
+        const lowerToken = token.toLowerCase();
+        const serviceName = token.startsWith('I') ? lowerToken.substring(1) : lowerToken;
+        
+        if (serviceName in this.services) {
+          return (this.services as any)[serviceName] as T;
+        }
+      }
+      
+      if (fallback !== undefined) {
+        return fallback;
+      }
+      
+      throw new Error(`Cannot resolve service '${String(token)}' in non-DI mode.`);
+    }
+  }
+
+  /**
+   * Initialize services with dependency injection asynchronously
+   */
+  private async initializeWithDIAsync(): Promise<void> {
+    // Register file system
+    this.container.registerMock('FileSystem', this.fs);
+
+    // Register services that we want the container to resolve
+    this.registerServices();
+
+    // Initialize services that need explicit initialization
+    this.initializeServices();
+
+    // Add a delay to ensure all service initializations (e.g., setTimeout) complete
+    return new Promise<void>((resolve) => {
+      setTimeout(() => {
+        resolve();
+      }, 10); // Small delay to allow all service inits to complete
+    });
+  }
+  
+  /**
+   * Initialize services with dependency injection (legacy synchronous version)
    */
   private initializeWithDI(): void {
     // Register file system
@@ -882,44 +990,33 @@ export class TestContextDI extends TestContext {
   }
 
   /**
-   * Clean up resources, including the container and child contexts
-   * This ensures proper cleanup to prevent memory leaks and test isolation issues
+   * Clean up all test resources
+   * Resets containers, removes temporary files, etc.
    */
   async cleanup(): Promise<void> {
-    // Skip if already cleaned up
     if (this.isCleanedUp) {
       return;
     }
-    
+
     this.isCleanedUp = true;
-    
+
     // Clean up child contexts first
-    await Promise.all(
-      this.childContexts.map(async (child) => {
-        if (!child.isCleanedUp) {
-          await child.cleanup();
-        }
-      })
-    );
-    
-    // Clear the child contexts array
+    for (const child of this.childContexts) {
+      await child.cleanup();
+    }
     this.childContexts = [];
-    
-    try {
-      // Call parent cleanup
-      await super.cleanup();
-    } catch (error) {
-      console.error('Error during parent context cleanup:', error);
+
+    // Clean up parent context
+    await super.cleanup();
+
+    // Clear container instances
+    if (this.useDI) {
+      this.container.clearInstances();
     }
-    
-    try {
-      // Reset the container last to ensure all services are disposed
-      this.container.reset();
-    } catch (error) {
-      console.error('Error during container reset:', error);
+
+    // Reset DI-only mode environment variable if we set it
+    if (this.diOnlyMode) {
+      delete process.env.MIGRATE_TO_DI_ONLY;
     }
-    
-    // Clear the registered mocks set
-    this.registeredMocks.clear();
   }
 }
