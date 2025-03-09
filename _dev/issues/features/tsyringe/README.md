@@ -91,6 +91,11 @@ Our migration strategy follows these key principles:
    - [x] Create ServiceMediator class
    - [x] Update core services to use the mediator
    - [x] Revise di-config.ts to use this approach
+   - [x] Fix StateService and StateTrackingService to work with the mediator
+   - [x] Fix VariableReferenceResolver to work with the mediator
+   - [ ] Complete FileSystemService and PathService mediator integration
+   - [ ] Complete ResolutionService mediator integration
+   - [ ] Complete InterpreterService mediator integration
 
 2. **Enhancing Test Framework**
    - [x] Improve test cleanup procedures
@@ -102,9 +107,10 @@ Our migration strategy follows these key principles:
    - [ ] Address circular dependency issues in integration tests
    - [x] Successfully fixed several foundation service tests:
      - [x] PathOperationsService.test.ts
-     - [x] FileSystemService.test.ts
      - [x] NodeFileSystem.test.ts
      - [x] PathService.test.ts - Fixed with comprehensive implementation of missing methods and proper error handling
+     - [x] StateService.test.ts - Fixed with proper initialization and child state handling
+     - [x] VariableReferenceResolver.test.ts - Fixed with improved variable resolution and proper test context handling
 
 ### Completed Work
 - Initial TSyringe implementation with dual-mode support
@@ -113,6 +119,7 @@ Our migration strategy follows these key principles:
 - All services now support TSyringe dependency injection
 - Opt-in mechanism for DI-only mode in tests
 - Test migration tracking system and verification tools
+- Fixed key services: StateService, VariableReferenceResolver
 
 ### What We've Done
 
@@ -122,36 +129,29 @@ Our migration strategy follows these key principles:
 4. ✅ Modified the PathService and FileSystemService to use the mediator
 5. ✅ Enhanced test setup for better memory management in tests/setup.ts
 6. ✅ Updated TestContext and TestContextDI to use the mediator
+7. ✅ Fixed StateService tests to properly handle child state creation and merging
+8. ✅ Fixed VariableReferenceResolver tests to properly handle variable resolution and extraction
+
+### Remaining Issues
+
+We still have 64 failing tests that need to be addressed. These have been categorized and documented in [tracking/remaining-failures.md](./tracking/remaining-failures.md) with specific fix strategies:
+
+1. API/CLI Integration Tests (17 failures) - "StateService is required for ResolutionService"
+2. FileSystemService Tests (17 failures) - "this.serviceMediator.setFileSystemService is not a function"
+3. PathService Tests (14 failures) - "this.projectPathResolver.getProjectPath is not a function"
+4. InterpreterService Tests (12 failures) - State rollback and circular import detection failures
+5. ResolutionService Tests (8 failures) - Validation failures for variables and references
 
 ### Next Steps (Prioritized)
 
 #### Immediate Actions (Next 1-2 Days)
-1. ✅ Fixed the PathService tests to work with the new mediator-based approach:
-   - ✅ Added missing methods (join, dirname, basename, etc.) that are referenced in tests
-   - ✅ Fixed validatePath implementation to properly reject invalid paths
-   - ✅ Updated the PathValidationError class to handle all test cases
-   - ✅ Added proper error messages for path validation
-   - ✅ Fixed structured path validation to check for illegal segments
-   - ✅ Updated tests to work with the new API surface
-
-2. Create a comprehensive test suite for the ServiceMediator:
-   ```typescript
-   // tests/services/mediator/ServiceMediator.test.ts
-   describe('ServiceMediator', () => {
-     it('should properly connect services with circular dependencies', () => {
-       // Test code
-     });
-     
-     it('should properly forward method calls between services', () => {
-       // Test code
-     });
-   });
-   ```
-
-3. Fix other failing tests that rely on the old API
+1. Complete the Service Mediator implementation for FileSystemService and PathService
+2. Fix the FileSystemService tests
+3. Fix the PathService tests
+4. Update the remaining-failures.md document as progress is made
 
 #### Short-Term Actions (Next Week)
-- [ ] Complete the ServiceMediator implementation for all circular dependencies
+- [ ] Complete the Service Mediator implementation for all circular dependencies
 - [ ] Create specialized test helpers for transformation tests
 - [ ] Add test-specific timeouts for embed transformation tests
 - [ ] Fix the first batch of transformation tests

@@ -97,8 +97,12 @@ private initializeDIMode(
   this.serviceMediator = serviceMediator;
   
   // Register this service with the mediator if available
-  if (this.serviceMediator) {
-    this.serviceMediator.setStateService(this);
+  if (this.serviceMediator && typeof this.serviceMediator.setStateService === 'function') {
+    try {
+      this.serviceMediator.setStateService(this);
+    } catch (error) {
+      console.warn('Failed to register StateService with ServiceMediator:', error);
+    }
   }
   
   this.initializeState(parentState);
@@ -164,11 +168,16 @@ private initializeLegacyMode(
     // If parent has services, inherit them
     if (parentState) {
       const parent = parentState as StateService;
+      
+      // Inherit services if not already set
       if (!this.eventService && parent.eventService) {
         this.eventService = parent.eventService;
       }
       if (!this.trackingService && parent.trackingService) {
         this.trackingService = parent.trackingService;
+      }
+      if (!this.serviceMediator && parent.serviceMediator) {
+        this.setServiceMediator(parent.serviceMediator);
       }
     }
 
@@ -179,19 +188,21 @@ private initializeLegacyMode(
       // Register the state with the pre-generated ID
       this.trackingService.registerState({
         id: this.currentState.stateId,
-        source: 'new',
         parentId,
         filePath: this.currentState.filePath,
-        transformationEnabled: this._transformationEnabled
+        timestamp: Date.now(),
+        source: 'initializeState'
       });
-
-      // Add parent-child relationship if there is a parent
-      if (parentId) {
-        this.trackingService.addRelationship(
-          parentId,
-          this.currentState.stateId!,
-          'parent-child'
-        );
+      
+      // Explicitly register parent-child relationship if parent exists
+      if (parentState && parentId) {
+        this.trackingService.registerRelationship({
+          sourceId: parentId,
+          targetId: this.currentState.stateId,
+          type: 'parent-child',
+          timestamp: Date.now(),
+          source: 'initializeState'
+        });
       }
     }
   }
@@ -504,10 +515,22 @@ private initializeLegacyMode(
       // In DI mode, resolve from container, then set parent
       const container = getContainer();
       child = container.resolve(StateService);
+      
+      // Set the service mediator to ensure proper circular dependency handling
+      if (this.serviceMediator && typeof child.setServiceMediator === 'function') {
+        child.setServiceMediator(this.serviceMediator);
+      }
+      
       child.initializeState(this);
     } else {
-      // In non-DI mode, create directly with parent
-      child = new StateService(this.stateFactory, this.eventService, this.trackingService, this);
+      // In non-DI mode, create directly with parent and pass the mediator
+      child = new StateService(
+        this.stateFactory, 
+        this.eventService, 
+        this.trackingService, 
+        this.serviceMediator, 
+        this
+      );
     }
     
     // Copy transformation state
@@ -791,5 +814,22 @@ private initializeLegacyMode(
       commands: false,
       imports: false
     };
+  }
+
+  /**
+   * Set the service mediator for this state service
+   * This is useful when creating a state service outside the DI container
+   */
+  setServiceMediator(mediator: IServiceMediator): void {
+    this.serviceMediator = mediator;
+    
+    // Register this service with the mediator
+    if (typeof this.serviceMediator.setStateService === 'function') {
+      try {
+        this.serviceMediator.setStateService(this);
+      } catch (error) {
+        logger.warn('Failed to register StateService with ServiceMediator:', error);
+      }
+    }
   }
 } 

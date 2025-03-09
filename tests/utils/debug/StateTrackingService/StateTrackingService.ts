@@ -565,4 +565,23 @@ export class StateTrackingService implements IStateTrackingService {
     
     return sourceState?.createdAt;
   }
+
+  /**
+   * Register a relationship between two states with additional metadata
+   */
+  registerRelationship(relationship: {
+    sourceId: string;
+    targetId: string;
+    type: 'parent-child' | 'merge-source' | 'merge-target';
+    timestamp: number;
+    source: string;
+  }): void {
+    logger.debug('Registering relationship:', {
+      operation: 'registerRelationship',
+      relationship
+    });
+    
+    // Use the existing addRelationship method to handle the core logic
+    this.addRelationship(relationship.sourceId, relationship.targetId, relationship.type);
+  }
 } 

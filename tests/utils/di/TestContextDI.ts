@@ -234,8 +234,11 @@ export class TestContextDI extends TestContext {
     // Create tracking service before state service since it's a dependency
     const trackingService = new StateTrackingService();
     
-    // Properly pass tracking service to state service
-    const state = new StateService(stateFactory, eventService, trackingService);
+    // Properly pass tracking service and mediator to state service
+    const state = new StateService(stateFactory, eventService, trackingService, mediator);
+    
+    // Explicitly register state service with mediator
+    mediator.setStateService(state);
     
     const interpreter = new InterpreterService();
     const directive = new DirectiveService();

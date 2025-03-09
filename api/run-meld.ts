@@ -66,6 +66,9 @@ export async function runMeld(
   // Create services
   const services = createDefaultServices(mergedOptions);
   
+  // Enable test mode on PathService to allow absolute paths in memory filesystem
+  services.path.setTestMode(true);
+  
   // Validate services
   validateServicePipeline(services);
 

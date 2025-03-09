@@ -47,7 +47,7 @@ export const PathErrorMessages = {
      * Error message for paths with dot segments
      */
     dotSegments: {
-      message: "Path cannot contain . or .. segments - use $. or $PROJECTPATH or $~ or $HOMEPATH to reference project or home directory",
+      message: "Paths with segments must start with $. or $~ or $PROJECTPATH or $HOMEPATH - use $. or $PROJECTPATH for project-relative paths and $~ or $HOMEPATH for home-relative paths, or use a path variable ($variableName)",
       code: "PATH_DOT_SEGMENTS",
       severity: "recoverable" as ErrorSeverity
     }

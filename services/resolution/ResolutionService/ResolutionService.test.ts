@@ -4,6 +4,7 @@ import { IStateService } from '@services/state/StateService/IStateService.js';
 import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 import { IPathService } from '@services/fs/PathService/IPathService.js';
+import { IServiceMediator } from '@services/mediator/IServiceMediator.js';
 import { ResolutionContext } from './IResolutionService.js';
 import { ResolutionError } from './errors/ResolutionError.js';
 import type { MeldNode, DirectiveNode, TextNode } from 'meld-spec';
@@ -43,32 +44,73 @@ describe.each([
   let fileSystemService: IFileSystemService;
   let parserService: IParserService;
   let pathService: IPathService;
+  let serviceMediator: IServiceMediator;
   let context: ResolutionContext;
   let testContext: TestContextDI;
 
   beforeEach(() => {
     // Create mock services
     stateService = {
-      getTextVar: vi.fn(),
-      getDataVar: vi.fn(),
+      getTextVar: vi.fn().mockImplementation(name => {
+        if (name === 'greeting') return 'Hello World';
+        return undefined;
+      }),
+      getDataVar: vi.fn().mockImplementation(name => {
+        if (name === 'user') return { name: 'Alice', id: 123 };
+        return undefined;
+      }),
       getPathVar: vi.fn(),
       getCommand: vi.fn(),
+      getAllTextVars: vi.fn().mockReturnValue(new Map([['greeting', 'Hello World']])),
+      getAllDataVars: vi.fn().mockReturnValue(new Map([['user', { name: 'Alice', id: 123 }]])),
+      getAllPathVars: vi.fn().mockReturnValue(new Map()),
     } as unknown as IStateService;
 
     fileSystemService = {
-      exists: vi.fn(),
-      readFile: vi.fn(),
+      exists: vi.fn().mockResolvedValue(true),
+      readFile: vi.fn().mockResolvedValue('file content'),
     } as unknown as IFileSystemService;
 
     parserService = {
-      parse: vi.fn(),
+      parse: vi.fn().mockResolvedValue([{ type: 'Text', content: 'parsed content' }]),
+      parseWithLocations: vi.fn().mockResolvedValue([{ type: 'Text', content: 'parsed content', location: {} }]),
     } as unknown as IParserService;
 
     pathService = {
       getHomePath: vi.fn().mockReturnValue('/home/user'),
       dirname: vi.fn(p => p.substring(0, p.lastIndexOf('/') || 0)),
       resolvePath: vi.fn(p => typeof p === 'string' ? p : p.raw),
+      normalizePath: vi.fn(p => p),
     } as unknown as IPathService;
+    
+    // Create mock service mediator
+    serviceMediator = {
+      setParserService: vi.fn(),
+      setResolutionService: vi.fn(),
+      setFileSystemService: vi.fn(),
+      setPathService: vi.fn(),
+      setStateService: vi.fn(),
+      resolveVariableForParser: vi.fn().mockResolvedValue('resolved value'),
+      parseForResolution: vi.fn().mockResolvedValue([{ type: 'Text', content: 'parsed content' }]),
+      parseWithLocationsForResolution: vi.fn().mockResolvedValue([{ type: 'Text', content: 'parsed content', location: {} }]),
+      resolvePath: vi.fn(p => p),
+      normalizePath: vi.fn(p => p),
+      isDirectory: vi.fn().mockResolvedValue(false),
+      exists: vi.fn().mockResolvedValue(true),
+      getTextVar: vi.fn().mockImplementation(name => {
+        if (name === 'greeting') return 'Hello World';
+        if (name === 'name') return 'World';
+        return undefined;
+      }),
+      getDataVar: vi.fn().mockImplementation(name => {
+        if (name === 'user') return { name: 'Alice', id: 123 };
+        return undefined;
+      }),
+      getPathVar: vi.fn().mockReturnValue('/path/value'),
+      getAllTextVars: vi.fn().mockReturnValue(new Map([['greeting', 'Hello World']])),
+      getAllDataVars: vi.fn().mockReturnValue(new Map([['user', { name: 'Alice', id: 123 }]])),
+      getAllPathVars: vi.fn().mockReturnValue(new Map()),
+    } as unknown as IServiceMediator;
 
     // Create test context with appropriate DI mode
     if (useDI) {
@@ -79,19 +121,24 @@ describe.each([
       container.registerInstance('IFileSystemService', fileSystemService);
       container.registerInstance('IParserService', parserService);
       container.registerInstance('IPathService', pathService);
+      container.registerInstance('IServiceMediator', serviceMediator);
+      container.registerInstance('ServiceMediator', serviceMediator);
       
       // Resolve service from the container
       service = container.resolve(ResolutionService);
     } else {
       testContext = TestContextDI.withoutDI();
       
-      // Create service manually
+      // Create service manually with mediator
       service = new ResolutionService(
         stateService,
-        fileSystemService,
-        parserService,
-        pathService
+        fileSystemService, 
+        pathService,
+        serviceMediator
       );
+      
+      // Manually setting parser service for non-DI mode
+      (service as any).parserService = parserService;
     }
 
     context = {

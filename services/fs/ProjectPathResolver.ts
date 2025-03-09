@@ -25,9 +25,28 @@ export class ProjectPathResolver {
     'go.mod',
     '.mld'
   ];
+  
+  // Cached project path for synchronous resolution
+  private cachedProjectPath: string | null = null;
+
+  /**
+   * Returns the project path synchronously 
+   * Will use cached path if available, otherwise defaults to current working directory
+   */
+  getProjectPath(): string {
+    // Return cached path if we have one
+    if (this.cachedProjectPath) {
+      return this.cachedProjectPath;
+    }
+    
+    // Default to current working directory if we don't have a cached path
+    // This is a safe fallback since we can't do async resolution here
+    return process.cwd();
+  }
 
   /**
    * Securely resolve project root with security constraints
+   * Also caches the result for synchronous access via getProjectPath()
    */
   async resolveProjectRoot(startDir: string): Promise<string> {
     // First priority: Look for meld.json
@@ -46,16 +65,20 @@ export class ProjectPathResolver {
           // Security check: Ensure the path is within the config directory
           if (!this.isSubdirectoryOf(specifiedPath, configDir)) {
             // Fail silently and use the config directory instead
+            this.cachedProjectPath = configDir;
             return configDir;
           }
           
+          this.cachedProjectPath = specifiedPath;
           return specifiedPath;
         }
         
         // If meld.json exists but doesn't specify projectRoot, use its directory
+        this.cachedProjectPath = configDir;
         return configDir;
       } catch (e) {
         // If we can't parse the config, use its directory
+        this.cachedProjectPath = path.dirname(meldConfigPath);
         return path.dirname(meldConfigPath);
       }
     }
@@ -64,11 +87,14 @@ export class ProjectPathResolver {
     for (const marker of ProjectPathResolver.PROJECT_MARKERS) {
       const markerPath = await this.findFileUpwards(marker, startDir);
       if (markerPath) {
-        return path.dirname(markerPath);
+        const projectPath = path.dirname(markerPath);
+        this.cachedProjectPath = projectPath;
+        return projectPath;
       }
     }
     
-    // Last resort: Use current directory
+    // Last resort: Use the current directory
+    this.cachedProjectPath = startDir;
     return startDir;
   }
   

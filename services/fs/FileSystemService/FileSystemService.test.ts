@@ -4,11 +4,17 @@ import { FileSystemService } from './FileSystemService.js';
 import { PathOperationsService } from './PathOperationsService.js';
 import { MeldError } from '@core/errors/MeldError.js';
 import path from 'path';
+import { ServiceMediator } from '@services/mediator/ServiceMediator.js';
+import { PathService } from '@services/fs/PathService/PathService.js';
+import { ProjectPathResolver } from '@services/fs/ProjectPathResolver.js';
 
 describe('FileSystemService', () => {
   let context: TestContext;
   let service: FileSystemService;
   let pathOps: PathOperationsService;
+  let serviceMediator: ServiceMediator;
+  let pathService: PathService;
+  let projectPathResolver: ProjectPathResolver;
 
   beforeEach(async () => {
     // Initialize test context
@@ -19,8 +25,21 @@ describe('FileSystemService', () => {
     await context.fixtures.load('fileSystemProject');
 
     // Initialize services
+    serviceMediator = new ServiceMediator();
     pathOps = new PathOperationsService();
-    service = new FileSystemService(pathOps, context.fs);
+    projectPathResolver = new ProjectPathResolver();
+    
+    // Create path service and register with mediator
+    pathService = new PathService(serviceMediator, projectPathResolver);
+    pathService.enableTestMode();
+    pathService.setProjectPath('/project');
+    
+    // Create file system service and register with mediator
+    service = new FileSystemService(pathOps, serviceMediator, context.fs);
+    
+    // Make sure both services are registered with the mediator
+    serviceMediator.setPathService(pathService);
+    serviceMediator.setFileSystemService(service);
 
     // Set up test files and directories
     await service.ensureDir('project/list-dir');
