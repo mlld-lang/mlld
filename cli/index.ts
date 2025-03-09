@@ -744,8 +744,11 @@ console.error = function(...args: any[]) {
 
 /**
  * Main CLI entry point
+ * 
+ * @param fsAdapter Optional filesystem adapter for testing
+ * @param customArgs Optional command line arguments (defaults to process.argv.slice(2))
  */
-export async function main(fsAdapter?: any): Promise<void> {
+export async function main(fsAdapter?: any, customArgs?: string[]): Promise<void> {
   process.title = 'meld';
 
   // Reset errorLogged flag for each invocation of main
@@ -758,7 +761,7 @@ export async function main(fsAdapter?: any): Promise<void> {
   process.env.DEBUG = '';
   
   // Parse command-line arguments
-  const args = process.argv.slice(2);
+  const args = customArgs || process.argv.slice(2);
   
   // Define options outside try block so it's accessible in catch block
   let options: CLIOptions = {
