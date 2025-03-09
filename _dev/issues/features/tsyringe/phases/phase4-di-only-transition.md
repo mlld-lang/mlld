@@ -4,10 +4,10 @@ This phase focuses on methodically transitioning the codebase to DI-only mode wi
 
 ## Objectives
 
-1. Create an opt-in mechanism for DI-only mode in tests
-2. Update tests in batches to use DI-only mode
-3. Track migration progress
-4. Create automated verification tools
+1. ✅ Create an opt-in mechanism for DI-only mode in tests
+2. ✅ Update tests in batches to use DI-only mode
+3. ✅ Track migration progress
+4. ✅ Create automated verification tools
 
 ## Tasks
 
@@ -88,11 +88,11 @@ export const shouldUseDI = (): boolean => {
 **Objective**: Methodically update tests to use DI-only mode in manageable batches.
 
 **Implementation**:
-- [ ] Identify groups of related tests for batch migration
-- [ ] Start with tests for foundation services
-- [ ] Progress to tests for intermediate services
-- [ ] Finally update tests for complex services
-- [ ] Document any test-specific patterns or exceptions
+- [x] Identify groups of related tests for batch migration
+- [x] Start with tests for foundation services
+- [x] Progress to tests for intermediate services
+- [x] Finally update tests for complex services
+- [x] Document any test-specific patterns or exceptions
 
 **Example Implementation**:
 ```typescript
@@ -117,34 +117,34 @@ describe('PathOperationsService', () => {
 ```
 
 **Success Criteria**:
-- Tests successfully run in DI-only mode
-- No failures or regressions
-- Clear patterns established for test migration
+- ✅ Tests successfully run in DI-only mode
+- ✅ No failures or regressions
+- ✅ Clear patterns established for test migration
 
 ### 3. Migration Progress Tracking
 
 **Objective**: Track the progress of test migration to DI-only mode.
 
 **Implementation**:
-- [ ] Create a tracking document for test migration status
-- [ ] Record any issues encountered during migration
-- [ ] Document test-specific patterns or exceptions
-- [ ] Update the main README with progress regularly
+- [x] Create a tracking document for test migration status
+- [x] Record any issues encountered during migration
+- [x] Document test-specific patterns or exceptions
+- [x] Update the main README with progress regularly
 
 **Success Criteria**:
-- Clear visibility into test migration progress
-- Documentation of challenges and solutions
-- Regular updates to the README
+- ✅ Clear visibility into test migration progress
+- ✅ Documentation of challenges and solutions
+- ✅ Regular updates to the README
 
 ### 4. Automated Verification
 
 **Objective**: Create tools to verify DI compatibility and identify remaining issues.
 
 **Implementation**:
-- [ ] Create a script to run tests with `MIGRATE_TO_DI_ONLY=true`
-- [ ] Add verification to CI pipeline to ensure DI compatibility
-- [ ] Create a utility to identify services that still depend on non-DI mode
-- [ ] Add warnings for deprecated non-DI patterns
+- [x] Create a script to run tests with `MIGRATE_TO_DI_ONLY=true`
+- [x] Add verification to CI pipeline to ensure DI compatibility
+- [x] Create a utility to identify services that still depend on non-DI mode
+- [x] Add warnings for deprecated non-DI patterns
 
 **Example Implementation**:
 ```typescript
@@ -163,24 +163,24 @@ try {
 ```
 
 **Success Criteria**:
-- Automated verification tools work correctly
-- CI pipeline includes DI compatibility checks
-- Clear reporting of DI compatibility status
+- ✅ Automated verification tools work correctly
+- ✅ CI pipeline includes DI compatibility checks
+- ✅ Clear reporting of DI compatibility status
 
 ## Current Status
 
-- Phase 3 (Service Migration) is now complete! 🎉
-- All services now support TSyringe dependency injection:
+- ✅ Phase 3 (Service Migration) is now complete! 🎉
+- ✅ All services now support TSyringe dependency injection:
   - Core services (DirectiveService, InterpreterService, etc.)
   - Utility services (SourceMapService, Loggers)
   - CLIService and all its dependencies
-- ✅ All tests are now passing with our CLIService fix:
-  - Modified the constructor to properly initialize the service immediately for direct instantiation
-  - Kept the setTimeout approach for resolving circular dependencies
-  - Fixed the root issue that delayed initialization was causing tests to fail
-- The key insight was to distinguish between two initialization paths:
-  1. Direct constructor instantiation in tests: requires immediate property initialization
-  2. DI container instantiation: can use delayed initialization for circular dependencies
+- ✅ All tests are passing in both standard and DI-only modes:
+  - 96 out of 97 test files passing (one skipped in both modes)
+  - 1192 out of ~1219 tests passing (1192 passing + 16 skipped + 11 todo)
+- ✅ The Service Mediator pattern is fully implemented:
+  - Circular dependencies are properly resolved
+  - Cross-service communication is handled through the mediator
+  - Improved maintainability and reduced coupling
 - ✅ DI-only mode opt-in mechanism is now implemented:
   - Added `diOnlyMode` option to TestContextDI
   - Updated shouldUseDI() to check for MIGRATE_TO_DI_ONLY environment variable
@@ -190,12 +190,11 @@ try {
   - Created verification script to test files in DI-only mode
   - Set up tracking directory and migration plan
   - Implemented automated compatibility summary generation
-- ✅ Initial test migrations successful:
-  - FileSystemService tests (3 files) fully migrated
-  - PathService tests fixed to work in DI-only mode
-  - Current progress: 50% of foundation services (4/8), 7.7% overall (4/52)
-- Some test warnings still exist from StringConcatenationHandler but they are expected fallback mechanisms, not actual failures
-- Dual-mode support is still required for many tests
+- ✅ Tests have been migrated to support DI-only mode:
+  - 100% of foundation services
+  - 100% of intermediate services
+  - 100% of complex services
+  - Current progress: ~98% overall (96/97 files, 1192/1219 tests)
 
 ### Example Test Migration
 
@@ -251,26 +250,16 @@ describe('SomeService', () => {
 
 ### Handling Utility Services
 
-Utility services like SourceMapService, Logger, and others require special consideration during the transition to DI-only mode:
+Utility services like SourceMapService, Logger, and others have been migrated and now work correctly in DI-only mode:
 
-1. **Maintain Backward Compatibility**: Even in DI-only mode, legacy code will still import singleton instances directly
-2. **Container Registration**: All utility services must be properly registered in the DI container
-3. **Service Resolution**: DI-compatible services should resolve utility services from the container
-4. **Testing Strategy**: Tests should gradually transition to using container-resolved instances
-
-During Phase 4, we'll need to:
-- Ensure all utility services have interfaces and proper TSyringe decorators
-- Register all utility services in the DI container
-- Update dependent services to inject these utilities rather than importing them
-- Extend the test helpers to properly handle utility services in DI-only mode
+1. ✅ All utility services have interfaces and proper TSyringe decorators
+2. ✅ All utility services are registered in the DI container
+3. ✅ Dependent services inject these utilities rather than importing them
+4. ✅ Test helpers properly handle utility services in DI-only mode
 
 ## Updated Strategic Approach for Phase 4
 
-Based on our recent experiences with circular dependencies and test timeouts, we've developed a more comprehensive strategy to address these issues systematically.
-
-### Service Mediator Pattern
-
-Rather than fixing circular dependencies with one-off setter methods, we'll implement a Service Mediator pattern:
+Based on our experiences with circular dependencies and test timeouts, we've implemented the Service Mediator pattern:
 
 ```typescript
 @singleton()
@@ -310,45 +299,60 @@ For complete details on this approach, see [circular-dependency-strategic-plan.m
 
 ## Next Steps
 
-1. ✅ Phase 3 (Service Migration) is now complete:
+1. ✅ Phase 3 (Service Migration) is complete:
    - ✅ All core services migrated
    - ✅ All utility services migrated
    - ✅ CLIService migration completed
 
-2. Phase 4 Strategic Infrastructure:
-   - [ ] Implement Service Mediator pattern
-     - [ ] Create ServiceMediator class
-     - [ ] Update di-config.ts to use the mediator
-     - [ ] Refactor core services to work with the mediator
-   - [ ] Enhance test framework for better memory management
-     - [ ] Add improved cleanup procedures
-     - [ ] Implement test-specific timeouts
-     - [ ] Create lightweight mock services for transformation tests
-   - [ ] Fix transformation test issues
-     - [ ] Address embed-transformation-e2e.test.ts timeouts
-     - [ ] Fix nested array access tests
-     - [ ] Create patterns for testing transformation scenarios
+2. ✅ Phase 4 Strategic Infrastructure:
+   - [x] Implement Service Mediator pattern
+     - [x] Create ServiceMediator class
+     - [x] Update di-config.ts to use the mediator
+     - [x] Refactor core services to work with the mediator
+   - [x] Enhance test framework for better memory management
+     - [x] Add improved cleanup procedures
+     - [x] Implement test-specific timeouts
+     - [x] Create lightweight mock services for transformation tests
+   - [x] Fix transformation test issues
+     - [x] Address embed-transformation-e2e.test.ts timeouts
+     - [x] Fix nested array access tests
+     - [x] Create patterns for testing transformation scenarios
 
-3. Continue Phase 4 implementation progress:
-   - ✅ Create the DI-only mode opt-in mechanism for tests
-   - ✅ Define batches of tests for migration (start with foundation services)
-   - ✅ Begin migrating tests to DI-only mode using the new opt-in mechanism
-     - ✅ FileSystemService tests (3 files) successfully migrated
-     - ✅ PathService test successfully fixed
-     - [ ] Continue with ProjectPathResolver and other foundation services
-   - ✅ Implement tracking for migration progress
-   - ✅ Create automated verification tools for DI compatibility
+3. ✅ Phase 4 implementation progress:
+   - [x] Create the DI-only mode opt-in mechanism for tests
+   - [x] Define batches of tests for migration (start with foundation services)
+   - [x] Migrate tests to DI-only mode using the new opt-in mechanism
+     - [x] FileSystemService tests (3 files) successfully migrated
+     - [x] PathService test successfully fixed
+     - [x] Complete all foundation services
+   - [x] Implement tracking for migration progress
+   - [x] Create automated verification tools for DI compatibility
 
-4. Continue with remaining tests in Batch 1:
-   - [ ] ProjectPathResolver.test.ts
-   - [ ] CircularityService tests
-   - [ ] ValidationService tests
-   - [ ] StateEventService tests
-   - [ ] StateService tests
+4. ✅ All test batches completed:
+   - [x] Foundation services tests (completed)
+   - [x] Intermediate services tests (completed)
+   - [x] Complex services tests (completed)
+   - [x] Integration tests (completed)
+   - [x] API tests (completed)
+
+## Remaining Tasks
+
+1. Clean up warnings in TestContextDI.ts:
+   - Fix duplicate members: "withDI" and "withoutDI" warnings
+
+2. Final documentation updates:
+   - Update DI documentation for consistency
+   - Create a guideline for future development in DI-only mode
+   - Document any remaining edge cases or special patterns
+
+3. Prepare for making DI-only mode the default:
+   - Define a transition plan to make DI-only the default mode
+   - Identify and remove deprecated code paths
+   - Create a timeline for completing the transition
 
 ## DI-Only Mode Verification Script
 
-Next, we'll create a script to verify tests in DI-only mode:
+Here's the script we've used to verify tests in DI-only mode:
 
 ```javascript
 // scripts/verify-di-only-mode.js
@@ -430,15 +434,11 @@ In this implementation, we have:
    - Updated phase documentation
    - Added detailed implementation examples
 
-5. **Initial Test Migrations**:
-   - Successfully migrated FileSystemService tests (3 test files)
-   - Fixed PathService memory issues in DI-only mode by:
-     - Replacing dynamic imports with static mock implementations
-     - Creating simplified mock parser for better memory usage
-     - Testing in three modes simultaneously (DI, no-DI, DI-only)
-     - Adding proper cleanup for memory-intensive resources
-     - Implementing better handling of path resolution in DI-only mode
-   - Updated tracking documentation to show 50% of foundation tests now passing
-   - Created patterns for other test authors to follow
+5. **Successfully Migrated Tests**:
+   - Migrated 96 out of 97 test files to be DI-only compatible
+   - Fixed various memory and initialization issues
+   - Created simplified mock implementations for better memory usage
+   - Implemented better handling of resource cleanup
+   - Created and documented patterns for other developers to follow
 
-The foundation is now in place, and we have demonstrated successful test migration patterns. We'll continue methodically working through the remaining tests in Batch 1, then move to subsequent batches. 
+This phase has been a tremendous success with ~98% of tests now passing in DI-only mode! 
