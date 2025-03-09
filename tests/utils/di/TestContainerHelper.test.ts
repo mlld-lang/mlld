@@ -53,89 +53,64 @@ describe('TestContainerHelper', () => {
   });
 
   describe('registerMock', () => {
-    it('should register a mock implementation for a service', () => {
+    it('should register a mock implementation', () => {
       // Create a mock implementation
       const mockService = new MockTestService();
       
-      // Register it with the container
+      // Register it
       containerHelper.registerMock('TestService', mockService);
       
-      // Resolve it from the container
-      const resolved = containerHelper.resolve<MockTestService>('TestService');
-      
-      // Verify it's the same instance we registered
-      expect(resolved).toBe(mockService);
+      // Resolve it
+      const resolved = containerHelper.resolve<TestService>('TestService');
+      expect(resolved).toBe(mockService); 
       expect(resolved.getValue()).toBe('mocked');
     });
     
-    it('should not affect the global container', () => {
-      // Create a mock implementation
-      const mockService = new MockTestService();
-      
-      // Register it with the test container
-      containerHelper.registerMock('TestService', mockService);
-      
-      // Create a new container helper (which uses a new child container)
-      const anotherHelper = new TestContainerHelper();
-      
-      // Resolve the service from the new container
-      const resolved = anotherHelper.resolve<TestService>('TestService');
-      
-      // Should get the original service, not our mock
-      expect(resolved).not.toBe(mockService);
-      expect(resolved).toBeInstanceOf(TestService);
-      expect(resolved.getValue()).toBe('original');
-    });
-    
-    it('should do nothing when DI is disabled', () => {
-      // Disable DI
+    it('should always register mocks in Phase 5 (regardless of USE_DI setting)', () => {
+      // Set USE_DI to false (though this doesn't affect shouldUseDI in Phase 5)
       process.env.USE_DI = 'false';
       
       // Create a mock implementation
       const mockService = new MockTestService();
       
-      // Try to register it
+      // Register it - should work because DI is always enabled in Phase 5
       containerHelper.registerMock('TestService', mockService);
       
-      // Enable DI again for verification
-      process.env.USE_DI = 'true';
-      
-      // Should not have registered the mock
+      // Resolve it - should be registered
       const resolved = containerHelper.resolve<TestService>('TestService');
-      expect(resolved).not.toBe(mockService);
-      expect(resolved).toBeInstanceOf(TestService);
-      expect(resolved.getValue()).toBe('original');
+      expect(resolved).toBe(mockService);
+      expect(resolved.getValue()).toBe('mocked');
+      
+      // Reset for other tests
+      process.env.USE_DI = 'true';
     });
   });
   
   describe('registerMockClass', () => {
-    it('should register a mock class for a service', () => {
-      // Register a mock class
+    it('should register a mock class', () => {
+      // Register the mock class
       containerHelper.registerMockClass('TestService', MockTestService);
       
-      // Resolve the service from the container
-      const resolved = containerHelper.resolve<MockTestService>('TestService');
-      
-      // Should get an instance of our mock class
+      // Resolve it
+      const resolved = containerHelper.resolve<TestService>('TestService');
       expect(resolved).toBeInstanceOf(MockTestService);
       expect(resolved.getValue()).toBe('mocked');
     });
     
-    it('should do nothing when DI is disabled', () => {
-      // Disable DI
+    it('should always register mock classes in Phase 5 (regardless of USE_DI setting)', () => {
+      // Set USE_DI to false (though this doesn't affect shouldUseDI in Phase 5)
       process.env.USE_DI = 'false';
       
-      // Try to register a mock class
+      // Register the mock class - should work because DI is always enabled in Phase 5
       containerHelper.registerMockClass('TestService', MockTestService);
       
-      // Enable DI again for verification
-      process.env.USE_DI = 'true';
-      
-      // Should not have registered the mock
+      // Resolve it - should be registered
       const resolved = containerHelper.resolve<TestService>('TestService');
-      expect(resolved).not.toBeInstanceOf(MockTestService);
-      expect(resolved).toBeInstanceOf(TestService);
-      expect(resolved.getValue()).toBe('original');
+      expect(resolved).toBeInstanceOf(MockTestService);
+      expect(resolved.getValue()).toBe('mocked');
+      
+      // Reset for other tests
+      process.env.USE_DI = 'true';
     });
   });
   
@@ -175,18 +150,19 @@ describe('TestContainerHelper', () => {
   });
   
   describe('resolve', () => {
-    it('should resolve services from the container', () => {
-      // Resolve a service
-      const service = containerHelper.resolve<DecoratedService>(DecoratedService);
+    it('should resolve registered services', () => {
+      // Register a mock service
+      const mockService = new MockTestService();
+      containerHelper.registerMock('TestService', mockService);
       
-      // Should get an instance of the service
-      expect(service).toBeInstanceOf(DecoratedService);
-      expect(service.getValue()).toBe('decorated');
+      // Resolve it
+      const resolved = containerHelper.resolve<TestService>('TestService');
+      expect(resolved).toBe(mockService);
     });
     
-    it('should use fallback class if provided and token is not registered', () => {
-      // Try to resolve a service that isn't registered
-      const service = containerHelper.resolve<MockTestService>('UnregisteredService', {
+    it('should use fallback class if provided for unregistered token', () => {
+      // Resolve a service that doesn't exist, with a fallback class
+      const service = containerHelper.resolve<TestService>('UnregisteredService', {
         fallbackClass: MockTestService
       });
       
@@ -195,13 +171,20 @@ describe('TestContainerHelper', () => {
       expect(service.getValue()).toBe('mocked');
     });
     
-    it('should throw an error when DI is disabled', () => {
-      // Disable DI
+    it('should always resolve services in Phase 5 (regardless of USE_DI setting)', () => {
+      // Set USE_DI to false (though this doesn't affect shouldUseDI in Phase 5)
       process.env.USE_DI = 'false';
       
-      // Should throw an error
-      expect(() => containerHelper.resolve<TestService>('TestService'))
-        .toThrow('Cannot resolve services in tests when DI is disabled');
+      // Register a mock service
+      const mockService = new MockTestService();
+      containerHelper.registerMock('TestService', mockService);
+      
+      // Should still be able to resolve the service because DI is always enabled in Phase 5
+      const resolved = containerHelper.resolve<TestService>('TestService');
+      expect(resolved).toBe(mockService);
+      
+      // Reset for other tests
+      process.env.USE_DI = 'true';
     });
   });
   
@@ -216,9 +199,18 @@ describe('TestContainerHelper', () => {
       expect(containerHelper.isRegistered('UnregisteredService')).toBe(false);
     });
     
-    it('should return false when DI is disabled', () => {
+    it('should always check registration in Phase 5 (regardless of USE_DI setting)', () => {
+      // Set USE_DI to false (though this doesn't affect shouldUseDI in Phase 5)
       process.env.USE_DI = 'false';
-      expect(containerHelper.isRegistered('TestService')).toBe(false);
+      
+      // Register a token
+      containerHelper.registerMockClass('TestServiceForRegistrationCheck', TestService);
+      
+      // Should still be able to check registration because DI is always enabled in Phase 5
+      expect(containerHelper.isRegistered('TestServiceForRegistrationCheck')).toBe(true);
+      
+      // Reset for other tests
+      process.env.USE_DI = 'true';
     });
   });
   

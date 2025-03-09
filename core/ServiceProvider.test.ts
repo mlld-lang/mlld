@@ -9,8 +9,8 @@ import {
   shouldUseDI,
   getServiceMetadata,
   ServiceMetadata
-} from './ServiceProvider';
-import { injectable, InjectionToken } from 'tsyringe';
+} from './ServiceProvider.js';
+import { injectable, container, InjectionToken } from 'tsyringe';
 
 // Mock classes for testing
 @injectable()
@@ -89,38 +89,39 @@ describe('ServiceProvider', () => {
   });
 
   describe('shouldUseDI', () => {
-    it('should return false when USE_DI is not set', () => {
+    it('should always return true in Phase 5 (DI-only mode)', () => {
+      // Test with different environment variable states
       delete process.env.USE_DI;
-      expect(shouldUseDI()).toBe(false);
-    });
-
-    it('should return true when USE_DI is set to "true"', () => {
+      expect(shouldUseDI()).toBe(true);
+      
+      process.env.USE_DI = 'false';
+      expect(shouldUseDI()).toBe(true);
+      
       process.env.USE_DI = 'true';
       expect(shouldUseDI()).toBe(true);
-    });
-
-    it('should return false when USE_DI is set to any other value', () => {
-      process.env.USE_DI = 'false';
-      expect(shouldUseDI()).toBe(false);
       
       process.env.USE_DI = '1';
-      expect(shouldUseDI()).toBe(false);
+      expect(shouldUseDI()).toBe(true);
     });
   });
 
   describe('createService', () => {
-    it('should create service instance directly when DI is disabled', () => {
+    it('should always create service instance through DI in Phase 5 (DI-only mode)', () => {
+      // DI is enabled regardless of environment variable in Phase 5
       delete process.env.USE_DI;
       const service = createService(TestService);
       expect(service).toBeInstanceOf(TestService);
       expect(service.getValue()).toBe('test-value');
-    });
-
-    it('should create service instance through DI when DI is enabled', () => {
+      
+      process.env.USE_DI = 'false';
+      const service2 = createService(TestService);
+      expect(service2).toBeInstanceOf(TestService);
+      expect(service2.getValue()).toBe('test-value');
+      
       process.env.USE_DI = 'true';
-      const service = createService(TestService);
-      expect(service).toBeInstanceOf(TestService);
-      expect(service.getValue()).toBe('test-value');
+      const service3 = createService(TestService);
+      expect(service3).toBeInstanceOf(TestService);
+      expect(service3.getValue()).toBe('test-value');
     });
 
     it('should pass dependencies to constructor when DI is disabled', () => {
@@ -153,16 +154,29 @@ describe('ServiceProvider', () => {
       expect(byInterface).toBeInstanceOf(DecoratedTestService);
     });
     
-    it('should not interfere with class when DI is disabled', () => {
+    it('should work with any environment variable setting in Phase 5 (DI-only mode)', () => {
+      // Test with USE_DI unset
       delete process.env.USE_DI;
       
+      // Should be able to create the service
       const service = createService(DecoratedTestService);
       expect(service).toBeInstanceOf(DecoratedTestService);
       expect(service.getValue()).toBe('decorated-test-value');
       
-      // We should not be able to resolve it by token when DI is disabled
-      expect(() => resolveService<DecoratedTestService>('DecoratedTestService'))
-        .toThrow("Cannot resolve service by token 'DecoratedTestService' when DI is disabled");
+      // Should be able to resolve by token
+      const byName = resolveService<DecoratedTestService>('DecoratedTestService');
+      expect(byName).toBeInstanceOf(DecoratedTestService);
+      
+      // And by interface name
+      const byInterface = resolveService<DecoratedTestService>('IDecoratedTestService');
+      expect(byInterface).toBeInstanceOf(DecoratedTestService);
+      
+      // Test with USE_DI set to false
+      process.env.USE_DI = 'false';
+      
+      // Should still be able to resolve by token
+      const byName2 = resolveService<DecoratedTestService>('DecoratedTestService');
+      expect(byName2).toBeInstanceOf(DecoratedTestService);
     });
     
     it('should store metadata on the class', () => {
@@ -198,19 +212,27 @@ describe('ServiceProvider', () => {
   });
   
   describe('registerServiceInstance', () => {
-    it('should register an instance with the container when DI is enabled', () => {
-      process.env.USE_DI = 'true';
+    it('should register an instance with the container in Phase 5 (DI-only mode)', () => {
+      // DI is always enabled in Phase 5, regardless of the environment variable
+      delete process.env.USE_DI;
       
       const testInstance = new TestService();
       registerServiceInstance('TestInstance', testInstance);
       
       const resolved = resolveService<TestService>('TestInstance');
       expect(resolved).toBe(testInstance); // Should be the exact same instance
+      
+      // Test with USE_DI set to false
+      process.env.USE_DI = 'false';
+      
+      const testInstance2 = new TestService();
+      registerServiceInstance('TestInstance2', testInstance2);
+      
+      const resolved2 = resolveService<TestService>('TestInstance2');
+      expect(resolved2).toBe(testInstance2);
     });
     
     it('should support registering with InjectionToken', () => {
-      process.env.USE_DI = 'true';
-      
       const token: InjectionToken<TestService> = Symbol('TestService');
       const testInstance = new TestService();
       registerServiceInstance(token, testInstance);
@@ -218,55 +240,35 @@ describe('ServiceProvider', () => {
       const resolved = resolveService<TestService>(token);
       expect(resolved).toBe(testInstance); // Should be the exact same instance
     });
-    
-    it('should do nothing when DI is disabled', () => {
-      delete process.env.USE_DI;
-      
-      const testInstance = new TestService();
-      registerServiceInstance('TestInstance', testInstance);
-      
-      // Should throw since we can't resolve services by token when DI is disabled
-      expect(() => resolveService<TestService>('TestInstance'))
-        .toThrow("Cannot resolve service by token 'TestInstance' when DI is disabled");
-    });
   });
   
   describe('registerServiceFactory', () => {
-    it('should register a factory with the container when DI is enabled', () => {
-      process.env.USE_DI = 'true';
-      
-      const factory = vi.fn().mockReturnValue(new TestService());
-      registerServiceFactory('TestFactory', factory);
-      
-      // First resolution should call the factory
-      const resolved1 = resolveService<TestService>('TestFactory');
-      expect(resolved1).toBeInstanceOf(TestService);
-      expect(factory).toHaveBeenCalledTimes(1);
-      
-      // Second resolution should call the factory again (default behavior is transient)
-      const resolved2 = resolveService<TestService>('TestFactory');
-      expect(resolved2).toBeInstanceOf(TestService);
-      expect(factory).toHaveBeenCalledTimes(2);
-    });
-    
-    it('should do nothing when DI is disabled', () => {
+    it('should register a factory with the container in Phase 5 (DI-only mode)', () => {
+      // DI is always enabled in Phase 5, regardless of the environment variable
       delete process.env.USE_DI;
       
-      const factory = vi.fn().mockReturnValue(new TestService());
+      const factory = () => new TestService();
       registerServiceFactory('TestFactory', factory);
       
-      // Factory should not be called
-      expect(factory).not.toHaveBeenCalled();
+      const resolved = resolveService<TestService>('TestFactory');
+      expect(resolved).toBeInstanceOf(TestService);
+      expect(resolved.getValue()).toBe('test-value');
       
-      // Should throw since we can't resolve services by token when DI is disabled
-      expect(() => resolveService<TestService>('TestFactory'))
-        .toThrow("Cannot resolve service by token 'TestFactory' when DI is disabled");
+      // Test with USE_DI set to false
+      process.env.USE_DI = 'false';
+      
+      registerServiceFactory('TestFactory2', factory);
+      
+      const resolved2 = resolveService<TestService>('TestFactory2');
+      expect(resolved2).toBeInstanceOf(TestService);
+      expect(resolved2.getValue()).toBe('test-value');
     });
   });
   
   describe('registerServiceClass', () => {
-    it('should register a class with the container when DI is enabled', () => {
-      process.env.USE_DI = 'true';
+    it('should register a class with the container in Phase 5 (DI-only mode)', () => {
+      // DI is always enabled in Phase 5, regardless of the environment variable
+      delete process.env.USE_DI;
       
       class CustomService {
         getValue() { return 'custom-value'; }
@@ -277,20 +279,27 @@ describe('ServiceProvider', () => {
       const resolved = resolveService<CustomService>('CustomService');
       expect(resolved).toBeInstanceOf(CustomService);
       expect(resolved.getValue()).toBe('custom-value');
-    });
-    
-    it('should do nothing when DI is disabled', () => {
-      delete process.env.USE_DI;
       
-      class CustomService {
-        getValue() { return 'custom-value'; }
+      // Test with USE_DI set to false
+      process.env.USE_DI = 'false';
+      
+      class CustomService2 {
+        getValue() { return 'custom-value-2'; }
       }
       
-      registerServiceClass('CustomService', CustomService);
+      registerServiceClass('CustomService2', CustomService2);
       
-      // Should throw since we can't resolve services by token when DI is disabled
-      expect(() => resolveService<CustomService>('CustomService'))
-        .toThrow("Cannot resolve service by token 'CustomService' when DI is disabled");
+      const resolved2 = resolveService<CustomService2>('CustomService2');
+      expect(resolved2).toBeInstanceOf(CustomService2);
+      expect(resolved2.getValue()).toBe('custom-value-2');
+    });
+    
+    it('should work with classes that have dependencies', () => {
+      @injectable()
+      class NonServiceClass {}
+      
+      const value = container.resolve(NonServiceClass);
+      expect(value).toBeInstanceOf(NonServiceClass);
     });
   });
   

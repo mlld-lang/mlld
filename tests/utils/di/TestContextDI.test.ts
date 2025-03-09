@@ -30,13 +30,12 @@ describe('TestContextDI', () => {
 
   describe('with DI disabled', () => {
     beforeEach(() => {
-      // Create context with DI disabled
-      context = TestContextDI.withoutDI();
+      context = new TestContextDI({ useDI: false });
     });
     
-    it('should create a test context with manual initialization', () => {
-      // Verify DI is disabled
-      expect(shouldUseDI()).toBe(false);
+    it('should create a test context with services initialized through DI in Phase 5', () => {
+      // In Phase 5, DI is always enabled regardless of the useDI setting
+      expect(shouldUseDI()).toBe(true);
       
       // Verify services are initialized
       expect(context.services.parser).toBeDefined();
@@ -147,9 +146,11 @@ describe('TestContextDI', () => {
       context.cleanup();
     });
     
-    it('withoutDI should create a context with DI disabled', () => {
+    it('withoutDI should still use DI in Phase 5', () => {
       const context = TestContextDI.withoutDI();
-      expect(shouldUseDI()).toBe(false);
+      // In Phase 5, DI is always enabled
+      expect(shouldUseDI()).toBe(true);
+      expect(context.useDI).toBe(true);
       context.cleanup();
     });
   });

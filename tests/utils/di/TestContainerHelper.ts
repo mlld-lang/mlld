@@ -44,7 +44,8 @@ export class TestContainerHelper {
     mockImpl: T, 
     options: {
       /**
-       * Force registration even if DI is disabled
+       * Force registration 
+       * @deprecated No longer needed in Phase 5 as DI is always enabled
        */
       force?: boolean;
       
@@ -55,17 +56,14 @@ export class TestContainerHelper {
     } = {}
   ): void {
     // Default options
-    const force = options.force === true;
     const track = options.track !== false;
     
-    // Only register if DI is enabled or forced
-    if (shouldUseDI() || force) {
-      this.childContainer.registerInstance(token, mockImpl);
-      
-      // Track registration for diagnostics and cleanup
-      if (track) {
-        this.registeredTokens.add(token);
-      }
+    // In Phase 5, DI is always enabled, so we always register
+    this.childContainer.registerInstance(token, mockImpl);
+    
+    // Track this registration if needed
+    if (track) {
+      this.registeredTokens.add(token);
     }
   }
   
@@ -81,7 +79,8 @@ export class TestContainerHelper {
     mockClass: new (...args: any[]) => T,
     options: {
       /**
-       * Force registration even if DI is disabled
+       * Force registration
+       * @deprecated No longer needed in Phase 5 as DI is always enabled
        */
       force?: boolean;
       
@@ -92,17 +91,14 @@ export class TestContainerHelper {
     } = {}
   ): void {
     // Default options
-    const force = options.force === true;
     const track = options.track !== false;
     
-    // Only register if DI is enabled or forced
-    if (shouldUseDI() || force) {
-      this.childContainer.register(token, { useClass: mockClass });
-      
-      // Track registration for diagnostics and cleanup
-      if (track) {
-        this.registeredTokens.add(token);
-      }
+    // In Phase 5, DI is always enabled, so we always register
+    this.childContainer.register(token, { useClass: mockClass });
+    
+    // Track this registration if needed
+    if (track) {
+      this.registeredTokens.add(token);
     }
   }
   
@@ -118,7 +114,8 @@ export class TestContainerHelper {
     factory: () => T,
     options: {
       /**
-       * Force registration even if DI is disabled
+       * Force registration
+       * @deprecated No longer needed in Phase 5 as DI is always enabled
        */
       force?: boolean;
       
@@ -129,17 +126,14 @@ export class TestContainerHelper {
     } = {}
   ): void {
     // Default options
-    const force = options.force === true;
     const track = options.track !== false;
     
-    // Only register if DI is enabled or forced
-    if (shouldUseDI() || force) {
-      this.childContainer.register(token, { useFactory: factory });
-      
-      // Track registration for diagnostics and cleanup
-      if (track) {
-        this.registeredTokens.add(token);
-      }
+    // In Phase 5, DI is always enabled, so we always register
+    this.childContainer.register(token, { useFactory: factory });
+    
+    // Track this registration if needed
+    if (track) {
+      this.registeredTokens.add(token);
     }
   }
   
@@ -156,24 +150,20 @@ export class TestContainerHelper {
     serviceClass: new (...args: any[]) => T,
     options: {
       /**
-       * Force registration even if DI is disabled
+       * Force registration
+       * @deprecated No longer needed in Phase 5 as DI is always enabled
        */
       force?: boolean;
     } = {}
   ): void {
-    // Default options
-    const force = options.force === true;
-    
-    // Only register if DI is enabled or forced
-    if (shouldUseDI() || force) {
-      // Don't register with parent if this is an isolated container
-      if (this.isIsolated) {
-        this.childContainer.register(token, { useClass: serviceClass });
-        this.registeredTokens.add(token);
-      } else {
-        // Register with the parent container to ensure it's available to all child containers
-        container.register(token, { useClass: serviceClass });
-      }
+    // In Phase 5, DI is always enabled, so we always register
+    // Don't register with parent if this is an isolated container
+    if (this.isIsolated) {
+      this.childContainer.register(token, { useClass: serviceClass });
+      this.registeredTokens.add(token);
+    } else {
+      // Register with the parent container to ensure it's available to all child containers
+      container.register(token, { useClass: serviceClass });
     }
   }
   
@@ -232,6 +222,7 @@ export class TestContainerHelper {
       
       /**
        * Whether to throw an error if DI is disabled
+       * @deprecated No longer needed in Phase 5 as DI is always enabled
        */
       throwIfDisabled?: boolean;
       
@@ -242,24 +233,9 @@ export class TestContainerHelper {
     } = {}
   ): T {
     // Default options
-    const throwIfDisabled = options.throwIfDisabled !== false;
     const fallbackClass = options.fallbackClass;
     const errorMessage = options.errorMessage || 
       `Cannot resolve service '${String(token)}' from container`;
-    
-    if (!shouldUseDI()) {
-      if (throwIfDisabled) {
-        throw new Error(`Cannot resolve services in tests when DI is disabled`);
-      }
-      
-      // If we have a fallback class, use it
-      if (fallbackClass) {
-        return new fallbackClass();
-      }
-      
-      // Otherwise return null
-      return null as unknown as T;
-    }
     
     try {
       return this.childContainer.resolve<T>(token);
@@ -275,8 +251,6 @@ export class TestContainerHelper {
       if (error instanceof Error) {
         throw new Error(`${errorMessage}: ${error.message}`);
       }
-      
-      // Re-throw the original error
       throw error;
     }
   }
@@ -288,9 +262,7 @@ export class TestContainerHelper {
    * @returns True if the token is registered
    */
   isRegistered(token: InjectionToken<any>): boolean {
-    if (!shouldUseDI()) {
-      return false;
-    }
+    // In Phase 5, DI is always enabled
     return this.childContainer.isRegistered(token);
   }
   

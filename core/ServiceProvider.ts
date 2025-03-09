@@ -28,28 +28,22 @@ export interface ServiceMetadata {
  * Determines if DI should be used based on the USE_DI environment variable
  */
 export const shouldUseDI = (): boolean => {
-  return process.env.USE_DI === 'true';
+  return true; // Always use DI - Phase 5 migration
 };
 
 /**
- * Creates a new instance of a service either through DI or manual instantiation
- * based on the USE_DI environment variable.
+ * Creates a new instance of a service through DI.
  * 
  * @param ServiceClass The service class to instantiate
- * @param dependencies The dependencies to pass to the constructor (for legacy mode)
+ * @param dependencies The dependencies to pass to the constructor (for legacy mode, now ignored)
  * @returns A new instance of the service
  */
 export function createService<T, D extends any[]>(
   ServiceClass: new (...args: D) => T,
   ...dependencies: D
 ): T {
-  if (shouldUseDI()) {
-    // In DI mode, resolve the service from the container
-    return container.resolve(ServiceClass);
-  } else {
-    // In legacy mode, instantiate the service manually
-    return new ServiceClass(...dependencies);
-  }
+  // In Phase 5, always use DI
+  return container.resolve(ServiceClass);
 }
 
 /**
@@ -59,9 +53,6 @@ export function createService<T, D extends any[]>(
  * @returns The resolved service
  */
 export function resolveService<T>(token: string | InjectionToken<T>): T {
-  if (!shouldUseDI()) {
-    throw new Error(`Cannot resolve service by token '${String(token)}' when DI is disabled`);
-  }
   return container.resolve<T>(token);
 }
 
@@ -72,9 +63,7 @@ export function resolveService<T>(token: string | InjectionToken<T>): T {
  * @param useValue The implementation to use
  */
 export function registerServiceInstance<T>(token: string | InjectionToken<T>, useValue: T): void {
-  if (shouldUseDI()) {
-    container.registerInstance(token, useValue);
-  }
+  container.registerInstance(token, useValue);
 }
 
 /**
@@ -87,9 +76,7 @@ export function registerServiceFactory<T>(
   token: string | InjectionToken<T>,
   factory: () => T
 ): void {
-  if (shouldUseDI()) {
-    container.register(token, { useFactory: factory });
-  }
+  container.register(token, { useFactory: factory });
 }
 
 /**
@@ -102,9 +89,7 @@ export function registerServiceClass<T>(
   token: string | InjectionToken<T>,
   serviceClass: new (...args: any[]) => T
 ): void {
-  if (shouldUseDI()) {
-    container.register(token, { useClass: serviceClass });
-  }
+  container.register(token, { useClass: serviceClass });
 }
 
 /**
