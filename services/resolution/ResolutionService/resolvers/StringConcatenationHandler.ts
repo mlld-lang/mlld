@@ -10,12 +10,21 @@ import type { MeldNode, TextNode } from 'meld-spec';
  */
 export class StringConcatenationHandler {
   private stringLiteralHandler: StringLiteralHandler;
+  private silentMode: boolean = false;
 
   constructor(
     private resolutionService: IResolutionService,
     private parserService?: IParserService
   ) {
     this.stringLiteralHandler = new StringLiteralHandler();
+  }
+
+  /**
+   * Enable silent mode to suppress warning messages (useful for tests)
+   */
+  setSilentMode(silent: boolean): void {
+    this.silentMode = silent;
+    this.stringLiteralHandler.setSilentMode(silent);
   }
 
   /**
@@ -48,17 +57,33 @@ export class StringConcatenationHandler {
           if (directiveValue && 
               typeof directiveValue === 'object' && 
               directiveValue.type === 'Concatenation') {
-            // Return the parts directly from the AST
-            return directiveValue.parts.map((p: any) => 
-              typeof p === 'object' && p.raw ? p.raw : String(p)
-            );
+            
+            // Extract parts
+            const parts = directiveValue.parts?.map((part: any) => {
+              if (part?.type === 'StringLiteral') {
+                return part.value;
+              } else if (part?.type === 'VariableReference') {
+                return `{{${part.name}}}`;
+              } else {
+                return String(part);
+              }
+            });
+            
+            if (Array.isArray(parts) && parts.length > 0) {
+              return parts;
+            }
           }
         }
         
-        // If AST parsing didn't identify concatenation structure,
-        // fall back to simpler splitting
+        // If we didn't extract parts, fall back to regex-based splitting
+        if (!this.silentMode) {
+          console.error('Failed to extract concatenation parts from AST, falling back to manual parsing');
+        }
       } catch (error) {
-        console.warn('Failed to parse concatenation with AST, falling back to manual parsing:', error);
+        // If parsing fails, log and fall back to regex-based splitting
+        if (!this.silentMode) {
+          console.error('Failed to parse concatenation with AST, falling back to manual parsing:', error);
+        }
       }
     }
     
@@ -104,7 +129,9 @@ export class StringConcatenationHandler {
         }
       } catch (error) {
         // If parsing fails, fall back to regex check
-        console.warn('Failed to check concatenation with AST, falling back to regex:', error);
+        if (!this.silentMode) {
+          console.error('Failed to check concatenation with AST, falling back to regex:', error);
+        }
       }
     }
     

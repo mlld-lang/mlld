@@ -8,8 +8,16 @@ import type { MeldNode, TextNode } from 'meld-spec';
 export class StringLiteralHandler {
   private readonly QUOTE_TYPES = ["'", '"', '`'] as const;
   private readonly MIN_CONTENT_LENGTH = 1;
+  private silentMode: boolean = false;
 
   constructor(private parserService?: IParserService) {}
+
+  /**
+   * Enable silent mode to suppress warning messages (useful for tests)
+   */
+  setSilentMode(silent: boolean): void {
+    this.silentMode = silent;
+  }
 
   /**
    * Checks if a value appears to be a string literal
@@ -51,8 +59,9 @@ export class StringLiteralHandler {
       
       return false;
     } catch (error) {
-      // If parsing fails, fall back to manual check
-      console.warn('Failed to check string literal with AST, falling back to manual check:', error);
+      if (!this.silentMode) {
+        console.error('Failed to check string literal with AST, falling back to manual check:', error);
+      }
       return this.isStringLiteral(value);
     }
   }
@@ -137,7 +146,9 @@ export class StringLiteralHandler {
       );
     } catch (error) {
       // If parsing fails, fall back to manual validation
-      console.warn('Failed to validate string literal with AST, falling back to manual validation:', error);
+      if (!this.silentMode) {
+        console.error('Failed to validate string literal with AST, falling back to manual validation:', error);
+      }
       return this.validateLiteral(value);
     }
   }
@@ -237,8 +248,7 @@ export class StringLiteralHandler {
           // The parser has already handled quote escaping
           return directiveValue.value;
         } else if (typeof directiveValue === 'string') {
-          // In test environment, the mock parser might return the string directly
-          // Parse the string value as a string literal
+          // Parse as string literal
           return this.parseLiteral(directiveValue);
         }
       }
@@ -247,7 +257,9 @@ export class StringLiteralHandler {
       return this.parseLiteral(value);
     } catch (error) {
       // If parsing fails, fall back to manual parsing
-      console.warn('Failed to parse string literal with AST, falling back to manual parsing:', error);
+      if (!this.silentMode) {
+        console.error('Failed to parse string literal with AST, falling back to manual parsing:', error);
+      }
       return this.parseLiteral(value);
     }
   }
