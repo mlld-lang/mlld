@@ -127,20 +127,18 @@ export class TestContextDI extends TestContext {
     // Handle DI-only mode setting (highest priority)
     this.diOnlyMode = !!options.diOnlyMode;
     
-    // In Phase 5, DI is always enabled regardless of environment variables,
-    // but we'll maintain this for backward compatibility with existing tests
-    // that may check process.env.USE_DI directly
+    // Set environment variables for DI modes
     if (this.diOnlyMode) {
-      // DI-only mode - no longer need to set MIGRATE_TO_DI_ONLY in Phase 5
+      // DI-only mode forces both flags to true
+      process.env.MIGRATE_TO_DI_ONLY = 'true';
       process.env.USE_DI = 'true';
     } else if (options.useDI !== undefined) {
       // Regular mode uses provided useDI setting if available
       process.env.USE_DI = options.useDI ? 'true' : 'false';
     }
 
-    // In Phase 5, useDI is always true but we'll maintain this property
-    // for backward compatibility
-    this.useDI = true;
+    // Set useDI property for easy access
+    this.useDI = this.diOnlyMode || shouldUseDI();
 
     // Create appropriate container helper
     if (options.container) {
@@ -1015,6 +1013,11 @@ export class TestContextDI extends TestContext {
     // Clear container instances
     if (this.useDI) {
       this.container.clearInstances();
+    }
+
+    // Reset DI-only mode environment variable if we set it
+    if (this.diOnlyMode) {
+      delete process.env.MIGRATE_TO_DI_ONLY;
     }
   }
 }
