@@ -1,6 +1,6 @@
 /**
  * TestContainerHelper provides utilities for working with the DI container in tests.
- * It allows creating a child container for each test and resetting it between tests.
+ * It allows creating isolated containers for each test and detecting container state leaks.
  */
 
 import { container, DependencyContainer, InjectionToken } from 'tsyringe';
@@ -8,13 +8,13 @@ import { container, DependencyContainer, InjectionToken } from 'tsyringe';
 // import { shouldUseDI } from '../../../core/ServiceProvider';
 
 /**
- * Creates a child container for testing that isolates registrations from the global container.
- * This is important for test isolation to prevent state leakage between tests.
+ * Creates a container for testing that isolates registrations and prevents state leakage.
  */
 export class TestContainerHelper {
   private childContainer: DependencyContainer;
   private registeredTokens: Set<InjectionToken<any>> = new Set();
   private isIsolated: boolean = false;
+  private instanceTracker: Set<object> = new Set();
   
   /**
    * Create a new TestContainerHelper
@@ -53,12 +53,16 @@ export class TestContainerHelper {
     // Default options
     const track = options.track !== false;
     
-    // Always register - no more conditional logic
     this.childContainer.registerInstance(token, mockImpl);
     
     // Track registration for diagnostics and cleanup
     if (track) {
       this.registeredTokens.add(token);
+      
+      // Track instance for leak detection if it's an object
+      if (mockImpl && typeof mockImpl === 'object') {
+        this.instanceTracker.add(mockImpl);
+      }
     }
   }
   
@@ -82,7 +86,6 @@ export class TestContainerHelper {
     // Default options
     const track = options.track !== false;
     
-    // Always register - no more conditional logic
     this.childContainer.register(token, { useClass: mockClass });
     
     // Track registration for diagnostics and cleanup
@@ -111,7 +114,6 @@ export class TestContainerHelper {
     // Default options
     const track = options.track !== false;
     
-    // Always register - no more conditional logic
     this.childContainer.register(token, { useFactory: factory });
     
     // Track registration for diagnostics and cleanup
@@ -121,24 +123,17 @@ export class TestContainerHelper {
   }
   
   /**
-   * Registers a service class with a parent container
-   * This is used for registering real services that should be available to all child containers
+   * Registers a service class with the container
    * 
    * @param token The token to register
    * @param serviceClass The service class to register
    */
-  registerParentService<T>(
+  registerService<T>(
     token: InjectionToken<T>,
     serviceClass: new (...args: any[]) => T
   ): void {
-    // Don't register with parent if this is an isolated container
-    if (this.isIsolated) {
-      this.childContainer.register(token, { useClass: serviceClass });
-      this.registeredTokens.add(token);
-    } else {
-      // Register with the parent container to ensure it's available to all child containers
-      container.register(token, { useClass: serviceClass });
-    }
+    this.childContainer.register(token, { useClass: serviceClass });
+    this.registeredTokens.add(token);
   }
   
   /**
@@ -154,8 +149,41 @@ export class TestContainerHelper {
       this.childContainer = container.createChildContainer();
     }
     
-    // Clear tracked registrations
+    // Clear tracked registrations and instances
     this.registeredTokens.clear();
+    this.instanceTracker.clear();
+  }
+  
+  /**
+   * Detects potential memory leaks by checking if registered instances are still referenced
+   * @returns Object with leak detection information
+   */
+  detectLeaks(): { 
+    hasLeaks: boolean; 
+    count: number; 
+    tokens: string[]; 
+  } {
+    const leakingTokens: string[] = [];
+    
+    // Check all registered tokens for leaks
+    this.registeredTokens.forEach(token => {
+      try {
+        // Try to resolve the token - if it still exists and is the same instance,
+        // it might indicate a leak
+        const instance = this.childContainer.resolve(token);
+        if (instance && typeof instance === 'object' && this.instanceTracker.has(instance)) {
+          leakingTokens.push(String(token));
+        }
+      } catch (error) {
+        // Ignore resolution errors
+      }
+    });
+    
+    return {
+      hasLeaks: leakingTokens.length > 0,
+      count: leakingTokens.length,
+      tokens: leakingTokens
+    };
   }
   
   /**
@@ -173,7 +201,8 @@ export class TestContainerHelper {
         this.childContainer = container.createChildContainer();
       }
       
-      // Don't clear tracked registrations since we want to preserve registration info
+      // Clear tracked instances to prevent memory leaks
+      this.instanceTracker.clear();
     } catch (error) {
       console.warn('Failed to clear container instances:', error);
     }
@@ -206,11 +235,25 @@ export class TestContainerHelper {
       `Cannot resolve service '${String(token)}' from container`;
     
     try {
-      return this.childContainer.resolve(token);
+      const instance = this.childContainer.resolve(token);
+      
+      // Track the instance for leak detection if it's an object
+      if (instance && typeof instance === 'object') {
+        this.instanceTracker.add(instance);
+      }
+      
+      return instance;
     } catch (error) {
       // If a fallback class is provided, use it
       if (fallbackClass) {
-        return new fallbackClass();
+        const instance = new fallbackClass();
+        
+        // Track the fallback instance for leak detection
+        if (instance && typeof instance === 'object') {
+          this.instanceTracker.add(instance);
+        }
+        
+        return instance;
       }
       
       // Otherwise, throw an error with the provided message
@@ -233,6 +276,23 @@ export class TestContainerHelper {
   }
   
   /**
+   * Gets diagnostic information about the container state
+   */
+  getDiagnostics(): {
+    isIsolated: boolean;
+    registeredTokenCount: number;
+    instanceCount: number;
+    leakInfo: { hasLeaks: boolean; count: number; tokens: string[] };
+  } {
+    return {
+      isIsolated: this.isIsolated,
+      registeredTokenCount: this.registeredTokens.size,
+      instanceCount: this.instanceTracker.size,
+      leakInfo: this.detectLeaks()
+    };
+  }
+  
+  /**
    * Creates a new test container helper with a child container
    */
   static createTestContainer(): TestContainerHelper {
@@ -249,7 +309,8 @@ export class TestContainerHelper {
   }
   
   /**
-   * Creates a test setup with setup and teardown functions
+   * Creates test setup utilities for before/after hooks
+   * @param options Options for test setup
    */
   static createTestSetup(options: {
     /**
@@ -259,16 +320,28 @@ export class TestContainerHelper {
   } = {}): {
     setupDI: () => TestContainerHelper;
     resetDI: (helper: TestContainerHelper) => void;
+    cleanupDI: (helper: TestContainerHelper) => void;
   } {
-    const isolated = options.isolated === true;
-    
     return {
       setupDI: () => {
-        return isolated 
+        return options.isolated
           ? TestContainerHelper.createIsolatedContainer()
           : TestContainerHelper.createTestContainer();
       },
       resetDI: (helper: TestContainerHelper) => {
+        helper.reset();
+      },
+      cleanupDI: (helper: TestContainerHelper) => {
+        // Detect and report leaks
+        const leakInfo = helper.detectLeaks();
+        if (leakInfo.hasLeaks) {
+          console.warn(`Container leak detected: ${leakInfo.count} tokens still have references`, {
+            tokens: leakInfo.tokens
+          });
+        }
+        
+        // Clear instances and reset
+        helper.clearInstances();
         helper.reset();
       }
     };

@@ -26,6 +26,71 @@ As part of Phase 2 of our DI cleanup plan, we've moved to a DI-only approach for
    - Easier mock registration and service resolution
    - Better cleanup of resources between tests
 
+### Unified Test Helpers
+
+A new `TestHelpers` utility has been added to simplify common test patterns:
+
+```typescript
+import { TestHelpers } from '@tests/utils/di';
+
+// Basic test setup
+const context = TestHelpers.setup({ 
+  isolatedContainer: true,
+  leakDetection: true 
+});
+
+// Setup with common mocks
+const context = TestHelpers.setupWithMocks({
+  'IStateService': customStateMock,
+  'IPathService': customPathMock
+});
+
+// Setup for directive tests
+const { 
+  context, 
+  validationService, 
+  stateService, 
+  resolutionService, 
+  handler 
+} = TestHelpers.setupDirectiveTest(myDirectiveHandler);
+
+// Helpers for beforeEach/afterEach
+describe('My test suite', () => {
+  const testSetup = TestHelpers.createTestSetup({
+    isolated: true,
+    leakDetection: true,
+    mocks: {
+      'IStateService': mockStateService
+    }
+  });
+  
+  let context: TestContextDI;
+  
+  beforeEach(() => {
+    context = testSetup.setup();
+  });
+  
+  afterEach(async () => {
+    await testSetup.cleanup();
+  });
+  
+  // Tests...
+});
+```
+
+### Container Leak Detection
+
+The new test infrastructure includes container leak detection to help identify memory leaks and resource management issues:
+
+```typescript
+// Enable leak detection when creating a context
+const context = TestContextDI.create({ leakDetection: true });
+
+// Get diagnostic information about the container state
+const report = context.createDiagnosticReport();
+console.log(report);
+```
+
 ### Migrating Existing Tests
 
 If you have tests using the dual-mode approach, here's how to update them:
@@ -64,19 +129,45 @@ describe('MyService', () => {
   let context: TestContextDI;
   let service: IMyService;
 
-  beforeEach(async () => {
+  beforeEach(() => {
     // Always use DI
-    context = TestContextDI.create();
+    context = TestHelpers.setup();
     
     // Register any mocks needed
     context.registerMock('IDependencyService', mockDependency);
     
     // Resolve service from container
-    service = context.container.resolve('IMyService');
+    service = context.resolveSync('IMyService');
   });
   
   afterEach(async () => {
     await context.cleanup();
+  });
+  
+  // Tests...
+});
+```
+
+Or with the unified helper:
+
+```typescript
+describe('MyService', () => {
+  const { setup, cleanup } = TestHelpers.createTestSetup({
+    mocks: {
+      'IDependencyService': mockDependency
+    }
+  });
+  
+  let context: TestContextDI;
+  let service: IMyService;
+
+  beforeEach(() => {
+    context = setup();
+    service = context.resolveSync('IMyService');
+  });
+  
+  afterEach(async () => {
+    await cleanup();
   });
   
   // Tests...

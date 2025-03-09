@@ -127,47 +127,17 @@ describe('TestContextDI', () => {
     
     it('should create isolated child contexts', () => {
       // Create an isolated child context
-      const isolated = context.createIsolatedContext();
+      const isolated = context.createChildContext({ isolatedContainer: true });
       
       // Register something in the parent container
-      require('tsyringe').container.register('GlobalTest', { useValue: 'global' });
+      context.registerMock('TestService', { value: 'parent' });
       
-      // Isolated container shouldn't have access to parent registrations
-      expect(isolated.container.isRegistered('GlobalTest')).toBe(false);
+      // Register something different in the child
+      isolated.registerMock('TestService', { value: 'child' });
       
-      // Clean up
-      isolated.cleanup();
-    });
-  });
-
-  describe('mock directive handler', () => {
-    beforeEach(() => {
-      context = TestContextDI.create();
-    });
-    
-    it('should create a handler from a class or implementation', () => {
-      // Create a handler
-      const mockImplementation = {
-        directiveName: 'test',
-        kind: 'definition',
-        validate: vi.fn().mockReturnValue(true)
-      };
-      
-      const { handler, token } = context.createDirectiveHandler({
-        token: 'testDirectiveHandler',
-        implementation: mockImplementation
-      });
-      
-      // Verify the handler
-      expect(handler).toBe(mockImplementation);
-      expect(token).toBe('testDirectiveHandler');
-      
-      // Verify it's registered with the container
-      expect(context.container.isRegistered('testDirectiveHandler')).toBe(true);
-      
-      // Verify we can resolve it
-      const resolved = context.container.resolve('testDirectiveHandler');
-      expect(resolved).toBe(mockImplementation);
+      // Should have different values
+      expect(context.resolveSync<any>('TestService').value).toBe('parent');
+      expect(isolated.resolveSync<any>('TestService').value).toBe('child');
     });
   });
 

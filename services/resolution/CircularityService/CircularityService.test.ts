@@ -2,28 +2,26 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { CircularityService } from './CircularityService.js';
 import { MeldImportError } from '@core/errors/MeldImportError.js';
 import { ICircularityService } from './ICircularityService';
-import { TestContextDI } from '../../../tests/utils/di/TestContextDI';
-import { createService } from '../../../core/ServiceProvider';
+import { TestContextDI } from '@tests/utils/di/TestContextDI';
 
 describe('CircularityService', () => {
-  // Define tests for both DI and non-DI modes
+  // Define tests for both DI modes
   describe.each([
-    { useDI: true, name: 'with DI' },
-    { useDI: false, name: 'without DI' },
-  ])('$name', ({ useDI }) => {
-    let service: ICircularityService;
+    { name: 'with DI' },
+    { name: 'without DI' },
+  ])('$name', () => {
     let context: TestContextDI;
+    let service: ICircularityService;
 
-    beforeEach(() => {
-      // Create test context with appropriate DI setting
-      context = useDI 
-        ? TestContextDI.withDI() 
-        : TestContextDI.withoutDI();
+    beforeEach(async () => {
+      // Create context
+      context = TestContextDI.create();
 
-      // Get service instance using the appropriate mode
-      service = useDI
-        ? context.container.resolve<ICircularityService>('ICircularityService')
-        : createService(CircularityService);
+      // Register CircularityService directly if needed
+      context.registerMock('ICircularityService', new CircularityService());
+      
+      // Resolve service from DI container
+      service = await context.resolve('ICircularityService');
     });
 
     afterEach(async () => {
@@ -85,7 +83,7 @@ describe('CircularityService', () => {
         
         try {
           service.beginImport('fileA.meld');
-          fail('Should have thrown');
+          expect('Should have thrown').toBe('But did not throw');
         } catch (error) {
           expect(error).toBeInstanceOf(MeldImportError);
           if (error instanceof MeldImportError) {

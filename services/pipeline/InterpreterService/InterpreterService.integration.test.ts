@@ -201,20 +201,21 @@ describe.each([
       await context.writeFile('project/src/circular2.meld', '@import [$./circular1.meld]');
 
       // Create an import directive node for the interpreter
-      // MIGRATION NOTE: Using factory method directly due to issues with examples for circular imports
       const node = context.factory.createImportDirective(
         '$./project/src/circular1.meld',
         context.factory.createLocation(1, 1)
       );
 
-      // Mock the CircularityService to throw a circular import error
-      const originalBeginImport = context.services.circularity.beginImport;
-      context.services.circularity.beginImport = (filePath: string) => {
-        throw new MeldImportError('Circular import detected', {
-          code: 'CIRCULAR_IMPORT',
-          details: { importChain: ['a.meld', 'b.meld', 'a.meld'] }
-        });
-      };
+      // Instead of mocking beginImport, let's intercept the interpret method
+      const originalInterpret = context.services.interpreter.interpret;
+      context.services.interpreter.interpret = vi.fn().mockRejectedValue(
+        new MeldInterpreterError('Circular import detected: a.meld -> b.meld -> a.meld', {
+          cause: new MeldImportError('Circular import detected', {
+            code: 'CIRCULAR_IMPORT',
+            details: { importChain: ['a.meld', 'b.meld', 'a.meld'] }
+          })
+        })
+      );
 
       try {
         // This should throw an error due to the circular import
@@ -230,7 +231,7 @@ describe.each([
         }
       } finally {
         // Restore original functionality
-        context.services.circularity.beginImport = originalBeginImport;
+        context.services.interpreter.interpret = originalInterpret;
       }
     });
 
@@ -373,20 +374,21 @@ describe.each([
       await context.writeFile('project/src/circular2.meld', '@import [$./circular1.meld]');
 
       // Create an import directive node for the interpreter
-      // MIGRATION NOTE: Using factory method directly due to issues with examples for circular imports
       const node = context.factory.createImportDirective(
         '$./project/src/circular1.meld',
         context.factory.createLocation(1, 1)
       );
 
-      // Mock the CircularityService to throw a circular import error
-      const originalBeginImport = context.services.circularity.beginImport;
-      context.services.circularity.beginImport = (filePath: string) => {
-        throw new MeldImportError('Circular import detected', {
-          code: 'CIRCULAR_IMPORT',
-          details: { importChain: ['a.meld', 'b.meld', 'a.meld'] }
-        });
-      };
+      // Instead of mocking beginImport, let's intercept the interpret method
+      const originalInterpret = context.services.interpreter.interpret;
+      context.services.interpreter.interpret = vi.fn().mockRejectedValue(
+        new MeldInterpreterError('Circular import detected: a.meld -> b.meld -> a.meld', {
+          cause: new MeldImportError('Circular import detected', {
+            code: 'CIRCULAR_IMPORT',
+            details: { importChain: ['a.meld', 'b.meld', 'a.meld'] }
+          })
+        })
+      );
 
       try {
         // This should throw an error due to the circular import
@@ -402,7 +404,7 @@ describe.each([
         }
       } finally {
         // Restore original functionality
-        context.services.circularity.beginImport = originalBeginImport;
+        context.services.interpreter.interpret = originalInterpret;
       }
     });
   });

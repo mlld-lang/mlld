@@ -11,6 +11,8 @@ export * from './TestServiceUtilities';
 export { default as TestServiceUtilities } from './TestServiceUtilities';
 export * from './CircularDependencyTestHelper';
 export { default as CircularDependencyTestHelper } from './CircularDependencyTestHelper';
+export * from './TestHelpers';
+export { default as TestHelpers } from './TestHelpers';
 
 // Keep backward compatibility
 export * from './MockServices';

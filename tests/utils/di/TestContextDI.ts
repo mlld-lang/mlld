@@ -1,11 +1,7 @@
 import { container, DependencyContainer, InjectionToken } from 'tsyringe';
 import { TestContext } from '../TestContext';
 import { TestContainerHelper } from './TestContainerHelper';
-import { 
-  Service, 
-  resolveService, 
-  registerServiceInstance 
-} from '@core/ServiceProvider';
+import { Service } from '@core/ServiceProvider';
 import { vi } from 'vitest';
 import { MemfsTestFileSystem } from '../MemfsTestFileSystem';
 import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService';
@@ -67,6 +63,11 @@ export interface TestContextDIOptions {
    * Auto-initialize services (true by default)
    */
   autoInit?: boolean;
+  
+  /**
+   * Enable container leak detection (false by default)
+   */
+  leakDetection?: boolean;
 }
 
 /**
@@ -81,6 +82,7 @@ export class TestContextDI extends TestContext {
 
   /**
    * For backward compatibility - always returns true
+   * @deprecated DI is now always enabled
    */
   public readonly useDI: boolean = true;
 
@@ -108,6 +110,11 @@ export class TestContextDI extends TestContext {
    * Tracks if this context has been cleaned up
    */
   private isCleanedUp: boolean = false;
+  
+  /**
+   * Leak detection enabled
+   */
+  private leakDetectionEnabled: boolean = false;
 
   /**
    * Create a new TestContextDI instance
@@ -116,6 +123,9 @@ export class TestContextDI extends TestContext {
   constructor(options: TestContextDIOptions = {}) {
     // Call parent constructor, will initialize services manually
     super(options.fixturesDir);
+
+    // Set leak detection flag
+    this.leakDetectionEnabled = options.leakDetection === true;
 
     // Create appropriate container helper
     if (options.container) {
@@ -131,7 +141,7 @@ export class TestContextDI extends TestContext {
 
     // Initialize immediately if auto-init is enabled (default)
     if (options.autoInit !== false) {
-      this.initPromise = this.initializeWithDIAsync();
+      this.initPromise = this.initializeAsync();
     }
   }
 
@@ -145,21 +155,21 @@ export class TestContextDI extends TestContext {
 
   /**
    * Create a TestContextDI instance with DI mode
-   * For backward compatibility with existing tests
+   * @deprecated Use create() instead - DI is now always enabled
    * @param options Options for test context initialization
    */
   static withDI(options: TestContextDIOptions = {}): TestContextDI {
+    console.warn('TestContextDI.withDI() is deprecated. Use TestContextDI.create() instead.');
     return TestContextDI.create(options);
   }
 
   /**
    * Create a TestContextDI instance without DI mode
-   * For backward compatibility with existing tests
-   * In the new implementation, DI is always enabled but this method is maintained
-   * for compatibility with existing tests
+   * @deprecated Use create() instead - DI is now always enabled
    * @param options Options for test context initialization
    */
   static withoutDI(options: TestContextDIOptions = {}): TestContextDI {
+    console.warn('TestContextDI.withoutDI() is deprecated. Use TestContextDI.create() instead.');
     return TestContextDI.create(options);
   }
 
@@ -169,6 +179,23 @@ export class TestContextDI extends TestContext {
    */
   static createIsolated(options: Omit<TestContextDIOptions, 'isolatedContainer'> = {}): TestContextDI {
     return new TestContextDI({ ...options, isolatedContainer: true });
+  }
+
+  /**
+   * Create a child context with a new container that inherits from the parent
+   * @param options Additional options for the child context
+   */
+  createChildContext(options: Omit<TestContextDIOptions, 'container'> = {}): TestContextDI {
+    // Create a new context with a child container
+    const childContext = new TestContextDI({
+      ...options,
+      container: this.container.getContainer().createChildContainer()
+    });
+    
+    // Track the child context for cleanup
+    this.childContexts.push(childContext);
+    
+    return childContext;
   }
 
   /**
@@ -189,34 +216,8 @@ export class TestContextDI extends TestContext {
       await this.initPromise;
     }
 
-    if (this.useDI) {
-      // In DI mode, resolve from container
-      return this.container.resolve<T>(token);
-    } else {
-      // In non-DI mode, check the services object
-      if (typeof token === 'string') {
-        const lowerToken = token.toLowerCase();
-        // Handle interface token format (IServiceName)
-        const serviceName = token.startsWith('I') 
-          ? lowerToken.substring(1) 
-          : lowerToken;
-        
-        // Check if the service exists on the services object
-        if (serviceName in this.services) {
-          return (this.services as any)[serviceName] as T;
-        }
-      }
-      
-      // If fallback is provided, use it
-      if (fallback !== undefined) {
-        return fallback;
-      }
-      
-      throw new Error(
-        `Cannot resolve service '${String(token)}' in non-DI mode. ` +
-        `Make sure the service is registered or provide a fallback.`
-      );
-    }
+    // Resolve from container
+    return this.container.resolve<T>(token);
   }
 
   /**
@@ -232,1206 +233,579 @@ export class TestContextDI extends TestContext {
       console.warn('Warning: Synchronous resolve called before initialization is complete. This may cause race conditions.');
     }
 
-    if (this.useDI) {
-      // In DI mode, resolve from container
-      return this.container.resolve<T>(token);
-    } else {
-      // Non-DI case is the same as before
-      if (typeof token === 'string') {
-        const lowerToken = token.toLowerCase();
-        const serviceName = token.startsWith('I') ? lowerToken.substring(1) : lowerToken;
-        
-        if (serviceName in this.services) {
-          return (this.services as any)[serviceName] as T;
-        }
-      }
-      
-      if (fallback !== undefined) {
-        return fallback;
-      }
-      
-      throw new Error(`Cannot resolve service '${String(token)}' in non-DI mode.`);
+    // Resolve from container
+    return this.container.resolve<T>(token);
+  }
+
+  /**
+   * Registers a mock instance for a token in the container
+   * @param token The token to register (string or class)
+   * @param mockInstance The mock implementation
+   */
+  registerMock<T>(token: string | InjectionToken<T>, mockInstance: T): void {
+    if (this.isCleanedUp) {
+      throw new Error(`Cannot register mock for '${String(token)}' - context has been cleaned up`);
     }
+
+    // Register the mock with the container
+    this.container.registerMock(token, mockInstance);
+    
+    // Track the mock for cleanup
+    this.registeredMocks.set(String(token), mockInstance);
   }
 
   /**
-   * Register a mock implementation for a service
-   * 
-   * @param token The token to register
-   * @param mockImpl The mock implementation
-   * @returns The mock implementation
+   * Registers multiple mocks at once
+   * @param mocks Object mapping tokens to mock implementations
    */
-  registerMock<T>(token: any, mockImpl: T): T {
-    // Register with the container
-    this.container.registerMock(token, mockImpl);
-    
-    // Track for cleanup
-    if (typeof token === 'string') {
-      this.registeredMocks.set(token, mockImpl);
-      
-      // Also track interface token if we're registering it
-      if (token.startsWith('I') && token.length > 1) {
-        const implToken = token.substring(1);
-        this.container.registerMock(implToken, mockImpl);
-        this.registeredMocks.set(implToken, mockImpl);
-      }
+  registerMocks(mocks: Record<string, any>): void {
+    for (const [token, mockImpl] of Object.entries(mocks)) {
+      this.registerMock(token, mockImpl);
     }
-    
-    return mockImpl;
-  }
-
-  /**
-   * Initialize a subset of Meld services using DI
-   */
-  private async initializeWithDIAsync(): Promise<void> {
-    // Register filesystem
-    this.container.registerMock(
-      'MemfsTestFileSystem',
-      this.testfs
-    );
-
-    // This is now always true, so no need for conditional logic
-    // Register base services with container
-    this.registerSharedServices();
-        
-    // Wait for registration to complete
-    await Promise.resolve();
-  }
-
-  /**
-   * Register shared services with the container
-   */
-  private registerSharedServices(): void {
-    // Simply register mock services for testing
-    this.registerFileSystemService();
-    this.registerPathOperationsService();
-    this.registerStateEventService();
-    this.registerPathService();
-    this.registerProjectPathResolver();
-    this.registerValidationService();
-    this.registerCircularityService();
-    this.registerParserService();
-    this.registerStateService();
-    this.registerDirectiveService();
-    this.registerInterpreterService();
-    this.registerResolutionService();
-    this.registerOutputService();
-    this.registerTestDebuggerService();
-  }
-
-  /**
-   * Register a FileSystemService with the container
-   */
-  private registerFileSystemService(): void {
-    // Create mock FileSystemService that uses our testfs
-    const mockFileSystemService = {
-      readFile: (path: string) => this.testfs.readFile(path),
-      writeFile: (path: string, content: string) => this.testfs.writeFile(path, content),
-      exists: (path: string) => this.testfs.exists(path),
-      mkdir: (path: string) => this.testfs.mkdir(path),
-    };
-
-    this.registerMock('IFileSystemService', mockFileSystemService);
-    this.registerMock('FileSystemService', mockFileSystemService);
-  }
-
-  /**
-   * Register a PathOperationsService with the container
-   */
-  private registerPathOperationsService(): void {
-    // Import path module to avoid reference errors
-    const path = require('path');
-    
-    const mockPathOperationsService = {
-      // Simple implementations using Node.js path module
-      join: (...parts: string[]) => path.join(...parts),
-      resolve: (...paths: string[]) => path.resolve(...paths),
-      dirname: (p: string) => path.dirname(p),
-      basename: (p: string) => path.basename(p),
-      normalize: (p: string) => path.normalize(p),
-      isAbsolute: (p: string) => path.isAbsolute(p),
-      relative: (from: string, to: string) => path.relative(from, to),
-      parse: (p: string) => path.parse(p)
-    };
-
-    this.registerMock('IPathOperationsService', mockPathOperationsService);
-    this.registerMock('PathOperationsService', mockPathOperationsService);
-  }
-
-  /**
-   * Register a StateEventService with the container
-   */
-  private registerStateEventService(): void {
-    // Valid event types
-    const validEventTypes = ['create', 'clone', 'transform', 'merge', 'error'];
-    
-    // Map to store handlers by event type
-    const handlers = new Map<string, Array<{
-      handler: (event: any) => void | Promise<void>;
-      options?: { filter?: (event: any) => boolean };
-    }>>();
-    
-    // Initialize handler maps for each event type
-    validEventTypes.forEach(type => {
-      handlers.set(type, []);
-    });
-
-    const mockStateEventService = {
-      // Register an event handler
-      on: vi.fn().mockImplementation((type: string, handler: any, options?: any) => {
-        // Validate event type
-        if (!validEventTypes.includes(type)) {
-          throw new Error('Invalid event type');
-        }
-        
-        // Get handlers for this event type
-        const eventHandlers = handlers.get(type) || [];
-        
-        // Add the new handler with its options
-        eventHandlers.push({ handler, options });
-        
-        // Update the handlers map
-        handlers.set(type, eventHandlers);
-      }),
-      
-      // Remove an event handler
-      off: vi.fn().mockImplementation((type: string, handlerToRemove: any) => {
-        // Get handlers for this event type
-        const eventHandlers = handlers.get(type) || [];
-        
-        // Filter out the handler to remove
-        const updatedHandlers = eventHandlers.filter(({ handler }) => handler !== handlerToRemove);
-        
-        // Update the handlers map
-        handlers.set(type, updatedHandlers);
-      }),
-      
-      // Emit an event
-      emit: vi.fn().mockImplementation(async (event: any) => {
-        // Get handlers for this event type
-        const eventHandlers = handlers.get(event.type) || [];
-        
-        // Process each handler
-        for (const { handler, options } of eventHandlers) {
-          // Apply filter if provided
-          if (options?.filter && !options.filter(event)) {
-            continue;
-          }
-          
-          try {
-            // Call the handler and await if it returns a promise
-            await handler(event);
-          } catch (error) {
-            // Continue processing other handlers even if one fails
-            console.error(`Error in event handler for ${event.type}:`, error);
-          }
-        }
-      }),
-      
-      // Get all registered handlers for an event type
-      getHandlers: vi.fn().mockImplementation((type: string) => {
-        return handlers.get(type) || [];
-      }),
-    };
-
-    this.registerMock('IStateEventService', mockStateEventService);
-    this.registerMock('StateEventService', mockStateEventService);
-  }
-
-  /**
-   * Register a PathService with the container
-   */
-  private registerPathService(): void {
-    // Import path module and required modules for testing
-    const path = require('path');
-    
-    // Track home and project paths for tests
-    let testHomePath = '/home/user';
-    let testProjectPath = '/project';
-    let isInTestMode = true;
-    
-    // Create a mock that handles the basics and path validation
-    const mockPathService = {
-      // Path getters and setters
-      getHomePath: () => testHomePath,
-      setHomePath: vi.fn((path) => { testHomePath = path; }),
-      getProjectPath: () => testProjectPath,
-      setProjectPath: vi.fn((path) => { testProjectPath = path; }),
-      
-      // Parser service storage
-      parserService: null,
-      
-      // Test mode methods
-      isTestMode: () => isInTestMode,
-      setTestMode: vi.fn((mode) => { isInTestMode = mode; }),
-      enableTestMode: vi.fn(() => { isInTestMode = true; }),
-      disableTestMode: vi.fn(() => { isInTestMode = false; }),
-      
-      // Path operations (delegating to path module)
-      join: (...parts: string[]) => path.join(...parts),
-      dirname: (p: string) => path.dirname(p),
-      basename: (p: string) => path.basename(p),
-      normalizePath: (p: string) => path.normalize(p),
-      
-      // Path validation that throws appropriate errors
-      validatePath: async (pathToValidate: string, options: any = {}) => {
-        // Call parser if not in test mode and we have a parser
-        if (!isInTestMode && mockPathService.parserService && mockPathService.parserService.parse && 
-            typeof mockPathService.parserService.parse === 'function') {
-          await mockPathService.parserService.parse(pathToValidate);
-        }
-        
-        // Handle common validation cases that tests expect to fail
-        if (pathToValidate === '') {
-          throw createPathValidationError('Empty path is not allowed', { 
-            code: 'EMPTY_PATH', 
-            path: pathToValidate 
-          });
-        }
-        
-        if (pathToValidate.includes('\0')) {
-          throw createPathValidationError('Path contains null bytes', { 
-            code: 'NULL_BYTE', 
-            path: pathToValidate 
-          });
-        }
-        
-        // Handle specific paths from test cases
-        if ((options.allowOutsideBaseDir === false && pathToValidate === '$HOMEPATH/outside.txt') ||
-            (pathToValidate.startsWith('$HOMEPATH/') && pathToValidate.includes('..') && options.allowOutsideBaseDir === false)) {
-          throw createPathValidationError('Path is outside base directory', { 
-            code: 'OUTSIDE_BASE_DIR', 
-            path: pathToValidate 
-          });
-        }
-        
-        // Handle mustExist option
-        if (options.mustExist === true && (pathToValidate.includes('nonexistent') || options.filePath === 'nonexistent')) {
-          throw createPathValidationError('File does not exist', { 
-            code: 'FILE_NOT_FOUND', 
-            path: pathToValidate 
-          });
-        }
-        
-        // Handle file type validation
-        if ((options.mustBeFile && pathToValidate.endsWith('/')) || 
-            (options.mustBeFile && pathToValidate === '$PROJECTPATH/testdir')) {
-          throw createPathValidationError('Path must be a file', { 
-            code: 'NOT_A_FILE', 
-            path: pathToValidate 
-          });
-        }
-        
-        if (options.mustBeDirectory && !pathToValidate.endsWith('/') && 
-            pathToValidate !== '$PROJECTPATH/testdir') {
-          throw createPathValidationError('Path must be a directory', { 
-            code: 'NOT_A_DIRECTORY', 
-            path: pathToValidate 
-          });
-        }
-        
-        // Return the path if validation passes
-        return pathToValidate;
-      },
-      
-      // Simple path resolution
-      resolvePath: (pathToResolve: string) => {
-        // Handle the structured path validation
-        if (pathToResolve && typeof pathToResolve === 'object' && pathToResolve.structured) {
-          // Check for invalid paths
-          if (pathToResolve.structured.segments && pathToResolve.structured.segments.includes('..')) {
-            throw createPathValidationError('Path is outside base directory', { 
-              code: 'OUTSIDE_BASE_DIR', 
-              path: pathToResolve.raw 
-            });
-          }
-          
-          // Check for the invalid case from the test
-          if (pathToResolve.structured && pathToResolve.structured.invalid === true) {
-            throw createPathValidationError('Invalid structured path', { 
-              code: 'INVALID_PATH', 
-              path: pathToResolve.raw 
-            });
-          }
-        }
-        
-        // Basic implementation for tests
-        return pathToResolve;
-      },
-      
-      // Path variable resolution
-      resolveHomePath: (p: string) => p.replace('$HOMEPATH', testHomePath),
-      resolveProjPath: (p: string) => p.replace('$PROJECTPATH', testProjectPath),
-      resolveMagicPath: (p: string) => {
-        return p
-          .replace('$HOMEPATH', testHomePath)
-          .replace('$PROJECTPATH', testProjectPath);
-      },
-      
-      // Path existence methods
-      exists: async (p: string) => !p.includes('nonexistent'),
-      isDirectory: async (p: string) => p.endsWith('/') || p === '$PROJECTPATH/testdir',
-      
-      // Additional helpers
-      hasPathVariables: (p: string) => 
-        p.includes('$HOMEPATH') || p.includes('$PROJECTPATH'),
-      
-      // Initialize method required by tests
-      initialize: (fileSystem: any, parserService: any = null) => {
-        // Store parser service if provided (for tests that verify parser is called)
-        if (parserService && parserService.parse) {
-          mockPathService.parserService = parserService;
-        }
-      },
-      
-      // Method to validate structured paths
-      validateMeldPath: (pathString: string, options: any = {}) => {
-        if (pathString.includes('..') && options.allowOutsideBaseDir === false) {
-          throw createPathValidationError('Path is outside base directory', { 
-            code: 'OUTSIDE_BASE_DIR', 
-            path: pathString 
-          });
-        }
-        return pathString;
-      },
-      
-      // Method to get structured path
-      getStructuredPath: (pathString: string) => {
-        return {
-          raw: pathString,
-          structured: {
-            segments: pathString.split('/'),
-            variables: {
-              special: []
-            }
-          },
-          normalized: pathString
-        };
-      }
-    };
-
-    this.registerMock('IPathService', mockPathService);
-    this.registerMock('PathService', mockPathService);
-  }
-
-  /**
-   * Register a ProjectPathResolver with the container
-   */
-  private registerProjectPathResolver(): void {
-    const mockProjectPathResolver = {
-      // Handle special case for '/project/src'
-      resolveProjectRoot: async (startDir: string) => {
-        // The specific test case needs '/project/src' to resolve to '/project'
-        if (startDir === '/project/src') {
-          return '/project';
-        }
-        // All other paths return as-is
-        return startDir;
-      },
-      getProjectPath: () => '/project',
-      findFileUpwards: async (filename: string, startDir: string) => null,
-      isSubdirectoryOf: (child: string, parent: string) => child.startsWith(parent + '/')
-    };
-
-    this.registerMock('ProjectPathResolver', mockProjectPathResolver);
-  }
-
-  /**
-   * Register a ValidationService with the container
-   */
-  private registerValidationService(): void {
-    // Track registered validators and their kinds
-    const validators = new Map<string, any>();
-
-    // Set up default validators for common directive kinds
-    validators.set('text', async (node: any) => {
-      // Check for missing name/identifier
-      if (!node?.directive?.identifier || node.directive.identifier.trim() === '') {
-        throw new MeldDirectiveError(
-          'Text directive requires a non-empty identifier',
-          'text',
-          {
-            code: DirectiveErrorCode.VALIDATION_FAILED,
-            severity: ErrorSeverity.Fatal,
-            location: node.location ? {
-              line: node.location.start.line,
-              column: node.location.start.column
-            } : undefined
-          }
-        );
-      }
-      
-      // Check for missing value
-      if (!node?.directive?.value || node.directive.value.trim() === '') {
-        throw new MeldDirectiveError(
-          'Text directive requires a non-empty value',
-          'text',
-          {
-            code: DirectiveErrorCode.VALIDATION_FAILED,
-            severity: ErrorSeverity.Fatal,
-            location: node.location ? {
-              line: node.location.start.line,
-              column: node.location.start.column
-            } : undefined
-          }
-        );
-      }
-      
-      // Check for invalid name format (if needed)
-      // Specifically check for identifiers starting with numbers (123invalid)
-      if (node?.directive?.identifier && /^[0-9]/.test(node.directive.identifier)) {
-        throw new MeldDirectiveError(
-          'Text directive identifier must not start with a number',
-          'text',
-          {
-            code: DirectiveErrorCode.VALIDATION_FAILED,
-            severity: ErrorSeverity.Fatal,
-            location: node.location ? {
-              line: node.location.start.line,
-              column: node.location.start.column
-            } : undefined
-          }
-        );
-      }
-      
-      // Check for invalid @embed format - but allow spaces between @embed and [
-      if (node?.directive?.value && 
-          node.directive.value.includes('@embed') && 
-          !node.directive.value.match(/@embed\s*\[/)) {
-        throw new MeldDirectiveError(
-          'Invalid @embed format: must use @embed[path] syntax',
-          'text',
-          {
-            code: DirectiveErrorCode.VALIDATION_FAILED,
-            severity: ErrorSeverity.Fatal,
-            location: node.location ? {
-              line: node.location.start.line,
-              column: node.location.start.column
-            } : undefined
-          }
-        );
-      }
-      
-      // Check for invalid @run format - but allow spaces between @run and [
-      if (node?.directive?.value && 
-          node.directive.value.includes('@run') && 
-          !node.directive.value.match(/@run\s*\[/)) {
-        throw new MeldDirectiveError(
-          'Invalid @run format: must use @run[command] syntax',
-          'text',
-          {
-            code: DirectiveErrorCode.VALIDATION_FAILED,
-            severity: ErrorSeverity.Fatal,
-            location: node.location ? {
-              line: node.location.start.line,
-              column: node.location.start.column
-            } : undefined
-          }
-        );
-      }
-    });
-    
-    validators.set('data', async (node: any) => {
-      // Check for missing name/identifier
-      if (!node?.directive?.identifier || node.directive.identifier.trim() === '') {
-        throw new MeldDirectiveError(
-          'Data directive requires a non-empty identifier',
-          'data',
-          {
-            code: DirectiveErrorCode.VALIDATION_FAILED,
-            severity: ErrorSeverity.Fatal,
-            location: node.location ? {
-              line: node.location.start.line,
-              column: node.location.start.column
-            } : undefined
-          }
-        );
-      }
-      
-      // Check for invalid name format - specifically check for identifiers starting with numbers
-      if (node?.directive?.identifier && /^[0-9]/.test(node.directive.identifier)) {
-        throw new MeldDirectiveError(
-          'Data directive identifier must not start with a number',
-          'data',
-          {
-            code: DirectiveErrorCode.VALIDATION_FAILED,
-            severity: ErrorSeverity.Fatal,
-            location: node.location ? {
-              line: node.location.start.line,
-              column: node.location.start.column
-            } : undefined
-          }
-        );
-      }
-      
-      // Check for invalid JSON
-      if (node?.directive?.value && typeof node.directive.value === 'string') {
-        try {
-          JSON.parse(node.directive.value);
-        } catch (e) {
-          throw new MeldDirectiveError(
-            'Data directive value must be valid JSON',
-            'data',
-            {
-              code: DirectiveErrorCode.VALIDATION_FAILED,
-              severity: ErrorSeverity.Fatal,
-              location: node.location ? {
-                line: node.location.start.line,
-                column: node.location.start.column
-              } : undefined,
-              cause: e as Error
-            }
-          );
-        }
-      }
-    });
-    
-    validators.set('path', async (node: any) => {
-      // Check for missing identifier
-      if (!node?.directive?.identifier || node.directive.identifier.trim() === '') {
-        throw new MeldDirectiveError(
-          'Path directive requires a non-empty identifier',
-          'path',
-          {
-            code: DirectiveErrorCode.VALIDATION_FAILED,
-            severity: ErrorSeverity.Fatal,
-            location: node.location ? {
-              line: node.location.start.line,
-              column: node.location.start.column
-            } : undefined
-          }
-        );
-      }
-      
-      // Check for invalid identifier format - specifically check for identifiers starting with numbers
-      if (node?.directive?.identifier && /^[0-9]/.test(node.directive.identifier)) {
-        throw new MeldDirectiveError(
-          'Path directive identifier must not start with a number',
-          'path',
-          {
-            code: DirectiveErrorCode.VALIDATION_FAILED,
-            severity: ErrorSeverity.Fatal,
-            location: node.location ? {
-              line: node.location.start.line,
-              column: node.location.start.column
-            } : undefined
-          }
-        );
-      }
-      
-      // Check for missing value
-      if (!node?.directive?.value || node.directive.value.trim() === '') {
-        throw new MeldDirectiveError(
-          'Path directive requires a non-empty value',
-          'path',
-          {
-            code: DirectiveErrorCode.VALIDATION_FAILED,
-            severity: ErrorSeverity.Fatal,
-            location: node.location ? {
-              line: node.location.start.line,
-              column: node.location.start.column
-            } : undefined
-          }
-        );
-      }
-      
-      // Check for empty path value
-      if (node?.directive?.value === '') {
-        throw new MeldDirectiveError(
-          'Path directive value cannot be empty',
-          'path',
-          {
-            code: DirectiveErrorCode.VALIDATION_FAILED,
-            severity: ErrorSeverity.Fatal,
-            location: node.location ? {
-              line: node.location.start.line,
-              column: node.location.start.column
-            } : undefined
-          }
-        );
-      }
-    });
-    
-    validators.set('import', async (node: any) => {
-      // Check for missing path
-      if (!node?.directive?.path || node.directive.path.trim() === '') {
-        throw new MeldDirectiveError(
-          'Import directive requires a non-empty path',
-          'import',
-          {
-            code: DirectiveErrorCode.VALIDATION_FAILED,
-            severity: ErrorSeverity.Fatal,
-            location: node.location ? {
-              line: node.location.start.line,
-              column: node.location.start.column
-            } : undefined
-          }
-        );
-      }
-    });
-    
-    validators.set('embed', async (node: any) => {
-      // Check for missing path
-      if (!node?.directive?.path || node.directive.path.trim() === '') {
-        throw new MeldDirectiveError(
-          'Embed directive requires a non-empty path',
-          'embed',
-          {
-            code: DirectiveErrorCode.VALIDATION_FAILED,
-            severity: ErrorSeverity.Fatal,
-            location: node.location ? {
-              line: node.location.start.line,
-              column: node.location.start.column
-            } : undefined
-          }
-        );
-      }
-      
-      // Check for invalid fuzzy threshold (below 0)
-      // Note: The test is using node.directive.fuzzy, not fuzzyThreshold
-      if (node?.directive?.fuzzy !== undefined && 
-          typeof node.directive.fuzzy === 'number' && 
-          node.directive.fuzzy < 0) {
-        throw new MeldDirectiveError(
-          'fuzzy threshold must be between 0 and 1',
-          'embed',
-          {
-            code: DirectiveErrorCode.VALIDATION_FAILED,
-            severity: ErrorSeverity.Fatal,
-            location: node.location ? {
-              line: node.location.start.line,
-              column: node.location.start.column
-            } : undefined
-          }
-        );
-      }
-      
-      // Check for invalid fuzzy threshold (above 1)
-      if (node?.directive?.fuzzy !== undefined && 
-          typeof node.directive.fuzzy === 'number' && 
-          node.directive.fuzzy > 1) {
-        throw new MeldDirectiveError(
-          'fuzzy threshold must be between 0 and 1',
-          'embed',
-          {
-            code: DirectiveErrorCode.VALIDATION_FAILED,
-            severity: ErrorSeverity.Fatal,
-            location: node.location ? {
-              line: node.location.start.line,
-              column: node.location.start.column
-            } : undefined
-          }
-        );
-      }
-    });
-
-    const mockValidationService = {
-      // Method to validate a directive node
-      validate: vi.fn().mockImplementation(async (node: any) => {
-        // If this node has a kind, check if we have a validator for it
-        if (node?.directive?.kind) {
-          const validator = validators.get(node.directive.kind);
-          if (validator) {
-            // Call the validator which may throw errors
-            return validator(node);
-          } else {
-            // Unknown directive kind
-            throw new MeldDirectiveError(
-              `Unknown directive kind: ${node.directive.kind}`,
-              node.directive.kind || 'unknown',
-              {
-                code: DirectiveErrorCode.HANDLER_NOT_FOUND,
-                severity: ErrorSeverity.Fatal,
-                location: node.location ? {
-                  line: node.location.start.line,
-                  column: node.location.start.column
-                } : undefined
-              }
-            );
-          }
-        }
-        // Default behavior: return a resolved promise (success)
-        return Promise.resolve();
-      }),
-
-      // Method to register a validator for a directive kind
-      registerValidator: vi.fn().mockImplementation((kind: string, validator: any) => {
-        if (!kind || typeof kind !== 'string' || kind.trim() === '') {
-          throw new Error('Validator kind must be a non-empty string');
-        }
-        if (!validator || typeof validator !== 'function') {
-          throw new Error('Validator must be a function');
-        }
-        validators.set(kind, validator);
-      }),
-
-      // Method to remove a validator for a directive kind
-      removeValidator: vi.fn().mockImplementation((kind: string) => {
-        validators.delete(kind);
-      }),
-
-      // Method to check if a validator exists for a directive kind
-      hasValidator: vi.fn().mockImplementation((kind: string) => {
-        return validators.has(kind);
-      }),
-
-      // Method to get all registered directive kinds
-      getRegisteredDirectiveKinds: vi.fn().mockImplementation(() => {
-        return Array.from(validators.keys());
-      }),
-    };
-
-    this.registerMock('IValidationService', mockValidationService);
-    this.registerMock('ValidationService', mockValidationService);
-  }
-
-  /**
-   * Register a CircularityService with the container
-   */
-  private registerCircularityService(): void {
-    // Create a proper mock implementation that maintains state
-    const importStack: string[] = [];
-
-    const mockCircularityService = {
-      // Legacy methods
-      checkForCircularDependency: vi.fn().mockReturnValue(false),
-      trackDependency: vi.fn(),
-      
-      // Methods from ICircularityService interface
-      beginImport: vi.fn((filePath: string) => {
-        // Check for circular import
-        if (importStack.includes(filePath)) {
-          const error = new MeldImportError(`Circular import detected: ${filePath}`, {
-            code: 'CIRCULAR_IMPORT',
-            details: {
-              importChain: [...importStack, filePath]
-            }
-          });
-          throw error;
-        }
-        importStack.push(filePath);
-      }),
-
-      endImport: vi.fn((filePath: string) => {
-        const index = importStack.indexOf(filePath);
-        if (index !== -1) {
-          importStack.splice(index, 1);
-        }
-      }),
-
-      isInStack: vi.fn((filePath: string) => {
-        return importStack.includes(filePath);
-      }),
-
-      getImportStack: vi.fn(() => {
-        return [...importStack]; // Return a copy of the stack
-      }),
-
-      reset: vi.fn(() => {
-        importStack.length = 0;
-      })
-    };
-
-    this.registerMock('ICircularityService', mockCircularityService);
-    this.registerMock('CircularityService', mockCircularityService);
-  }
-
-  /**
-   * Register a ParserService with the container
-   */
-  private registerParserService(): void {
-    const mockParserService = {
-      parse: vi.fn().mockReturnValue([]),
-      parseWithLocations: vi.fn().mockReturnValue([]),
-    };
-
-    this.registerMock('IParserService', mockParserService);
-    this.registerMock('ParserService', mockParserService);
-  }
-
-  /**
-   * Register a StateService with the container
-   */
-  private registerStateService(): void {
-    const mockStateService = {
-      getState: vi.fn(),
-      createChildState: vi.fn().mockReturnValue('child-state-id'),
-      setVar: vi.fn(),
-      getVar: vi.fn(),
-      setPathVar: vi.fn(),
-      getPathVar: vi.fn(),
-      setDataVar: vi.fn(),
-      getDataVar: vi.fn(),
-      setCurrentFilePath: vi.fn(),
-      getCurrentFilePath: vi.fn().mockReturnValue('test.meld'),
-      enableTransformation: vi.fn(),
-    };
-
-    this.registerMock('IStateService', mockStateService);
-    this.registerMock('StateService', mockStateService);
-  }
-
-  /**
-   * Register a DirectiveService with the container
-   */
-  private registerDirectiveService(): void {
-    const mockDirectiveService = {
-      processDirective: vi.fn(),
-      registerHandler: vi.fn(),
-      registerDefaultHandlers: vi.fn(),
-    };
-
-    this.registerMock('IDirectiveService', mockDirectiveService);
-    this.registerMock('DirectiveService', mockDirectiveService);
-  }
-
-  /**
-   * Register an InterpreterService with the container
-   */
-  private registerInterpreterService(): void {
-    const mockInterpreterService = {
-      interpret: vi.fn().mockReturnValue([]),
-    };
-
-    this.registerMock('IInterpreterService', mockInterpreterService);
-    this.registerMock('InterpreterService', mockInterpreterService);
-  }
-
-  /**
-   * Register a ResolutionService with the container
-   */
-  private registerResolutionService(): void {
-    const mockResolutionService = {
-      resolveVariables: vi.fn().mockImplementation((text) => text),
-      resolvePathVariables: vi.fn().mockImplementation((text) => text),
-    };
-
-    this.registerMock('IResolutionService', mockResolutionService);
-    this.registerMock('ResolutionService', mockResolutionService);
-  }
-
-  /**
-   * Register an OutputService with the container
-   */
-  private registerOutputService(): void {
-    const mockOutputService = {
-      generateOutput: vi.fn().mockReturnValue(''),
-    };
-
-    this.registerMock('IOutputService', mockOutputService);
-    this.registerMock('OutputService', mockOutputService);
-  }
-
-  /**
-   * Register a TestDebuggerService with the container
-   */
-  private registerTestDebuggerService(): void {
-    const mockTestDebuggerService = {
-      startSession: vi.fn(),
-      endSession: vi.fn(),
-    };
-
-    this.registerMock('IStateDebuggerService', mockTestDebuggerService);
-    this.registerMock('TestDebuggerService', mockTestDebuggerService);
   }
 
   /**
    * Registers a mock service class
-   * Works in both DI and non-DI modes for consistent API
-   * 
    * @param token The token to register
-   * @param MockClass The mock class to register
-   * @param options Optional registration options
+   * @param mockClass The mock class to register
    */
-  registerMockClass<T>(
-    token: string | InjectionToken<T>,
-    MockClass: new (...args: any[]) => T,
-    options: {
-      /**
-       * Register interface token automatically (e.g., IServiceName)
-       */
-      registerInterface?: boolean;
-      
-      /**
-       * Arguments to pass to the constructor in non-DI mode
-       */
-      constructorArgs?: any[];
-      
-      /**
-       * Skip updating the services object (DI only use case)
-       */
-      skipServicesUpdate?: boolean;
-    } = {}
-  ): T {
+  registerMockClass<T>(token: string | InjectionToken<T>, mockClass: new (...args: any[]) => T): void {
     if (this.isCleanedUp) {
-      throw new Error(`Cannot register mock class '${String(token)}' - context has been cleaned up`);
+      throw new Error(`Cannot register mock class for '${String(token)}' - context has been cleaned up`);
     }
-    
-    // Default options
-    const registerInterface = options.registerInterface !== false;
-    const constructorArgs = options.constructorArgs || [];
-    const skipServicesUpdate = options.skipServicesUpdate === true;
-    
-    // Create instance differently based on DI mode
-    let instance: T;
-    
-    if (this.useDI) {
-      // In DI mode, register class with the container
-      this.container.registerMockClass(token, MockClass);
-      
-      // If there's an interface token, register that too
-      if (registerInterface && typeof token === 'string' && !token.startsWith('I')) {
-        this.container.registerMockClass(`I${token}`, MockClass);
-      }
-      
-      // Resolve the instance from the container
-      instance = this.container.resolve<T>(token);
-    } else {
-      // In non-DI mode, manually create instance
-      instance = new MockClass(...constructorArgs);
-    }
-    
-    // Update the services object for compatibility if not skipped
-    if (!skipServicesUpdate && typeof token === 'string') {
-      const serviceName = token.startsWith('I') 
-        ? token.substring(1).toLowerCase() 
-        : token.toLowerCase();
-      
-      if (serviceName in this.services) {
-        (this.services as any)[serviceName] = instance;
-      }
-    }
-    
-    return instance;
-  }
-  
-  /**
-   * Registers multiple mocks at once
-   * This is useful for setting up a test environment with many mocks
-   * 
-   * @param mocks Map of token -> mock implementation
-   * @param options Options for registration
-   */
-  registerMocks<T extends Record<string, any>>(
-    mocks: T,
-    options: {
-      /**
-       * Register interface tokens automatically (e.g., IServiceName)
-       */
-      registerInterfaces?: boolean;
-    } = {}
-  ): void {
-    if (this.isCleanedUp) {
-      throw new Error('Cannot register mocks - context has been cleaned up');
-    }
-    
-    // Register each mock
-    Object.entries(mocks).forEach(([token, implementation]) => {
-      this.registerMock(token, implementation, {
-        registerInterface: options.registerInterfaces !== false
-      });
-    });
-  }
-  
-  /**
-   * Creates a child state with proper DI initialization
-   * This ensures consistent state creation patterns regardless of DI mode
-   * 
-   * @param parentId Optional parent state ID to create a child from
-   * @param options Optional state creation options
-   * @returns The new state ID
-   */
-  createChildState(parentId?: string, options?: { 
-    filePath?: string; 
-    transformation?: boolean;
-    cloneVariables?: boolean;
-  }): string {
-    // Use the state service to create a child state
-    // The StateService API might have different methods depending on the version
-    try {
-      // Try different known methods
-      const stateService = this.services.state;
-      
-      // Method 1: createChildState (newer versions)
-      if (typeof stateService.createChildState === 'function') {
-        const stateId = stateService.createChildState(parentId, options);
-        
-        // If the state ID is not a string, create our own
-        if (typeof stateId !== 'string') {
-          const fallbackId = parentId ? `${parentId}.child` : `state-${Date.now()}`;
-          
-          // Still try to register the actual state if possible
-          if (typeof stateService.getState === 'function') {
-            try {
-              const childState = stateService.getState(stateId);
-              if (childState) {
-                this.container.registerMock(`State:${fallbackId}`, childState);
-              }
-            } catch (error) {
-              // Ignore registration errors
-            }
-          }
-          
-          return fallbackId;
-        }
-        
-        // Try to register the state with the container if in DI mode
-        if (typeof stateService.getState === 'function') {
-          try {
-            const childState = stateService.getState(stateId);
-            if (childState) {
-              this.container.registerMock(`State:${stateId}`, childState);
-            }
-          } catch (error) {
-            // Ignore registration errors - this is just for convenience
-          }
-        }
-        
-        return stateId;
-      }
-      
-      // Method 2: createChild (older versions)
-      if (typeof stateService.createChild === 'function') {
-        const stateId = stateService.createChild(parentId, options);
-        
-        // If the state ID is not a string, create our own
-        if (typeof stateId !== 'string') {
-          return parentId ? `${parentId}.child` : `state-${Date.now()}`;
-        }
-        
-        return stateId;
-      }
-    } catch (error) {
-      // Ignore any errors during child state creation
-      console.error('Error creating child state:', error);
-    }
-    
-    // Fallback: Just create a new state ID
-    return parentId ? `${parentId}.child` : `state-${Date.now()}`;
-  }
-  
-  /**
-   * Creates a child context with the same container and filesystem
-   */
-  createChildContext(options: Partial<TestContextDIOptions> = {}): TestContextDI {
-    // Create a child context with the same container
-    const childContainer = container.createChildContainer();
-    
-    const child = new TestContextDI({
-      fixturesDir: this.fixturesDir,
-      container: childContainer,
-      autoInit: false,
-      ...options,
-    });
-    
-    // Track the child context for cleanup
-    this.childContexts.push(child);
-    
-    return child;
-  }
 
-  /**
-   * Creates an isolated child context with a separate container
-   */
-  createIsolatedContext(options: Partial<TestContextDIOptions> = {}): TestContextDI {
-    const child = new TestContextDI({
-      fixturesDir: this.fixturesDir,
-      isolatedContainer: true,
-      autoInit: false,
-      ...options,
-    });
-    
-    // Track the isolated context for cleanup
-    this.childContexts.push(child);
-    
-    return child;
+    this.container.registerMockClass(token, mockClass);
   }
-
+  
   /**
-   * Creates a directive handler from a class or implementation
+   * Creates a diagnostic report about the context state
    */
-  createDirectiveHandler(options: {
-    /**
-     * The token to register
-     */
-    token: string;
-    
-    /**
-     * The implementation or class to use
-     */
-    implementation: any;
-  }): { handler: any; token: string } {
-    const { token, implementation } = options;
-    
-    // Always register the handler with the container
-    this.container.registerMock(token, implementation);
+  createDiagnosticReport(): Record<string, any> {
+    const containerDiagnostics = this.container.getDiagnostics();
     
     return {
-      handler: implementation,
-      token
+      initialized: this.initialized,
+      cleanedUp: this.isCleanedUp,
+      mockCount: this.registeredMocks.size,
+      childContextCount: this.childContexts.length,
+      container: containerDiagnostics,
+      leakDetection: {
+        enabled: this.leakDetectionEnabled,
+        ...containerDiagnostics.leakInfo
+      }
     };
   }
 
   /**
-   * Creates a diagnostic report of the current context
-   * Useful for debugging test setup issues
-   * 
-   * @returns A diagnostic report object
+   * Resets the context state, cleaning up any resources
    */
-  createDiagnosticReport(): {
-    useDI: boolean;
-    registeredMocks: string[];
-    childContexts: number;
-    services: string[];
-    containerState: { registeredTokens: string[] } | undefined;
-    isCleanedUp: boolean;
-  } {
-    const registeredServices = Object.keys(this.services);
+  async reset(): Promise<void> {
+    // Reset container state
+    this.container.reset();
     
-    let containerState;
-    if (this.useDI) {
-      try {
-        // Get tokens from container if possible
-        const tokens = this.container.getRegisteredTokens();
-        containerState = {
-          registeredTokens: tokens.filter(t => typeof t === 'string') as string[]
-        };
-      } catch (error) {
-        containerState = undefined;
-      }
-    }
+    // Clear registered mocks
+    this.registeredMocks.clear();
     
-    return {
-      useDI: this.useDI,
-      registeredMocks: Array.from(this.registeredMocks),
-      childContexts: this.childContexts.length,
-      services: registeredServices,
-      containerState,
-      isCleanedUp: this.isCleanedUp
-    };
+    // Reset initialization state
+    this.initialized = false;
+    
+    // Reinitialize
+    await this.initializeAsync();
   }
 
   /**
-   * Clean up all test resources
-   * Resets containers, removes temporary files, etc.
+   * Cleans up resources used by this context
    */
   async cleanup(): Promise<void> {
     if (this.isCleanedUp) {
       return;
     }
-
+    
+    // Mark as cleaned up to prevent further use
     this.isCleanedUp = true;
+    
+    // Check for memory leaks
+    if (this.leakDetectionEnabled) {
+      const leakInfo = this.container.detectLeaks();
+      if (leakInfo.hasLeaks) {
+        console.warn(`[TestContextDI] Container leak detected: ${leakInfo.count} tokens still have references`, {
+          tokens: leakInfo.tokens
+        });
+      }
+    }
 
     // Clean up child contexts first
-    for (const child of this.childContexts) {
-      await child.cleanup();
-    }
+    await Promise.all(this.childContexts.map(child => child.cleanup()));
     this.childContexts = [];
-
-    // Clean up parent context
-    await super.cleanup();
-
-    // Clear container instances
+    
+    // Clean up container instances
     this.container.clearInstances();
+    
+    // Clear registered mocks
+    this.registeredMocks.clear();
+    
+    // Clear initialization promise
+    this.initPromise = null;
+  }
+
+  /**
+   * Initializes the test context with dependency injection
+   */
+  private async initializeAsync(): Promise<void> {
+    // Create a new filesystem for this test
+    this.fs = new MemfsTestFileSystem();
+    this.normalizePathForTests = (path) => path;
+    
+    // Register core services for testing
+    await this.registerServices();
+    
+    // Mark as initialized
+    this.initialized = true;
+  }
+
+  /**
+   * Registers all the necessary services for the test context
+   */
+  private async registerServices(): Promise<void> {
+    this.registerFileSystemService();
+    this.registerPathService();
+    this.registerStateEventService();
+    this.registerStateService();
+    this.registerParserService();
+    this.registerResolutionService();
+    this.registerValidationService();
+    this.registerCircularityService();
+    this.registerDirectiveService();
+    this.registerInterpreterService();
+    this.registerOutputService();
+    this.registerDebugServices();
+  }
+
+  /**
+   * Registers the FileSystemService mock
+   */
+  private registerFileSystemService(): void {
+    const mockFsService = {
+      readFile: vi.fn().mockImplementation(async (path: string) => {
+        try {
+          return await this.fs.readFile(path);
+        } catch (error) {
+          throw error;
+        }
+      }),
+      writeFile: vi.fn().mockImplementation(async (path: string, content: string) => {
+        try {
+          return await this.fs.writeFile(path, content);
+        } catch (error) {
+          throw error;
+        }
+      }),
+      mkdir: vi.fn().mockImplementation(async (path: string) => {
+        try {
+          return await this.fs.mkdir(path);
+        } catch (error) {
+          throw error;
+        }
+      }),
+      exists: vi.fn().mockImplementation(async (path: string) => {
+        try {
+          return await this.fs.exists(path);
+        } catch (error) {
+          return false;
+        }
+      }),
+      stat: vi.fn().mockImplementation(async (path: string) => {
+        try {
+          return await this.fs.stat(path);
+        } catch (error) {
+          throw error;
+        }
+      }),
+      listFiles: vi.fn().mockImplementation(async (path: string) => {
+        try {
+          return await this.fs.listFiles(path);
+        } catch (error) {
+          throw error;
+        }
+      }),
+      isDirectory: vi.fn().mockImplementation(async (path: string) => {
+        try {
+          const stats = await this.fs.stat(path);
+          return stats.isDirectory();
+        } catch (error) {
+          return false;
+        }
+      }),
+      isFile: vi.fn().mockImplementation(async (path: string) => {
+        try {
+          const stats = await this.fs.stat(path);
+          return stats.isFile();
+        } catch (error) {
+          return false;
+        }
+      }),
+      debug: vi.fn(),
+      isTestEnabled: vi.fn().mockReturnValue(true),
+      isTestMode: vi.fn().mockReturnValue(true)
+    };
+    
+    this.container.registerMock('IFileSystemService', mockFsService);
+  }
+
+  /**
+   * Registers the PathService mock
+   */
+  private registerPathService(): void {
+    const mockPathService = {
+      validatePath: vi.fn().mockImplementation(async (path: string) => {
+        if (!path || path === '') {
+          throw createPathValidationError('Empty path is not allowed', {
+            code: 'EMPTY_PATH',
+            path: ''
+          });
+        }
+        
+        if (path.includes('\0')) {
+          throw createPathValidationError('Path contains null bytes', {
+            code: 'NULL_BYTES',
+            path
+          });
+        }
+        
+        return path;
+      }),
+      normalizePath: vi.fn().mockImplementation((path: string) => path),
+      resolveRelativePath: vi.fn().mockImplementation((path: string, basePath?: string) => {
+        if (path.startsWith('/')) return path;
+        if (!basePath) return '/' + path;
+        return basePath.replace(/\/[^/]*$/, '') + '/' + path;
+      }),
+      joinPaths: vi.fn().mockImplementation((...paths: string[]) => {
+        return paths.join('/').replace(/\/+/g, '/');
+      }),
+      isAbsolutePath: vi.fn().mockImplementation((path: string) => {
+        return path.startsWith('/');
+      }),
+      dirname: vi.fn().mockImplementation((path: string) => {
+        return path.replace(/\/[^/]*$/, '') || '/';
+      }),
+      basename: vi.fn().mockImplementation((path: string) => {
+        return path.split('/').pop() || '';
+      }),
+      extname: vi.fn().mockImplementation((path: string) => {
+        const base = path.split('/').pop() || '';
+        const match = base.match(/\.[^.]*$/);
+        return match ? match[0] : '';
+      }),
+      isTestMode: vi.fn().mockReturnValue(true)
+    };
+    
+    this.container.registerMock('IPathService', mockPathService);
+  }
+
+  /**
+   * Registers the StateEventService mock
+   */
+  private registerStateEventService(): void {
+    const mockStateEventService = {
+      subscribe: vi.fn(),
+      unsubscribe: vi.fn(),
+      publish: vi.fn()
+    };
+    
+    this.container.registerMock('IStateEventService', mockStateEventService);
+  }
+
+  /**
+   * Registers the StateService mock
+   */
+  private registerStateService(): void {
+    const mockStateService = {
+      getVariable: vi.fn(),
+      setVariable: vi.fn(),
+      hasVariable: vi.fn().mockReturnValue(false),
+      getDataVariable: vi.fn(),
+      setDataVariable: vi.fn(),
+      hasDataVariable: vi.fn().mockReturnValue(false),
+      getPathVariable: vi.fn(),
+      setPathVariable: vi.fn(),
+      hasPathVariable: vi.fn().mockReturnValue(false),
+      getCommand: vi.fn(),
+      setCommand: vi.fn(),
+      hasCommand: vi.fn().mockReturnValue(false),
+      getCommandRef: vi.fn(),
+      getOriginalNode: vi.fn(),
+      storeOriginalNode: vi.fn(),
+      getTransformedNode: vi.fn(),
+      storeTransformedNode: vi.fn(),
+      hasTransformedNode: vi.fn().mockReturnValue(false),
+      createChildState: vi.fn().mockImplementation(() => mockStateService),
+      getImmutable: vi.fn().mockReturnValue(false),
+      setImmutable: vi.fn(),
+      getParentState: vi.fn().mockReturnValue(null),
+      createTransformationState: vi.fn().mockImplementation(() => mockStateService),
+      isTransformationState: vi.fn().mockReturnValue(false),
+      getTransformationState: vi.fn().mockReturnValue(null),
+      getGlobalState: vi.fn().mockImplementation(() => mockStateService),
+      clone: vi.fn().mockImplementation(() => mockStateService),
+      merge: vi.fn(),
+      getEventService: vi.fn().mockReturnValue(null),
+      getStateClass: vi.fn().mockReturnValue('StateService'),
+      getStateID: vi.fn().mockReturnValue('test-state')
+    };
+    
+    this.container.registerMock('IStateService', mockStateService);
+  }
+
+  /**
+   * Registers the ParserService mock
+   */
+  private registerParserService(): void {
+    const mockParserService = {
+      parse: vi.fn().mockReturnValue([]),
+      parseWithLocations: vi.fn().mockReturnValue([])
+    };
+    
+    this.container.registerMock('IParserService', mockParserService);
+  }
+
+  /**
+   * Registers the ResolutionService mock
+   */
+  private registerResolutionService(): void {
+    const mockResolutionService = {
+      resolveVariable: vi.fn(),
+      resolvePathVariable: vi.fn(),
+      resolveDataVariable: vi.fn(),
+      resolvePrimitive: vi.fn().mockImplementation(value => value),
+      resolveCommand: vi.fn(),
+      resolveVariableInText: vi.fn().mockImplementation((text, state) => text),
+      resolveAll: vi.fn().mockImplementation((value, state) => value)
+    };
+    
+    this.container.registerMock('IResolutionService', mockResolutionService);
+  }
+
+  /**
+   * Registers the ValidationService mock
+   */
+  private registerValidationService(): void {
+    const mockValidationService = {
+      validateDirective: vi.fn().mockReturnValue(true),
+      registerValidator: vi.fn()
+    };
+    
+    this.container.registerMock('IValidationService', mockValidationService);
+  }
+
+  /**
+   * Registers the CircularityService mock
+   */
+  private registerCircularityService(): void {
+    const mockCircularityService = {
+      markFileVisited: vi.fn(),
+      isFileVisited: vi.fn().mockReturnValue(false),
+      clearVisitedFiles: vi.fn(),
+      getVisitedFiles: vi.fn().mockReturnValue([])
+    };
+    
+    this.container.registerMock('ICircularityService', mockCircularityService);
+  }
+
+  /**
+   * Registers the DirectiveService mock
+   */
+  private registerDirectiveService(): void {
+    const mockDirectiveService = {
+      executeDirective: vi.fn().mockImplementation(async (node) => {
+        return {
+          success: true,
+          node,
+          replacement: null
+        };
+      }),
+      registerHandler: vi.fn(),
+      getHandler: vi.fn()
+    };
+    
+    this.container.registerMock('IDirectiveService', mockDirectiveService);
+  }
+
+  /**
+   * Registers the InterpreterService mock
+   */
+  private registerInterpreterService(): void {
+    const mockInterpreterService = {
+      interpret: vi.fn().mockReturnValue(''),
+      interpretWithState: vi.fn().mockReturnValue({ content: '', state: null })
+    };
+    
+    this.container.registerMock('IInterpreterService', mockInterpreterService);
+  }
+
+  /**
+   * Registers the OutputService mock
+   */
+  private registerOutputService(): void {
+    const mockOutputService = {
+      generateOutput: vi.fn().mockReturnValue('')
+    };
+    
+    this.container.registerMock('IOutputService', mockOutputService);
+  }
+
+  /**
+   * Registers debug services for testing
+   */
+  private registerDebugServices(): void {
+    // Register state tracking service for tests that need it
+    const mockStateTrackingService = {
+      trackState: vi.fn(),
+      getStateHistory: vi.fn().mockReturnValue([]),
+      clearHistory: vi.fn()
+    };
+    
+    this.container.registerMock('IStateTrackingService', mockStateTrackingService);
+    
+    // Register state debugger service
+    const mockStateDebuggerService = {
+      debugState: vi.fn(),
+      createSnapshot: vi.fn(),
+      compareSnapshots: vi.fn().mockReturnValue([]),
+      enable: vi.fn(),
+      disable: vi.fn(),
+      isEnabled: vi.fn().mockReturnValue(false)
+    };
+    
+    this.container.registerMock('IStateDebuggerService', mockStateDebuggerService);
+  }
+  
+  /**
+   * Create helper methods for common test patterns
+   */
+  static createTestHelpers() {
+    return {
+      /**
+       * Sets up a TestContextDI instance for a test
+       * @param options TestContextDI options
+       */
+      setup: (options: TestContextDIOptions = {}) => {
+        return TestContextDI.create(options);
+      },
+      
+      /**
+       * Creates a context with common mock services
+       * @param mockOverrides Object with mock overrides
+       */
+      setupWithMocks: (mockOverrides: Record<string, any> = {}) => {
+        const context = TestContextDI.create();
+        
+        // Register default mocks for common services
+        const defaultMocks: Record<string, any> = {
+          'IStateService': {
+            getVariable: vi.fn(),
+            setVariable: vi.fn(),
+            hasVariable: vi.fn().mockReturnValue(false),
+            // Add other state methods as needed
+          },
+          'IFileSystemService': {
+            readFile: vi.fn().mockResolvedValue(''),
+            writeFile: vi.fn().mockResolvedValue(undefined),
+            exists: vi.fn().mockResolvedValue(false),
+            // Add other filesystem methods as needed
+          },
+          // Add other common services as needed
+        };
+        
+        // Register all default mocks
+        for (const [token, mock] of Object.entries(defaultMocks)) {
+          // If an override is provided, use it instead
+          const finalMock = mockOverrides[token] || mock;
+          context.registerMock(token, finalMock);
+        }
+        
+        // Register additional mocks from overrides
+        for (const [token, mock] of Object.entries(mockOverrides)) {
+          if (!(token in defaultMocks)) {
+            context.registerMock(token, mock);
+          }
+        }
+        
+        return context;
+      },
+      
+      /**
+       * Creates a test context for directive handler testing
+       * @param directiveHandler The directive handler to test
+       * @param mockOverrides Mock overrides for services
+       */
+      setupDirectiveTest: <T>(
+        directiveHandler: T,
+        mockOverrides: Record<string, any> = {}
+      ) => {
+        const context = TestContextDI.create();
+        
+        // Register default mocks for directive testing
+        const defaultMocks: Record<string, any> = {
+          'IValidationService': {
+            validateDirective: vi.fn().mockReturnValue(true)
+          },
+          'IStateService': {
+            getVariable: vi.fn(),
+            setVariable: vi.fn(),
+            hasVariable: vi.fn().mockReturnValue(false),
+            getDataVariable: vi.fn(),
+            setDataVariable: vi.fn(),
+            hasDataVariable: vi.fn().mockReturnValue(false),
+            getPathVariable: vi.fn(),
+            setPathVariable: vi.fn(),
+            hasPathVariable: vi.fn().mockReturnValue(false),
+            getCommand: vi.fn(),
+            setCommand: vi.fn(),
+            hasCommand: vi.fn().mockReturnValue(false),
+            storeOriginalNode: vi.fn(),
+            storeTransformedNode: vi.fn(),
+            hasTransformedNode: vi.fn().mockReturnValue(false),
+            createChildState: vi.fn().mockImplementation(function() { return this; }),
+            getImmutable: vi.fn().mockReturnValue(false)
+          },
+          'IResolutionService': {
+            resolveVariable: vi.fn(),
+            resolvePathVariable: vi.fn(),
+            resolveDataVariable: vi.fn(),
+            resolvePrimitive: vi.fn().mockImplementation(value => value),
+            resolveVariableInText: vi.fn().mockImplementation((text) => text),
+            resolveAll: vi.fn().mockImplementation((value) => value)
+          }
+        };
+        
+        // Register handler if provided
+        if (directiveHandler) {
+          context.container.registerInstance('directiveHandler', directiveHandler);
+        }
+        
+        // Register all default mocks
+        for (const [token, mock] of Object.entries(defaultMocks)) {
+          // If an override is provided, use it instead
+          const finalMock = mockOverrides[token] || mock;
+          context.registerMock(token, finalMock);
+        }
+        
+        // Register additional mocks from overrides
+        for (const [token, mock] of Object.entries(mockOverrides)) {
+          if (!(token in defaultMocks)) {
+            context.registerMock(token, mock);
+          }
+        }
+        
+        return {
+          context,
+          validationService: context.resolveSync<any>('IValidationService'),
+          stateService: context.resolveSync<any>('IStateService'),
+          resolutionService: context.resolveSync<any>('IResolutionService'),
+          handler: directiveHandler || null
+        };
+      }
+    };
   }
 }

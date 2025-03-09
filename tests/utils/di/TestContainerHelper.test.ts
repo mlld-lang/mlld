@@ -95,22 +95,13 @@ describe('TestContainerHelper', () => {
     });
   });
 
-  describe('registerParentService', () => {
+  describe('registerService', () => {
     it('should register a service in the parent container', () => {
       // Register a parent service
-      containerHelper.registerParentService('ParentService', TestService);
+      containerHelper.registerService('ParentService', TestService);
 
       // Should be able to resolve from the child container
-      const resolved = containerHelper.resolve<TestService>('ParentService');
-      expect(resolved).toBeInstanceOf(TestService);
-      expect(resolved.getValue()).toBe('original');
-
-      // Child container should inherit from parent
-      const childHelper = new TestContainerHelper(containerHelper.getContainer().createChildContainer());
-      const childResolved = childHelper.resolve<TestService>('ParentService', { 
-        fallbackClass: MockTestService // Use fallback to identify if service was found
-      });
-      expect(childResolved).toBeInstanceOf(TestService); // Should find TestService, not use fallback
+      expect(containerHelper.resolve('ParentService')).toBeInstanceOf(TestService);
     });
   });
 

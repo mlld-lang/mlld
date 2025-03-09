@@ -53,31 +53,33 @@ The DI migration removed the Node.js platform setting in some build configuratio
 - Bundle size analysis shows no significant increases
 - Build process documentation is updated
 
-## Phase 2: Test Infrastructure Simplification
+## Phase 2: Test Infrastructure Simplification ✅
 
 **Focus:** Improve the reliability and maintainability of the test infrastructure.
 
 **Relevant Documentation:** [cleanup-test-infrastructure.md](./cleanup-test-infrastructure.md)
 
 ### Tasks:
-1. Remove conditional DI mode in test utilities (partial implementation of cleanup-dual-mode-di.md)
-2. Simplify TestContainerHelper to focus on isolated container creation
-3. Implement automatic container reset between tests
-4. Add container state leak detection
-5. Create unified helper methods for common test patterns
-6. Update all existing tests to use the improved test infrastructure
+1. ✅ Remove conditional DI mode in test utilities
+2. ✅ Simplify TestContainerHelper to focus on isolated container creation
+3. ✅ Implement automatic container reset between tests
+4. ✅ Add container state leak detection
+5. ✅ Create unified helper methods for common test patterns
+6. ✅ Update all existing tests to use the improved test infrastructure
+7. ✅ Implement vitest-mock-extended for class identity checks in tests
 
-### Additional Context:
-The current test infrastructure is complex and relies on environment variables to toggle between DI and non-DI modes. This creates potential for flaky tests due to shared container state between tests. The TestContainerHelper currently has complex logic for tracking registered tokens and doesn't always properly clean up between tests. Tests may also inadvertently share instances across tests, causing unexpected behavior.
+### Completed Implementation:
+- **Removed Dual-Mode Support**: Eliminated all conditional logic for DI/non-DI modes
+- **Container Simplification**: Refactored TestContainerHelper for better isolation and leak detection
+- **Automatic Reset**: Added proper cleanup and reset mechanisms
+- **Leak Detection**: Implemented container state leak detection to identify memory issues
+- **Unified Helpers**: Created TestHelpers for common test patterns
+- **Documentation**: Updated TESTS.md with comprehensive guidance on the new approach
 
-Additionally, test setup requires verbose boilerplate code to configure containers and register mock services, increasing the complexity of writing and maintaining tests.
-
-### Exit Criteria:
-- All tests pass using the simplified test infrastructure
-- No tests use environment variables to toggle DI mode
-- Container state is properly isolated between tests
-- Test boilerplate is significantly reduced
-- Test runtime is maintained or improved
+### Next Steps:
+- Monitor test performance with the new infrastructure
+- Consider further optimizations for container initialization
+- Proceed to Phase 3: Interface Standardization
 
 ## Phase 3: Interface Standardization
 
