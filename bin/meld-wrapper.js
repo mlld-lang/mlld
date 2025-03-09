@@ -39,10 +39,10 @@ if (!reflectMetadataPath) {
 }
 
 // Run the CLI with the --require flag to ensure reflect-metadata is loaded first
+const cliPath = require.resolve('../dist/cli.cjs');
 const result = spawnSync('node', [
   '--require', reflectMetadataPath,
-  require.resolve('../dist/cli.cjs'),
-  ...args
+  '-e', `require('${cliPath}').main(null, ${JSON.stringify(args)})`
 ], {
   stdio: 'inherit' // Pass stdin/stdout/stderr through to the parent process
 });

@@ -55,15 +55,18 @@ container.registerInstance('IServiceMediator', serviceMediator);
 // so we can connect them through the mediator
 
 // Create minimal instances of core services with circular dependencies
-const fileSystemService = new FileSystemService();
-const pathService = new PathService();
-const parserService = new ParserService();
+const pathOps = new PathOperationsService();
+const fileSystemService = new FileSystemService(pathOps, serviceMediator);
+const pathService = new PathService(serviceMediator);
+const parserService = new ParserService(serviceMediator);
 
 // Create StateService with early initialization
 // This is needed because ResolutionService depends on StateService
 const stateFactory = new StateFactory();
 container.registerInstance(StateFactory, stateFactory);
-const stateService = new StateService(stateFactory, undefined, undefined, serviceMediator);
+const stateEventService = new StateEventService();
+const stateTrackingService = new StateTrackingService();
+const stateService = new StateService(stateFactory, stateEventService, stateTrackingService, serviceMediator);
 
 // Create the ResolutionService with the StateService dependency
 const resolutionService = new ResolutionService(stateService, fileSystemService, pathService, serviceMediator);

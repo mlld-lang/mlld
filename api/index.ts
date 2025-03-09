@@ -96,17 +96,17 @@ export function createDefaultServices(options: ProcessOptions): Services & Requi
     }
     
     // Resolve services from the container
-    const filesystem = resolveService<FileSystemService>('FileSystemService');
-    const path = resolveService<PathService>('PathService');
-    const eventService = resolveService<StateEventService>('StateEventService');
-    const state = resolveService<StateService>('StateService');
-    const parser = resolveService<ParserService>('ParserService');
-    const resolution = resolveService<ResolutionService>('ResolutionService');
-    const validation = resolveService<ValidationService>('ValidationService');
-    const circularity = resolveService<CircularityService>('CircularityService');
-    const directive = resolveService<DirectiveService>('DirectiveService');
-    const interpreter = resolveService<InterpreterService>('InterpreterService');
-    const output = resolveService<OutputService>('OutputService');
+    const filesystem = resolveService('FileSystemService');
+    const path = resolveService('PathService');
+    const eventService = resolveService('StateEventService');
+    const state = resolveService('StateService');
+    const parser = resolveService('ParserService');
+    const resolution = resolveService('ResolutionService');
+    const validation = resolveService('ValidationService');
+    const circularity = resolveService('CircularityService');
+    const directive = resolveService('DirectiveService');
+    const interpreter = resolveService('InterpreterService');
+    const output = resolveService('OutputService');
     
     // Initialize special path variables
     state.setPathVar('PROJECTPATH', process.cwd());
@@ -120,7 +120,7 @@ export function createDefaultServices(options: ProcessOptions): Services & Requi
     if (options.debug) {
       try {
         // Try to resolve from the container first
-        debug = resolveService<StateDebuggerService>('StateDebuggerService');
+        debug = resolveService('StateDebuggerService');
       } catch (e) {
         // If not available in container, create manually
         const debugService = new TestDebuggerService(state);
@@ -174,7 +174,8 @@ export function createDefaultServices(options: ProcessOptions): Services & Requi
 
     // 3. State Management Services
     const eventService = new StateEventService();
-    const state = new StateService(undefined, undefined, eventService, serviceMediator);
+    const trackingService = new StateTrackingService();
+    const state = new StateService(undefined, eventService, trackingService, serviceMediator);
     state.setEventService(eventService);
     
     // Initialize special path variables
