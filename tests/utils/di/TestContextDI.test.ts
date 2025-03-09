@@ -224,46 +224,69 @@ describe('TestContextDI', () => {
   });
   
   describe('mock directive handler', () => {
-    beforeEach(() => {
-      context = TestContextDI.withDI();
-    });
-    
-    it('should create a definition directive handler mock', () => {
-      // Create a simple transform function
-      const transformFn = vi.fn((node) => ({ ...node, transformed: true }));
-      
-      // Create the mock handler
-      const handler = context.createMockDirectiveHandler('test', {
-        transform: transformFn
+    describe('with DI enabled', () => {
+      beforeEach(() => {
+        context = TestContextDI.withDI();
       });
       
-      // Verify the handler is created correctly
-      expect(handler).toBeDefined();
-      expect(handler.directiveName).toBe('test');
-      expect(handler.__isMockHandler).toBe(true);
-      expect(handler.kind).toBe('definition'); // Should default to definition
-      
-      // Verify the transform function works
-      expect(typeof handler.transform).toBe('function');
-    });
-    
-    it('should create an execution directive handler mock', () => {
-      // Create a simple execute function
-      const executeFn = vi.fn((node) => ({ output: 'test-output' }));
-      
-      // Create the mock handler
-      const handler = context.createMockDirectiveHandler('run', {
-        execute: executeFn
+      it('should create a definition directive handler mock', () => {
+        // Create a simple transform function
+        const transformFn = vi.fn((node) => ({ ...node, transformed: true }));
+        
+        // Create the mock handler
+        const handler = context.createMockDirectiveHandler('test', {
+          transform: transformFn
+        });
+        
+        // Verify the handler is created correctly
+        expect(handler).toBeDefined();
+        expect(handler.directiveName).toBe('test');
+        expect(handler.__isMockHandler).toBe(true);
+        expect(handler.kind).toBe('definition'); // Should default to definition
+        
+        // Verify the transform function works
+        expect(typeof handler.transform).toBe('function');
       });
       
-      // Verify the handler is created correctly
-      expect(handler).toBeDefined();
-      expect(handler.directiveName).toBe('run');
-      expect(handler.__isMockHandler).toBe(true);
-      expect(handler.kind).toBe('execution'); // Should be execution for handlers with execute
+      it('should create an execution directive handler mock', () => {
+        // Create a simple execute function
+        const executeFn = vi.fn((node) => ({ output: 'test-output' }));
+        
+        // Create the mock handler
+        const handler = context.createMockDirectiveHandler('run', {
+          execute: executeFn
+        });
+        
+        // Verify the handler is created correctly
+        expect(handler).toBeDefined();
+        expect(handler.directiveName).toBe('run');
+        expect(handler.__isMockHandler).toBe(true);
+        expect(handler.kind).toBe('execution'); // Should be execution for handlers with execute
+        
+        // Verify the execute function works
+        expect(typeof handler.execute).toBe('function');
+      });
+    });
+
+    describe('with DI disabled', () => {
+      beforeEach(() => {
+        context = TestContextDI.withoutDI();
+      });
       
-      // Verify the execute function works
-      expect(typeof handler.execute).toBe('function');
+      it('should still create mock handlers without touching DI', () => {
+        // Create a simple transform function
+        const transformFn = vi.fn((node) => ({ ...node, transformed: true }));
+        
+        // Create the mock handler
+        const handler = context.createMockDirectiveHandler('test', {
+          transform: transformFn
+        });
+        
+        // Verify the handler is created correctly
+        expect(handler).toBeDefined();
+        expect(handler.directiveName).toBe('test');
+        expect(handler.__isMockHandler).toBe(true);
+      });
     });
   });
 });

@@ -922,7 +922,8 @@ export class TestContextDI extends TestContext {
         
         // Also register it with the directive service if available
         try {
-          const directiveService = this.resolve<IDirectiveService>('IDirectiveService');
+          // Use resolveSync to avoid unhandled promise rejections
+          const directiveService = this.resolveSync<IDirectiveService>('IDirectiveService', null);
           if (directiveService && typeof directiveService.registerHandler === 'function') {
             directiveService.registerHandler(directiveName, handler);
           }

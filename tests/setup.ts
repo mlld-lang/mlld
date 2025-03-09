@@ -2,6 +2,10 @@ import 'reflect-metadata';
 import { beforeEach, afterEach, afterAll, vi } from 'vitest';
 import { TestContext } from '@tests/utils/index.js';
 import { container } from 'tsyringe';
+import { EventEmitter } from 'events';
+
+// Increase the default max listeners to prevent warnings
+EventEmitter.defaultMaxListeners = 20;
 
 // Ensure test environment is set
 process.env.NODE_ENV = 'test';

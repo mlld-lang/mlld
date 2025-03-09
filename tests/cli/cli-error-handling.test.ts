@@ -5,11 +5,11 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { CLIService } from '../../services/cli/CLIService/CLIService.js';
-import { FileSystemAdapter } from '../../services/fs/FileSystemAdapter.js';
-import { mockArgv } from '../utils/index.js';
-import { TestContext } from '../utils/index.js';
-import { getMockConsole } from '../utils/tests/ConsoleMocks.js';
+import { CLIService } from '@services/cli/CLIService/CLIService.js';
+import { MemfsTestFileSystemAdapter as FileSystemAdapter } from '@tests/utils/MemfsTestFileSystemAdapter.js';
+import { mockArgv } from '@tests/utils/cli/mockArgv.js';
+import { TestContext } from '@tests/utils/index.js';
+import { mockConsole as getMockConsole } from '@tests/utils/cli/mockConsole.js';
 import fs from 'fs';
 import path from 'path';
 import { ensureDir } from 'fs-extra';
@@ -48,7 +48,7 @@ describe('CLI Error Handling', () => {
     it('should handle multiple errors in permissive mode', async () => {
       // Create a test context with an meld file that has undefined variables
       const context = new TestContext();
-      await context.addFile(
+      await context.writeFile(
         '$./test.meld',
         `Hello {{name}}, welcome to {{place}}!`
       );
@@ -118,13 +118,13 @@ describe('CLI Error Handling', () => {
     it('should fail fast in strict mode', async () => {
       // Create a test context with an meld file that has undefined variables
       const context = new TestContext();
-      await context.addFile(
+      await context.writeFile(
         '$./test.meld',
         `Hello {{name}}, welcome to {{place}}!`
       );
       
-      // Set up a mock process.argv for strict mode
-      const restore = mockArgv(['node', 'meld', '--strict', 'run', '$./test.meld']);
+      // Set up a mock process.argv
+      const restore = mockArgv(['node', 'meld', 'run', '--strict', '$./test.meld']);
       
       // Set up the FileSystemAdapter with the test context
       const fsAdapter = new FileSystemAdapter();
