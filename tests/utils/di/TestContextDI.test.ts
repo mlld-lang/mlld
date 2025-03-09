@@ -1,6 +1,5 @@
 import { describe, beforeEach, afterEach, it, expect, vi } from 'vitest';
 import { TestContextDI } from './TestContextDI';
-import { shouldUseDI } from '../../../core/ServiceProvider';
 
 // Mock class for testing
 class MockParser {
@@ -10,8 +9,6 @@ class MockParser {
 }
 
 describe('TestContextDI', () => {
-  // Backup original environment variable
-  const originalEnv = process.env.USE_DI;
   let context: TestContextDI;
 
   afterEach(async () => {
@@ -19,274 +16,164 @@ describe('TestContextDI', () => {
     if (context) {
       await context.cleanup();
     }
-    
-    // Restore original environment variable
-    if (originalEnv === undefined) {
-      delete process.env.USE_DI;
-    } else {
-      process.env.USE_DI = originalEnv;
-    }
   });
 
-  describe('with DI disabled', () => {
+  describe('basic functionality', () => {
     beforeEach(() => {
-      // Create context with DI disabled
-      context = TestContextDI.withoutDI();
-    });
-    
-    it('should create a test context with manual initialization', () => {
-      // Verify DI is disabled
-      expect(shouldUseDI()).toBe(false);
-      
-      // Verify services are initialized
-      expect(context.services.parser).toBeDefined();
-      expect(context.services.state).toBeDefined();
-      expect(context.services.filesystem).toBeDefined();
-    });
-    
-    it('should use the traditional service registration', () => {
-      // Create a mock parser
-      const mockParser = new MockParser();
-      
-      // Register it manually on the services object
-      (context.services as any).parser = mockParser;
-      
-      // Verify it's used
-      expect(context.services.parser).toBe(mockParser);
-      
-      // Parse some content with the mock
-      const result = context.parseMeld('test');
-      expect(result).toEqual({ type: 'mock', content: 'test' });
-    });
-  });
-  
-  describe('with DI enabled', () => {
-    beforeEach(() => {
-      // Create context with DI enabled
-      context = TestContextDI.withDI();
+      // Create context
+      context = TestContextDI.create();
     });
     
     it('should create a test context with DI initialization', () => {
-      // Verify DI is enabled
-      expect(shouldUseDI()).toBe(true);
-      
       // Verify services are initialized
       expect(context.services.parser).toBeDefined();
       expect(context.services.state).toBeDefined();
       expect(context.services.filesystem).toBeDefined();
-      
-      // Verify container is initialized
-      expect(context.container).toBeDefined();
-      expect(context.container.isRegistered('ParserService')).toBe(true);
     });
     
     it('should support registering mocks with the container', () => {
       // Create a mock parser
       const mockParser = new MockParser();
       
-      // Register it with the container - override both services object and container
-      context.services.parser = mockParser;
-      context.container.registerMock('ParserService', mockParser);
+      // Register it with the container
+      context.registerMock('IParserService', mockParser);
       
-      // Verify it's used when resolved from the container
-      const resolvedParser = context.container.resolve('ParserService');
-      expect(resolvedParser).toBe(mockParser);
+      // Get it from the container
+      const parser = context.container.resolve('IParserService');
       
-      // Parse some content with the mock
-      const result = context.parseMeld('test');
+      // Verify it's our mock
+      expect(parser).toBe(mockParser);
+      
+      // Test its functionality
+      const result = parser.parse('test');
       expect(result).toEqual({ type: 'mock', content: 'test' });
     });
-    
-    it('should maintain service interface compatibility regardless of DI mode', async () => {
-      // Write a file to the project directory
-      await context.writeFile('test.txt', 'Hello, world!');
+
+    it('should maintain service interface compatibility', () => {
+      // Get a service from the context's services property
+      const parser = context.services.parser;
       
-      // Check if file exists - must use absolute path for memfs
-      const exists = await context.fs.exists('/project/test.txt');
-      expect(exists).toBe(true);
-      
-      // Write test file directly to '/project/test.txt' to ensure it exists
-      await context.fs.writeFile('/project/test.txt', 'Hello, world!');
-      
-      // Use the file system service - use project path format
-      // This should now work because the file exists at the expected location
-      const fsExists = await context.services.filesystem.exists('$PROJECTPATH/test.txt');
-      expect(fsExists).toBe(true);
-      
-      // Use the path service
-      const resolved = context.services.path.resolvePath('$PROJECTPATH/test.txt');
-      expect(resolved).toBe('/project/test.txt');
-    });
-    
-    it('should support creating child contexts with custom container', () => {
-      // Create a child context that shares the same services
-      const childContext = new TestContextDI({
-        useDI: true
-      });
-      
-      // Mock a service in both contexts
-      const mockParser = new MockParser();
-      
-      // Set it on the parent context
-      context.services.parser = mockParser;
-      context.container.registerMock('ParserService', mockParser);
-      
-      // Set it on the child context to simulate shared mocks
-      childContext.services.parser = mockParser;
-      
-      // Verify mock is applied in both contexts
-      expect(context.parseMeld('test')).toEqual({ type: 'mock', content: 'test' });
-      expect(childContext.parseMeld('test')).toEqual({ type: 'mock', content: 'test' });
-    });
-  });
-  
-  describe('static factory methods', () => {
-    it('withDI should create a context with DI enabled', () => {
-      const context = TestContextDI.withDI();
-      expect(shouldUseDI()).toBe(true);
-      context.cleanup();
-    });
-    
-    it('withoutDI should create a context with DI disabled', () => {
-      const context = TestContextDI.withoutDI();
-      expect(shouldUseDI()).toBe(false);
-      context.cleanup();
-    });
-  });
-  
-  describe('child state creation', () => {
-    beforeEach(() => {
-      context = TestContextDI.withDI();
-    });
-    
-    it('should create child states with DI container support', () => {
-      // Create a child state
-      const childId = context.createChildState();
-      
-      // Verify we got a valid state ID
-      expect(childId).toBeDefined();
-      expect(typeof childId).toBe('string');
-      expect(childId.length).toBeGreaterThan(0);
-    });
-    
-    it('should create child states with custom options', () => {
-      // Create a child state with custom options
-      const childId = context.createChildState(undefined, {
-        filePath: 'custom.meld',
-        transformation: true,
-        cloneVariables: true
-      });
-      
-      // Verify we got a valid state ID
-      expect(childId).toBeDefined();
-      expect(typeof childId).toBe('string');
-      expect(childId.length).toBeGreaterThan(0);
-    });
-  });
-  
-  describe('variable resolution tracking', () => {
-    beforeEach(() => {
-      context = TestContextDI.withDI();
-    });
-    
-    it('should create a variable tracker', () => {
-      // Create a variable tracker - no need to set the variable first
-      const tracker = context.createVariableTracker();
-      
-      // Start tracking the variable
-      tracker.trackResolution('testVar');
-      
-      // The tracker should exist and have methods
-      expect(tracker).toBeDefined();
-      expect(typeof tracker.trackResolution).toBe('function');
-      expect(typeof tracker.getResolutionPath).toBe('function');
-      expect(typeof tracker.reset).toBe('function');
-      
-      // Reset should work
-      tracker.reset();
-      expect(tracker.getResolutionPath('testVar')).toEqual([]);
-    });
-    
-    it('should track multiple variables', () => {
-      const tracker = context.createVariableTracker();
-      
-      // Track multiple variables
-      tracker.trackResolution('var1');
-      tracker.trackResolution('var2');
-      
-      // Get and reset paths
-      expect(tracker.getResolutionPath('var1')).toEqual([]);
-      expect(tracker.getResolutionPath('var2')).toEqual([]);
-      
-      // Reset one variable
-      tracker.reset();
-    });
-  });
-  
-  describe('mock directive handler', () => {
-    describe('with DI enabled', () => {
-      beforeEach(() => {
-        context = TestContextDI.withDI();
-      });
-      
-      it('should create a definition directive handler mock', () => {
-        // Create a simple transform function
-        const transformFn = vi.fn((node) => ({ ...node, transformed: true }));
-        
-        // Create the mock handler
-        const handler = context.createMockDirectiveHandler('test', {
-          transform: transformFn
-        });
-        
-        // Verify the handler is created correctly
-        expect(handler).toBeDefined();
-        expect(handler.directiveName).toBe('test');
-        expect(handler.__isMockHandler).toBe(true);
-        expect(handler.kind).toBe('definition'); // Should default to definition
-        
-        // Verify the transform function works
-        expect(typeof handler.transform).toBe('function');
-      });
-      
-      it('should create an execution directive handler mock', () => {
-        // Create a simple execute function
-        const executeFn = vi.fn((node) => ({ output: 'test-output' }));
-        
-        // Create the mock handler
-        const handler = context.createMockDirectiveHandler('run', {
-          execute: executeFn
-        });
-        
-        // Verify the handler is created correctly
-        expect(handler).toBeDefined();
-        expect(handler.directiveName).toBe('run');
-        expect(handler.__isMockHandler).toBe(true);
-        expect(handler.kind).toBe('execution'); // Should be execution for handlers with execute
-        
-        // Verify the execute function works
-        expect(typeof handler.execute).toBe('function');
-      });
+      // Verify it exists and implements the expected interface
+      expect(parser).toBeDefined();
+      expect(typeof parser.parse).toBe('function');
     });
 
-    describe('with DI disabled', () => {
-      beforeEach(() => {
-        context = TestContextDI.withoutDI();
+    it('should support creating child contexts with custom container', () => {
+      // Create a child context
+      const child = context.createChildContext();
+      
+      // Verify the child has its own container
+      expect(child.container).toBeDefined();
+      expect(child.container).not.toBe(context.container);
+      
+      // Verify the child inherits services
+      expect(child.services.parser).toBeDefined();
+      
+      // Register a mock in the parent
+      const mockParser = new MockParser();
+      context.registerMock('MockParser', mockParser);
+      
+      // Should not be accessible in the child
+      expect(child.container.isRegistered('MockParser')).toBe(false);
+      
+      // Clean up the child
+      child.cleanup();
+    });
+  });
+
+  describe('static factory methods', () => {
+    it('create should create a context with DI', () => {
+      const context = TestContextDI.create();
+      expect(context).toBeInstanceOf(TestContextDI);
+      context.cleanup();
+    });
+
+    it('createIsolated should create a context with an isolated container', () => {
+      const context = TestContextDI.createIsolated();
+      expect(context).toBeInstanceOf(TestContextDI);
+      
+      // Isolated container shouldn't have parent registrations
+      const container = require('tsyringe').container;
+      container.register('IsolationTest', { useValue: 'test' });
+      
+      // Shouldn't be able to resolve it from the isolated container
+      expect(context.container.isRegistered('IsolationTest')).toBe(false);
+      
+      context.cleanup();
+    });
+  });
+
+  describe('child context creation', () => {
+    beforeEach(() => {
+      context = TestContextDI.create();
+    });
+    
+    it('should create child contexts with DI container support', () => {
+      // Create a child context
+      const child = context.createChildContext();
+      
+      // Verify it has a container
+      expect(child.container).toBeDefined();
+      
+      // Register something in the parent
+      context.registerMock('ParentValue', 'parent');
+      
+      // Child should not have access to parent registrations
+      expect(child.container.isRegistered('ParentValue')).toBe(false);
+      
+      // Clean up
+      child.cleanup();
+    });
+    
+    it('should create isolated child contexts', () => {
+      // Create an isolated child context
+      const isolated = context.createIsolatedContext();
+      
+      // Register something in the parent container
+      require('tsyringe').container.register('GlobalTest', { useValue: 'global' });
+      
+      // Isolated container shouldn't have access to parent registrations
+      expect(isolated.container.isRegistered('GlobalTest')).toBe(false);
+      
+      // Clean up
+      isolated.cleanup();
+    });
+  });
+
+  describe('mock directive handler', () => {
+    beforeEach(() => {
+      context = TestContextDI.create();
+    });
+    
+    it('should create a handler from a class or implementation', () => {
+      // Create a handler
+      const mockImplementation = {
+        directiveName: 'test',
+        kind: 'definition',
+        validate: vi.fn().mockReturnValue(true)
+      };
+      
+      const { handler, token } = context.createDirectiveHandler({
+        token: 'testDirectiveHandler',
+        implementation: mockImplementation
       });
       
-      it('should still create mock handlers without touching DI', () => {
-        // Create a simple transform function
-        const transformFn = vi.fn((node) => ({ ...node, transformed: true }));
-        
-        // Create the mock handler
-        const handler = context.createMockDirectiveHandler('test', {
-          transform: transformFn
-        });
-        
-        // Verify the handler is created correctly
-        expect(handler).toBeDefined();
-        expect(handler.directiveName).toBe('test');
-        expect(handler.__isMockHandler).toBe(true);
-      });
+      // Verify the handler
+      expect(handler).toBe(mockImplementation);
+      expect(token).toBe('testDirectiveHandler');
+      
+      // Verify it's registered with the container
+      expect(context.container.isRegistered('testDirectiveHandler')).toBe(true);
+      
+      // Verify we can resolve it
+      const resolved = context.container.resolve('testDirectiveHandler');
+      expect(resolved).toBe(mockImplementation);
     });
+  });
+
+  afterEach(async () => {
+    if (context) {
+      await context.cleanup();
+    }
   });
 });

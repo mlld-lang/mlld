@@ -9,7 +9,7 @@
   "exports": {
     ".": {
       "require": {
-        "types": "./dist/index.d.ts", 
+        "types": "./dist/index.d.ts",
         "default": "./dist/index.cjs"
       },
       "import": {
@@ -102,6 +102,7 @@
     "tsup": "^8.0.2",
     "typescript": "^5.7.3",
     "vite-tsconfig-paths": "^5.1.4",
-    "vitest": "^2.1.9"
+    "vitest": "^2.1.9",
+    "vitest-mock-extended": "^2.0.1"
   }
 }

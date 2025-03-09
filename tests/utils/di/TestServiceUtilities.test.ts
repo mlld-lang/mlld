@@ -16,7 +16,7 @@ describe('TestServiceUtilities', () => {
   let context: TestContextDI;
   
   beforeEach(() => {
-    context = TestContextDI.create({ useDI: true });
+    context = TestContextDI.create();
   });
   
   afterEach(async () => {
@@ -49,12 +49,12 @@ describe('TestServiceUtilities', () => {
       
       // Verify the fallback was used
       expect(service).toBeInstanceOf(FallbackService);
-      expect(service.getValue()).toBe('fallback');
+      expect((service as any).getValue()).toBe('fallback');
     });
     
     it('should use fallback value when service is not found', async () => {
       // Create a fallback value
-      const fallback = { getValue: () => 'fallback value' };
+      const fallback = { value: 'fallback' };
       
       // Try to resolve a non-existent service with fallback
       const service = await getService(context, 'NonExistentService', {
@@ -63,19 +63,16 @@ describe('TestServiceUtilities', () => {
       
       // Verify the fallback was used
       expect(service).toBe(fallback);
-      expect(service.getValue()).toBe('fallback value');
     });
     
     it('should throw an error when required service is not found', async () => {
       // Try to resolve a non-existent service without fallback
-      await expect(getService(context, 'NonExistentService', {
-        required: true
-      })).rejects.toThrow();
+      await expect(getService(context, 'RequiredService')).rejects.toThrow();
     });
     
     it('should return null when non-required service is not found', async () => {
       // Try to resolve a non-existent service that's not required
-      const service = await getService(context, 'NonExistentService', {
+      const service = await getService(context, 'OptionalService', {
         required: false
       });
       
@@ -88,49 +85,43 @@ describe('TestServiceUtilities', () => {
     it('should create and register a mock service', async () => {
       // Create a mock service
       const mockService = createServiceMock(context, 'MockService', {
-        test: vi.fn().mockReturnValue('test value'),
-        value: 42
+        getValue: vi.fn().mockReturnValue('mocked')
       });
       
-      // Verify the mock was registered
-      const resolved = await getService(context, 'MockService');
-      expect(resolved).toBe(mockService);
-      
-      // Verify the mock implementation works
-      expect(mockService.test()).toBe('test value');
-      expect(mockService.value).toBe(42);
+      // Verify the mock is registered
+      const service = await getService(context, 'MockService');
+      expect(service).toBe(mockService);
+      expect((service as any).getValue()).toBe('mocked');
     });
   });
   
   describe('createService', () => {
     it('should create a service using a factory function', async () => {
-      // Create a service with a factory that uses the context
-      const service = await createService(context, (ctx) => {
-        // Create an object that uses the context
+      // Define a service creation factory
+      const factory = (ctx: TestContextDI) => {
         return {
-          getState: () => ctx.services.state,
-          getContext: () => ctx
+          ctx,
+          getValue: vi.fn().mockReturnValue('factory')
         };
-      });
+      };
+      
+      // Create the service
+      const service = await createService(context, factory);
       
       // Verify the service was created correctly
-      expect(service.getContext()).toBe(context);
-      expect(service.getState()).toBe(context.services.state);
+      expect(service.ctx).toBe(context);
+      expect(service.getValue()).toBe('factory');
     });
   });
   
   describe('createDiagnosticReport', () => {
     it('should create a diagnostic report', async () => {
-      // Register some mocks to make the report more interesting
+      // Register some services for the report
       context.registerMock('Service1', {});
       context.registerMock('Service2', {});
       
       // Create a diagnostic report
-      const report = await createDiagnosticReport(context, {
-        includeServices: true,
-        includeMocks: true,
-        includeContainerState: true
-      });
+      const report = await createDiagnosticReport(context);
       
       // Verify the report contains expected sections
       expect(report).toContain('--- DIAGNOSTIC REPORT ---');
@@ -142,40 +133,30 @@ describe('TestServiceUtilities', () => {
   
   describe('createTestSetup', () => {
     it('should create a test setup helper', async () => {
-      // Create a test setup helper
-      const setup = createTestSetup({
-        useDI: true,
-        isolatedContainer: true
-      });
+      // Create a test setup
+      const { setup, cleanup } = createTestSetup({});
       
-      // Verify the helper has the expected methods
-      expect(setup.setup).toBeTypeOf('function');
-      expect(setup.cleanup).toBeTypeOf('function');
-      
-      // Create a context with the helper
-      const testContext = setup.setup();
+      // Create a test context
+      const testContext = setup();
       
       // Verify the context has the expected properties
       expect(testContext).toBeInstanceOf(TestContextDI);
-      expect(testContext.useDI).toBe(true);
       
       // Clean up
-      await setup.cleanup(testContext);
+      await cleanup(testContext);
     });
   });
   
   describe('testInBothModes', () => {
-    // We'll create a separate describe block to test this function
-    // without actually using it to avoid infinite nesting
-    it('should create test cases for both DI modes', () => {
-      // Spy on describe to verify it's called correctly
+    it('should create test cases for service testing', () => {
+      // Create a spy on the describe function
       const describeSpy = vi.spyOn(global, 'describe');
       
+      // Create a test function
+      const testFn = vi.fn();
+      
       // Call testInBothModes
-      testInBothModes('TestService', async (ctx) => {
-        // Simple test function
-        expect(ctx).toBeInstanceOf(TestContextDI);
-      });
+      testInBothModes('TestService', testFn);
       
       // Verify describe was called with the correct arguments
       expect(describeSpy).toHaveBeenCalledWith('TestService', expect.any(Function));

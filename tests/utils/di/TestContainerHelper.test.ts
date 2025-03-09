@@ -1,251 +1,211 @@
-import { describe, beforeEach, afterEach, it, expect, vi } from 'vitest';
+import { expect, describe, it, beforeEach, afterEach, vi } from 'vitest';
 import { TestContainerHelper } from './TestContainerHelper';
-import { Service, shouldUseDI } from '../../../core/ServiceProvider';
-import { injectable, container } from 'tsyringe';
+import { Service } from '../../../core/ServiceProvider';
 
-// Mock services for testing
-@injectable()
+// Test classes for dependency injection
+@Service()
 class TestService {
   getValue(): string {
     return 'original';
   }
-}
 
-@Service()
-class DecoratedService {
-  getValue(): string {
-    return 'decorated';
+  getType(): string {
+    return 'TestService';
   }
 }
 
-// Mock implementation for testing
+@Service()
 class MockTestService {
   getValue(): string {
-    return 'mocked';
+    return 'mock';
+  }
+
+  getType(): string {
+    return 'MockTestService';
+  }
+}
+
+@Service()
+class TestDependency {
+  getName(): string {
+    return 'dependency';
+  }
+}
+
+@Service()
+class TestServiceWithDependency {
+  constructor(private dependency: TestDependency) {}
+
+  getDependencyName(): string {
+    return this.dependency.getName();
   }
 }
 
 describe('TestContainerHelper', () => {
-  // Backup original environment variable
-  const originalEnv = process.env.USE_DI;
   let containerHelper: TestContainerHelper;
 
   beforeEach(() => {
-    // Enable DI for tests
-    process.env.USE_DI = 'true';
     containerHelper = new TestContainerHelper();
-    
-    // Register test services in the parent container
-    containerHelper.registerParentService('TestService', TestService);
-    container.register(DecoratedService, { useClass: DecoratedService });
   });
 
   afterEach(() => {
-    // Reset the container to clear test registrations
+    // Reset container to make sure tests don't affect each other
     containerHelper.reset();
-    
-    // Restore original environment variable after each test
-    if (originalEnv === undefined) {
-      delete process.env.USE_DI;
-    } else {
-      process.env.USE_DI = originalEnv;
-    }
   });
 
   describe('registerMock', () => {
     it('should register a mock implementation for a service', () => {
-      // Create a mock implementation
+      // Create a mock service
       const mockService = new MockTestService();
-      
+
       // Register it with the container
       containerHelper.registerMock('TestService', mockService);
-      
-      // Resolve it from the container
-      const resolved = containerHelper.resolve<MockTestService>('TestService');
-      
-      // Verify it's the same instance we registered
-      expect(resolved).toBe(mockService);
-      expect(resolved.getValue()).toBe('mocked');
-    });
-    
-    it('should not affect the global container', () => {
-      // Create a mock implementation
-      const mockService = new MockTestService();
-      
-      // Register it with the test container
-      containerHelper.registerMock('TestService', mockService);
-      
-      // Create a new container helper (which uses a new child container)
-      const anotherHelper = new TestContainerHelper();
-      
-      // Resolve the service from the new container
-      const resolved = anotherHelper.resolve<TestService>('TestService');
-      
-      // Should get the original service, not our mock
-      expect(resolved).not.toBe(mockService);
-      expect(resolved).toBeInstanceOf(TestService);
-      expect(resolved.getValue()).toBe('original');
-    });
-    
-    it('should do nothing when DI is disabled', () => {
-      // Disable DI
-      process.env.USE_DI = 'false';
-      
-      // Create a mock implementation
-      const mockService = new MockTestService();
-      
-      // Try to register it
-      containerHelper.registerMock('TestService', mockService);
-      
-      // Enable DI again for verification
-      process.env.USE_DI = 'true';
-      
-      // Should not have registered the mock
+
+      // Should be able to resolve the mock
       const resolved = containerHelper.resolve<TestService>('TestService');
-      expect(resolved).not.toBe(mockService);
-      expect(resolved).toBeInstanceOf(TestService);
-      expect(resolved.getValue()).toBe('original');
+      expect(resolved).toBe(mockService);
+      expect(resolved.getValue()).toBe('mock');
+    });
+
+    it('should not affect the global container', () => {
+      // Create a mock service
+      const mockService = new MockTestService();
+
+      // Register it with the container
+      containerHelper.registerMock('TestService', mockService);
+
+      // Create another container that doesn't inherit from this one
+      const newHelper = TestContainerHelper.createIsolatedContainer();
+      
+      // The new container shouldn't have access to the registered mock
+      const result = newHelper.isRegistered('TestService');
+      expect(result).toBe(false);
     });
   });
-  
+
   describe('registerMockClass', () => {
     it('should register a mock class for a service', () => {
-      // Register a mock class
+      // Register mock class with the container
       containerHelper.registerMockClass('TestService', MockTestService);
-      
-      // Resolve the service from the container
-      const resolved = containerHelper.resolve<MockTestService>('TestService');
-      
-      // Should get an instance of our mock class
-      expect(resolved).toBeInstanceOf(MockTestService);
-      expect(resolved.getValue()).toBe('mocked');
-    });
-    
-    it('should do nothing when DI is disabled', () => {
-      // Disable DI
-      process.env.USE_DI = 'false';
-      
-      // Try to register a mock class
-      containerHelper.registerMockClass('TestService', MockTestService);
-      
-      // Enable DI again for verification
-      process.env.USE_DI = 'true';
-      
-      // Should not have registered the mock
+
+      // Should instantiate the mock class
       const resolved = containerHelper.resolve<TestService>('TestService');
-      expect(resolved).not.toBeInstanceOf(MockTestService);
-      expect(resolved).toBeInstanceOf(TestService);
-      expect(resolved.getValue()).toBe('original');
+      expect(resolved).toBeInstanceOf(MockTestService);
+      expect(resolved.getValue()).toBe('mock');
     });
   });
-  
+
   describe('registerParentService', () => {
     it('should register a service in the parent container', () => {
-      // Create a new service
-      class ParentService {
-        getValue() { return 'parent'; }
-      }
-      
-      // Register it with the parent container
-      containerHelper.registerParentService('ParentService', ParentService);
-      
-      // Create a new container helper
-      const anotherHelper = new TestContainerHelper();
-      
-      // Should be able to resolve the service from the new container
-      const resolved = anotherHelper.resolve<ParentService>('ParentService');
-      expect(resolved).toBeInstanceOf(ParentService);
-      expect(resolved.getValue()).toBe('parent');
+      // Register a parent service
+      containerHelper.registerParentService('ParentService', TestService);
+
+      // Should be able to resolve from the child container
+      const resolved = containerHelper.resolve<TestService>('ParentService');
+      expect(resolved).toBeInstanceOf(TestService);
+      expect(resolved.getValue()).toBe('original');
+
+      // Child container should inherit from parent
+      const childHelper = new TestContainerHelper(containerHelper.getContainer().createChildContainer());
+      const childResolved = childHelper.resolve<TestService>('ParentService', { 
+        fallbackClass: MockTestService // Use fallback to identify if service was found
+      });
+      expect(childResolved).toBeInstanceOf(TestService); // Should find TestService, not use fallback
     });
   });
-  
+
   describe('reset', () => {
     it('should clear mock registrations', () => {
       // Register a mock
       containerHelper.registerMock('TestService', new MockTestService());
       
+      // Verify it's registered
+      expect(containerHelper.isRegistered('TestService')).toBe(true);
+
       // Reset the container
       containerHelper.reset();
+
+      // Should no longer be registered
+      expect(containerHelper.isRegistered('TestService')).toBe(false);
       
-      // Should get the original service, not our mock
+      // Should use fallback if we try to resolve it
+      const fallback = new TestService();
+      const resolved = containerHelper.resolve('TestService', { 
+        fallbackClass: TestService,
+        errorMessage: 'Custom error'
+      });
+      expect(resolved).not.toBeInstanceOf(MockTestService);
+      expect(resolved).toBeInstanceOf(TestService);
+    });
+  });
+
+  describe('resolve', () => {
+    it('should resolve services from the container', () => {
+      // Register a mock service
+      const mockService = new MockTestService();
+      containerHelper.registerMock('TestService', mockService);
+
+      // Should be able to resolve it
       const resolved = containerHelper.resolve<TestService>('TestService');
+      expect(resolved).toBe(mockService);
+    });
+
+    it('should use fallback class if provided and token is not registered', () => {
+      // Resolve with fallback
+      const resolved = containerHelper.resolve<TestService>('UnknownService', {
+        fallbackClass: TestService
+      });
+
+      // Should use the fallback class
       expect(resolved).toBeInstanceOf(TestService);
       expect(resolved.getValue()).toBe('original');
     });
   });
-  
-  describe('resolve', () => {
-    it('should resolve services from the container', () => {
-      // Resolve a service
-      const service = containerHelper.resolve<DecoratedService>(DecoratedService);
-      
-      // Should get an instance of the service
-      expect(service).toBeInstanceOf(DecoratedService);
-      expect(service.getValue()).toBe('decorated');
-    });
-    
-    it('should use fallback class if provided and token is not registered', () => {
-      // Try to resolve a service that isn't registered
-      const service = containerHelper.resolve<MockTestService>('UnregisteredService', {
-        fallbackClass: MockTestService
-      });
-      
-      // Should get an instance of the fallback class
-      expect(service).toBeInstanceOf(MockTestService);
-      expect(service.getValue()).toBe('mocked');
-    });
-    
-    it('should throw an error when DI is disabled', () => {
-      // Disable DI
-      process.env.USE_DI = 'false';
-      
-      // Should throw an error
-      expect(() => containerHelper.resolve<TestService>('TestService'))
-        .toThrow('Cannot resolve services in tests when DI is disabled');
-    });
-  });
-  
+
   describe('isRegistered', () => {
     it('should return true for registered tokens', () => {
-      // Directly register in the child container to test isRegistered
-      containerHelper.registerMockClass('TestServiceDirect', TestService);
-      expect(containerHelper.isRegistered('TestServiceDirect')).toBe(true);
+      // Register a service
+      containerHelper.registerMock('TestService', new TestService());
+
+      // Should return true
+      expect(containerHelper.isRegistered('TestService')).toBe(true);
     });
-    
+
     it('should return false for unregistered tokens', () => {
-      expect(containerHelper.isRegistered('UnregisteredService')).toBe(false);
+      // Should return false for unregistered tokens
+      expect(containerHelper.isRegistered('UnknownService')).toBe(false);
     });
-    
-    it('should return false when DI is disabled', () => {
-      process.env.USE_DI = 'false';
-      expect(containerHelper.isRegistered('TestService')).toBe(false);
+
+    it('should return false for unknown services', () => {
+      // Just check that unregistered tokens return false
+      expect(containerHelper.isRegistered('AnotherUnknownService')).toBe(false);
     });
   });
-  
+
   describe('static methods', () => {
     it('createTestContainer should create a new TestContainerHelper', () => {
+      // Should create a new helper
       const helper = TestContainerHelper.createTestContainer();
       expect(helper).toBeInstanceOf(TestContainerHelper);
     });
-    
+
     it('createTestSetup should return setup and reset functions', () => {
+      // Should return setup and reset functions
       const { setupDI, resetDI } = TestContainerHelper.createTestSetup();
-      
-      // setupDI should create a new TestContainerHelper
+      expect(typeof setupDI).toBe('function');
+      expect(typeof resetDI).toBe('function');
+
+      // Setup should create a new helper
       const helper = setupDI();
       expect(helper).toBeInstanceOf(TestContainerHelper);
-      
+
       // Register a mock
       helper.registerMock('TestService', new MockTestService());
+      expect(helper.isRegistered('TestService')).toBe(true);
       
-      // resetDI should reset the container
+      // Reset should clear registrations
       resetDI(helper);
-      
-      // Should get the original service if we register it first
-      helper.registerMockClass('TestService', TestService);
-      const resolved = helper.resolve<TestService>('TestService');
-      expect(resolved).toBeInstanceOf(TestService);
-      expect(resolved.getValue()).toBe('original');
+      expect(helper.isRegistered('TestService')).toBe(false);
     });
   });
 });
