@@ -24,6 +24,7 @@ export interface StateNode {
   readonly nodes: MeldNode[];
   readonly transformedNodes?: MeldNode[];
   readonly imports: Set<string>;
+  readonly parentState?: StateNode;
 }
 
 /**

@@ -10,8 +10,9 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import { MeldFileSystemError } from '@core/errors/MeldFileSystemError.js';
 import { injectable, inject } from 'tsyringe';
-import { Service } from '../../../core/ServiceProvider';
-import { IServiceMediator } from '@services/mediator/index.js';
+import { Service } from '@core/ServiceProvider.js';
+import { IServiceMediator } from '@services/mediator/IServiceMediator.js';
+import { IPathService } from '../PathService/IPathService.js';
 
 const execAsync = promisify(exec);
 

@@ -10,8 +10,13 @@ import { Service } from '@core/ServiceProvider.js';
 import { IServiceMediator } from '@services/mediator/IServiceMediator.js';
 
 // Helper function to check if DI should be used
+/**
+ * @deprecated This function now always returns true as part of the DI-only migration.
+ * Legacy non-DI mode is being phased out.
+ */
 function shouldUseDI(): boolean {
-  return process.env.USE_DI === 'true';
+  // Always return true as part of Phase 4.1 of the DI cleanup plan
+  return true;
 }
 
 // Helper function to get the container
@@ -29,7 +34,8 @@ function getContainer() {
   description: 'Service responsible for managing state in Meld files'
 })
 export class StateService implements IStateService {
-  private stateFactory: StateFactory;
+  // Initialize with default or it will be set in initialization methods
+  private stateFactory: StateFactory = new StateFactory();
   private currentState!: StateNode;
   private _isImmutable: boolean = false;
   private _transformationEnabled: boolean = false;
@@ -190,8 +196,9 @@ private initializeLegacyMode(
         id: this.currentState.stateId,
         parentId,
         filePath: this.currentState.filePath,
-        timestamp: Date.now(),
-        source: 'initializeState'
+        createdAt: Date.now(),
+        transformationEnabled: this._transformationEnabled,
+        source: 'child'
       });
       
       // Explicitly register parent-child relationship if parent exists
@@ -201,7 +208,7 @@ private initializeLegacyMode(
           targetId: this.currentState.stateId,
           type: 'parent-child',
           timestamp: Date.now(),
-          source: 'initializeState'
+          source: 'child'
         });
       }
     }

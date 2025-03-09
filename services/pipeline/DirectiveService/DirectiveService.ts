@@ -49,7 +49,7 @@ export class MeldLLMXMLError extends Error {
     { token: 'IPathService', name: 'pathService' },
     { token: 'IFileSystemService', name: 'fileSystemService' },
     { token: 'IParserService', name: 'parserService' },
-    { token: 'IInterpreterService', name: 'interpreterService', circular: true },
+    { token: 'IInterpreterService', name: 'interpreterService' },
     { token: 'ICircularityService', name: 'circularityService' },
     { token: 'IResolutionService', name: 'resolutionService' }
   ]

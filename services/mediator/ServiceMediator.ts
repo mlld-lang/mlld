@@ -120,14 +120,17 @@ export class ServiceMediator implements IServiceMediator {
   }
 
   /**
-   * Parses content using the parser service
-   * This method is used by the resolution service to parse content during variable resolution
+   * Parses content for resolution using the parser service
+   * This is used by resolution service when parsing variable references
    */
   async parseForResolution(content: string, filePath?: string): Promise<any[]> {
     if (!this.parserService) {
       throw new Error('ParserService not initialized in mediator');
     }
-    return this.parserService.parse(content, filePath);
+    // If filePath is provided, use parseWithLocations, otherwise use parse
+    return filePath 
+      ? this.parserService.parseWithLocations(content, filePath)
+      : this.parserService.parse(content);
   }
   
   /**
@@ -145,7 +148,7 @@ export class ServiceMediator implements IServiceMediator {
   
   /**
    * Resolves a path using the path service
-   * This method is used by the filesystem service to resolve paths
+   * This is used by filesystem service to resolve paths
    */
   resolvePath(path: string): string {
     if (!this.pathService) {
@@ -162,7 +165,8 @@ export class ServiceMediator implements IServiceMediator {
     if (!this.pathService) {
       throw new Error('PathService not initialized in mediator');
     }
-    return this.pathService.normalizePath(path);
+    // Since IPathService doesn't have normalizePath, we'll use resolvePath instead
+    return this.pathService.resolvePath(path);
   }
   
   /**

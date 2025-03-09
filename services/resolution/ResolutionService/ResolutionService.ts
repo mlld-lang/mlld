@@ -134,17 +134,18 @@ function isHeadingTextNode(node: MeldNode): node is TextNode {
   ]
 })
 export class ResolutionService implements IResolutionService {
-  private textResolver: TextResolver;
-  private dataResolver: DataResolver;
-  private pathResolver: PathResolver;
-  private commandResolver: CommandResolver;
-  private contentResolver: ContentResolver;
-  private variableReferenceResolver: VariableReferenceResolver;
+  // Initialize with null values that will be set in initialization methods
+  private textResolver: TextResolver = null!;
+  private dataResolver: DataResolver = null!;
+  private pathResolver: PathResolver = null!;
+  private commandResolver: CommandResolver = null!;
+  private contentResolver: ContentResolver = null!;
+  private variableReferenceResolver: VariableReferenceResolver = null!;
   private resolutionTracker?: VariableResolutionTracker;
   
-  private stateService: IStateService;
-  private fileSystemService: IFileSystemService;
-  private pathService: IPathService;
+  private stateService: IStateService = null!;
+  private fileSystemService: IFileSystemService = null!;
+  private pathService: IPathService = null!;
   private serviceMediator?: IServiceMediator;
 
   /**
@@ -596,8 +597,7 @@ export class ResolutionService implements IResolutionService {
               code: ResolutionErrorCode.CIRCULAR_REFERENCE,
               details: { 
                 value: text,
-                variableName: ref,
-                path
+                variableName: ref
               },
               severity: ErrorSeverity.Fatal
             }

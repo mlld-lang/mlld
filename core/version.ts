@@ -5,16 +5,9 @@ import { fileURLToPath } from 'url';
 // Handle both ESM and CommonJS environments
 const getPackageJsonPath = () => {
   try {
-    // ESM environment
-    if (typeof import.meta === 'object' && import.meta.url) {
-      const __filename = fileURLToPath(import.meta.url);
-      const __dirname = dirname(__filename);
-      return join(__dirname, '../package.json');
-    } 
-    // CommonJS environment
-    else {
-      return join(__dirname, '../package.json');
-    }
+    // For CommonJS compatibility, avoid using import.meta
+    // Instead, use a relative path from the current file
+    return join(process.cwd(), 'package.json');
   } catch (error) {
     // Fallback to a relative path if all else fails
     return join(process.cwd(), 'package.json');
