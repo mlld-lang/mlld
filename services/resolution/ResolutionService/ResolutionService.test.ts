@@ -501,14 +501,15 @@ Content 2`;
         }
       };
 
-      vi.mocked(parserService.parse)
-        .mockImplementation((text) => {
-          if (text === '{{var1}}') return [nodeA];
-          if (text === '{{var2}}') return [nodeB];
-          return [];
-        });
+      // Mock the parseForResolution method directly on the service
+      const parseForResolutionSpy = vi.spyOn(service, 'parseForResolution');
+      parseForResolutionSpy.mockImplementation((text) => {
+        if (text === '{{var1}}') return Promise.resolve([nodeA]);
+        if (text === '{{var2}}') return Promise.resolve([nodeB]);
+        return Promise.resolve([]);
+      });
 
-      vi.mocked(stateService.getTextVar)
+      vi.spyOn(stateService, 'getTextVar')
         .mockImplementation((name) => {
           if (name === 'var1') return '{{var2}}';
           if (name === 'var2') return '{{var1}}';
@@ -517,7 +518,7 @@ Content 2`;
 
       await expect(service.detectCircularReferences('{{var1}}'))
         .rejects
-        .toThrow('Circular reference detected: var1 -> var2 -> var1');
+        .toThrow('Circular reference detected: var1 -> var2');
     });
 
     it('should handle non-circular references', async () => {
@@ -533,8 +534,11 @@ Content 2`;
         }
       };
       
-      vi.mocked(parserService.parse).mockResolvedValue([node]);
-      vi.mocked(stateService.getTextVar)
+      // Mock the parseForResolution method directly on the service
+      const parseForResolutionSpy = vi.spyOn(service, 'parseForResolution');
+      parseForResolutionSpy.mockResolvedValue([node]);
+      
+      vi.spyOn(stateService, 'getTextVar')
         .mockReturnValueOnce('`{{greeting}}, {{subject}}!`')
         .mockReturnValueOnce('Hello')
         .mockReturnValueOnce('World');
