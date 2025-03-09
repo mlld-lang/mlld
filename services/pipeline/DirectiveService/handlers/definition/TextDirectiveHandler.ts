@@ -12,11 +12,21 @@ import { VariableReferenceResolver } from '@services/resolution/ResolutionServic
 import { ResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
+import { inject, injectable } from 'tsyringe';
+import { Service } from '@core/ServiceProvider.js';
 
 /**
  * Handler for @text directives
  * Stores text values in state after resolving variables and processing embedded content
  */
+@Service({
+  description: 'Handler for text directives',
+  dependencies: [
+    { token: 'IValidationService', name: 'validationService' },
+    { token: 'IStateService', name: 'stateService' },
+    { token: 'IResolutionService', name: 'resolutionService' }
+  ]
+})
 export class TextDirectiveHandler implements IDirectiveHandler {
   readonly kind = 'text';
   private stringLiteralHandler: StringLiteralHandler;
@@ -25,10 +35,19 @@ export class TextDirectiveHandler implements IDirectiveHandler {
   private fileSystemService?: IFileSystemService;
 
   constructor(
-    private validationService: IValidationService,
-    private stateService: IStateService,
-    private resolutionService: IResolutionService
+    @inject('IValidationService') private validationService: IValidationService,
+    @inject('IStateService') private stateService: IStateService,
+    @inject('IResolutionService') private resolutionService: IResolutionService
   ) {
+    logger.debug('TextDirectiveHandler constructor called', {
+      hasValidationService: !!validationService,
+      hasStateService: !!stateService,
+      hasResolutionService: !!resolutionService,
+      state: stateService ? {
+        hasTrackingService: !!(stateService as any).trackingService
+      } : 'undefined'
+    });
+
     this.stringLiteralHandler = new StringLiteralHandler();
     this.stringConcatenationHandler = new StringConcatenationHandler(resolutionService);
     

@@ -6,6 +6,9 @@ import type { Location, Position } from '@core/types/index.js';
 import { IStateService } from '@services/state/StateService/IStateService.js';
 import { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import type { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
+import { injectable, inject } from 'tsyringe';
+import { Service } from '@core/ServiceProvider.js';
+import { IServiceMediator } from '@services/mediator/index.js';
 
 // Define our own ParseError type since it's not exported from meld-ast
 interface ParseError {
@@ -36,15 +39,22 @@ function isMeldAstError(error: unknown): error is MeldAstError {
   );
 }
 
+@injectable()
+@Service({
+  description: 'Service responsible for parsing Meld syntax into AST nodes'
+})
 export class ParserService implements IParserService {
-  private resolutionService?: IResolutionService;
+  private mediator?: IServiceMediator;
 
-  constructor(resolutionService?: IResolutionService) {
-    this.resolutionService = resolutionService;
+  constructor(@inject('IServiceMediator') mediator?: IServiceMediator) {
+    this.mediator = mediator;
   }
 
-  setResolutionService(resolutionService: IResolutionService): void {
-    this.resolutionService = resolutionService;
+  /**
+   * Sets the service mediator for breaking circular dependencies
+   */
+  setMediator(mediator: IServiceMediator): void {
+    this.mediator = mediator;
   }
 
   private async parseContent(content: string, filePath?: string): Promise<MeldNode[]> {
@@ -313,9 +323,9 @@ export class ParserService implements IParserService {
       return node;
     }
 
-    // Ensure we have a resolution service
-    if (!this.resolutionService) {
-      logger.warn('No resolution service available for variable transformation');
+    // Ensure we have a mediator
+    if (!this.mediator) {
+      logger.warn('No mediator available for variable transformation');
       return node;
     }
 
@@ -344,8 +354,8 @@ export class ParserService implements IParserService {
             return node;
           }
           
-          // Resolve the variable reference
-          const resolved = await this.resolutionService.resolveInContext(variableName, context);
+          // Resolve the variable reference through the mediator
+          const resolved = await this.mediator.resolveVariableForParser(variableName, context);
           
           // Create a new Text node with the resolved value
           const textNode: TextNode = {

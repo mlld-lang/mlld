@@ -12,6 +12,8 @@ describe('StringLiteralHandler', () => {
   beforeEach(() => {
     parserService = createMockParserService();
     handler = new StringLiteralHandler(parserService);
+    // Enable silent mode to avoid console error spam during tests
+    handler.setSilentMode(true);
   });
 
   describe('isStringLiteral', () => {

@@ -1,45 +1,96 @@
 import type { DirectiveNode } from 'meld-spec';
-import { InterpreterState } from '../../_old/src/interpreter/state/state.js';
-import { ErrorFactory } from '../../_old/src/interpreter/errors/factory.js';
-import { DirectiveHandler, HandlerContext } from '../../_old/src/interpreter/directives/types.js';
+import { injectable } from 'tsyringe';
+import { Service } from '@core/ServiceProvider';
+import { InterpreterState } from './state';
+import { MeldDirectiveError } from '@core/errors/MeldDirectiveError';
 import { vi } from 'vitest';
 import type { MeldNode } from 'meld-spec';
 
-export class EmbedDirectiveHandler implements DirectiveHandler {
+/**
+ * Mock handler for embed directives
+ */
+@injectable()
+@Service('MockEmbedDirectiveHandler for testing')
+export class EmbedDirectiveHandler {
+  constructor() {
+    // Empty constructor for DI compatibility
+  }
+  
+  kind = 'execution';
+  directiveName = 'embed';
+
   canHandle(kind: string, mode: 'toplevel' | 'rightside'): boolean {
     return kind === 'embed';
   }
 
-  async handle(node: DirectiveNode, state: InterpreterState, context: HandlerContext): Promise<void> {
+  async transform(node: DirectiveNode, state: any): Promise<any> {
+    // Mock transformation implementation
+    return node;
+  }
+
+  async execute(node: DirectiveNode, state: any): Promise<any> {
     const data = node.directive;
-    if (!data.source) {
-      throw ErrorFactory.createDirectiveError(
-        'Embed source is required',
+    if (!data.path) {
+      throw new MeldDirectiveError(
+        'Embed path is required',
         'embed',
         node.location?.start
       );
     }
     // Mock implementation
-    state.setTextVar(`embed:${data.source}`, 'Mock embedded content');
+    state.setTextVar(`embed:${data.path}`, 'Mock embedded content');
+  }
+
+  async validate(node: DirectiveNode): Promise<boolean | { valid: boolean; errors?: string[] }> {
+    // Mock validation
+    if (!node.directive.path) {
+      return { valid: false, errors: ['Embed path is required'] };
+    }
+    return true;
   }
 }
 
-export class ImportDirectiveHandler implements DirectiveHandler {
+/**
+ * Mock handler for import directives
+ */
+@injectable()
+@Service('MockImportDirectiveHandler for testing')
+export class ImportDirectiveHandler {
+  constructor() {
+    // Empty constructor for DI compatibility
+  }
+  
+  kind = 'execution';
+  directiveName = 'import';
+
   canHandle(kind: string, mode: 'toplevel' | 'rightside'): boolean {
     return kind === 'import';
   }
 
-  async handle(node: DirectiveNode, state: InterpreterState, context: HandlerContext): Promise<void> {
+  async transform(node: DirectiveNode, state: any): Promise<any> {
+    // Mock transformation implementation
+    return node;
+  }
+
+  async execute(node: DirectiveNode, state: any): Promise<any> {
     const data = node.directive;
-    if (!data.source) {
-      throw ErrorFactory.createDirectiveError(
-        'Import source is required',
+    if (!data.path) {
+      throw new MeldDirectiveError(
+        'Import path is required',
         'import',
         node.location?.start
       );
     }
     // Mock implementation
-    state.setTextVar(`import:${data.source}`, 'Mock imported content');
+    state.setTextVar(`import:${data.path}`, 'Mock imported content');
+  }
+
+  async validate(node: DirectiveNode): Promise<boolean | { valid: boolean; errors?: string[] }> {
+    // Mock validation
+    if (!node.directive.path) {
+      return { valid: false, errors: ['Import path is required'] };
+    }
+    return true;
   }
 }
 
@@ -54,7 +105,7 @@ export const parseMeld = vi.fn((content: string): MeldNode[] => {
   try {
     if (typeof content !== 'string') {
       console.error('[Parser Mock] Invalid input type:', typeof content);
-      throw ErrorFactory.createParseError('Parser input must be a string');
+      throw new MeldDirectiveError('Parser input must be a string', 'parse');
     }
 
     // Handle basic text directive
@@ -63,7 +114,7 @@ export const parseMeld = vi.fn((content: string): MeldNode[] => {
         type: 'Directive',
         directive: {
           kind: 'text',
-          name: 'test',
+          identifier: 'test',
           value: 'value'
         },
         location: {
@@ -81,7 +132,7 @@ export const parseMeld = vi.fn((content: string): MeldNode[] => {
         type: 'Directive',
         directive: {
           kind: 'data',
-          name: 'test',
+          identifier: 'test',
           value: { key: 'value' }
         },
         location: {
@@ -95,7 +146,7 @@ export const parseMeld = vi.fn((content: string): MeldNode[] => {
 
     // Handle invalid content
     console.error('[Parser Mock] Failed to parse content:', content);
-    throw ErrorFactory.createParseError('Failed to parse content');
+    throw new MeldDirectiveError('Failed to parse content', 'parse');
   } catch (error) {
     console.error('[Parser Mock] Error during parsing:', {
       error: error instanceof Error ? error.message : String(error),

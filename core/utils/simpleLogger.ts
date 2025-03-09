@@ -1,10 +1,31 @@
-type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+import { injectable, singleton } from 'tsyringe';
+import { Service } from '@core/ServiceProvider.js';
 
-interface LogContext {
+export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+
+export interface LogContext {
   [key: string]: unknown;
 }
 
-class Logger {
+/**
+ * Interface for the simple Logger to enable DI resolution
+ */
+export interface ISimpleLogger {
+  debug(message: string, context?: LogContext): void;
+  info(message: string, context?: LogContext): void;
+  warn(message: string, context?: LogContext): void;
+  error(message: string, context?: LogContext): void;
+}
+
+/**
+ * Simple logger implementation for minimal logging needs
+ */
+@injectable()
+@singleton()
+@Service({
+  providedIn: 'root'
+})
+export class Logger implements ISimpleLogger {
   constructor(private namespace: string) {}
 
   debug(message: string, context: LogContext = {}): void {
@@ -43,5 +64,5 @@ class Logger {
   }
 }
 
-// Create namespaced loggers
+// Create namespaced loggers - maintain exported singleton for backward compatibility
 export const fsLogger = new Logger('filesystem'); 

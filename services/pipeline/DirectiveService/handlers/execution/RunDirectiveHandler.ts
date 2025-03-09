@@ -8,19 +8,25 @@ import { directiveLogger } from '../../../../../core/utils/logger.js';
 import type { DirectiveResult } from '@services/pipeline/DirectiveService/types.js';
 import type { IDirectiveHandler } from '@services/pipeline/DirectiveService/IDirectiveService.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
+import { inject, injectable } from 'tsyringe';
+import { Service } from '@core/ServiceProvider.js';
 
 /**
  * Handler for @run directives
  * Executes commands and stores their output in state
  */
+@injectable()
+@Service({
+  description: 'Handler for @run directives'
+})
 export class RunDirectiveHandler implements IDirectiveHandler {
   readonly kind = 'run';
 
   constructor(
-    private validationService: IValidationService,
-    private resolutionService: IResolutionService,
-    private stateService: IStateService,
-    private fileSystemService: IFileSystemService
+    @inject('IValidationService') private validationService: IValidationService,
+    @inject('IResolutionService') private resolutionService: IResolutionService,
+    @inject('IStateService') private stateService: IStateService,
+    @inject('IFileSystemService') private fileSystemService: IFileSystemService
   ) {}
 
   async execute(node: DirectiveNode, context: DirectiveContext): Promise<DirectiveResult> {

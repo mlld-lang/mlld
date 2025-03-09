@@ -18,6 +18,18 @@ export interface IStateTrackingService {
   addRelationship(sourceId: string, targetId: string, type: 'parent-child' | 'merge-source' | 'merge-target'): void;
 
   /**
+   * Register a relationship between two states with additional metadata.
+   * @param relationship - The relationship details including source, target, type, and metadata
+   */
+  registerRelationship(relationship: {
+    sourceId: string;
+    targetId: string;
+    type: 'parent-child' | 'merge-source' | 'merge-target';
+    timestamp: number;
+    source: string;
+  }): void;
+
+  /**
    * Get the complete lineage of a state from root to the given state.
    * @param stateId - The ID of the state to get lineage for
    * @param visited - Set of visited states to prevent cycles

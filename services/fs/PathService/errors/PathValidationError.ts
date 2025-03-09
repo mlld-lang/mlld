@@ -7,7 +7,9 @@ import type { Location } from '@core/types/index.js';
 export enum PathErrorCode {
   // Basic validation
   INVALID_PATH = 'INVALID_PATH',
+  EMPTY_PATH = 'EMPTY_PATH',
   NULL_BYTE = 'NULL_BYTE',
+  FILE_NOT_FOUND = 'FILE_NOT_FOUND',
   PATH_NOT_FOUND = 'PATH_NOT_FOUND',
   
   // File type validation
@@ -22,15 +24,39 @@ export enum PathErrorCode {
 }
 
 /**
+ * Error details for path validation errors
+ */
+export interface PathValidationErrorDetails {
+  code: PathErrorCode;
+  path: string;
+  resolvedPath?: string;
+  baseDir?: string;
+  cause?: Error;
+}
+
+/**
  * Error thrown when path validation fails
  */
 export class PathValidationError extends Error {
+  public code: PathErrorCode;
+  public path: string;
+  public resolvedPath?: string;
+  public baseDir?: string;
+  public cause?: Error;
+  public location?: Location;
+
   constructor(
     message: string,
-    public code: PathErrorCode,
-    public location?: Location
+    details: PathValidationErrorDetails,
+    location?: Location
   ) {
     super(message);
     this.name = 'PathValidationError';
+    this.code = details.code;
+    this.path = details.path;
+    this.resolvedPath = details.resolvedPath;
+    this.baseDir = details.baseDir;
+    this.cause = details.cause;
+    this.location = location;
   }
 } 

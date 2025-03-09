@@ -9,7 +9,6 @@ import { ContentResolver } from './resolvers/ContentResolver.js';
 import { VariableReferenceResolver } from './resolvers/VariableReferenceResolver.js';
 import { resolutionLogger as logger } from '@core/utils/logger.js';
 import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
-import { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 import type { MeldNode, DirectiveNode, TextNode, DirectiveKind, CodeFenceNode } from 'meld-spec';
 import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
 import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
@@ -17,6 +16,8 @@ import { ErrorSeverity } from '@core/errors/MeldError.js';
 import { inject, singleton } from 'tsyringe';
 import { IPathService } from '@services/fs/PathService/IPathService.js';
 import { VariableResolutionTracker, ResolutionTrackingConfig } from '@tests/utils/debug/VariableResolutionTracker/index.js';
+import { Service } from '@core/ServiceProvider.js';
+import { IServiceMediator } from '@services/mediator/index.js';
 
 /**
  * Interface matching the StructuredPath expected from meld-spec
@@ -123,6 +124,15 @@ function isHeadingTextNode(node: MeldNode): node is TextNode {
  * Service responsible for resolving variables, commands, and paths in different contexts
  */
 @singleton()
+@Service({
+  description: 'Service responsible for resolving variables, commands, and paths',
+  dependencies: [
+    { token: 'IStateService', name: 'stateService' },
+    { token: 'IFileSystemService', name: 'fileSystemService' },
+    { token: 'IParserService', name: 'parserService' },
+    { token: 'IPathService', name: 'pathService' }
+  ]
+})
 export class ResolutionService implements IResolutionService {
   private textResolver: TextResolver;
   private dataResolver: DataResolver;
@@ -131,22 +141,106 @@ export class ResolutionService implements IResolutionService {
   private contentResolver: ContentResolver;
   private variableReferenceResolver: VariableReferenceResolver;
   private resolutionTracker?: VariableResolutionTracker;
+  
+  private stateService: IStateService;
+  private fileSystemService: IFileSystemService;
+  private pathService: IPathService;
+  private serviceMediator?: IServiceMediator;
 
+  /**
+   * Creates a new ResolutionService instance with dependency injection
+   * 
+   * @param stateService Service for accessing state variables
+   * @param fileSystemService Service for file operations
+   * @param pathService Service for path resolution
+   * @param serviceMediator Service mediator for breaking circular dependencies
+   */
   constructor(
-    private stateService: IStateService,
-    private fileSystemService: IFileSystemService,
-    private parserService: IParserService,
-    private pathService: IPathService
+    @inject('IStateService') stateService?: IStateService,
+    @inject('IFileSystemService') fileSystemService?: IFileSystemService, 
+    @inject('IPathService') pathService?: IPathService,
+    @inject('IServiceMediator') serviceMediator?: IServiceMediator
   ) {
-    this.textResolver = new TextResolver(stateService);
-    this.dataResolver = new DataResolver(stateService);
-    this.pathResolver = new PathResolver(stateService);
-    this.commandResolver = new CommandResolver(stateService);
-    this.contentResolver = new ContentResolver(stateService);
+    this.initializeFromParams(stateService, fileSystemService, pathService, serviceMediator);
+  }
+  
+  /**
+   * Initialize this service with the given parameters
+   * Handles both DI and non-DI mode initialization
+   */
+  private initializeFromParams(
+    stateService?: IStateService,
+    fileSystemService?: IFileSystemService,
+    pathService?: IPathService,
+    serviceMediator?: IServiceMediator
+  ): void {
+    // Check if we're in DI mode by verifying all dependencies exist
+    if (stateService && fileSystemService && pathService && serviceMediator) {
+      this.initializeDIMode(stateService, fileSystemService, pathService, serviceMediator);
+    } else {
+      // In legacy non-DI mode, require at least the state service
+      if (!stateService) {
+        throw new Error('StateService is required for ResolutionService');
+      }
+      this.initializeLegacyMode(stateService, fileSystemService, pathService, serviceMediator);
+    }
+  }
+  
+  /**
+   * Initialize in DI mode with explicit dependencies
+   */
+  private initializeDIMode(
+    stateService: IStateService,
+    fileSystemService: IFileSystemService,
+    pathService: IPathService,
+    serviceMediator: IServiceMediator
+  ): void {
+    this.stateService = stateService;
+    this.fileSystemService = fileSystemService;
+    this.pathService = pathService;
+    this.serviceMediator = serviceMediator;
+    
+    // Register this service with the mediator
+    this.serviceMediator.setResolutionService(this);
+    
+    this.initializeResolvers();
+  }
+  
+  /**
+   * Initialize in legacy non-DI mode
+   */
+  private initializeLegacyMode(
+    stateService: IStateService,
+    fileSystemService?: IFileSystemService,
+    pathService?: IPathService,
+    serviceMediator?: IServiceMediator
+  ): void {
+    this.stateService = stateService;
+    this.fileSystemService = fileSystemService || {} as IFileSystemService;
+    this.pathService = pathService || {} as IPathService;
+    this.serviceMediator = serviceMediator;
+    
+    // Register this service with the mediator if available
+    if (this.serviceMediator) {
+      this.serviceMediator.setResolutionService(this);
+    }
+    
+    this.initializeResolvers();
+  }
+  
+  /**
+   * Initialize the resolver components used by this service
+   */
+  private initializeResolvers(): void {
+    this.textResolver = new TextResolver(this.stateService);
+    this.dataResolver = new DataResolver(this.stateService);
+    this.pathResolver = new PathResolver(this.stateService);
+    this.commandResolver = new CommandResolver(this.stateService);
+    this.contentResolver = new ContentResolver(this.stateService);
     this.variableReferenceResolver = new VariableReferenceResolver(
-      stateService,
+      this.stateService,
       this,
-      parserService
+      this.serviceMediator // Pass the mediator instead of parser service
     );
   }
 
@@ -155,8 +249,17 @@ export class ResolutionService implements IResolutionService {
    */
   private async parseForResolution(value: string): Promise<MeldNode[]> {
     try {
-      const nodes = await this.parserService.parse(value);
-      return nodes || [];
+      // Use the mediator to get AST nodes if available
+      if (this.serviceMediator) {
+        const nodes = await this.serviceMediator.parseForResolution(value);
+        return nodes || [];
+      }
+      
+      // Fallback for backward compatibility during transition
+      logger.warn('No mediator available for parsing - falling back to direct import');
+      const { parse } = await import('meld-ast');
+      const result = await parse(value, { trackLocations: true });
+      return result.ast || [];
     } catch (error) {
       // If parsing fails, treat the value as literal text
       return [{
@@ -367,69 +470,86 @@ export class ResolutionService implements IResolutionService {
       if (node.type !== 'Directive') continue;
 
       const directiveNode = node as DirectiveNode;
+      
       // Check if the directive type is allowed
       switch (directiveNode.directive.kind) {
         case 'text':
           if (!context.allowedVariableTypes.text) {
-            throw new MeldResolutionError(
-              'Text variables are not allowed in this context',
+            const errorMessage = 'Text variables are not allowed in this context';
+            const errorDetails = { 
+              value: typeof value === 'string' ? value : value.raw, 
+              context: JSON.stringify(context)
+            };
+            const error = new MeldResolutionError(
+              errorMessage,
               {
                 code: ResolutionErrorCode.INVALID_CONTEXT,
-                details: { 
-                  value: typeof value === 'string' ? value : value.raw, 
-                  context: JSON.stringify(context)
-                },
+                details: errorDetails,
                 severity: ErrorSeverity.Fatal
               }
             );
+            logger.error('Validation error in ResolutionService', { error });
+            throw error;
           }
           break;
 
         case 'data':
           if (!context.allowedVariableTypes.data) {
-            throw new MeldResolutionError(
-              'Data variables are not allowed in this context',
+            const errorMessage = 'Data variables are not allowed in this context';
+            const errorDetails = { 
+              value: typeof value === 'string' ? value : value.raw, 
+              context: JSON.stringify(context)
+            };
+            const error = new MeldResolutionError(
+              errorMessage,
               {
                 code: ResolutionErrorCode.INVALID_CONTEXT,
-                details: { 
-                  value: typeof value === 'string' ? value : value.raw, 
-                  context: JSON.stringify(context)
-                },
+                details: errorDetails,
                 severity: ErrorSeverity.Fatal
               }
             );
+            logger.error('Validation error in ResolutionService', { error });
+            throw error;
           }
           break;
 
         case 'path':
           if (!context.allowedVariableTypes.path) {
-            throw new MeldResolutionError(
-              'Path variables are not allowed in this context',
+            const errorMessage = 'Path variables are not allowed in this context';
+            const errorDetails = { 
+              value: typeof value === 'string' ? value : value.raw, 
+              context: JSON.stringify(context)
+            };
+            const error = new MeldResolutionError(
+              errorMessage,
               {
                 code: ResolutionErrorCode.INVALID_CONTEXT,
-                details: { 
-                  value: typeof value === 'string' ? value : value.raw, 
-                  context: JSON.stringify(context)
-                },
+                details: errorDetails,
                 severity: ErrorSeverity.Fatal
               }
             );
+            logger.error('Validation error in ResolutionService', { error });
+            throw error;
           }
           break;
 
         case 'run':
           if (!context.allowedVariableTypes.command) {
-            throw new MeldResolutionError(
-              'Command references are not allowed in this context',
+            const errorMessage = 'Command references are not allowed in this context';
+            const errorDetails = { 
+              value: typeof value === 'string' ? value : value.raw, 
+              context: JSON.stringify(context)
+            };
+            const error = new MeldResolutionError(
+              errorMessage,
               {
                 code: ResolutionErrorCode.INVALID_CONTEXT,
-                details: { 
-                  value: typeof value === 'string' ? value : value.raw, 
-                  context: JSON.stringify(context)
-                },
+                details: errorDetails,
                 severity: ErrorSeverity.Fatal
               }
             );
+            logger.error('Validation error in ResolutionService', { error });
+            throw error;
           }
           break;
       }
@@ -441,7 +561,7 @@ export class ResolutionService implements IResolutionService {
    */
   async detectCircularReferences(value: string): Promise<void> {
     const visited = new Set<string>();
-    const stack = new Set<string>();
+    const stack: string[] = [];
 
     const checkReferences = async (text: string, currentRef?: string) => {
       // Parse the text to get variable references
@@ -467,15 +587,17 @@ export class ResolutionService implements IResolutionService {
         // Skip if this is a direct reference to the current variable
         if (ref === currentRef) continue;
 
-        if (stack.has(ref)) {
-          const path = Array.from(stack).join(' -> ');
+        if (stack.includes(ref)) {
+          // Create the circular reference path
+          const path = [...stack, ref].join(' -> ');
           throw new MeldResolutionError(
-            `Circular reference detected: ${path} -> ${ref}`,
+            `Circular reference detected: ${path}`,
             {
               code: ResolutionErrorCode.CIRCULAR_REFERENCE,
               details: { 
                 value: text,
-                variableName: ref
+                variableName: ref,
+                path
               },
               severity: ErrorSeverity.Fatal
             }
@@ -484,7 +606,7 @@ export class ResolutionService implements IResolutionService {
 
         if (!visited.has(ref)) {
           visited.add(ref);
-          stack.add(ref);
+          stack.push(ref);
 
           let refValue: string | undefined;
 
@@ -513,7 +635,8 @@ export class ResolutionService implements IResolutionService {
             await checkReferences(refValue, ref);
           }
 
-          stack.delete(ref);
+          // Remove from stack after checking
+          stack.pop();
         }
       }
     };

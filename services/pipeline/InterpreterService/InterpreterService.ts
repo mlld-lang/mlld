@@ -6,6 +6,8 @@ import type { IStateService } from '@services/state/StateService/IStateService.j
 import { MeldInterpreterError, type InterpreterLocation } from '@core/errors/MeldInterpreterError.js';
 import { MeldError, ErrorSeverity } from '@core/errors/MeldError.js';
 import { StateVariableCopier } from '@services/state/utilities/StateVariableCopier.js';
+import { Service } from '@core/ServiceProvider.js';
+import { inject, injectable, delay } from 'tsyringe';
 
 const DEFAULT_OPTIONS: Required<Omit<InterpreterOptions, 'initialState' | 'errorHandler'>> = {
   filePath: '',
@@ -28,11 +30,44 @@ function getErrorMessage(error: unknown): string {
   return 'Unknown error';
 }
 
+/**
+ * Service for interpreting Meld AST and executing directives
+ */
+@injectable()
+@Service({
+  description: 'Service for interpreting Meld AST nodes and executing directives',
+  dependencies: [
+    { token: 'IDirectiveService', name: 'directiveService' },
+    { token: 'IStateService', name: 'stateService' }
+  ]
+})
 export class InterpreterService implements IInterpreterService {
   private directiveService?: IDirectiveService;
   private stateService?: IStateService;
   private initialized = false;
   private stateVariableCopier = new StateVariableCopier();
+  private initializationPromise: Promise<void> | null = null;
+
+  constructor(
+    @inject('IDirectiveService') directiveService?: IDirectiveService,
+    @inject('IStateService') stateService?: IStateService
+  ) {
+    // Handle DI constructor injection
+    if (directiveService && stateService) {
+      // Create a promise that resolves when initialization completes
+      this.initializationPromise = new Promise<void>((resolve) => {
+        // Initialization happens immediately, but promise resolves on next tick
+        // to avoid circular dependency issues
+        this.directiveService = directiveService;
+        this.stateService = stateService;
+        setTimeout(() => {
+          this.initialized = true;
+          logger.debug('InterpreterService initialized via DI');
+          resolve();
+        }, 0);
+      });
+    }
+  }
 
   public canHandleTransformations(): boolean {
     return true;
@@ -45,8 +80,41 @@ export class InterpreterService implements IInterpreterService {
     this.directiveService = directiveService;
     this.stateService = stateService;
     this.initialized = true;
+    this.initializationPromise = Promise.resolve();
+    logger.debug('InterpreterService initialized manually');
+  }
 
-    logger.debug('InterpreterService initialized');
+  /**
+   * Ensures that service is properly initialized before use
+   * Returns a promise that resolves when initialization is complete
+   */
+  private async ensureInitialized(): Promise<void> {
+    if (this.initialized && this.directiveService && this.stateService) {
+      return Promise.resolve();
+    }
+
+    if (this.initializationPromise) {
+      await this.initializationPromise;
+      
+      // After waiting for initialization, check if services are actually defined
+      if (!this.directiveService || !this.stateService) {
+        throw new MeldInterpreterError(
+          'InterpreterService must be initialized before use',
+          'initialization',
+          undefined,
+          { severity: ErrorSeverity.Fatal }
+        );
+      }
+      
+      return;
+    }
+
+    throw new MeldInterpreterError(
+      'InterpreterService must be initialized before use',
+      'initialization',
+      undefined,
+      { severity: ErrorSeverity.Fatal }
+    );
   }
 
   /**
@@ -59,6 +127,8 @@ export class InterpreterService implements IInterpreterService {
     const meldError = error instanceof MeldError 
       ? error 
       : MeldError.wrap(error);
+    
+    logger.error('Error in InterpreterService', { error: meldError });
     
     // In strict mode, or if it's a fatal error, throw it
     if (options.strict || !meldError.canBeWarning()) {
@@ -81,7 +151,8 @@ export class InterpreterService implements IInterpreterService {
     nodes: MeldNode[],
     options?: InterpreterOptions
   ): Promise<IStateService> {
-    this.ensureInitialized();
+    // Wait for initialization to complete before proceeding
+    await this.ensureInitialized();
 
     if (!nodes) {
       throw new MeldInterpreterError(
@@ -412,7 +483,7 @@ export class InterpreterService implements IInterpreterService {
     filePath?: string,
     options?: InterpreterOptions
   ): Promise<IStateService> {
-    this.ensureInitialized();
+    await this.ensureInitialized();
 
     if (!parentState) {
       throw new MeldInterpreterError(
@@ -475,15 +546,6 @@ export class InterpreterService implements IInterpreterService {
             }
           }
         }
-      );
-    }
-  }
-
-  private ensureInitialized(): void {
-    if (!this.initialized || !this.directiveService || !this.stateService) {
-      throw new MeldInterpreterError(
-        'InterpreterService must be initialized before use',
-        'initialization'
       );
     }
   }

@@ -9,13 +9,16 @@ import { InterpreterService } from '@services/pipeline/InterpreterService/Interp
 import { DirectiveService } from '@services/pipeline/DirectiveService/DirectiveService.js';
 import { ValidationService } from '@services/resolution/ValidationService/ValidationService.js';
 import { StateService } from '@services/state/StateService/StateService.js';
+import { StateFactory } from '@services/state/StateService/StateFactory.js';
 import { PathService } from '@services/fs/PathService/PathService.js';
+import { ProjectPathResolver } from '@services/fs/ProjectPathResolver.js';
 import { CircularityService } from '@services/resolution/CircularityService/CircularityService.js';
 import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService.js';
 import { FileSystemService } from '@services/fs/FileSystemService/FileSystemService.js';
 import { OutputService } from '@services/pipeline/OutputService/OutputService.js';
 import { OutputFormat } from '@services/pipeline/OutputService/IOutputService.js';
 import { StateTrackingService } from './debug/StateTrackingService/StateTrackingService.js';
+import { ServiceMediator } from '@services/mediator/index.js';
 import { StateVisualizationService } from './debug/StateVisualizationService/StateVisualizationService.js';
 import { StateDebuggerService } from './debug/StateDebuggerService/StateDebuggerService.js';
 import { StateHistoryService } from './debug/StateHistoryService/StateHistoryService.js';
@@ -116,27 +119,37 @@ export class TestContext {
 
     // Initialize services
     const pathOps = new PathOperationsService();
-    const filesystem = new FileSystemService(pathOps, this.fs);
     const validation = new ValidationService();
-    const path = new PathService();
     
-    // Initialize PathService first
-    path.initialize(filesystem);
-    path.enableTestMode();
-    path.setProjectPath('/project');
+    // Create ProjectPathResolver
+    const projectPathResolver = new ProjectPathResolver();
     
-    // Make FileSystemService use PathService for path resolution
-    filesystem.setPathService(path);
+    // Create ServiceMediator to manage circular dependencies
+    const mediator = new ServiceMediator();
     
-    const parser = new ParserService();
+    // Create services with circular dependencies first
+    const filesystem = new FileSystemService(pathOps, mediator, this.fs);
+    const path = new PathService(mediator, projectPathResolver);
+    const parser = new ParserService(mediator);
+    
+    // Set test mode for PathService
+    path.setTestMode(true);
+    
+    // Connect services through the mediator
+    mediator.setFileSystemService(filesystem);
+    mediator.setPathService(path);
+    mediator.setParserService(parser);
+    
     const circularity = new CircularityService();
     const interpreter = new InterpreterService();
 
     // Initialize event service
     const eventService = new StateEventService();
     
-    // Initialize state service
-    const state = new StateService(eventService);
+    // Initialize state service (using legacy constructor form)
+    let stateFactory = new StateFactory();
+    const state = new StateService();
+    state.initialize(eventService);
     state.setCurrentFilePath('test.meld'); // Set initial file path
     state.enableTransformation(true);
     
@@ -145,7 +158,8 @@ export class TestContext {
     state.setPathVar('HOMEPATH', '/home/user');
     
     // Initialize resolution service
-    const resolution = new ResolutionService(state, filesystem, parser, path);
+    const resolution = new ResolutionService(state, filesystem, path, mediator);
+    mediator.setResolutionService(resolution);
 
     // Initialize debugger service
     const debuggerService = new TestDebuggerService(state);

@@ -5,4 +5,6 @@ export * from './ProjectBuilder.js';
 export * from './TestSnapshot.js';
 export * from './FixtureManager.js';
 export * from './testFactories.js';
-export * from './ErrorTestUtils.js'; 
+export * from './ErrorTestUtils.js';
+export * from './cli/mockArgv.js';
+export * from './cli/mockConsole.js'; 

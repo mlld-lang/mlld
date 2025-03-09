@@ -9,7 +9,9 @@ import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { MeldFileSystemError } from '@core/errors/MeldFileSystemError.js';
-import { IPathService } from '../PathService/IPathService.js';
+import { injectable, inject } from 'tsyringe';
+import { Service } from '../../../core/ServiceProvider';
+import { IServiceMediator } from '@services/mediator/index.js';
 
 const execAsync = promisify(exec);
 
@@ -20,15 +22,34 @@ interface FileOperationContext {
   [key: string]: unknown;
 }
 
+@injectable()
+@Service({
+  description: 'Service for file system operations'
+})
 export class FileSystemService implements IFileSystemService {
   private fs: IFileSystem;
-  private pathService?: IPathService;
+  private serviceMediator?: IServiceMediator;
 
   constructor(
-    private readonly pathOps: IPathOperationsService,
-    fileSystem?: IFileSystem
+    @inject('IPathOperationsService') private readonly pathOps: IPathOperationsService,
+    @inject('ServiceMediator') serviceMediator?: IServiceMediator,
+    @inject('IFileSystem') fileSystem: IFileSystem | null = null
   ) {
     this.fs = fileSystem || new NodeFileSystem();
+    this.serviceMediator = serviceMediator;
+    
+    // Register this service with the mediator if available
+    if (this.serviceMediator) {
+      this.serviceMediator.setFileSystemService(this);
+    }
+  }
+
+  /**
+   * Sets the service mediator for breaking circular dependencies
+   */
+  setMediator(mediator: IServiceMediator): void {
+    this.serviceMediator = mediator;
+    this.serviceMediator.setFileSystemService(this);
   }
 
   setFileSystem(fileSystem: IFileSystem): void {
@@ -39,17 +60,22 @@ export class FileSystemService implements IFileSystemService {
     return this.fs;
   }
 
+  /**
+   * @deprecated Use setMediator instead
+   */
   setPathService(pathService: IPathService): void {
-    this.pathService = pathService;
+    logger.warn('setPathService is deprecated. Use setMediator instead.');
+    // This method is kept for backward compatibility only
   }
 
   private resolvePath(filePath: string): string {
-    // If we have a PathService, use it for resolving paths
-    if (this.pathService) {
-      return this.pathService.resolvePath(filePath);
+    // If we have a ServiceMediator, use it for resolving paths
+    if (this.serviceMediator) {
+      return this.serviceMediator.resolvePath(filePath);
     }
     
-    // Fall back to direct path usage if PathService is not available
+    // Fall back to direct path usage if ServiceMediator is not available
+    logger.warn('No ServiceMediator available for path resolution', { filePath });
     return filePath;
   }
 

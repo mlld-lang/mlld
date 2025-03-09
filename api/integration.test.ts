@@ -458,13 +458,24 @@ Docs are at $docs
         }
       };
       
-      // Manual validation
+      // Add debugging information
+      await debugService.captureState('before-validation', {
+        structuredPath,
+        message: 'State before path validation'
+      });
+      
+      // Save current test mode state
+      const wasTestMode = pathService.isTestMode();
+      
+      // Temporarily disable test mode to properly validate raw paths 
+      pathService.setTestMode(false);
+      
       try {
-        console.log('Manually validating structured path:', JSON.stringify(structuredPath));
-        await pathService.validatePath(structuredPath);
-        console.log('✅ Structured path validation succeeded');
-      } catch (error) {
-        console.error('❌ Structured path validation failed:', error);
+        // Directly validate the path - this should PASS not fail since $PROJECTPATH is valid
+        await expect(pathService.validatePath(structuredPath)).resolves.toBeDefined();
+      } finally {
+        // Restore original test mode setting
+        pathService.setTestMode(wasTestMode);
       }
       
       // Process using our manually created path
@@ -876,8 +887,19 @@ Docs are at $docs
         message: 'State before path validation'
       });
       
-      // Directly validate the path
-      await expect(pathService.validatePath(structuredPath)).rejects.toThrow(/Paths with segments must start with \$\. or \$~ or \$PROJECTPATH or \$HOMEPATH/);
+      // Save current test mode state
+      const wasTestMode = pathService.isTestMode();
+      
+      // Temporarily disable test mode to properly validate raw paths 
+      pathService.setTestMode(false);
+      
+      try {
+        // Directly validate the path
+        await expect(pathService.validatePath(structuredPath)).rejects.toThrow(/Paths with segments must start with \$\. or \$~ or \$PROJECTPATH or \$HOMEPATH/);
+      } finally {
+        // Restore original test mode setting
+        pathService.setTestMode(wasTestMode);
+      }
       
       // Add debugging for the main function call
       try {

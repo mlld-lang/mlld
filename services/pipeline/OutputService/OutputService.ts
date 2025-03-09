@@ -6,6 +6,8 @@ import { outputLogger as logger } from '@core/utils/logger.js';
 import { MeldOutputError } from '@core/errors/MeldOutputError.js';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
 import { MeldError } from '@core/errors/MeldError.js';
+import { inject, injectable } from 'tsyringe';
+import { Service } from '@core/ServiceProvider.js';
 
 type FormatConverter = (
   nodes: MeldNode[],
@@ -19,6 +21,14 @@ const DEFAULT_OPTIONS: Required<OutputOptions> = {
   formatOptions: {}
 };
 
+@injectable()
+@Service({
+  description: 'Service responsible for converting Meld nodes to different output formats',
+  dependencies: [
+    { token: 'IStateService', name: 'state' },
+    { token: 'IResolutionService', name: 'resolutionService' }
+  ]
+})
 export class OutputService implements IOutputService {
   private formatters = new Map<string, FormatConverter>();
   private state: IStateService | undefined;
@@ -28,23 +38,66 @@ export class OutputService implements IOutputService {
     return true;
   }
 
-  constructor() {
-    // Register default formatters
+  /**
+   * Creates a new OutputService instance.
+   * Supports both DI mode and legacy non-DI mode.
+   * 
+   * @param state State service (injected in DI mode or provided later via initialize())
+   * @param resolutionService Resolution service for variable resolution (injected in DI mode)
+   */
+  constructor(
+    @inject('IStateService') state?: IStateService,
+    @inject('IResolutionService') resolutionService?: IResolutionService
+  ) {
+    this.initializeFromParams(state, resolutionService);
+  }
+
+  /**
+   * Initialize this service with the given parameters
+   * Handles both DI and non-DI mode initialization
+   */
+  private initializeFromParams(
+    state?: IStateService,
+    resolutionService?: IResolutionService
+  ): void {
+    // Register default formatters in either mode
     this.registerFormat('markdown', this.convertToMarkdown.bind(this));
     this.registerFormat('md', this.convertToMarkdown.bind(this));
     this.registerFormat('xml', this.convertToXML.bind(this));
 
-    logger.debug('OutputService initialized with default formatters', {
+    if (state) {
+      // DI mode or initialize() called with state
+      this.initializeDIMode(state, resolutionService);
+    } else {
+      // Legacy mode - will need initialize() called later
+      logger.debug('OutputService initialized with default formatters (legacy mode)', {
+        formats: Array.from(this.formatters.keys())
+      });
+    }
+  }
+
+  /**
+   * Initialize in DI mode with explicit dependencies
+   */
+  private initializeDIMode(
+    state: IStateService,
+    resolutionService?: IResolutionService
+  ): void {
+    this.state = state;
+    this.resolutionService = resolutionService;
+    
+    logger.debug('OutputService initialized with state service', {
+      hasResolutionService: !!resolutionService,
       formats: Array.from(this.formatters.keys())
     });
   }
 
+  /**
+   * Legacy initialization method for backward compatibility
+   * Called manually after construction in non-DI mode
+   */
   initialize(state: IStateService, resolutionService?: IResolutionService): void {
-    this.state = state;
-    this.resolutionService = resolutionService;
-    logger.debug('OutputService initialized with state service', {
-      hasResolutionService: !!resolutionService
-    });
+    this.initializeDIMode(state, resolutionService);
   }
 
   async convert(

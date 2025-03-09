@@ -12,67 +12,117 @@ import { version } from '@core/version.js';
 import { createInterface } from 'readline';
 import { dirname, basename, extname } from 'path';
 import { join } from 'path';
-import { IParserService } from '@services/parser/ParserService/IParserService.js';
+import { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 import { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
-import { IOutputService } from '@services/output/OutputService/IOutputService.js';
+import { IOutputService } from '@services/pipeline/OutputService/IOutputService.js';
 import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import { IPathService } from '@services/fs/PathService/IPathService.js';
 import { IStateService } from '@services/state/StateService/IStateService.js';
 import { ProcessOptions } from '@api/types.js';
 import readline from 'readline';
+import { inject, injectable, delay } from 'tsyringe';
+import { Service } from '@core/ServiceProvider.js';
+import { CLIOptions, ICLIService, IPromptService } from './ICLIService.js';
 
 /**
- * Interface for a service that handles user prompts
+ * Default prompt service implementation using Node.js readline
  */
-export interface IPromptService {
-  /**
-   * Gets text input from the user
-   * @param prompt The prompt to display to the user
-   * @param defaultValue Optional default value to use if the user presses Enter without input
-   * @returns The user's input
-   */
-  getText(prompt: string, defaultValue?: string): Promise<string>;
+export class DefaultPromptService implements IPromptService {
+  async getText(prompt: string, defaultValue?: string): Promise<string> {
+    return new Promise((resolve) => {
+      const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout
+      });
+      
+      rl.question(prompt, (answer) => {
+        rl.close();
+        // If the user just pressed Enter and we have a default value, use that
+        resolve(answer.trim() || defaultValue || '');
+      });
+    });
+  }
 }
 
-export interface CLIOptions {
-  input?: string;
-  output?: string;
-  format?: 'xml' | 'llmxml' | 'markdown' | 'md';
-  strict?: boolean;
-  stdout?: boolean;
-  version?: boolean;
-  verbose?: boolean;
-  homePath?: string;
-  debug?: boolean;
-  help?: boolean;
-}
-
-export interface ICLIService {
-  run(args: string[]): Promise<void>;
-}
-
+@injectable()
+@Service({
+  description: 'Service for handling CLI operations',
+  dependencies: [
+    { token: 'IParserService', name: 'parserService' },
+    { token: 'IInterpreterService', name: 'interpreterService' },
+    { token: 'IOutputService', name: 'outputService' },
+    { token: 'IFileSystemService', name: 'fileSystemService' },
+    { token: 'IPathService', name: 'pathService' },
+    { token: 'IStateService', name: 'stateService' }
+  ]
+})
 export class CLIService implements ICLIService {
-  private parserService: IParserService;
-  private interpreterService: IInterpreterService;
-  private outputService: IOutputService;
-  private fileSystemService: IFileSystemService;
-  private pathService: IPathService;
-  private stateService: IStateService;
+  private parserService?: IParserService;
+  private interpreterService?: IInterpreterService;
+  private outputService?: IOutputService;
+  private fileSystemService?: IFileSystemService;
+  private pathService?: IPathService;
+  private stateService?: IStateService;
   private promptService: IPromptService;
   private flags: Record<string, string | boolean | undefined> = {};
   private cmdOptions: ProcessOptions = {
     output: ''
   };
+  private initialized = false;
 
   constructor(
-    private parserService: IParserService,
-    private interpreterService: IInterpreterService,
-    private outputService: IOutputService,
-    private fileSystemService: IFileSystemService,
-    private pathService: IPathService,
-    private stateService: IStateService,
+    @inject('IParserService') parserService?: IParserService,
+    @inject('IInterpreterService') interpreterService?: IInterpreterService,
+    @inject('IOutputService') outputService?: IOutputService,
+    @inject('IFileSystemService') fileSystemService?: IFileSystemService,
+    @inject('IPathService') pathService?: IPathService,
+    @inject('IStateService') stateService?: IStateService,
     promptService?: IPromptService
   ) {
+    // Handle direct construction in tests
+    if (parserService && interpreterService && outputService && 
+        fileSystemService && pathService && stateService) {
+      // Immediately initialize service properties for direct construction
+      this.parserService = parserService;
+      this.interpreterService = interpreterService;
+      this.outputService = outputService;
+      this.fileSystemService = fileSystemService;
+      this.pathService = pathService;
+      this.stateService = stateService;
+      this.initialized = true;
+      logger.debug('CLIService initialized via constructor');
+      
+      // Additionally, set up a setTimeout for DI circular dependencies
+      // This allows the service to work with both direct construction and DI
+      setTimeout(() => {
+        // Re-assign services in case they changed due to DI resolution
+        this.parserService = parserService;
+        this.interpreterService = interpreterService;
+        this.outputService = outputService;
+        this.fileSystemService = fileSystemService;
+        this.pathService = pathService;
+        this.stateService = stateService;
+        logger.debug('CLIService circular dependencies resolved');
+      }, 0);
+    }
+    
+    // Use the provided prompt service or create a default one
+    this.promptService = promptService || new DefaultPromptService();
+  }
+  
+  /**
+   * Initialize the service with dependencies
+   * This method provides backward compatibility for code not using DI
+   */
+  initialize(
+    parserService: IParserService,
+    interpreterService: IInterpreterService,
+    outputService: IOutputService,
+    fileSystemService: IFileSystemService,
+    pathService: IPathService,
+    stateService: IStateService,
+    promptService?: IPromptService
+  ): void {
     this.parserService = parserService;
     this.interpreterService = interpreterService;
     this.outputService = outputService;
@@ -80,23 +130,12 @@ export class CLIService implements ICLIService {
     this.pathService = pathService;
     this.stateService = stateService;
     
-    // Use the provided prompt service or create a default one
-    this.promptService = promptService || {
-      getText: async (prompt: string, defaultValue?: string): Promise<string> => {
-        return new Promise((resolve) => {
-          const rl = readline.createInterface({
-            input: process.stdin,
-            output: process.stdout
-          });
-          
-          rl.question(prompt, (answer) => {
-            rl.close();
-            // If the user just pressed Enter and we have a default value, use that
-            resolve(answer.trim() || defaultValue || '');
-          });
-        });
-      }
-    };
+    if (promptService) {
+      this.promptService = promptService;
+    }
+    
+    this.initialized = true;
+    logger.debug('CLIService initialized manually');
   }
 
   private normalizeFormat(format: string): 'markdown' | 'xml' {
@@ -203,12 +242,14 @@ export class CLIService implements ICLIService {
    * Convert CLI options to API options
    */
   private cliToApiOptions(cliOptions: CLIOptions): ProcessOptions {
+    this.ensureInitialized();
+    
     return {
       format: cliOptions.format,
       debug: cliOptions.debug,
       strict: cliOptions.strict,
       transformation: true, // Enable transformation by default for CLI usage
-      fs: this.fileSystemService.getFileSystem()
+      fs: this.fileSystemService!.getFileSystem()
     };
   }
 
@@ -216,10 +257,12 @@ export class CLIService implements ICLIService {
    * Confirms whether a file should be overwritten
    */
   async confirmOverwrite(outputPath: string): Promise<{ outputPath: string; shouldOverwrite: boolean }> {
+    this.ensureInitialized();
+    
     this.debug(`confirmOverwrite: ${outputPath}`);
     
     // Check if file exists
-    const exists = await this.fileSystemService.exists(outputPath);
+    const exists = await this.fileSystemService!.exists(outputPath);
     if (!exists) {
       this.debug(`confirmOverwrite: file does not exist, no need to overwrite`);
       return { outputPath, shouldOverwrite: true };
@@ -247,6 +290,8 @@ export class CLIService implements ICLIService {
    * @returns An object with the available output path and shouldOverwrite=true
    */
   private async findAvailableIncrementalFilename(outputPath: string): Promise<{ outputPath: string; shouldOverwrite: boolean }> {
+    this.ensureInitialized();
+    
     console.log('Finding incremental filename for:', outputPath);
     const ext = extname(outputPath); // Use Node.js path module
     console.log('Extension:', ext);
@@ -256,7 +301,7 @@ export class CLIService implements ICLIService {
     let newPath = `${basePath}-${counter}${ext}`;
     console.log('Trying path:', newPath);
     
-    while (await this.fileSystemService.exists(newPath)) {
+    while (await this.fileSystemService!.exists(newPath)) {
       console.log(`Path ${newPath} exists, incrementing counter`);
       counter++;
       newPath = `${basePath}-${counter}${ext}`;
@@ -269,10 +314,24 @@ export class CLIService implements ICLIService {
   }
 
   /**
+   * Verifies that the service is properly initialized before use
+   * @throws Error if the service is not initialized
+   */
+  private ensureInitialized(): void {
+    if (!this.initialized || !this.parserService || !this.interpreterService || 
+        !this.outputService || !this.fileSystemService || !this.pathService || 
+        !this.stateService) {
+      throw new Error('CLIService is not properly initialized. Use initialize() or dependency injection.');
+    }
+  }
+
+  /**
    * Run the CLI with the given arguments
    */
   public async run(args: string[]): Promise<void> {
     try {
+      this.ensureInitialized();
+      
       // Parse command line arguments
       const options = this.parseArguments(args);
 
@@ -288,10 +347,10 @@ export class CLIService implements ICLIService {
       }
 
       // Set up environment paths
-      const state = this.stateService.createChildState();
+      const state = this.stateService!.createChildState();
       
       // Set up project path
-      const projectPath = await this.pathService.resolveProjectPath();
+      const projectPath = await this.pathService!.resolveProjectPath();
       state.setPathVar('PROJECTPATH', projectPath);
       state.setPathVar('.', projectPath);
       
@@ -315,7 +374,7 @@ export class CLIService implements ICLIService {
         options
       });
 
-      // Remove watch check and directly process the file
+      // Process the file
       await this.processFile(options);
     } catch (error) {
       // For CLI errors, always log and exit with error code
@@ -331,6 +390,8 @@ export class CLIService implements ICLIService {
    * Process a file using the API
    */
   private async processFile(options: CLIOptions): Promise<void> {
+    this.ensureInitialized();
+    
     // Configure logging based on options
     if (options.verbose) {
       logger.level = 'debug';
@@ -349,8 +410,8 @@ export class CLIService implements ICLIService {
 
     try {
       // Check if input file exists
-      const inputPath = await this.pathService.resolvePath(options.input);
-      if (!(await this.fileSystemService.exists(inputPath))) {
+      const inputPath = await this.pathService!.resolvePath(options.input);
+      if (!(await this.fileSystemService!.exists(inputPath))) {
         throw new MeldError(`File not found: ${options.input}`, {
           severity: ErrorSeverity.Fatal,
           code: 'FILE_NOT_FOUND'
@@ -358,13 +419,13 @@ export class CLIService implements ICLIService {
       }
 
       // Read input file
-      const content = await this.fileSystemService.readFile(inputPath);
+      const content = await this.fileSystemService!.readFile(inputPath);
       
       // Parse content into AST
-      const ast = await this.parserService.parse(content);
+      const ast = await this.parserService!.parse(content);
       
       // Interpret AST
-      const interpretResult = await this.interpreterService.interpret(ast, { 
+      const interpretResult = await this.interpreterService!.interpret(ast, { 
         strict: options.strict 
       });
       
@@ -372,9 +433,9 @@ export class CLIService implements ICLIService {
       const outputPath = await this.determineOutputPath(options);
       
       // Convert to desired format
-      const outputContent = await this.outputService.convert(
+      const outputContent = await this.outputService!.convert(
         ast, // Pass the AST as the first parameter
-        this.stateService, // Pass the state service as the second parameter
+        this.stateService!, // Pass the state service as the second parameter
         options.format || 'md', // Pass the format as the third parameter
         { // Pass the options as the fourth parameter
           preserveMarkdown: options.format === 'markdown'
@@ -387,7 +448,7 @@ export class CLIService implements ICLIService {
         logger.info('Successfully wrote output to stdout');
       } else {
         // Check if output file exists and prompt for overwrite if needed
-        if (await this.fileSystemService.exists(outputPath) && !options.force) {
+        if (await this.fileSystemService!.exists(outputPath) && !options.force) {
           const { outputPath: confirmedOutputPath, shouldOverwrite } = await this.confirmOverwrite(outputPath);
           if (!shouldOverwrite) {
             // Instead of cancelling, use an incremental filename
@@ -395,14 +456,14 @@ export class CLIService implements ICLIService {
             logger.info('Using alternative filename instead of overwriting', { path: alternateOutputPath });
             
             // Write to the alternate file
-            await this.fileSystemService.writeFile(alternateOutputPath, outputContent);
+            await this.fileSystemService!.writeFile(alternateOutputPath, outputContent);
             console.log(`Output written to ${alternateOutputPath}`);
             return;
           }
         }
 
         // Write output file
-        await this.fileSystemService.writeFile(outputPath, outputContent);
+        await this.fileSystemService!.writeFile(outputPath, outputContent);
         logger.info('Successfully wrote output file', { path: outputPath });
       }
     } catch (error) {
@@ -428,9 +489,11 @@ export class CLIService implements ICLIService {
    * Determine the output path based on CLI options
    */
   private async determineOutputPath(options: CLIOptions): Promise<string> {
+    this.ensureInitialized();
+    
     // If output path is explicitly specified, use it
     if (options.output) {
-      return this.pathService.resolvePath(options.output);
+      return this.pathService!.resolvePath(options.output);
     }
     
     // If no output path specified, use input path with new extension
@@ -451,7 +514,7 @@ export class CLIService implements ICLIService {
     // Always append .o.{format} for default behavior
     const outputPath = `${basePath}.o${outputExt}`;
     
-    return this.pathService.resolvePath(outputPath);
+    return this.pathService!.resolvePath(outputPath);
   }
 
   private showHelp() {

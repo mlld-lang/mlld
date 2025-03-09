@@ -21,6 +21,9 @@ describe('PathService Temporary Path Rules', () => {
     // Set known paths for testing
     service.setHomePath('/home/user');
     service.setProjectPath('/project/root');
+    
+    // Explicitly disable test mode to ensure path validation is enforced
+    service.setTestMode(false);
   });
 
   afterEach(async () => {

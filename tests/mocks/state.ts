@@ -1,11 +1,22 @@
 import type { MeldNode } from 'meld-spec';
+import { injectable } from 'tsyringe';
+import { Service } from '@core/ServiceProvider';
 
+/**
+ * Mock implementation of a state object for testing interpreters
+ */
+@injectable()
+@Service('MockInterpreterState for testing')
 export class InterpreterState {
   private nodes: MeldNode[] = [];
   private textVars: Map<string, string> = new Map();
   private dataVars: Map<string, any> = new Map();
   private commands: Map<string, string> = new Map();
   private imports: Set<string> = new Set();
+
+  constructor() {
+    // Empty constructor for DI compatibility
+  }
 
   addNode(node: MeldNode): void {
     this.nodes.push(node);

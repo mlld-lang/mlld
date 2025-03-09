@@ -30,6 +30,9 @@ describe('StringConcatenationHandler', () => {
       },
       state: {} as any
     };
+
+    // Enable silent mode to avoid console error spam during tests
+    handler.setSilentMode(true);
   });
 
   describe('hasConcatenation', () => {

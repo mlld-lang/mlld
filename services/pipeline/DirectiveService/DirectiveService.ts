@@ -13,6 +13,8 @@ import { IResolutionService } from '@services/resolution/ResolutionService/IReso
 import { DirectiveError, DirectiveErrorCode, DirectiveErrorSeverity } from './errors/DirectiveError.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 import type { ILogger } from './handlers/execution/EmbedDirectiveHandler.js';
+import { Service } from '@core/ServiceProvider.js';
+import { inject, delay, injectable } from 'tsyringe';
 
 // Import all handlers
 import { TextDirectiveHandler } from './handlers/definition/TextDirectiveHandler.js';
@@ -38,22 +40,139 @@ export class MeldLLMXMLError extends Error {
 /**
  * Service responsible for handling directives
  */
+@injectable()
+@Service({
+  description: 'Service responsible for handling and processing directives',
+  dependencies: [
+    { token: 'IValidationService', name: 'validationService' },
+    { token: 'IStateService', name: 'stateService' },
+    { token: 'IPathService', name: 'pathService' },
+    { token: 'IFileSystemService', name: 'fileSystemService' },
+    { token: 'IParserService', name: 'parserService' },
+    { token: 'IInterpreterService', name: 'interpreterService', circular: true },
+    { token: 'ICircularityService', name: 'circularityService' },
+    { token: 'IResolutionService', name: 'resolutionService' }
+  ]
+})
 export class DirectiveService implements IDirectiveService {
-  private validationService?: IValidationService;
-  private stateService?: IStateService;
-  private pathService?: IPathService;
-  private fileSystemService?: IFileSystemService;
-  private parserService?: IParserService;
-  private interpreterService?: IInterpreterService;
-  private circularityService?: ICircularityService;
-  private resolutionService?: IResolutionService;
+  private validationService!: IValidationService;
+  private stateService!: IStateService;
+  private pathService!: IPathService;
+  private fileSystemService!: IFileSystemService;
+  private parserService!: IParserService;
+  private interpreterService?: IInterpreterService; // Will be set by updateInterpreterService for circular dependency
+  private circularityService!: ICircularityService;
+  private resolutionService!: IResolutionService;
   private initialized = false;
   private logger: ILogger;
 
   private handlers: Map<string, IDirectiveHandler> = new Map();
 
-  constructor(logger?: ILogger) {
+  /**
+   * Creates a new DirectiveService instance.
+   * Supports both DI mode and legacy non-DI mode.
+   * 
+   * @param validationService Validation service for directives (injected in DI mode)
+   * @param stateService State service for managing variables (injected in DI mode)
+   * @param pathService Path service for handling file paths (injected in DI mode)
+   * @param fileSystemService File system service for file operations (injected in DI mode)
+   * @param parserService Parser service for parsing Meld files (injected in DI mode)
+   * @param interpreterService Interpreter service for nested interpretation (injected in DI mode)
+   * @param circularityService Circularity service for detecting circular imports (injected in DI mode)
+   * @param resolutionService Resolution service for variable resolution (injected in DI mode)
+   * @param logger Logger for directive operations (optional)
+   */
+  constructor(
+    @inject('IValidationService') validationService?: IValidationService,
+    @inject('IStateService') stateService?: IStateService,
+    @inject('IPathService') pathService?: IPathService,
+    @inject('IFileSystemService') fileSystemService?: IFileSystemService,
+    @inject('IParserService') parserService?: IParserService,
+    @inject('IInterpreterService') interpreterService?: IInterpreterService,
+    @inject('ICircularityService') circularityService?: ICircularityService,
+    @inject('IResolutionService') resolutionService?: IResolutionService,
+    logger?: ILogger
+  ) {
     this.logger = logger || directiveLogger;
+    this.initializeFromParams(
+      validationService, 
+      stateService, 
+      pathService, 
+      fileSystemService, 
+      parserService, 
+      interpreterService, 
+      circularityService, 
+      resolutionService
+    );
+  }
+  
+  /**
+   * Initialize this service with the given parameters.
+   * Handles both DI and non-DI mode initialization.
+   */
+  private initializeFromParams(
+    validationService?: IValidationService,
+    stateService?: IStateService,
+    pathService?: IPathService,
+    fileSystemService?: IFileSystemService,
+    parserService?: IParserService,
+    interpreterService?: IInterpreterService,
+    circularityService?: ICircularityService,
+    resolutionService?: IResolutionService
+  ): void {
+    // Check if all required services for DI mode are provided
+    if (validationService && stateService && pathService && 
+        fileSystemService && parserService && 
+        circularityService && resolutionService) {
+      this.initializeDIMode(
+        validationService,
+        stateService,
+        pathService,
+        fileSystemService,
+        parserService,
+        interpreterService,
+        circularityService,
+        resolutionService
+      );
+    }
+    // Note: For non-DI mode, we need the initialize() method to be called explicitly
+  }
+  
+  /**
+   * Initialize in DI mode with explicit dependencies
+   */
+  private initializeDIMode(
+    validationService: IValidationService,
+    stateService: IStateService,
+    pathService: IPathService,
+    fileSystemService: IFileSystemService,
+    parserService: IParserService,
+    interpreterService?: IInterpreterService,
+    circularityService?: ICircularityService,
+    resolutionService?: IResolutionService
+  ): void {
+    this.validationService = validationService;
+    this.stateService = stateService;
+    this.pathService = pathService;
+    this.fileSystemService = fileSystemService;
+    this.parserService = parserService;
+    this.circularityService = circularityService!;
+    this.resolutionService = resolutionService!;
+    
+    // Handle the circular dependency with InterpreterService
+    // We'll set this later in updateInterpreterService()
+    // but use the delay-injected service if available
+    if (interpreterService) {
+      // Use setTimeout to ensure all services are fully initialized
+      setTimeout(() => {
+        this.interpreterService = interpreterService;
+        this.initialized = true;
+        this.registerDefaultHandlers();
+        this.logger.debug('DirectiveService initialized via DI', {
+          handlers: Array.from(this.handlers.keys())
+        });
+      }, 0);
+    }
   }
 
   initialize(
@@ -79,36 +198,55 @@ export class DirectiveService implements IDirectiveService {
     // Register default handlers
     this.registerDefaultHandlers();
 
-    this.logger.debug('DirectiveService initialized', {
+    this.logger.debug('DirectiveService initialized manually', {
       handlers: Array.from(this.handlers.keys())
     });
   }
 
   /**
    * Register all default directive handlers
+   * This is public to allow tests to explicitly initialize handlers in both DI and non-DI modes
    */
   public registerDefaultHandlers(): void {
-    // Definition handlers
-    const textHandler = new TextDirectiveHandler(
-      this.validationService!,
-      this.stateService!,
-      this.resolutionService!
-    );
-    
-    // Set FileSystemService if available
-    if (this.fileSystemService) {
-      textHandler.setFileSystemService(this.fileSystemService);
-    }
-    
-    this.registerHandler(textHandler);
+    // Add debug logging to help diagnose DI issues
+    this.logger.debug('Registering default handlers', {
+      hasValidationService: !!this.validationService,
+      hasStateService: !!this.stateService,
+      hasResolutionService: !!this.resolutionService,
+      hasFileSystemService: !!this.fileSystemService,
+      stateTransformationEnabled: this.stateService?.isTransformationEnabled?.(),
+      state: this.stateService ? {
+        hasTrackingService: !!(this.stateService as any).trackingService,
+        hasEventService: !!(this.stateService as any).eventService
+      } : 'undefined'
+    });
 
-    this.registerHandler(
-      new DataDirectiveHandler(
+    try {
+      // Definition handlers
+      const textHandler = new TextDirectiveHandler(
         this.validationService!,
         this.stateService!,
         this.resolutionService!
-      )
-    );
+      );
+      
+      // Set FileSystemService if available
+      if (this.fileSystemService) {
+        textHandler.setFileSystemService(this.fileSystemService);
+      }
+      
+      this.registerHandler(textHandler);
+
+      this.registerHandler(
+        new DataDirectiveHandler(
+          this.validationService!,
+          this.stateService!,
+          this.resolutionService!
+        )
+      );
+    } catch (error) {
+      this.logger.error('Error registering directive handlers', { error });
+      throw error;
+    }
 
     this.registerHandler(
       new PathDirectiveHandler(

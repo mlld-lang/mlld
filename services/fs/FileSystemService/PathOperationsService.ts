@@ -1,6 +1,12 @@
 import * as path from 'path';
 import { IPathOperationsService } from './IPathOperationsService.js';
+import { Service } from '../../../core/ServiceProvider';
+import { injectable } from 'tsyringe';
 
+@injectable()
+@Service({
+  description: 'Service that provides path manipulation operations'
+})
 export class PathOperationsService implements IPathOperationsService {
   join(...paths: string[]): string {
     return path.join(...paths);

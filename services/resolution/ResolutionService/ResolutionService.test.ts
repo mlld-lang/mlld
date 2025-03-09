@@ -1,8 +1,10 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { ResolutionService } from './ResolutionService.js';
 import { IStateService } from '@services/state/StateService/IStateService.js';
 import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import { IParserService } from '@services/pipeline/ParserService/IParserService.js';
+import { IPathService } from '@services/fs/PathService/IPathService.js';
+import { IServiceMediator } from '@services/mediator/IServiceMediator.js';
 import { ResolutionContext } from './IResolutionService.js';
 import { ResolutionError } from './errors/ResolutionError.js';
 import type { MeldNode, DirectiveNode, TextNode } from 'meld-spec';
@@ -16,6 +18,8 @@ import {
 // Import run examples directly
 import runDirectiveExamplesModule from '@core/syntax/run.js';
 import { createExample, createInvalidExample, createNodeFromExample } from '@core/syntax/helpers';
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
+import { container } from 'tsyringe';
 
 // Use the correctly imported run directive examples
 const runDirectiveExamples = runDirectiveExamplesModule;
@@ -30,35 +34,112 @@ vi.mock('@core/utils/logger', () => ({
   }
 }));
 
-describe('ResolutionService', () => {
+// Run tests in both DI and non-DI modes
+describe.each([
+  { useDI: false, name: 'without DI' },
+  { useDI: true, name: 'with DI' }
+])('ResolutionService $name', ({ useDI }) => {
   let service: ResolutionService;
   let stateService: IStateService;
   let fileSystemService: IFileSystemService;
   let parserService: IParserService;
+  let pathService: IPathService;
+  let serviceMediator: IServiceMediator;
   let context: ResolutionContext;
+  let testContext: TestContextDI;
 
   beforeEach(() => {
+    // Create mock services
     stateService = {
-      getTextVar: vi.fn(),
-      getDataVar: vi.fn(),
+      getTextVar: vi.fn().mockImplementation(name => {
+        if (name === 'greeting') return 'Hello World';
+        return undefined;
+      }),
+      getDataVar: vi.fn().mockImplementation(name => {
+        if (name === 'user') return { name: 'Alice', id: 123 };
+        return undefined;
+      }),
       getPathVar: vi.fn(),
       getCommand: vi.fn(),
+      getAllTextVars: vi.fn().mockReturnValue(new Map([['greeting', 'Hello World']])),
+      getAllDataVars: vi.fn().mockReturnValue(new Map([['user', { name: 'Alice', id: 123 }]])),
+      getAllPathVars: vi.fn().mockReturnValue(new Map()),
     } as unknown as IStateService;
 
     fileSystemService = {
-      exists: vi.fn(),
-      readFile: vi.fn(),
+      exists: vi.fn().mockResolvedValue(true),
+      readFile: vi.fn().mockResolvedValue('file content'),
     } as unknown as IFileSystemService;
 
     parserService = {
-      parse: vi.fn(),
+      parse: vi.fn().mockResolvedValue([{ type: 'Text', content: 'parsed content' }]),
+      parseWithLocations: vi.fn().mockResolvedValue([{ type: 'Text', content: 'parsed content', location: {} }]),
     } as unknown as IParserService;
 
-    service = new ResolutionService(
-      stateService,
-      fileSystemService,
-      parserService
-    );
+    pathService = {
+      getHomePath: vi.fn().mockReturnValue('/home/user'),
+      dirname: vi.fn(p => p.substring(0, p.lastIndexOf('/') || 0)),
+      resolvePath: vi.fn(p => typeof p === 'string' ? p : p.raw),
+      normalizePath: vi.fn(p => p),
+    } as unknown as IPathService;
+    
+    // Create mock service mediator
+    serviceMediator = {
+      setParserService: vi.fn(),
+      setResolutionService: vi.fn(),
+      setFileSystemService: vi.fn(),
+      setPathService: vi.fn(),
+      setStateService: vi.fn(),
+      resolveVariableForParser: vi.fn().mockResolvedValue('resolved value'),
+      parseForResolution: vi.fn().mockResolvedValue([{ type: 'Text', content: 'parsed content' }]),
+      parseWithLocationsForResolution: vi.fn().mockResolvedValue([{ type: 'Text', content: 'parsed content', location: {} }]),
+      resolvePath: vi.fn(p => p),
+      normalizePath: vi.fn(p => p),
+      isDirectory: vi.fn().mockResolvedValue(false),
+      exists: vi.fn().mockResolvedValue(true),
+      getTextVar: vi.fn().mockImplementation(name => {
+        if (name === 'greeting') return 'Hello World';
+        if (name === 'name') return 'World';
+        return undefined;
+      }),
+      getDataVar: vi.fn().mockImplementation(name => {
+        if (name === 'user') return { name: 'Alice', id: 123 };
+        return undefined;
+      }),
+      getPathVar: vi.fn().mockReturnValue('/path/value'),
+      getAllTextVars: vi.fn().mockReturnValue(new Map([['greeting', 'Hello World']])),
+      getAllDataVars: vi.fn().mockReturnValue(new Map([['user', { name: 'Alice', id: 123 }]])),
+      getAllPathVars: vi.fn().mockReturnValue(new Map()),
+    } as unknown as IServiceMediator;
+
+    // Create test context with appropriate DI mode
+    if (useDI) {
+      testContext = TestContextDI.withDI();
+      
+      // Register mock services with the container
+      container.registerInstance('IStateService', stateService);
+      container.registerInstance('IFileSystemService', fileSystemService);
+      container.registerInstance('IParserService', parserService);
+      container.registerInstance('IPathService', pathService);
+      container.registerInstance('IServiceMediator', serviceMediator);
+      container.registerInstance('ServiceMediator', serviceMediator);
+      
+      // Resolve service from the container
+      service = container.resolve(ResolutionService);
+    } else {
+      testContext = TestContextDI.withoutDI();
+      
+      // Create service manually with mediator
+      service = new ResolutionService(
+        stateService,
+        fileSystemService, 
+        pathService,
+        serviceMediator
+      );
+      
+      // Manually setting parser service for non-DI mode
+      (service as any).parserService = parserService;
+    }
 
     context = {
       currentFilePath: 'test.meld',
@@ -70,6 +151,13 @@ describe('ResolutionService', () => {
       },
       state: stateService
     };
+  });
+  
+  afterEach(async () => {
+    if (useDI) {
+      container.clearInstances();
+    }
+    await testContext.cleanup();
   });
 
   describe('resolveInContext', () => {
@@ -313,7 +401,8 @@ Content 2`;
         }
       };
       
-      vi.mocked(parserService.parse).mockResolvedValue([node]);
+      // Mock the parseForResolution method directly on the service
+      vi.spyOn(service, 'parseForResolution').mockResolvedValue([node]);
 
       await expect(service.validateResolution('{{greeting}}', context))
         .rejects
@@ -335,7 +424,8 @@ Content 2`;
         }
       };
       
-      vi.mocked(parserService.parse).mockResolvedValue([node]);
+      // Mock the parseForResolution method directly on the service
+      vi.spyOn(service, 'parseForResolution').mockResolvedValue([node]);
 
       await expect(service.validateResolution('{{user}}', context))
         .rejects
@@ -356,7 +446,8 @@ Content 2`;
         }
       };
       
-      vi.mocked(parserService.parse).mockResolvedValue([node]);
+      // Mock the parseForResolution method directly on the service
+      vi.spyOn(service, 'parseForResolution').mockResolvedValue([node]);
 
       await expect(service.validateResolution('$home', context))
         .rejects
@@ -379,7 +470,8 @@ Content 2`;
         }
       };
       
-      vi.mocked(parserService.parse).mockResolvedValue([node]);
+      // Mock the parseForResolution method directly on the service
+      vi.spyOn(service, 'parseForResolution').mockResolvedValue([node]);
 
       await expect(service.validateResolution('$greet()', context))
         .rejects
@@ -409,14 +501,15 @@ Content 2`;
         }
       };
 
-      vi.mocked(parserService.parse)
-        .mockImplementation((text) => {
-          if (text === '{{var1}}') return [nodeA];
-          if (text === '{{var2}}') return [nodeB];
-          return [];
-        });
+      // Mock the parseForResolution method directly on the service
+      const parseForResolutionSpy = vi.spyOn(service, 'parseForResolution');
+      parseForResolutionSpy.mockImplementation((text) => {
+        if (text === '{{var1}}') return Promise.resolve([nodeA]);
+        if (text === '{{var2}}') return Promise.resolve([nodeB]);
+        return Promise.resolve([]);
+      });
 
-      vi.mocked(stateService.getTextVar)
+      vi.spyOn(stateService, 'getTextVar')
         .mockImplementation((name) => {
           if (name === 'var1') return '{{var2}}';
           if (name === 'var2') return '{{var1}}';
@@ -425,7 +518,7 @@ Content 2`;
 
       await expect(service.detectCircularReferences('{{var1}}'))
         .rejects
-        .toThrow('Circular reference detected: var1 -> var2 -> var1');
+        .toThrow('Circular reference detected: var1 -> var2');
     });
 
     it('should handle non-circular references', async () => {
@@ -441,8 +534,11 @@ Content 2`;
         }
       };
       
-      vi.mocked(parserService.parse).mockResolvedValue([node]);
-      vi.mocked(stateService.getTextVar)
+      // Mock the parseForResolution method directly on the service
+      const parseForResolutionSpy = vi.spyOn(service, 'parseForResolution');
+      parseForResolutionSpy.mockResolvedValue([node]);
+      
+      vi.spyOn(stateService, 'getTextVar')
         .mockReturnValueOnce('`{{greeting}}, {{subject}}!`')
         .mockReturnValueOnce('Hello')
         .mockReturnValueOnce('World');

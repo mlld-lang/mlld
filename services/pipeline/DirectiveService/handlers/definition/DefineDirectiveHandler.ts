@@ -6,6 +6,8 @@ import { DirectiveNode, DefineDirectiveData } from 'meld-spec';
 import { DirectiveError, DirectiveErrorCode, DirectiveErrorSeverity } from '../../errors/DirectiveError.js';
 import { directiveLogger as logger } from '@core/utils/logger.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
+import { inject, injectable } from 'tsyringe';
+import { Service } from '@core/ServiceProvider.js';
 
 interface CommandDefinition {
   parameters: string[];
@@ -17,13 +19,17 @@ interface CommandDefinition {
   };
 }
 
+@injectable()
+@Service({
+  description: 'Handler for @define directives'
+})
 export class DefineDirectiveHandler implements IDirectiveHandler {
   public readonly kind = 'define';
 
   constructor(
-    private validationService: IValidationService,
-    private stateService: IStateService,
-    private resolutionService: IResolutionService
+    @inject('IValidationService') private validationService: IValidationService,
+    @inject('IStateService') private stateService: IStateService,
+    @inject('IResolutionService') private resolutionService: IResolutionService
   ) {}
 
   async execute(node: DirectiveNode, context: DirectiveContext): Promise<IStateService> {

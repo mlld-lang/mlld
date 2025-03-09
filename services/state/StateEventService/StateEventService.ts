@@ -1,5 +1,7 @@
 import { IStateEventService, StateEvent, StateEventType, StateEventHandler, StateEventHandlerOptions } from './IStateEventService.js';
 import { stateLogger as logger } from '@core/utils/logger.js';
+import { Service } from '@core/ServiceProvider.js';
+import { injectable } from 'tsyringe';
 
 /**
  * @package
@@ -9,6 +11,10 @@ import { stateLogger as logger } from '@core/utils/logger.js';
  * Provides event emission and handling for state operations.
  * Implements filtering and async event handling.
  */
+@injectable()
+@Service({
+  description: 'Service for emitting and handling state events'
+})
 export class StateEventService implements IStateEventService {
   private handlers: Map<StateEventType, Array<{
     handler: StateEventHandler;

@@ -1,8 +1,10 @@
 import { vi, beforeEach } from 'vitest';
 import type { DirectiveNode, MeldNode } from 'meld-spec';
-import { InterpreterState } from '../../_old/src/interpreter/state/state.js';
-import { ErrorFactory } from '../../_old/src/interpreter/errors/factory.js';
-import { HandlerContext } from '../../_old/src/interpreter/directives/types.js';
+import { injectable } from 'tsyringe';
+import { Service } from '@core/ServiceProvider';
+import { InterpreterState } from './state';
+import { MeldInterpreterError } from '@core/errors/MeldInterpreterError';
+import { MeldDirectiveError } from '@core/errors/MeldDirectiveError';
 import { embedDirectiveHandler, importDirectiveHandler } from './directive-handlers.js';
 
 // Mock file system state
@@ -83,7 +85,11 @@ vi.mock('path', async () => {
   return mockExports;
 });
 
-// Mock InterpreterState with enhanced tracking
+/**
+ * Enhanced InterpreterState with tracking for tests
+ */
+@injectable()
+@Service('MockInterpreterState with tracking for testing')
 export class MockInterpreterState extends InterpreterState {
   private nodeHistory: MeldNode[] = [];
   private textVarHistory: Map<string, string[]> = new Map();
@@ -135,11 +141,34 @@ export class MockInterpreterState extends InterpreterState {
   }
 
   // Existing methods with proper error handling
-  override mergeChildState(childState: InterpreterState): void {
+  mergeChildState(childState: InterpreterState): void {
     try {
-      super.mergeChildState(childState);
+      // Get all variables from the child state
+      const childTextVars = childState.getAllTextVars();
+      const childDataVars = childState.getAllDataVars();
+      const childCommands = childState.getAllCommands();
+      
+      // Merge text variables
+      for (const [key, value] of childTextVars.entries()) {
+        this.setTextVar(key, value);
+      }
+      
+      // Merge data variables
+      for (const [key, value] of childDataVars.entries()) {
+        this.setDataVar(key, value);
+      }
+      
+      // Merge commands
+      for (const [key, value] of childCommands.entries()) {
+        this.setCommand(key, value);
+      }
+      
+      // Merge nodes
+      for (const node of childState.getNodes()) {
+        this.addNode(node);
+      }
     } catch (error) {
-      throw ErrorFactory.createInterpretError(
+      throw new MeldInterpreterError(
         `Failed to merge child state: ${error instanceof Error ? error.message : String(error)}`,
         'State'
       );
@@ -147,71 +176,127 @@ export class MockInterpreterState extends InterpreterState {
   }
 }
 
-// Mock handler factory with enhanced error handling
-function createMockHandler(kind: string) {
-  const handlers: Record<string, any> = {
-    data: {
-      canHandle: (k: string) => k === 'data',
-      handle: async (node: DirectiveNode, state: InterpreterState, context: HandlerContext) => {
-        const data = node.directive;
-        if (!data.name) {
-          throw ErrorFactory.createDirectiveError(
-            'Data directive requires a name',
-            'data',
-            node.location?.start
-          );
+/**
+ * Creates DI-compatible mock directive handlers
+ */
+@injectable()
+@Service('MockDirectiveHandlerFactory for testing')
+export class MockDirectiveHandlerFactory {
+  constructor() {
+    // Empty constructor for DI compatibility
+  }
+  
+  /**
+   * Creates a mock directive handler
+   */
+  createHandler(kind: string) {
+    const handlers: Record<string, any> = {
+      data: {
+        kind: 'definition',
+        directiveName: 'data',
+        canHandle: (k: string) => k === 'data',
+        validate: (node: DirectiveNode) => {
+          if (!node.directive.identifier) {
+            return { valid: false, errors: ['Data directive requires an identifier'] };
+          }
+          return true;
+        },
+        execute: async (node: DirectiveNode, state: any) => {
+          const data = node.directive;
+          if (!data.identifier) {
+            throw new MeldDirectiveError(
+              'Data directive requires an identifier',
+              'data',
+              node.location?.start
+            );
+          }
+          state.setDataVar(data.identifier, data.value);
         }
-        state.setDataVar(data.name, data.value);
+      },
+      text: {
+        kind: 'definition',
+        directiveName: 'text',
+        canHandle: (k: string) => k === 'text',
+        validate: (node: DirectiveNode) => {
+          if (!node.directive.identifier) {
+            return { valid: false, errors: ['Text directive requires an identifier'] };
+          }
+          return true;
+        },
+        execute: async (node: DirectiveNode, state: any) => {
+          const data = node.directive;
+          if (!data.identifier) {
+            throw new MeldDirectiveError(
+              'Text directive requires an identifier',
+              'text',
+              node.location?.start
+            );
+          }
+          state.setTextVar(data.identifier, data.value);
+        }
+      },
+      run: {
+        kind: 'execution',
+        directiveName: 'run',
+        canHandle: (k: string) => k === 'run',
+        validate: (node: DirectiveNode) => {
+          if (!node.directive.command) {
+            return { valid: false, errors: ['Run directive requires a command'] };
+          }
+          return true;
+        },
+        transform: async (node: DirectiveNode, state: any) => {
+          // Transform implementation
+          return node;
+        },
+        execute: async (node: DirectiveNode, state: any) => {
+          const data = node.directive;
+          if (!data.command) {
+            throw new MeldDirectiveError(
+              'Run directive requires a command',
+              'run',
+              node.location?.start
+            );
+          }
+          const commandData = state.getCommand(data.command);
+          if (commandData) {
+            console.log(`[MOCK] Executing command: ${data.command}`);
+          }
+        }
+      },
+      define: {
+        kind: 'definition',
+        directiveName: 'define',
+        canHandle: (k: string) => k === 'define',
+        validate: (node: DirectiveNode) => {
+          if (!node.directive.identifier) {
+            return { valid: false, errors: ['Define directive requires an identifier'] };
+          }
+          return true;
+        },
+        execute: async (node: DirectiveNode, state: any) => {
+          const data = node.directive;
+          if (!data.identifier) {
+            throw new MeldDirectiveError(
+              'Define directive requires an identifier',
+              'define',
+              node.location?.start
+            );
+          }
+          state.setCommand(data.identifier, data.command || '');
+        }
       }
-    },
-    text: {
-      canHandle: (k: string) => k === 'text',
-      handle: async (node: DirectiveNode, state: InterpreterState, context: HandlerContext) => {
-        const data = node.directive;
-        if (!data.name) {
-          throw ErrorFactory.createDirectiveError(
-            'Text directive requires a name',
-            'text',
-            node.location?.start
-          );
-        }
-        state.setTextVar(data.name, data.value);
-      }
-    },
-    run: {
-      canHandle: (k: string) => k === 'run',
-      handle: async (node: DirectiveNode, state: InterpreterState, context: HandlerContext) => {
-        const data = node.directive;
-        if (!data.command) {
-          throw ErrorFactory.createDirectiveError(
-            'Run directive requires a command',
-            'run',
-            node.location?.start
-          );
-        }
-        const commandData = state.getCommand(data.command);
-        if (commandData && typeof commandData === 'object' && 'command' in commandData) {
-          const { command } = commandData as { command: string };
-          console.log(`[MOCK] Executing command: ${command}`);
-        }
-      }
-    },
-    define: {
-      canHandle: (k: string) => k === 'define',
-      handle: async (node: DirectiveNode, state: InterpreterState, context: HandlerContext) => {
-        const data = node.directive;
-        if (!data.name) {
-          throw ErrorFactory.createDirectiveError(
-            'Define directive requires a name',
-            'define',
-            node.location?.start
-          );
-        }
-        state.setCommand(data.name, data.command || '');
-      }
-    }
-  };
-  return handlers[kind];
+    };
+    
+    // Return the appropriate handler or a default one
+    return handlers[kind] || {
+      kind: 'generic',
+      directiveName: kind,
+      canHandle: (k: string) => k === kind,
+      validate: () => true,
+      execute: async () => {}
+    };
+  }
 }
 
 // File system utilities
@@ -342,5 +427,8 @@ Using Docker & Kubernetes
 - Database</Section><Section title="Component Details" hlevel="2"><Section title="Frontend" hlevel="3">Built with React &amp; TypeScript</Section><Section title="Backend" hlevel="3">Node.js with Express</Section><Section title="Database" hlevel="3">PostgreSQL for persistence</Section></Section><Section title="Deployment" hlevel="2">Using Docker &amp; Kubernetes</Section></ArchitectureDocumentation>`);
 });
 
+// Create a factory instance
+const mockHandlerFactory = new MockDirectiveHandlerFactory();
+
 // Export utilities
-export { createMockHandler, mockFiles }; 
+export { mockHandlerFactory as createMockHandler, mockFiles }; 

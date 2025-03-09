@@ -1,14 +1,27 @@
 export interface CLIOptions {
-  input: string;
+  input?: string;
   output?: string;
-  format?: 'md' | 'xml';
+  format?: 'md' | 'xml' | 'markdown' | 'llmxml';
   stdout?: boolean;
-  watch?: boolean;
   verbose?: boolean;
   strict?: boolean;
-  config?: string;
-  projectPath?: string;
+  version?: boolean;
+  debug?: boolean;
+  help?: boolean;
   homePath?: string;
+}
+
+/**
+ * Interface for a service that handles user prompts
+ */
+export interface IPromptService {
+  /**
+   * Gets text input from the user
+   * @param prompt The prompt to display to the user
+   * @param defaultValue Optional default value to use if the user presses Enter without input
+   * @returns The user's input
+   */
+  getText(prompt: string, defaultValue?: string): Promise<string>;
 }
 
 export interface ICLIService {
@@ -19,8 +32,8 @@ export interface ICLIService {
   run(args: string[]): Promise<void>;
 
   /**
-   * Watch for changes and reprocess files
-   * @param options CLI options for watch mode
+   * Parse command line arguments into a structured options object
+   * @param args Command line arguments to parse
    */
-  watch(options: CLIOptions): Promise<void>;
+  parseArguments(args: string[]): CLIOptions;
 } 

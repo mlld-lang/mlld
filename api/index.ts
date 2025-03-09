@@ -13,6 +13,7 @@ export * from '@services/fs/FileSystemService/FileSystemService.js';
 export * from '@services/fs/FileSystemService/PathOperationsService.js';
 export * from '@services/pipeline/OutputService/OutputService.js';
 export * from '@services/resolution/CircularityService/CircularityService.js';
+export * from '@services/mediator/ServiceMediator.js';
 
 // Core types and errors
 export * from '@core/types/index.js';
@@ -43,6 +44,7 @@ import { FileSystemService } from '@services/fs/FileSystemService/FileSystemServ
 import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService.js';
 import { OutputService } from '@services/pipeline/OutputService/OutputService.js';
 import { CircularityService } from '@services/resolution/CircularityService/CircularityService.js';
+import { ServiceMediator } from '@services/mediator/ServiceMediator.js';
 import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
 import { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
 import { StateDebuggerService } from '@tests/utils/debug/StateDebuggerService/StateDebuggerService.js';
@@ -79,95 +81,183 @@ type RequiredServices = {
 };
 
 export function createDefaultServices(options: ProcessOptions): Services & RequiredServices {
-  // 1. FileSystemService (base dependency)
-  const pathOps = new PathOperationsService();
-  // If options.fs is provided, use it; otherwise create a new NodeFileSystem
-  const fs: IFileSystem = options.fs || new NodeFileSystem();
-  const filesystem = new FileSystemService(pathOps, fs);
-  filesystem.setFileSystem(fs);
-
-  // 2. PathService (depends on filesystem)
-  const path = new PathService();
-  path.initialize(filesystem);
-
-  // 3. State Management Services
-  const eventService = new StateEventService();
-  const state = new StateService();
-  state.setEventService(eventService);
+  // Check if DI should be used
+  const useDI = process.env.USE_DI === 'true';
   
-  // Initialize special path variables
-  state.setPathVar('PROJECTPATH', process.cwd());
-  state.setPathVar('HOMEPATH', process.env.HOME || process.env.USERPROFILE || '/home');
+  if (useDI) {
+    // DI-based service creation
+    // Import required utilities for DI
+    const { resolveService, registerServiceInstance } = require('@core/ServiceProvider.js');
+    
+    // If a custom filesystem is provided, register it with the container
+    if (options.fs) {
+      registerServiceInstance('IFileSystem', options.fs);
+      registerServiceInstance('NodeFileSystem', options.fs);
+    }
+    
+    // Resolve services from the container
+    const filesystem = resolveService<FileSystemService>('FileSystemService');
+    const path = resolveService<PathService>('PathService');
+    const eventService = resolveService<StateEventService>('StateEventService');
+    const state = resolveService<StateService>('StateService');
+    const parser = resolveService<ParserService>('ParserService');
+    const resolution = resolveService<ResolutionService>('ResolutionService');
+    const validation = resolveService<ValidationService>('ValidationService');
+    const circularity = resolveService<CircularityService>('CircularityService');
+    const directive = resolveService<DirectiveService>('DirectiveService');
+    const interpreter = resolveService<InterpreterService>('InterpreterService');
+    const output = resolveService<OutputService>('OutputService');
+    
+    // Initialize special path variables
+    state.setPathVar('PROJECTPATH', process.cwd());
+    state.setPathVar('HOMEPATH', process.env.HOME || process.env.USERPROFILE || '/home');
 
-  // 4. ParserService (independent)
-  const parser = new ParserService();
+    // Register default handlers after all services are initialized
+    directive.registerDefaultHandlers();
+    
+    // Create debug service if requested
+    let debug = undefined;
+    if (options.debug) {
+      try {
+        // Try to resolve from the container first
+        debug = resolveService<StateDebuggerService>('StateDebuggerService');
+      } catch (e) {
+        // If not available in container, create manually
+        const debugService = new TestDebuggerService(state);
+        debugService.initialize(state);
+        debug = debugService as unknown as StateDebuggerService;
+      }
+    }
+    
+    // Create services object in correct initialization order based on dependencies
+    const services: Services & RequiredServices = {
+      // Base services
+      filesystem,
+      path,
+      // State management
+      eventService,
+      state,
+      // Core pipeline
+      parser,
+      // Resolution layer
+      resolution,
+      validation,
+      circularity,
+      // Pipeline orchestration
+      directive,
+      interpreter,
+      // Output generation
+      output,
+      // Optional debug service
+      debug
+    };
 
-  // 5. Resolution Layer Services
-  const resolution = new ResolutionService(state, filesystem, parser, path);
-  const validation = new ValidationService();
-  const circularity = new CircularityService();
+    // Validate the service pipeline
+    validateServicePipeline(services);
 
-  // 6. Pipeline Orchestration (handle circular dependency)
-  const directive = new DirectiveService();
-  const interpreter = new InterpreterService();
+    return services;
+  } else {
+    // Legacy non-DI service creation
+    // Create a service mediator to break circular dependencies
+    const serviceMediator = new ServiceMediator();
+    
+    // 1. FileSystemService (base dependency)
+    const pathOps = new PathOperationsService();
+    // If options.fs is provided, use it; otherwise create a new NodeFileSystem
+    const fs: IFileSystem = options.fs || new NodeFileSystem();
+    const filesystem = new FileSystemService(pathOps, serviceMediator, fs);
+    filesystem.setFileSystem(fs);
 
-  // Initialize interpreter with directive and state
-  interpreter.initialize(directive, state);
+    // 2. PathService (depends on filesystem)
+    const path = new PathService(serviceMediator);
+    path.initialize(filesystem);
 
-  // Initialize directive with all dependencies
-  directive.initialize(
-    validation,
-    state,
-    path,
-    filesystem,
-    parser,
-    interpreter,
-    circularity,
-    resolution
-  );
+    // 3. State Management Services
+    const eventService = new StateEventService();
+    const state = new StateService(undefined, undefined, eventService, serviceMediator);
+    state.setEventService(eventService);
+    
+    // Initialize special path variables
+    state.setPathVar('PROJECTPATH', process.cwd());
+    state.setPathVar('HOMEPATH', process.env.HOME || process.env.USERPROFILE || '/home');
 
-  // Register default handlers after all services are initialized
-  directive.registerDefaultHandlers();
+    // 4. ParserService (independent)
+    const parser = new ParserService(serviceMediator);
 
-  // 7. OutputService (depends on state and resolution)
-  const output = new OutputService();
-  output.initialize(state, resolution);
+    // 5. Resolution Layer Services
+    const resolution = new ResolutionService(state, filesystem, path, serviceMediator);
+    const validation = new ValidationService();
+    const circularity = new CircularityService();
+    
+    // Connect services through the mediator
+    serviceMediator.setFileSystemService(filesystem);
+    serviceMediator.setPathService(path);
+    serviceMediator.setParserService(parser);
+    serviceMediator.setResolutionService(resolution);
+    serviceMediator.setStateService(state);
 
-  // Create debug service if requested
-  let debug = undefined;
-  if (options.debug) {
-    const debugService = new TestDebuggerService(state);
-    debugService.initialize(state);
-    debug = debugService as unknown as StateDebuggerService;
+    // 6. Pipeline Orchestration (handle circular dependency)
+    const directive = new DirectiveService();
+    const interpreter = new InterpreterService();
+
+    // Initialize interpreter with directive and state
+    interpreter.initialize(directive, state);
+
+    // Initialize directive with all dependencies
+    directive.initialize(
+      validation,
+      state,
+      path,
+      filesystem,
+      parser,
+      interpreter,
+      circularity,
+      resolution
+    );
+
+    // Register default handlers after all services are initialized
+    directive.registerDefaultHandlers();
+
+    // 7. OutputService (depends on state and resolution)
+    const output = new OutputService();
+    output.initialize(state, resolution);
+
+    // Create debug service if requested
+    let debug = undefined;
+    if (options.debug) {
+      const debugService = new TestDebuggerService(state);
+      debugService.initialize(state);
+      debug = debugService as unknown as StateDebuggerService;
+    }
+
+    // Create services object in correct initialization order based on dependencies
+    const services: Services & RequiredServices = {
+      // Base services
+      filesystem,
+      path,
+      // State management
+      eventService,
+      state,
+      // Core pipeline
+      parser,
+      // Resolution layer
+      resolution,
+      validation,
+      circularity,
+      // Pipeline orchestration
+      directive,
+      interpreter,
+      // Output generation
+      output,
+      // Optional debug service
+      debug
+    };
+
+    // Validate the service pipeline
+    validateServicePipeline(services);
+
+    return services;
   }
-
-  // Create services object in correct initialization order based on dependencies
-  const services: Services & RequiredServices = {
-    // Base services
-    filesystem,
-    path,
-    // State management
-    eventService,
-    state,
-    // Core pipeline
-    parser,
-    // Resolution layer
-    resolution,
-    validation,
-    circularity,
-    // Pipeline orchestration
-    directive,
-    interpreter,
-    // Output generation
-    output,
-    // Optional debug service
-    debug
-  };
-
-  // Validate the service pipeline
-  validateServicePipeline(services);
-
-  return services;
 }
 
 export async function main(filePath: string, options: ProcessOptions = {}): Promise<string> {

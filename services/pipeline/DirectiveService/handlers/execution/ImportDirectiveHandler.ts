@@ -13,11 +13,17 @@ import { directiveLogger as logger } from '@core/utils/logger.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 import { IStateTrackingService } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
 import { StateVariableCopier } from '@services/state/utilities/StateVariableCopier.js';
+import { inject, injectable } from 'tsyringe';
+import { Service } from '@core/ServiceProvider.js';
 
 /**
  * Handler for @import directives
  * Imports variables from other Meld files
  */
+@injectable()
+@Service({
+  description: 'Handler for @import directives'
+})
 export class ImportDirectiveHandler implements IDirectiveHandler {
   readonly kind = 'import';
   private debugEnabled: boolean = false;
@@ -25,14 +31,14 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
   private stateVariableCopier: StateVariableCopier;
 
   constructor(
-    private validationService: IValidationService,
-    private resolutionService: IResolutionService,
-    private stateService: IStateService,
-    private fileSystemService: IFileSystemService,
-    private parserService: IParserService,
-    private interpreterService: IInterpreterService,
-    private circularityService: ICircularityService,
-    trackingService?: IStateTrackingService
+    @inject('IValidationService') private validationService: IValidationService,
+    @inject('IResolutionService') private resolutionService: IResolutionService,
+    @inject('IStateService') private stateService: IStateService,
+    @inject('IFileSystemService') private fileSystemService: IFileSystemService,
+    @inject('IParserService') private parserService: IParserService,
+    @inject('IInterpreterService') private interpreterService: IInterpreterService,
+    @inject('ICircularityService') private circularityService: ICircularityService,
+    @inject('StateTrackingService') trackingService?: IStateTrackingService
   ) {
     this.stateTrackingService = trackingService;
     this.debugEnabled = !!trackingService && (process.env.MELD_DEBUG === 'true');
