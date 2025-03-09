@@ -89,12 +89,23 @@ export class InterpreterService implements IInterpreterService {
    * Returns a promise that resolves when initialization is complete
    */
   private async ensureInitialized(): Promise<void> {
-    if (this.initialized) {
+    if (this.initialized && this.directiveService && this.stateService) {
       return Promise.resolve();
     }
 
     if (this.initializationPromise) {
       await this.initializationPromise;
+      
+      // After waiting for initialization, check if services are actually defined
+      if (!this.directiveService || !this.stateService) {
+        throw new MeldInterpreterError(
+          'InterpreterService must be initialized before use',
+          'initialization',
+          undefined,
+          { severity: ErrorSeverity.Fatal }
+        );
+      }
+      
       return;
     }
 

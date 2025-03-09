@@ -10,7 +10,8 @@ const createMockParserService = () => ({
 
 const createMockResolutionService = () => ({
   resolveInContext: vi.fn().mockResolvedValue('resolved value'),
-  resolveText: vi.fn().mockResolvedValue('resolved text')
+  resolveText: vi.fn().mockResolvedValue('resolved text'),
+  validateResolution: vi.fn().mockResolvedValue(undefined)
 });
 
 const createMockFileSystemService = () => ({
@@ -64,6 +65,7 @@ describe('ServiceMediator', () => {
     it('should forward resolveVariableForParser calls to resolution service', async () => {
       const result = await mediator.resolveVariableForParser('{{var}}', { strict: true });
       expect(result).toBe('resolved value');
+      expect(mockResolutionService.validateResolution).toHaveBeenCalledWith('{{var}}', { strict: true });
       expect(mockResolutionService.resolveInContext).toHaveBeenCalledWith('{{var}}', { strict: true });
     });
 
