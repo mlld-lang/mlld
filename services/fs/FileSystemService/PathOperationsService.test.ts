@@ -16,9 +16,7 @@ describe('PathOperationsService', () => {
 
     beforeEach(() => {
       // Create test context with appropriate DI setting
-      context = useDI 
-        ? TestContextDI.withDI() 
-        : TestContextDI.withoutDI();
+      context = TestContextDI.create({ isolatedContainer: true });
 
       // Get service instance using the appropriate mode
       service = useDI

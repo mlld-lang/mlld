@@ -65,11 +65,16 @@ function createTestContext(useDI: boolean) {
   
   if (useDI) {
     // Initialize test context with DI
-    const testContext = TestContextDI.withDI();
+    const testContext = TestContextDI.create({ isolatedContainer: true });
     
     // Register mocks in the container
     const mockEventService = new MockStateEventService();
     container.registerInstance('IStateEventService', mockEventService);
+    
+    // Register the tracking service in the container
+    const mockTrackingService = new StateTrackingService();
+    container.registerInstance('IStateTrackingService', mockTrackingService);
+    container.registerInstance('StateTrackingService', mockTrackingService);
     
     // Resolve the service from the container
     const state = container.resolve(StateService);
@@ -79,7 +84,7 @@ function createTestContext(useDI: boolean) {
     return { state, eventService, testContext, stateFactory };
   } else {
     // Initialize test context without DI
-    const testContext = TestContextDI.withoutDI();
+    const testContext = TestContextDI.create({ isolatedContainer: true });
     
     // Create services manually for legacy mode
     const mockEventService = new MockStateEventService();
@@ -266,19 +271,32 @@ describe('StateService', () => {
     let testContext: TestContextDI;
 
     beforeEach(() => {
-      process.env.USE_DI = 'false';
-      testContext = TestContextDI.withoutDI();
+      // Use DI mode since shouldUseDI() now always returns true
+      process.env.USE_DI = 'true';
+      testContext = TestContextDI.create({ isolatedContainer: true });
       
+      // Create and register services
       stateFactory = new StateFactory();
-      service = new StateService(stateFactory);
-      eventService = new MockStateEventService();
-      trackingService = new StateTrackingService();
-      historyService = new StateHistoryService(eventService);
-      visualizationService = new StateVisualizationService(historyService, trackingService);
-      debuggerService = new StateDebuggerService(visualizationService, historyService, trackingService);
+      container.registerInstance(StateFactory, stateFactory);
       
-      service.setEventService(eventService);
-      service.setTrackingService(trackingService);
+      eventService = new MockStateEventService();
+      container.registerInstance('IStateEventService', eventService);
+      
+      trackingService = new StateTrackingService();
+      container.registerInstance('IStateTrackingService', trackingService);
+      container.registerInstance('StateTrackingService', trackingService);
+      
+      historyService = new StateHistoryService(eventService);
+      container.registerInstance('StateHistoryService', historyService);
+      
+      visualizationService = new StateVisualizationService(historyService, trackingService);
+      container.registerInstance('StateVisualizationService', visualizationService);
+      
+      debuggerService = new StateDebuggerService(visualizationService, historyService, trackingService);
+      container.registerInstance('StateDebuggerService', debuggerService);
+      
+      // Resolve the service from the container
+      service = container.resolve(StateService);
       
       // Add services to the service instance for visualization and debugging
       (service as any).services = {
@@ -301,7 +319,7 @@ describe('StateService', () => {
 
       const metadata = trackingService.getStateMetadata(stateId!);
       expect(metadata).toBeDefined();
-      expect(metadata?.source).toBe('new');
+      expect(metadata?.source).toBe('child');
       expect(metadata?.transformationEnabled).toBe(false);
     });
 

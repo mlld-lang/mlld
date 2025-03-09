@@ -1,12 +1,34 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { StateService } from './StateService.js';
+import { StateFactory } from './StateFactory.js';
+import { StateTrackingService } from '@tests/utils/debug/StateTrackingService/StateTrackingService.js';
+import { container } from 'tsyringe';
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import type { MeldNode } from 'meld-spec';
 
 describe('StateService node transformation', () => {
   let service: StateService;
+  let testContext: TestContextDI;
 
   beforeEach(() => {
-    service = new StateService();
+    // Set up DI environment
+    process.env.USE_DI = 'true';
+    testContext = TestContextDI.create({ isolatedContainer: true });
+    
+    // Register necessary services
+    const stateFactory = new StateFactory();
+    container.registerInstance(StateFactory, stateFactory);
+    
+    const trackingService = new StateTrackingService();
+    container.registerInstance('IStateTrackingService', trackingService);
+    container.registerInstance('StateTrackingService', trackingService);
+    
+    // Resolve the service from the container
+    service = container.resolve(StateService);
+  });
+
+  afterEach(() => {
+    testContext.cleanup();
   });
 
   it('should have transformation disabled by default', () => {

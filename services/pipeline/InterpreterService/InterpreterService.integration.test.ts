@@ -18,6 +18,8 @@ import {
 } from '@core/syntax';
 import { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
 import { InterpreterService } from '@services/pipeline/InterpreterService/InterpreterService.js';
+import { StateTrackingService } from '@tests/utils/debug/StateTrackingService/StateTrackingService.js';
+import { container } from 'tsyringe';
 
 // Run integration tests for both DI and non-DI modes
 describe.each([
@@ -31,9 +33,20 @@ describe.each([
     if (useDI) {
       context = new TestContextDI();
       await (context as TestContextDI).initialize(true); // true = use DI
+      
+      // Register the StateTrackingService
+      const trackingService = new StateTrackingService();
+      container.registerInstance('IStateTrackingService', trackingService);
+      container.registerInstance('StateTrackingService', trackingService);
     } else {
       context = new TestContext();
       await context.initialize();
+      
+      // Register the StateTrackingService for non-DI mode as well
+      // since shouldUseDI() now always returns true
+      const trackingService = new StateTrackingService();
+      container.registerInstance('IStateTrackingService', trackingService);
+      container.registerInstance('StateTrackingService', trackingService);
     }
     await context.fixtures.load('interpreterTestProject');
   });

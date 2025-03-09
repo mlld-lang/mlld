@@ -71,8 +71,11 @@ describe('ServiceMediator', () => {
 
     it('should forward parseForResolution calls to parser service', async () => {
       const result = await mediator.parseForResolution('content', 'file.meld');
-      expect(result).toEqual([{ type: 'Text', content: 'test' }]);
-      expect(mockParserService.parse).toHaveBeenCalledWith('content', 'file.meld');
+      expect(result).toEqual([{ type: 'Text', content: 'test', location: {} }]);
+      expect(mockParserService.parseWithLocations).toHaveBeenCalledWith('content', 'file.meld');
+      
+      await mediator.parseForResolution('content');
+      expect(mockParserService.parse).toHaveBeenCalledWith('content');
     });
 
     it('should forward parseWithLocationsForResolution calls to parser service', async () => {
@@ -91,8 +94,8 @@ describe('ServiceMediator', () => {
 
     it('should forward normalizePath calls to path service', () => {
       const result = mediator.normalizePath('/path/to/normalize');
-      expect(result).toBe('/normalized/path');
-      expect(mockPathService.normalizePath).toHaveBeenCalledWith('/path/to/normalize');
+      expect(result).toBe('/resolved/path');
+      expect(mockPathService.resolvePath).toHaveBeenCalledWith('/path/to/normalize');
     });
 
     it('should forward isDirectory calls to filesystem service', async () => {

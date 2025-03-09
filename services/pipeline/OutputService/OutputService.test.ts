@@ -249,7 +249,7 @@ describe.each([
     
     // Set up test context and service based on DI mode
     if (useDI) {
-      testContext = TestContextDI.withDI();
+      testContext = TestContextDI.create({ isolatedContainer: true });
       
       // Register dependencies with the container
       container.registerInstance('IStateService', state);
@@ -258,7 +258,7 @@ describe.each([
       // Resolve service from container
       service = container.resolve(OutputService);
     } else {
-      testContext = TestContextDI.withoutDI();
+      testContext = TestContextDI.create({ isolatedContainer: true });
       
       // Create and initialize service manually
       service = new OutputService();

@@ -74,7 +74,7 @@ describe.each([
     // Set up DI mode for tests
     if (useDI) {
       process.env.USE_DI = 'true';
-      testContext = TestContextDI.withDI();
+      testContext = TestContextDI.create({ isolatedContainer: true });
       
       // Register mock services in the container
       container.registerInstance('IResolutionService', mockResolutionService);
@@ -83,7 +83,7 @@ describe.each([
       service = container.resolve(ParserService);
     } else {
       process.env.USE_DI = 'false';
-      testContext = TestContextDI.withoutDI();
+      testContext = TestContextDI.create({ isolatedContainer: true });
       service = new ParserService();
     }
     

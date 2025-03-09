@@ -8,6 +8,8 @@ import { createService } from '@core/ServiceProvider.js';
 import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
 import { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
 import { vi } from 'vitest';
+import { StateTrackingService } from '@tests/utils/debug/StateTrackingService/StateTrackingService.js';
+import { container } from 'tsyringe';
 
 // Main test suite for DirectiveService
 describe('DirectiveService', () => {
@@ -69,6 +71,11 @@ describe('DirectiveService', () => {
       if (useDI) {
         // In DI mode, register the necessary dependencies
         context.registerMock('IFileSystem', new NodeFileSystem());
+        
+        // Register the StateTrackingService
+        const trackingService = new StateTrackingService();
+        container.registerInstance('IStateTrackingService', trackingService);
+        container.registerInstance('StateTrackingService', trackingService);
         
         // Create the service manually to ensure proper initialization
         const directiveService = new DirectiveService(

@@ -36,9 +36,7 @@ describe.each([
     const originalDISetting = process.env.USE_DI;
     
     // Create test context with the appropriate DI setting
-    context = useDI 
-      ? TestContextDI.withDI() 
-      : TestContextDI.withoutDI();
+    context = TestContextDI.create({ isolatedContainer: true });
       
     // Get service from container or create manually
     if (useDI) {

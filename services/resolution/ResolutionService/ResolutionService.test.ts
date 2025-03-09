@@ -114,7 +114,7 @@ describe.each([
 
     // Create test context with appropriate DI mode
     if (useDI) {
-      testContext = TestContextDI.withDI();
+      testContext = TestContextDI.create({ isolatedContainer: true });
       
       // Register mock services with the container
       container.registerInstance('IStateService', stateService);
@@ -127,7 +127,7 @@ describe.each([
       // Resolve service from the container
       service = container.resolve(ResolutionService);
     } else {
-      testContext = TestContextDI.withoutDI();
+      testContext = TestContextDI.create({ isolatedContainer: true });
       
       // Create service manually with mediator
       service = new ResolutionService(
