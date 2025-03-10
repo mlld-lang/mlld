@@ -48,7 +48,12 @@ export class MemfsTestFileSystemAdapter extends NodeFileSystem {
 
   async mkdir(dirPath: string, options?: { recursive?: boolean }): Promise<void> {
     const resolvedPath = this.resolveSpecialPaths(dirPath);
-    await this.memfs.mkdir(resolvedPath, options);
+    if (typeof this.memfs.mkdir === 'function') {
+      await this.memfs.mkdir(resolvedPath, options);
+    } else {
+      // Fallback to ensureDir if mkdir doesn't exist
+      await this.memfs.ensureDir(resolvedPath);
+    }
   }
 
   async readDir(dirPath: string): Promise<string[]> {

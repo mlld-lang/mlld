@@ -448,25 +448,33 @@ describe('CLI Tests', () => {
     });
 
     it('should properly pass strict flag to API', async () => {
-      const { fsAdapter, cleanup } = await setupCliTest();
+      const { fsAdapter, exitMock, consoleMocks, cleanup } = await setupCliTest({
+        // Enable debug mode to help identify issues
+        debug: false
+      });
       
-      // Mock the API main function to return a simple string
-      const apiModule = await import('@api/index.js');
-      vi.mocked(apiModule.main).mockReset();
-      vi.mocked(apiModule.main).mockResolvedValueOnce('Test output');
-      
-      // Set CLI arguments with strict mode
-      process.argv = ['node', 'meld', '/project/test.meld', '--strict'];
+      try {
+        // Mock the API main function to return a simple string
+        const apiModule = await import('@api/index.js');
+        vi.mocked(apiModule.main).mockReset();
+        vi.mocked(apiModule.main).mockResolvedValueOnce('Test output');
+        
+        // Set CLI arguments with strict mode
+        process.argv = ['node', 'meld', '/project/test.meld', '--strict'];
 
-      await cli.main(fsAdapter);
-      
-      // Verify API was called with strict mode enabled
-      expect(apiModule.main).toHaveBeenCalled();
-      const callArgs = vi.mocked(apiModule.main).mock.calls[0];
-      expect(callArgs[0]).toBe('/project/test.meld');
-      expect(callArgs[1]).toHaveProperty('strict', true);
-      
-      cleanup();
+        await cli.main(fsAdapter);
+        
+        // Verify API was called with strict mode enabled
+        expect(apiModule.main).toHaveBeenCalled();
+        const callArgs = vi.mocked(apiModule.main).mock.calls[0];
+        expect(callArgs[0]).toBe('/project/test.meld');
+        expect(callArgs[1]).toHaveProperty('strict', true);
+      } finally {
+        // Always call cleanup to ensure proper resource release
+        if (cleanup && typeof cleanup === 'function') {
+          cleanup();
+        }
+      }
     });
   });
 
