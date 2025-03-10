@@ -8,9 +8,12 @@ describe('PathOperationsService', () => {
   let service: IPathOperationsService;
   let context: TestContextDI;
 
-  beforeEach(() => {
-    // Create test context with DI
-    context = TestContextDI.create({ isolatedContainer: true });
+  beforeEach(async () => {
+    // Create isolated test context
+    context = TestContextDI.createIsolated();
+
+    // Initialize context
+    await context.initialize();
 
     // Get service instance using DI
     service = context.container.resolve<IPathOperationsService>('IPathOperationsService');

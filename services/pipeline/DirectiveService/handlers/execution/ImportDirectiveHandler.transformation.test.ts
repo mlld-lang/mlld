@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import type { DirectiveNode, DirectiveContext } from 'meld-spec';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import type { DirectiveNode } from 'meld-spec';
 import { ImportDirectiveHandler } from './ImportDirectiveHandler.js';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
@@ -13,6 +13,7 @@ import { createLocation } from '@tests/utils/testFactories.js';
 import { importDirectiveExamples } from '@core/syntax/index.js';
 import { createNodeFromExample } from '@core/syntax/helpers';
 import { TestContextDI } from '@tests/utils/di/TestContextDI';
+import { mockDeep, mockReset } from 'vitest-mock-extended';
 import {
   createValidationServiceMock,
   createStateServiceMock,
@@ -94,33 +95,36 @@ describe('ImportDirectiveHandler Transformation', () => {
   let stateService: ReturnType<typeof createStateServiceMock>;
   let resolutionService: ReturnType<typeof createResolutionServiceMock>;
   let fileSystemService: ReturnType<typeof createFileSystemServiceMock>;
-  let parserService: any;
-  let interpreterService: any;
-  let circularityService: any;
-  let clonedState: any;
-  let childState: any;
+  let parserService: jest.Mocked<IParserService>;
+  let interpreterService: jest.Mocked<IInterpreterService>;
+  let circularityService: jest.Mocked<ICircularityService>;
+  let clonedState: ReturnType<typeof createStateServiceMock>;
+  let childState: ReturnType<typeof createStateServiceMock>;
   let context: TestContextDI;
 
   beforeEach(async () => {
     context = TestContextDI.createIsolated();
     await context.initialize();
 
-    // Register mocks
+    // Create mocks using vitest-mock-extended
     validationService = createValidationServiceMock();
     resolutionService = createResolutionServiceMock();
     stateService = createStateServiceMock();
     fileSystemService = createFileSystemServiceMock();
-    parserService = vi.mocked({
-      parse: vi.fn()
-    });
-    interpreterService = vi.mocked({
-      interpret: vi.fn()
-    });
-    circularityService = vi.mocked({
-      beginImport: vi.fn(),
-      endImport: vi.fn()
-    });
+    parserService = mockDeep<IParserService>();
+    interpreterService = mockDeep<IInterpreterService>();
+    circularityService = mockDeep<ICircularityService>();
 
+    // Reset all mocks before each test
+    mockReset(validationService);
+    mockReset(resolutionService);
+    mockReset(stateService);
+    mockReset(fileSystemService);
+    mockReset(parserService);
+    mockReset(interpreterService);
+    mockReset(circularityService);
+
+    // Register mocks with the DI container
     context.registerMock('IValidationService', validationService);
     context.registerMock('IResolutionService', resolutionService);
     context.registerMock('IStateService', stateService);
@@ -130,55 +134,32 @@ describe('ImportDirectiveHandler Transformation', () => {
     context.registerMock('ICircularityService', circularityService);
 
     // Set up child state and cloned state mocks
-    childState = {
-      setTextVar: vi.fn(),
-      setDataVar: vi.fn(),
-      setPathVar: vi.fn(),
-      setCommand: vi.fn(),
-      getTextVar: vi.fn(),
-      getDataVar: vi.fn(),
-      getPathVar: vi.fn(),
-      getCommand: vi.fn(),
-      getAllTextVars: vi.fn().mockReturnValue(new Map()),
-      getAllDataVars: vi.fn().mockReturnValue(new Map()),
-      getAllPathVars: vi.fn().mockReturnValue(new Map()),
-      getAllCommands: vi.fn().mockReturnValue(new Map()),
-      clone: vi.fn(),
-      mergeChildState: vi.fn(),
-      isTransformationEnabled: vi.fn().mockReturnValue(true)
-    };
+    childState = createStateServiceMock();
+    clonedState = createStateServiceMock();
 
-    clonedState = {
-      setTextVar: vi.fn(),
-      setDataVar: vi.fn(),
-      setPathVar: vi.fn(),
-      setCommand: vi.fn(),
-      getTextVar: vi.fn(),
-      getDataVar: vi.fn(),
-      getPathVar: vi.fn(),
-      getCommand: vi.fn(),
-      getAllTextVars: vi.fn().mockReturnValue(new Map()),
-      getAllDataVars: vi.fn().mockReturnValue(new Map()),
-      getAllPathVars: vi.fn().mockReturnValue(new Map()),
-      getAllCommands: vi.fn().mockReturnValue(new Map()),
-      createChildState: vi.fn().mockReturnValue(childState),
-      mergeChildState: vi.fn(),
-      clone: vi.fn(),
-      isTransformationEnabled: vi.fn().mockReturnValue(true)
-    };
-
-    // Configure state service
+    // Configure state service behavior
     stateService.clone.mockReturnValue(clonedState);
     stateService.createChildState.mockReturnValue(childState);
     stateService.isTransformationEnabled.mockReturnValue(true);
-    stateService.getTextVar = vi.fn();
-    stateService.getDataVar = vi.fn();
-    stateService.getPathVar = vi.fn();
-    stateService.getCommand = vi.fn();
-    stateService.getAllTextVars = vi.fn().mockReturnValue(new Map());
-    stateService.getAllDataVars = vi.fn().mockReturnValue(new Map());
-    stateService.getAllPathVars = vi.fn().mockReturnValue(new Map());
-    stateService.getAllCommands = vi.fn().mockReturnValue(new Map());
+    stateService.getAllTextVars.mockReturnValue(new Map());
+    stateService.getAllDataVars.mockReturnValue(new Map());
+    stateService.getAllPathVars.mockReturnValue(new Map());
+    stateService.getAllCommands.mockReturnValue(new Map());
+
+    // Configure child state behavior
+    childState.getAllTextVars.mockReturnValue(new Map());
+    childState.getAllDataVars.mockReturnValue(new Map());
+    childState.getAllPathVars.mockReturnValue(new Map());
+    childState.getAllCommands.mockReturnValue(new Map());
+    childState.isTransformationEnabled.mockReturnValue(true);
+
+    // Configure cloned state behavior
+    clonedState.createChildState.mockReturnValue(childState);
+    clonedState.getAllTextVars.mockReturnValue(new Map());
+    clonedState.getAllDataVars.mockReturnValue(new Map());
+    clonedState.getAllPathVars.mockReturnValue(new Map());
+    clonedState.getAllCommands.mockReturnValue(new Map());
+    clonedState.isTransformationEnabled.mockReturnValue(true);
 
     // Configure file system service
     fileSystemService.dirname.mockReturnValue('/workspace');
@@ -188,7 +169,7 @@ describe('ImportDirectiveHandler Transformation', () => {
     // Configure interpreter service
     interpreterService.interpret.mockResolvedValue(childState);
 
-    // Register the handler
+    // Register the handler through DI with all required dependencies
     context.registerMock('ImportDirectiveHandler', new ImportDirectiveHandler(
       validationService,
       resolutionService,
@@ -198,9 +179,7 @@ describe('ImportDirectiveHandler Transformation', () => {
       interpreterService,
       circularityService
     ));
-
-    // Resolve the handler
-    handler = context.container.resolve('ImportDirectiveHandler');
+    handler = await context.container.resolve('ImportDirectiveHandler');
   });
 
   afterEach(async () => {

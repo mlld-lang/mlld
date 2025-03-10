@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { mockDeep, mockReset } from 'vitest-mock-extended';
 import { ValidationService } from './ValidationService.js';
 import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import type { DirectiveNode } from 'meld-spec';
@@ -29,12 +30,15 @@ describe('ValidationService', () => {
   let service: ValidationService;
   let context: TestContextDI;
   
-  beforeEach(() => {
-    // Create test context with DI
-    context = TestContextDI.create({ isolatedContainer: true });
+  beforeEach(async () => {
+    // Create isolated test context
+    context = TestContextDI.createIsolated();
+    
+    // Initialize context
+    await context.initialize();
     
     // Resolve the validation service from the container
-    service = context.resolveSync(ValidationService);
+    service = context.container.resolve(ValidationService);
   });
   
   afterEach(async () => {

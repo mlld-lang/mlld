@@ -1,52 +1,68 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { mockDeep, mockReset } from 'vitest-mock-extended';
 import { ProjectPathResolver } from './ProjectPathResolver.js';
-import * as fs from 'fs/promises';
-import * as path from 'path';
+import type * as fs from 'fs/promises';
+import type * as path from 'path';
 import { TestContextDI } from '../../tests/utils/di/TestContextDI';
-
-// Mock fs and path modules
-vi.mock('fs/promises');
-vi.mock('path');
 
 describe('ProjectPathResolver', () => {
   let resolver: ProjectPathResolver;
   let context: TestContextDI;
+  let mockFs: jest.Mocked<typeof fs>;
+  let mockPath: jest.Mocked<typeof path>;
   
-  beforeEach(() => {
-    // Create test context with DI
-    context = TestContextDI.create({ isolatedContainer: true });
+  beforeEach(async () => {
+    // Create isolated test context
+    context = TestContextDI.createIsolated();
     
-    // Get service instance using DI
-    resolver = context.container.resolve<ProjectPathResolver>('ProjectPathResolver');
-      
-    vi.resetAllMocks();
-  
+    // Create mocks using vitest-mock-extended
+    mockFs = mockDeep<typeof fs>();
+    mockPath = mockDeep<typeof path>();
+    
+    // Reset mocks
+    mockReset(mockFs);
+    mockReset(mockPath);
+    
+    // Register mocks with the context
+    context.registerMock('fs/promises', mockFs);
+    context.registerMock('path', mockPath);
+    
     // Setup path mocks with default implementations
-    vi.mocked(path.join).mockImplementation((...args) => args.join('/'));
-    vi.mocked(path.dirname).mockImplementation((p) => p.split('/').slice(0, -1).join('/'));
-    vi.mocked(path.resolve).mockImplementation((dir, file) => `${dir}/${file}`);
-    vi.mocked(path.normalize).mockImplementation((p) => p);
-    vi.mocked(path.relative).mockImplementation((from, to) => {
+    mockPath.join.mockImplementation((...args) => args.join('/'));
+    mockPath.dirname.mockImplementation((p) => p.split('/').slice(0, -1).join('/'));
+    mockPath.resolve.mockImplementation((dir, file) => `${dir}/${file}`);
+    mockPath.normalize.mockImplementation((p) => p);
+    mockPath.relative.mockImplementation((from, to) => {
       if (to.startsWith(from)) {
         return to.substring(from.length + 1);
       }
       return `../${to}`;
     });
-    vi.mocked(path.parse).mockReturnValue({ root: '/' } as any);
-    vi.mocked(path.isAbsolute).mockImplementation((p) => p.startsWith('/'));
+    mockPath.parse.mockReturnValue({ root: '/' } as any);
+    mockPath.isAbsolute.mockImplementation((p) => p.startsWith('/'));
+    
+    // Initialize context
+    await context.initialize();
+    
+    // Get service instance using DI
+    resolver = context.container.resolve<ProjectPathResolver>('ProjectPathResolver');
+  });
+  
+  afterEach(async () => {
+    await context.cleanup();
   });
   
   it('should use meld.json directory when found', async () => {
     // Setup mocks for this test
-    vi.mocked(fs.stat).mockImplementation(async (filePath) => {
+    mockFs.stat.mockImplementation(async (filePath) => {
       if (filePath === '/project/meld.json') {
         return { isFile: () => true } as any;
       }
       throw new Error('File not found');
     });
     
-    vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify({ projectRoot: '.' }));
-    vi.mocked(path.dirname).mockReturnValueOnce('/project');
+    mockFs.readFile.mockResolvedValue(JSON.stringify({ projectRoot: '.' }));
+    mockPath.dirname.mockReturnValueOnce('/project');
     
     // Mock findFileUpwards behavior
     vi.spyOn(resolver as any, 'findFileUpwards').mockResolvedValue('/project/meld.json');
@@ -57,10 +73,10 @@ describe('ProjectPathResolver', () => {
   
   it('should use subdirectory when specified in meld.json', async () => {
     // Setup mocks for this test
-    vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify({ projectRoot: 'src' }));
-    vi.mocked(path.dirname).mockReturnValueOnce('/project');
-    vi.mocked(path.resolve).mockReturnValueOnce('/project/src');
-    vi.mocked(path.relative).mockReturnValueOnce('src');
+    mockFs.readFile.mockResolvedValue(JSON.stringify({ projectRoot: 'src' }));
+    mockPath.dirname.mockReturnValueOnce('/project');
+    mockPath.resolve.mockReturnValueOnce('/project/src');
+    mockPath.relative.mockReturnValueOnce('src');
     
     // Mock findFileUpwards behavior
     vi.spyOn(resolver as any, 'findFileUpwards').mockResolvedValue('/project/meld.json');
@@ -81,9 +97,9 @@ describe('ProjectPathResolver', () => {
   
   it('should reject paths outside the meld.json directory', async () => {
     // Setup mocks for this test
-    vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify({ projectRoot: '../other' }));
-    vi.mocked(path.dirname).mockReturnValueOnce('/project');
-    vi.mocked(path.resolve).mockReturnValueOnce('/other');
+    mockFs.readFile.mockResolvedValue(JSON.stringify({ projectRoot: '../other' }));
+    mockPath.dirname.mockReturnValueOnce('/project');
+    mockPath.resolve.mockReturnValueOnce('/other');
     
     // Mock findFileUpwards behavior
     vi.spyOn(resolver as any, 'findFileUpwards').mockResolvedValue('/project/meld.json');
@@ -97,7 +113,7 @@ describe('ProjectPathResolver', () => {
   
   it('should detect project root using markers', async () => {
     // Setup mocks for this test
-    vi.mocked(fs.stat).mockImplementation(async (filePath) => {
+    mockFs.stat.mockImplementation(async (filePath) => {
       if (filePath === '/project/.git') {
         return { isDirectory: () => true } as any;
       }
@@ -109,7 +125,7 @@ describe('ProjectPathResolver', () => {
       .mockImplementationOnce(async () => null) // meld.json not found
       .mockImplementationOnce(async () => '/project/.git'); // .git found
     
-    vi.mocked(path.dirname).mockReturnValueOnce('/project');
+    mockPath.dirname.mockReturnValueOnce('/project');
     
     const result = await resolver.resolveProjectRoot('/project/src');
     expect(result).toBe('/project');
@@ -121,9 +137,5 @@ describe('ProjectPathResolver', () => {
     
     const result = await resolver.resolveProjectRoot('/current/dir');
     expect(result).toBe('/current/dir');
-  });
-
-  afterEach(async () => {
-    await context.cleanup();
   });
 }); 
