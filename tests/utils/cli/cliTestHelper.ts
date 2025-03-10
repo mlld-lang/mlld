@@ -40,15 +40,18 @@ interface CliTestResult {
   /** The TestContextDI instance */
   context: TestContextDI;
   /** The filesystem adapter for the test */
-  fsAdapter: MemfsTestFileSystemAdapter;
+  fsAdapter: MemfsTestFileSystemAdapter & {
+    mkdir: (path: string, options?: { recursive?: boolean }) => Promise<void>;
+    exists: (path: string) => Promise<boolean>;
+  };
   /** The FileSystemService instance */
   fileSystemService: IFileSystemService;
   /** The PathService instance */
   pathService: IPathService;
   /** Mock function for process.exit */
-  exitMock?: ReturnType<typeof mockProcessExit>['mockExit'];
+  exitMock: ReturnType<typeof mockProcessExit>['mockExit'];
   /** Mock functions for console methods */
-  consoleMocks?: ReturnType<typeof mockConsole>['mocks'];
+  consoleMocks: ReturnType<typeof mockConsole>['mocks'];
   /** Function to clean up all mocks */
   cleanup: () => void;
 }
@@ -61,6 +64,8 @@ interface CliTestResult {
 export async function setupCliTest(options: CliTestOptions = {}): Promise<CliTestResult> {
   // Create and initialize the test context
   const context = TestContextDI.createIsolated();
+  
+  // Initialize the context
   await context.initialize();
   
   // Get the filesystem adapter from the context's filesystem
@@ -111,44 +116,51 @@ export async function setupCliTest(options: CliTestOptions = {}): Promise<CliTes
         }
       }
       
-      console.log(`Setting up test file: ${testPath} (original: ${filePath})`);
-      
       // Resolve special paths for memfs handling
       const resolvedPath = fsAdapter.resolveSpecialPaths(filePath);
       
       // Ensure parent directory exists
       const dirPath = path.dirname(resolvedPath);
       if (dirPath && dirPath !== '.') {
-        console.log(`Creating parent directory: ${dirPath}`);
         await fileSystemService.ensureDir(dirPath);
       }
       
       // Write the file
       await fileSystemService.writeFile(resolvedPath, content);
-      console.log(`Created test file: ${resolvedPath} (from: ${filePath}, test path: ${testPath})`);
     } catch (error) {
       console.warn(`Failed to write file: ${filePath}`, error);
     }
   }
   
   // Set up environment variables
+  const originalEnv = { ...process.env };
   if (options.env) {
-    const originalEnv = { ...process.env };
     Object.entries(options.env).forEach(([key, value]) => {
       process.env[key] = value;
     });
   }
   
   // Set up process.exit mock if requested
-  const exitMock = options.mockProcessExit !== false ? mockProcessExit() : null;
+  const exitMockResult = options.mockProcessExit !== false ? mockProcessExit() : { mockExit: vi.fn(), restore: vi.fn() };
   
   // Set up console mocks if requested
-  const consoleMocks = options.mockConsole !== false ? mockConsole() : null;
+  const consoleMockResult = options.mockConsole !== false ? mockConsole() : { mocks: { log: vi.fn(), error: vi.fn(), warn: vi.fn(), info: vi.fn() }, restore: vi.fn() };
   
-  const cleanup = async () => {
+  // Add necessary methods to fsAdapter for tests expecting NodeFileSystem interface
+  fsAdapter.mkdir = async (path: string, options?: { recursive?: boolean }) => {
+    return fileSystemService.ensureDir(path);
+  };
+  
+  // Add exists method if not already present
+  fsAdapter.exists = async (path: string) => {
+    return fileSystemService.exists(path);
+  };
+  
+  // Create a cleanup function
+  const cleanup = () => {
     // Restore mocks
-    exitMock?.restore();
-    consoleMocks?.restore();
+    exitMockResult.restore();
+    consoleMockResult.restore();
     
     // Additional cleanup for Vitest 
     vi.clearAllMocks();
@@ -160,8 +172,15 @@ export async function setupCliTest(options: CliTestOptions = {}): Promise<CliTes
       });
     }
     
-    // Cleanup the context
-    await context.cleanup();
+    // Reset env variables to original
+    process.env = originalEnv;
+    
+    // Async cleanup wrapped in a sync function
+    // The test expects a sync function, but we'll handle the context cleanup
+    // on a best-effort basis
+    context.cleanup().catch(err => {
+      console.error('Error during context cleanup:', err);
+    });
   };
   
   return {
@@ -169,8 +188,8 @@ export async function setupCliTest(options: CliTestOptions = {}): Promise<CliTes
     fsAdapter,
     fileSystemService,
     pathService,
-    exitMock: exitMock?.mockExit || vi.fn(),
-    consoleMocks: consoleMocks?.mocks,
+    exitMock: exitMockResult.mockExit,
+    consoleMocks: consoleMockResult.mocks,
     cleanup
   };
 }
@@ -196,7 +215,7 @@ export async function setupCliTest(options: CliTestOptions = {}): Promise<CliTes
  *       expect(await context.services.filesystem.exists('/result.txt')).toBe(true);
  *       expect(await context.services.filesystem.readFile('/result.txt', 'utf8')).toBe('Hello TestUser');
  *     } finally {
- *       await cleanup();
+ *       cleanup();
  *     }
  *   });
  *   
@@ -210,7 +229,7 @@ export async function setupCliTest(options: CliTestOptions = {}): Promise<CliTes
  *         expect.stringContaining('undefined variable')
  *       );
  *     } finally {
- *       await cleanup();
+ *       cleanup();
  *     }
  *   });
  * });
