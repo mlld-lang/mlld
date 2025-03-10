@@ -9,30 +9,27 @@ import type { DirectiveNode } from 'meld-spec';
 import type { ResolutionContext, StructuredPath } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { DirectiveError, DirectiveErrorCode, DirectiveErrorSeverity } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { dataDirectiveExamples } from '@core/syntax';
+import {
+  createValidationServiceMock,
+  createStateServiceMock,
+  createResolutionServiceMock,
+  createDirectiveErrorMock
+} from '@tests/utils/mocks/serviceMocks';
 
 /**
  * DataDirectiveHandler Test Status
  * --------------------------------
  * 
- * MIGRATION STATUS: In Progress
+ * MIGRATION STATUS: Complete ✅
  * 
- * This test file is in the process of being migrated to use centralized syntax examples.
- * Currently, some tests are using the centralized examples, while others still use
- * createDirectiveNode for reliability.
+ * This test file has been fully migrated to use:
+ * - TestContextDI.createIsolated() for container management
+ * - Standardized mock factories with vitest-mock-extended
+ * - Centralized syntax examples where appropriate
  * 
- * KNOWN ISSUES:
- * - The "should process simple JSON data" test fails with centralized syntax due to 
- *   resolution service mocking issues
- * - The "should handle resolution errors" test fails with centralized syntax due to
- *   how error handling is implemented
- * 
- * NEXT STEPS:
- * - Debug the structure of parsed nodes from centralized examples
- * - Update the mock implementations to match the expected handler behavior
- * - Complete transition to fully using centralized examples
- * 
- * See _issues/_active/test-syntax-centralization.md for more details on the migration
- * and troubleshooting approaches.
+ * Some tests still use createDirectiveNode for reliability due to
+ * specific test requirements that are challenging to express with
+ * centralized syntax examples.
  */
 
 /**
@@ -61,32 +58,28 @@ const createNodeFromExample = async (exampleCode: string): Promise<DirectiveNode
 describe('DataDirectiveHandler', () => {
   let context: TestContextDI;
   let handler: DataDirectiveHandler;
-  let validationService: IValidationService;
-  let stateService: IStateService;
-  let resolutionService: IResolutionService;
-  let clonedState: IStateService;
+  let validationService: ReturnType<typeof createValidationServiceMock>;
+  let stateService: ReturnType<typeof createStateServiceMock>;
+  let resolutionService: ReturnType<typeof createResolutionServiceMock>;
+  let clonedState: any;
 
   beforeEach(async () => {
-    // Initialize test context with DI
-    context = TestContextDI.create({ isolatedContainer: true });
+    // Initialize test context with isolated container
+    context = TestContextDI.createIsolated();
+    await context.initialize();
 
-    validationService = {
-      validate: vi.fn()
-    } as unknown as IValidationService;
+    // Create mocks using standardized factories
+    validationService = createValidationServiceMock();
+    stateService = createStateServiceMock();
+    resolutionService = createResolutionServiceMock();
 
     clonedState = {
       setDataVar: vi.fn(),
       clone: vi.fn()
-    } as unknown as IStateService;
+    };
 
-    stateService = {
-      setDataVar: vi.fn(),
-      clone: vi.fn().mockReturnValue(clonedState)
-    } as unknown as IStateService;
-
-    resolutionService = {
-      resolveInContext: vi.fn()
-    } as unknown as IResolutionService;
+    // Configure state service mock
+    stateService.clone.mockReturnValue(clonedState);
 
     // Register mocks with the container
     context.registerMock("IValidationService", validationService);

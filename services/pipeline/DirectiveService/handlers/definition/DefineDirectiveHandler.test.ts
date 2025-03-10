@@ -37,9 +37,10 @@ describe('DefineDirectiveHandler', () => {
   let handler: DefineDirectiveHandler;
   let context: TestContextDI;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     // Create a context with an isolated container
-    context = TestContextDI.create({ isolatedContainer: true });
+    context = TestContextDI.createIsolated();
+    await context.initialize();
     
     // Create mocks using standardized factories
     validationService = createValidationServiceMock();

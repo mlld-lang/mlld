@@ -44,9 +44,10 @@ describe('PathDirectiveHandler', () => {
   let clonedState: any;
   let context: TestContextDI;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     // Create context with isolated container
-    context = TestContextDI.create({ isolatedContainer: true });
+    context = TestContextDI.createIsolated();
+    await context.initialize();
     
     // Create cloned state
     clonedState = {
