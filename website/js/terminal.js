@@ -42,8 +42,37 @@ document.addEventListener('DOMContentLoaded', () => {
     terminalScripts.style.position = originalScriptsPosition;
   }
   
+  // Function to animate the last line with a typing effect
+  function animateLastLine(terminal) {
+    // Get the last line content from data attribute
+    const lastLine = terminal.querySelector('.animated-line');
+    if (!lastLine) return;
+    
+    const fullText = lastLine.getAttribute('data-text');
+    
+    // Clear the existing content but keep the span structure
+    lastLine.innerHTML = '<span class="token string"></span><span class="terminal-cursor"></span>';
+    const textSpan = lastLine.querySelector('.token.string');
+    
+    // Type one character at a time
+    let i = 0;
+    const typingInterval = setInterval(() => {
+      if (i < fullText.length) {
+        textSpan.textContent = fullText.substring(0, i + 1);
+        i++;
+      } else {
+        clearInterval(typingInterval);
+      }
+    }, 50);
+  }
+  
   // Set height after a brief delay to ensure all content is rendered
-  setTimeout(setTerminalHeight, 100);
+  setTimeout(() => {
+    setTerminalHeight();
+    
+    // Start with the modules animation since it's visible by default
+    animateLastLine(terminalModules);
+  }, 100);
 
   // Toggle between modules and scripts
   toggleModules.addEventListener('click', () => {
@@ -51,6 +80,9 @@ document.addEventListener('DOMContentLoaded', () => {
     terminalScripts.style.display = 'none';
     toggleModules.classList.add('active');
     toggleScripts.classList.remove('active');
+    
+    // Trigger animation when switching to modules tab
+    animateLastLine(terminalModules);
   });
 
   toggleScripts.addEventListener('click', () => {
@@ -58,6 +90,9 @@ document.addEventListener('DOMContentLoaded', () => {
     terminalScripts.style.display = 'block';
     toggleModules.classList.remove('active');
     toggleScripts.classList.add('active');
+    
+    // Trigger animation when switching to scripts tab
+    animateLastLine(terminalScripts);
   });
   
   // Re-calculate on window resize

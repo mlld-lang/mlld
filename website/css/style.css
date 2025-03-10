@@ -209,7 +209,7 @@ hr {
 .hero {
   display: flex;
   flex-direction: row;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   padding: 3rem 0;
   gap: 2rem;
@@ -218,6 +218,7 @@ hr {
 .hero-content {
   flex: 0 0 33%;
   text-align: left;
+  padding-top: 1rem;
 }
 
 .hero-logo {
@@ -305,22 +306,28 @@ hr {
   font-style: italic;
 }
 
-.terminal-content div.space {
-  margin: -5px 0;
+.terminal-content .space {
+  display: block;
+  margin: -10px 0;
 }
 
 .terminal-content div {
   min-height: 1.6em;
 }
 
+.animated-line {
+  display: inline-block;
+  padding-top: 1em;
+}
+
 .terminal-cursor {
   display: inline-block;
-  width: 0.6em;
+  width: 10px;
   height: 1.2em;
-  background-color: #fff;
+  background-color: white;
   margin-left: 2px;
-  vertical-align: middle;
   animation: blink 1s step-end infinite;
+  vertical-align: text-bottom;
 }
 
 @keyframes blink {
