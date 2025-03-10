@@ -50,7 +50,6 @@ export interface CLIOptions {
   includeContent?: boolean;
   debugSourceMaps?: boolean; // Flag to display source mapping information
   detailedSourceMaps?: boolean; // Flag to display detailed source mapping information
-  useDI?: boolean; // Flag to enable/disable DI
   // No transform options - transformation is always enabled
 }
 
@@ -212,22 +211,6 @@ function parseArgs(args: string[]): CLIOptions {
       case '-h':
         options.help = true;
         break;
-      // Add DI related options
-      case '--use-di':
-        options.useDI = true;
-        break;
-      case '--no-di':
-        options.useDI = false;
-        break;
-      // Add new debug-resolution options
-      case '--var':
-      case '--variable':
-      case '--variable-name':
-        options.variableName = args[++i];
-        break;
-      case '--output-format':
-        options.outputFormat = args[++i] as 'json' | 'text' | 'mermaid';
-        break;
       // Add directive type option for debug-transform
       case '--directive':
         options.directiveType = args[++i];
@@ -311,8 +294,6 @@ Options:
   -v, --verbose           Enable verbose output (some additional info)
   -d, --debug             Enable debug output (full verbose logging)
   -w, --watch             Watch for changes and reprocess
-  --use-di                Enable dependency injection (USE_DI=true)
-  --no-di                 Disable dependency injection (USE_DI=false)
   -h, --help              Display this help message
   -V, --version           Display version information
   `);
@@ -774,14 +755,6 @@ export async function main(fsAdapter?: any, customArgs?: string[]): Promise<void
     
     // Store the current CLI options for access by other functions
     setCurrentCLIOptions(options);
-    
-    // Apply DI setting to environment if specified
-    if (options.useDI !== undefined) {
-      process.env.USE_DI = options.useDI ? 'true' : 'false';
-      if (options.verbose) {
-        console.log(`Dependency Injection ${options.useDI ? 'enabled' : 'disabled'}`);
-      }
-    }
     
     // Handle version flag
     if (options.version) {

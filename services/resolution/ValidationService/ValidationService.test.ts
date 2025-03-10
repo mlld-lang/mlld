@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { ValidationService } from './ValidationService.js';
 import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import type { DirectiveNode } from 'meld-spec';
@@ -16,37 +16,25 @@ import {
   expectDirectiveValidationError, 
   expectToThrowWithConfig,
   expectValidationError,
-  expectValidationToThrowWithDetails
+  expectValidationToThrowWithDetails,
+  expectToThrowMeldError, 
+  makeDirectiveNode,
+  ValidationErrorTestSetup
 } from '@tests/utils/errorTestUtils.js';
 import { textDirectiveExamples } from '@core/syntax/index.js';
 import { getExample, getInvalidExample } from '@tests/utils/syntax-test-helpers.js';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
-import { shouldUseDI } from '@core/ServiceProvider.js';
 
-// Run all tests with both DI enabled and disabled
-describe.each([
-  { useDI: true, name: 'with DI' },
-  { useDI: false, name: 'without DI' }
-])('ValidationService $name', ({ useDI }) => {
+describe('ValidationService', () => {
   let service: ValidationService;
   let context: TestContextDI;
   
   beforeEach(() => {
-    // Save original DI setting
-    const originalDISetting = process.env.USE_DI;
-    
-    // Create test context with the appropriate DI setting
+    // Create test context with DI
     context = TestContextDI.create({ isolatedContainer: true });
-      
-    // Get service from container or create manually
-    if (useDI) {
-      service = context.container.resolve('ValidationService');
-    } else {
-      service = new ValidationService();
-    }
     
-    // Restore original DI setting after test
-    process.env.USE_DI = originalDISetting;
+    // Resolve the validation service from the container
+    service = context.resolveSync(ValidationService);
   });
   
   afterEach(async () => {

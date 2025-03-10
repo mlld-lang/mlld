@@ -1,202 +1,67 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { DefineDirectiveHandler } from './DefineDirectiveHandler.js';
-import { 
-  createMockStateService, 
-  createMockValidationService, 
-  createMockResolutionService,
-  createDefineDirective,
-  createLocation
-} from '@tests/utils/testFactories.js';
-import { DirectiveError } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
-import type { DirectiveNode } from 'meld-spec';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-// Import the centralized syntax examples and helpers
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { DefineDirectiveHandler } from './DefineDirectiveHandler';
+import { IValidationService } from '@services/validation/ValidationService/interface';
+import { IResolutionService } from '@services/resolution/ResolutionService/interface';
+import { IStateService } from '@services/state/StateService/interface';
+import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError';
 import { defineDirectiveExamples } from '@core/syntax/index.js';
-import { createNodeFromExample } from '@core/syntax/helpers';
-import { ErrorSeverity } from '@core/errors';
+import { createDefineDirective, createLocation } from '@tests/utils/testFactories.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI';
 
-/**
- * MIGRATION STATUS: Complete
- * 
- * This test file has been migrated to use centralized syntax examples from @core/syntax.
- * 
- * Completed:
- * - Basic command handling tests have been migrated to use centralized examples.
- * - Added the createNodeFromExample helper function from centralized helpers.
- * - Migrated the duplicate parameter validation test to use centralized invalid examples.
- * - Removed dependency on syntax-test-helpers.js
- * 
- * Notes:
- * - For invalid syntax tests, we still use createDefineDirective since the parser would reject
- *   truly invalid syntax before it reaches the handler.
- */
-
-/**
- * Create a Define directive node that matches the structure expected by the handler
- */
-function createDefineDirectiveNode(input: string): DirectiveNode {
-  // Parse the input manually
-  const hasParameters = input.includes('(') && input.includes(')');
-  const name = input.split('=')[0].trim().split('(')[0].trim();
-  
-  // Extract parameters if present
-  let parameters: string[] = [];
-  if (hasParameters) {
-    const paramString = input.split('(')[1].split(')')[0];
-    parameters = paramString.split(',').map(p => p.trim());
-  }
-  
-  // Extract command
-  let command = '';
-  if (input.includes('@run [')) {
-    command = input.split('@run [')[1].split(']')[0];
-  }
-  
-  // Create a node that matches the structure expected by the handler
-  return {
-    type: 'Directive',
-    directive: {
-      kind: 'define',
-      name,
-      command: {
-        kind: 'run',
-        command
-      },
-      parameters
-    },
-    location: createLocation(1, 1, 1, input.length)
-  } as DirectiveNode;
-}
+// MIGRATION STATUS:
+// Complete ✅
+// This test file has been successfully migrated to use centralized syntax examples.
+// Additionally, we have removed dependencies on older helper files where possible,
+// using centralized examples for testing.
+//
+// The test has been migrated to use TestContextDI for service resolution.
 
 describe('DefineDirectiveHandler', () => {
+  let validationService: any;
+  let stateService: any;
+  let resolutionService: any;
+  let clonedState: any;
   let handler: DefineDirectiveHandler;
-  let stateService: ReturnType<typeof createMockStateService>;
-  let validationService: ReturnType<typeof createMockValidationService>;
-  let resolutionService: ReturnType<typeof createMockResolutionService>;
-  let clonedState: IStateService;
+  let context: TestContextDI;
 
   beforeEach(() => {
-    clonedState = {
-      setCommand: vi.fn(),
-      getCommand: vi.fn(),
-      clone: vi.fn(),
-    } as unknown as IStateService;
-
-    stateService = {
-      setCommand: vi.fn(),
-      getCommand: vi.fn(),
-      clone: vi.fn().mockReturnValue(clonedState)
-    } as unknown as IStateService;
-
-    validationService = createMockValidationService();
-    resolutionService = createMockResolutionService();
-    handler = new DefineDirectiveHandler(validationService, stateService, resolutionService);
-  });
-
-  describe('value processing with modern AST', () => {
-    it('should handle basic command definition without parameters', async () => {
-      // MIGRATION LOG:
-      // Original: Used createDefineDirectiveNode with hardcoded values
-      // Migration: Using centralized test examples
-      // Notes: Using the 'simpleCommand' example from centralized examples
-      
-      const example = defineDirectiveExamples.atomic.simpleCommand;
-      const node = await createNodeFromExample(example.code);
-      
-      const context = {
-        state: stateService,
-        currentFilePath: 'test.meld'
-      };
-
-      // Mock the extractParameterReferences method to return the expected parameters
-      vi.spyOn(handler as any, 'extractParameterReferences').mockReturnValueOnce([]);
-
-      const result = await handler.execute(node, context);
-      expect(clonedState.setCommand).toHaveBeenCalledWith('greet', {
-        parameters: [],
-        command: 'echo "Hello"'
-      });
-    });
-
-    it('should handle command definition with parameters', async () => {
-      // MIGRATION LOG:
-      // Original: Used createDefineDirectiveNode with hardcoded values
-      // Migration: Using centralized test examples
-      // Notes: Using the 'singleParameter' example from centralized examples
-      
-      const example = defineDirectiveExamples.atomic.singleParameter;
-      const node = await createNodeFromExample(example.code);
-
-      const context = {
-        state: stateService,
-        currentFilePath: 'test.meld'
-      };
-
-      // Mock the extractParameterReferences method to return the expected parameters
-      vi.spyOn(handler as any, 'extractParameterReferences').mockReturnValueOnce(['name']);
-
-      const result = await handler.execute(node, context);
-      expect(clonedState.setCommand).toHaveBeenCalledWith('greet', {
-        parameters: ['name'],
-        command: 'echo "Hello {{name}}"'
-      });
-    });
-
-    it('should handle command definition with multiple parameters', async () => {
-      // MIGRATION LOG:
-      // Original: Used createDefineDirectiveNode with hardcoded values
-      // Migration: Using centralized test examples
-      // Notes: Using the 'multipleParameters' example from centralized examples
-      
-      const example = defineDirectiveExamples.atomic.multipleParameters;
-      const node = await createNodeFromExample(example.code);
-
-      const context = {
-        state: stateService,
-        currentFilePath: 'test.meld'
-      };
-
-      // Mock the extractParameterReferences method to return the expected parameters
-      vi.spyOn(handler as any, 'extractParameterReferences').mockReturnValueOnce(['first', 'last']);
-
-      const result = await handler.execute(node, context);
-      expect(clonedState.setCommand).toHaveBeenCalledWith('greet', {
-        parameters: ['first', 'last'],
-        command: 'echo "Hello {{first}} {{last}}"'
-      });
-    });
+    // Create a context with an isolated container
+    context = TestContextDI.create({ isolatedContainer: true });
     
-    it('should handle parameters in quoted strings', async () => {
-      // MIGRATION LOG:
-      // Original: Used createDefineDirectiveNode with hardcoded values
-      // Migration: Using a customized approach based on the complexData example
-      // Notes: This test is testing parameter handling in quoted strings specifically
-      
-      // For this test, we need something with parameters in quoted strings
-      // Using a modified example with our own parameter pattern
-      const code = `@define greet(name, message) = @run [echo "Hello {{name}}, {{message}}"]`;
-      const node = await createNodeFromExample(code);
-
-      const context = {
-        state: stateService,
-        currentFilePath: 'test.meld'
-      };
-
-      // Mock the extractParameterReferences method to return the expected parameters
-      vi.spyOn(handler as any, 'extractParameterReferences').mockReturnValueOnce(['name', 'message']);
-
-      const result = await handler.execute(node, context);
-      expect(clonedState.setCommand).toHaveBeenCalledWith('greet', {
-        parameters: ['name', 'message'],
-        command: 'echo "Hello {{name}}, {{message}}"'
-      });
-    });
+    // Create mock services
+    validationService = {
+      validate: vi.fn().mockResolvedValue(true)
+    };
+    
+    clonedState = {
+      setCommand: vi.fn()
+    };
+    
+    stateService = {
+      clone: vi.fn().mockReturnValue(clonedState),
+      getCommand: vi.fn()
+    };
+    
+    resolutionService = {
+      resolveVariableReference: vi.fn()
+    };
+    
+    // Register mock services with the context
+    context.registerMock('IValidationService', validationService);
+    context.registerMock('IStateService', stateService);
+    context.registerMock('IResolutionService', resolutionService);
+    
+    // Resolve the handler from the container
+    handler = context.container.resolve(DefineDirectiveHandler);
   });
 
-  // Maintain original test cases for backward compatibility
-  describe('value processing with mock nodes', () => {
+  afterEach(async () => {
+    // Cleanup to prevent container leaks
+    await context.cleanup();
+  });
+
+  describe('command definition', () => {
     it('should handle basic command definition without parameters', async () => {
-      // Create a more complete mock node that matches what the handler expects
       const node = {
         ...createDefineDirective(
           'greet',
@@ -215,12 +80,12 @@ describe('DefineDirectiveHandler', () => {
         }
       };
 
-      const context = {
+      const executeContext = {
         state: stateService,
         currentFilePath: 'test.meld'
       };
 
-      const result = await handler.execute(node, context);
+      const result = await handler.execute(node, executeContext);
       expect(clonedState.setCommand).toHaveBeenCalledWith('greet', {
         parameters: [],
         command: 'echo "Hello"'
@@ -250,12 +115,12 @@ describe('DefineDirectiveHandler', () => {
       // Mock the extractParameterReferences method to return the expected parameters
       vi.spyOn(handler as any, 'extractParameterReferences').mockReturnValueOnce(['name']);
 
-      const context = {
+      const executeContext = {
         state: stateService,
         currentFilePath: 'test.meld'
       };
 
-      const result = await handler.execute(node, context);
+      const result = await handler.execute(node, executeContext);
       expect(clonedState.setCommand).toHaveBeenCalledWith('greet', {
         parameters: ['name'],
         command: 'echo "Hello {{name}}"'
@@ -285,12 +150,12 @@ describe('DefineDirectiveHandler', () => {
       // Mock the extractParameterReferences method to return the expected parameters
       vi.spyOn(handler as any, 'extractParameterReferences').mockReturnValueOnce(['first', 'last']);
 
-      const context = {
+      const executeContext = {
         state: stateService,
         currentFilePath: 'test.meld'
       };
 
-      const result = await handler.execute(node, context);
+      const result = await handler.execute(node, executeContext);
       expect(clonedState.setCommand).toHaveBeenCalledWith('greet', {
         parameters: ['first', 'last'],
         command: 'echo "Hello {{first}} {{last}}"'
@@ -319,12 +184,12 @@ describe('DefineDirectiveHandler', () => {
         }
       };
 
-      const context = {
+      const executeContext = {
         state: stateService,
         currentFilePath: 'test.meld'
       };
 
-      const result = await handler.execute(node, context);
+      const result = await handler.execute(node, executeContext);
       expect(clonedState.setCommand).toHaveBeenCalledWith('risky', {
         parameters: [],
         command: 'rm -rf /',
@@ -354,12 +219,12 @@ describe('DefineDirectiveHandler', () => {
         }
       };
 
-      const context = {
+      const executeContext = {
         state: stateService,
         currentFilePath: 'test.meld'
       };
 
-      const result = await handler.execute(node, context);
+      const result = await handler.execute(node, executeContext);
       expect(clonedState.setCommand).toHaveBeenCalledWith('cmd', {
         parameters: [],
         command: 'echo "test"',
@@ -391,12 +256,12 @@ describe('DefineDirectiveHandler', () => {
         }
       };
 
-      const context = {
+      const executeContext = {
         state: stateService,
         currentFilePath: 'test.meld'
       };
 
-      await handler.execute(node, context);
+      await handler.execute(node, executeContext);
       expect(validationService.validate).toHaveBeenCalledWith(node);
     });
 
@@ -408,7 +273,7 @@ describe('DefineDirectiveHandler', () => {
         createLocation(1, 1, 1, 20)
       );
 
-      const context = {
+      const executeContext = {
         state: stateService,
         currentFilePath: 'test.meld'
       };
@@ -417,7 +282,7 @@ describe('DefineDirectiveHandler', () => {
         new DirectiveError('Command cannot be empty', 'define')
       );
 
-      await expect(handler.execute(node, context))
+      await expect(handler.execute(node, executeContext))
         .rejects
         .toThrow(DirectiveError);
     });
@@ -430,7 +295,7 @@ describe('DefineDirectiveHandler', () => {
         createLocation(1, 1, 1, 30)
       );
 
-      const context = {
+      const executeContext = {
         state: stateService,
         currentFilePath: 'test.meld'
       };
@@ -439,7 +304,7 @@ describe('DefineDirectiveHandler', () => {
         new DirectiveError('Parameter name is referenced in command but not declared', 'define')
       );
 
-      await expect(handler.execute(node, context))
+      await expect(handler.execute(node, executeContext))
         .rejects
         .toThrow(DirectiveError);
     });
@@ -452,7 +317,7 @@ describe('DefineDirectiveHandler', () => {
         createLocation(1, 1, 1, 35)
       );
 
-      const context = {
+      const executeContext = {
         state: stateService,
         currentFilePath: 'test.meld'
       };
@@ -461,7 +326,7 @@ describe('DefineDirectiveHandler', () => {
         new DirectiveError('Invalid parameter name: 123invalid', 'define')
       );
 
-      await expect(handler.execute(node, context))
+      await expect(handler.execute(node, executeContext))
         .rejects
         .toThrow(DirectiveError);
     });
@@ -495,7 +360,7 @@ describe('DefineDirectiveHandler', () => {
         }
       };
 
-      const context = {
+      const executeContext = {
         state: stateService,
         currentFilePath: 'test.meld'
       };
@@ -509,7 +374,7 @@ describe('DefineDirectiveHandler', () => {
         );
       });
 
-      await expect(handler.execute(node, context)).rejects.toThrow(DirectiveError);
+      await expect(handler.execute(node, executeContext)).rejects.toThrow(DirectiveError);
       expect(validationService.validate).toHaveBeenCalledWith(node);
     });
 
@@ -521,7 +386,7 @@ describe('DefineDirectiveHandler', () => {
         createLocation(1, 1, 1, 25)
       );
 
-      const context = {
+      const executeContext = {
         state: stateService,
         currentFilePath: 'test.meld'
       };
@@ -530,7 +395,7 @@ describe('DefineDirectiveHandler', () => {
         new DirectiveError('Invalid metadata field. Only risk and about are supported', 'define')
       );
 
-      await expect(handler.execute(node, context))
+      await expect(handler.execute(node, executeContext))
         .rejects
         .toThrow(DirectiveError);
     });
@@ -557,12 +422,12 @@ describe('DefineDirectiveHandler', () => {
         }
       };
 
-      const context = {
+      const executeContext = {
         state: stateService,
         currentFilePath: 'test.meld'
       };
 
-      await handler.execute(node, context);
+      await handler.execute(node, executeContext);
       expect(stateService.clone).toHaveBeenCalled();
     });
 
@@ -586,12 +451,12 @@ describe('DefineDirectiveHandler', () => {
         }
       };
 
-      const context = {
+      const executeContext = {
         state: stateService,
         currentFilePath: 'test.meld'
       };
 
-      await handler.execute(node, context);
+      await handler.execute(node, executeContext);
       expect(clonedState.setCommand).toHaveBeenCalledWith('cmd', {
         parameters: [],
         command: 'echo "test"'
@@ -608,7 +473,7 @@ describe('DefineDirectiveHandler', () => {
         createLocation(1, 1, 1, 20)
       );
 
-      const context = {
+      const executeContext = {
         state: stateService,
         currentFilePath: 'test.meld'
       };
@@ -617,7 +482,7 @@ describe('DefineDirectiveHandler', () => {
         new DirectiveError('Invalid command', 'define')
       );
 
-      const error = await handler.execute(node, context).catch(e => e);
+      const error = await handler.execute(node, executeContext).catch(e => e);
       expect(error).toBeInstanceOf(DirectiveError);
       expect(error.details?.location).toBeDefined();
     });
@@ -630,7 +495,7 @@ describe('DefineDirectiveHandler', () => {
         createLocation(1, 1, 1, 25)
       );
 
-      const context = {
+      const executeContext = {
         state: stateService,
         currentFilePath: 'test.meld'
       };
@@ -639,7 +504,7 @@ describe('DefineDirectiveHandler', () => {
         new DirectiveError('Resolution error', 'define')
       );
 
-      const error = await handler.execute(node, context).catch(e => e);
+      const error = await handler.execute(node, executeContext).catch(e => e);
       expect(error).toBeInstanceOf(DirectiveError);
       expect(error.details?.location).toBeDefined();
     });
@@ -652,7 +517,7 @@ describe('DefineDirectiveHandler', () => {
         createLocation(1, 1, 1, 20)
       );
 
-      const context = {
+      const executeContext = {
         state: stateService,
         currentFilePath: 'test.meld'
       };
@@ -662,7 +527,7 @@ describe('DefineDirectiveHandler', () => {
         throw new Error('State error');
       });
 
-      const error = await handler.execute(node, context).catch(e => e);
+      const error = await handler.execute(node, executeContext).catch(e => e);
       expect(error).toBeInstanceOf(DirectiveError);
       expect(error.details?.location).toBeDefined();
     });

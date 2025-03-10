@@ -1,12 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { main } from '@api/index.js';
-import { TestContext } from '@tests/utils/TestContext.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
+import type { Services } from '@core/types/index.js';
 
 describe('Embed Directive Line Number Mismatch Fix', () => {
-  let context: TestContext;
+  let context: TestContextDI;
 
   beforeEach(async () => {
-    context = new TestContext();
+    context = TestContextDI.create();
     await context.initialize();
   });
 
@@ -17,7 +18,7 @@ describe('Embed Directive Line Number Mismatch Fix', () => {
   it('should replace embed directive with content even if line numbers shift', async () => {
     // Create file with content that will cause line number shifts
     // The embedded file has many lines
-    await context.fs.writeFile('content.md', 
+    await context.services.filesystem.writeFile('content.md', 
       '# Section One\nContent one\n\n' + 
       '# Section Two\nContent two\n\n' +
       '# Section Three\nContent three\n\n' +
@@ -26,7 +27,7 @@ describe('Embed Directive Line Number Mismatch Fix', () => {
     );
     
     // Create a test file with multiple directives to cause shifts
-    await context.fs.writeFile('test.meld', 
+    await context.services.filesystem.writeFile('test.meld', 
       '@text title = "Test File"\n\n' +
       '# {{title}}\n\n' +
       '@text long_chunk = "This is a chunk that takes up multiple lines\n' +
@@ -39,8 +40,8 @@ describe('Embed Directive Line Number Mismatch Fix', () => {
 
     // Test embed replacement with transformation enabled
     const result = await main('test.meld', {
-      fs: context.fs,
-      services: context.services,
+      fs: context.services.filesystem,
+      services: context.services as unknown as Partial<Services>,
       transformation: true,
       format: 'md'
     });
@@ -55,12 +56,12 @@ describe('Embed Directive Line Number Mismatch Fix', () => {
 
   it('should handle multiple embed directives with potentially shifted line numbers', async () => {
     // Create files with content
-    await context.fs.writeFile('content1.md', '# File One\nContent from file one');
-    await context.fs.writeFile('content2.md', '# File Two\nContent from file two');
-    await context.fs.writeFile('content3.md', '# File Three\nContent from file three');
+    await context.services.filesystem.writeFile('content1.md', '# File One\nContent from file one');
+    await context.services.filesystem.writeFile('content2.md', '# File Two\nContent from file two');
+    await context.services.filesystem.writeFile('content3.md', '# File Three\nContent from file three');
     
     // Create a test file with multiple embed directives
-    await context.fs.writeFile('test.meld', 
+    await context.services.filesystem.writeFile('test.meld', 
       '@text title = "Test File"\n\n' +
       '# {{title}}\n\n' +
       '@text long_chunk = "This is a chunk that takes up multiple lines\n' +
@@ -76,8 +77,8 @@ describe('Embed Directive Line Number Mismatch Fix', () => {
 
     // Test embed replacement with transformation enabled
     const result = await main('test.meld', {
-      fs: context.fs,
-      services: context.services,
+      fs: context.services.filesystem,
+      services: context.services as unknown as Partial<Services>,
       transformation: true,
       format: 'md'
     });

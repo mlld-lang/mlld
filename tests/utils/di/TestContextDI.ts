@@ -146,31 +146,11 @@ export class TestContextDI extends TestContext {
   }
 
   /**
-   * Create a TestContextDI instance 
+   * Create a TestContextDI instance
    * @param options Options for test context initialization
    */
   static create(options: TestContextDIOptions = {}): TestContextDI {
     return new TestContextDI(options);
-  }
-
-  /**
-   * Create a TestContextDI instance with DI mode
-   * @deprecated Use create() instead - DI is now always enabled
-   * @param options Options for test context initialization
-   */
-  static withDI(options: TestContextDIOptions = {}): TestContextDI {
-    console.warn('TestContextDI.withDI() is deprecated. Use TestContextDI.create() instead.');
-    return TestContextDI.create(options);
-  }
-
-  /**
-   * Create a TestContextDI instance without DI mode
-   * @deprecated Use create() instead - DI is now always enabled
-   * @param options Options for test context initialization
-   */
-  static withoutDI(options: TestContextDIOptions = {}): TestContextDI {
-    console.warn('TestContextDI.withoutDI() is deprecated. Use TestContextDI.create() instead.');
-    return TestContextDI.create(options);
   }
 
   /**

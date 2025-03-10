@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { main } from './index.js';
-import { TestContext } from '@tests/utils/index.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import type { ProcessOptions, Services } from '@core/types/index.js';
 import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
 import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
@@ -27,11 +27,11 @@ const runDirectiveExamples = runDirectiveExamplesModule;
 // and getBackwardCompatibleInvalidExample from the old syntax-test-helpers.js
 
 describe('API Integration Tests', () => {
-  let context: TestContext;
+  let context: TestContextDI;
   let projectRoot: string;
   
   beforeEach(async () => {
-    context = new TestContext();
+    context = TestContextDI.create();
     await context.initialize();
     projectRoot = '/project';
     
@@ -73,13 +73,13 @@ Some text content with {{var1}} and {{message}}
       try {
         // Write content to a file first
         const testFilePath = 'test.meld';
-        await context.writeFile(testFilePath, content);
+        await context.services.filesystem.writeFile(testFilePath, content);
         
         // Process the file
         const result = await main(testFilePath, {
           transformation: true,
           services: context.services as unknown as Partial<Services>,
-          fs: context.fs
+          fs: context.services.filesystem
         });
         
         // Log debug information
@@ -136,7 +136,7 @@ ${textVarExample.code}
 User info: {{user.name}} ({{user.id}})
 `;
 
-      await context.writeFile('test.meld', content);
+      await context.services.filesystem.writeFile('test.meld', content);
       
       try {
         // Enable transformation
@@ -144,7 +144,7 @@ User info: {{user.name}} ({{user.id}})
         stateService.enableTransformation(true);
         
         const result = await main('test.meld', {
-          fs: context.fs,
+          fs: context.services.filesystem,
           services: context.services as unknown as Partial<Services>,
           transformation: true
         });
@@ -182,7 +182,7 @@ Version: {{config.app.version}}
 First feature: {{config.app.features.0}}
 `;
 
-      await context.writeFile('test.meld', content);
+      await context.services.filesystem.writeFile('test.meld', content);
       
       try {
         // Enable transformation
@@ -190,7 +190,7 @@ First feature: {{config.app.features.0}}
         stateService.enableTransformation(true);
         
         const result = await main('test.meld', {
-          fs: context.fs,
+          fs: context.services.filesystem,
           services: context.services as unknown as Partial<Services>,
           transformation: true
         });
@@ -231,13 +231,13 @@ Template result: {{template}}
         // FIXME: Update to use file-based approach instead of passing content directly
         // Write content to a file first
         const testFilePath = 'test.meld';
-        await context.writeFile(testFilePath, content);
+        await context.services.filesystem.writeFile(testFilePath, content);
         
         // Process the file
         const result = await main(testFilePath, {
           transformation: true,
           services: context.services as unknown as Partial<Services>,
-          fs: context.fs
+          fs: context.services.filesystem
         });
         
         // Log debug information
@@ -305,7 +305,7 @@ Template result: {{template}}
 @path testpath2 = "$./"`; 
       
       console.log('Writing project path test:', projectPathTest);
-      await context.writeFile('projectpath-test.meld', projectPathTest);
+      await context.services.filesystem.writeFile('projectpath-test.meld', projectPathTest);
       
       // Debug pre-processing state
       await debugService.captureState('before-projectpath-test', {
@@ -316,7 +316,7 @@ Template result: {{template}}
         // Run test to determine $PROJECTPATH value
         console.log('Processing project path test...');
         const projectPathResult = await main('projectpath-test.meld', {
-          fs: context.fs,
+          fs: context.services.filesystem,
           services: context.services as unknown as Partial<Services>,
           transformation: { variables: true, directives: true }
         });
@@ -369,7 +369,7 @@ Docs are at $docs
       `;
       
       console.log('\nTesting $PROJECTPATH format first:');
-      await context.writeFile('test-projectpath.meld', content1);
+      await context.services.filesystem.writeFile('test-projectpath.meld', content1);
       
       // Capture state before processing
       await debugService.captureState('before-main-test-projectpath', {
@@ -389,7 +389,7 @@ Docs are at $docs
       try {
         console.log('Processing $PROJECTPATH format...');
         const result = await main('test-projectpath.meld', {
-          fs: context.fs,
+          fs: context.services.filesystem,
           services: context.services as unknown as Partial<Services>,
           transformation: { variables: true, directives: true }
         });
@@ -403,7 +403,7 @@ Docs are at $docs
       }
       
       console.log('\nTesting $. format next:');
-      await context.writeFile('test-dot.meld', content2);
+      await context.services.filesystem.writeFile('test-dot.meld', content2);
       
       // Capture state before processing
       await debugService.captureState('before-main-test-dot', {
@@ -423,7 +423,7 @@ Docs are at $docs
       try {
         console.log('Processing $. format...');
         const result = await main('test-dot.meld', {
-          fs: context.fs,
+          fs: context.services.filesystem,
           services: context.services as unknown as Partial<Services>,
           transformation: { variables: true, directives: true }
         });
@@ -444,7 +444,7 @@ Docs are at $docs
 Docs are at $docs
       `;
       
-      await context.writeFile('test.meld', directContent);
+      await context.services.filesystem.writeFile('test.meld', directContent);
       
       // Manual structured path creation
       const structuredPath = {
@@ -490,7 +490,7 @@ Docs are at $docs
         // Process with transformation
         console.log('Processing file...');
         const result = await main('test.meld', {
-          fs: context.fs,
+          fs: context.services.filesystem,
           services: context.services as unknown as Partial<Services>,
           transformation: { variables: true, directives: true }
         });
@@ -557,7 +557,7 @@ Docs are at $docs
       const content = `@path config = "$./config"`;
       console.log('Test content:', content);
       
-      await context.writeFile('test.meld', content);
+      await context.services.filesystem.writeFile('test.meld', content);
       
       // Capture state before processing
       await debugService.captureState('before-dotslash-test', {
@@ -567,7 +567,7 @@ Docs are at $docs
       try {
         console.log('Processing test file...');
         const result = await main('test.meld', {
-          fs: context.fs,
+          fs: context.services.filesystem,
           services: context.services as unknown as Partial<Services>,
           transformation: true
         });
@@ -634,7 +634,7 @@ Docs are at $docs
       const content = `@path home = "$HOMEPATH/meld"`;
       console.log('Test content:', content);
       
-      await context.writeFile('test.meld', content);
+      await context.services.filesystem.writeFile('test.meld', content);
       
       // Capture state before processing
       await debugService.captureState('before-homepath-test', {
@@ -644,7 +644,7 @@ Docs are at $docs
       try {
         console.log('Processing test file...');
         const result = await main('test.meld', {
-          fs: context.fs,
+          fs: context.services.filesystem,
           services: context.services as unknown as Partial<Services>,
           transformation: true
         });
@@ -711,7 +711,7 @@ Docs are at $docs
       const content = `@path data = "$~/data"`;
       console.log('Test content:', content);
       
-      await context.writeFile('test.meld', content);
+      await context.services.filesystem.writeFile('test.meld', content);
       
       // Capture state before processing
       await debugService.captureState('before-tilde-test', {
@@ -721,7 +721,7 @@ Docs are at $docs
       try {
         console.log('Processing test file...');
         const result = await main('test.meld', {
-          fs: context.fs,
+          fs: context.services.filesystem,
           services: context.services as unknown as Partial<Services>,
           transformation: true
         });
@@ -755,7 +755,7 @@ Docs are at $docs
     
     it('should handle path variables in directives properly', async () => {
       // Create a file to embed
-      await context.writeFile('templates/header.md', 'This is embedded content');
+      await context.services.filesystem.writeFile('templates/header.md', 'This is embedded content');
       
       // Ensure the directory exists
       await context.fs.mkdir('templates', { recursive: true });
@@ -779,12 +779,12 @@ Docs are at $docs
       const simpleTest = `@path simple_templates = "templates"`;
       
       console.log('Simple test content:', simpleTest);
-      await context.writeFile('simple_test.meld', simpleTest);
+      await context.services.filesystem.writeFile('simple_test.meld', simpleTest);
       
       try {
         console.log('Processing simple test file...');
         const simpleResult = await main('simple_test.meld', {
-          fs: context.fs,
+          fs: context.services.filesystem,
           services: context.services as unknown as Partial<Services>,
           transformation: true
         });
@@ -807,11 +807,11 @@ Docs are at $docs
           const content = `@path templates = "$PROJECTPATH/templates"`;
           
           console.log('Main test content:', content);
-          await context.writeFile('test.meld', content);
+          await context.services.filesystem.writeFile('test.meld', content);
           
           console.log('Processing main test file...');
           const result = await main('test.meld', {
-            fs: context.fs,
+            fs: context.services.filesystem,
             services: context.services as unknown as Partial<Services>,
             transformation: true
           });
@@ -849,7 +849,7 @@ Docs are at $docs
       const content = `
         @path bad = "/absolute/path"
       `;
-      await context.writeFile('test.meld', content);
+      await context.services.filesystem.writeFile('test.meld', content);
       
       // Get the path service from the context
       const pathService = context.services.path;
@@ -907,7 +907,7 @@ Docs are at $docs
         await debugService.captureState('before-main', {
           message: 'State before main function call',
           options: {
-            fs: context.fs,
+            fs: context.services.filesystem,
             services: context.services,
             transformation: true
           }
@@ -916,7 +916,7 @@ Docs are at $docs
         // Wrap main function in trace operation
         await debugService.traceOperation('main-function', async () => {
           const result = await main('test.meld', {
-            fs: context.fs,
+            fs: context.services.filesystem,
             services: context.services as unknown as Partial<Services>,
             transformation: true, // Enable debug mode
             debug: true
@@ -960,7 +960,7 @@ Docs are at $docs
       const content = `
         @path bad = "../path/with/dot"
       `;
-      await context.writeFile('test.meld', content);
+      await context.services.filesystem.writeFile('test.meld', content);
       
       // Get the path service from the context
       const pathService = context.services.path;
@@ -1009,7 +1009,7 @@ Docs are at $docs
         await debugService.captureState('before-main-dots', {
           message: 'State before main function call for dot segments',
           options: {
-            fs: context.fs,
+            fs: context.services.filesystem,
             services: context.services,
             transformation: true,
             debug: true
@@ -1019,7 +1019,7 @@ Docs are at $docs
         // Wrap main function in trace operation
         await debugService.traceOperation('main-function-dots', async () => {
           const result = await main('test.meld', {
-            fs: context.fs,
+            fs: context.services.filesystem,
             services: context.services as unknown as Partial<Services>,
             transformation: true, // Change to true for debugging
             debug: true
@@ -1065,14 +1065,14 @@ Docs are at $docs
       
       // Create the imported file with text example
       const importedVar = textDirectiveExamples.atomic.simpleString;
-      await context.writeFile('imported.meld', importedVar.code);
+      await context.services.filesystem.writeFile('imported.meld', importedVar.code);
       
       // Create the main file that imports it
       const content = `${basicImport.code}
         
 Content from import: {{greeting}}
       `;
-      await context.writeFile('test.meld', content);
+      await context.services.filesystem.writeFile('test.meld', content);
       
       // Enable transformation with more logging
       context.enableTransformation(true);
@@ -1098,7 +1098,7 @@ Content from import: {{greeting}}
       console.log('=============================');
       
       const result = await main('test.meld', {
-        fs: context.fs,
+        fs: context.services.filesystem,
         services: context.services as unknown as Partial<Services>,
         transformation: true
       });
@@ -1144,8 +1144,8 @@ Content from import: {{greeting}}
     
     it('should handle nested imports with proper scope inheritance', async () => {
       // Create individual files with text variables
-      await context.writeFile('level3.meld', `@text level3 = "Level 3 imported"`);
-      await context.writeFile('level2.meld', `@text level2 = "Level 2 imported"
+      await context.services.filesystem.writeFile('level3.meld', `@text level3 = "Level 3 imported"`);
+      await context.services.filesystem.writeFile('level2.meld', `@text level2 = "Level 2 imported"
 @import [level3.meld]`);
       
       // Create main content with import and references
@@ -1156,13 +1156,13 @@ Level 1: {{level1}}
 Level 2: {{level2}}
 Level 3: {{level3}}
       `;
-      await context.writeFile('test.meld', content);
+      await context.services.filesystem.writeFile('test.meld', content);
       
       // Enable transformation
       context.enableTransformation(true);
       
       const result = await main('test.meld', {
-        fs: context.fs,
+        fs: context.services.filesystem,
         services: context.services as unknown as Partial<Services>,
         transformation: true
       });
@@ -1176,12 +1176,12 @@ Level 3: {{level3}}
     
     it('should detect circular imports', async () => {
       // Create files with circular imports
-      await context.writeFile('circular1.meld', `@import [circular2.meld]`);
-      await context.writeFile('circular2.meld', `@import [circular1.meld]`);
+      await context.services.filesystem.writeFile('circular1.meld', `@import [circular2.meld]`);
+      await context.services.filesystem.writeFile('circular2.meld', `@import [circular1.meld]`);
 
       // Create content that imports circular1
       const content = `@import [circular1.meld]`;
-      await context.writeFile('test.meld', content);
+      await context.services.filesystem.writeFile('test.meld', content);
       
       // Disable transformation to properly test error handling
       context.disableTransformation();

@@ -49,7 +49,7 @@ export class InterpreterService implements IInterpreterService {
   private initializationPromise: Promise<void> | null = null;
 
   constructor(
-    @inject('IDirectiveService') directiveService?: IDirectiveService,
+    @inject(delay(() => 'IDirectiveService')) directiveService?: IDirectiveService,
     @inject('IStateService') stateService?: IStateService
   ) {
     // Handle DI constructor injection

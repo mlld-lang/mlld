@@ -58,11 +58,6 @@ export async function runMeld(
   // Always use the memory filesystem
   mergedOptions.fs = memoryFS;
   
-  // Check if DI should be explicitly enabled or disabled for this call
-  if (mergedOptions.useDI !== undefined) {
-    process.env.USE_DI = mergedOptions.useDI ? 'true' : 'false';
-  }
-  
   // Create services
   const services = createDefaultServices(mergedOptions);
   
@@ -71,6 +66,34 @@ export async function runMeld(
   
   // Validate services
   validateServicePipeline(services);
+
+  // Initialize the ServiceMediator with all services
+  const mediator = services.filesystem['serviceMediator'];
+  if (mediator) {
+    mediator.setPathService(services.path);
+    mediator.setFileSystemService(services.filesystem);
+    mediator.setStateService(services.state);
+    mediator.setParserService(services.parser);
+    mediator.setResolutionService(services.resolution);
+  }
+
+  // Ensure FileSystemService has the mediator set
+  services.filesystem.setMediator(mediator);
+
+  // Re-initialize directive and interpreter services to ensure they have the correct dependencies
+  services.directive.initialize(
+    services.validation,
+    services.state,
+    services.path,
+    services.filesystem,
+    services.parser,
+    services.interpreter,
+    services.circularity,
+    services.resolution
+  );
+
+  // Re-initialize interpreter with directive
+  services.interpreter.initialize(services.directive, services.state);
 
   try {
     // Read the file (from memory)

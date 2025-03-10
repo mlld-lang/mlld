@@ -9,10 +9,10 @@ As part of Phase 2 of our DI cleanup plan, we've moved to a DI-only approach for
 ### What Changed
 
 1. **Removed Dual-Mode Support**:
-   - `TestContextDI.withDI()` and `TestContextDI.withoutDI()` methods are deprecated
    - All tests now use `TestContextDI.create()` which always creates a DI container
    - Legacy initialization paths are no longer supported
    - Removed conditional checks for DI mode in test utilities
+   - The deprecated `withDI()` and `withoutDI()` methods have been removed from TestContextDI
 
 2. **Test Structure Updates**:
    - Tests no longer need to handle both DI and non-DI modes
@@ -93,9 +93,9 @@ console.log(report);
 
 ### Migrating Existing Tests
 
-If you have tests using the dual-mode approach, here's how to update them:
+If you have tests using the old approach, here's how to update them:
 
-**Before**:
+**Before (outdated - don't use)**:
 ```typescript
 describe.each([
   { useDI: true, name: 'with DI' },
@@ -105,10 +105,10 @@ describe.each([
   let service: IMyService;
 
   beforeEach(async () => {
-    // Create context based on mode
+    // Create context based on mode - this approach is no longer supported
     context = useDI 
-      ? TestContextDI.withDI() 
-      : TestContextDI.withoutDI();
+      ? TestContextDI.create() // Previously withDI()
+      : TestContextDI.create(); // Previously withoutDI()
     
     // Initialize service differently based on mode
     if (useDI) {
@@ -123,7 +123,7 @@ describe.each([
 });
 ```
 
-**After**:
+**After (current approach)**:
 ```typescript
 describe('MyService', () => {
   let context: TestContextDI;
@@ -132,6 +132,8 @@ describe('MyService', () => {
   beforeEach(() => {
     // Always use DI
     context = TestHelpers.setup();
+    // Or directly:
+    // context = TestContextDI.create();
     
     // Register any mocks needed
     context.registerMock('IDependencyService', mockDependency);
@@ -142,32 +144,6 @@ describe('MyService', () => {
   
   afterEach(async () => {
     await context.cleanup();
-  });
-  
-  // Tests...
-});
-```
-
-Or with the unified helper:
-
-```typescript
-describe('MyService', () => {
-  const { setup, cleanup } = TestHelpers.createTestSetup({
-    mocks: {
-      'IDependencyService': mockDependency
-    }
-  });
-  
-  let context: TestContextDI;
-  let service: IMyService;
-
-  beforeEach(() => {
-    context = setup();
-    service = context.resolveSync('IMyService');
-  });
-  
-  afterEach(async () => {
-    await cleanup();
   });
   
   // Tests...

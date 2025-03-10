@@ -1,13 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { TestContext } from '@tests/utils/index.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { main } from './index.js';
 import type { Services, ProcessOptions } from '@core/types/index.js';
 
 describe('Nested Array Access Tests', () => {
-  let context: TestContext;
+  let context: TestContextDI;
 
   beforeEach(async () => {
-    context = new TestContext();
+    context = TestContextDI.create();
     await context.initialize();
     context.enableTransformation();
   });
@@ -29,10 +29,10 @@ First item of first array: {{nestedArray.0.0}}
 Second item of second array: {{nestedArray.1.1}}
 Third item of third array: {{nestedArray.2.2}}`;
     
-    await context.writeFile('test.meld', content);
+    await context.services.filesystem.writeFile('test.meld', content);
     
     const result = await main('test.meld', {
-      fs: context.fs,
+      fs: context.services.filesystem,
       services: context.services as unknown as Partial<Services>,
       transformation: true
     });

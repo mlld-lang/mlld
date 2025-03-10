@@ -1,13 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { TestContext } from '@tests/utils/index.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { main } from '../api/index.js';
 import type { Services } from '@core/types/index.js';
 
 describe('Transformation Debug Tests', () => {
-  let context: TestContext;
+  let context: TestContextDI;
 
   beforeEach(async () => {
-    context = new TestContext();
+    context = TestContextDI.create();
     await context.initialize();
     context.enableTransformation();
   });
@@ -24,7 +24,7 @@ describe('Transformation Debug Tests', () => {
 
 {{greeting}}, {{subject}}!`;
     
-    await context.writeFile('test.meld', content);
+    await context.services.filesystem.writeFile('test.meld', content);
     
     // Enable debug logging
     const outputService = context.services.output;
@@ -39,7 +39,7 @@ describe('Transformation Debug Tests', () => {
     };
     
     const result = await main('test.meld', {
-      fs: context.fs,
+      fs: context.services.filesystem,
       services: context.services as unknown as Partial<Services>,
       transformation: true
     });
@@ -56,10 +56,10 @@ describe('Transformation Debug Tests', () => {
 
 First item: {{items.0}}`;
     
-    await context.writeFile('test.meld', content);
+    await context.services.filesystem.writeFile('test.meld', content);
     
     const result = await main('test.meld', {
-      fs: context.fs,
+      fs: context.services.filesystem,
       services: context.services as unknown as Partial<Services>,
       transformation: true
     });

@@ -40,10 +40,10 @@ export class OutputService implements IOutputService {
 
   /**
    * Creates a new OutputService instance.
-   * Supports both DI mode and legacy non-DI mode.
+   * Uses dependency injection for service dependencies.
    * 
-   * @param state State service (injected in DI mode or provided later via initialize())
-   * @param resolutionService Resolution service for variable resolution (injected in DI mode)
+   * @param state State service (injected)
+   * @param resolutionService Resolution service for variable resolution (injected)
    */
   constructor(
     @inject('IStateService') state?: IStateService,
@@ -53,36 +53,19 @@ export class OutputService implements IOutputService {
   }
 
   /**
-   * Initialize this service with the given parameters
-   * Handles both DI and non-DI mode initialization
+   * Initialize this service with the given parameters.
+   * Always uses DI mode initialization.
    */
   private initializeFromParams(
     state?: IStateService,
     resolutionService?: IResolutionService
   ): void {
-    // Register default formatters in either mode
+    // Register default formatters
     this.registerFormat('markdown', this.convertToMarkdown.bind(this));
     this.registerFormat('md', this.convertToMarkdown.bind(this));
     this.registerFormat('xml', this.convertToXML.bind(this));
 
-    if (state) {
-      // DI mode or initialize() called with state
-      this.initializeDIMode(state, resolutionService);
-    } else {
-      // Legacy mode - will need initialize() called later
-      logger.debug('OutputService initialized with default formatters (legacy mode)', {
-        formats: Array.from(this.formatters.keys())
-      });
-    }
-  }
-
-  /**
-   * Initialize in DI mode with explicit dependencies
-   */
-  private initializeDIMode(
-    state: IStateService,
-    resolutionService?: IResolutionService
-  ): void {
+    // Always initialize in DI mode
     this.state = state;
     this.resolutionService = resolutionService;
     
@@ -93,11 +76,16 @@ export class OutputService implements IOutputService {
   }
 
   /**
-   * Legacy initialization method for backward compatibility
-   * Called manually after construction in non-DI mode
+   * @deprecated Use dependency injection instead of manual initialization.
+   * This method is kept for backward compatibility but will be removed in a future version.
    */
   initialize(state: IStateService, resolutionService?: IResolutionService): void {
-    this.initializeDIMode(state, resolutionService);
+    this.state = state;
+    this.resolutionService = resolutionService;
+    
+    logger.debug('OutputService manually initialized with state service', {
+      hasResolutionService: !!resolutionService
+    });
   }
 
   async convert(

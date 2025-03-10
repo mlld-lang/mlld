@@ -1,9 +1,27 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { VariableReferenceResolver } from '@services/resolution/ResolutionService/resolvers/VariableReferenceResolver.js';
 import type { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 
+/**
+ * This test file follows a hybrid approach:
+ * 
+ * 1. It maintains the focused unit test approach to directly test the VariableReferenceResolver
+ *    in isolation with controlled inputs and outputs, which is ideal for testing complex resolution logic.
+ * 
+ * 2. It uses TestContextDI for managing the test lifecycle and mock registration, aligning with
+ *    the project's DI-based testing infrastructure while preserving the benefits of isolated testing.
+ * 
+ * This approach was chosen intentionally to balance:
+ * - The need to test this complex component in isolation
+ * - The consistency benefits of using the project's DI testing infrastructure
+ * - Better maintainability as the codebase evolves
+ */
 describe('VariableReferenceResolver Array Index Debug', () => {
-  // Mock state service
+  // Use TestContextDI for service mocking
+  let testContext: TestContextDI;
+  
+  // Mock services
   const mockStateService = {
     getTextVar: vi.fn(),
     getDataVar: vi.fn(),
@@ -24,24 +42,51 @@ describe('VariableReferenceResolver Array Index Debug', () => {
   };
 
   // Create a basic resolver
-  const resolver = new VariableReferenceResolver(
-    mockStateService as any, 
-    mockResolutionService as any,
-    mockParserService as any
-  );
+  let resolver: VariableReferenceResolver;
 
   // Basic context
-  const context: ResolutionContext = {
-    state: mockStateService as any,
-    baseDir: '/',
-    strict: true,
-    allowedVariableTypes: { text: true, data: true }
-  };
+  let context: ResolutionContext;
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    // Create a test context with isolated container
+    testContext = TestContextDI.createIsolated();
+    await testContext.initialize();
+    
+    // Register our mock services
+    testContext.registerMock('IStateService', mockStateService);
+    testContext.registerMock('IResolutionService', mockResolutionService);
+    testContext.registerMock('IParserService', mockParserService);
+    
+    // Create a resolver with our mocked services
+    resolver = new VariableReferenceResolver(
+      mockStateService as any, 
+      mockResolutionService as any,
+      mockParserService as any
+    );
+
+    // Set up basic resolution context
+    context = {
+      currentFilePath: 'test.meld',
+      allowedVariableTypes: { 
+        text: true, 
+        data: true, 
+        path: false, 
+        command: false 
+      },
+      strict: true,
+      state: mockStateService as any
+    };
+    
+    // Clear all mocks
     vi.clearAllMocks();
+    
     // Setup transformation enabled by default
     mockStateService.isTransformationEnabled.mockReturnValue(true);
+  });
+
+  afterEach(async () => {
+    // Clean up the test context
+    await testContext.cleanup();
   });
 
   it('should correctly handle field access for arrays with numeric indices via resolveFieldAccess', async () => {

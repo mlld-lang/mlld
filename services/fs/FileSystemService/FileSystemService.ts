@@ -31,6 +31,13 @@ export class FileSystemService implements IFileSystemService {
   private fs: IFileSystem;
   private serviceMediator?: IServiceMediator;
 
+  /**
+   * Creates a new instance of the FileSystemService
+   * 
+   * @param pathOps - Service for path operations
+   * @param serviceMediator - Service mediator for resolving circular dependencies
+   * @param fileSystem - Optional file system implementation (defaults to NodeFileSystem)
+   */
   constructor(
     @inject('IPathOperationsService') private readonly pathOps: IPathOperationsService,
     @inject('ServiceMediator') serviceMediator?: IServiceMediator,
@@ -47,37 +54,55 @@ export class FileSystemService implements IFileSystemService {
 
   /**
    * Sets the service mediator for breaking circular dependencies
+   * @deprecated This method is deprecated and will be removed in a future version.
+   * Use constructor injection instead.
    */
   setMediator(mediator: IServiceMediator): void {
     this.serviceMediator = mediator;
     this.serviceMediator.setFileSystemService(this);
   }
 
+  /**
+   * Sets the file system implementation
+   * @param fileSystem - The file system implementation to use
+   */
   setFileSystem(fileSystem: IFileSystem): void {
     this.fs = fileSystem;
   }
 
+  /**
+   * Gets the current file system implementation
+   * @returns The current file system implementation
+   */
   getFileSystem(): IFileSystem {
     return this.fs;
   }
 
   /**
-   * @deprecated Use setMediator instead
+   * @deprecated Use setMediator instead, which will be deprecated in a future version.
+   * Ultimately, use constructor injection for all dependencies.
    */
   setPathService(pathService: IPathService): void {
     logger.warn('setPathService is deprecated. Use setMediator instead.');
     // This method is kept for backward compatibility only
   }
 
+  /**
+   * Resolves a path using the service mediator
+   * @private
+   * @param filePath - The path to resolve
+   * @returns The resolved path
+   * @throws If no ServiceMediator is available
+   */
   private resolvePath(filePath: string): string {
-    // If we have a ServiceMediator, use it for resolving paths
-    if (this.serviceMediator) {
-      return this.serviceMediator.resolvePath(filePath);
+    if (!this.serviceMediator) {
+      throw new MeldError(
+        'No ServiceMediator available for path resolution',
+        { filePath }
+      );
     }
     
-    // Fall back to direct path usage if ServiceMediator is not available
-    logger.warn('No ServiceMediator available for path resolution', { filePath });
-    return filePath;
+    return this.serviceMediator.resolvePath(filePath);
   }
 
   // File operations

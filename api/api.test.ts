@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { main } from './index.js';
-import { TestContext } from '@tests/utils/index.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import type { ProcessOptions } from '@core/types/index.js';
 import { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
 import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
@@ -16,11 +16,11 @@ type MainOptions = {
 };
 
 describe('SDK Integration Tests', () => {
-  let context: TestContext;
+  let context: TestContextDI;
   let testFilePath: string;
 
   beforeEach(async () => {
-    context = new TestContext();
+    context = TestContextDI.create();
     await context.initialize();
     testFilePath = 'test.meld';
   });
@@ -43,8 +43,8 @@ describe('SDK Integration Tests', () => {
         directive
       };
       
-      await context.fs.writeFile(testFilePath, '@text greeting = "Hello"');
-      await main(testFilePath, { fs: context.fs, services: services as any });
+      await context.services.filesystem.writeFile(testFilePath, '@text greeting = "Hello"');
+      await main(testFilePath, { fs: context.services.filesystem, services: services as any });
       
       // Verify directive.initialize was called with services in correct order
       expect(initSpy).toHaveBeenCalledWith(
@@ -63,9 +63,9 @@ describe('SDK Integration Tests', () => {
       const customState = context.services.state;
       const spy = vi.spyOn(customState, 'enableTransformation');
 
-      await context.fs.writeFile(testFilePath, '@text greeting = "Hello"');
+      await context.services.filesystem.writeFile(testFilePath, '@text greeting = "Hello"');
       await main(testFilePath, {
-        fs: context.fs,
+        fs: context.services.filesystem,
         services: { state: customState } as any,
         transformation: true
       });
@@ -78,13 +78,13 @@ describe('SDK Integration Tests', () => {
     it('should enable transformation through options', async () => {
       const content = `@text greeting = "Hello"
 @run[echo test]`;
-      await context.fs.writeFile(testFilePath, content);
+      await context.services.filesystem.writeFile(testFilePath, content);
       
       // Start a debug session to capture metrics
       const sessionId = await context.startDebugSession();
       
       const result = await main(testFilePath, {
-        fs: context.fs,
+        fs: context.services.filesystem,
         services: context.services as any,
         transformation: true
       });
@@ -104,13 +104,13 @@ describe('SDK Integration Tests', () => {
 
     it('should respect existing transformation state', async () => {
       const content = '@run [echo test]';
-      await context.fs.writeFile(testFilePath, content);
+      await context.services.filesystem.writeFile(testFilePath, content);
       
       // Enable transformation through context
       context.enableTransformation();
       
       const result = await main(testFilePath, {
-        fs: context.fs,
+        fs: context.services.filesystem,
         services: context.services as any
       });
       
@@ -120,13 +120,13 @@ describe('SDK Integration Tests', () => {
     });
 
     it('should handle execution directives correctly', async () => {
-      await context.fs.writeFile(testFilePath, '@run [echo test]');
+      await context.services.filesystem.writeFile(testFilePath, '@run [echo test]');
       
       context.enableDebug();
       context.disableTransformation(); // Explicitly disable transformation
       
       const result = await main(testFilePath, {
-        fs: context.fs,
+        fs: context.services.filesystem,
         format: 'xml',
         services: context.services as any, // Cast to any to avoid type errors
         debug: true
@@ -143,10 +143,10 @@ describe('SDK Integration Tests', () => {
 Some text content
 @run [echo test]
 More text`;
-      await context.fs.writeFile(testFilePath, content);
+      await context.services.filesystem.writeFile(testFilePath, content);
       context.disableTransformation(); // Explicitly disable transformation
       const result = await main(testFilePath, { 
-        fs: context.fs,
+        fs: context.services.filesystem,
         services: context.services as any
       });
       
@@ -166,10 +166,10 @@ More text`;
 
   describe('Debug Mode', () => {
     it('should enable debug mode through options', async () => {
-      await context.fs.writeFile(testFilePath, '@text greeting = "Hello"');
+      await context.services.filesystem.writeFile(testFilePath, '@text greeting = "Hello"');
       
       await main(testFilePath, {
-        fs: context.fs,
+        fs: context.services.filesystem,
         services: context.services as any,
         debug: true
       });
@@ -183,9 +183,9 @@ More text`;
 
   describe('Format Conversion', () => {
     it('should handle definition directives correctly', async () => {
-      await context.fs.writeFile(testFilePath, '@text greeting = "Hello"');
+      await context.services.filesystem.writeFile(testFilePath, '@text greeting = "Hello"');
       const result = await main(testFilePath, { 
-        fs: context.fs,
+        fs: context.services.filesystem,
         services: context.services as any
       });
       // Definition directives should be omitted from output
@@ -193,13 +193,13 @@ More text`;
     });
 
     it('should handle execution directives correctly', async () => {
-      await context.fs.writeFile(testFilePath, '@run [echo test]');
+      await context.services.filesystem.writeFile(testFilePath, '@run [echo test]');
       
       context.enableDebug();
       context.disableTransformation(); // Explicitly disable transformation
       
       const result = await main(testFilePath, {
-        fs: context.fs,
+        fs: context.services.filesystem,
         format: 'xml',
         services: context.services as any, // Cast to any to avoid type errors
         debug: true
@@ -216,10 +216,10 @@ More text`;
 Some text content
 @run [echo test]
 More text`;
-      await context.fs.writeFile(testFilePath, content);
+      await context.services.filesystem.writeFile(testFilePath, content);
       context.disableTransformation(); // Explicitly disable transformation
       const result = await main(testFilePath, { 
-        fs: context.fs,
+        fs: context.services.filesystem,
         services: context.services as any
       });
       
@@ -240,10 +240,10 @@ More text`;
   describe('Error Handling', () => {
     it('should handle parse errors gracefully', async () => {
       const invalidContent = '@invalid directive';
-      await context.fs.writeFile(testFilePath, invalidContent);
+      await context.services.filesystem.writeFile(testFilePath, invalidContent);
       
       await expect(main(testFilePath, { 
-        fs: context.fs,
+        fs: context.services.filesystem,
         services: context.services as any
       })).rejects.toThrow();
     });
@@ -252,7 +252,7 @@ More text`;
       const nonExistentFile = 'non-existent.meld';
       
       await expect(main(nonExistentFile, { 
-        fs: context.fs,
+        fs: context.services.filesystem,
         services: context.services as any
       })).rejects.toThrow(MeldFileNotFoundError);
     });
@@ -264,10 +264,10 @@ More text`;
         directive: undefined
       };
       
-      await context.fs.writeFile(testFilePath, '@text greeting = "Hello"');
+      await context.services.filesystem.writeFile(testFilePath, '@text greeting = "Hello"');
       
       await expect(main(testFilePath, { 
-        fs: context.fs,
+        fs: context.services.filesystem,
         services: brokenServices as any
       })).rejects.toThrow();
     });
@@ -278,10 +278,10 @@ More text`;
       const content = `
 @text greeting = "Hello"
 @run [echo {{greeting}}]`;
-      await context.fs.writeFile(testFilePath, content);
+      await context.services.filesystem.writeFile(testFilePath, content);
       
       const result = await main(testFilePath, {
-        fs: context.fs,
+        fs: context.services.filesystem,
         services: context.services as any,
         transformation: true
       });
@@ -297,10 +297,10 @@ More text`;
 @text greeting = "Hello"
 @text name = "World"
 @run [echo {{greeting}}, {{name}}!]`;
-      await context.fs.writeFile(testFilePath, content);
+      await context.services.filesystem.writeFile(testFilePath, content);
       
       const result = await main(testFilePath, {
-        fs: context.fs,
+        fs: context.services.filesystem,
         services: context.services as any,
         transformation: true
       });
@@ -324,10 +324,10 @@ More text`;
 ## Title
 
 @run [echo "This is a simple example"]`;
-      await context.fs.writeFile(testFilePath, content);
+      await context.services.filesystem.writeFile(testFilePath, content);
       
       const result = await main(testFilePath, {
-        fs: context.fs,
+        fs: context.services.filesystem,
         services: context.services as any,
         transformation: true
       });

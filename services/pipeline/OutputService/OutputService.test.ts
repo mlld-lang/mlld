@@ -232,11 +232,8 @@ class MockResolutionService implements IResolutionService {
   detectCircularReferences(): Promise<void> { return Promise.resolve(); }
 }
 
-// Run tests in both DI and non-DI modes
-describe.each([
-  { useDI: false, name: 'without DI' },
-  { useDI: true, name: 'with DI' }
-])('OutputService $name', ({ useDI }) => {
+// Run tests with DI mode only
+describe('OutputService', () => {
   let service: OutputService;
   let state: IStateService;
   let resolutionService: IResolutionService;
@@ -247,29 +244,19 @@ describe.each([
     state = new MockStateService();
     resolutionService = new MockResolutionService();
     
-    // Set up test context and service based on DI mode
-    if (useDI) {
-      testContext = TestContextDI.create({ isolatedContainer: true });
-      
-      // Register dependencies with the container
-      container.registerInstance('IStateService', state);
-      container.registerInstance('IResolutionService', resolutionService);
-      
-      // Resolve service from container
-      service = container.resolve(OutputService);
-    } else {
-      testContext = TestContextDI.create({ isolatedContainer: true });
-      
-      // Create and initialize service manually
-      service = new OutputService();
-      service.initialize(state, resolutionService);
-    }
+    // Set up test context and service with DI
+    testContext = TestContextDI.create({ isolatedContainer: true });
+    
+    // Register dependencies with the container
+    container.registerInstance('IStateService', state);
+    container.registerInstance('IResolutionService', resolutionService);
+    
+    // Resolve service from container
+    service = container.resolve(OutputService);
   });
   
   afterEach(async () => {
-    if (useDI) {
-      container.clearInstances();
-    }
+    container.clearInstances();
     await testContext.cleanup();
   });
 

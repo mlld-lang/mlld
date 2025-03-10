@@ -46,12 +46,19 @@ function isMeldAstError(error: unknown): error is MeldAstError {
 export class ParserService implements IParserService {
   private mediator?: IServiceMediator;
 
+  /**
+   * Creates a new instance of the ParserService
+   * 
+   * @param mediator - Service mediator for resolving circular dependencies
+   */
   constructor(@inject('IServiceMediator') mediator?: IServiceMediator) {
     this.mediator = mediator;
   }
 
   /**
    * Sets the service mediator for breaking circular dependencies
+   * @deprecated This method is deprecated and will be removed in a future version.
+   * Use constructor injection instead.
    */
   setMediator(mediator: IServiceMediator): void {
     this.mediator = mediator;

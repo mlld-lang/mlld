@@ -58,51 +58,46 @@ class MockStateEventService implements IStateEventService {
   }
 }
 
-// Base test suite that will be reused for both DI and non-DI modes
-function createTestContext(useDI: boolean) {
-  // Set up environment based on test mode
-  process.env.USE_DI = useDI ? 'true' : 'false';
+// Test context creation function - DI-only approach
+function createTestContext() {
+  // Initialize test context with DI
+  const testContext = TestContextDI.create({ isolatedContainer: true });
   
-  if (useDI) {
-    // Initialize test context with DI
-    const testContext = TestContextDI.create({ isolatedContainer: true });
-    
-    // Register mocks in the container
-    const mockEventService = new MockStateEventService();
-    container.registerInstance('IStateEventService', mockEventService);
-    
-    // Register the tracking service in the container
-    const mockTrackingService = new StateTrackingService();
-    container.registerInstance('IStateTrackingService', mockTrackingService);
-    container.registerInstance('StateTrackingService', mockTrackingService);
-    
-    // Resolve the service from the container
-    const state = container.resolve(StateService);
-    const eventService = mockEventService;
-    const stateFactory = container.resolve(StateFactory);
-    
-    return { state, eventService, testContext, stateFactory };
-  } else {
-    // Initialize test context without DI
-    const testContext = TestContextDI.create({ isolatedContainer: true });
-    
-    // Create services manually for legacy mode
-    const mockEventService = new MockStateEventService();
-    const stateFactory = new StateFactory(); 
-    const state = new StateService(stateFactory);
-    state.setEventService(mockEventService);
-    const eventService = mockEventService;
-    
-    return { state, eventService, testContext, stateFactory };
-  }
+  // Register mocks in the container
+  const mockEventService = new MockStateEventService();
+  container.registerInstance('IStateEventService', mockEventService);
+  
+  // Register the tracking service in the container
+  const mockTrackingService = new StateTrackingService();
+  container.registerInstance('IStateTrackingService', mockTrackingService);
+  container.registerInstance('StateTrackingService', mockTrackingService);
+  
+  // Resolve the service from the container
+  const state = container.resolve(StateService);
+  const eventService = mockEventService;
+  const stateFactory = container.resolve(StateFactory);
+  
+  return { state, eventService, testContext, stateFactory };
 }
 
-// Main test suite with conditional describe blocks for each mode
+// Main test suite - using DI-only mode
 describe('StateService', () => {
-  // Define the shared tests that will be run for both modes
-  function defineSharedTests(getState: () => StateService, getEventService: () => IStateEventService) {
-    // Using function with parameters to access the correct state
-    
+  let context: ReturnType<typeof createTestContext>;
+  
+  beforeEach(() => {
+    context = createTestContext();
+  });
+  
+  afterEach(async () => {
+    await context.testContext.cleanup();
+  });
+  
+  // Helper functions to get current state in tests
+  const getState = () => context.state;
+  const getEventService = () => context.eventService;
+  
+  // Define the tests for state functionality
+  describe('Basic functionality', () => {
     it('should set and get text variables', () => {
       const state = getState();
       state.setTextVar('greeting', 'Hello');
@@ -193,73 +188,30 @@ describe('StateService', () => {
       clone.setTextVar('new', 'value');
       expect(state.getTextVar('new')).toBeUndefined();
     });
-  }
-
-  // Legacy non-DI mode tests
-  describe('Legacy Mode (without DI)', () => {
-    let context: ReturnType<typeof createTestContext>;
-    
-    beforeEach(() => {
-      context = createTestContext(false);
+  });
+  
+  describe('DI-specific tests', () => {
+    it('should be resolvable from container', () => {
+      const service = container.resolve(StateService);
+      expect(service).toBeInstanceOf(StateService);
     });
     
-    afterEach(async () => {
-      await context.testContext.cleanup();
+    it('should work with injected dependencies', () => {
+      const eventService = container.resolve<IStateEventService>('IStateEventService');
+      const stateFactory = container.resolve(StateFactory);
+      expect(eventService).toBeDefined();
+      expect(stateFactory).toBeDefined();
     });
     
-    // Helper functions to get current state in tests
-    const getState = () => context.state;
-    const getEventService = () => context.eventService as MockStateEventService;
-    
-    describe('Basic functionality', () => {
-      defineSharedTests(getState, getEventService);
-    });
-    
-    describe('Additional legacy-mode tests', () => {
-      it('should initialize with factory without requiring DI', () => {
-        const factory = new StateFactory();
-        const service = new StateService(factory);
-        expect(service).toBeInstanceOf(StateService);
-      });
+    it('should initialize with factory through DI', () => {
+      const factory = new StateFactory();
+      container.registerInstance(StateFactory, factory);
+      const service = container.resolve(StateService);
+      expect(service).toBeInstanceOf(StateService);
     });
   });
   
-  // DI mode tests
-  describe('DI Mode (with TSyringe)', () => {
-    let context: ReturnType<typeof createTestContext>;
-    
-    beforeEach(() => {
-      context = createTestContext(true);
-    });
-    
-    afterEach(async () => {
-      await context.testContext.cleanup();
-    });
-    
-    // Helper functions to get current state in tests
-    const getState = () => context.state;
-    const getEventService = () => context.eventService;
-    
-    describe('Basic functionality', () => {
-      defineSharedTests(getState, getEventService);
-    });
-    
-    describe('Additional DI-mode tests', () => {
-      it('should be resolvable from container', () => {
-        const service = container.resolve(StateService);
-        expect(service).toBeInstanceOf(StateService);
-      });
-      
-      it('should work with injected dependencies', () => {
-        const eventService = container.resolve<IStateEventService>('IStateEventService');
-        const stateFactory = container.resolve(StateFactory);
-        expect(eventService).toBeDefined();
-        expect(stateFactory).toBeDefined();
-      });
-    });
-  });
-  
-  // State tracking tests - these are more specialized and can run in non-DI mode
+  // State tracking tests
   describe('State Tracking', () => {
     let service: StateService;
     let trackingService: IStateTrackingService;
@@ -271,8 +223,7 @@ describe('StateService', () => {
     let testContext: TestContextDI;
 
     beforeEach(() => {
-      // Use DI mode since shouldUseDI() now always returns true
-      process.env.USE_DI = 'true';
+      // Create test context with DI
       testContext = TestContextDI.create({ isolatedContainer: true });
       
       // Create and register services

@@ -32,18 +32,211 @@ This document details the plan for Phase 2 of the DI cleanup initiative: simplif
 
 ### 1. Remove Dual-Mode Support in Test Utilities
 
-- [ ] Remove `static withDI()` and `static withoutDI()` methods from TestContextDI
-- [ ] Update TestContextDI constructor to always use DI mode
-- [ ] Remove conditional checks related to useDI throughout TestContextDI
+- [✅] Remove `static withDI()` and `static withoutDI()` methods from TestContextDI
+- [✅] Update TestContextDI constructor to always use DI mode
+- [✅] Remove conditional checks related to useDI throughout TestContextDI
 - [ ] Deprecate any remaining dual-mode utility functions
 - [ ] Create migration guide for tests still using dual-mode pattern
 
 ### 2. Update All Tests to Use DI-Only Approach
 
-- [ ] Identify all tests using `.each([{ useDI: true }, { useDI: false }])` pattern
-- [ ] Convert identified tests to use `TestContextDI.create()` exclusively
+- [✅] Identify all tests using `.each([{ useDI: true }, { useDI: false }])` pattern
+- [✅] Convert identified tests to use `TestContextDI.create()` exclusively
+  - [✅] DirectiveService.test.ts
+  - [✅] OutputService.test.ts
+  - [✅] CLIService.test.ts
+  - [✅] PathService.test.ts
+  - [✅] ParserService.test.ts
+  - [✅] FileSystemService.test.ts
+  - [✅] CircularityService.test.ts
+  - [✅] ValidationService.test.ts
+  - [✅] ProjectPathResolver.test.ts
+  - [✅] PathOperationsService.test.ts
+  - [✅] InterpreterService.unit.test.ts
+  - [✅] InterpreterService.integration.test.ts
+  - [✅] CommandResolver.test.ts
+  - [✅] DataDirectiveHandler.test.ts
 - [ ] Remove duplicate test cases for DI and non-DI modes
 - [ ] Verify all tests pass with the updated patterns
+
+#### 2.1 Remaining Test Files Using Legacy TestContext
+
+The following test files still use the non-DI `TestContext` instead of `TestContextDI` and need to be migrated:
+
+1. API Tests:
+   - [✅] api/resolution-debug.test.ts
+   - [✅] api/api.test.ts
+   - [✅] api/array-access.test.ts
+   - [✅] api/integration.test.ts
+   - [✅] api/nested-array.test.ts
+
+2. Service Tests:
+   - [✅] services/fs/PathService/PathService.tmp.test.ts
+   - [✅] services/fs/FileSystemService/FileSystemService.test.ts
+
+3. General Test Files:
+   - [ ] tests/debug/import-debug.test.ts
+   - [ ] tests/specific-variable-resolution.test.ts
+   - [ ] tests/transformation-debug.test.ts
+   - [ ] tests/output-filename-handling.test.ts
+   - [ ] tests/cli/cli-error-handling.test.ts
+   - [ ] tests/specific-nested-array.test.ts
+   - [ ] tests/xml-output-format.test.ts
+   - [ ] tests/comment-handling-fix.test.ts
+   - [ ] tests/embed-transformation-e2e.test.ts
+   - [ ] tests/embed-line-number-fix.test.ts
+   - [ ] tests/embed-transformation-variable-fix.test.ts
+   - [ ] tests/codefence-duplication-fix.test.ts
+   - [ ] tests/pipeline/pipelineValidation.test.ts
+   - [ ] tests/utils/tests/TestContext.test.ts (special case - tests TestContext itself)
+
+**Progress Update:** All API test files and service test files have been successfully migrated to use TestContextDI.create() instead of new TestContext(). The key changes involved:
+1. Changing imports from TestContext to TestContextDI
+2. Updating initialization from new TestContext() to TestContextDI.create()
+3. Replacing context.fs with context.services.filesystem in file system operations
+4. Adjusting other API calls as needed to match the DI approach
+
+The remaining files are mostly feature-specific test files in the tests/ directory.
+
+#### 2.1.1 Prioritized Migration Plan for Remaining Test Files
+
+To efficiently migrate the remaining test files, we'll use the following prioritized approach:
+
+**Priority 1: Simple Feature Tests**
+- [x] tests/specific-variable-resolution.test.ts
+- [x] tests/transformation-debug.test.ts
+- [x] tests/variable-index-debug.test.ts
+- [x] tests/specific-nested-array.test.ts
+
+**Priority 2: Output and Format Tests**
+- [x] tests/xml-output-format.test.ts
+- [x] tests/output-filename-handling.test.ts
+- [x] tests/comment-handling-fix.test.ts
+
+**Priority 3: Embed-Related Tests (Common Pattern)**
+- [✅] tests/embed-transformation-e2e.test.ts
+- [✅] tests/embed-line-number-fix.test.ts
+- [✅] tests/embed-transformation-variable-fix.test.ts
+- [✅] tests/embed-directive-fixes.test.ts (already DI-compatible, uses direct dependency injection)
+- [✅] tests/embed-directive-transformation-fixes.test.ts (already DI-compatible, uses direct dependency injection)
+
+**Priority 4: Complex Tests**
+- [ ] tests/debug/import-debug.test.ts
+- [ ] tests/cli/cli-error-handling.test.ts
+- [ ] tests/pipeline/pipelineValidation.test.ts
+
+**Priority 5: Special Cases**
+- [ ] tests/codefence-duplication-fix.test.ts (may be skipped)
+- [ ] tests/utils/tests/TestContext.test.ts (requires special handling)
+
+**Common Migration Pattern:**
+For each test file:
+1. Update imports (TestContextDI instead of TestContext)
+2. Change initialization pattern (TestContextDI.create())
+3. Update file system operations (context.services.filesystem)
+4. Fix any context-specific method calls
+5. Run tests to verify functionality
+
+This methodical approach allows us to:
+- Group similar tests for consistent patterns
+- Address simpler cases first to build confidence
+- Handle special cases last when we have more experience
+- Create reusable patterns for similar test files
+
+As each test file is migrated, we'll update the checklist and document any notable issues or patterns encountered.
+
+#### 2.2 Directive Handler Tests Requiring Migration
+
+The following directive handler test files need to be updated to use the DI-only approach:
+
+1. Definition Handlers:
+   - [✅] TextDirectiveHandler.test.ts
+   - [✅] TextDirectiveHandler.command.test.ts
+   - [✅] TextDirectiveHandler.integration.test.ts
+   - [✅] PathDirectiveHandler.test.ts
+   - [✅] DefineDirectiveHandler.test.ts
+
+2. Execution Handlers:
+   - [✅] EmbedDirectiveHandler.test.ts
+   - [✅] EmbedDirectiveHandler.transformation.test.ts
+   - [ ] ImportDirectiveHandler.test.ts
+   - [ ] ImportDirectiveHandler.transformation.test.ts
+   - [ ] RunDirectiveHandler.test.ts
+   - [ ] RunDirectiveHandler.integration.test.ts
+   - [ ] RunDirectiveHandler.transformation.test.ts
+
+#### 2.2.1 Prioritized Migration Plan for Directive Handler Tests
+
+For the directive handler tests, we'll use a similar prioritized approach, grouping related handlers and focusing on establishing consistent patterns:
+
+**Priority 1: Definition Directive Handlers (Simpler)**
+- [ ] TextDirectiveHandler.test.ts
+- [ ] TextDirectiveHandler.command.test.ts
+- [ ] PathDirectiveHandler.test.ts
+- [ ] DefineDirectiveHandler.test.ts
+
+**Priority 2: Integration Tests for Definition Handlers**
+- [ ] TextDirectiveHandler.integration.test.ts
+
+**Priority 3: Execution Directive Handlers (Basic)**
+- [ ] RunDirectiveHandler.test.ts 
+- [ ] ImportDirectiveHandler.test.ts
+
+**Priority 4: Transformation-Related Handler Tests**
+- [ ] EmbedDirectiveHandler.test.ts
+- [ ] EmbedDirectiveHandler.transformation.test.ts
+- [ ] ImportDirectiveHandler.transformation.test.ts
+- [ ] RunDirectiveHandler.transformation.test.ts
+
+**Priority 5: Complex Integration Tests**
+- [ ] RunDirectiveHandler.integration.test.ts
+
+**Migration Strategy for Directive Handlers:**
+
+Prior to starting the migration, we'll create a shared helper function for setting up directive handler tests with DI:
+
+```typescript
+// Helper function in TestContextDI or a separate utility file
+function setupDirectiveHandlerTest<T>(
+  handlerType: new (...args: any[]) => T,
+  mockDependencies?: Record<string, any>
+): { context: TestContextDI, handler: T } {
+  const context = TestContextDI.create();
+  
+  // Register standard mock dependencies for all handlers
+  context.registerMock('IValidationService', { validateDirective: vi.fn().mockReturnValue(true) });
+  context.registerMock('IStateService', { 
+    /* Standard state service mock */ 
+  });
+  context.registerMock('IResolutionService', {
+    /* Standard resolution service mock */
+  });
+  
+  // Register any custom mock dependencies
+  if (mockDependencies) {
+    Object.entries(mockDependencies).forEach(([token, mock]) => {
+      context.registerMock(token, mock);
+    });
+  }
+  
+  // Create the handler with DI
+  const handler = context.container.resolve(handlerType);
+  
+  return { context, handler };
+}
+```
+
+This helper will significantly reduce the boilerplate in each handler test file and ensure a consistent approach across all directive handler tests.
+
+The migration process for each handler test will follow these steps:
+1. Update imports to use TestContextDI
+2. Replace custom handler creation with the helper function
+3. Update mock implementations to work with DI
+4. Fix any context-specific method calls
+5. Run tests to verify functionality
+6. Document any handler-specific patterns for future reference
+
+Starting with the simpler definition directive handlers will help establish patterns that can be applied to the more complex execution directive handlers.
 
 ### 3. Extend vitest-mock-extended to All Error Classes
 
@@ -149,3 +342,24 @@ export function createCustomError(
 - [TESTS.md](docs/dev/TESTS.md) - Updated testing documentation
 - [DI.md](docs/dev/DI.md) - Dependency Injection documentation
 - [phase2-pathservice-instanceof-tests.md](./_dev/issues/active/phase2-pathservice-instanceof-tests.md) - Analysis of the instanceof issue 
+
+## Progress Summary
+
+### Achievements
+- ✅ Removed dual-mode support in TestContextDI (withDI/withoutDI methods)
+- ✅ Successfully migrated all API test files (resolution-debug.test.ts, api.test.ts, array-access.test.ts, integration.test.ts, nested-array.test.ts)
+- ✅ Migrated service test files (PathService.tmp.test.ts, FileSystemService.test.ts)
+- ✅ Established patterns for using context.services.filesystem instead of context.fs
+- ✅ Verified all tests pass with the updated approach
+- ✅ Completed migration of all Priority 1 test files (variable-index-debug.test.ts, specific-nested-array.test.ts, specific-variable-resolution.test.ts, transformation-debug.test.ts)
+- ✅ Completed migration of all Priority 2 test files (xml-output-format.test.ts, output-filename-handling.test.ts, comment-handling-fix.test.ts)
+- ✅ Made significant progress on Priority 3 test files, with three files already migrated (embed-transformation-e2e.test.ts, embed-line-number-fix.test.ts, embed-transformation-variable-fix.test.ts)
+- ✅ Implemented hybrid approach for unit tests that preserves isolation while adopting DI infrastructure where appropriate
+
+### Immediate Next Steps
+1. Continue implementation of the prioritized migration plan with remaining Priority 3 test files (embed-directive-fixes.test.ts, embed-directive-transformation-fixes.test.ts)
+2. ✅ Use the existing TestHelpers.setupDirectiveTest function for directive handler tests (discovered in tests/utils/di/TestHelpers.ts)
+3. Begin migration of Priority 1 directive handler tests
+4. Document common patterns and issues encountered
+
+The test infrastructure simplification has made significant progress, with the removal of dual-mode support and the migration of key test files. All Priority 1 and Priority 2 test files have now been successfully migrated, along with several Priority 3 test files, providing a solid foundation for continuing with the more complex test files. The established patterns provide a clear path forward for migrating the remaining test files, and the prioritized approach ensures a methodical and efficient process. 

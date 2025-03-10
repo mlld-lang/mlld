@@ -70,16 +70,16 @@ export class DirectiveService implements IDirectiveService {
 
   /**
    * Creates a new DirectiveService instance.
-   * Supports both DI mode and legacy non-DI mode.
+   * Uses dependency injection for service dependencies.
    * 
-   * @param validationService Validation service for directives (injected in DI mode)
-   * @param stateService State service for managing variables (injected in DI mode)
-   * @param pathService Path service for handling file paths (injected in DI mode)
-   * @param fileSystemService File system service for file operations (injected in DI mode)
-   * @param parserService Parser service for parsing Meld files (injected in DI mode)
-   * @param interpreterService Interpreter service for nested interpretation (injected in DI mode)
-   * @param circularityService Circularity service for detecting circular imports (injected in DI mode)
-   * @param resolutionService Resolution service for variable resolution (injected in DI mode)
+   * @param validationService Validation service for directives (injected)
+   * @param stateService State service for managing variables (injected)
+   * @param pathService Path service for handling file paths (injected)
+   * @param fileSystemService File system service for file operations (injected)
+   * @param parserService Parser service for parsing Meld files (injected)
+   * @param interpreterService Interpreter service for nested interpretation (injected)
+   * @param circularityService Circularity service for detecting circular imports (injected)
+   * @param resolutionService Resolution service for variable resolution (injected)
    * @param logger Logger for directive operations (optional)
    */
   constructor(
@@ -88,7 +88,7 @@ export class DirectiveService implements IDirectiveService {
     @inject('IPathService') pathService?: IPathService,
     @inject('IFileSystemService') fileSystemService?: IFileSystemService,
     @inject('IParserService') parserService?: IParserService,
-    @inject('IInterpreterService') interpreterService?: IInterpreterService,
+    @inject(delay(() => 'IInterpreterService')) interpreterService?: IInterpreterService,
     @inject('ICircularityService') circularityService?: ICircularityService,
     @inject('IResolutionService') resolutionService?: IResolutionService,
     logger?: ILogger
@@ -108,7 +108,7 @@ export class DirectiveService implements IDirectiveService {
   
   /**
    * Initialize this service with the given parameters.
-   * Handles both DI and non-DI mode initialization.
+   * Uses DI-only mode for initialization.
    */
   private initializeFromParams(
     validationService?: IValidationService,
@@ -120,44 +120,22 @@ export class DirectiveService implements IDirectiveService {
     circularityService?: ICircularityService,
     resolutionService?: IResolutionService
   ): void {
-    // Check if all required services for DI mode are provided
-    if (validationService && stateService && pathService && 
-        fileSystemService && parserService && 
-        circularityService && resolutionService) {
-      this.initializeDIMode(
-        validationService,
-        stateService,
-        pathService,
-        fileSystemService,
-        parserService,
-        interpreterService,
-        circularityService,
-        resolutionService
-      );
+    // Verify that required services are provided
+    if (!validationService || !stateService || !pathService || 
+        !fileSystemService || !parserService || 
+        !circularityService || !resolutionService) {
+      this.logger.warn('DirectiveService initialized with missing dependencies');
+      return;
     }
-    // Note: For non-DI mode, we need the initialize() method to be called explicitly
-  }
-  
-  /**
-   * Initialize in DI mode with explicit dependencies
-   */
-  private initializeDIMode(
-    validationService: IValidationService,
-    stateService: IStateService,
-    pathService: IPathService,
-    fileSystemService: IFileSystemService,
-    parserService: IParserService,
-    interpreterService?: IInterpreterService,
-    circularityService?: ICircularityService,
-    resolutionService?: IResolutionService
-  ): void {
+    
+    // Initialize all services
     this.validationService = validationService;
     this.stateService = stateService;
     this.pathService = pathService;
     this.fileSystemService = fileSystemService;
     this.parserService = parserService;
-    this.circularityService = circularityService!;
-    this.resolutionService = resolutionService!;
+    this.circularityService = circularityService;
+    this.resolutionService = resolutionService;
     
     // Handle the circular dependency with InterpreterService
     // We'll set this later in updateInterpreterService()
@@ -175,6 +153,11 @@ export class DirectiveService implements IDirectiveService {
     }
   }
 
+  /**
+   * Explicitly initialize the service with all required dependencies.
+   * @deprecated This method is maintained for backward compatibility. 
+   * The service is automatically initialized via dependency injection.
+   */
   initialize(
     validationService: IValidationService,
     stateService: IStateService,

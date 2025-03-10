@@ -1,13 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { TestContext } from '@tests/utils/index.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { main } from './index.js';
 import type { Services, ProcessOptions } from '@core/types/index.js';
 
 describe('Variable Resolution Debug Tests', () => {
-  let context: TestContext;
+  let context: TestContextDI;
 
   beforeEach(async () => {
-    context = new TestContext();
+    context = TestContextDI.create();
     await context.initialize();
     context.enableTransformation();
   });
@@ -24,7 +24,7 @@ describe('Variable Resolution Debug Tests', () => {
 
 {{greeting}}, {{subject}}!`;
     
-    await context.writeFile('test.meld', content);
+    await context.services.filesystem.writeFile('test.meld', content);
     
     // Add debug logging for parsed content
     const parserService = context.services.parser;
@@ -36,7 +36,7 @@ describe('Variable Resolution Debug Tests', () => {
     };
     
     const result = await main('test.meld', {
-      fs: context.fs,
+      fs: context.services.filesystem,
       services: context.services as unknown as Partial<Services>,
       transformation: true
     });
@@ -55,7 +55,7 @@ describe('Variable Resolution Debug Tests', () => {
 
 First item: {{items.0}}`;
     
-    await context.writeFile('test.meld', content);
+    await context.services.filesystem.writeFile('test.meld', content);
     
     // Add debug logging for parsed content
     const parserService = context.services.parser;
@@ -67,7 +67,7 @@ First item: {{items.0}}`;
     };
     
     const result = await main('test.meld', {
-      fs: context.fs,
+      fs: context.services.filesystem,
       services: context.services as unknown as Partial<Services>,
       transformation: true
     });
@@ -88,10 +88,10 @@ First item: {{items.0}}`;
 
 User: {{users.0.name}}, Age: {{users.0.age}}`;
     
-    await context.writeFile('test.meld', content);
+    await context.services.filesystem.writeFile('test.meld', content);
     
     const result = await main('test.meld', {
-      fs: context.fs,
+      fs: context.services.filesystem,
       services: context.services as unknown as Partial<Services>,
       transformation: true
     });
@@ -121,10 +121,10 @@ User: {{users.0.name}}, Age: {{users.0.age}}`;
 Name: {{nested.users.0.name}}
 Hobby: {{nested.users.0.hobbies.0}}`;
     
-    await context.writeFile('test.meld', content);
+    await context.services.filesystem.writeFile('test.meld', content);
     
     const result = await main('test.meld', {
-      fs: context.fs,
+      fs: context.services.filesystem,
       services: context.services as unknown as Partial<Services>,
       transformation: true
     });

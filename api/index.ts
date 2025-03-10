@@ -1,5 +1,6 @@
 import '@core/di-config.js';
 import * as path from 'path';
+import { resolveService, registerServiceInstance } from '@core/ServiceProvider';
 
 // Core services
 export * from '@services/pipeline/InterpreterService/InterpreterService.js';
@@ -81,184 +82,72 @@ type RequiredServices = {
 };
 
 export function createDefaultServices(options: ProcessOptions): Services & RequiredServices {
-  // Check if DI should be used
-  const useDI = process.env.USE_DI === 'true';
+  // DI is always used now
   
-  if (useDI) {
-    // DI-based service creation
-    // Import required utilities for DI
-    const { resolveService, registerServiceInstance } = require('@core/ServiceProvider.js');
-    
-    // If a custom filesystem is provided, register it with the container
-    if (options.fs) {
-      registerServiceInstance('IFileSystem', options.fs);
-      registerServiceInstance('NodeFileSystem', options.fs);
-    }
-    
-    // Resolve services from the container
-    const filesystem = resolveService('FileSystemService');
-    const path = resolveService('PathService');
-    const eventService = resolveService('StateEventService');
-    const state = resolveService('StateService');
-    const parser = resolveService('ParserService');
-    const resolution = resolveService('ResolutionService');
-    const validation = resolveService('ValidationService');
-    const circularity = resolveService('CircularityService');
-    const directive = resolveService('DirectiveService');
-    const interpreter = resolveService('InterpreterService');
-    const output = resolveService('OutputService');
-    
-    // Initialize special path variables
-    state.setPathVar('PROJECTPATH', process.cwd());
-    state.setPathVar('HOMEPATH', process.env.HOME || process.env.USERPROFILE || '/home');
+  // If a custom filesystem is provided, register it with the container
+  if (options.fs) {
+    registerServiceInstance('IFileSystem', options.fs);
+    registerServiceInstance('NodeFileSystem', options.fs);
+  }
+  
+  // Resolve services from the container
+  const filesystem = resolveService('FileSystemService');
+  const path = resolveService('PathService');
+  const eventService = resolveService('StateEventService');
+  const state = resolveService('StateService');
+  const parser = resolveService('ParserService');
+  const resolution = resolveService('ResolutionService');
+  const validation = resolveService('ValidationService');
+  const circularity = resolveService('CircularityService');
+  const directive = resolveService('DirectiveService');
+  const interpreter = resolveService('InterpreterService');
+  const output = resolveService('OutputService');
+  
+  // Initialize special path variables
+  state.setPathVar('PROJECTPATH', process.cwd());
+  state.setPathVar('HOMEPATH', process.env.HOME || process.env.USERPROFILE || '/home');
 
-    // Register default handlers after all services are initialized
-    directive.registerDefaultHandlers();
-    
-    // Create debug service if requested
-    let debug = undefined;
-    if (options.debug) {
-      try {
-        // Try to resolve from the container first
-        debug = resolveService('StateDebuggerService');
-      } catch (e) {
-        // If not available in container, create manually
-        const debugService = new TestDebuggerService(state);
-        debugService.initialize(state);
-        debug = debugService as unknown as StateDebuggerService;
-      }
-    }
-    
-    // Create services object in correct initialization order based on dependencies
-    const services: Services & RequiredServices = {
-      // Base services
-      filesystem,
-      path,
-      // State management
-      eventService,
-      state,
-      // Core pipeline
-      parser,
-      // Resolution layer
-      resolution,
-      validation,
-      circularity,
-      // Pipeline orchestration
-      directive,
-      interpreter,
-      // Output generation
-      output,
-      // Optional debug service
-      debug
-    };
-
-    // Validate the service pipeline
-    validateServicePipeline(services);
-
-    return services;
-  } else {
-    // Legacy non-DI service creation
-    // Create a service mediator to break circular dependencies
-    const serviceMediator = new ServiceMediator();
-    
-    // 1. FileSystemService (base dependency)
-    const pathOps = new PathOperationsService();
-    // If options.fs is provided, use it; otherwise create a new NodeFileSystem
-    const fs: IFileSystem = options.fs || new NodeFileSystem();
-    const filesystem = new FileSystemService(pathOps, serviceMediator, fs);
-    filesystem.setFileSystem(fs);
-
-    // 2. PathService (depends on filesystem)
-    const path = new PathService(serviceMediator);
-    path.initialize(filesystem);
-
-    // 3. State Management Services
-    const eventService = new StateEventService();
-    const trackingService = new StateTrackingService();
-    const state = new StateService(undefined, eventService, trackingService, serviceMediator);
-    state.setEventService(eventService);
-    
-    // Initialize special path variables
-    state.setPathVar('PROJECTPATH', process.cwd());
-    state.setPathVar('HOMEPATH', process.env.HOME || process.env.USERPROFILE || '/home');
-
-    // 4. ParserService (independent)
-    const parser = new ParserService(serviceMediator);
-
-    // 5. Resolution Layer Services
-    const resolution = new ResolutionService(state, filesystem, path, serviceMediator);
-    const validation = new ValidationService();
-    const circularity = new CircularityService();
-    
-    // Connect services through the mediator
-    serviceMediator.setFileSystemService(filesystem);
-    serviceMediator.setPathService(path);
-    serviceMediator.setParserService(parser);
-    serviceMediator.setResolutionService(resolution);
-    serviceMediator.setStateService(state);
-
-    // 6. Pipeline Orchestration (handle circular dependency)
-    const directive = new DirectiveService();
-    const interpreter = new InterpreterService();
-
-    // Initialize interpreter with directive and state
-    interpreter.initialize(directive, state);
-
-    // Initialize directive with all dependencies
-    directive.initialize(
-      validation,
-      state,
-      path,
-      filesystem,
-      parser,
-      interpreter,
-      circularity,
-      resolution
-    );
-
-    // Register default handlers after all services are initialized
-    directive.registerDefaultHandlers();
-
-    // 7. OutputService (depends on state and resolution)
-    const output = new OutputService();
-    output.initialize(state, resolution);
-
-    // Create debug service if requested
-    let debug = undefined;
-    if (options.debug) {
+  // Create debug service if requested
+  let debug = undefined;
+  if (options.debug) {
+    try {
+      // Try to resolve from the container first
+      debug = resolveService('StateDebuggerService');
+    } catch (e) {
+      // If not available in container, create manually
       const debugService = new TestDebuggerService(state);
       debugService.initialize(state);
       debug = debugService as unknown as StateDebuggerService;
     }
-
-    // Create services object in correct initialization order based on dependencies
-    const services: Services & RequiredServices = {
-      // Base services
-      filesystem,
-      path,
-      // State management
-      eventService,
-      state,
-      // Core pipeline
-      parser,
-      // Resolution layer
-      resolution,
-      validation,
-      circularity,
-      // Pipeline orchestration
-      directive,
-      interpreter,
-      // Output generation
-      output,
-      // Optional debug service
-      debug
-    };
-
-    // Validate the service pipeline
-    validateServicePipeline(services);
-
-    return services;
   }
+  
+  // Create services object in correct initialization order based on dependencies
+  const services: Services & RequiredServices = {
+    // Base services
+    filesystem,
+    path,
+    // State management
+    eventService,
+    state,
+    // Core pipeline
+    parser,
+    // Resolution layer
+    resolution,
+    validation,
+    circularity,
+    // Pipeline orchestration
+    directive,
+    interpreter,
+    // Output generation
+    output,
+    // Optional debug service
+    debug
+  };
+
+  // Validate the service pipeline
+  validateServicePipeline(services);
+
+  return services;
 }
 
 export async function main(filePath: string, options: ProcessOptions = {}): Promise<string> {
@@ -271,27 +160,40 @@ export async function main(filePath: string, options: ProcessOptions = {}): Prom
   // Validate the service pipeline after merging
   validateServicePipeline(services);
 
+  // Initialize the ServiceMediator with the merged services
+  const mediator = resolveService('ServiceMediator');
+  if (services.path) mediator.setPathService(services.path);
+  if (services.filesystem) mediator.setFileSystemService(services.filesystem);
+  if (services.state) mediator.setStateService(services.state);
+  if (services.parser) mediator.setParserService(services.parser);
+  if (services.resolution) mediator.setResolutionService(services.resolution);
+
+  // Ensure FileSystemService has the mediator set
+  if (services.filesystem) {
+    services.filesystem.setMediator(mediator);
+  }
+
+  // Re-initialize directive and interpreter services to ensure they have the correct dependencies
+  services.directive.initialize(
+    services.validation,
+    services.state,
+    services.path,
+    services.filesystem,
+    services.parser,
+    services.interpreter,
+    services.circularity,
+    services.resolution
+  );
+
+  // Re-initialize interpreter with directive
+  services.interpreter.initialize(services.directive, services.state);
+
   // If directive service was injected, we need to re-initialize it and the interpreter
   if (options.services?.directive) {
     const directive = services.directive;
     const interpreter = services.interpreter;
 
     // Re-initialize directive with interpreter
-    directive.initialize(
-      services.validation,
-      services.state,
-      services.path,
-      services.filesystem,
-      services.parser,
-      interpreter, // Pass interpreter immediately
-      services.circularity,
-      services.resolution
-    );
-
-    // Re-initialize interpreter with directive
-    interpreter.initialize(directive, services.state);
-
-    // Register default handlers
     directive.registerDefaultHandlers();
   }
 

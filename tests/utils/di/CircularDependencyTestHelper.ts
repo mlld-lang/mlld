@@ -1,6 +1,20 @@
-import { DependencyContainer, injectable, injectAll, inject } from 'tsyringe';
+import { DependencyContainer, injectable, injectAll, inject, container } from 'tsyringe';
 import TestContainerHelper from './TestContainerHelper';
 import { ICircularityService } from '../../../services/resolution/CircularityService/ICircularityService';
+
+/**
+ * Creates a container with circular dependencies configured for testing
+ * This is a convenience function for tests
+ */
+export function createTestContainerWithCircularDeps(): DependencyContainer {
+  const testContainer = container.createChildContainer();
+  
+  // Register our test services for circular dependency testing
+  testContainer.register('IServiceE', { useClass: ServiceE });
+  testContainer.register('IServiceD', { useClass: ServiceD });
+  
+  return testContainer;
+}
 
 /**
  * Helper for testing circular dependencies in DI container
@@ -22,6 +36,34 @@ export class CircularDependencyTestHelper {
     containerHelper.registerMockClass('IServiceC', ServiceC);
     
     return container;
+  }
+
+  /**
+   * Detects circular dependencies when resolving a service
+   * @param serviceName The name of the service to resolve
+   * @returns Object with cycle information and error
+   */
+  detectCircularDependencies(serviceName: string): { cycle: string[], error?: Error } {
+    const container = CircularDependencyTestHelper.createCircularContainer();
+    
+    try {
+      // This will trigger circular dependency detection
+      const helper = new TestContainerHelper(container);
+      helper.resolve(serviceName);
+      
+      // If we get here, no circular dependency was detected
+      return { cycle: [] };
+    } catch (error) {
+      // Extract cycle information from the error
+      const errorMessage = error.message || '';
+      const cycleMatch = errorMessage.match(/Circular dependency detected: (.*)/);
+      const cycle = cycleMatch ? cycleMatch[1].split(' -> ') : [];
+      
+      return { 
+        cycle,
+        error
+      };
+    }
   }
 
   /**

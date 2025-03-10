@@ -10,7 +10,7 @@ vi.mock('../../../../core/utils/logger', () => ({
   embedLogger: mockLogger
 }));
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import type { DirectiveNode, DirectiveData, MeldNode } from 'meld-spec';
 import { EmbedDirectiveHandler, type ILogger } from './EmbedDirectiveHandler.js';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
@@ -24,6 +24,22 @@ import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/Directive
 import { createLocation } from '@tests/utils/testFactories.js';
 // Import the centralized syntax examples and helpers
 import { embedDirectiveExamples } from '@core/syntax/index.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI';
+
+/**
+ * EmbedDirectiveHandler Test Status
+ * --------------------------------
+ * 
+ * MIGRATION STATUS: Complete
+ * 
+ * This test file has been migrated to use TestContextDI for dependency injection.
+ * 
+ * COMPLETED:
+ * - All tests migrated to use TestContextDI
+ * - Service mocks registered through DI container
+ * - Added proper cleanup to prevent container leaks
+ * - Using centralized syntax examples
+ */
 
 // Direct usage of meld-ast instead of mock factories
 const createRealParserService = () => {
@@ -116,20 +132,20 @@ interface EmbedDirective extends DirectiveData {
 
 describe('EmbedDirectiveHandler', () => {
   let handler: EmbedDirectiveHandler;
-  let validationService: IValidationService;
-  let resolutionService: IResolutionService;
-  let stateService: IStateService;
-  let circularityService: ICircularityService;
-  let fileSystemService: IFileSystemService;
-  let parserService: IParserService;
-  let interpreterService: IInterpreterService;
-  let clonedState: IStateService;
-  let childState: IStateService;
+  let validationService: any;
+  let resolutionService: any;
+  let stateService: any;
+  let circularityService: any;
+  let fileSystemService: any;
+  let parserService: any;
+  let interpreterService: any;
+  let clonedState: any;
+  let childState: any;
+  let context: TestContextDI;
 
   beforeEach(() => {
-    validationService = {
-      validate: vi.fn()
-    } as unknown as IValidationService;
+    // Create context with isolated container
+    context = TestContextDI.create({ isolatedContainer: true });
 
     childState = {
       setTextVar: vi.fn(),
@@ -139,7 +155,7 @@ describe('EmbedDirectiveHandler', () => {
       clone: vi.fn(),
       mergeChildState: vi.fn(),
       isTransformationEnabled: vi.fn().mockReturnValue(false)
-    } as unknown as IStateService;
+    };
 
     clonedState = {
       setTextVar: vi.fn(),
@@ -150,7 +166,7 @@ describe('EmbedDirectiveHandler', () => {
       mergeChildState: vi.fn(),
       clone: vi.fn(),
       isTransformationEnabled: vi.fn().mockReturnValue(false)
-    } as unknown as IStateService;
+    };
 
     stateService = {
       setTextVar: vi.fn(),
@@ -160,17 +176,21 @@ describe('EmbedDirectiveHandler', () => {
       clone: vi.fn().mockReturnValue(clonedState),
       createChildState: vi.fn().mockReturnValue(childState),
       isTransformationEnabled: vi.fn().mockReturnValue(false)
-    } as unknown as IStateService;
+    };
+
+    validationService = {
+      validate: vi.fn()
+    };
 
     resolutionService = {
       resolveInContext: vi.fn(),
       extractSection: vi.fn()
-    } as unknown as IResolutionService;
+    };
 
     circularityService = {
       beginImport: vi.fn(),
       endImport: vi.fn()
-    } as unknown as ICircularityService;
+    };
 
     fileSystemService = {
       exists: vi.fn(),
@@ -179,14 +199,16 @@ describe('EmbedDirectiveHandler', () => {
       join: vi.fn().mockImplementation((...args) => args.join('/')),
       normalize: vi.fn().mockImplementation(path => path),
       resolveRelativePath: vi.fn()
-    } as unknown as IFileSystemService;
+    };
 
     parserService = createRealParserService();
 
     interpreterService = {
       interpret: vi.fn().mockResolvedValue(childState)
-    } as unknown as IInterpreterService;
+    };
 
+    // Instead of using the container to resolve the handler,
+    // create the handler directly with the mocks
     handler = new EmbedDirectiveHandler(
       validationService,
       resolutionService,
@@ -197,6 +219,11 @@ describe('EmbedDirectiveHandler', () => {
       interpreterService,
       mockLogger
     );
+  });
+
+  afterEach(async () => {
+    // Cleanup to prevent container leaks
+    await context.cleanup();
   });
 
   describe('basic embed functionality', () => {

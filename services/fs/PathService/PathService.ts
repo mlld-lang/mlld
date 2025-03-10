@@ -33,6 +33,12 @@ export class PathService implements IPathService {
   private projectPathResolver: ProjectPathResolver;
   private projectPathResolved: boolean = false;
 
+  /**
+   * Creates a new PathService with dependencies injected.
+   * 
+   * @param serviceMediator Optional service mediator for resolving circular dependencies
+   * @param projectPathResolver Resolver for project paths
+   */
   constructor(
     @inject('ServiceMediator') serviceMediator?: IServiceMediator,
     @inject(ProjectPathResolver) projectPathResolver?: ProjectPathResolver
@@ -70,20 +76,12 @@ export class PathService implements IPathService {
   }
 
   /**
-   * Initialize the path service with a file system service
-   * @deprecated Use constructor injection instead
+   * @deprecated Use dependency injection through constructor instead.
+   * This method is kept for backward compatibility but will be removed in a future version.
    */
   initialize(fileSystem: IFileSystemService, parser: any = null): void {
-    logger.warn('PathService.initialize is deprecated. Use ServiceMediator instead.');
+    logger.warn('PathService.initialize is deprecated. Use dependency injection instead.');
     this.fs = fileSystem;
-    
-    // Connect parser service if provided (for test compatibility)
-    if (parser && parser.parse && !this.testMode) {
-      // Store the parser service for use in validatePath when not in test mode
-      (this as any).parserService = parser;
-    }
-    
-    // This is kept for backwards compatibility only
   }
 
   /**

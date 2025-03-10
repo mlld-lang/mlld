@@ -1,13 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { TestContext } from '@tests/utils/index.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { main } from '../api/index.js';
 import type { Services } from '@core/types/index.js';
 
 describe('Nested Arrays Specific Test', () => {
-  let context: TestContext;
+  let context: TestContextDI;
 
   beforeEach(async () => {
-    context = new TestContext();
+    context = TestContextDI.create();
     await context.initialize();
     context.enableTransformation();
   });
@@ -35,10 +35,10 @@ describe('Nested Arrays Specific Test', () => {
 Name: {{nested.users.0.name}}
 Hobby: {{nested.users.0.hobbies.0}}`;
     
-    await context.writeFile('test.meld', content);
+    await context.services.filesystem.writeFile('test.meld', content);
     
     const result = await main('test.meld', {
-      fs: context.fs,
+      fs: context.services.filesystem,
       services: context.services as unknown as Partial<Services>,
       transformation: true
     });

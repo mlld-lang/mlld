@@ -10,6 +10,16 @@ import { container, injectable, ClassProvider, InjectionToken } from 'tsyringe';
 import 'reflect-metadata';
 
 /**
+ * Determines if dependency injection should be used.
+ * @deprecated This function is maintained for backward compatibility and always returns true.
+ * All new code should assume DI is enabled.
+ * @returns Always returns true
+ */
+export function shouldUseDI(): boolean {
+  return true;
+}
+
+/**
  * Metadata key for storing service dependencies
  */
 const SERVICE_METADATA_KEY = Symbol('service:metadata');
@@ -25,33 +35,17 @@ export interface ServiceMetadata {
 }
 
 /**
- * Determines if DI should be used.
- * 
- * @deprecated This function now always returns true as part of the DI-only migration.
- * Legacy non-DI mode is being phased out. All code should use DI.
- * This function is maintained for backward compatibility during the transition.
- */
-export const shouldUseDI = (): boolean => {
-  // As part of Phase 4.1 of the DI cleanup plan, this function now always returns true
-  // regardless of the environment variable setting
-  return true;
-};
-
-/**
- * Creates a new instance of a service either through DI or manual instantiation
- * based on the USE_DI environment variable.
+ * Creates a new instance of a service through DI.
  * 
  * @param ServiceClass The service class to instantiate
- * @param dependencies The dependencies to pass to the constructor (for legacy mode)
+ * @param dependencies These parameters are ignored and maintained only for backward compatibility
  * @returns A new instance of the service
- * 
- * @deprecated The legacy non-DI mode is being phased out. This function now always uses DI.
  */
 export function createService<T, D extends any[]>(
   ServiceClass: new (...args: D) => T,
   ...dependencies: D
 ): T {
-  // DI is now always enabled, so we always resolve from the container
+  // Always use DI
   return container.resolve(ServiceClass);
 }
 
@@ -62,7 +56,6 @@ export function createService<T, D extends any[]>(
  * @returns The resolved service
  */
 export function resolveService<T>(token: string | InjectionToken<T>): T {
-  // DI is now always enabled, so we can directly resolve from the container
   return container.resolve<T>(token);
 }
 

@@ -11,7 +11,6 @@ import {
 } from '@core/syntax/index.js';
 import { getExample, getInvalidExample } from '@tests/utils/syntax-test-helpers.js';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
-import { container } from 'tsyringe';
 
 // Define a type that combines the meld-spec Location with our filePath
 type LocationWithFilePath = {
@@ -59,36 +58,19 @@ const mockResolutionService = {
   }
 };
 
-// Run tests with both DI and non-DI modes
-describe.each([
-  { useDI: true, name: 'with DI' },
-  { useDI: false, name: 'without DI' }
-])('ParserService %s', ({ useDI }) => {
+describe('ParserService', () => {
   let service: ParserService;
   let testContext: TestContextDI;
 
   beforeEach(() => {
-    // Save original DI setting
-    const originalDISetting = process.env.USE_DI;
+    // Create test context with DI
+    testContext = TestContextDI.create({ isolatedContainer: true });
     
-    // Set up DI mode for tests
-    if (useDI) {
-      process.env.USE_DI = 'true';
-      testContext = TestContextDI.create({ isolatedContainer: true });
-      
-      // Register mock services in the container
-      container.registerInstance('IResolutionService', mockResolutionService);
-      
-      // Resolve service from container
-      service = container.resolve(ParserService);
-    } else {
-      process.env.USE_DI = 'false';
-      testContext = TestContextDI.create({ isolatedContainer: true });
-      service = new ParserService();
-    }
+    // Register mock services in the container
+    testContext.registerMock('IResolutionService', mockResolutionService);
     
-    // Restore original DI setting
-    process.env.USE_DI = originalDISetting;
+    // Resolve service from container
+    service = testContext.container.resolve(ParserService);
   });
   
   afterEach(async () => {

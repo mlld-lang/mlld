@@ -1,6 +1,5 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { TextDirectiveHandler } from './TextDirectiveHandler.js';
-import { createMockStateService, createMockValidationService, createMockResolutionService } from '@tests/utils/testFactories.js';
 import { DirectiveError } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import type { DirectiveNode } from 'meld-spec';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
@@ -9,6 +8,8 @@ import { StringConcatenationHandler } from '@services/resolution/ResolutionServi
 // Import the centralized syntax examples and helpers
 import { textDirectiveExamples } from '@core/syntax/index.js';
 import { ErrorSeverity } from '@core/errors';
+// Import TestContextDI
+import { TestContextDI } from '@tests/utils/di/TestContextDI';
 
 /**
  * Helper function to create real AST nodes using meld-ast
@@ -32,38 +33,65 @@ const createNodeFromExample = async (code: string): Promise<DirectiveNode> => {
 
 describe('TextDirectiveHandler', () => {
   let handler: TextDirectiveHandler;
-  let stateService: ReturnType<typeof createMockStateService>;
-  let validationService: ReturnType<typeof createMockValidationService>;
-  let resolutionService: ReturnType<typeof createMockResolutionService>;
-  let clonedState: IStateService;
+  let stateService: any;
+  let validationService: any;
+  let resolutionService: any;
+  let context: TestContextDI;
+  let clonedState: any;
   // Create real instances of the literal and concatenation handlers for testing
   let realStringLiteralHandler: StringLiteralHandler;
   let realStringConcatenationHandler: StringConcatenationHandler;
 
   beforeEach(() => {
+    // Create cloned state that will be returned by stateService.clone()
     clonedState = {
       setTextVar: vi.fn(),
       getTextVar: vi.fn(),
       getDataVar: vi.fn(),
       clone: vi.fn(),
-    } as unknown as IStateService;
+    };
 
+    // Create context with isolated container 
+    context = TestContextDI.create({ isolatedContainer: true });
+    
+    // Create and register mocks
+    validationService = {
+      validate: vi.fn().mockImplementation((node: any) => {
+        if (node.directive?.value === "'unclosed string") {
+          throw new Error('Invalid string literal: unclosed string');
+        }
+        if (node.directive?.value === '"no"++"spaces"') {
+          throw new Error('Invalid concatenation syntax');
+        }
+        return Promise.resolve(true);
+      })
+    };
+    
     stateService = {
       setTextVar: vi.fn(),
       getTextVar: vi.fn(),
       getDataVar: vi.fn(),
       clone: vi.fn().mockReturnValue(clonedState)
-    } as unknown as IStateService;
-
-    validationService = createMockValidationService();
-    resolutionService = createMockResolutionService();
+    };
     
+    resolutionService = {
+      resolveInContext: vi.fn()
+    };
+    
+    // Register mocks with the container
+    context.registerMock('IValidationService', validationService);
+    context.registerMock('IStateService', stateService);
+    context.registerMock('IResolutionService', resolutionService);
+    
+    // Resolve the handler from the container
+    handler = context.container.resolve(TextDirectiveHandler);
+
     // Create real handlers to match actual implementation
     realStringLiteralHandler = new StringLiteralHandler();
     realStringConcatenationHandler = new StringConcatenationHandler(resolutionService);
     
     // Set up better mocking for variable resolution
-    resolutionService.resolveInContext.mockImplementation(async (value: string, context: any) => {
+    resolutionService.resolveInContext = vi.fn().mockImplementation(async (value: string, context: any) => {
       // Use real string literal handler for string literals
       if (realStringLiteralHandler.isStringLiteral(value)) {
         return realStringLiteralHandler.parseLiteral(value);
@@ -104,19 +132,11 @@ describe('TextDirectiveHandler', () => {
       
       return value;
     });
-    
-    // Mock validation service to fail for invalid nodes
-    validationService.validate.mockImplementation((node: any) => {
-      if (node.directive?.value === "'unclosed string") {
-        throw new Error('Invalid string literal: unclosed string');
-      }
-      if (node.directive?.value === '"no"++"spaces"') {
-        throw new Error('Invalid concatenation syntax');
-      }
-      return Promise.resolve();
-    });
-    
-    handler = new TextDirectiveHandler(validationService, stateService, resolutionService);
+  });
+
+  afterEach(async () => {
+    // Cleanup to prevent container leaks
+    await context.cleanup();
   });
 
   describe('execute', () => {
@@ -125,12 +145,12 @@ describe('TextDirectiveHandler', () => {
       const example = textDirectiveExamples.atomic.simpleString;
       const node = await createNodeFromExample(example.code);
 
-      const context = {
+      const testContext = {
         state: stateService,
         currentFilePath: 'test.meld'
       };
 
-      const result = await handler.execute(node, context);
+      const result = await handler.execute(node, testContext);
       // The example uses 'greeting' as the identifier and "Hello" as the value
       expect(clonedState.setTextVar).toHaveBeenCalledWith('greeting', 'Hello');
     });
@@ -145,12 +165,12 @@ describe('TextDirectiveHandler', () => {
         return 'Line 1\nLine 2\t"Quoted"';
       });
 
-      const context = {
+      const testContext = {
         state: stateService,
         currentFilePath: 'test.meld'
       };
 
-      const result = await handler.execute(node, context);
+      const result = await handler.execute(node, testContext);
       expect(clonedState.setTextVar).toHaveBeenCalledWith('escaped', 'Line 1\nLine 2\t"Quoted"');
     });
 
@@ -159,12 +179,12 @@ describe('TextDirectiveHandler', () => {
       const example = textDirectiveExamples.atomic.templateLiteral;
       const node = await createNodeFromExample(example.code);
 
-      const context = {
+      const testContext = {
         state: stateService,
         currentFilePath: 'test.meld'
       };
 
-      const result = await handler.execute(node, context);
+      const result = await handler.execute(node, testContext);
       expect(clonedState.setTextVar).toHaveBeenCalledWith('message', 'Template content');
     });
 
@@ -180,12 +200,12 @@ describe('TextDirectiveHandler', () => {
       
       const node = await createNodeFromExample(example.code.split('\n')[1]); // Get the second line with greeting directive
 
-      const context = {
+      const testContext = {
         state: stateService,
         currentFilePath: 'test.meld'
       };
 
-      const result = await handler.execute(node, context);
+      const result = await handler.execute(node, testContext);
       expect(clonedState.setTextVar).toHaveBeenCalledWith('greeting', 'Hello, Alice! Your ID is 123.');
       
       // Restore the original mock
@@ -204,12 +224,12 @@ describe('TextDirectiveHandler', () => {
       
       const node = await createNodeFromExample(example.code.split('\n')[5]); // Get the docsText line
 
-      const context = {
+      const testContext = {
         state: stateService,
         currentFilePath: 'test.meld'
       };
 
-      const result = await handler.execute(node, context);
+      const result = await handler.execute(node, testContext);
       expect(clonedState.setTextVar).toHaveBeenCalledWith('configText', 'Docs are at $PROJECTPATH/docs');
       
       // Restore the original mock
@@ -229,12 +249,12 @@ describe('TextDirectiveHandler', () => {
 
       const node = await createNodeFromExample(example.code);
 
-      const context = {
+      const testContext = {
         state: stateService,
         currentFilePath: 'test.meld'
       };
 
-      await expect(handler.execute(node, context))
+      await expect(handler.execute(node, testContext))
         .rejects
         .toThrow(DirectiveError);
         
@@ -254,12 +274,12 @@ describe('TextDirectiveHandler', () => {
       
       const node = await createNodeFromExample(example.code.split('\n')[2]); // Get the third line with the message directive
 
-      const context = {
+      const testContext = {
         state: stateService,
         currentFilePath: 'test.meld'
       };
 
-      const result = await handler.execute(node, context);
+      const result = await handler.execute(node, testContext);
       expect(clonedState.setTextVar).toHaveBeenCalledWith('message', 'Hello, World!');
       
       // Restore the original mock
@@ -271,12 +291,12 @@ describe('TextDirectiveHandler', () => {
       const example = textDirectiveExamples.atomic.simpleString;
       const node = await createNodeFromExample(example.code);
 
-      const context = {
+      const testContext = {
         state: stateService,
         currentFilePath: 'test.meld'
       };
 
-      const result = await handler.execute(node, context);
+      const result = await handler.execute(node, testContext);
       // The example uses 'greeting' as the identifier and "Hello" as the value
       expect(clonedState.setTextVar).toHaveBeenCalledWith('greeting', 'Hello');
     });

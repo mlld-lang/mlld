@@ -1,12 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { main } from '@api/index.js';
-import { TestContext } from '@tests/utils/TestContext.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
+import type { Services } from '@core/types/index.js';
 
 describe('Embed Directive Variable Path Prefix Fix', () => {
-  let context: TestContext;
+  let context: TestContextDI;
 
   beforeEach(async () => {
-    context = new TestContext();
+    context = TestContextDI.create();
     await context.initialize();
   });
 
@@ -16,7 +17,7 @@ describe('Embed Directive Variable Path Prefix Fix', () => {
 
   it('should fix the path prefixing issue with data variable embeds', async () => {
     // Create a test file that resembles examples/output.meld
-    await context.fs.writeFile('variable-output.meld',
+    await context.services.filesystem.writeFile('variable-output.meld',
       '@data role = {\n' +
       '  "architect": "You are a senior architect skilled in TypeScript.",\n' +
       '  "ux": "You are a UX designer with experience in user testing."\n' +
@@ -33,8 +34,8 @@ describe('Embed Directive Variable Path Prefix Fix', () => {
 
     // Test with transformation
     const result = await main('variable-output.meld', {
-      fs: context.fs,
-      services: context.services,
+      fs: context.services.filesystem,
+      services: context.services as unknown as Partial<Services>,
       transformation: true,
       format: 'markdown'
     });

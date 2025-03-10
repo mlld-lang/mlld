@@ -1,13 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { TestContext } from '@tests/utils/index.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { main } from '@api/index.js';
 import type { Services } from '@core/types/index.js';
 
 describe('Variable Resolution Specific Tests', () => {
-  let context: TestContext;
+  let context: TestContextDI;
   
   beforeEach(async () => {
-    context = new TestContext();
+    context = TestContextDI.create();
     await context.initialize();
     
     // Enable transformation with specific options
@@ -30,11 +30,11 @@ describe('Variable Resolution Specific Tests', () => {
 {{greeting}}, {{config.user.name}}!
 
 App: {{config.app.name}} v{{config.app.version}}`;
-    await context.writeFile('test.meld', content);
+    await context.services.filesystem.writeFile('test.meld', content);
     
     // Enable transformation
     const result = await main('test.meld', {
-      fs: context.fs,
+      fs: context.services.filesystem,
       services: context.services as unknown as Partial<Services>,
       transformation: true
     });
@@ -68,11 +68,11 @@ App: {{config.app.name}} v{{config.app.version}}`;
 First item: {{items[0]}}
 Second user: {{users[1].name}}
 First user role: {{users[0].role}}`;
-    await context.writeFile('test.meld', content);
+    await context.services.filesystem.writeFile('test.meld', content);
     
     // Enable transformation
     const result = await main('test.meld', {
-      fs: context.fs,
+      fs: context.services.filesystem,
       services: context.services as unknown as Partial<Services>,
       transformation: true
     });
@@ -97,11 +97,11 @@ First user role: {{users[0].role}}`;
 
 - List item 1
 - List item 2`;
-    await context.writeFile('test.meld', content);
+    await context.services.filesystem.writeFile('test.meld', content);
     
     // Enable transformation with markdown format
     const result = await main('test.meld', {
-      fs: context.fs,
+      fs: context.services.filesystem,
       services: context.services as unknown as Partial<Services>,
       transformation: true,
       format: 'markdown'
@@ -118,7 +118,7 @@ First user role: {{users[0].role}}`;
     
     // Try with XML format
     const xmlResult = await main('test.meld', {
-      fs: context.fs,
+      fs: context.services.filesystem,
       services: context.services as unknown as Partial<Services>,
       transformation: true,
       format: 'xml'

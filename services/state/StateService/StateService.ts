@@ -9,16 +9,6 @@ import { inject, container, injectable } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
 import { IServiceMediator } from '@services/mediator/IServiceMediator.js';
 
-// Helper function to check if DI should be used
-/**
- * @deprecated This function now always returns true as part of the DI-only migration.
- * Legacy non-DI mode is being phased out.
- */
-function shouldUseDI(): boolean {
-  // Always return true as part of Phase 4.1 of the DI cleanup plan
-  return true;
-}
-
 // Helper function to get the container
 function getContainer() {
   return container;
@@ -50,107 +40,83 @@ export class StateService implements IStateService {
   private serviceMediator?: IServiceMediator;
 
   /**
- * Creates a new StateService instance
- * Supports both DI mode and legacy non-DI mode
- * 
- * @param stateFactory State factory for creating states (injected in DI mode)
- * @param eventService Event service for state events (injected in DI mode)
- * @param trackingService Tracking service for debugging (injected in DI mode)
- * @param serviceMediator Service mediator for breaking circular dependencies
- * @param parentState Optional parent state to inherit from
- */
-constructor(
-  @inject(StateFactory) stateFactory?: StateFactory,
-  @inject('IStateEventService') eventService?: IStateEventService,
-  @inject('IStateTrackingService') trackingService?: IStateTrackingService,
-  @inject('IServiceMediator') serviceMediator?: IServiceMediator,
-  parentState?: IStateService
-) {
-  this.initializeFromParams(stateFactory, eventService, trackingService, serviceMediator, parentState);
-}
-
-/**
- * Initialize this service with the given parameters
- * Handles both DI and non-DI mode initialization
- */
-private initializeFromParams(
-  stateFactory?: StateFactory,
-  eventService?: IStateEventService | IStateService, // Could be event service or parent state in legacy mode
-  trackingService?: IStateTrackingService,
-  serviceMediator?: IServiceMediator,
-  parentState?: IStateService
-): void {
-  if (stateFactory) {
-    this.initializeDIMode(stateFactory, eventService as IStateEventService, trackingService, serviceMediator, parentState);
-  } else {
-    this.initializeLegacyMode(eventService, trackingService, serviceMediator, parentState);
+   * Creates a new StateService instance using dependency injection
+   * 
+   * @param stateFactory State factory for creating states
+   * @param eventService Event service for state events
+   * @param trackingService Tracking service for debugging
+   * @param serviceMediator Service mediator for breaking circular dependencies
+   * @param parentState Optional parent state to inherit from
+   */
+  constructor(
+    @inject(StateFactory) stateFactory?: StateFactory,
+    @inject('IStateEventService') eventService?: IStateEventService,
+    @inject('IStateTrackingService') trackingService?: IStateTrackingService,
+    @inject('IServiceMediator') serviceMediator?: IServiceMediator,
+    parentState?: IStateService
+  ) {
+    this.initializeFromParams(stateFactory, eventService, trackingService, serviceMediator, parentState);
   }
-}
 
-/**
- * Initialize in DI mode with explicit dependencies
- */
-private initializeDIMode(
-  stateFactory: StateFactory,
-  eventService?: IStateEventService,
-  trackingService?: IStateTrackingService,
-  serviceMediator?: IServiceMediator,
-  parentState?: IStateService
-): void {
-  this.stateFactory = stateFactory;
-  this.eventService = eventService;
-  this.trackingService = trackingService;
-  this.serviceMediator = serviceMediator;
-  
-  // Register this service with the mediator if available
-  if (this.serviceMediator && typeof this.serviceMediator.setStateService === 'function') {
-    try {
-      this.serviceMediator.setStateService(this);
-    } catch (error) {
-      console.warn('Failed to register StateService with ServiceMediator:', error);
+  /**
+   * Initialize this service with the given parameters
+   * Using DI-only mode
+   */
+  private initializeFromParams(
+    stateFactory?: StateFactory,
+    eventService?: IStateEventService | IStateService,
+    trackingService?: IStateTrackingService,
+    serviceMediator?: IServiceMediator,
+    parentState?: IStateService
+  ): void {
+    // Always use DI mode
+    if (stateFactory) {
+      this.stateFactory = stateFactory;
+      this.eventService = eventService as IStateEventService;
+      this.trackingService = trackingService;
+      this.serviceMediator = serviceMediator;
+      
+      // Register this service with the mediator if available
+      if (this.serviceMediator && typeof this.serviceMediator.setStateService === 'function') {
+        try {
+          this.serviceMediator.setStateService(this);
+        } catch (error) {
+          console.warn('Failed to register StateService with ServiceMediator:', error);
+        }
+      }
+      
+      this.initializeState(parentState);
+    } else {
+      // This branch should not be reached in DI-only mode, but keeping as fallback
+      // Creating a default factory for robustness
+      logger.warn('StateService initialized without factory in DI-only mode');
+      this.stateFactory = new StateFactory();
+      
+      // Use event service if provided as first parameter
+      if (eventService && !(eventService as IStateService).createChildState) {
+        this.eventService = eventService as IStateEventService;
+      }
+      
+      // Store tracking service and mediator if provided
+      this.trackingService = trackingService;
+      this.serviceMediator = serviceMediator;
+      
+      // Register with mediator if available
+      if (this.serviceMediator) {
+        this.serviceMediator.setStateService(this);
+      }
+      
+      // Initialize state with parent if provided
+      const actualParentState = parentState || 
+        (eventService && (eventService as IStateService).createChildState ? 
+          eventService as IStateService : undefined);
+      
+      this.initializeState(actualParentState);
     }
   }
-  
-  this.initializeState(parentState);
-}
 
-/**
- * Initialize in legacy non-DI mode with parameter overloading
- */
-private initializeLegacyMode(
-  eventServiceOrParent?: IStateEventService | IStateService,
-  trackingService?: IStateTrackingService,
-  serviceMediator?: IServiceMediator,
-  explicitParentState?: IStateService
-): void {
-  // Create default factory
-  this.stateFactory = new StateFactory();
-  
-  // Store the service mediator
-  this.serviceMediator = serviceMediator;
-  
-  // Register this service with the mediator if available
-  if (this.serviceMediator) {
-    this.serviceMediator.setStateService(this);
-  }
-  
-  // Handle different legacy constructor signatures
-  if (eventServiceOrParent && !trackingService && !serviceMediator && !explicitParentState) {
-    // Case: StateService(eventService)
-    this.eventService = eventServiceOrParent as IStateEventService;
-    this.initializeState();
-  } else if (eventServiceOrParent && !trackingService && !serviceMediator && explicitParentState) {
-    // Case: StateService(parentState)
-    // In this case eventServiceOrParent is actually the parentState
-    this.initializeState(eventServiceOrParent as IStateService);
-  } else {
-    // Default case or explicit initialize() call later
-    this.initializeState(explicitParentState as IStateService);
-  }
-}
-  
   /**
-   * Initialize the service (legacy mode) or re-initialize (DI mode)
+   * Initialize the service or re-initialize it
    * Can be used to reset the service to initial state
    */
   initialize(eventService?: IStateEventService, parentState?: IStateService): void {
@@ -514,56 +480,71 @@ private initializeLegacyMode(
   }
 
   createChildState(): IStateService {
-    // In TSyringe mode, we need to use different instantiation approaches
-    // based on whether DI is being used or not
-    let child: StateService;
+    // Always use DI mode
+    const container = getContainer();
+    const child = container.resolve(StateService);
     
-    if (shouldUseDI()) {
-      // In DI mode, resolve from container, then set parent
-      const container = getContainer();
-      child = container.resolve(StateService);
+    // Set the service mediator to ensure proper circular dependency handling
+    if (this.serviceMediator && typeof child.setServiceMediator === 'function') {
+      child.setServiceMediator(this.serviceMediator);
+    }
+    
+    // Set parent state reference
+    child.parentState = this;
+    
+    // Transfer parent variables to child
+    // Copy text variables
+    this.getAllTextVars().forEach((value, key) => {
+      child.setTextVar(key, value);
+    });
+    
+    // Copy data variables
+    this.getAllDataVars().forEach((value, key) => {
+      child.setDataVar(key, value);
+    });
+    
+    // Copy path variables
+    this.getAllPathVars().forEach((value, key) => {
+      child.setPathVar(key, value);
+    });
+    
+    // Copy commands
+    this.getAllCommands().forEach((command, name) => {
+      child.setCommand(name, command);
+    });
+    
+    // Copy import info
+    this.getImports().forEach(importPath => {
+      child.addImport(importPath);
+    });
+    
+    // Copy current file path
+    const filePath = this.getCurrentFilePath();
+    if (filePath) {
+      child.setCurrentFilePath(filePath);
+    }
+    
+    // Copy transformation settings
+    if (this.isTransformationEnabled()) {
+      child.enableTransformation(this.getTransformationOptions());
+    }
+    
+    // Register with tracking service if available and set parent ID
+    if (this.trackingService && this.currentState.stateId) {
+      // Set the state ID, which will register with tracking and establish the parent relationship
+      child.setStateId({
+        parentId: this.currentState.stateId,
+        source: 'child'
+      });
       
-      // Set the service mediator to ensure proper circular dependency handling
-      if (this.serviceMediator && typeof child.setServiceMediator === 'function') {
-        child.setServiceMediator(this.serviceMediator);
-      }
-      
-      child.initializeState(this);
-    } else {
-      // In non-DI mode, create directly with parent and pass the mediator
-      child = new StateService(
-        this.stateFactory, 
-        this.eventService, 
-        this.trackingService, 
-        this.serviceMediator, 
-        this
+      // Explicitly create the parent-child relationship in the tracking service
+      this.trackingService.addRelationship(
+        this.currentState.stateId,
+        child.getStateId()!,
+        'parent-child'
       );
     }
     
-    // Copy transformation state
-    child._transformationEnabled = this._transformationEnabled;
-    if (child._transformationEnabled && !child.currentState.transformedNodes) {
-      child.currentState = this.stateFactory.updateState(child.currentState, {
-        transformedNodes: [...child.currentState.nodes]
-      });
-    }
-
-    logger.debug('Created child state', {
-      parentPath: this.getCurrentFilePath(),
-      childPath: child.getCurrentFilePath()
-    });
-
-    // Emit create event
-    this.emitEvent({
-      type: 'create',
-      stateId: child.currentState.filePath || 'unknown',
-      source: 'createChildState',
-      timestamp: Date.now(),
-      location: {
-        file: this.getCurrentFilePath() || undefined
-      }
-    });
-
     return child;
   }
 
@@ -573,10 +554,17 @@ private initializeLegacyMode(
     this.currentState = this.stateFactory.mergeStates(this.currentState, child.currentState);
 
     // Add merge relationship if tracking enabled
-    if (this.trackingService && child.currentState.stateId) {
-      // Add merge-source relationship without removing the existing parent-child relationship
+    if (this.trackingService && this.currentState.stateId && child.currentState.stateId) {
+      // Make sure parent-child relationship exists
       this.trackingService.addRelationship(
-        this.currentState.stateId!,
+        this.currentState.stateId,
+        child.currentState.stateId,
+        'parent-child'
+      );
+      
+      // Add merge-source relationship
+      this.trackingService.addRelationship(
+        this.currentState.stateId,
         child.currentState.stateId,
         'merge-source'
       );
@@ -595,16 +583,23 @@ private initializeLegacyMode(
   }
 
   clone(): IStateService {
-    // Create a new state service instance based on DI mode
-    let cloned: StateService;
+    // Always use DI mode
+    const container = getContainer();
+    const cloned = container.resolve(StateService);
     
-    if (shouldUseDI()) {
-      // In DI mode, resolve from container
-      const container = getContainer();
-      cloned = container.resolve(StateService);
-    } else {
-      // In non-DI mode, create directly
-      cloned = new StateService(this.stateFactory, this.eventService, this.trackingService);
+    // Set the service mediator to ensure proper circular dependency handling
+    if (this.serviceMediator && typeof cloned.setServiceMediator === 'function') {
+      cloned.setServiceMediator(this.serviceMediator);
+    }
+    
+    // Transfer event service if available
+    if (this.eventService) {
+      cloned.setEventService(this.eventService);
+    }
+    
+    // Transfer tracking service if available
+    if (this.trackingService) {
+      cloned.setTrackingService(this.trackingService);
     }
     
     // Create a completely new state without parent reference
@@ -626,53 +621,20 @@ private initializeLegacyMode(
         this.deepCloneValue(this.currentState.transformedNodes) : undefined,
       imports: this.deepCloneValue(this.currentState.imports)
     }, 'clone');
-
-    // Copy flags
-    cloned._isImmutable = this._isImmutable;
-    cloned._transformationEnabled = this._transformationEnabled;
-
-    // Initialize transformation state if enabled
-    if (cloned._transformationEnabled && !cloned.currentState.transformedNodes) {
-      cloned.currentState = this.stateFactory.updateState(cloned.currentState, {
-        transformedNodes: [...cloned.currentState.nodes]
-      });
+    
+    // Copy transformation settings
+    if (this.isTransformationEnabled()) {
+      cloned.enableTransformation(this.getTransformationOptions());
     }
-
-    // Copy service references (if not already set via DI)
-    if (this.eventService && !cloned.eventService) {
-      cloned.setEventService(this.eventService);
-    }
-    if (this.trackingService && !cloned.trackingService) {
-      cloned.setTrackingService(this.trackingService);
-      
-      // Register the cloned state with tracking service
-      this.trackingService.registerState({
-        id: cloned.currentState.stateId!,
-        source: 'clone',
+    
+    // Register with tracking service if present
+    if (this.trackingService && this.currentState.stateId) {
+      cloned.setStateId({
         parentId: this.currentState.stateId,
-        filePath: cloned.currentState.filePath,
-        transformationEnabled: cloned._transformationEnabled
+        source: 'clone'
       });
-
-      // Add clone relationship as parent-child since 'clone' is not a valid relationship type
-      this.trackingService.addRelationship(
-        this.currentState.stateId!,
-        cloned.currentState.stateId!,
-        'parent-child' // Changed from 'clone' to 'parent-child'
-      );
     }
-
-    // Emit clone event
-    this.emitEvent({
-      type: 'clone',
-      stateId: cloned.currentState.stateId || 'unknown',
-      source: 'clone',
-      timestamp: Date.now(),
-      location: {
-        file: this.getCurrentFilePath() || undefined
-      }
-    });
-
+    
     return cloned;
   }
 
@@ -784,6 +746,38 @@ private initializeLegacyMode(
 
   getStateId(): string | undefined {
     return this.currentState.stateId;
+  }
+  
+  /**
+   * Sets the state ID and establishes parent-child relationships for tracking
+   */
+  setStateId(params: { parentId?: string, source: string }): void {
+    const stateId = this.currentState.stateId || this.stateFactory.generateStateId();
+    this.currentState.stateId = stateId;
+    this.currentState.source = params.source;
+    
+    // Register with tracking service if available
+    if (this.trackingService) {
+      try {
+        this.trackingService.registerState({
+          id: stateId,
+          source: params.source,
+          filePath: this.getCurrentFilePath() || undefined,
+          transformationEnabled: this._transformationEnabled
+        });
+        
+        // Add parent-child relationship if parentId provided
+        if (params.parentId) {
+          this.trackingService.addRelationship(
+            params.parentId,
+            stateId,
+            'parent-child'
+          );
+        }
+      } catch (error) {
+        console.warn('Failed to register state ID with tracking service', { error, stateId });
+      }
+    }
   }
 
   getCommandOutput(command: string): string | undefined {

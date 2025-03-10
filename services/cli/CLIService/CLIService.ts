@@ -57,62 +57,47 @@ export class DefaultPromptService implements IPromptService {
   ]
 })
 export class CLIService implements ICLIService {
-  private parserService?: IParserService;
-  private interpreterService?: IInterpreterService;
-  private outputService?: IOutputService;
-  private fileSystemService?: IFileSystemService;
-  private pathService?: IPathService;
-  private stateService?: IStateService;
+  private parserService: IParserService;
+  private interpreterService: IInterpreterService;
+  private outputService: IOutputService;
+  private fileSystemService: IFileSystemService;
+  private pathService: IPathService;
+  private stateService: IStateService;
   private promptService: IPromptService;
   private flags: Record<string, string | boolean | undefined> = {};
   private cmdOptions: ProcessOptions = {
     output: ''
   };
-  private initialized = false;
 
+  /**
+   * Creates a new CLIService instance using dependency injection.
+   */
   constructor(
-    @inject('IParserService') parserService?: IParserService,
-    @inject('IInterpreterService') interpreterService?: IInterpreterService,
-    @inject('IOutputService') outputService?: IOutputService,
-    @inject('IFileSystemService') fileSystemService?: IFileSystemService,
-    @inject('IPathService') pathService?: IPathService,
-    @inject('IStateService') stateService?: IStateService,
+    @inject('IParserService') parserService: IParserService,
+    @inject('IInterpreterService') interpreterService: IInterpreterService,
+    @inject('IOutputService') outputService: IOutputService,
+    @inject('IFileSystemService') fileSystemService: IFileSystemService,
+    @inject('IPathService') pathService: IPathService,
+    @inject('IStateService') stateService: IStateService,
     promptService?: IPromptService
   ) {
-    // Handle direct construction in tests
-    if (parserService && interpreterService && outputService && 
-        fileSystemService && pathService && stateService) {
-      // Immediately initialize service properties for direct construction
-      this.parserService = parserService;
-      this.interpreterService = interpreterService;
-      this.outputService = outputService;
-      this.fileSystemService = fileSystemService;
-      this.pathService = pathService;
-      this.stateService = stateService;
-      this.initialized = true;
-      logger.debug('CLIService initialized via constructor');
-      
-      // Additionally, set up a setTimeout for DI circular dependencies
-      // This allows the service to work with both direct construction and DI
-      setTimeout(() => {
-        // Re-assign services in case they changed due to DI resolution
-        this.parserService = parserService;
-        this.interpreterService = interpreterService;
-        this.outputService = outputService;
-        this.fileSystemService = fileSystemService;
-        this.pathService = pathService;
-        this.stateService = stateService;
-        logger.debug('CLIService circular dependencies resolved');
-      }, 0);
-    }
+    // Store injected services
+    this.parserService = parserService;
+    this.interpreterService = interpreterService;
+    this.outputService = outputService;
+    this.fileSystemService = fileSystemService;
+    this.pathService = pathService;
+    this.stateService = stateService;
     
     // Use the provided prompt service or create a default one
     this.promptService = promptService || new DefaultPromptService();
+    
+    logger.debug('CLIService initialized via dependency injection');
   }
   
   /**
-   * Initialize the service with dependencies
-   * This method provides backward compatibility for code not using DI
+   * @deprecated Use dependency injection instead of manual initialization.
+   * This method is kept for backward compatibility but will be removed in a future version.
    */
   initialize(
     parserService: IParserService,
@@ -134,8 +119,7 @@ export class CLIService implements ICLIService {
       this.promptService = promptService;
     }
     
-    this.initialized = true;
-    logger.debug('CLIService initialized manually');
+    logger.debug('CLIService manually initialized (deprecated)');
   }
 
   private normalizeFormat(format: string): 'markdown' | 'xml' {
@@ -318,11 +302,8 @@ export class CLIService implements ICLIService {
    * @throws Error if the service is not initialized
    */
   private ensureInitialized(): void {
-    if (!this.initialized || !this.parserService || !this.interpreterService || 
-        !this.outputService || !this.fileSystemService || !this.pathService || 
-        !this.stateService) {
-      throw new Error('CLIService is not properly initialized. Use initialize() or dependency injection.');
-    }
+    // No longer needed - services are always initialized in constructor
+    return;
   }
 
   /**

@@ -3,7 +3,7 @@ import { CommandResolver } from './CommandResolver.js';
 import { IStateService } from '@services/state/StateService/IStateService.js';
 import { ResolutionContext, ResolutionErrorCode } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { ResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError.js';
-import { TestContext } from '@tests/utils/TestContext.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { MeldNode, DirectiveNode, TextNode } from 'meld-spec';
 import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
@@ -16,14 +16,17 @@ describe('CommandResolver', () => {
   let stateService: IStateService;
   let parserService: ReturnType<typeof createMockParserService>;
   let context: ResolutionContext;
-  let testContext: TestContext;
+  let testContext: TestContextDI;
 
   beforeEach(async () => {
-    testContext = new TestContext();
-    await testContext.initialize();
-
+    // Create context with DI
+    testContext = TestContextDI.create({ isolatedContainer: true });
+    
+    // Create mock services
     stateService = testContext.factory.createMockStateService();
     parserService = createMockParserService();
+    
+    // Create the resolver directly
     resolver = new CommandResolver(stateService, parserService);
 
     context = {

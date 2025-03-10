@@ -1,14 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { TestContext } from './utils/TestContext.js';
+import { TestContextDI } from './utils/di/TestContextDI.js';
 import { OutputService } from '../services/pipeline/OutputService/OutputService.js';
 import { StateService } from '../services/state/StateService/StateService.js';
 
 describe('XML Output Format', () => {
-  let context: TestContext;
+  let context: TestContextDI;
 
   beforeEach(async () => {
     // Set up test context
-    context = new TestContext();
+    context = TestContextDI.create();
     await context.initialize();
     
     // Enable test mode for PathService
@@ -24,12 +24,9 @@ describe('XML Output Format', () => {
     // Create a simple markdown string
     const markdown = "# Hello World\n\nThis is a test.";
     
-    // Create a fresh OutputService
-    const outputService = new OutputService();
-    const stateService = new StateService();
-    
-    // Initialize the OutputService with the StateService
-    outputService.initialize(stateService);
+    // Get services from dependency injection container
+    const outputService = context.services.output;
+    const stateService = context.services.state;
     
     // Call the convertToXML method directly using type assertion to access private method
     const xmlOutput = await (outputService as any).convertToXML([], stateService, {
@@ -64,12 +61,9 @@ Here's some JSON data:
 
 More text after the JSON.`;
     
-    // Create a fresh OutputService
-    const outputService = new OutputService();
-    const stateService = new StateService();
-    
-    // Initialize the OutputService with the StateService
-    outputService.initialize(stateService);
+    // Get services from dependency injection container
+    const outputService = context.services.output;
+    const stateService = context.services.state;
     
     // Call the convertToXML method directly
     const xmlOutput = await (outputService as any).convertToXML([], stateService, {

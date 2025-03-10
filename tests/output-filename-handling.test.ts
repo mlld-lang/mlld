@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { TestContext } from './utils/TestContext.js';
+import { TestContextDI } from './utils/di/TestContextDI.js';
 import { CLIService, IPromptService } from '../services/cli/CLIService/CLIService.js';
 
 describe('Output Filename Handling', () => {
-  let context: TestContext;
+  let context: TestContextDI;
   let cliService: CLIService;
   const mockPromptService: IPromptService = {
     getText: vi.fn()
@@ -11,7 +11,7 @@ describe('Output Filename Handling', () => {
 
   beforeEach(async () => {
     // Set up test context
-    context = new TestContext();
+    context = TestContextDI.create();
     await context.initialize();
     
     // Create sample files
@@ -22,8 +22,8 @@ describe('Output Filename Handling', () => {
       {{greeting}}, {{name}}!
     `;
     
-    await context.fs.writeFile('$PROJECTPATH/test.mld', meldContent);
-    await context.fs.writeFile('$PROJECTPATH/test.md', meldContent);
+    await context.services.filesystem.writeFile('$PROJECTPATH/test.mld', meldContent);
+    await context.services.filesystem.writeFile('$PROJECTPATH/test.md', meldContent);
     
     // Set up CLI service with our test context
     cliService = new CLIService(
@@ -95,7 +95,7 @@ describe('Output Filename Handling', () => {
   
   it('should generate incremental filenames when file exists and overwrite is declined', async () => {
     // Create an existing output file
-    await context.fs.writeFile('$PROJECTPATH/test.o.md', 'existing content');
+    await context.services.filesystem.writeFile('$PROJECTPATH/test.o.md', 'existing content');
     
     // Call the findAvailableIncrementalFilename method directly
     const result = await (cliService as any).findAvailableIncrementalFilename('$PROJECTPATH/test.o.md');
@@ -110,9 +110,9 @@ describe('Output Filename Handling', () => {
   
   it('should continue incrementing filename until available one is found', async () => {
     // Create existing output files
-    await context.fs.writeFile('$PROJECTPATH/test.o.md', 'existing content');
-    await context.fs.writeFile('$PROJECTPATH/test.o-1.md', 'existing content');
-    await context.fs.writeFile('$PROJECTPATH/test.o-2.md', 'existing content');
+    await context.services.filesystem.writeFile('$PROJECTPATH/test.o.md', 'existing content');
+    await context.services.filesystem.writeFile('$PROJECTPATH/test.o-1.md', 'existing content');
+    await context.services.filesystem.writeFile('$PROJECTPATH/test.o-2.md', 'existing content');
     
     // Create a spy on the fileSystemService.exists method
     const existsSpy = vi.spyOn(cliService['fileSystemService'], 'exists');
@@ -144,7 +144,7 @@ describe('Output Filename Handling', () => {
   
   it('should allow overwriting if user confirms', async () => {
     // Create an existing output file
-    await context.fs.writeFile('$PROJECTPATH/test.o.md', 'existing content');
+    await context.services.filesystem.writeFile('$PROJECTPATH/test.o.md', 'existing content');
     
     // Mock user confirming overwrite
     vi.mocked(mockPromptService.getText).mockResolvedValueOnce('y');

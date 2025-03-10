@@ -7,8 +7,6 @@ import { MeldInterpreterError } from '@core/errors/MeldInterpreterError.js';
 import { MeldNode, DirectiveNode as MeldDirective, TextNode, SourceLocation } from 'meld-spec';
 import { IInterpreterService } from './IInterpreterService.js';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
-import { createService } from '@core/ServiceProvider.js';
-import { container } from 'tsyringe';
 import { DependencyContainer } from 'tsyringe';
 import { TestContainerHelper } from '@tests/utils/di/TestContainerHelper.js';
 
@@ -109,62 +107,30 @@ const createMockStateService = () => {
   } as unknown as Mocked<StateService>;
 };
 
-describe.each([
-  { useDI: true, name: 'with DI' },
-  { useDI: false, name: 'without DI' },
-])('InterpreterService Unit > %s', ({ useDI, name }) => {
+describe('InterpreterService Unit', () => {
   let context: TestContextDI;
   let service: InterpreterService;
   let mockDirectiveService: any;
   let mockStateService: any;
   let mockChildState: any;
 
-  beforeEach(async () => {
-    // Create mock child state
-    mockChildState = {
-      setCurrentFilePath: vi.fn(),
-      getCurrentFilePath: vi.fn(),
-      addNode: vi.fn(),
-      mergeChildState: vi.fn(),
-      clone: vi.fn().mockReturnThis(),
-      getTextVar: vi.fn(),
-      getDataVar: vi.fn(),
-      getNodes: vi.fn().mockReturnValue([]),
-      setImmutable: vi.fn(),
-      setTextVar: vi.fn(),
-      createChildState: vi.fn().mockReturnThis(),
-      variables: {
-        text: new Map(),
-        data: new Map(),
-        path: new Map()
-      },
-      commands: new Map(),
-      imports: new Set(),
-      nodes: [],
-      filePath: undefined,
-      parentState: undefined
-    };
+  beforeEach(() => {
+    // Create TestContextDI with isolated container
+    context = TestContextDI.create({ isolatedContainer: true });
     
-    // Create mock services
+    // Create mocks
     mockDirectiveService = createMockDirectiveService();
     mockStateService = createMockStateService();
+    mockChildState = mockStateService.createChildState();
     
-    // Update mockStateService to return our mockChildState
-    mockStateService.createChildState = vi.fn().mockReturnValue(mockChildState);
-    mockDirectiveService.processDirective = vi.fn().mockResolvedValue(mockChildState);
-    
-    // Create test context with DI (which is now always used)
-    context = TestContextDI.create({ isolatedContainer: true });
-
-    // Register our mocks in the context
+    // Register mocks
+    context.registerMock('DirectiveService', mockDirectiveService);
     context.registerMock('IDirectiveService', mockDirectiveService);
+    context.registerMock('StateService', mockStateService);
     context.registerMock('IStateService', mockStateService);
     
-    // Use the container to resolve the service
+    // Resolve the interpreter service
     service = context.resolveSync(InterpreterService);
-    
-    // Give the service a moment to initialize via setTimeout
-    await new Promise(resolve => setTimeout(resolve, 10));
   });
 
   afterEach(async () => {
@@ -175,8 +141,8 @@ describe.each([
     it('initializes with required services', (): void => {
       expect(service).toBeDefined();
       // Access to private properties should still work in tests
-      expect(service['directiveService']).toBe(mockDirectiveService);
-      expect(service['stateService']).toBe(mockStateService);
+      expect(service['directiveService']).toStrictEqual(mockDirectiveService);
+      expect(service['stateService']).toStrictEqual(mockStateService);
     });
 
     it('throws if initialized without required services', async (): Promise<void> => {

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { TestContext } from '@tests/utils/TestContext.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { PathService } from './PathService.js';
 import { PathValidationError, PathErrorCode } from './errors/PathValidationError.js';
 import type { Location } from '@core/types/index.js';
@@ -7,12 +7,12 @@ import type { StructuredPath } from 'meld-spec';
 import { PathErrorMessages } from '@core/errors/messages/paths.js';
 
 describe('PathService Temporary Path Rules', () => {
-  let context: TestContext;
+  let context: TestContextDI;
   let service: PathService;
 
   beforeEach(async () => {
     // Initialize test context
-    context = new TestContext();
+    context = TestContextDI.create();
     await context.initialize();
 
     // Get PathService from context

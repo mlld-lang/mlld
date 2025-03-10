@@ -1,6 +1,5 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { TextDirectiveHandler } from './TextDirectiveHandler.js';
-import { createMockStateService, createMockValidationService, createMockResolutionService } from '@tests/utils/testFactories.js';
 import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { ResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError.js';
 import { ResolutionErrorCode } from '@services/resolution/ResolutionService/IResolutionService.js';
@@ -8,32 +7,56 @@ import type { DirectiveNode } from 'meld-spec';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import { ErrorCollector } from '@tests/utils/ErrorTestUtils.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI';
 
 describe('TextDirectiveHandler Integration', () => {
   let handler: TextDirectiveHandler;
-  let stateService: ReturnType<typeof createMockStateService>;
-  let validationService: ReturnType<typeof createMockValidationService>;
-  let resolutionService: ReturnType<typeof createMockResolutionService>;
-  let clonedState: IStateService;
+  let stateService: any;
+  let validationService: any;
+  let resolutionService: any;
+  let clonedState: any;
+  let context: TestContextDI;
 
   beforeEach(() => {
+    // Create context with isolated container
+    context = TestContextDI.create({ isolatedContainer: true });
+    
+    // Create cloned state that will be returned by stateService.clone()
     clonedState = {
       setTextVar: vi.fn(),
       getTextVar: vi.fn(),
       getDataVar: vi.fn(),
       clone: vi.fn(),
-    } as unknown as IStateService;
+    };
 
+    // Create mock services
     stateService = {
       setTextVar: vi.fn(),
       getTextVar: vi.fn(),
       getDataVar: vi.fn(),
       clone: vi.fn().mockReturnValue(clonedState)
-    } as unknown as IStateService;
+    };
 
-    validationService = createMockValidationService();
-    resolutionService = createMockResolutionService();
-    handler = new TextDirectiveHandler(validationService, stateService, resolutionService);
+    validationService = {
+      validate: vi.fn().mockResolvedValue(true)
+    };
+
+    resolutionService = {
+      resolveInContext: vi.fn().mockImplementation(value => Promise.resolve(value))
+    };
+
+    // Register mocks with the container
+    context.registerMock('IValidationService', validationService);
+    context.registerMock('IStateService', stateService);
+    context.registerMock('IResolutionService', resolutionService);
+    
+    // Resolve the handler from the container
+    handler = context.container.resolve(TextDirectiveHandler);
+  });
+
+  afterEach(async () => {
+    // Cleanup to prevent container leaks
+    await context.cleanup();
   });
 
   describe('complex scenarios', () => {
@@ -47,7 +70,7 @@ describe('TextDirectiveHandler Integration', () => {
         }
       };
 
-      const context = {
+      const testContext = {
         state: stateService,
         currentFilePath: 'test.meld'
       };
@@ -55,7 +78,7 @@ describe('TextDirectiveHandler Integration', () => {
       vi.mocked(resolutionService.resolveInContext)
         .mockResolvedValue('Hello Alice!');
 
-      const result = await handler.execute(node, context);
+      const result = await handler.execute(node, testContext);
       expect(clonedState.setTextVar).toHaveBeenCalledWith('greeting', 'Hello Alice!');
     });
 
@@ -69,7 +92,7 @@ describe('TextDirectiveHandler Integration', () => {
         }
       };
 
-      const context = {
+      const testContext = {
         state: stateService,
         currentFilePath: 'test.meld'
       };
@@ -77,7 +100,7 @@ describe('TextDirectiveHandler Integration', () => {
       vi.mocked(resolutionService.resolveInContext)
         .mockResolvedValue('Hello "quoted World" !');
 
-      const result = await handler.execute(node, context);
+      const result = await handler.execute(node, testContext);
       expect(clonedState.setTextVar).toHaveBeenCalledWith('message', 'Hello "quoted World" !');
     });
 
@@ -91,7 +114,7 @@ describe('TextDirectiveHandler Integration', () => {
         }
       };
 
-      const context = {
+      const testContext = {
         state: stateService,
         currentFilePath: 'test.meld'
       };
@@ -99,7 +122,7 @@ describe('TextDirectiveHandler Integration', () => {
       vi.mocked(resolutionService.resolveInContext)
         .mockResolvedValue('second@example.com');
 
-      const result = await handler.execute(node, context);
+      const result = await handler.execute(node, testContext);
       expect(clonedState.setTextVar).toHaveBeenCalledWith('userInfo', 'second@example.com');
     });
 
@@ -113,7 +136,7 @@ describe('TextDirectiveHandler Integration', () => {
         }
       };
 
-      const context = {
+      const testContext = {
         state: stateService,
         currentFilePath: 'test.meld'
       };
@@ -124,7 +147,7 @@ describe('TextDirectiveHandler Integration', () => {
       vi.mocked(resolutionService.resolveInContext)
         .mockResolvedValue('example.com:3000');
 
-      const result = await handler.execute(node, context);
+      const result = await handler.execute(node, testContext);
       expect(clonedState.setTextVar).toHaveBeenCalledWith('config', 'example.com:3000');
 
       delete process.env.ENV_HOST;
@@ -148,7 +171,7 @@ describe('TextDirectiveHandler Integration', () => {
         }
       };
 
-      const context = {
+      const testContext = {
         state: stateService,
         currentFilePath: 'test.meld'
       };
@@ -163,7 +186,7 @@ describe('TextDirectiveHandler Integration', () => {
           {
             node,
             context: {
-              ...context,
+              ...testContext,
               filePath: 'test.meld'
             },
             location: {
@@ -190,7 +213,7 @@ describe('TextDirectiveHandler Integration', () => {
       // Test strict mode (should throw)
       await expect(async () => {
         try {
-          await handler.execute(node, context);
+          await handler.execute(node, testContext);
         } catch (error) {
           // Ensure we're passing an appropriate error to the handler
           if (error instanceof DirectiveError) {

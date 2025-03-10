@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { TestContext } from '@tests/utils/TestContext.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { FileSystemService } from './FileSystemService.js';
 import { PathOperationsService } from './PathOperationsService.js';
 import { MeldError } from '@core/errors/MeldError.js';
@@ -7,9 +7,14 @@ import path from 'path';
 import { ServiceMediator } from '@services/mediator/ServiceMediator.js';
 import { PathService } from '@services/fs/PathService/PathService.js';
 import { ProjectPathResolver } from '@services/fs/ProjectPathResolver.js';
+import { IPathService } from '../PathService/IPathService.js';
+import { IFileSystemService } from './IFileSystemService.js';
+import { IFileSystem } from './IFileSystem.js';
+import { IPathOperationsService } from './IPathOperationsService.js';
+import { IServiceMediator } from '@services/mediator/IServiceMediator.js';
 
 describe('FileSystemService', () => {
-  let context: TestContext;
+  let context: TestContextDI;
   let service: FileSystemService;
   let pathOps: PathOperationsService;
   let serviceMediator: ServiceMediator;
@@ -18,13 +23,13 @@ describe('FileSystemService', () => {
 
   beforeEach(async () => {
     // Initialize test context
-    context = new TestContext();
+    context = TestContextDI.create();
     await context.initialize();
 
     // Load test fixture
     await context.fixtures.load('fileSystemProject');
 
-    // Initialize services
+    // Initialize services using DI approach
     serviceMediator = new ServiceMediator();
     pathOps = new PathOperationsService();
     projectPathResolver = new ProjectPathResolver();
@@ -37,7 +42,7 @@ describe('FileSystemService', () => {
     // Create file system service and register with mediator
     service = new FileSystemService(pathOps, serviceMediator, context.fs);
     
-    // Make sure both services are registered with the mediator
+    // Connect services through the mediator to resolve circular dependencies
     serviceMediator.setPathService(pathService);
     serviceMediator.setFileSystemService(service);
 

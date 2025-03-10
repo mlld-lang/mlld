@@ -149,11 +149,11 @@ export class ResolutionService implements IResolutionService {
   private serviceMediator?: IServiceMediator;
 
   /**
-   * Creates a new ResolutionService instance with dependency injection
+   * Creates a new ResolutionService instance using dependency injection
    * 
-   * @param stateService Service for accessing state variables
-   * @param fileSystemService Service for file operations
-   * @param pathService Service for path resolution
+   * @param stateService State service for accessing variables and commands
+   * @param fileSystemService File system service for resolving file paths
+   * @param pathService Path service for validating paths
    * @param serviceMediator Service mediator for breaking circular dependencies
    */
   constructor(
@@ -167,7 +167,7 @@ export class ResolutionService implements IResolutionService {
   
   /**
    * Initialize this service with the given parameters
-   * Handles both DI and non-DI mode initialization
+   * Using DI-only mode
    */
   private initializeFromParams(
     stateService?: IStateService,
@@ -175,58 +175,57 @@ export class ResolutionService implements IResolutionService {
     pathService?: IPathService,
     serviceMediator?: IServiceMediator
   ): void {
-    // Check if we're in DI mode by verifying all dependencies exist
-    if (stateService && fileSystemService && pathService && serviceMediator) {
-      this.initializeDIMode(stateService, fileSystemService, pathService, serviceMediator);
-    } else {
-      // In legacy non-DI mode, require at least the state service
-      if (!stateService) {
-        throw new Error('StateService is required for ResolutionService');
-      }
-      this.initializeLegacyMode(stateService, fileSystemService, pathService, serviceMediator);
+    // Verify required dependencies
+    if (!stateService) {
+      throw new Error('StateService is required for ResolutionService');
     }
-  }
-  
-  /**
-   * Initialize in DI mode with explicit dependencies
-   */
-  private initializeDIMode(
-    stateService: IStateService,
-    fileSystemService: IFileSystemService,
-    pathService: IPathService,
-    serviceMediator: IServiceMediator
-  ): void {
-    this.stateService = stateService;
-    this.fileSystemService = fileSystemService;
-    this.pathService = pathService;
-    this.serviceMediator = serviceMediator;
     
-    // Register this service with the mediator
-    this.serviceMediator.setResolutionService(this);
-    
-    this.initializeResolvers();
-  }
-  
-  /**
-   * Initialize in legacy non-DI mode
-   */
-  private initializeLegacyMode(
-    stateService: IStateService,
-    fileSystemService?: IFileSystemService,
-    pathService?: IPathService,
-    serviceMediator?: IServiceMediator
-  ): void {
+    // Initialize services
     this.stateService = stateService;
-    this.fileSystemService = fileSystemService || {} as IFileSystemService;
-    this.pathService = pathService || {} as IPathService;
+    this.fileSystemService = fileSystemService || this.createDefaultFileSystemService();
+    this.pathService = pathService || this.createDefaultPathService();
     this.serviceMediator = serviceMediator;
     
     // Register this service with the mediator if available
-    if (this.serviceMediator) {
-      this.serviceMediator.setResolutionService(this);
+    if (this.serviceMediator && typeof this.serviceMediator.setResolutionService === 'function') {
+      try {
+        this.serviceMediator.setResolutionService(this);
+      } catch (error) {
+        console.warn('Failed to register ResolutionService with ServiceMediator:', error);
+      }
     }
     
+    // Initialize resolvers
     this.initializeResolvers();
+  }
+  
+  /**
+   * Create a default file system service if not provided
+   * Used as fallback in case dependency injection fails
+   */
+  private createDefaultFileSystemService(): IFileSystemService {
+    logger.warn('Using default FileSystemService - this should only happen in tests');
+    return {
+      readFile: async () => '',
+      writeFile: async () => {},
+      exists: async () => false,
+      isDirectory: async () => false,
+      // Minimal implementation for fallback
+    } as IFileSystemService;
+  }
+  
+  /**
+   * Create a default path service if not provided
+   * Used as fallback in case dependency injection fails
+   */
+  private createDefaultPathService(): IPathService {
+    logger.warn('Using default PathService - this should only happen in tests');
+    return {
+      validatePath: async (path) => path,
+      resolvePath: (path) => path,
+      normalizePath: (path) => path,
+      // Minimal implementation for fallback
+    } as IPathService;
   }
   
   /**

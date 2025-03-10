@@ -3,32 +3,24 @@ import { ProjectPathResolver } from './ProjectPathResolver.js';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { TestContextDI } from '../../tests/utils/di/TestContextDI';
-import { createService } from '../../core/ServiceProvider';
 
 // Mock fs and path modules
 vi.mock('fs/promises');
 vi.mock('path');
 
 describe('ProjectPathResolver', () => {
-  // Define tests for both DI and non-DI modes
-  describe.each([
-    { useDI: true, name: 'with DI' },
-    { useDI: false, name: 'without DI' },
-  ])('$name', ({ useDI }) => {
-    let resolver: ProjectPathResolver;
-    let context: TestContextDI;
+  let resolver: ProjectPathResolver;
+  let context: TestContextDI;
+  
+  beforeEach(() => {
+    // Create test context with DI
+    context = TestContextDI.create({ isolatedContainer: true });
     
-    beforeEach(() => {
-      // Create test context with appropriate DI setting
-      context = TestContextDI.create({ isolatedContainer: true });
+    // Get service instance using DI
+    resolver = context.container.resolve<ProjectPathResolver>('ProjectPathResolver');
       
-      // Get service instance using the appropriate mode
-      resolver = useDI
-        ? context.container.resolve<ProjectPathResolver>('ProjectPathResolver')
-        : createService(ProjectPathResolver);
-        
-      vi.resetAllMocks();
-    
+    vi.resetAllMocks();
+  
     // Setup path mocks with default implementations
     vi.mocked(path.join).mockImplementation((...args) => args.join('/'));
     vi.mocked(path.dirname).mockImplementation((p) => p.split('/').slice(0, -1).join('/'));
@@ -133,6 +125,5 @@ describe('ProjectPathResolver', () => {
 
   afterEach(async () => {
     await context.cleanup();
-  });
   });
 }); 

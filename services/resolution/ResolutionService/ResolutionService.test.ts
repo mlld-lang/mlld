@@ -34,11 +34,8 @@ vi.mock('@core/utils/logger', () => ({
   }
 }));
 
-// Run tests in both DI and non-DI modes
-describe.each([
-  { useDI: false, name: 'without DI' },
-  { useDI: true, name: 'with DI' }
-])('ResolutionService $name', ({ useDI }) => {
+// Run tests using DI mode only
+describe('ResolutionService', () => {
   let service: ResolutionService;
   let stateService: IStateService;
   let fileSystemService: IFileSystemService;
@@ -113,33 +110,18 @@ describe.each([
     } as unknown as IServiceMediator;
 
     // Create test context with appropriate DI mode
-    if (useDI) {
-      testContext = TestContextDI.create({ isolatedContainer: true });
-      
-      // Register mock services with the container
-      container.registerInstance('IStateService', stateService);
-      container.registerInstance('IFileSystemService', fileSystemService);
-      container.registerInstance('IParserService', parserService);
-      container.registerInstance('IPathService', pathService);
-      container.registerInstance('IServiceMediator', serviceMediator);
-      container.registerInstance('ServiceMediator', serviceMediator);
-      
-      // Resolve service from the container
-      service = container.resolve(ResolutionService);
-    } else {
-      testContext = TestContextDI.create({ isolatedContainer: true });
-      
-      // Create service manually with mediator
-      service = new ResolutionService(
-        stateService,
-        fileSystemService, 
-        pathService,
-        serviceMediator
-      );
-      
-      // Manually setting parser service for non-DI mode
-      (service as any).parserService = parserService;
-    }
+    testContext = TestContextDI.create({ isolatedContainer: true });
+    
+    // Register mock services with the container
+    container.registerInstance('IStateService', stateService);
+    container.registerInstance('IFileSystemService', fileSystemService);
+    container.registerInstance('IParserService', parserService);
+    container.registerInstance('IPathService', pathService);
+    container.registerInstance('IServiceMediator', serviceMediator);
+    container.registerInstance('ServiceMediator', serviceMediator);
+    
+    // Resolve service from the container
+    service = container.resolve(ResolutionService);
 
     context = {
       currentFilePath: 'test.meld',
@@ -154,9 +136,7 @@ describe.each([
   });
   
   afterEach(async () => {
-    if (useDI) {
-      container.clearInstances();
-    }
+    container.clearInstances();
     await testContext.cleanup();
   });
 

@@ -4,6 +4,16 @@ import { importLogger as logger } from '@core/utils/logger.js';
 import { Service } from '../../../core/ServiceProvider';
 import { injectable } from 'tsyringe';
 
+/**
+ * Service for tracking and detecting circular imports in Meld files
+ * 
+ * This service maintains an import stack to track the current chain of file imports
+ * and can detect circular dependencies in the import chain.
+ * 
+ * @remarks
+ * Always use dependency injection to obtain an instance of this service.
+ * Manual instantiation without DI is deprecated and will be removed in a future version.
+ */
 @injectable()
 @Service({
   description: 'Service for tracking and detecting circular imports in Meld files'
@@ -11,6 +21,11 @@ import { injectable } from 'tsyringe';
 export class CircularityService implements ICircularityService {
   private importStack: string[] = [];
 
+  /**
+   * Begins tracking an import of the specified file
+   * @param filePath - Path of the file being imported
+   * @throws {MeldImportError} If a circular import is detected
+   */
   beginImport(filePath: string): void {
     logger.debug('Beginning import', { 
       filePath,
@@ -36,6 +51,10 @@ export class CircularityService implements ICircularityService {
     this.importStack.push(filePath);
   }
 
+  /**
+   * Ends tracking of an import for the specified file
+   * @param filePath - Path of the file whose import has completed
+   */
   endImport(filePath: string): void {
     const idx = this.importStack.lastIndexOf(filePath);
     if (idx !== -1) {
@@ -52,18 +71,28 @@ export class CircularityService implements ICircularityService {
     }
   }
 
+  /**
+   * Checks if a file is currently in the import stack
+   * @param filePath - Path of the file to check
+   * @returns True if the file is in the import stack, false otherwise
+   */
   isInStack(filePath: string): boolean {
     return this.importStack.includes(filePath);
   }
 
+  /**
+   * Gets the current import stack
+   * @returns Array of file paths in the current import stack
+   */
   getImportStack(): string[] {
     return [...this.importStack];
   }
 
+  /**
+   * Resets the import stack to an empty state
+   */
   reset(): void {
-    logger.debug('Resetting import stack', {
-      previousStack: this.importStack
-    });
     this.importStack = [];
+    logger.debug('Reset import stack');
   }
 } 

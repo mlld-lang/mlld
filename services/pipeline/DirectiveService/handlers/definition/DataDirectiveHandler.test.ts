@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { DataDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/DataDirectiveHandler.js';
 import { createDataDirective, createLocation, createDirectiveNode } from '@tests/utils/testFactories.js';
-import { TestContext } from '@tests/utils/TestContext.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
@@ -59,7 +59,7 @@ const createNodeFromExample = async (exampleCode: string): Promise<DirectiveNode
 };
 
 describe('DataDirectiveHandler', () => {
-  let context: TestContext;
+  let context: TestContextDI;
   let handler: DataDirectiveHandler;
   let validationService: IValidationService;
   let stateService: IStateService;
@@ -67,9 +67,8 @@ describe('DataDirectiveHandler', () => {
   let clonedState: IStateService;
 
   beforeEach(async () => {
-    // Initialize test context with memfs
-    context = new TestContext();
-    await context.initialize();
+    // Initialize test context with DI
+    context = TestContextDI.create({ isolatedContainer: true });
 
     validationService = {
       validate: vi.fn()
@@ -89,6 +88,12 @@ describe('DataDirectiveHandler', () => {
       resolveInContext: vi.fn()
     } as unknown as IResolutionService;
 
+    // Register mocks with the container
+    context.registerMock("IValidationService", validationService);
+    context.registerMock("IStateService", stateService);
+    context.registerMock("IResolutionService", resolutionService);
+
+    // Create handler directly since it's not registered with DI
     handler = new DataDirectiveHandler(
       validationService,
       stateService,

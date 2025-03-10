@@ -1,12 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { TestContext } from '@tests/utils/TestContext.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { main } from '@api/index.js';
+import type { Services } from '@core/types/index.js';
 
 describe('Comment Handling Fix', () => {
-  let context: TestContext;
+  let context: TestContextDI;
 
   beforeEach(async () => {
-    context = new TestContext();
+    context = TestContextDI.create();
     await context.initialize();
   });
 
@@ -16,7 +17,7 @@ describe('Comment Handling Fix', () => {
 
   it('should properly handle files with comment lines starting with >>', async () => {
     // Create a file with comment lines (starting with >>)
-    await context.fs.writeFile('comment-test.meld', 
+    await context.services.filesystem.writeFile('comment-test.meld', 
       '>> This is a comment and should be ignored\n' +
       '>> Another comment line that should be ignored\n\n' +
       '@text title = "Test File With Comments"\n\n' +
@@ -26,8 +27,8 @@ describe('Comment Handling Fix', () => {
 
     // Process the file
     const result = await main('comment-test.meld', {
-      fs: context.fs,
-      services: context.services,
+      fs: context.services.filesystem,
+      services: context.services as unknown as Partial<Services>,
       format: 'markdown'
     });
 
@@ -43,7 +44,7 @@ describe('Comment Handling Fix', () => {
 
   it('should handle files with a mix of comments and directives', async () => {
     // Create a file with comments and directives
-    await context.fs.writeFile('comment-directive-test.meld', 
+    await context.services.filesystem.writeFile('comment-directive-test.meld', 
       '>> This file has comments and directives\n' +
       '@data user = { "name": "Test User", "role": "Developer" }\n' +
       '>> Another comment\n\n' +
@@ -53,8 +54,8 @@ describe('Comment Handling Fix', () => {
 
     // Process the file
     const result = await main('comment-directive-test.meld', {
-      fs: context.fs,
-      services: context.services,
+      fs: context.services.filesystem,
+      services: context.services as unknown as Partial<Services>,
       format: 'markdown'
     });
 
@@ -71,7 +72,7 @@ describe('Comment Handling Fix', () => {
 
   it('should handle comments in transformation mode', async () => {
     // Create a file with comments and content
-    await context.fs.writeFile('transform-comment-test.meld', 
+    await context.services.filesystem.writeFile('transform-comment-test.meld', 
       '>> These comments should be ignored in transformation mode\n' +
       '>> More comments to ignore\n\n' +
       '@text transformed = "This content should be visible"\n\n' +
@@ -80,8 +81,8 @@ describe('Comment Handling Fix', () => {
 
     // Process the file with transformation enabled
     const result = await main('transform-comment-test.meld', {
-      fs: context.fs,
-      services: context.services,
+      fs: context.services.filesystem,
+      services: context.services as unknown as Partial<Services>,
       format: 'markdown',
       transformation: true
     });

@@ -6,7 +6,6 @@ import {
   registerServiceFactory,
   registerServiceClass,
   Service,
-  shouldUseDI,
   getServiceMetadata,
   ServiceMetadata
 } from './ServiceProvider';
@@ -71,40 +70,9 @@ class DerivedService extends BaseService {
 }
 
 describe('ServiceProvider', () => {
-  // Backup original environment variable
-  const originalEnv = process.env.USE_DI;
-
-  beforeEach(() => {
-    // Clear environment variable before each test
-    delete process.env.USE_DI;
-  });
-
+  // Clear container registrations between tests to prevent test interference
   afterEach(() => {
-    // Restore original environment variable after each test
-    if (originalEnv === undefined) {
-      delete process.env.USE_DI;
-    } else {
-      process.env.USE_DI = originalEnv;
-    }
-  });
-
-  describe('shouldUseDI', () => {
-    it('should always return true regardless of USE_DI environment variable', () => {
-      // When USE_DI is not set
-      delete process.env.USE_DI;
-      expect(shouldUseDI()).toBe(true);
-
-      // When USE_DI is set to "true"
-      process.env.USE_DI = 'true';
-      expect(shouldUseDI()).toBe(true);
-
-      // When USE_DI is set to other values
-      process.env.USE_DI = 'false';
-      expect(shouldUseDI()).toBe(true);
-      
-      process.env.USE_DI = '1';
-      expect(shouldUseDI()).toBe(true);
-    });
+    vi.restoreAllMocks();
   });
 
   describe('createService', () => {
