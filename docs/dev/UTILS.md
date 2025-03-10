@@ -199,7 +199,7 @@ describe('My Test', () => {
   
   it('should process a file', async () => {
     // Write a test file
-    await context.writeFile('/test.meld', '@text greeting = "Hello"');
+    await context.writeFile('/test.mld', '@text greeting = "Hello"');
     
     // Process the file
     const result = await context.services.interpreter.interpret(
@@ -233,7 +233,7 @@ describe('CLI Test', () => {
     // Set up CLI test environment
     const { exitMock, consoleMocks } = await context.setupCliTest({
       files: {
-        '/project/test.meld': '@text greeting = "Hello"'
+        '/project/test.mld': '@text greeting = "Hello"'
       },
       env: {
         NODE_ENV: 'test'
@@ -243,7 +243,7 @@ describe('CLI Test', () => {
     });
     
     // Run CLI command
-    process.argv = ['node', 'meld', '$./test.meld', '--stdout'];
+    process.argv = ['node', 'meld', '$./test.mld', '--stdout'];
     await cli.main();
     
     // Verify results
@@ -285,7 +285,7 @@ describe('Debug Test', () => {
   
   it('should track state changes', async () => {
     // Write and process a test file
-    await context.writeFile('/test.meld', '@text greeting = "Hello"');
+    await context.writeFile('/test.mld', '@text greeting = "Hello"');
     await context.services.interpreter.interpret(
       context.services.parser.parse('@text greeting = "Hello"')
     );

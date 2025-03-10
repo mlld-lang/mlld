@@ -54,16 +54,16 @@ This command focuses on variable resolution issues, tracking when and how variab
 
 ```bash
 # Debug all variables in a file
-meld debug-resolution myfile.meld
+meld debug-resolution myfile.mld
 
 # Debug a specific variable
-meld debug-resolution myfile.meld --var userData
+meld debug-resolution myfile.mld --var userData
 
 # Get JSON output for programmatic processing
-meld debug-resolution myfile.meld --output-format json > debug.json
+meld debug-resolution myfile.mld --output-format json > debug.json
 
 # Watch a file for changes
-meld debug-resolution myfile.meld --var userData --watch
+meld debug-resolution myfile.mld --var userData --watch
 ```
 
 ### Debug Transform Command
@@ -88,13 +88,13 @@ This command provides insights into the transformation process, showing how the 
 
 ```bash
 # Debug transformation of a file
-meld debug-transform myfile.meld
+meld debug-transform myfile.mld
 
 # Focus on specific directive type
-meld debug-transform myfile.meld --directive-type embed
+meld debug-transform myfile.mld --directive-type embed
 
 # Generate visualization output
-meld debug-transform myfile.meld --output-format mermaid --output-file transform.md
+meld debug-transform myfile.mld --output-format mermaid --output-file transform.md
 ```
 
 ### Debug Context Command
@@ -123,10 +123,10 @@ This command focuses on the context and state management across files, especiall
 
 ```bash
 # Debug context of a file
-meld debug-context myfile.meld
+meld debug-context myfile.mld
 
 # Generate hierarchy visualization
-meld debug-context myfile.meld --visualization-type hierarchy --output-format mermaid
+meld debug-context myfile.mld --visualization-type hierarchy --output-format mermaid
 ```
 
 ## Variable Resolution Debugging
@@ -155,18 +155,18 @@ When variables cross context boundaries (e.g., during imports), the debug tool t
 #### Sample Output
 
 ```
-Variable Resolution Debug for myfile.meld
+Variable Resolution Debug for myfile.mld
 =====================================
 
 VARIABLE: userData (3 resolution attempts)
 
 Attempt #1:
-  Context: /project/myfile.meld
+  Context: /project/myfile.mld
   Success: false
   Error: Variable not found
   
 Attempt #2:
-  Context: /project/imported.meld
+  Context: /project/imported.mld
   Success: true
   Value: {"name":"John","age":30}
   Context Boundary: 
@@ -175,7 +175,7 @@ Attempt #2:
     Target: state_347830
     
 Attempt #3:
-  Context: /project/myfile.meld
+  Context: /project/myfile.mld
   Success: true
   Value: {"name":"John","age":30}
 ```
@@ -213,9 +213,9 @@ Shows the parent-child relationships between states:
 
 ```
 RootState
-├── ImportState (file1.meld)
+├── ImportState (file1.mld)
 │   └── EmbedState (nested-content)
-└── ImportState (file2.meld)
+└── ImportState (file2.mld)
 ```
 
 ### Transition Diagram
@@ -370,7 +370,7 @@ Some debugging behaviors can be controlled with environment variables, though th
 
 Example:
 ```bash
-MELD_DEBUG=1 MELD_DEBUG_VARS=userData,config meld debug-resolution myfile.meld
+MELD_DEBUG=1 MELD_DEBUG_VARS=userData,config meld debug-resolution myfile.mld
 ```
 
 ## Best Practices

@@ -60,18 +60,18 @@
 <p>The <code>@import</code> directive allows you to import variables and commands from other Meld files.</p>
 <h2 id="syntax" tabindex="-1">Syntax</h2>
 <p>Modern syntax:</p>
-<pre><code class="language-meld">@import [path.meld]                           # Import all variables
-@import [*] from [path.meld]                  # Import all variables (equivalent)
-@import [var1, var2] from [path.meld]        # Import specific variables
-@import [var1 as alias1, var2] from [path.meld] # Import with aliases
+<pre><code class="language-meld">@import [path.mld]                           # Import all variables
+@import [*] from [path.mld]                  # Import all variables (equivalent)
+@import [var1, var2] from [path.mld]        # Import specific variables
+@import [var1 as alias1, var2] from [path.mld] # Import with aliases
 </code></pre>
 <p>Legacy syntax (also supported):</p>
-<pre><code class="language-meld">@import path=&quot;path.meld&quot;                     # Import all variables
-@import path=&quot;path.meld&quot; imports=[var1, var2] # Import specific variables
+<pre><code class="language-meld">@import path=&quot;path.mld&quot;                     # Import all variables
+@import path=&quot;path.mld&quot; imports=[var1, var2] # Import specific variables
 </code></pre>
 <p>Where:</p>
 <ul>
-<li><code>path.meld</code> is the path to the Meld file to import</li>
+<li><code>path.mld</code> is the path to the Meld file to import</li>
 <li><code>var1</code>, <code>var2</code> are variable names to import</li>
 <li><code>alias1</code> is an alternative name to use for the imported variable</li>
 </ul>
@@ -100,30 +100,30 @@
 </ul>
 <h2 id="selective-imports-and-aliases" tabindex="-1">Selective Imports and Aliases</h2>
 <p>Specify selective imports using a comma-separated list:</p>
-<pre><code class="language-meld">@import [var1, var2, var3] from [path.meld]
+<pre><code class="language-meld">@import [var1, var2, var3] from [path.mld]
 </code></pre>
 <p>Import with aliases to avoid name conflicts:</p>
-<pre><code class="language-meld">@import [var1 as myVar1, var2 as myVar2] from [path.meld]
+<pre><code class="language-meld">@import [var1 as myVar1, var2 as myVar2] from [path.mld]
 </code></pre>
 <p>Alternative alias syntax with colon:</p>
-<pre><code class="language-meld">@import [var1:myVar1, var2:myVar2] from [path.meld]
+<pre><code class="language-meld">@import [var1:myVar1, var2:myVar2] from [path.mld]
 </code></pre>
 <h2 id="examples" tabindex="-1">Examples</h2>
 <p>Basic import:</p>
-<pre><code class="language-meld">@import [&quot;$PROJECTPATH/utils.meld&quot;]
+<pre><code class="language-meld">@import [&quot;$PROJECTPATH/utils.mld&quot;]
 </code></pre>
 <p>Import with path variables:</p>
 <pre><code class="language-meld">@path lib = &quot;$PROJECTPATH/lib&quot;
-@import [$lib/utils.meld]
+@import [$lib/utils.mld]
 </code></pre>
 <p>Selective import:</p>
-<pre><code class="language-meld">@import [textVar, dataVar] from [$lib/utils.meld]
+<pre><code class="language-meld">@import [textVar, dataVar] from [$lib/utils.mld]
 </code></pre>
 <p>Import with aliases:</p>
-<pre><code class="language-meld">@import [textVar as myText, dataVar as myData] from [$lib/utils.meld]
+<pre><code class="language-meld">@import [textVar as myText, dataVar as myData] from [$lib/utils.mld]
 </code></pre>
 <p>Using imported variables:</p>
-<pre><code class="language-meld">@import [&quot;$PROJECTPATH/utils.meld&quot;]
+<pre><code class="language-meld">@import [&quot;$PROJECTPATH/utils.mld&quot;]
 
 @text message = `Hello, {{importedName}}!`
 @run [$importedCommand({{param}})]

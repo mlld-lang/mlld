@@ -30,8 +30,8 @@
       
 <section class="hero">
   <div class="hero-content">
-    <h1 class="hero-logo">meld</h1>
-    <p class="tagline">modular prompt scripting for<br> people tired of repeating themselves</p>
+    <h1 class="hero-logo">mlld</h1>
+    <p class="tagline">modular prompt scripting</p>
   </div>
   
   <div class="hero-terminal-container">
@@ -40,94 +40,88 @@
         <!-- Terminal content will be populated by JavaScript -->
       </div>
     </div>
-    
-    <div class="terminal-tabs">
-      <a href="#" class="terminal-tab" data-tab="tab1">Basic Usage</a>
-      <a href="#" class="terminal-tab" data-tab="tab2">Command Help</a>
-      <a href="#" class="terminal-tab" data-tab="tab3">Template Example</a>
+  </div>
+</section>
+
+<section>  
+  <h2>What is prompt scripting?</h2>
+  <p>If you've already experienced the <strong>pain</strong>, you already know what you <strong>want</strong> it to be.</p>
+  <div class="examples">
+    <div>
+      <h3>Tired of repeating yourself</h3>
+      <p>"Working with LLMs is like having a brilliant intern with chronic amnesia."</p>
+    </div>
+    <div>
+      <h3>Tired of curating context</h3>
+      <p>"I'd do a lot more with LLMs if re-assembling context wasn't such a chore."</p>
+    </div>
+    <div>
+      <h3>Tired of wrong tools for the job</h3>
+      <p>"I just want to script LLMs. A chat or an IDE isn't helpful for that."</p>
     </div>
   </div>
 </section>
 
-<section>
-  <p>Meld is a document templating language designed for creating modular prompts and dynamic text content. It processes special directives while preserving the rest of your document exactly as written.</p>
+<section>  
+  <h2>What is prompt scripting?</h2>
+  <p>If you've already seen the <strong>possibility</strong>, you already know what you <strong>want</strong> it to be.</p>
+  <div class="examples">
+    <div>
+      <h3>Write scripts to embed LLM context in the middle of your markdown docs.</h3>
+      <pre>
+<code>
+  # Overview
+
+  Here's the structure of the codebase:
   
-  <div class="features">
-    <div class="feature">
-      <h3>Simple & Predictable</h3>
-      <p>Clear syntax boundaries that don't interfere with your markdown. No complex programming knowledge required.</p>
+  @run [tree --gitignore]  
+</code>
+      </pre>
     </div>
-    
-    <div class="feature">
-      <h3>Modular by Design</h3>
-      <p>Import and embed external files. Define reusable commands. Create templates with variable interpolation.</p>
+    <div>
+      <h3>Chain LLM requests and responses like you'd pipe shell commands</h3>
+      <pre>
+<code>
+@text tests = @run [npm test]
+
+@text res = @run [oneshot "What's broken here? "]
+
+@run [oneshot "Make a plan to fix "]
+
+–--
+
+"Here's a plan to fix the failing tests."
+</code>
+    </pre>
     </div>
-    
-    <div class="feature">
-      <h3>Dynamic Content</h3>
-      <p>Execute shell commands and capture their output. Access environment variables. Process data from various sources.</p>
+    <div>
+      <h3>Use imports and treat markdown doc sections like modules</h3>
+      <pre>
+<code>
+  @import [roles] from [roles.mld]
+
+
+  @text infra = @embed [TESTING.md # Infrastructure]
+  
+  @text prompt = [[
+    Read our docs:  
+    Review this set of changes: 
+    Please create a list of the tests we
+    should add to cover the changes.
+  ]]
+  
+  @run [oneshot  --system ]
+
+  –--
+
+  "Here's a list of the tests to add…"  
+</code>
+      </pre>
     </div>
   </div>
 </section>
 
-<section>
-  <h2>How It Works</h2>
-  
-  <p>Meld processes special directives in your documents while preserving all other content exactly as written. This makes it perfect for building modular prompts and templates.</p>
-  
-  <div class="example">
-    <div class="example-header">Example: Template with Variables</div>
-<pre><code>---
-! Define some variables
-@define name = "World"
-@define greeting = "Hello"
 
-! Use the variables in text
-{{ greeting }}, {{ name }}!
-
-! Execute a command and capture its output
-@run date
-Today is: {{ output }}
-</code></pre>
-  </div>
-  
-  <div class="example">
-    <div class="example-header">Example: Importing Content</div>
-<pre><code>---
-! Include content from other files
-@import intro.md
-@import examples/basic.md
-
-! Only import a section from another file
-@import examples/advanced.md#section2
-
-! Add dynamic data
-@data users = [
-  { "name": "Alice", "role": "Admin" },
-  { "name": "Bob", "role": "User" }
-]
-
-
-{{#each users}}
-- {{name}}: {{role}}
-{{/each}}
-
-</code></pre>
-  </div>
-</section>
-
-<section>
-  <h2>Use Cases</h2>
-  
-  <ul>
-    <li><strong>LLM Prompting</strong> - Build complex, modular prompts for AI systems</li>
-    <li><strong>Documentation</strong> - Create documentation with dynamic examples and content</li>
-    <li><strong>Content Generation</strong> - Generate template-based content with variable substitution</li>
-    <li><strong>Data Transformation</strong> - Transform structured data into readable documents</li>
-  </ul>
-  
-  <p>Meld provides both a command-line interface for simple file processing and a JavaScript/TypeScript SDK for integration into your applications.</p>
-  
   <div class="cta-link">
     <a href="/docs/introduction/">Read the Introduction →</a>
   </div>

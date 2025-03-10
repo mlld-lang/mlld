@@ -134,7 +134,7 @@ Path variables can be used in various directives:
 @path docs = "$PROJECTPATH/docs"
 @embed [$docs/file.md]                  # Embed content from a file
 @run [cat $docs/file.md]                # Run command with path argument
-@import [$docs/import.meld]             # Import another meld file
+@import [$docs/import.mld]             # Import another meld file
 ```
 
 ## Path Variable Extraction

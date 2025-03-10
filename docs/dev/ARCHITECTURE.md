@@ -353,10 +353,10 @@ which ensures services are created in the correct order and all dependencies are
 
 ## EXAMPLE USAGE SCENARIO
 
-1) Input: A .meld file with lines like:  
+1) Input: A .mld file with lines like:  
    @text greeting = "Hello"  
    @data config = { "value": 123 }  
-   @import [ path = "other.meld" ]  
+   @import [ path = "other.mld" ]  
 
 2) We load the file from disk.  
 3) ParserService → parse the content → AST.  

@@ -54,7 +54,7 @@ it('should throw MeldFileNotFoundError for missing files', async () => {
   await context.initialize();
   
   // Act & Assert
-  await expect(main('non-existent.meld', {
+  await expect(main('non-existent.mld', {
     fs: context.fs,
     services: context.services
   })).rejects.toThrow(MeldFileNotFoundError);
@@ -73,11 +73,11 @@ it('should throw MeldDirectiveError with directive details', async () => {
   // Arrange
   const context = new TestContext();
   await context.initialize();
-  await context.writeFile('test.meld', '@text = "missing identifier"');
+  await context.writeFile('test.mld', '@text = "missing identifier"');
   
   try {
     // Act
-    await main('test.meld', {
+    await main('test.mld', {
       fs: context.fs,
       services: context.services
     });
@@ -108,7 +108,7 @@ it('should recover from variable resolution errors in permissive mode', async ()
   // Arrange
   const context = new TestContext();
   await context.initialize();
-  await context.writeFile('test.meld', `
+  await context.writeFile('test.mld', `
     @text greeting = "Hello"
     \${missing} \${greeting}
   `);
@@ -117,7 +117,7 @@ it('should recover from variable resolution errors in permissive mode', async ()
   context.enableTransformation();
   
   // Act & Assert - With strict mode (should throw)
-  await expect(main('test.meld', {
+  await expect(main('test.mld', {
     fs: context.fs,
     services: context.services,
     transformation: true,
@@ -150,13 +150,13 @@ it('should exit with code 1 for fatal errors', async () => {
   // Simulate invalid file
   await context.setupCliTest({
     files: {
-      'invalid.meld': '@invalid directive'
+      'invalid.mld': '@invalid directive'
     }
   });
   
   // Act
   // This would use the CLI command when implemented
-  // await cli.run(['invalid.meld']);
+  // await cli.run(['invalid.mld']);
   
   // Assert
   expect(exitMock.exit).toHaveBeenCalledWith(1);
@@ -177,17 +177,17 @@ Here are common patterns for testing errors:
 
 ```typescript
 // Testing that a specific error type is thrown
-await expect(main('test.meld', options)).rejects.toThrow(MeldDirectiveError);
+await expect(main('test.mld', options)).rejects.toThrow(MeldDirectiveError);
 
 // Testing with more specific error message matching
-await expect(main('test.meld', options)).rejects.toThrow(/missing identifier/);
+await expect(main('test.mld', options)).rejects.toThrow(/missing identifier/);
 ```
 
 ### 2. Checking Error Properties
 
 ```typescript
 try {
-  await main('test.meld', options);
+  await main('test.mld', options);
   fail('Expected error was not thrown');
 } catch (error) {
   expect(error).toBeInstanceOf(MeldDirectiveError);
@@ -199,7 +199,7 @@ try {
 
 ```typescript
 try {
-  await main('test.meld', options);
+  await main('test.mld', options);
 } catch (error) {
   if (error instanceof MeldDirectiveError) {
     expect(error.location).toBeDefined();
@@ -225,7 +225,7 @@ const consoleMock = context.mockConsole();
 // Set up CLI testing environment
 const testEnv = await context.setupCliTest({
   files: {
-    'test.meld': '@text greeting = "Hello"'
+    'test.mld': '@text greeting = "Hello"'
   },
   mockExit: true,
   mockConsoleOutput: true
@@ -247,7 +247,7 @@ const sessionId = await context.startDebugSession({
 });
 
 try {
-  await main('test.meld', options);
+  await main('test.mld', options);
 } catch (error) {
   // Expected error - now analyze debug data
   const debugResult = await context.endDebugSession(sessionId);

@@ -179,19 +179,16 @@ hr {
 
 /* Home page specific styles */
 .hero {
-  margin: 4rem 0 5rem;
   display: flex;
   flex-direction: row;
   align-items: center;
   justify-content: space-between;
-  gap: 3rem;
-  position: relative;
-  overflow: hidden;
-  z-index: 1;
+  padding: 3rem 0;
+  gap: 2rem;
 }
 
 .hero-content {
-  flex: 1;
+  flex: 0 0 33%;
   text-align: left;
 }
 
@@ -214,17 +211,17 @@ hr {
 }
 
 .hero-terminal-container {
-  flex: 1.2;
+  flex: 0 0 66%;
 }
 
 .hero-terminal {
-  width: 100%;
-  background-color: var(--code-bg);
+  background: var(--code-bg);
   border-radius: 8px;
-  padding: 2.5rem 1.75rem 1.75rem;
-  box-shadow: 0 4px 10px var(--terminal-shadow);
+  padding: 2rem 1.5rem 1.5rem;
+  box-shadow: 0 4px 12px var(--terminal-shadow);
+  text-align: left;
+  overflow: hidden;
   position: relative;
-  margin-bottom: 1rem;
 }
 
 .hero-terminal::before {
@@ -245,6 +242,36 @@ hr {
   line-height: 1.6;
   color: #fff;
   white-space: pre-wrap;
+}
+
+/* Syntax highlighting */
+.terminal-content .token.keyword {
+  color: #ff79c6;
+}
+
+.terminal-content .token.operator {
+  color: #bd93f9;
+}
+
+.terminal-content .token.string {
+  color: #50fa7b;
+}
+
+.terminal-content .token.bracket {
+  color: #666666;
+}
+
+.terminal-content .token.selector {
+  color: #f1fa8c;
+}
+
+.terminal-content .token.variable {
+  color: #8be9fd;
+  font-style: italic;
+}
+
+.terminal-content div.space {
+  margin: -5px 0;
 }
 
 .terminal-content div {
@@ -299,20 +326,21 @@ hr {
 @media (max-width: 950px) {
   .hero {
     flex-direction: column;
-    align-items: stretch;
-    gap: 2rem;
+    text-align: center;
   }
-  
+
+  .hero-content,
+  .hero-terminal-container {
+    flex: none;
+    width: 100%;
+  }
+
   .hero-content {
     text-align: center;
   }
-  
+
   .hero-logo {
     font-size: 100px;
-  }
-  
-  .hero-terminal-container {
-    width: 100%;
   }
 }
 

@@ -39,10 +39,10 @@ async function main(
 import { main } from 'meld';
 
 // Basic usage
-const output = await main('path/to/file.meld');
+const output = await main('path/to/file.mld');
 
 // With options
-const output = await main('path/to/file.meld', {
+const output = await main('path/to/file.mld', {
   transformation: true,
   format: 'md'
 });
@@ -100,7 +100,7 @@ class MyFileSystem extends FileSystemService {
 }
 
 // Process with custom services
-const output = await main('path/to/file.meld', {
+const output = await main('path/to/file.mld', {
   services: {
     filesystem: new MyFileSystem()
   }
@@ -115,7 +115,7 @@ Meld provides built-in debugging facilities:
 import { main } from 'meld';
 
 // Enable debug mode
-const output = await main('path/to/file.meld', {
+const output = await main('path/to/file.mld', {
   debug: true
 });
 
@@ -128,7 +128,7 @@ const debugSessionId = await context.startDebugSession({
   traceOperations: true
 });
 
-const result = await main('path/to/file.meld', {
+const result = await main('path/to/file.mld', {
   fs: context.fs,
   services: context.services,
   debug: true
@@ -146,7 +146,7 @@ Meld provides specialized error classes for robust error handling:
 import { main, MeldParseError, MeldDirectiveError } from 'meld';
 
 try {
-  const output = await main('path/to/file.meld');
+  const output = await main('path/to/file.mld');
 } catch (error) {
   if (error instanceof MeldParseError) {
     console.error('Parse error:', error.message);
@@ -165,7 +165,7 @@ try {
 Transformation mode replaces directive calls with their results:
 
 ```typescript
-const output = await main('path/to/file.meld', {
+const output = await main('path/to/file.mld', {
   transformation: true
 });
 ```
@@ -176,12 +176,12 @@ Choose between output formats:
 
 ```typescript
 // Get markdown output
-const markdown = await main('path/to/file.meld', {
+const markdown = await main('path/to/file.mld', {
   format: 'md'
 });
 
 // Get XML (LLM) output
-const xml = await main('path/to/file.meld', {
+const xml = await main('path/to/file.mld', {
   format: 'xml'
 });
 ```
@@ -198,10 +198,10 @@ const context = new TestContext();
 await context.initialize();
 
 // Create test files
-await context.writeFile('test.meld', '@text greeting = "Hello"');
+await context.writeFile('test.mld', '@text greeting = "Hello"');
 
 // Process file
-const output = await main('test.meld', {
+const output = await main('test.mld', {
   fs: context.fs,
   services: context.services
 });
