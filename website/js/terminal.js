@@ -15,12 +15,19 @@ document.addEventListener('DOMContentLoaded', () => {
     const originalModulesDisplay = terminalModules.style.display;
     const originalScriptsDisplay = terminalScripts.style.display;
     
+    // Temporarily position both terminals absolute so they don't affect page flow
+    // but can still be measured
+    const originalModulesPosition = terminalModules.style.position;
+    const originalScriptsPosition = terminalScripts.style.position;
+    
     terminalModules.style.display = 'block';
     terminalScripts.style.display = 'block';
+    terminalModules.style.position = 'static';
+    terminalScripts.style.position = 'static';
     
     // Force layout recalculation to get proper heights
-    const modulesHeight = terminalModules.getBoundingClientRect().height;
-    const scriptsHeight = terminalScripts.getBoundingClientRect().height;
+    const modulesHeight = terminalModules.scrollHeight;
+    const scriptsHeight = terminalScripts.scrollHeight;
     
     // Find the taller one and add substantial extra padding
     const maxHeight = Math.max(modulesHeight, scriptsHeight) + 100;
@@ -31,10 +38,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // Reset terminals to their original display state
     terminalModules.style.display = originalModulesDisplay;
     terminalScripts.style.display = originalScriptsDisplay;
+    terminalModules.style.position = originalModulesPosition;
+    terminalScripts.style.position = originalScriptsPosition;
   }
   
   // Set height after a brief delay to ensure all content is rendered
-  setTimeout(setTerminalHeight, 50);
+  setTimeout(setTerminalHeight, 100);
 
   // Toggle between modules and scripts
   toggleModules.addEventListener('click', () => {

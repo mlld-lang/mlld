@@ -252,17 +252,23 @@ hr {
   position: relative;
 }
 
-.hero-terminal::before {
-  content: "";
+.terminal-dots {
   position: absolute;
   top: 0.75rem;
   left: 0.75rem;
+  display: flex;
+  gap: 8px;
+}
+
+.terminal-dots .dot {
   height: 12px;
   width: 12px;
   border-radius: 50%;
-  background-color: #ff5f56;
-  box-shadow: 20px 0 0 #ffbd2e, 40px 0 0 #27c93f;
 }
+
+.dot.red { background-color: #ff5f56; }
+.dot.yellow { background-color: #ffbd2e; }
+.dot.green { background-color: #27c93f; }
 
 .terminal-content {
   font-family: 'Cousine', monospace;
@@ -270,6 +276,7 @@ hr {
   line-height: 1.6;
   color: #fff;
   white-space: pre-wrap;
+  padding-bottom: 1.5rem;
 }
 
 /* Syntax highlighting */

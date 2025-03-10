@@ -44,33 +44,34 @@
       </div>
 
       <div id="terminal-modules" class="terminal-content active"><span class="token keyword">@import</span> <span class="token bracket">[</span><span class="token variable">roles</span><span class="token bracket">, </span><span class="token variable">tasks</span><span class="token bracket">]</span> from <span class="token bracket">[</span>prompts.mld<span class="token bracket">]</span>
-<span class="space"></span>
+
 <span class="token keyword">@text</span> <span class="token variable">arch</span> = <span class="token keyword">@embed</span> <span class="token bracket">[</span>README.md <span class="token selector"># Architecture</span><span class="token bracket">]</span>
 <span class="token keyword">@text</span> <span class="token variable">standards</span> = <span class="token keyword">@embed</span> <span class="token bracket">[</span>README.md <span class="token selector"># Code Standards</span><span class="token bracket">]</span>
 <span class="token keyword">@text</span> <span class="token variable">diff</span> = <span class="token keyword">@run</span> <span class="token bracket">[</span>git diff | cat<span class="token bracket">]</span>
-<span class="space"></span>
+
 <span class="token keyword">@text</span> <span class="token variable">prompt</span> = <span class="token bracket">[[</span>
    Read our docs: <span class="token variable"></span> <span class="token variable"></span>
    Latest changes: <span class="token variable"></span>
    Your task: <span class="token variable"></span>
 <span class="token bracket">]]</span>
-<span class="space"></span>
+
 <span class="token keyword">@run</span> <span class="token bracket">[</span>oneshot <span class="token variable"></span> --system <span class="token variable"></span><span class="token bracket">]</span>
-<span class="space"></span>
-<span class="token operator">---</spa
-<span class="space"></span>
-<span class="token string">LLM: "Here's my code review..."</span>
+
+<span class="token operator">---</span>
+
+<span class="token string">LLM: "Here's my code review..."</span><span class="terminal-cursor"></span>
       </div>
 
       <div id="terminal-scripts" class="terminal-content" style="display: none;"><span class="token keyword">#!/usr/bin/env meld</span>
-<span class="space"></span>
+
 <span class="token keyword">@text</span> <span class="token variable">tests</span> = <span class="token keyword">@run</span> <span class="token bracket">[</span>npm test<span class="token bracket">]</span>
-<span class="space"></span>
-<span class="tokeword">@text</span> <span class="token variable">diagnosis</span> = <span class="token keyword">@run</span> <span class="token bracket">[</span>oneshot "What's broken here? <span class="token variable"></span>"<span class="token bracket">]</span>
+
+<span class="token keyword">@text</span> <span class="token variable">diagnosis</span> = <span class="token keyword">@run</span> <span class="token bracket">[</span>oneshot "What's broken here? <span class="token variable"></span>"<span class="token bracket">]</span>
+
 <span class="token keyword">@run</span> <span class="token bracket">[</span>oneshot "Make a plan to fix <span class="token variable"></span>"<span class="token bracket">]</span>
-<span class="space"></span>
+
 <span class="token operator">---</span>
-<span class="space"></span>
+
 <span class="token string">LLM: "Here's a plan to fix the failing tests..."</span><span class="terminal-cursor"></span>
       </div>
     </div>
