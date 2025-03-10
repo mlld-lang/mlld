@@ -1,71 +1,56 @@
 document.addEventListener('DOMContentLoaded', () => {
-  const terminal = document.querySelector('.hero-terminal');
+  // Get terminal elements
+  const terminalModules = document.getElementById('terminal-modules');
+  const terminalScripts = document.getElementById('terminal-scripts');
   
-  // Terminal content with syntax highlighting
-  const content = [
-    '<span class="token keyword">@import</span> <span class="token bracket">[</span><span class="token variable">roles</span><span class="token bracket">, </span><span class="token variable">tasks</span><span class="token bracket">]</span> from <span class="token bracket">[</span>prompts.mld<span class="token bracket">]</span>',
-    '<span class="space"></span>',
-    '<span class="token keyword">@text</span> <span class="token variable">arch</span> = <span class="token keyword">@embed</span> <span class="token bracket">[</span>README.md <span class="token selector"># Architecture</span><span class="token bracket">]</span>',
-    '<span class="token keyword">@text</span> <span class="token variable">standards</span> = <span class="token keyword">@embed</span> <span class="token bracket">[</span>README.md <span class="token selector"># Code Standards</span><span class="token bracket">]</span>',
-    '<span class="token keyword">@text</span> <span class="token variable">diff</span> = <span class="token keyword">@run</span> <span class="token bracket">[</span>git diff | cat<span class="token bracket">]</span>',
-    '<span class="space"></span>',
-    '<span class="token keyword">@text</span> <span class="token variable">prompt</span> = <span class="token bracket">[[</span>',
-    '  Read our docs: <span class="token variable">{{arch}}</span> <span class="token variable">{{standards}}</span>',
-    '  Latest changes: <span class="token variable">{{diff}}</span>',
-    '  Your task: <span class="token variable">{{tasks.codereview}}</span>',
-    '<span class="token bracket">]]</span>',
-    '<span class="space"></span>',
-    '<span class="token keyword">@run</span> <span class="token bracket">[</span>oneshot <span class="token variable">{{prompt}}</span> --system <span class="token variable">{{roles.architect}}</span><span class="token bracket">]</span>',
-    '<span class="space"></span>',
-    '<span class="token operator">---</span>',
-    '<span class="space"></span>',
-    '<span class="token string">LLM: "Here\'s my code review..."</span>'
-  ];
-
-  function animateTerminal() {
-    if (!terminal) return;
+  // Get toggle buttons
+  const toggleModules = document.getElementById('toggle-modules');
+  const toggleScripts = document.getElementById('toggle-scripts');
+  
+  // Set terminal height based on the taller content
+  function setTerminalHeight() {
+    const terminalContainer = document.querySelector('.hero-terminal');
     
-    // Clear terminal and add all lines except the last one
-    const terminalContent = document.querySelector('.terminal-content');
-    terminalContent.innerHTML = '';
+    // Make both terminals visible for height calculation
+    const originalModulesDisplay = terminalModules.style.display;
+    const originalScriptsDisplay = terminalScripts.style.display;
     
-    // Add all lines except the last
-    for (let i = 0; i < content.length - 1; i++) {
-      const line = document.createElement('div');
-      line.innerHTML = content[i];
-      // Add space class to div if it contains a space span
-      if (content[i] === '<span class="space"></span>') {
-        line.classList.add('space');
-      }
-      terminalContent.appendChild(line);
-    }
+    terminalModules.style.display = 'block';
+    terminalScripts.style.display = 'block';
     
-    // Create last line with cursor
-    const lastLine = document.createElement('div');
-    lastLine.classList.add('typing-line');
-    terminalContent.appendChild(lastLine);
+    // Force layout recalculation to get proper heights
+    const modulesHeight = terminalModules.getBoundingClientRect().height;
+    const scriptsHeight = terminalScripts.getBoundingClientRect().height;
     
-    // Start typing animation for last line
-    const lastLineText = content[content.length - 1];
-    let i = 0;
-    let plainText = lastLineText.replace(/<[^>]*>/g, ''); // Get plain text for length calculation
+    // Find the taller one and add substantial extra padding
+    const maxHeight = Math.max(modulesHeight, scriptsHeight) + 100;
     
-    const typingInterval = setInterval(() => {
-      if (i <= plainText.length) {
-        // For the typing animation, we'll show the raw HTML but only up to the current character count
-        lastLine.innerHTML = lastLineText;
-        i++;
-      } else {
-        clearInterval(typingInterval);
-        
-        // Add cursor element after typing is done
-        const cursor = document.createElement('span');
-        cursor.classList.add('terminal-cursor');
-        lastLine.appendChild(cursor);
-      }
-    }, 50);
+    // Set the fixed height on the container
+    terminalContainer.style.height = maxHeight + 'px';
+    
+    // Reset terminals to their original display state
+    terminalModules.style.display = originalModulesDisplay;
+    terminalScripts.style.display = originalScriptsDisplay;
   }
+  
+  // Set height after a brief delay to ensure all content is rendered
+  setTimeout(setTerminalHeight, 50);
 
-  // Initialize terminal
-  animateTerminal();
+  // Toggle between modules and scripts
+  toggleModules.addEventListener('click', () => {
+    terminalModules.style.display = 'block';
+    terminalScripts.style.display = 'none';
+    toggleModules.classList.add('active');
+    toggleScripts.classList.remove('active');
+  });
+
+  toggleScripts.addEventListener('click', () => {
+    terminalModules.style.display = 'none';
+    terminalScripts.style.display = 'block';
+    toggleModules.classList.remove('active');
+    toggleScripts.classList.add('active');
+  });
+  
+  // Re-calculate on window resize
+  window.addEventListener('resize', setTerminalHeight);
 }); 

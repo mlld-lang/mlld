@@ -135,12 +135,12 @@ code {
 
 pre {
   background-color: var(--code-bg);
-  padding: 2rem 1.5rem 1.5rem;
   border-radius: 8px;
+  padding: 2rem 1.5rem 1.5rem;
   overflow-x: auto;
-  margin-bottom: 1.5rem;
-  box-shadow: 0 4px 10px var(--terminal-shadow);
+  white-space: pre;
   position: relative;
+  margin: 1.5rem 0;
 }
 
 pre::before {
@@ -156,11 +156,39 @@ pre::before {
 }
 
 pre code {
-  background-color: transparent;
+  font-family: 'Cousine', monospace;
+  font-size: 15px;
+  line-height: 1.6;
+  color: #fff;
+  background: transparent;
   padding: 0;
   border-radius: 0;
-  display: block;
-  color: #fff;
+}
+
+/* Apply syntax highlighting to code blocks */
+pre code .token.keyword {
+  color: #ff79c6;
+}
+
+pre code .token.operator {
+  color: #bd93f9;
+}
+
+pre code .token.string {
+  color: #50fa7b;
+}
+
+pre code .token.bracket {
+  color: #666666;
+}
+
+pre code .token.selector {
+  color: #f1fa8c;
+}
+
+pre code .token.variable {
+  color: #8be9fd;
+  font-style: italic;
 }
 
 blockquote {
@@ -217,7 +245,7 @@ hr {
 .hero-terminal {
   background: var(--code-bg);
   border-radius: 8px;
-  padding: 2rem 1.5rem 1.5rem;
+  padding: 3.5rem 2rem;
   box-shadow: 0 4px 12px var(--terminal-shadow);
   text-align: left;
   overflow: hidden;
@@ -238,7 +266,7 @@ hr {
 
 .terminal-content {
   font-family: 'Cousine', monospace;
-  font-size: 16px;
+  font-size: 15px;
   line-height: 1.6;
   color: #fff;
   white-space: pre-wrap;
@@ -320,6 +348,45 @@ hr {
   border-color: var(--text-color);
   background-color: rgba(128, 128, 128, 0.15);
   font-weight: 700;
+}
+
+/* Terminal toggle styles */
+.terminal-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1rem;
+  gap: 0.75rem;
+}
+
+.terminal-toggle p {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.toggle-buttons {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.toggle-btn {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 0.3rem 0.8rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+  color: var(--text-color);
+  transition: all 0.2s ease;
+}
+
+.toggle-btn:hover {
+  background-color: rgba(var(--text-color-rgb), 0.1);
+}
+
+.toggle-btn.active {
+  background-color: var(--text-color);
+  color: var(--bg-color);
 }
 
 /* Responsive */
