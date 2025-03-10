@@ -226,9 +226,9 @@ project-root/
 │  ├─ utils/                # Test utilities and factories
 │  │  ├─ di/                # Dependency injection test utilities
 │  │  │  └─ TestContextDI.ts # DI-based test context
-│  ├─ mocks/                # Shared mock implementations
-│  ├─ fixtures/             # Test fixture data
-│  └─ setup.ts             # Global test setup
+│  │  ├─ mocks/                # Shared mock implementations
+│  │  ├─ fixtures/             # Test fixture data
+│  │  └─ setup.ts             # Global test setup
 └─ services/               # Service implementations with co-located tests
    └─ ServiceName/
       ├─ ServiceName.test.ts           # Unit tests
@@ -326,6 +326,188 @@ expect(error instanceof PathValidationError).toBe(true); // Passes!
 ```
 
 This approach ensures mock objects pass `instanceof` checks, which is especially important for error handling tests.
+
+### Implementing vitest-mock-extended for PathValidationError
+
+As part of Phase 2 of our DI cleanup plan, we've adopted vitest-mock-extended to solve instanceof checks issues with PathValidationError and similar classes. Here's how to implement it:
+
+1. **Install the package**:
+```bash
+npm install --save-dev vitest-mock-extended
+```
+
+2. **Create a factory function for PathValidationError**:
+```typescript
+// In tests/utils/errorFactories.ts
+import { mock } from 'vitest-mock-extended';
+import { PathValidationError } from '@services/fs/PathService/errors/PathValidationError';
+import { PathErrorCode } from '@services/fs/PathService/errors/PathErrorCode';
+import { Location } from 'meld-spec';
+
+export interface PathValidationErrorDetails {
+  code: PathErrorCode;
+  path: string;
+  resolvedPath?: string;
+  baseDir?: string;
+  cause?: Error;
+}
+
+/**
+ * Creates a mock PathValidationError that passes instanceof checks
+ */
+export function createPathValidationError(
+  message: string,
+  details: PathValidationErrorDetails,
+  location?: Location
+): PathValidationError {
+  const error = mock<PathValidationError>();
+  
+  // Define properties to match the real PathValidationError
+  Object.defineProperties(error, {
+    message: { value: message, writable: true, configurable: true },
+    name: { value: 'PathValidationError', writable: true, configurable: true },
+    code: { value: details.code, writable: true, configurable: true },
+    path: { value: details.path, writable: true, configurable: true },
+    resolvedPath: { value: details.resolvedPath, writable: true, configurable: true },
+    baseDir: { value: details.baseDir, writable: true, configurable: true },
+    cause: { value: details.cause, writable: true, configurable: true },
+    location: { value: location, writable: true, configurable: true },
+    stack: { value: new Error().stack, writable: true, configurable: true }
+  });
+  
+  return error;
+}
+```
+
+3. **Update TestContextDI to use the factory function**:
+```typescript
+// In TestContextDI.ts, replace the current PathValidationError implementation:
+
+private registerPathService(): void {
+  // Register the mock PathService
+  const mockPathService = {
+    validatePath: vi.fn().mockImplementation(async (path) => {
+      if (!path || path === '') {
+        throw createPathValidationError('Empty path is not allowed', {
+          code: 'EMPTY_PATH',
+          path: ''
+        });
+      }
+      
+      if (path.includes('\0')) {
+        throw createPathValidationError('Path contains null bytes', {
+          code: 'NULL_BYTES',
+          path
+        });
+      }
+      
+      return path;
+    }),
+    // ... other methods
+  };
+  
+  this.container.register('IPathService', { useValue: mockPathService });
+}
+```
+
+4. **Use in tests**:
+```typescript
+import { PathValidationError } from '@services/fs/PathService/errors/PathValidationError';
+
+it('validates empty path', async () => {
+  // This test will now pass the instanceof check
+  await expect(service.validatePath('')).rejects.toThrow(PathValidationError);
+});
+```
+
+This approach can be extended to other error classes or any class that requires instanceof checks in tests.
+
+### Standardized Service Mock Factories
+
+To ensure a consistent approach across all tests, we've created a standardized way to create service mocks using vitest-mock-extended. This approach combines the benefits of proper type checking with instanceof support.
+
+1. **Using the Service Mock Factories**:
+
+```typescript
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { TestContextDI } from '@tests/utils/di/TestContextDI';
+import { 
+  createValidationServiceMock,
+  createStateServiceMock,
+  createResolutionServiceMock
+} from '@tests/utils/mocks/serviceMocks';
+import { DirectiveHandler } from '@services/pipeline/DirectiveService/handlers/DirectiveHandler';
+
+describe('MyDirectiveHandler', () => {
+  let context: TestContextDI;
+  let handler: MyDirectiveHandler;
+  let validationService: ReturnType<typeof createValidationServiceMock>;
+  let stateService: ReturnType<typeof createStateServiceMock>;
+  let resolutionService: ReturnType<typeof createResolutionServiceMock>;
+
+  beforeEach(() => {
+    // Setup test context
+    context = TestContextDI.create({ isolatedContainer: true });
+    
+    // Create mock services with vitest-mock-extended
+    validationService = createValidationServiceMock();
+    stateService = createStateServiceMock();
+    resolutionService = createResolutionServiceMock();
+    
+    // Configure mock behaviors as needed
+    validationService.validate.mockImplementation((path) => {
+      if (path === 'invalid-path') {
+        throw new Error('Invalid path');
+      }
+    });
+    
+    // Create handler instance directly with mocks
+    handler = new MyDirectiveHandler(
+      validationService,
+      stateService,
+      resolutionService
+    );
+  });
+  
+  afterEach(async () => {
+    await context.cleanup();
+  });
+  
+  // Test cases...
+});
+```
+
+2. **Available Mock Factory Functions**:
+
+The following mock factories are available in `@tests/utils/mocks/serviceMocks.ts`:
+
+- `createValidationServiceMock()` - Creates a mock of `IValidationService`
+- `createStateServiceMock()` - Creates a mock of `IStateService`
+- `createResolutionServiceMock()` - Creates a mock of `IResolutionService`
+- `createFileSystemServiceMock()` - Creates a mock of `IFileSystemService`
+- `createPathServiceMock()` - Creates a mock of `IPathService`
+- `createDirectiveErrorMock(message, code)` - Creates a mock of `DirectiveError`
+- `createPathValidationErrorMock(message, path)` - Creates a mock of `PathValidationError`
+
+3. **Benefits of Using Mock Factories**:
+
+- **Type Safety**: Full TypeScript type checking and IDE autocompletion
+- **Instance Verification**: Mocks will pass `instanceof` checks
+- **Default Behaviors**: Common method implementations provided out of the box
+- **Customizability**: Easy to override default behaviors for specific tests
+- **Consistency**: Standardized approach across all test files
+- **Simplicity**: Reduces boilerplate code in test setup
+
+4. **Hybrid Testing Approach**:
+
+Our recommended testing approach combines the benefits of DI with direct constructor injection:
+
+1. Use `TestContextDI.create()` for proper container lifecycle management and isolation
+2. Use mock factories to create strongly-typed mock services
+3. Inject mocks directly into class constructors instead of resolving from container
+4. Ensure proper cleanup with `context.cleanup()` in afterEach hooks
+
+This approach provides the best balance of type safety, control, and simplicity while maintaining proper container lifecycle management.
 
 ## Writing Tests
 
@@ -718,101 +900,6 @@ Object.defineProperties(mockError, {
 // Use in tests - will pass instanceof checks
 expect(mockError instanceof MyErrorClass).toBe(true);
 ```
-
-### Implementing vitest-mock-extended for PathValidationError
-
-As part of Phase 2 of our DI cleanup plan, we've adopted vitest-mock-extended to solve instanceof checks issues with PathValidationError and similar classes. Here's how to implement it:
-
-1. **Install the package**:
-```bash
-npm install --save-dev vitest-mock-extended
-```
-
-2. **Create a factory function for PathValidationError**:
-```typescript
-// In tests/utils/errorFactories.ts
-import { mock } from 'vitest-mock-extended';
-import { PathValidationError } from '@services/fs/PathService/errors/PathValidationError';
-import { PathErrorCode } from '@services/fs/PathService/errors/PathErrorCode';
-import { Location } from 'meld-spec';
-
-export interface PathValidationErrorDetails {
-  code: PathErrorCode;
-  path: string;
-  resolvedPath?: string;
-  baseDir?: string;
-  cause?: Error;
-}
-
-/**
- * Creates a mock PathValidationError that passes instanceof checks
- */
-export function createPathValidationError(
-  message: string,
-  details: PathValidationErrorDetails,
-  location?: Location
-): PathValidationError {
-  const error = mock<PathValidationError>();
-  
-  // Define properties to match the real PathValidationError
-  Object.defineProperties(error, {
-    message: { value: message, writable: true, configurable: true },
-    name: { value: 'PathValidationError', writable: true, configurable: true },
-    code: { value: details.code, writable: true, configurable: true },
-    path: { value: details.path, writable: true, configurable: true },
-    resolvedPath: { value: details.resolvedPath, writable: true, configurable: true },
-    baseDir: { value: details.baseDir, writable: true, configurable: true },
-    cause: { value: details.cause, writable: true, configurable: true },
-    location: { value: location, writable: true, configurable: true },
-    stack: { value: new Error().stack, writable: true, configurable: true }
-  });
-  
-  return error;
-}
-```
-
-3. **Update TestContextDI to use the factory function**:
-```typescript
-// In TestContextDI.ts, replace the current PathValidationError implementation:
-
-private registerPathService(): void {
-  // Register the mock PathService
-  const mockPathService = {
-    validatePath: vi.fn().mockImplementation(async (path) => {
-      if (!path || path === '') {
-        throw createPathValidationError('Empty path is not allowed', {
-          code: 'EMPTY_PATH',
-          path: ''
-        });
-      }
-      
-      if (path.includes('\0')) {
-        throw createPathValidationError('Path contains null bytes', {
-          code: 'NULL_BYTES',
-          path
-        });
-      }
-      
-      return path;
-    }),
-    // ... other methods
-  };
-  
-  this.container.register('IPathService', { useValue: mockPathService });
-}
-```
-
-4. **Use in tests**:
-```typescript
-import { PathValidationError } from '@services/fs/PathService/errors/PathValidationError';
-
-it('validates empty path', async () => {
-  // This test will now pass the instanceof check
-  await expect(service.validatePath('')).rejects.toThrow(PathValidationError);
-});
-```
-
-This approach can be extended to other error classes or any class that requires instanceof checks in tests.
 
 ### Creating Child Contexts
 

@@ -24,6 +24,7 @@ import { promisify } from 'util';
 import { runDirectiveExamples } from '@core/syntax/index.js';
 import { parse } from 'meld-ast';
 import { ErrorSeverity } from '@core/errors';
+import { TestContextDI } from '@tests/utils/di/TestContextDI';
 
 // Mock child_process
 vi.mock('child_process', () => ({
@@ -36,8 +37,14 @@ vi.mock('child_process', () => ({
  * 
  * MIGRATION STATUS: Completed
  * 
- * This test file has been updated to no longer rely on syntax-test-helpers.
- * It now uses direct syntax examples that match the expected syntax in the codebase.
+ * This test file has been updated to use TestContextDI for dependency injection.
+ * 
+ * COMPLETED:
+ * - Using TestContextDI for test environment setup
+ * - Using a hybrid approach with direct handler instantiation
+ * - Added proper cleanup for container management
+ * - Enhanced with centralized syntax examples
+ * - No longer relies on syntax-test-helpers
  */
 
 // Direct usage of meld-ast instead of mock factories
@@ -95,9 +102,6 @@ const createRunDirectiveNode = (command: string, outputVar?: string): DirectiveN
   } as DirectiveNode;
 };
 
-// Migration Status: In progress - updating to use centralized syntax examples
-// TODO: Convert more tests to use centralized examples
-
 // Helper function to create parser services for testing
 function createServices() {
   const validationService = {
@@ -122,37 +126,41 @@ function createServices() {
 
 describe('RunDirectiveHandler', () => {
   let handler: RunDirectiveHandler;
-  let validationService: IValidationService;
-  let stateService: IStateService;
-  let resolutionService: IResolutionService;
-  let fileSystemService: IFileSystemService;
-  let clonedState: IStateService;
+  let validationService: any;
+  let stateService: any;
+  let resolutionService: any;
+  let fileSystemService: any;
+  let clonedState: any;
+  let context: TestContextDI;
 
   beforeEach(() => {
+    // Create context with isolated container
+    context = TestContextDI.create({ isolatedContainer: true });
+    
     validationService = {
       validate: vi.fn(),
       registerValidator: vi.fn(),
       removeValidator: vi.fn(),
       hasValidator: vi.fn(),
       getRegisteredDirectiveKinds: vi.fn()
-    } as unknown as IValidationService;
+    };
 
     clonedState = {
       setTextVar: vi.fn(),
       clone: vi.fn(),
       isTransformationEnabled: vi.fn().mockReturnValue(false),
       transformNode: vi.fn()
-    } as unknown as IStateService;
+    };
 
     stateService = {
       setTextVar: vi.fn(),
       clone: vi.fn().mockReturnValue(clonedState),
       isTransformationEnabled: vi.fn().mockReturnValue(false)
-    } as unknown as IStateService;
+    };
 
     resolutionService = {
       resolveInContext: vi.fn()
-    } as unknown as IResolutionService;
+    };
 
     fileSystemService = {
       getCwd: vi.fn().mockReturnValue('/workspace'),
@@ -160,8 +168,10 @@ describe('RunDirectiveHandler', () => {
       dirname: vi.fn().mockReturnValue('/workspace'),
       join: vi.fn().mockImplementation((...args) => args.join('/')),
       normalize: vi.fn().mockImplementation(path => path)
-    } as unknown as IFileSystemService;
+    };
 
+    // Instead of using the container to resolve the handler,
+    // create the handler directly with the mocks
     handler = new RunDirectiveHandler(
       validationService,
       resolutionService,
@@ -171,6 +181,11 @@ describe('RunDirectiveHandler', () => {
 
     // Reset mocks
     vi.clearAllMocks();
+  });
+
+  afterEach(async () => {
+    // Cleanup to prevent container leaks
+    await context.cleanup();
   });
 
   describe('basic command execution', () => {

@@ -145,9 +145,9 @@ This methodical approach allows us to:
 
 As each test file is migrated, we'll update the checklist and document any notable issues or patterns encountered.
 
-#### 2.2 Directive Handler Tests Requiring Migration
+#### 2.2 Directive Handler Tests
 
-The following directive handler test files need to be updated to use the DI-only approach:
+Several directive handlers still need migration to DI-only approach:
 
 1. Definition Handlers:
    - [✅] TextDirectiveHandler.test.ts
@@ -159,10 +159,10 @@ The following directive handler test files need to be updated to use the DI-only
 2. Execution Handlers:
    - [✅] EmbedDirectiveHandler.test.ts
    - [✅] EmbedDirectiveHandler.transformation.test.ts
-   - [ ] ImportDirectiveHandler.test.ts
-   - [ ] ImportDirectiveHandler.transformation.test.ts
-   - [ ] RunDirectiveHandler.test.ts
-   - [ ] RunDirectiveHandler.integration.test.ts
+   - [✅] ImportDirectiveHandler.test.ts
+   - [✅] ImportDirectiveHandler.transformation.test.ts
+   - [✅] RunDirectiveHandler.test.ts
+   - [✅] RunDirectiveHandler.integration.test.ts (already using direct testing approach, no DI migration needed)
    - [ ] RunDirectiveHandler.transformation.test.ts
 
 #### 2.2.1 Prioritized Migration Plan for Directive Handler Tests

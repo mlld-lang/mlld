@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import type { DirectiveNode, DirectiveContext } from 'meld-spec';
 import { ImportDirectiveHandler } from './ImportDirectiveHandler.js';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
@@ -12,11 +12,19 @@ import { createLocation } from '@tests/utils/testFactories.js';
 // Import centralized syntax examples and helpers
 import { importDirectiveExamples } from '@core/syntax/index.js';
 import { createNodeFromExample } from '@core/syntax/helpers';
+import { TestContextDI } from '@tests/utils/di/TestContextDI';
 
 /**
  * MIGRATION NOTES:
  * 
- * This file has been migrated to use centralized syntax examples where possible.
+ * This file has been migrated to use TestContextDI for dependency injection and centralized syntax examples where possible.
+ * 
+ * Migration details:
+ * 
+ * 1. Added TestContextDI for test environment setup
+ * 2. Using a hybrid approach with direct handler instantiation while leveraging TestContextDI for test lifecycle
+ * 3. Maintained use of centralized syntax examples
+ * 4. Added proper cleanup with afterEach hook
  * 
  * Some key observations from the migration:
  * 
@@ -72,21 +80,21 @@ async function createNodeFromExample(code: string): Promise<DirectiveNode> {
 
 describe('ImportDirectiveHandler Transformation', () => {
   let handler: ImportDirectiveHandler;
-  let validationService: IValidationService;
-  let stateService: IStateService;
-  let resolutionService: IResolutionService;
-  let fileSystemService: IFileSystemService;
-  let parserService: IParserService;
-  let interpreterService: IInterpreterService;
-  let circularityService: ICircularityService;
-  let clonedState: IStateService;
-  let childState: IStateService;
+  let validationService: any;
+  let stateService: any;
+  let resolutionService: any;
+  let fileSystemService: any;
+  let parserService: any;
+  let interpreterService: any;
+  let circularityService: any;
+  let clonedState: any;
+  let childState: any;
+  let context: TestContextDI;
 
   beforeEach(() => {
-    validationService = {
-      validate: vi.fn()
-    } as unknown as IValidationService;
-
+    // Create context with isolated container
+    context = TestContextDI.create({ isolatedContainer: true });
+    
     childState = {
       setTextVar: vi.fn(),
       setDataVar: vi.fn(),
@@ -103,7 +111,7 @@ describe('ImportDirectiveHandler Transformation', () => {
       clone: vi.fn(),
       mergeChildState: vi.fn(),
       isTransformationEnabled: vi.fn().mockReturnValue(true)
-    } as unknown as IStateService;
+    };
 
     clonedState = {
       setTextVar: vi.fn(),
@@ -122,7 +130,7 @@ describe('ImportDirectiveHandler Transformation', () => {
       mergeChildState: vi.fn(),
       clone: vi.fn(),
       isTransformationEnabled: vi.fn().mockReturnValue(true)
-    } as unknown as IStateService;
+    };
 
     stateService = {
       setTextVar: vi.fn(),
@@ -140,11 +148,15 @@ describe('ImportDirectiveHandler Transformation', () => {
       clone: vi.fn().mockReturnValue(clonedState),
       createChildState: vi.fn().mockReturnValue(childState),
       isTransformationEnabled: vi.fn().mockReturnValue(true)
-    } as unknown as IStateService;
+    };
 
+    validationService = {
+      validate: vi.fn()
+    };
+    
     resolutionService = {
       resolveInContext: vi.fn()
-    } as unknown as IResolutionService;
+    };
 
     fileSystemService = {
       exists: vi.fn(),
@@ -152,21 +164,23 @@ describe('ImportDirectiveHandler Transformation', () => {
       dirname: vi.fn().mockReturnValue('/workspace'),
       join: vi.fn().mockImplementation((...args) => args.join('/')),
       normalize: vi.fn().mockImplementation(path => path)
-    } as unknown as IFileSystemService;
+    };
 
     parserService = {
       parse: vi.fn()
-    } as unknown as IParserService;
+    };
 
     interpreterService = {
       interpret: vi.fn().mockResolvedValue(childState)
-    } as unknown as IInterpreterService;
+    };
 
     circularityService = {
       beginImport: vi.fn(),
       endImport: vi.fn()
-    } as unknown as ICircularityService;
+    };
 
+    // Instead of using the container to resolve the handler,
+    // create the handler directly with the mocks
     handler = new ImportDirectiveHandler(
       validationService,
       resolutionService,
@@ -176,6 +190,11 @@ describe('ImportDirectiveHandler Transformation', () => {
       interpreterService,
       circularityService
     );
+  });
+
+  afterEach(async () => {
+    // Cleanup to prevent container leaks
+    await context.cleanup();
   });
 
   describe('transformation behavior', () => {

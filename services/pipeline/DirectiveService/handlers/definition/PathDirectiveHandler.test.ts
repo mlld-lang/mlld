@@ -9,6 +9,12 @@ import { DirectiveError } from '@services/pipeline/DirectiveService/errors/Direc
 import { pathDirectiveExamples } from '@core/syntax/index.js';
 import { createNodeFromExample } from '@core/syntax/helpers';
 import { TestContextDI } from '@tests/utils/di/TestContextDI';
+import { 
+  createValidationServiceMock, 
+  createStateServiceMock, 
+  createResolutionServiceMock,
+  createDirectiveErrorMock
+} from '@tests/utils/mocks/serviceMocks';
 
 /**
  * PathDirectiveHandler Test Status
@@ -16,12 +22,13 @@ import { TestContextDI } from '@tests/utils/di/TestContextDI';
  * 
  * MIGRATION STATUS: Complete
  * 
- * This test file has been fully migrated to use centralized syntax examples.
+ * This test file has been fully migrated to use centralized syntax examples and standardized mock factories.
  * 
  * COMPLETED:
  * - All "basic path handling" tests successfully migrated to use centralized examples
  * - Removed dependency on syntax-test-helpers.js
  * - Using centralized createNodeFromExample helper
+ * - Updated to use standardized mock factories with vitest-mock-extended
  * 
  * NOTES:
  * - Error handling tests continue to use createPathDirective since the parser rejects 
@@ -31,9 +38,9 @@ import { TestContextDI } from '@tests/utils/di/TestContextDI';
 
 describe('PathDirectiveHandler', () => {
   let handler: PathDirectiveHandler;
-  let validationService: any;
-  let stateService: any;
-  let resolutionService: any;
+  let validationService: ReturnType<typeof createValidationServiceMock>;
+  let stateService: ReturnType<typeof createStateServiceMock>;
+  let resolutionService: ReturnType<typeof createResolutionServiceMock>;
   let clonedState: any;
   let context: TestContextDI;
 
@@ -47,31 +54,23 @@ describe('PathDirectiveHandler', () => {
       clone: vi.fn()
     };
 
-    // Create mock services
-    validationService = {
-      validate: vi.fn()
-    };
-
-    stateService = {
-      setPathVar: vi.fn(),
-      clone: vi.fn().mockReturnValue(clonedState)
-    };
-
-    resolutionService = {
-      resolveInContext: vi.fn()
-    };
-
-    // Register mocks with the container
-    context.registerMock('IValidationService', validationService);
-    context.registerMock('IStateService', stateService);
-    context.registerMock('IResolutionService', resolutionService);
+    // Create mock services using standardized factories
+    validationService = createValidationServiceMock();
+    stateService = createStateServiceMock();
+    resolutionService = createResolutionServiceMock();
     
-    // Resolve the handler from the container
-    handler = context.container.resolve(PathDirectiveHandler);
+    // Configure mock behaviors
+    stateService.clone.mockReturnValue(clonedState);
+    
+    // Create PathDirectiveHandler instance
+    handler = new PathDirectiveHandler(
+      validationService,
+      stateService,
+      resolutionService
+    );
   });
 
   afterEach(async () => {
-    // Cleanup to prevent container leaks
     await context.cleanup();
   });
 
