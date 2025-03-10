@@ -269,8 +269,29 @@ export class TextDirectiveHandler implements IDirectiveHandler {
             throw error;
           }
         } else if (this.stringLiteralHandler.isStringLiteral(value)) {
-          // For string literals, strip the quotes and handle escapes
-          resolvedValue = this.stringLiteralHandler.parseLiteral(value);
+          // First, strip the quotes and handle escapes
+          const parsedLiteral = this.stringLiteralHandler.parseLiteral(value);
+          
+          // Then resolve any variable references within the string
+          try {
+            resolvedValue = await this.resolutionService.resolveInContext(parsedLiteral, resolutionContext);
+          } catch (error) {
+            if (error instanceof ResolutionError) {
+              throw new DirectiveError(
+                'Failed to resolve variables in string literal',
+                this.kind,
+                DirectiveErrorCode.RESOLUTION_FAILED,
+                {
+                  node,
+                  context,
+                  cause: error,
+                  location: node.location,
+                  severity: DirectiveErrorSeverity[DirectiveErrorCode.RESOLUTION_FAILED]
+                }
+              );
+            }
+            throw error;
+          }
         } else {
           // For values with variables, resolve them using the resolution service
           try {

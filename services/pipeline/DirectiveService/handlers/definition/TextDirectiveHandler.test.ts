@@ -61,7 +61,13 @@ describe('TextDirectiveHandler', () => {
   let realStringLiteralHandler: StringLiteralHandler;
   let realStringConcatenationHandler: StringConcatenationHandler;
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    // Create context with isolated container
+    context = TestContextDI.createIsolated();
+    
+    // Initialize the context
+    await context.initialize();
+    
     // Create cloned state that will be returned by stateService.clone()
     clonedState = {
       setTextVar: vi.fn(),
@@ -69,9 +75,6 @@ describe('TextDirectiveHandler', () => {
       getDataVar: vi.fn(),
       clone: vi.fn(),
     };
-
-    // Create context with isolated container 
-    context = TestContextDI.create({ isolatedContainer: true });
     
     // Create mocks using standardized factories
     validationService = createValidationServiceMock();
@@ -91,14 +94,15 @@ describe('TextDirectiveHandler', () => {
     
     stateService.clone.mockReturnValue(clonedState);
     
-    // Create handler instance directly with mocks
-    handler = new TextDirectiveHandler(
-      validationService,
-      stateService,
-      resolutionService
-    );
+    // Register mocks with the context
+    context.registerMock('IValidationService', validationService);
+    context.registerMock('IStateService', stateService);
+    context.registerMock('IResolutionService', resolutionService);
+    
+    // Create handler instance from container
+    handler = context.container.resolve(TextDirectiveHandler);
 
-    // Create real handlers to match actual implementation
+    // Initialize real handlers for testing
     realStringLiteralHandler = new StringLiteralHandler();
     realStringConcatenationHandler = new StringConcatenationHandler(resolutionService);
     
@@ -147,6 +151,7 @@ describe('TextDirectiveHandler', () => {
   });
 
   afterEach(async () => {
+    // Clean up the context to prevent memory leaks
     await context.cleanup();
   });
 

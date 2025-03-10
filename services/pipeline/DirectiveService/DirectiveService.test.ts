@@ -4,12 +4,11 @@ import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { DirectiveError, DirectiveErrorCode } from './errors/DirectiveError.js';
 import type { DirectiveNode } from 'meld-spec';
 import { IDirectiveService } from './IDirectiveService.js';
-import { createService } from '@core/ServiceProvider.js';
 import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
 import { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
 import { vi } from 'vitest';
 import { StateTrackingService } from '@tests/utils/debug/StateTrackingService/StateTrackingService.js';
-import { container } from 'tsyringe';
+import { TestDirectiveHandlerHelper } from '@tests/utils/di/TestDirectiveHandlerHelper.js';
 
 // Main test suite for DirectiveService
 describe('DirectiveService', () => {
@@ -17,82 +16,34 @@ describe('DirectiveService', () => {
   let service: IDirectiveService;
 
   beforeEach(async () => {
-    // Initialize test context with DI
-    context = TestContextDI.create();
+    // Initialize test context with isolated container
+    context = TestContextDI.createIsolated();
+    await context.initialize();
     
     // Load test fixtures
     await context.fixtures.load('directiveTestProject');
 
-    // Verify test files exist before proceeding
-    const testFiles = [
-      'test.meld', 
-      'test-interpolation.meld', 
-      'test-data.meld', 
-      'test-data-interpolation.meld',
-      'module.meld', 
-      'inner.meld', 
-      'middle.meld', 
-      'a.meld', 
-      'b.meld'
-    ];
-    
-    // Ensure all test files exist by writing them if they don't
-    for (const file of testFiles) {
-      const exists = await context.fs.exists(file);
-      console.log(`Test file ${file} exists: ${exists}`);
-      
-      if (!exists) {
-        console.warn(`Creating missing test file: ${file}`);
-        
-        // Create appropriate content based on the file
-        if (file === 'module.meld') {
-          await context.fs.writeFile(file, 'This is the imported module content');
-        } else if (file === 'inner.meld') {
-          await context.fs.writeFile(file, 'This is the inner module content');
-        } else if (file === 'middle.meld') {
-          await context.fs.writeFile(file, '@import inner.meld\nMiddle module content');
-        } else if (file === 'a.meld') {
-          await context.fs.writeFile(file, '@import b.meld\nA imports B');
-        } else if (file === 'b.meld') {
-          await context.fs.writeFile(file, '@import a.meld\nB imports A');
-        } else {
-          // Default content for other test files
-          await context.fs.writeFile(file, `Test content for ${file}`);
-        }
-      }
-    }
+    // Create test files with appropriate content
+    await context.fs.writeFile('test.meld', '@text greeting = "Hello"');
+    await context.fs.writeFile('test-interpolation.meld', '@text greeting = "Hello {{name}}"');
+    await context.fs.writeFile('test-data.meld', '@data config = { "key": "value" }');
+    await context.fs.writeFile('test-data-interpolation.meld', '@data config = { "greeting": "Hello {{user}}" }');
+    await context.fs.writeFile('module.meld', '@text greeting = "Hello"');
+    await context.fs.writeFile('inner.meld', 'This is the inner module content');
+    await context.fs.writeFile('middle.meld', '@import inner.meld\nMiddle module content');
+    await context.fs.writeFile('a.meld', '@import b.meld\nA imports B');
+    await context.fs.writeFile('b.meld', '@import a.meld\nB imports A');
     
     // Register the NodeFileSystem
     context.registerMock('IFileSystem', new NodeFileSystem());
     
     // Register the StateTrackingService
     const trackingService = new StateTrackingService();
-    container.registerInstance('IStateTrackingService', trackingService);
-    container.registerInstance('StateTrackingService', trackingService);
+    context.registerMock('IStateTrackingService', trackingService);
+    context.registerMock('StateTrackingService', trackingService);
     
-    // Create and initialize the service directly (ensuring proper initialization)
-    const directiveService = new DirectiveService(
-      context.services.validation,
-      context.services.state,
-      context.services.path,
-      context.services.filesystem,
-      context.services.parser,
-      context.services.interpreter,
-      context.services.circularity,
-      context.services.resolution
-    );
-    
-    // Wait a bit for async initialization to complete
-    await new Promise(resolve => setTimeout(resolve, 10));
-    
-    // Make sure default handlers are registered
-    directiveService.registerDefaultHandlers();
-    
-    // Register the service in the container
-    context.registerMock('IDirectiveService', directiveService);
-    
-    // Keep a reference to the service
-    service = directiveService;
+    // Use the helper to initialize the DirectiveService with all handlers
+    service = await TestDirectiveHandlerHelper.initializeDirectiveService(context);
   });
 
   afterEach(async () => {

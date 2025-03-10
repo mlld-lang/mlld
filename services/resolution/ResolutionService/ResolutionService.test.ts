@@ -19,7 +19,6 @@ import {
 import runDirectiveExamplesModule from '@core/syntax/run.js';
 import { createExample, createInvalidExample, createNodeFromExample } from '@core/syntax/helpers';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
-import { container } from 'tsyringe';
 
 // Use the correctly imported run directive examples
 const runDirectiveExamples = runDirectiveExamplesModule;
@@ -45,7 +44,7 @@ describe('ResolutionService', () => {
   let context: ResolutionContext;
   let testContext: TestContextDI;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     // Create mock services
     stateService = {
       getTextVar: vi.fn().mockImplementation(name => {
@@ -110,18 +109,19 @@ describe('ResolutionService', () => {
     } as unknown as IServiceMediator;
 
     // Create test context with appropriate DI mode
-    testContext = TestContextDI.create({ isolatedContainer: true });
+    testContext = TestContextDI.createIsolated();
+    await testContext.initialize();
     
     // Register mock services with the container
-    container.registerInstance('IStateService', stateService);
-    container.registerInstance('IFileSystemService', fileSystemService);
-    container.registerInstance('IParserService', parserService);
-    container.registerInstance('IPathService', pathService);
-    container.registerInstance('IServiceMediator', serviceMediator);
-    container.registerInstance('ServiceMediator', serviceMediator);
+    testContext.registerMock('IStateService', stateService);
+    testContext.registerMock('IFileSystemService', fileSystemService);
+    testContext.registerMock('IParserService', parserService);
+    testContext.registerMock('IPathService', pathService);
+    testContext.registerMock('IServiceMediator', serviceMediator);
+    testContext.registerMock('ServiceMediator', serviceMediator);
     
     // Resolve service from the container
-    service = container.resolve(ResolutionService);
+    service = testContext.container.resolve(ResolutionService);
 
     context = {
       currentFilePath: 'test.meld',
@@ -136,7 +136,6 @@ describe('ResolutionService', () => {
   });
   
   afterEach(async () => {
-    container.clearInstances();
     await testContext.cleanup();
   });
 

@@ -114,9 +114,10 @@ describe('InterpreterService Unit', () => {
   let mockStateService: any;
   let mockChildState: any;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     // Create TestContextDI with isolated container
-    context = TestContextDI.create({ isolatedContainer: true });
+    context = TestContextDI.createIsolated();
+    await context.initialize();
     
     // Create mocks
     mockDirectiveService = createMockDirectiveService();
@@ -130,7 +131,7 @@ describe('InterpreterService Unit', () => {
     context.registerMock('IStateService', mockStateService);
     
     // Resolve the interpreter service
-    service = context.resolveSync(InterpreterService);
+    service = context.container.resolve(InterpreterService);
   });
 
   afterEach(async () => {

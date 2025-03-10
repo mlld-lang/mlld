@@ -8,8 +8,8 @@ describe('StateFactory', () => {
   let context: TestContextDI;
 
   beforeEach(() => {
-    // Create test context with DI
-    context = TestContextDI.create({ isolatedContainer: true });
+    // Create test context with isolated DI container
+    context = TestContextDI.createIsolated();
     
     // Get service instance using DI
     factory = context.resolveSync<IStateFactory>('IStateFactory');

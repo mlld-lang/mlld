@@ -62,9 +62,10 @@ describe('ParserService', () => {
   let service: ParserService;
   let testContext: TestContextDI;
 
-  beforeEach(() => {
-    // Create test context with DI
-    testContext = TestContextDI.create({ isolatedContainer: true });
+  beforeEach(async () => {
+    // Create test context with isolated container
+    testContext = TestContextDI.createIsolated();
+    await testContext.initialize();
     
     // Register mock services in the container
     testContext.registerMock('IResolutionService', mockResolutionService);

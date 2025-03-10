@@ -18,19 +18,19 @@ import {
 import { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
 import { InterpreterService } from '@services/pipeline/InterpreterService/InterpreterService.js';
 import { StateTrackingService } from '@tests/utils/debug/StateTrackingService/StateTrackingService.js';
-import { container } from 'tsyringe';
 
 describe('InterpreterService Integration', () => {
   let context: TestContextDI;
 
   beforeEach(async () => {
-    // Use DI mode
-    context = TestContextDI.create();
+    // Use DI mode with isolated container
+    context = TestContextDI.createIsolated();
+    await context.initialize();
     
     // Register the StateTrackingService
     const trackingService = new StateTrackingService();
-    container.registerInstance('IStateTrackingService', trackingService);
-    container.registerInstance('StateTrackingService', trackingService);
+    context.registerMock('IStateTrackingService', trackingService);
+    context.registerMock('StateTrackingService', trackingService);
     
     await context.fixtures.load('interpreterTestProject');
   });
