@@ -42,11 +42,11 @@ export class StateService implements IStateService {
   /**
    * Creates a new StateService instance using dependency injection
    * 
-   * @param stateFactory State factory for creating states
-   * @param eventService Event service for state events
-   * @param trackingService Tracking service for debugging
-   * @param serviceMediator Service mediator for breaking circular dependencies
-   * @param parentState Optional parent state to inherit from
+   * @param stateFactory - Factory for creating state nodes and managing state operations
+   * @param eventService - Service for handling state events and notifications
+   * @param trackingService - Service for tracking state changes and relationships (used for debugging)
+   * @param serviceMediator - Mediator for resolving circular dependencies with other services
+   * @param parentState - Optional parent state to inherit from (used for nested imports)
    */
   constructor(
     @inject(StateFactory) stateFactory?: StateFactory,

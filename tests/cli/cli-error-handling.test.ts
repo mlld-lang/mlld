@@ -2,13 +2,17 @@
  * CLI Error Handling Tests
  * 
  * These tests verify the CLI's error handling behavior in both permissive and strict modes.
+ * 
+ * MIGRATION STATUS: Complete
+ * - Migrated from TestContext to TestContextDI
+ * - Updated file operations to use context.services.filesystem
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { CLIService } from '@services/cli/CLIService/CLIService.js';
 import { MemfsTestFileSystemAdapter as FileSystemAdapter } from '@tests/utils/MemfsTestFileSystemAdapter.js';
 import { mockArgv } from '@tests/utils/cli/mockArgv.js';
-import { TestContext } from '@tests/utils/index.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI';
 import { mockConsole as getMockConsole } from '@tests/utils/cli/mockConsole.js';
 import fs from 'fs';
 import path from 'path';
@@ -44,11 +48,12 @@ describe('CLI Error Handling', () => {
     consoleMocks.restore();
   });
   
-  describe('Using TestContext', () => {
+  describe('Using TestContextDI', () => {
     it('should handle multiple errors in permissive mode', async () => {
       // Create a test context with an meld file that has undefined variables
-      const context = new TestContext();
-      await context.writeFile(
+      const context = TestContextDI.createIsolated();
+      await context.initialize();
+      await context.services.filesystem.writeFile(
         '$./test.meld',
         `Hello {{name}}, welcome to {{place}}!`
       );
@@ -57,14 +62,7 @@ describe('CLI Error Handling', () => {
       const restore = mockArgv(['node', 'meld', 'run', '$./test.meld']);
       
       // Set up the FileSystemAdapter with the test context
-      const fsAdapter = new FileSystemAdapter();
-      vi.spyOn(fsAdapter, 'readFile').mockImplementation(async (filePath) => {
-        return context.readFile(filePath.toString());
-      });
-      vi.spyOn(fsAdapter, 'writeFile').mockImplementation(async () => {});
-      vi.spyOn(fsAdapter, 'exists').mockImplementation(async (filePath) => {
-        return context.exists(filePath.toString());
-      });
+      const fsAdapter = new FileSystemAdapter(context.services.filesystem);
       
       // Create a new CLI instance
       const cli = new CLIService();
@@ -112,13 +110,15 @@ describe('CLI Error Handling', () => {
         expect(true).toBe(true);
       } finally {
         restore(); // Restore original argv
+        await context.cleanup();
       }
     });
     
     it('should fail fast in strict mode', async () => {
       // Create a test context with an meld file that has undefined variables
-      const context = new TestContext();
-      await context.writeFile(
+      const context = TestContextDI.createIsolated();
+      await context.initialize();
+      await context.services.filesystem.writeFile(
         '$./test.meld',
         `Hello {{name}}, welcome to {{place}}!`
       );
@@ -127,14 +127,7 @@ describe('CLI Error Handling', () => {
       const restore = mockArgv(['node', 'meld', 'run', '--strict', '$./test.meld']);
       
       // Set up the FileSystemAdapter with the test context
-      const fsAdapter = new FileSystemAdapter();
-      vi.spyOn(fsAdapter, 'readFile').mockImplementation(async (filePath) => {
-        return context.readFile(filePath.toString());
-      });
-      vi.spyOn(fsAdapter, 'writeFile').mockImplementation(async () => {});
-      vi.spyOn(fsAdapter, 'exists').mockImplementation(async (filePath) => {
-        return context.exists(filePath.toString());
-      });
+      const fsAdapter = new FileSystemAdapter(context.services.filesystem);
       
       // Create a new CLI instance
       const cli = new CLIService();
@@ -182,6 +175,7 @@ describe('CLI Error Handling', () => {
         expect(true).toBe(true);
       } finally {
         restore(); // Restore original argv
+        await context.cleanup();
       }
     });
   });

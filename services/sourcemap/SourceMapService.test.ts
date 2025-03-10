@@ -132,7 +132,7 @@ describe('SourceMapService', () => {
 
     beforeEach(async () => {
       // Create a new test context with DI
-      testContext = new TestContextDI();
+      testContext = TestContextDI.createIsolated();
       await testContext.initialize();
 
       // Get the SourceMapService from the container

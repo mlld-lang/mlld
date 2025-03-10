@@ -10,6 +10,25 @@ import { textDirectiveExamples } from '@core/syntax/index.js';
 import { ErrorSeverity } from '@core/errors';
 // Import TestContextDI
 import { TestContextDI } from '@tests/utils/di/TestContextDI';
+// Import standardized mock factories
+import {
+  createValidationServiceMock,
+  createStateServiceMock,
+  createResolutionServiceMock,
+  createDirectiveErrorMock
+} from '@tests/utils/mocks/serviceMocks';
+
+/**
+ * TextDirectiveHandler Test Status
+ * --------------------------------
+ * 
+ * MIGRATION STATUS: Complete
+ * 
+ * This test file has been fully migrated to use:
+ * - Centralized syntax examples
+ * - TestContextDI for container management
+ * - Standardized mock factories with vitest-mock-extended
+ */
 
 /**
  * Helper function to create real AST nodes using meld-ast
@@ -33,9 +52,9 @@ const createNodeFromExample = async (code: string): Promise<DirectiveNode> => {
 
 describe('TextDirectiveHandler', () => {
   let handler: TextDirectiveHandler;
-  let stateService: any;
-  let validationService: any;
-  let resolutionService: any;
+  let stateService: ReturnType<typeof createStateServiceMock>;
+  let validationService: ReturnType<typeof createValidationServiceMock>;
+  let resolutionService: ReturnType<typeof createResolutionServiceMock>;
   let context: TestContextDI;
   let clonedState: any;
   // Create real instances of the literal and concatenation handlers for testing
@@ -54,44 +73,37 @@ describe('TextDirectiveHandler', () => {
     // Create context with isolated container 
     context = TestContextDI.create({ isolatedContainer: true });
     
-    // Create and register mocks
-    validationService = {
-      validate: vi.fn().mockImplementation((node: any) => {
-        if (node.directive?.value === "'unclosed string") {
-          throw new Error('Invalid string literal: unclosed string');
-        }
-        if (node.directive?.value === '"no"++"spaces"') {
-          throw new Error('Invalid concatenation syntax');
-        }
-        return Promise.resolve(true);
-      })
-    };
+    // Create mocks using standardized factories
+    validationService = createValidationServiceMock();
+    stateService = createStateServiceMock();
+    resolutionService = createResolutionServiceMock();
     
-    stateService = {
-      setTextVar: vi.fn(),
-      getTextVar: vi.fn(),
-      getDataVar: vi.fn(),
-      clone: vi.fn().mockReturnValue(clonedState)
-    };
+    // Configure mock implementations
+    validationService.validate.mockImplementation((node: any) => {
+      if (node.directive?.value === "'unclosed string") {
+        throw new Error('Invalid string literal: unclosed string');
+      }
+      if (node.directive?.value === '"no"++"spaces"') {
+        throw new Error('Invalid concatenation syntax');
+      }
+      return Promise.resolve(true);
+    });
     
-    resolutionService = {
-      resolveInContext: vi.fn()
-    };
+    stateService.clone.mockReturnValue(clonedState);
     
-    // Register mocks with the container
-    context.registerMock('IValidationService', validationService);
-    context.registerMock('IStateService', stateService);
-    context.registerMock('IResolutionService', resolutionService);
-    
-    // Resolve the handler from the container
-    handler = context.container.resolve(TextDirectiveHandler);
+    // Create handler instance directly with mocks
+    handler = new TextDirectiveHandler(
+      validationService,
+      stateService,
+      resolutionService
+    );
 
     // Create real handlers to match actual implementation
     realStringLiteralHandler = new StringLiteralHandler();
     realStringConcatenationHandler = new StringConcatenationHandler(resolutionService);
     
     // Set up better mocking for variable resolution
-    resolutionService.resolveInContext = vi.fn().mockImplementation(async (value: string, context: any) => {
+    resolutionService.resolveInContext.mockImplementation(async (value: string, context: any) => {
       // Use real string literal handler for string literals
       if (realStringLiteralHandler.isStringLiteral(value)) {
         return realStringLiteralHandler.parseLiteral(value);
@@ -135,7 +147,6 @@ describe('TextDirectiveHandler', () => {
   });
 
   afterEach(async () => {
-    // Cleanup to prevent container leaks
     await context.cleanup();
   });
 

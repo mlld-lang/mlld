@@ -1,19 +1,72 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { TestContext } from '@tests/utils/TestContext.js';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { TestContextDI } from '@tests/utils/di/TestContextDI';
 import { ServiceInitializationError, ServiceInitializationErrorCode } from '@core/errors/ServiceInitializationError.js';
 import { validateServicePipeline } from '@core/utils/serviceValidation.js';
 import { Services } from '@services/types.js';
 import type { DebugSessionConfig } from '@tests/utils/debug/StateDebuggerService/IStateDebuggerService.js';
 
+/**
+ * Tests for pipeline validation logic
+ * 
+ * MIGRATION STATUS: Complete
+ * - Migrated from TestContext to TestContextDI
+ * - Added extension methods for debug session management
+ */
 describe('Pipeline Validation', () => {
-  let context: TestContext;
+  let context: TestContextDI;
   let services: Services;
   let debugSessionId: string;
 
+  // Add necessary debug methods to TestContextDI instance
+  function extendContextWithDebug(context: TestContextDI) {
+    const originalCleanup = context.cleanup.bind(context);
+    const originalInitialize = context.initialize.bind(context);
+    
+    return Object.assign(Object.create(Object.getPrototypeOf(context)), {
+      ...context,
+      // Add startDebugSession method
+      startDebugSession: async (config?: Partial<DebugSessionConfig>): Promise<string> => {
+        const defaultConfig: DebugSessionConfig = {
+          captureConfig: {
+            capturePoints: ['pre-transform', 'post-transform', 'error'] as const,
+            includeFields: ['nodes', 'transformedNodes', 'variables', 'metadata', 'relationships'] as const,
+            format: 'full'
+          },
+          visualization: {
+            format: 'mermaid',
+            includeMetadata: true,
+            includeTimestamps: true
+          },
+          traceOperations: true,
+          collectMetrics: true
+        };
+    
+        const mergedConfig = { ...defaultConfig, ...config };
+        return await context.services.debug.startSession(mergedConfig);
+      },
+      // Add visualizeState method
+      visualizeState: async (format: 'mermaid' | 'dot' = 'mermaid'): Promise<string> => {
+        return context.services.debug.visualizeState(format);
+      },
+      // Preserve original cleanup method
+      cleanup: async () => {
+        return originalCleanup();
+      },
+      // Preserve original initialize method
+      initialize: async () => {
+        return originalInitialize();
+      }
+    });
+  }
+
   beforeEach(async () => {
-    context = new TestContext();
+    // Create an isolated context
+    context = TestContextDI.createIsolated();
     await context.initialize();
     services = context.services;
+
+    // Extend context with debug methods
+    context = extendContextWithDebug(context) as TestContextDI;
 
     // Start debug session
     const config: DebugSessionConfig = {
@@ -37,6 +90,8 @@ describe('Pipeline Validation', () => {
       console.log('\nDebug Report:', report);
       await context.services.debug.endSession(debugSessionId);
     }
+    
+    await context.cleanup();
   });
 
   describe('Core Pipeline Services', () => {

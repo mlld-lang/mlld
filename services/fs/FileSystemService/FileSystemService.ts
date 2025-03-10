@@ -34,9 +34,9 @@ export class FileSystemService implements IFileSystemService {
   /**
    * Creates a new instance of the FileSystemService
    * 
-   * @param pathOps - Service for path operations
-   * @param serviceMediator - Service mediator for resolving circular dependencies
-   * @param fileSystem - Optional file system implementation (defaults to NodeFileSystem)
+   * @param pathOps - Service for handling path operations and normalization
+   * @param serviceMediator - Service mediator for resolving circular dependencies with PathService
+   * @param fileSystem - File system implementation to use (defaults to NodeFileSystem if not provided)
    */
   constructor(
     @inject('IPathOperationsService') private readonly pathOps: IPathOperationsService,

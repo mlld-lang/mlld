@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 import { beforeEach, afterEach, afterAll, vi } from 'vitest';
-import { TestContext } from '@tests/utils/index.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { container } from 'tsyringe';
 import { EventEmitter } from 'events';
 
@@ -13,8 +13,16 @@ process.env.NODE_ENV = 'test';
 // Set test timeout to a reasonable value (10 seconds by default)
 vi.setConfig({ testTimeout: 10000 });
 
-// Reset all mocks and container before each test
-beforeEach(() => {
+// Create global test context
+globalThis.testContext = TestContextDI.createIsolated();
+
+// Initialize the global test context
+beforeEach(async () => {
+  // Initialize global test context if not already initialized
+  if (globalThis.testContext && !globalThis.testContext.isInitialized) {
+    await globalThis.testContext.initialize();
+  }
+  
   vi.resetAllMocks();
   
   // Clear container instances to prevent test cross-contamination
@@ -25,13 +33,6 @@ beforeEach(() => {
 afterEach(async () => {
   // Clean up any test context resources
   if (globalThis.testContext) {
-    // Explicitly nullify service references to break circular dependencies
-    if (globalThis.testContext.services) {
-      Object.keys(globalThis.testContext.services).forEach(key => {
-        globalThis.testContext.services[key] = null;
-      });
-    }
-    
     // Clean up context
     await globalThis.testContext.cleanup();
   }
@@ -65,8 +66,5 @@ afterAll(() => {
 // Make test utilities available globally
 declare global {
   // eslint-disable-next-line no-var
-  var testContext: TestContext;
+  var testContext: TestContextDI;
 }
-
-// Initialize test context
-globalThis.testContext = new TestContext();

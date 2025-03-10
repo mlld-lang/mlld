@@ -48,6 +48,12 @@ export class InterpreterService implements IInterpreterService {
   private stateVariableCopier = new StateVariableCopier();
   private initializationPromise: Promise<void> | null = null;
 
+  /**
+   * Creates a new InterpreterService instance
+   * 
+   * @param directiveService - Service for handling and processing directives (injected with delay to handle circular dependency)
+   * @param stateService - Service for managing and accessing state
+   */
   constructor(
     @inject(delay(() => 'IDirectiveService')) directiveService?: IDirectiveService,
     @inject('IStateService') stateService?: IStateService
@@ -69,6 +75,10 @@ export class InterpreterService implements IInterpreterService {
     }
   }
 
+  /**
+   * Returns whether this service can handle transformations
+   * Required by the pipeline validation system
+   */
   public canHandleTransformations(): boolean {
     return true;
   }

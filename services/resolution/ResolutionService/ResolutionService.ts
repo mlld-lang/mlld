@@ -151,10 +151,10 @@ export class ResolutionService implements IResolutionService {
   /**
    * Creates a new ResolutionService instance using dependency injection
    * 
-   * @param stateService State service for accessing variables and commands
-   * @param fileSystemService File system service for resolving file paths
-   * @param pathService Path service for validating paths
-   * @param serviceMediator Service mediator for breaking circular dependencies
+   * @param stateService - State service for accessing variables and commands
+   * @param fileSystemService - File system service for resolving file paths and content
+   * @param pathService - Path service for validating and normalizing paths
+   * @param serviceMediator - Service mediator for breaking circular dependencies with the parser service
    */
   constructor(
     @inject('IStateService') stateService?: IStateService,
@@ -198,7 +198,7 @@ export class ResolutionService implements IResolutionService {
     // Initialize resolvers
     this.initializeResolvers();
   }
-  
+
   /**
    * Create a default file system service if not provided
    * Used as fallback in case dependency injection fails
@@ -207,9 +207,7 @@ export class ResolutionService implements IResolutionService {
     logger.warn('Using default FileSystemService - this should only happen in tests');
     return {
       readFile: async () => '',
-      writeFile: async () => {},
       exists: async () => false,
-      isDirectory: async () => false,
       // Minimal implementation for fallback
     } as IFileSystemService;
   }

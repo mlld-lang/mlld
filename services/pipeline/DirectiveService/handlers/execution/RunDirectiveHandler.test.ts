@@ -25,6 +25,13 @@ import { runDirectiveExamples } from '@core/syntax/index.js';
 import { parse } from 'meld-ast';
 import { ErrorSeverity } from '@core/errors';
 import { TestContextDI } from '@tests/utils/di/TestContextDI';
+import {
+  createValidationServiceMock,
+  createStateServiceMock,
+  createResolutionServiceMock,
+  createFileSystemServiceMock,
+  createDirectiveErrorMock
+} from '@tests/utils/mocks/serviceMocks';
 
 // Mock child_process
 vi.mock('child_process', () => ({
@@ -32,15 +39,19 @@ vi.mock('child_process', () => ({
 }));
 
 /**
- * RunDirectiveHandler Test Migration Status
+ * RunDirectiveHandler Test Status
  * ----------------------------------------
  * 
- * MIGRATION STATUS: Completed
+ * MIGRATION STATUS: Complete
  * 
- * This test file has been updated to use TestContextDI for dependency injection.
+ * This test file has been fully migrated to use:
+ * - TestContextDI for container management
+ * - Standardized mock factories with vitest-mock-extended
+ * - Centralized syntax examples
  * 
  * COMPLETED:
  * - Using TestContextDI for test environment setup
+ * - Using standardized mock factories for service mocks
  * - Using a hybrid approach with direct handler instantiation
  * - Added proper cleanup for container management
  * - Enhanced with centralized syntax examples
@@ -102,34 +113,12 @@ const createRunDirectiveNode = (command: string, outputVar?: string): DirectiveN
   } as DirectiveNode;
 };
 
-// Helper function to create parser services for testing
-function createServices() {
-  const validationService = {
-    validate: vi.fn()
-  };
-
-  const resolutionService = {
-    resolveInContext: vi.fn()
-  };
-
-  const fileSystemService = {
-    executeCommand: vi.fn(),
-    getWorkspacePath: vi.fn().mockReturnValue('/workspace')
-  };
-
-  return {
-    validationService,
-    resolutionService,
-    fileSystemService
-  };
-}
-
 describe('RunDirectiveHandler', () => {
   let handler: RunDirectiveHandler;
-  let validationService: any;
-  let stateService: any;
-  let resolutionService: any;
-  let fileSystemService: any;
+  let validationService: ReturnType<typeof createValidationServiceMock>;
+  let stateService: ReturnType<typeof createStateServiceMock>;
+  let resolutionService: ReturnType<typeof createResolutionServiceMock>;
+  let fileSystemService: ReturnType<typeof createFileSystemServiceMock>;
   let clonedState: any;
   let context: TestContextDI;
 
@@ -137,13 +126,17 @@ describe('RunDirectiveHandler', () => {
     // Create context with isolated container
     context = TestContextDI.create({ isolatedContainer: true });
     
-    validationService = {
-      validate: vi.fn(),
-      registerValidator: vi.fn(),
-      removeValidator: vi.fn(),
-      hasValidator: vi.fn(),
-      getRegisteredDirectiveKinds: vi.fn()
-    };
+    // Create mocks using standardized factories
+    validationService = createValidationServiceMock();
+    stateService = createStateServiceMock();
+    resolutionService = createResolutionServiceMock();
+    fileSystemService = createFileSystemServiceMock();
+    
+    // Configure validation service
+    validationService.registerValidator = vi.fn();
+    validationService.removeValidator = vi.fn();
+    validationService.hasValidator = vi.fn();
+    validationService.getRegisteredDirectiveKinds = vi.fn();
 
     clonedState = {
       setTextVar: vi.fn(),
@@ -152,39 +145,26 @@ describe('RunDirectiveHandler', () => {
       transformNode: vi.fn()
     };
 
-    stateService = {
-      setTextVar: vi.fn(),
-      clone: vi.fn().mockReturnValue(clonedState),
-      isTransformationEnabled: vi.fn().mockReturnValue(false)
-    };
+    // Configure state service
+    stateService.clone.mockReturnValue(clonedState);
+    stateService.isTransformationEnabled.mockReturnValue(false);
 
-    resolutionService = {
-      resolveInContext: vi.fn()
-    };
+    // Configure file system service
+    fileSystemService.getCwd.mockReturnValue('/workspace');
+    fileSystemService.dirname.mockReturnValue('/workspace');
+    fileSystemService.join.mockImplementation((...args) => args.join('/'));
+    fileSystemService.normalize.mockImplementation(path => path);
 
-    fileSystemService = {
-      getCwd: vi.fn().mockReturnValue('/workspace'),
-      executeCommand: vi.fn(),
-      dirname: vi.fn().mockReturnValue('/workspace'),
-      join: vi.fn().mockImplementation((...args) => args.join('/')),
-      normalize: vi.fn().mockImplementation(path => path)
-    };
-
-    // Instead of using the container to resolve the handler,
-    // create the handler directly with the mocks
+    // Create handler directly with the mocks
     handler = new RunDirectiveHandler(
       validationService,
       resolutionService,
       stateService,
       fileSystemService
     );
-
-    // Reset mocks
-    vi.clearAllMocks();
   });
 
   afterEach(async () => {
-    // Cleanup to prevent container leaks
     await context.cleanup();
   });
 

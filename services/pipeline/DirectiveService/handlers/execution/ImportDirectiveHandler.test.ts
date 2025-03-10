@@ -23,17 +23,28 @@ import {
 import { importDirectiveExamples } from '@core/syntax/index.js';
 import { createNodeFromExample } from '@core/syntax/helpers';
 import { TestContextDI } from '@tests/utils/di/TestContextDI';
+import {
+  createValidationServiceMock,
+  createStateServiceMock,
+  createResolutionServiceMock,
+  createFileSystemServiceMock,
+  createDirectiveErrorMock
+} from '@tests/utils/mocks/serviceMocks';
 
 /**
- * ImportDirectiveHandler Test Migration Status
+ * ImportDirectiveHandler Test Status
  * ----------------------------------------
  * 
  * MIGRATION STATUS: Complete
  * 
- * This file has been migrated to use TestContextDI for dependency injection.
+ * This test file has been fully migrated to use:
+ * - TestContextDI for container management
+ * - Standardized mock factories with vitest-mock-extended
+ * - Centralized syntax examples
  * 
  * COMPLETED:
  * - Using TestContextDI for test environment setup
+ * - Using standardized mock factories for service mocks
  * - Using a hybrid approach with direct handler instantiation
  * - Added proper cleanup for container management
  * - Enhanced with centralized syntax examples
@@ -78,10 +89,10 @@ function createImportDirectiveNode(options: {
 
 describe('ImportDirectiveHandler', () => {
   let handler: ImportDirectiveHandler;
-  let validationService: any;
-  let stateService: any;
-  let resolutionService: any;
-  let fileSystemService: any;
+  let validationService: ReturnType<typeof createValidationServiceMock>;
+  let stateService: ReturnType<typeof createStateServiceMock>;
+  let resolutionService: ReturnType<typeof createResolutionServiceMock>;
+  let fileSystemService: ReturnType<typeof createFileSystemServiceMock>;
   let parserService: any;
   let interpreterService: any;
   let circularityService: any;
@@ -125,33 +136,22 @@ describe('ImportDirectiveHandler', () => {
       setCurrentFilePath: vi.fn()
     };
 
-    stateService = {
-      setTextVar: vi.fn(),
-      setDataVar: vi.fn(),
-      setPathVar: vi.fn(),
-      setCommand: vi.fn(),
-      clone: vi.fn().mockReturnValue(clonedState),
-      createChildState: vi.fn().mockReturnValue(childState),
-      getCurrentFilePath: vi.fn().mockReturnValue('source.meld'),
-      setCurrentFilePath: vi.fn(),
-      __isMock: true
-    };
-
-    validationService = {
-      validate: vi.fn()
-    };
+    // Create mocks using standardized factories
+    validationService = createValidationServiceMock();
+    stateService = createStateServiceMock();
+    resolutionService = createResolutionServiceMock();
+    fileSystemService = createFileSystemServiceMock();
     
-    resolutionService = {
-      resolveInContext: vi.fn()
-    };
+    // Configure state service
+    stateService.clone.mockReturnValue(clonedState);
+    stateService.createChildState.mockReturnValue(childState);
+    stateService.getCurrentFilePath.mockReturnValue('source.meld');
+    stateService.__isMock = true;
 
-    fileSystemService = {
-      exists: vi.fn(),
-      readFile: vi.fn(),
-      dirname: vi.fn().mockReturnValue('/workspace'),
-      join: vi.fn().mockImplementation((...args) => args.join('/')),
-      normalize: vi.fn().mockImplementation(path => path)
-    };
+    // Configure file system service
+    fileSystemService.dirname.mockReturnValue('/workspace');
+    fileSystemService.join.mockImplementation((...args) => args.join('/'));
+    fileSystemService.normalize.mockImplementation(path => path);
 
     parserService = {
       parse: vi.fn()
@@ -166,8 +166,7 @@ describe('ImportDirectiveHandler', () => {
       endImport: vi.fn()
     };
 
-    // Instead of using the container to resolve the handler,
-    // create the handler directly with the mocks
+    // Create handler directly with the mocks
     handler = new ImportDirectiveHandler(
       validationService,
       resolutionService,
@@ -180,7 +179,6 @@ describe('ImportDirectiveHandler', () => {
   });
 
   afterEach(async () => {
-    // Cleanup to prevent container leaks
     await context.cleanup();
   });
 

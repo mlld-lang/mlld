@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { CLIService, IPromptService } from './CLIService.js';
-import { TestContext } from '@tests/utils/index.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 import { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
 import { IOutputService } from '@services/pipeline/OutputService/IOutputService.js';
@@ -75,7 +75,7 @@ vi.mock('readline', () => ({
 }));
 
 describe('CLIService', () => {
-  let context: TestContext;
+  let context: TestContextDI;
   let service: CLIService;
   let mockParserService: IParserService;
   let mockInterpreterService: IInterpreterService;
@@ -91,7 +91,7 @@ describe('CLIService', () => {
     vi.clearAllMocks();
     vi.mocked(mockPromptService.getText).mockReset();
     
-    context = new TestContext();
+    context = TestContextDI.createIsolated();
     await context.initialize();
 
     // Initialize readline mock
@@ -123,14 +123,14 @@ describe('CLIService', () => {
       canAccessTransformedNodes: vi.fn().mockReturnValue(true)
     } as unknown as IOutputService;
 
-    // Use the MemfsTestFileSystem for file operations
-    const fs = context.fs;
+    // Use the DI context filesystem for file operations
+    const filesystem = context.services.filesystem;
     mockFileSystemService = {
-      readFile: fs.readFile.bind(fs),
-      writeFile: fs.writeFile.bind(fs),
-      exists: fs.exists.bind(fs),
-      watch: fs.watch.bind(fs),
-      getFileSystem: vi.fn().mockReturnValue(fs)
+      readFile: filesystem.readFile.bind(filesystem),
+      writeFile: filesystem.writeFile.bind(filesystem),
+      exists: filesystem.exists.bind(filesystem),
+      watch: filesystem.watch.bind(filesystem),
+      getFileSystem: vi.fn().mockReturnValue(filesystem)
     } as unknown as IFileSystemService;
 
     mockPathService = {
@@ -161,6 +161,15 @@ describe('CLIService', () => {
       createChildState: vi.fn().mockReturnValue(mockChildState)
     } as unknown as IStateService;
 
+    // Register mocks with the DI container
+    context.registerMock('IParserService', mockParserService);
+    context.registerMock('IInterpreterService', mockInterpreterService);
+    context.registerMock('IOutputService', mockOutputService);
+    context.registerMock('IFileSystemService', mockFileSystemService);
+    context.registerMock('IPathService', mockPathService);
+    context.registerMock('IStateService', mockStateService);
+    context.registerMock('IPromptService', mockPromptService);
+    
     // Create CLI service with mocks
     service = new CLIService(
       mockParserService,
@@ -174,7 +183,7 @@ describe('CLIService', () => {
 
     // Set up test files
     const textExample = textDirectiveExamples.atomic.simpleString;
-    await context.fs.writeFile('test.mld', textExample.code);
+    await context.services.filesystem.writeFile('test.mld', textExample.code);
 
     // Initialize mock logger
     mockLogger = {
@@ -326,8 +335,8 @@ describe('CLIService', () => {
   describe('File Overwrite Handling', () => {
     it('should prompt for overwrite when file exists', async () => {
       const args = ['node', 'meld', 'test.mld', '--output', 'test.md'];
-      await mockFileSystemService.writeFile('test.mld', 'input content');
-      await mockFileSystemService.writeFile('test.md', 'existing content');
+      await context.services.filesystem.writeFile('test.mld', 'input content');
+      await context.services.filesystem.writeFile('test.md', 'existing content');
       
       // Mock the prompt service to return 'y'
       vi.mocked(mockPromptService.getText).mockResolvedValueOnce('y');

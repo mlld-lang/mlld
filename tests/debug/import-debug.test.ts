@@ -1,11 +1,20 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { main } from '@api/index.js';
-import { TestContext } from '@tests/utils/index.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI';
 import { StateHistoryService } from '@tests/utils/debug/StateHistoryService/StateHistoryService.js';
 import { StateTrackingService } from '@tests/utils/debug/StateTrackingService/StateTrackingService.js';
 import { StateVisualizationService } from '@tests/utils/debug/StateVisualizationService/StateVisualizationService.js';
 import * as fs from 'fs-extra';
 import * as path from 'path';
+
+/**
+ * Debug test for import directive transformation
+ * 
+ * MIGRATION STATUS: Complete
+ * - Migrated from TestContext to TestContextDI
+ * - Updated file operations to use context.services.filesystem
+ * - Added helper methods for enableTransformation and writeFile
+ */
 
 // Create a file-based debug logger
 const DEBUG_LOG_FILE = path.join(process.cwd(), 'debug-import.log');
@@ -36,13 +45,29 @@ try {
 }
 
 describe('Import Directive Debug', () => {
-  let context: TestContext;
+  let context: TestContextDI;
   let historyService: StateHistoryService;
   let trackingService: StateTrackingService;
   let visualizationService: StateVisualizationService;
 
+  // Helper method to write files
+  async function writeFile(filePath: string, content: string): Promise<void> {
+    await context.services.filesystem.writeFile(filePath, content);
+  }
+
+  // Helper method to enable transformation
+  function enableTransformation(options: {
+    variables?: boolean;
+    directives?: boolean;
+    commands?: boolean;
+    imports?: boolean;
+  } = {}): void {
+    // Pass the options directly to the enableTransformation method
+    context.services.state.enableTransformation(options);
+  }
+
   beforeEach(async () => {
-    context = new TestContext();
+    context = TestContextDI.createIsolated();
     await context.initialize();
     
     debugLog('\n====================================================');
@@ -72,7 +97,7 @@ describe('Import Directive Debug', () => {
     
     // Enable transformation with explicit imports option
     debugLog('\nEnabling transformation with explicit imports option');
-    context.enableTransformation({
+    enableTransformation({
       variables: true,
       directives: true,
       commands: true,
@@ -190,7 +215,7 @@ describe('Import Directive Debug', () => {
     debugLog('====================================================\n');
     
     // Create the imported file
-    await context.writeFile('imported.meld', `
+    await writeFile('imported.meld', `
       @text importedVar = "Imported content"
     `);
     
@@ -200,17 +225,17 @@ describe('Import Directive Debug', () => {
       
       Content from import: {{importedVar}}
     `;
-    await context.writeFile('test.meld', content);
+    await writeFile('test.meld', content);
     
     // Log the test files
     debugLog('Created test files:');
     debugLog('- imported.meld:');
     debugLog('```');
-    debugLog(await context.fs.readFile('imported.meld', 'utf8'));
+    debugLog(await context.services.filesystem.readFile('imported.meld', 'utf8'));
     debugLog('```');
     debugLog('- test.meld:');
     debugLog('```');
-    debugLog(await context.fs.readFile('test.meld', 'utf8'));
+    debugLog(await context.services.filesystem.readFile('test.meld', 'utf8'));
     debugLog('```');
     
     // Add a monkey patch to the DirectiveService to watch for import variable handling
@@ -323,7 +348,7 @@ describe('Import Directive Debug', () => {
     // Run with transformation enabled and explicit options
     debugLog('\nExecuting main function...');
     const result = await main('test.meld', {
-      fs: context.fs,
+      fs: context.services.filesystem,
       services: context.services,
       transformation: transformationOptions,
       debug: true

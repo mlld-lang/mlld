@@ -13,18 +13,32 @@ import { createLocation } from '@tests/utils/testFactories.js';
 import { importDirectiveExamples } from '@core/syntax/index.js';
 import { createNodeFromExample } from '@core/syntax/helpers';
 import { TestContextDI } from '@tests/utils/di/TestContextDI';
+import {
+  createValidationServiceMock,
+  createStateServiceMock,
+  createResolutionServiceMock,
+  createFileSystemServiceMock,
+  createDirectiveErrorMock
+} from '@tests/utils/mocks/serviceMocks';
 
 /**
- * MIGRATION NOTES:
+ * ImportDirectiveHandler Transformation Test Status
+ * -----------------------------------------------
  * 
- * This file has been migrated to use TestContextDI for dependency injection and centralized syntax examples where possible.
+ * MIGRATION STATUS: Complete
+ * 
+ * This test file has been fully migrated to use:
+ * - TestContextDI for container management
+ * - Standardized mock factories with vitest-mock-extended
+ * - Centralized syntax examples
  * 
  * Migration details:
  * 
- * 1. Added TestContextDI for test environment setup
- * 2. Using a hybrid approach with direct handler instantiation while leveraging TestContextDI for test lifecycle
- * 3. Maintained use of centralized syntax examples
- * 4. Added proper cleanup with afterEach hook
+ * 1. Using TestContextDI for test environment setup
+ * 2. Using standardized mock factories for service mocks
+ * 3. Using a hybrid approach with direct handler instantiation
+ * 4. Maintained use of centralized syntax examples
+ * 5. Added proper cleanup with afterEach hook
  * 
  * Some key observations from the migration:
  * 
@@ -38,10 +52,6 @@ import { TestContextDI } from '@tests/utils/di/TestContextDI';
  * 
  * 3. For the error handling test, we were able to use a modified version of the 
  *    centralized example by replacing the file path with a non-existent one.
- * 
- * These decisions were made to balance using centralized examples while ensuring
- * the tests continue to properly test the handler's specific behaviors, particularly
- * around the importList parameter which is crucial for the transformation tests.
  */
 
 /**
@@ -80,10 +90,10 @@ async function createNodeFromExample(code: string): Promise<DirectiveNode> {
 
 describe('ImportDirectiveHandler Transformation', () => {
   let handler: ImportDirectiveHandler;
-  let validationService: any;
-  let stateService: any;
-  let resolutionService: any;
-  let fileSystemService: any;
+  let validationService: ReturnType<typeof createValidationServiceMock>;
+  let stateService: ReturnType<typeof createStateServiceMock>;
+  let resolutionService: ReturnType<typeof createResolutionServiceMock>;
+  let fileSystemService: ReturnType<typeof createFileSystemServiceMock>;
   let parserService: any;
   let interpreterService: any;
   let circularityService: any;
@@ -132,39 +142,29 @@ describe('ImportDirectiveHandler Transformation', () => {
       isTransformationEnabled: vi.fn().mockReturnValue(true)
     };
 
-    stateService = {
-      setTextVar: vi.fn(),
-      setDataVar: vi.fn(),
-      setPathVar: vi.fn(),
-      setCommand: vi.fn(),
-      getTextVar: vi.fn(),
-      getDataVar: vi.fn(),
-      getPathVar: vi.fn(),
-      getCommand: vi.fn(),
-      getAllTextVars: vi.fn().mockReturnValue(new Map()),
-      getAllDataVars: vi.fn().mockReturnValue(new Map()),
-      getAllPathVars: vi.fn().mockReturnValue(new Map()),
-      getAllCommands: vi.fn().mockReturnValue(new Map()),
-      clone: vi.fn().mockReturnValue(clonedState),
-      createChildState: vi.fn().mockReturnValue(childState),
-      isTransformationEnabled: vi.fn().mockReturnValue(true)
-    };
-
-    validationService = {
-      validate: vi.fn()
-    };
+    // Create mocks using standardized factories
+    validationService = createValidationServiceMock();
+    stateService = createStateServiceMock();
+    resolutionService = createResolutionServiceMock();
+    fileSystemService = createFileSystemServiceMock();
     
-    resolutionService = {
-      resolveInContext: vi.fn()
-    };
+    // Configure state service
+    stateService.clone.mockReturnValue(clonedState);
+    stateService.createChildState.mockReturnValue(childState);
+    stateService.isTransformationEnabled.mockReturnValue(true);
+    stateService.getTextVar = vi.fn();
+    stateService.getDataVar = vi.fn();
+    stateService.getPathVar = vi.fn();
+    stateService.getCommand = vi.fn();
+    stateService.getAllTextVars = vi.fn().mockReturnValue(new Map());
+    stateService.getAllDataVars = vi.fn().mockReturnValue(new Map());
+    stateService.getAllPathVars = vi.fn().mockReturnValue(new Map());
+    stateService.getAllCommands = vi.fn().mockReturnValue(new Map());
 
-    fileSystemService = {
-      exists: vi.fn(),
-      readFile: vi.fn(),
-      dirname: vi.fn().mockReturnValue('/workspace'),
-      join: vi.fn().mockImplementation((...args) => args.join('/')),
-      normalize: vi.fn().mockImplementation(path => path)
-    };
+    // Configure file system service
+    fileSystemService.dirname.mockReturnValue('/workspace');
+    fileSystemService.join.mockImplementation((...args) => args.join('/'));
+    fileSystemService.normalize.mockImplementation(path => path);
 
     parserService = {
       parse: vi.fn()
@@ -179,8 +179,7 @@ describe('ImportDirectiveHandler Transformation', () => {
       endImport: vi.fn()
     };
 
-    // Instead of using the container to resolve the handler,
-    // create the handler directly with the mocks
+    // Create handler directly with the mocks
     handler = new ImportDirectiveHandler(
       validationService,
       resolutionService,
@@ -193,7 +192,6 @@ describe('ImportDirectiveHandler Transformation', () => {
   });
 
   afterEach(async () => {
-    // Cleanup to prevent container leaks
     await context.cleanup();
   });
 

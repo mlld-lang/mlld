@@ -75,20 +75,9 @@ The following test files still use the non-DI `TestContext` instead of `TestCont
    - [✅] services/fs/FileSystemService/FileSystemService.test.ts
 
 3. General Test Files:
-   - [ ] tests/debug/import-debug.test.ts
-   - [ ] tests/specific-variable-resolution.test.ts
-   - [ ] tests/transformation-debug.test.ts
-   - [ ] tests/output-filename-handling.test.ts
-   - [ ] tests/cli/cli-error-handling.test.ts
-   - [ ] tests/specific-nested-array.test.ts
-   - [ ] tests/xml-output-format.test.ts
-   - [ ] tests/comment-handling-fix.test.ts
-   - [ ] tests/embed-transformation-e2e.test.ts
-   - [ ] tests/embed-line-number-fix.test.ts
-   - [ ] tests/embed-transformation-variable-fix.test.ts
-   - [ ] tests/codefence-duplication-fix.test.ts
-   - [ ] tests/pipeline/pipelineValidation.test.ts
-   - [ ] tests/utils/tests/TestContext.test.ts (special case - tests TestContext itself)
+   - [✅] tests/codefence-duplication-fix.test.ts - *Migrated with custom runMeld implementation*
+   - [✅] tests/pipeline/pipelineValidation.test.ts - *Migrated with extended debug methods*
+   - [✅] tests/utils/tests/TestContext.test.ts - *Special case: tests TestContext itself, no migration needed*
 
 **Progress Update:** All API test files and service test files have been successfully migrated to use TestContextDI.create() instead of new TestContext(). The key changes involved:
 1. Changing imports from TestContext to TestContextDI
@@ -345,21 +334,32 @@ export function createCustomError(
 
 ## Progress Summary
 
-### Achievements
-- ✅ Removed dual-mode support in TestContextDI (withDI/withoutDI methods)
-- ✅ Successfully migrated all API test files (resolution-debug.test.ts, api.test.ts, array-access.test.ts, integration.test.ts, nested-array.test.ts)
-- ✅ Migrated service test files (PathService.tmp.test.ts, FileSystemService.test.ts)
-- ✅ Established patterns for using context.services.filesystem instead of context.fs
-- ✅ Verified all tests pass with the updated approach
-- ✅ Completed migration of all Priority 1 test files (variable-index-debug.test.ts, specific-nested-array.test.ts, specific-variable-resolution.test.ts, transformation-debug.test.ts)
-- ✅ Completed migration of all Priority 2 test files (xml-output-format.test.ts, output-filename-handling.test.ts, comment-handling-fix.test.ts)
-- ✅ Made significant progress on Priority 3 test files, with three files already migrated (embed-transformation-e2e.test.ts, embed-line-number-fix.test.ts, embed-transformation-variable-fix.test.ts)
-- ✅ Implemented hybrid approach for unit tests that preserves isolation while adopting DI infrastructure where appropriate
+The test infrastructure simplification has made significant progress, with the removal of dual-mode support and the migration of all test files. All test files have now been successfully migrated to use TestContextDI, providing a solid foundation for future development. The established patterns provide a clear path forward for any new test files, and the standardized approach ensures consistency across the codebase.
 
-### Immediate Next Steps
-1. Continue implementation of the prioritized migration plan with remaining Priority 3 test files (embed-directive-fixes.test.ts, embed-directive-transformation-fixes.test.ts)
-2. ✅ Use the existing TestHelpers.setupDirectiveTest function for directive handler tests (discovered in tests/utils/di/TestHelpers.ts)
-3. Begin migration of Priority 1 directive handler tests
-4. Document common patterns and issues encountered
+Key accomplishments:
+1. Removed dual-mode support and updated documentation
+2. Fixed container state leakage and class identity issues
+3. Migrated all test files to TestContextDI:
+   - All general test files
+   - All directive handler tests
+   - All API tests
+   - All service tests
+4. Standardized test approach with clear patterns for:
+   - Mock creation using vitest-mock-extended
+   - Container isolation
+   - Proper cleanup
+   - Error handling
 
-The test infrastructure simplification has made significant progress, with the removal of dual-mode support and the migration of key test files. All Priority 1 and Priority 2 test files have now been successfully migrated, along with several Priority 3 test files, providing a solid foundation for continuing with the more complex test files. The established patterns provide a clear path forward for migrating the remaining test files, and the prioritized approach ensures a methodical and efficient process. 
+Next steps:
+1. Simplify service factories where applicable
+2. Continue to refine the test infrastructure documentation
+3. Apply the standardized approach to any new test files
+
+### General Test Files
+
+1. **Remaining Tests**: The following tests still use the legacy TestContext approach:
+   - [✅] tests/debug/import-debug.test.ts - *Migrated with custom enableTransformation implementation*
+   - [✅] tests/cli/cli-error-handling.test.ts - *Migrated with FileSystemAdapter integration*
+   - [✅] tests/codefence-duplication-fix.test.ts - *Migrated with custom runMeld implementation*
+   - [✅] tests/pipeline/pipelineValidation.test.ts - *Migrated with extended debug methods*
+   - [✅] tests/utils/tests/TestContext.test.ts - *Special case: tests TestContext itself, no migration needed* 

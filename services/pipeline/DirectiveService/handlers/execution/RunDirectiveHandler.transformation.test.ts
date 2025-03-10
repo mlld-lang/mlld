@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import type { DirectiveNode, DirectiveContext } from 'meld-spec';
 import { RunDirectiveHandler } from './RunDirectiveHandler.js';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
@@ -6,51 +6,70 @@ import type { IStateService } from '@services/state/StateService/IStateService.j
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import { createRunDirective, createLocation } from '@tests/utils/testFactories.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI';
+import {
+  createValidationServiceMock,
+  createStateServiceMock,
+  createResolutionServiceMock,
+  createFileSystemServiceMock,
+  createDirectiveErrorMock
+} from '@tests/utils/mocks/serviceMocks';
+
+/**
+ * RunDirectiveHandler Transformation Test Status
+ * -----------------------------------------------
+ * 
+ * MIGRATION STATUS: Complete
+ * 
+ * This test file has been fully migrated to use:
+ * - TestContextDI for container management
+ * - Standardized mock factories with vitest-mock-extended
+ * - Direct constructor injection for handler instantiation
+ * - Proper cleanup to prevent container leaks
+ */
 
 describe('RunDirectiveHandler Transformation', () => {
   let handler: RunDirectiveHandler;
-  let validationService: IValidationService;
-  let stateService: IStateService;
-  let resolutionService: IResolutionService;
-  let fileSystemService: IFileSystemService;
-  let clonedState: IStateService;
+  let validationService: ReturnType<typeof createValidationServiceMock>;
+  let stateService: ReturnType<typeof createStateServiceMock>;
+  let resolutionService: ReturnType<typeof createResolutionServiceMock>;
+  let fileSystemService: ReturnType<typeof createFileSystemServiceMock>;
+  let clonedState: any;
+  let context: TestContextDI;
 
   beforeEach(() => {
-    validationService = {
-      validate: vi.fn()
-    } as unknown as IValidationService;
+    // Create context with isolated container
+    context = TestContextDI.create({ isolatedContainer: true });
+    
+    // Create mocks using standardized factories
+    validationService = createValidationServiceMock();
+    stateService = createStateServiceMock();
+    resolutionService = createResolutionServiceMock();
+    fileSystemService = createFileSystemServiceMock();
 
     clonedState = {
       setTextVar: vi.fn(),
       clone: vi.fn().mockReturnThis(),
       isTransformationEnabled: vi.fn().mockReturnValue(true),
       transformNode: vi.fn()
-    } as unknown as IStateService;
+    };
 
-    stateService = {
-      setTextVar: vi.fn(),
-      clone: vi.fn().mockReturnValue(clonedState),
-      isTransformationEnabled: vi.fn().mockReturnValue(true)
-    } as unknown as IStateService;
+    // Configure mock behaviors
+    stateService.clone.mockReturnValue(clonedState);
+    stateService.isTransformationEnabled.mockReturnValue(true);
+    fileSystemService.getCwd.mockReturnValue('/workspace');
 
-    resolutionService = {
-      resolveInContext: vi.fn()
-    } as unknown as IResolutionService;
-
-    fileSystemService = {
-      getCwd: vi.fn().mockReturnValue('/workspace'),
-      executeCommand: vi.fn()
-    } as unknown as IFileSystemService;
-
+    // Create handler directly with the mocks
     handler = new RunDirectiveHandler(
       validationService,
       resolutionService,
       stateService,
       fileSystemService
     );
+  });
 
-    // Reset mocks
-    vi.clearAllMocks();
+  afterEach(async () => {
+    await context.cleanup();
   });
 
   describe('transformation behavior', () => {
@@ -58,9 +77,9 @@ describe('RunDirectiveHandler Transformation', () => {
       const node = createRunDirective('echo test', createLocation(1, 1));
       const context = { currentFilePath: 'test.meld', state: stateService };
 
-      vi.mocked(validationService.validate).mockResolvedValue(undefined);
-      vi.mocked(resolutionService.resolveInContext).mockResolvedValue('echo test');
-      vi.mocked(fileSystemService.executeCommand).mockResolvedValue({
+      validationService.validate.mockResolvedValue(undefined);
+      resolutionService.resolveInContext.mockResolvedValue('echo test');
+      fileSystemService.executeCommand.mockResolvedValue({
         stdout: 'test output',
         stderr: ''
       });
@@ -80,9 +99,9 @@ describe('RunDirectiveHandler Transformation', () => {
       const node = createRunDirective('echo {{message}}', createLocation(1, 1));
       const context = { currentFilePath: 'test.meld', state: stateService };
 
-      vi.mocked(validationService.validate).mockResolvedValue(undefined);
-      vi.mocked(resolutionService.resolveInContext).mockResolvedValue('echo Hello World');
-      vi.mocked(fileSystemService.executeCommand).mockResolvedValue({
+      validationService.validate.mockResolvedValue(undefined);
+      resolutionService.resolveInContext.mockResolvedValue('echo Hello World');
+      fileSystemService.executeCommand.mockResolvedValue({
         stdout: 'Hello World',
         stderr: ''
       });
@@ -102,9 +121,9 @@ describe('RunDirectiveHandler Transformation', () => {
       const node = createRunDirective('echo error >&2', createLocation(1, 1));
       const context = { currentFilePath: 'test.meld', state: stateService };
 
-      vi.mocked(validationService.validate).mockResolvedValue(undefined);
-      vi.mocked(resolutionService.resolveInContext).mockResolvedValue('echo error >&2');
-      vi.mocked(fileSystemService.executeCommand).mockResolvedValue({
+      validationService.validate.mockResolvedValue(undefined);
+      resolutionService.resolveInContext.mockResolvedValue('echo error >&2');
+      fileSystemService.executeCommand.mockResolvedValue({
         stdout: '',
         stderr: 'error output'
       });
@@ -124,9 +143,9 @@ describe('RunDirectiveHandler Transformation', () => {
       const node = createRunDirective('echo test && echo error >&2', createLocation(1, 1));
       const context = { currentFilePath: 'test.meld', state: stateService };
 
-      vi.mocked(validationService.validate).mockResolvedValue(undefined);
-      vi.mocked(resolutionService.resolveInContext).mockResolvedValue('echo test && echo error >&2');
-      vi.mocked(fileSystemService.executeCommand).mockResolvedValue({
+      validationService.validate.mockResolvedValue(undefined);
+      resolutionService.resolveInContext.mockResolvedValue('echo test && echo error >&2');
+      fileSystemService.executeCommand.mockResolvedValue({
         stdout: 'test output',
         stderr: 'error output'
       });
@@ -146,9 +165,9 @@ describe('RunDirectiveHandler Transformation', () => {
       const node = createRunDirective('invalid-command', createLocation(1, 1));
       const context = { currentFilePath: 'test.meld', state: stateService };
 
-      vi.mocked(validationService.validate).mockResolvedValue(undefined);
-      vi.mocked(resolutionService.resolveInContext).mockResolvedValue('invalid-command');
-      vi.mocked(fileSystemService.executeCommand).mockRejectedValue(new Error('Command failed'));
+      validationService.validate.mockResolvedValue(undefined);
+      resolutionService.resolveInContext.mockResolvedValue('invalid-command');
+      fileSystemService.executeCommand.mockRejectedValue(new Error('Command failed'));
 
       await expect(handler.execute(node, context)).rejects.toThrow('Failed to execute command: Command failed');
     });

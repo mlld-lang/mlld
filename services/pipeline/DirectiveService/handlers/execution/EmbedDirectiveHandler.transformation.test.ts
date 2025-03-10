@@ -16,18 +16,32 @@ import {
 } from '@core/syntax/index.js';
 import { createNodeFromExample } from '@core/syntax/helpers';
 import { TestContextDI } from '@tests/utils/di/TestContextDI';
+import {
+  createValidationServiceMock,
+  createStateServiceMock,
+  createResolutionServiceMock,
+  createFileSystemServiceMock,
+  createDirectiveErrorMock
+} from '@tests/utils/mocks/serviceMocks';
 
 /**
- * MIGRATION NOTES:
+ * EmbedDirectiveHandler Transformation Test Status
+ * -----------------------------------------------
  * 
- * This file has been migrated to use TestContextDI for dependency injection and centralized syntax examples where possible.
+ * MIGRATION STATUS: Complete
+ * 
+ * This test file has been fully migrated to use:
+ * - TestContextDI for container management
+ * - Standardized mock factories with vitest-mock-extended
+ * - Centralized syntax examples
  * 
  * Migration details:
  * 
- * 1. Added TestContextDI for test environment setup
- * 2. Using a hybrid approach with direct handler instantiation while leveraging TestContextDI for test lifecycle
- * 3. Maintained use of centralized syntax examples 
- * 4. Added proper cleanup with afterEach hook
+ * 1. Using TestContextDI for test environment setup
+ * 2. Using standardized mock factories for service mocks
+ * 3. Using a hybrid approach with direct handler instantiation
+ * 4. Maintained use of centralized syntax examples 
+ * 5. Added proper cleanup with afterEach hook
  */
 
 /**
@@ -78,11 +92,11 @@ vi.mock('../../../../core/utils/logger', () => ({
 
 describe('EmbedDirectiveHandler Transformation', () => {
   let handler: EmbedDirectiveHandler;
-  let validationService: any;
-  let resolutionService: any;
-  let stateService: any;
+  let validationService: ReturnType<typeof createValidationServiceMock>;
+  let resolutionService: ReturnType<typeof createResolutionServiceMock>;
+  let stateService: ReturnType<typeof createStateServiceMock>;
+  let fileSystemService: ReturnType<typeof createFileSystemServiceMock>;
   let circularityService: any;
-  let fileSystemService: any;
   let parserService: any;
   let interpreterService: any;
   let clonedState: any;
@@ -115,38 +129,27 @@ describe('EmbedDirectiveHandler Transformation', () => {
       transformNode: vi.fn()
     };
 
-    stateService = {
-      setTextVar: vi.fn(),
-      setDataVar: vi.fn(),
-      setPathVar: vi.fn(),
-      setCommand: vi.fn(),
-      clone: vi.fn().mockReturnValue(clonedState),
-      createChildState: vi.fn().mockReturnValue(childState),
-      isTransformationEnabled: vi.fn().mockReturnValue(true),
-      transformNode: vi.fn()
-    };
-
-    validationService = {
-      validate: vi.fn()
-    };
-
-    resolutionService = {
-      resolveInContext: vi.fn(),
-      extractSection: vi.fn()
-    };
+    // Create mocks using standardized factories
+    validationService = createValidationServiceMock();
+    stateService = createStateServiceMock();
+    resolutionService = createResolutionServiceMock();
+    fileSystemService = createFileSystemServiceMock();
+    
+    // Configure state service
+    stateService.clone.mockReturnValue(clonedState);
+    stateService.createChildState.mockReturnValue(childState);
+    stateService.isTransformationEnabled.mockReturnValue(true);
+    stateService.transformNode = vi.fn();
 
     circularityService = {
       beginImport: vi.fn(),
       endImport: vi.fn()
     };
 
-    fileSystemService = {
-      exists: vi.fn(),
-      readFile: vi.fn(),
-      dirname: vi.fn().mockReturnValue('/workspace'),
-      join: vi.fn().mockImplementation((...args) => args.join('/')),
-      normalize: vi.fn().mockImplementation(path => path)
-    };
+    // Configure file system service
+    fileSystemService.dirname.mockReturnValue('/workspace');
+    fileSystemService.join.mockImplementation((...args) => args.join('/'));
+    fileSystemService.normalize.mockImplementation(path => path);
 
     parserService = {
       parse: vi.fn()
@@ -156,8 +159,7 @@ describe('EmbedDirectiveHandler Transformation', () => {
       interpret: vi.fn().mockResolvedValue(childState)
     };
 
-    // Instead of using the container to resolve the handler,
-    // create the handler directly with the mocks
+    // Create handler directly with the mocks
     handler = new EmbedDirectiveHandler(
       validationService,
       resolutionService,
@@ -171,7 +173,6 @@ describe('EmbedDirectiveHandler Transformation', () => {
   });
 
   afterEach(async () => {
-    // Cleanup to prevent container leaks
     await context.cleanup();
   });
 

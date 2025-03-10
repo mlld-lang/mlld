@@ -4,6 +4,23 @@ import type { DirectiveNode } from 'meld-spec';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import { TestContextDI } from '@tests/utils/di/TestContextDI';
+import {
+  createValidationServiceMock,
+  createStateServiceMock,
+  createResolutionServiceMock,
+  createFileSystemServiceMock
+} from '@tests/utils/mocks/serviceMocks';
+
+/**
+ * TextDirectiveHandler Command Test Status
+ * --------------------------------
+ * 
+ * MIGRATION STATUS: Complete
+ * 
+ * This test file has been fully migrated to use:
+ * - TestContextDI for container management
+ * - Standardized mock factories with vitest-mock-extended
+ */
 
 /**
  * Helper function to create a directive node specifically with a @run command
@@ -39,10 +56,10 @@ const createTextDirectiveNode = (identifier: string, text: string): DirectiveNod
 
 describe('TextDirectiveHandler - Command Execution', () => {
   let handler: TextDirectiveHandler;
-  let stateService: any;
-  let validationService: any;
-  let resolutionService: any;
-  let fileSystemService: any;
+  let stateService: ReturnType<typeof createStateServiceMock>;
+  let validationService: ReturnType<typeof createValidationServiceMock>;
+  let resolutionService: ReturnType<typeof createResolutionServiceMock>;
+  let fileSystemService: ReturnType<typeof createFileSystemServiceMock>;
   let clonedState: any;
   let context: TestContextDI;
 
@@ -61,67 +78,58 @@ describe('TextDirectiveHandler - Command Execution', () => {
       clone: vi.fn(),
     };
 
-    stateService = {
-      setTextVar: vi.fn(),
-      getTextVar: vi.fn().mockImplementation((name: string) => {
-        if (name === 'step1') return 'Command 1 output';
-        return undefined;
-      }),
-      getDataVar: vi.fn(),
-      clone: vi.fn().mockReturnValue(clonedState)
-    };
-
-    validationService = {
-      validate: vi.fn().mockResolvedValue(true)
-    };
+    // Create mocks using standardized factories
+    validationService = createValidationServiceMock();
+    stateService = createStateServiceMock();
+    resolutionService = createResolutionServiceMock();
+    fileSystemService = createFileSystemServiceMock();
     
-    resolutionService = {
-      resolveInContext: vi.fn().mockImplementation(value => Promise.resolve(value))
-    };
+    // Configure mock implementations
+    validationService.validate.mockResolvedValue(true);
+    
+    stateService.getTextVar.mockImplementation((name: string) => {
+      if (name === 'step1') return 'Command 1 output';
+      return undefined;
+    });
+    
+    stateService.clone.mockReturnValue(clonedState);
+    
+    resolutionService.resolveInContext.mockImplementation(value => Promise.resolve(value));
 
     // Mock file system service for command execution
-    fileSystemService = {
-      executeCommand: vi.fn().mockImplementation((command: string) => {
-        if (command.includes('echo "test"')) {
-          return Promise.resolve({ stdout: 'test output', stderr: '', exitCode: 0 });
-        }
-        if (command.includes('echo "Command 1 output"')) {
-          return Promise.resolve({ stdout: 'Command 1 output', stderr: '', exitCode: 0 });
-        }
-        if (command.includes('echo "Command 1 referenced')) {
-          return Promise.resolve({ stdout: 'Command 1 referenced output', stderr: '', exitCode: 0 });
-        }
-        if (command.includes('Output with')) {
-          return Promise.resolve({ stdout: 'Output with \'single\' and "double" quotes', stderr: '', exitCode: 0 });
-        }
-        if (command.includes('Line 1')) {
-          return Promise.resolve({ stdout: 'Line 1\nLine 2\nLine 3', stderr: '', exitCode: 0 });
-        }
-        return Promise.resolve({ stdout: 'generic output', stderr: '', exitCode: 0 });
-      }),
-      readFile: vi.fn(),
-      writeFile: vi.fn(),
-      exists: vi.fn(),
-      mkdir: vi.fn(),
-      listFiles: vi.fn(),
-      getCwd: vi.fn().mockReturnValue('/Users/adam/dev/meld')
-    };
+    fileSystemService.executeCommand.mockImplementation((command: string) => {
+      if (command.includes('echo "test"')) {
+        return Promise.resolve({ stdout: 'test output', stderr: '', exitCode: 0 });
+      }
+      if (command.includes('echo "Command 1 output"')) {
+        return Promise.resolve({ stdout: 'Command 1 output', stderr: '', exitCode: 0 });
+      }
+      if (command.includes('echo "Command 1 referenced')) {
+        return Promise.resolve({ stdout: 'Command 1 referenced output', stderr: '', exitCode: 0 });
+      }
+      if (command.includes('Output with')) {
+        return Promise.resolve({ stdout: 'Output with \'single\' and "double" quotes', stderr: '', exitCode: 0 });
+      }
+      if (command.includes('Line 1')) {
+        return Promise.resolve({ stdout: 'Line 1\nLine 2\nLine 3', stderr: '', exitCode: 0 });
+      }
+      return Promise.resolve({ stdout: 'generic output', stderr: '', exitCode: 0 });
+    });
     
-    // Register mocks with the container
-    context.registerMock('IValidationService', validationService);
-    context.registerMock('IStateService', stateService);
-    context.registerMock('IResolutionService', resolutionService);
-    context.registerMock('IFileSystemService', fileSystemService);
+    fileSystemService.getCwd.mockReturnValue('/Users/adam/dev/meld');
     
-    // Resolve the handler from the container
-    handler = context.container.resolve(TextDirectiveHandler);
+    // Create handler instance directly with mocks
+    handler = new TextDirectiveHandler(
+      validationService,
+      stateService,
+      resolutionService
+    );
     
     // Set the file system service on the handler - this is required for command execution
     handler.setFileSystemService(fileSystemService);
   });
 
   afterEach(async () => {
-    // Cleanup to prevent container leaks
     await context.cleanup();
   });
 

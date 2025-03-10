@@ -8,12 +8,29 @@ import type { IStateService } from '@services/state/StateService/IStateService.j
 import { ErrorCollector } from '@tests/utils/ErrorTestUtils.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 import { TestContextDI } from '@tests/utils/di/TestContextDI';
+import {
+  createValidationServiceMock,
+  createStateServiceMock,
+  createResolutionServiceMock,
+  createDirectiveErrorMock
+} from '@tests/utils/mocks/serviceMocks';
+
+/**
+ * TextDirectiveHandler Integration Test Status
+ * --------------------------------
+ * 
+ * MIGRATION STATUS: Complete
+ * 
+ * This test file has been fully migrated to use:
+ * - TestContextDI for container management
+ * - Standardized mock factories with vitest-mock-extended
+ */
 
 describe('TextDirectiveHandler Integration', () => {
   let handler: TextDirectiveHandler;
-  let stateService: any;
-  let validationService: any;
-  let resolutionService: any;
+  let stateService: ReturnType<typeof createStateServiceMock>;
+  let validationService: ReturnType<typeof createValidationServiceMock>;
+  let resolutionService: ReturnType<typeof createResolutionServiceMock>;
   let clonedState: any;
   let context: TestContextDI;
 
@@ -29,33 +46,25 @@ describe('TextDirectiveHandler Integration', () => {
       clone: vi.fn(),
     };
 
-    // Create mock services
-    stateService = {
-      setTextVar: vi.fn(),
-      getTextVar: vi.fn(),
-      getDataVar: vi.fn(),
-      clone: vi.fn().mockReturnValue(clonedState)
-    };
-
-    validationService = {
-      validate: vi.fn().mockResolvedValue(true)
-    };
-
-    resolutionService = {
-      resolveInContext: vi.fn().mockImplementation(value => Promise.resolve(value))
-    };
-
-    // Register mocks with the container
-    context.registerMock('IValidationService', validationService);
-    context.registerMock('IStateService', stateService);
-    context.registerMock('IResolutionService', resolutionService);
+    // Create mocks using standardized factories
+    validationService = createValidationServiceMock();
+    stateService = createStateServiceMock();
+    resolutionService = createResolutionServiceMock();
     
-    // Resolve the handler from the container
-    handler = context.container.resolve(TextDirectiveHandler);
+    // Configure mock implementations
+    validationService.validate.mockResolvedValue(true);
+    stateService.clone.mockReturnValue(clonedState);
+    resolutionService.resolveInContext.mockImplementation(value => Promise.resolve(value));
+    
+    // Create handler instance directly with mocks
+    handler = new TextDirectiveHandler(
+      validationService,
+      stateService,
+      resolutionService
+    );
   });
 
   afterEach(async () => {
-    // Cleanup to prevent container leaks
     await context.cleanup();
   });
 

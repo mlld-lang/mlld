@@ -7,19 +7,32 @@ import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/Directive
 import { defineDirectiveExamples } from '@core/syntax/index.js';
 import { createDefineDirective, createLocation } from '@tests/utils/testFactories.js';
 import { TestContextDI } from '@tests/utils/di/TestContextDI';
+import {
+  createValidationServiceMock,
+  createStateServiceMock,
+  createResolutionServiceMock,
+  createDirectiveErrorMock
+} from '@tests/utils/mocks/serviceMocks';
 
-// MIGRATION STATUS:
-// Complete ✅
-// This test file has been successfully migrated to use centralized syntax examples.
-// Additionally, we have removed dependencies on older helper files where possible,
-// using centralized examples for testing.
-//
-// The test has been migrated to use TestContextDI for service resolution.
+/**
+ * DefineDirectiveHandler Test Status
+ * ---------------------------------
+ * 
+ * MIGRATION STATUS: Complete ✅
+ * 
+ * This test file has been fully migrated to use:
+ * - Centralized syntax examples
+ * - TestContextDI for container management
+ * - Standardized mock factories with vitest-mock-extended
+ * 
+ * Additionally, we have removed dependencies on older helper files where possible,
+ * using centralized examples for testing.
+ */
 
 describe('DefineDirectiveHandler', () => {
-  let validationService: any;
-  let stateService: any;
-  let resolutionService: any;
+  let validationService: ReturnType<typeof createValidationServiceMock>;
+  let stateService: ReturnType<typeof createStateServiceMock>;
+  let resolutionService: ReturnType<typeof createResolutionServiceMock>;
   let clonedState: any;
   let handler: DefineDirectiveHandler;
   let context: TestContextDI;
@@ -28,35 +41,29 @@ describe('DefineDirectiveHandler', () => {
     // Create a context with an isolated container
     context = TestContextDI.create({ isolatedContainer: true });
     
-    // Create mock services
-    validationService = {
-      validate: vi.fn().mockResolvedValue(true)
-    };
+    // Create mocks using standardized factories
+    validationService = createValidationServiceMock();
+    stateService = createStateServiceMock();
+    resolutionService = createResolutionServiceMock();
+    
+    // Configure mock implementations
+    validationService.validate.mockResolvedValue(true);
     
     clonedState = {
       setCommand: vi.fn()
     };
     
-    stateService = {
-      clone: vi.fn().mockReturnValue(clonedState),
-      getCommand: vi.fn()
-    };
+    stateService.clone.mockReturnValue(clonedState);
     
-    resolutionService = {
-      resolveVariableReference: vi.fn()
-    };
-    
-    // Register mock services with the context
-    context.registerMock('IValidationService', validationService);
-    context.registerMock('IStateService', stateService);
-    context.registerMock('IResolutionService', resolutionService);
-    
-    // Resolve the handler from the container
-    handler = context.container.resolve(DefineDirectiveHandler);
+    // Create handler instance directly with mocks
+    handler = new DefineDirectiveHandler(
+      validationService,
+      stateService,
+      resolutionService
+    );
   });
 
   afterEach(async () => {
-    // Cleanup to prevent container leaks
     await context.cleanup();
   });
 
