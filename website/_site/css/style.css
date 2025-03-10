@@ -4,6 +4,8 @@
   --text-color-rgb: 0, 0, 0;
   --accent-color: #000000;
   --code-bg: #1a1a1a;
+  --terminal-bg: #1a1a1a;
+  --terminal-bg-rgb: 26, 26, 26;
   --border-color: #dedede;
   --terminal-shadow: rgba(0, 0, 0, 0.2);
 }
@@ -15,6 +17,8 @@
     --text-color-rgb: 255, 255, 255;
     --accent-color: #ffffff;
     --code-bg: #1a1a1a;
+    --terminal-bg: #1a1a1a;
+    --terminal-bg-rgb: 26, 26, 26;
     --border-color: #333333;
     --terminal-shadow: rgba(0, 0, 0, 0.4);
   }
@@ -244,21 +248,59 @@ hr {
 }
 
 .hero-terminal {
-  background: var(--code-bg);
-  border-radius: 8px;
-  padding: 3.5rem 2rem;
-  box-shadow: 0 4px 12px var(--terminal-shadow);
-  text-align: left;
-  overflow: hidden;
   position: relative;
+  background-color: var(--terminal-bg);
+  border-radius: 8px;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+  padding: 0; /* Remove default padding */
+  width: 100%;
+  height: 480px; /* Fixed height of 480px instead of dynamic height */
+  overflow-y: hidden; /* Changed from auto to hidden to prevent scrolling */
+  z-index: 1;
+}
+
+/* Add a subtle titlebar effect at the top of the terminal */
+.hero-terminal::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 36px; /* Standard titlebar height */
+  background-color: rgba(40, 40, 40, 1); /* Slightly lighter than terminal bg */
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
+  border-bottom: 1px solid rgba(70, 70, 70, 0.5);
+  z-index: 1;
+}
+
+/* Add fade overlay at the bottom of the terminal */
+.hero-terminal::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 80px; /* Total height of fade effect */
+  background: linear-gradient(
+    to bottom, 
+    rgba(26, 26, 26, 0) 0%, /* Fully transparent at top of gradient (80px from bottom) */
+    rgba(26, 26, 26, 0.7) 50%, /* 50% through the gradient */
+    rgba(26, 26, 26, 1) 75% /* Fully opaque at 20px from bottom (75% of 80px) */
+  );
+  pointer-events: none; /* Allow clicking through the gradient */
+  z-index: 2;
+  border-bottom-left-radius: 8px;
+  border-bottom-right-radius: 8px;
 }
 
 .terminal-dots {
   position: absolute;
-  top: 0.75rem;
-  left: 0.75rem;
+  top: 12px; /* Center in titlebar */
+  left: 16px;
   display: flex;
   gap: 8px;
+  z-index: 10; /* Make sure dots are above the fade and titlebar */
 }
 
 .terminal-dots .dot {
@@ -277,7 +319,9 @@ hr {
   line-height: 1.6;
   color: #fff;
   white-space: pre-wrap;
-  padding-bottom: 1.5rem;
+  padding: 48px 16px 24px 16px; /* Top, right, bottom, left padding */
+  max-height: 100%; /* Ensure content respects the container height */
+  overflow-y: visible; /* Allow content to be scrollable in the parent container */
 }
 
 /* Syntax highlighting */
@@ -315,9 +359,20 @@ hr {
   min-height: 1.6em;
 }
 
+/* Make animated line take full space from the beginning */
 .animated-line {
-  display: inline-block;
+  display: block;
   padding-top: 1em;
+  min-height: 1.5em;
+  height: 1.5em;
+  line-height: 1.5em;
+  margin-bottom: 0.5em;
+}
+
+.animated-line .token.string {
+  display: inline-block;
+  min-width: 2px;
+  height: 100%;
 }
 
 .terminal-cursor {
@@ -388,10 +443,13 @@ hr {
   border: 1px solid var(--border-color);
   border-radius: 4px;
   padding: 0.3rem 0.8rem;
+  margin: 0;
   font-size: 0.9rem;
   cursor: pointer;
   color: var(--text-color);
   transition: all 0.2s ease;
+  min-width: 80px; /* Ensure consistent width */
+  text-align: center;
 }
 
 .toggle-btn:hover {

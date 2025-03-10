@@ -7,72 +7,89 @@ document.addEventListener('DOMContentLoaded', () => {
   const toggleModules = document.getElementById('toggle-modules');
   const toggleScripts = document.getElementById('toggle-scripts');
   
-  // Set terminal height based on the taller content
-  function setTerminalHeight() {
-    const terminalContainer = document.querySelector('.hero-terminal');
+  // Track if initial animation has run
+  let hasAnimationRun = false;
+  
+  // Function to display static content without animation
+  function showStaticContent(terminal) {
+    const animatedLine = terminal.querySelector('.animated-line');
+    if (!animatedLine) return;
     
-    // Make both terminals visible for height calculation
-    const originalModulesDisplay = terminalModules.style.display;
-    const originalScriptsDisplay = terminalScripts.style.display;
+    // Get the text content from data attribute
+    const fullText = animatedLine.getAttribute('data-text');
     
-    // Temporarily position both terminals absolute so they don't affect page flow
-    // but can still be measured
-    const originalModulesPosition = terminalModules.style.position;
-    const originalScriptsPosition = terminalScripts.style.position;
-    
-    terminalModules.style.display = 'block';
-    terminalScripts.style.display = 'block';
-    terminalModules.style.position = 'static';
-    terminalScripts.style.position = 'static';
-    
-    // Force layout recalculation to get proper heights
-    const modulesHeight = terminalModules.scrollHeight;
-    const scriptsHeight = terminalScripts.scrollHeight;
-    
-    // Find the taller one and add substantial extra padding
-    const maxHeight = Math.max(modulesHeight, scriptsHeight) + 100;
-    
-    // Set the fixed height on the container
-    terminalContainer.style.height = maxHeight + 'px';
-    
-    // Reset terminals to their original display state
-    terminalModules.style.display = originalModulesDisplay;
-    terminalScripts.style.display = originalScriptsDisplay;
-    terminalModules.style.position = originalModulesPosition;
-    terminalScripts.style.position = originalScriptsPosition;
+    // Set the content directly without animation
+    animatedLine.innerHTML = `<span class="token string">${fullText}</span>`;
   }
   
-  // Function to animate the last line with a typing effect
+  // Function to animate the last line with an LLM-like typing effect
   function animateLastLine(terminal) {
+    // If animation has already run, just show content statically
+    if (hasAnimationRun) {
+      showStaticContent(terminal);
+      return;
+    }
+    
+    // Mark that animation has run
+    hasAnimationRun = true;
+    
     // Get the last line content from data attribute
     const lastLine = terminal.querySelector('.animated-line');
     if (!lastLine) return;
     
     const fullText = lastLine.getAttribute('data-text');
     
-    // Clear the existing content but keep the span structure
-    lastLine.innerHTML = '<span class="token string"></span><span class="terminal-cursor"></span>';
-    const textSpan = lastLine.querySelector('.token.string');
+    // Prepare animation elements without clearing existing content yet
+    const animationContainer = document.createElement('span');
+    animationContainer.classList.add('token', 'string');
     
-    // Type one character at a time
-    let i = 0;
-    const typingInterval = setInterval(() => {
-      if (i < fullText.length) {
-        textSpan.textContent = fullText.substring(0, i + 1);
-        i++;
+    const cursor = document.createElement('span');
+    cursor.classList.add('terminal-cursor');
+    
+    // Clear and set up the elements
+    lastLine.innerHTML = '';
+    lastLine.appendChild(animationContainer);
+    lastLine.appendChild(cursor);
+    
+    // Split text into tokens (words or parts of words)
+    // This creates a more realistic LLM-like effect
+    const tokens = fullText.split(/\b/);
+    let currentText = '';
+    let tokenIndex = 0;
+    
+    // Function to add the next token with a variable delay
+    function addNextToken() {
+      if (tokenIndex < tokens.length) {
+        // Add the next token
+        currentText += tokens[tokenIndex];
+        animationContainer.textContent = currentText;
+        tokenIndex++;
+        
+        // Random delay between tokens to simulate LLM thinking/generating
+        const delay = Math.random() * 60 + 20; // 20-80ms random delay (even faster)
+        
+        // Sometimes pause a bit longer to make it more realistic
+        const shouldPauseLonger = Math.random() < 0.1; // 10% chance (reduced from 15%)
+        const actualDelay = shouldPauseLonger ? delay * 1.5 : delay; // 1.5x pause (reduced from 2x)
+        
+        setTimeout(addNextToken, actualDelay);
       } else {
-        clearInterval(typingInterval);
+        // Animation complete, remove cursor
+        cursor.remove();
       }
-    }, 50);
+    }
+    
+    // Start the token-by-token animation
+    addNextToken();
   }
   
-  // Set height after a brief delay to ensure all content is rendered
+  // Preload content of the scripts tab so it's ready when switching
+  showStaticContent(terminalScripts);
+  
+  // Start with the modules animation after a short delay
   setTimeout(() => {
-    setTerminalHeight();
-    
-    // Start with the modules animation since it's visible by default
     animateLastLine(terminalModules);
-  }, 100);
+  }, 300);
 
   // Toggle between modules and scripts
   toggleModules.addEventListener('click', () => {
@@ -80,9 +97,6 @@ document.addEventListener('DOMContentLoaded', () => {
     terminalScripts.style.display = 'none';
     toggleModules.classList.add('active');
     toggleScripts.classList.remove('active');
-    
-    // Trigger animation when switching to modules tab
-    animateLastLine(terminalModules);
   });
 
   toggleScripts.addEventListener('click', () => {
@@ -90,11 +104,5 @@ document.addEventListener('DOMContentLoaded', () => {
     terminalScripts.style.display = 'block';
     toggleModules.classList.remove('active');
     toggleScripts.classList.add('active');
-    
-    // Trigger animation when switching to scripts tab
-    animateLastLine(terminalScripts);
   });
-  
-  // Re-calculate on window resize
-  window.addEventListener('resize', setTerminalHeight);
 }); 
