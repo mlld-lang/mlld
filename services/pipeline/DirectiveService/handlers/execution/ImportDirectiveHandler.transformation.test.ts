@@ -101,10 +101,35 @@ describe('ImportDirectiveHandler Transformation', () => {
   let childState: any;
   let context: TestContextDI;
 
-  beforeEach(() => {
-    // Create context with isolated container
-    context = TestContextDI.create({ isolatedContainer: true });
-    
+  beforeEach(async () => {
+    context = TestContextDI.createIsolated();
+    await context.initialize();
+
+    // Register mocks
+    validationService = createValidationServiceMock();
+    resolutionService = createResolutionServiceMock();
+    stateService = createStateServiceMock();
+    fileSystemService = createFileSystemServiceMock();
+    parserService = vi.mocked({
+      parse: vi.fn()
+    });
+    interpreterService = vi.mocked({
+      interpret: vi.fn()
+    });
+    circularityService = vi.mocked({
+      beginImport: vi.fn(),
+      endImport: vi.fn()
+    });
+
+    context.registerMock('IValidationService', validationService);
+    context.registerMock('IResolutionService', resolutionService);
+    context.registerMock('IStateService', stateService);
+    context.registerMock('IFileSystemService', fileSystemService);
+    context.registerMock('IParserService', parserService);
+    context.registerMock('IInterpreterService', interpreterService);
+    context.registerMock('ICircularityService', circularityService);
+
+    // Set up child state and cloned state mocks
     childState = {
       setTextVar: vi.fn(),
       setDataVar: vi.fn(),
@@ -142,12 +167,6 @@ describe('ImportDirectiveHandler Transformation', () => {
       isTransformationEnabled: vi.fn().mockReturnValue(true)
     };
 
-    // Create mocks using standardized factories
-    validationService = createValidationServiceMock();
-    stateService = createStateServiceMock();
-    resolutionService = createResolutionServiceMock();
-    fileSystemService = createFileSystemServiceMock();
-    
     // Configure state service
     stateService.clone.mockReturnValue(clonedState);
     stateService.createChildState.mockReturnValue(childState);
@@ -166,21 +185,11 @@ describe('ImportDirectiveHandler Transformation', () => {
     fileSystemService.join.mockImplementation((...args) => args.join('/'));
     fileSystemService.normalize.mockImplementation(path => path);
 
-    parserService = {
-      parse: vi.fn()
-    };
+    // Configure interpreter service
+    interpreterService.interpret.mockResolvedValue(childState);
 
-    interpreterService = {
-      interpret: vi.fn().mockResolvedValue(childState)
-    };
-
-    circularityService = {
-      beginImport: vi.fn(),
-      endImport: vi.fn()
-    };
-
-    // Create handler directly with the mocks
-    handler = new ImportDirectiveHandler(
+    // Register the handler
+    context.registerMock('ImportDirectiveHandler', new ImportDirectiveHandler(
       validationService,
       resolutionService,
       stateService,
@@ -188,7 +197,10 @@ describe('ImportDirectiveHandler Transformation', () => {
       parserService,
       interpreterService,
       circularityService
-    );
+    ));
+
+    // Resolve the handler
+    handler = context.container.resolve('ImportDirectiveHandler');
   });
 
   afterEach(async () => {

@@ -20,7 +20,6 @@ import {
 import runDirectiveExamplesModule from '@core/syntax/run.js';
 import { createNodeFromExample } from '@core/syntax/helpers';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
-import { container } from 'tsyringe';
 
 // Use the correctly imported run directive examples
 const runDirectiveExamples = runDirectiveExamplesModule;
@@ -232,32 +231,33 @@ class MockResolutionService implements IResolutionService {
   detectCircularReferences(): Promise<void> { return Promise.resolve(); }
 }
 
-// Run tests with DI mode only
 describe('OutputService', () => {
+  let context: TestContextDI;
   let service: OutputService;
   let state: IStateService;
   let resolutionService: IResolutionService;
-  let testContext: TestContextDI;
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    // Create isolated test context
+    context = TestContextDI.createIsolated();
+    
     // Create mock services
     state = new MockStateService();
     resolutionService = new MockResolutionService();
     
-    // Set up test context and service with DI
-    testContext = TestContextDI.create({ isolatedContainer: true });
+    // Register mocks with the context
+    context.registerMock('IStateService', state);
+    context.registerMock('IResolutionService', resolutionService);
     
-    // Register dependencies with the container
-    container.registerInstance('IStateService', state);
-    container.registerInstance('IResolutionService', resolutionService);
+    // Initialize context
+    await context.initialize();
     
-    // Resolve service from container
-    service = container.resolve(OutputService);
+    // Resolve the service
+    service = context.container.resolve(OutputService);
   });
-  
+
   afterEach(async () => {
-    container.clearInstances();
-    await testContext.cleanup();
+    await context.cleanup();
   });
 
   describe('Format Registration', () => {
@@ -495,12 +495,11 @@ describe('OutputService', () => {
       state.enableTransformation(false);
       
       let output = await service.convert(originalNodes, state, 'markdown');
-      expect(output).to.include('Before');
-      // The fence markers are now part of the content, not added by the converter
-      expect(output).to.include('```js');
-      expect(output).to.include('const greeting = \'Hello, world!\';');
-      expect(output).to.include('console.log(greeting);');
-      expect(output).to.include('After');
+      expect(output).toContain('Before');
+      expect(output).toContain('```js');
+      expect(output).toContain('const greeting = \'Hello, world!\';');
+      expect(output).toContain('console.log(greeting);');
+      expect(output).toContain('After');
 
       // Test transformation mode
       state.enableTransformation(true);
@@ -508,12 +507,11 @@ describe('OutputService', () => {
       state.setTransformedNodes(originalNodes);
       
       output = await service.convert(originalNodes, state, 'markdown');
-      expect(output).to.include('Before');
-      // The fence markers are now part of the content, not added by the converter
-      expect(output).to.include('```js');
-      expect(output).to.include('const greeting = \'Hello, world!\';');
-      expect(output).to.include('console.log(greeting);');
-      expect(output).to.include('After');
+      expect(output).toContain('Before');
+      expect(output).toContain('```js');
+      expect(output).toContain('const greeting = \'Hello, world!\';');
+      expect(output).toContain('console.log(greeting);');
+      expect(output).toContain('After');
     });
 
     it('should handle XML output in both modes', async () => {
@@ -582,16 +580,78 @@ describe('OutputService', () => {
     });
   });
 
-  it('should handle text directives', async () => {
-    // Arrange
-    const textExample = textDirectiveExamples.atomic.simpleString;
-    // ... existing code ...
-  });
+  describe('Directive Handling', () => {
+    it('should handle text directives properly', async () => {
+      // Using centralized text directive example
+      const textExample = textDirectiveExamples.atomic.simpleString;
+      const textNode = await createNodeFromExample(textExample.code);
+      
+      // Test in non-transformation mode
+      let output = await service.convert([textNode], state, 'markdown');
+      expect(output).toBe(''); // Definition directives are omitted
+      
+      // Test in transformation mode
+      state.enableTransformation(true);
+      const transformedNodes = [createTextNode('transformed content\n', createLocation(1, 1))];
+      state.setTransformedNodes(transformedNodes);
+      
+      output = await service.convert([textNode], state, 'markdown');
+      expect(output).toBe('transformed content\n');
+    });
 
-  it('should handle run directives', async () => {
-    // Arrange
-    const runExample = runDirectiveExamples.atomic.simple;
-    // ... existing code ...
+    it('should handle run directives properly', async () => {
+      // Using centralized run directive example
+      const runExample = runDirectiveExamples.atomic.simple;
+      const runNode = await createNodeFromExample(runExample.code);
+      
+      // Test in non-transformation mode
+      let output = await service.convert([runNode], state, 'markdown');
+      expect(output).toBe('[run directive output placeholder]\n');
+      
+      // Test in transformation mode
+      state.enableTransformation(true);
+      const transformedNodes = [createTextNode('executed command output\n', createLocation(1, 1))];
+      state.setTransformedNodes(transformedNodes);
+      
+      output = await service.convert([runNode], state, 'markdown');
+      expect(output).toBe('executed command output\n');
+    });
+
+    it('should handle data directives properly', async () => {
+      // Using centralized data directive example
+      const dataExample = dataDirectiveExamples.atomic.simpleObject;
+      const dataNode = await createNodeFromExample(dataExample.code);
+      
+      // Test in non-transformation mode
+      let output = await service.convert([dataNode], state, 'markdown');
+      expect(output).toBe(''); // Definition directives are omitted
+      
+      // Test in transformation mode
+      state.enableTransformation(true);
+      const transformedNodes = [createTextNode('data content\n', createLocation(1, 1))];
+      state.setTransformedNodes(transformedNodes);
+      
+      output = await service.convert([dataNode], state, 'markdown');
+      expect(output).toBe('data content\n');
+    });
+
+    it('should handle define directives properly', async () => {
+      // Using centralized define directive example
+      const defineExample = defineDirectiveExamples.atomic.stringLiteral;
+      const defineNode = await createNodeFromExample(defineExample.code);
+      
+      // Test in non-transformation mode
+      let output = await service.convert([defineNode], state, 'markdown');
+      expect(output).toBe(''); // Definition directives are omitted
+      
+      // Test in transformation mode
+      state.enableTransformation(true);
+      const transformedNodes = [createTextNode('defined content\n', createLocation(1, 1))];
+      state.setTransformedNodes(transformedNodes);
+      
+      output = await service.convert([defineNode], state, 'markdown');
+      expect(output).toBe('defined content\n');
+    });
   });
 
   describe('Regression Tests', () => {
