@@ -12,7 +12,7 @@ describe('Comment Handling Fix', () => {
   });
 
   afterEach(async () => {
-    await context.cleanup();
+    await context?.cleanup();
   });
 
   it('should properly handle files with comment lines starting with >>', async () => {

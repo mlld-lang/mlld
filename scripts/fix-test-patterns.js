@@ -8,9 +8,9 @@
  * 4. Replace jest-mock-deep with vitest-mock-extended
  */
 
-import { promises as fs } from 'fs';
-import path from 'path';
-import { execSync } from 'child_process';
+const fs = require('fs').promises;
+const path = require('path');
+const { execSync } = require('child_process');
 
 // Regular expressions for matching patterns
 const RESOLVE_SYNC_REGEX = /context\.resolveSync\s*<([^>]*)>\s*\(\s*['"]([^'"]+)['"]\s*\)/g;

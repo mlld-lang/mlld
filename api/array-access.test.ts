@@ -13,7 +13,7 @@ describe('Array Access Tests', () => {
   });
 
   afterEach(async () => {
-    await context.cleanup();
+    await context?.cleanup();
     vi.resetModules();
   });
 

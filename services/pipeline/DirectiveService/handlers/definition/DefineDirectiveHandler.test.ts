@@ -65,7 +65,7 @@ describe('DefineDirectiveHandler', () => {
   });
 
   afterEach(async () => {
-    await context.cleanup();
+    await context?.cleanup();
   });
 
   describe('command definition', () => {

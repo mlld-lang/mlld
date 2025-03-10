@@ -12,7 +12,7 @@ describe('Embed Directive Variable Path Prefix Fix', () => {
   });
 
   afterEach(async () => {
-    await context.cleanup();
+    await context?.cleanup();
   });
 
   it('should fix the path prefixing issue with data variable embeds', async () => {

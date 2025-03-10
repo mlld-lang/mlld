@@ -95,7 +95,7 @@ describe('DataDirectiveHandler', () => {
   });
 
   afterEach(async () => {
-    await context.cleanup();
+    await context?.cleanup();
   });
 
   describe('basic data handling', () => {

@@ -47,7 +47,7 @@ describe('DirectiveService', () => {
   });
 
   afterEach(async () => {
-    await context.cleanup();
+    await context?.cleanup();
   });
 
   describe('Service initialization', () => {

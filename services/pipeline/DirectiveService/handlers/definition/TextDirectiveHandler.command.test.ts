@@ -130,7 +130,7 @@ describe('TextDirectiveHandler - Command Execution', () => {
   });
 
   afterEach(async () => {
-    await context.cleanup();
+    await context?.cleanup();
   });
 
   it('should execute command and store its output', async () => {

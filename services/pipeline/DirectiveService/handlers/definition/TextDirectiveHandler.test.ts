@@ -100,7 +100,7 @@ describe('TextDirectiveHandler', () => {
     context.registerMock('IResolutionService', resolutionService);
     
     // Create handler instance from container
-    handler = context.container.resolve(TextDirectiveHandler);
+    handler = await context.container.resolve(TextDirectiveHandler);
 
     // Initialize real handlers for testing
     realStringLiteralHandler = new StringLiteralHandler();
@@ -152,7 +152,7 @@ describe('TextDirectiveHandler', () => {
 
   afterEach(async () => {
     // Clean up the context to prevent memory leaks
-    await context.cleanup();
+    await context?.cleanup();
   });
 
   describe('execute', () => {

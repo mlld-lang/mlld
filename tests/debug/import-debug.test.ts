@@ -206,7 +206,7 @@ describe('Import Directive Debug', () => {
     debugLog('\n====================================================');
     debugLog('CLEANING UP TEST ENVIRONMENT');
     debugLog('====================================================\n');
-    await context.cleanup();
+    await context?.cleanup();
   });
 
   it('should transform import directive and resolve variables', async () => {

@@ -12,7 +12,7 @@ describe('Embed Directive Line Number Mismatch Fix', () => {
   });
 
   afterEach(async () => {
-    await context.cleanup();
+    await context?.cleanup();
   });
 
   it('should replace embed directive with content even if line numbers shift', async () => {

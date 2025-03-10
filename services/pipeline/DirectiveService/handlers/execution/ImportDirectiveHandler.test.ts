@@ -180,7 +180,7 @@ describe('ImportDirectiveHandler', () => {
   });
 
   afterEach(async () => {
-    await context.cleanup();
+    await context?.cleanup();
   });
 
   describe('special path variables', () => {

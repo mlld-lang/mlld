@@ -17,7 +17,7 @@ describe('XML Output Format', () => {
 
   afterEach(async () => {
     // Clean up
-    await context.cleanup();
+    await context?.cleanup();
   });
 
   it('should convert markdown to XML format directly', async () => {

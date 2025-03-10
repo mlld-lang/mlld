@@ -17,7 +17,7 @@ describe('TestContext', () => {
   });
 
   afterEach(async () => {
-    await context.cleanup();
+    await context?.cleanup();
   });
 
   describe('initialization', () => {
@@ -159,7 +159,7 @@ describe('TestContext', () => {
       expect(exists).toBe(true);
       
       // Cleanup - this should reset the file system
-      await context.cleanup();
+      await context?.cleanup();
       console.log('Cleanup completed');
       
       // Re-initialize the file system to ensure test consistency

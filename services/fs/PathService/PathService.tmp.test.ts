@@ -27,7 +27,7 @@ describe('PathService Temporary Path Rules', () => {
   });
 
   afterEach(async () => {
-    await context.cleanup();
+    await context?.cleanup();
   });
 
   it('should allow simple filenames in current directory', () => {

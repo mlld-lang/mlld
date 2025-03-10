@@ -17,7 +17,7 @@ describe('DI-Only Testing Examples', () => {
   describe('Basic Setup', () => {
     let context: TestContextDI;
     
-    beforeEach(() => {
+    beforeEach(async () => {
       // Create a simple test context
       context = TestHelpers.setup({ 
         isolatedContainer: true,
@@ -27,15 +27,15 @@ describe('DI-Only Testing Examples', () => {
     
     afterEach(async () => {
       // Clean up resources
-      await context.cleanup();
+      await context?.cleanup();
     });
     
-    it('should register and resolve services', () => {
+    it('should register and resolve services', async () => {
       // Register a mock service
       context.registerMock('IMockService', new MockService());
       
       // Resolve the service
-      const service = context.resolveSync<MockService>('IMockService');
+      const service = await context.resolve<MockService>('IMockService');
       
       // Test the service
       expect(service).toBeDefined();
@@ -46,7 +46,7 @@ describe('DI-Only Testing Examples', () => {
   describe('Setup With Common Mocks', () => {
     let context: TestContextDI;
     
-    beforeEach(() => {
+    beforeEach(async () => {
       // Create a context with common mocks
       context = TestHelpers.setupWithMocks({
         'IMockService': {
@@ -56,12 +56,12 @@ describe('DI-Only Testing Examples', () => {
     });
     
     afterEach(async () => {
-      await context.cleanup();
+      await context?.cleanup();
     });
     
-    it('should use the provided mocks', () => {
+    it('should use the provided mocks', async () => {
       // Resolve the mock service
-      const mockService = context.resolveSync<any>('IMockService');
+      const mockService = await context.resolve<any>('IMockService');
       
       // Use the mock
       const result = mockService.process('test');
@@ -71,10 +71,10 @@ describe('DI-Only Testing Examples', () => {
       expect(mockService.process).toHaveBeenCalledWith('test');
     });
     
-    it('should have default mocks for common services', () => {
+    it('should have default mocks for common services', async () => {
       // Resolve built-in mock services
-      const stateService = context.resolveSync<any>('IStateService');
-      const fsService = context.resolveSync<any>('IFileSystemService');
+      const stateService = await context.resolve<any>('IStateService');
+      const fsService = await context.resolve<any>('IFileSystemService');
       
       // Verify they're defined
       expect(stateService).toBeDefined();
@@ -100,7 +100,7 @@ describe('DI-Only Testing Examples', () => {
     
     let context: TestContextDI;
     
-    beforeEach(() => {
+    beforeEach(async () => {
       // Setup for each test
       context = testSetup.setup();
       
@@ -115,8 +115,8 @@ describe('DI-Only Testing Examples', () => {
       await testSetup.cleanup();
     });
     
-    it('should provide context with registered mocks', () => {
-      const mockService = context.resolveSync<any>('IMockService');
+    it('should provide context with registered mocks', async () => {
+      const mockService = await context.resolve<any>('IMockService');
       
       expect(mockService.process('test')).toBe('setup helper result');
       expect(mockService.process).toHaveBeenCalledWith('test');
@@ -143,7 +143,7 @@ describe('DI-Only Testing Examples', () => {
     } = TestHelpers.setupDirectiveTest(directiveHandler);
     
     afterEach(async () => {
-      await context.cleanup();
+      await context?.cleanup();
     });
     
     it('should provide all necessary services for directive testing', async () => {
@@ -179,7 +179,7 @@ describe('DI-Only Testing Examples', () => {
       expect(report.leakDetection.enabled).toBe(true);
       
       // Clean up
-      await context.cleanup();
+      await context?.cleanup();
     });
   });
 }); 

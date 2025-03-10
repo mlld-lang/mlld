@@ -20,7 +20,7 @@ describe('Variable Resolution Specific Tests', () => {
   });
   
   afterEach(async () => {
-    await context.cleanup();
+    await context?.cleanup();
   });
   
   it('should handle nested object data structures with variable references', async () => {

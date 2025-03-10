@@ -131,11 +131,11 @@ describe('InterpreterService Unit', () => {
     context.registerMock('IStateService', mockStateService);
     
     // Resolve the interpreter service
-    service = context.container.resolve(InterpreterService);
+    service = await context.container.resolve(InterpreterService);
   });
 
   afterEach(async () => {
-    await context.cleanup();
+    await context?.cleanup();
   });
 
   describe('initialization', () => {

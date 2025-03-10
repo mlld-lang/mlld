@@ -166,7 +166,7 @@ describe('RunDirectiveHandler', () => {
   });
 
   afterEach(async () => {
-    await context.cleanup();
+    await context?.cleanup();
   });
 
   describe('basic command execution', () => {

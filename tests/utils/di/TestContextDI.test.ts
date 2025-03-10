@@ -14,12 +14,12 @@ describe('TestContextDI', () => {
   afterEach(async () => {
     // Clean up the test context
     if (context) {
-      await context.cleanup();
+      await context?.cleanup();
     }
   });
 
   describe('basic functionality', () => {
-    beforeEach(() => {
+    beforeEach(async () => {
       // Create context
       context = TestContextDI.create();
     });
@@ -104,7 +104,7 @@ describe('TestContextDI', () => {
   });
 
   describe('child context creation', () => {
-    beforeEach(() => {
+    beforeEach(async () => {
       context = TestContextDI.create();
     });
     
@@ -125,8 +125,7 @@ describe('TestContextDI', () => {
       child.cleanup();
     });
     
-    it('should create isolated child contexts', () => {
-      // Create an isolated child context
+    it('should create isolated child contexts', async () => {
       const isolated = context.createChildContext({ isolatedContainer: true });
       
       // Register something in the parent container
@@ -136,14 +135,14 @@ describe('TestContextDI', () => {
       isolated.registerMock('TestService', { value: 'child' });
       
       // Should have different values
-      expect(context.resolveSync<any>('TestService').value).toBe('parent');
-      expect(isolated.resolveSync<any>('TestService').value).toBe('child');
+      expect((await context.resolve<any>('TestService')).value).toBe('parent');
+      expect((await isolated.resolve<any>('TestService')).value).toBe('child');
     });
   });
 
   afterEach(async () => {
     if (context) {
-      await context.cleanup();
+      await context?.cleanup();
     }
   });
 });

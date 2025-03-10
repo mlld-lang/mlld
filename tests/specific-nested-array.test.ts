@@ -13,7 +13,7 @@ describe('Nested Arrays Specific Test', () => {
   });
 
   afterEach(async () => {
-    await context.cleanup();
+    await context?.cleanup();
     vi.resetModules();
   });
 

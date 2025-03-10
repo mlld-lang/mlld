@@ -45,7 +45,7 @@ describe('API Integration Tests', () => {
   });
 
   afterEach(async () => {
-    await context.cleanup();
+    await context?.cleanup();
     vi.resetModules();
     vi.clearAllMocks();
   });

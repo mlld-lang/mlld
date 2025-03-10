@@ -65,7 +65,7 @@ describe('TextDirectiveHandler Integration', () => {
   });
 
   afterEach(async () => {
-    await context.cleanup();
+    await context?.cleanup();
   });
 
   describe('complex scenarios', () => {

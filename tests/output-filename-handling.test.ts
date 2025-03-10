@@ -45,7 +45,7 @@ describe('Output Filename Handling', () => {
 
   afterEach(async () => {
     // Clean up
-    await context.cleanup();
+    await context?.cleanup();
   });
 
   it('should use .o.md extension for markdown output by default', async () => {

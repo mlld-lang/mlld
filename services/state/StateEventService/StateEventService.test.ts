@@ -24,7 +24,7 @@ describe('StateEventService', () => {
     });
 
     afterEach(async () => {
-      await context.cleanup();
+      await context?.cleanup();
     });
 
     it('should register and emit events', async () => {

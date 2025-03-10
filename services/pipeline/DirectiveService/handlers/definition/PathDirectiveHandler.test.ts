@@ -72,7 +72,7 @@ describe('PathDirectiveHandler', () => {
   });
 
   afterEach(async () => {
-    await context.cleanup();
+    await context?.cleanup();
   });
 
   describe('basic path handling', () => {

@@ -91,7 +91,7 @@ describe('Pipeline Validation', () => {
       await context.services.debug.endSession(debugSessionId);
     }
     
-    await context.cleanup();
+    await context?.cleanup();
   });
 
   describe('Core Pipeline Services', () => {

@@ -153,7 +153,7 @@ describe('PathService', () => {
   });
 
   afterEach(async () => {
-    await context.cleanup();
+    await context?.cleanup();
   });
 
   describe('Path validation', () => {

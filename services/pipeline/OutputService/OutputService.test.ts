@@ -51,11 +51,11 @@ describe('OutputService', () => {
     await context.initialize();
     
     // Resolve the service
-    service = context.container.resolve(OutputService);
+    service = await context.container.resolve(OutputService);
   });
 
   afterEach(async () => {
-    await context.cleanup();
+    await context?.cleanup();
   });
 
   describe('Format Registration', () => {

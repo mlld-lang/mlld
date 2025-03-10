@@ -110,7 +110,7 @@ describe('CLI Error Handling', () => {
         expect(true).toBe(true);
       } finally {
         restore(); // Restore original argv
-        await context.cleanup();
+        await context?.cleanup();
       }
     });
     
@@ -175,7 +175,7 @@ describe('CLI Error Handling', () => {
         expect(true).toBe(true);
       } finally {
         restore(); // Restore original argv
-        await context.cleanup();
+        await context?.cleanup();
       }
     });
   });

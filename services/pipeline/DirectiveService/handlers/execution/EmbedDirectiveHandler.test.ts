@@ -287,12 +287,12 @@ describe('EmbedDirectiveHandler', () => {
     context.registerMock('ILogger', mockLogger);
     
     // Create handler from container
-    handler = context.container.resolve(EmbedDirectiveHandler);
+    handler = await context.container.resolve(EmbedDirectiveHandler);
   });
 
   afterEach(async () => {
     // Clean up the context to prevent memory leaks
-    await context.cleanup();
+    await context?.cleanup();
     
     // Reset all mocks
     vi.clearAllMocks();

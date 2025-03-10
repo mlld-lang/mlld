@@ -12,7 +12,7 @@ describe('Embed Directive Transformation E2E', () => {
   });
 
   afterEach(async () => {
-    await context.cleanup();
+    await context?.cleanup();
   });
 
   it('should replace embed directive with file content in transformation mode', async () => {

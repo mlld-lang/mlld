@@ -173,7 +173,7 @@ describe('EmbedDirectiveHandler Transformation', () => {
   });
 
   afterEach(async () => {
-    await context.cleanup();
+    await context?.cleanup();
   });
 
   describe('transformation behavior', () => {
