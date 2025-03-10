@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { PathOperationsService } from './PathOperationsService';
-import { TestContextDI } from '../../../tests/utils/di/TestContextDI';
-import { IPathOperationsService } from './IPathOperationsService';
+import type { IPathOperationsService } from './IPathOperationsService.js';
+import { PathOperationsService } from './PathOperationsService.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import path from 'path';
 
 describe('PathOperationsService', () => {
@@ -12,15 +12,18 @@ describe('PathOperationsService', () => {
     // Create isolated test context
     context = TestContextDI.createIsolated();
 
+    // Register the service
+    context.registerMock('IPathOperationsService', new PathOperationsService());
+
     // Initialize context
     await context.initialize();
 
     // Get service instance using DI
-    service = context.container.resolve<IPathOperationsService>('IPathOperationsService');
+    service = await context.container.resolve('IPathOperationsService');
   });
 
   afterEach(async () => {
-    await context.cleanup();
+    await context?.cleanup();
   });
 
   describe('Path operations', () => {

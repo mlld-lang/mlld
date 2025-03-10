@@ -3,13 +3,13 @@ import { mockDeep, mockReset } from 'vitest-mock-extended';
 import { ProjectPathResolver } from './ProjectPathResolver.js';
 import type * as fs from 'fs/promises';
 import type * as path from 'path';
-import { TestContextDI } from '../../tests/utils/di/TestContextDI';
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 
 describe('ProjectPathResolver', () => {
   let resolver: ProjectPathResolver;
   let context: TestContextDI;
-  let mockFs: jest.Mocked<typeof fs>;
-  let mockPath: jest.Mocked<typeof path>;
+  let mockFs: ReturnType<typeof mockDeep<typeof fs>>;
+  let mockPath: ReturnType<typeof mockDeep<typeof path>>;
   
   beforeEach(async () => {
     // Create isolated test context
@@ -45,11 +45,11 @@ describe('ProjectPathResolver', () => {
     await context.initialize();
     
     // Get service instance using DI
-    resolver = context.container.resolve<ProjectPathResolver>('ProjectPathResolver');
+    resolver = await context.container.resolve('ProjectPathResolver');
   });
   
   afterEach(async () => {
-    await context.cleanup();
+    await context?.cleanup();
   });
   
   it('should use meld.json directory when found', async () => {

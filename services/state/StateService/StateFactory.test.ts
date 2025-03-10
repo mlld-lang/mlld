@@ -1,22 +1,23 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { StateFactory } from './StateFactory.js';
 import type { StateNode, IStateFactory } from './types.js';
-import { TestContextDI } from '../../../tests/utils/di/TestContextDI';
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 
 describe('StateFactory', () => {
   let factory: IStateFactory;
   let context: TestContextDI;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     // Create test context with isolated DI container
     context = TestContextDI.createIsolated();
+    await context.initialize();
     
-    // Get service instance using DI
-    factory = context.resolveSync<IStateFactory>('IStateFactory');
+    // Get service instance using DI with await for proper initialization
+    factory = await context.resolve<IStateFactory>('IStateFactory');
   });
 
   afterEach(async () => {
-    await context.cleanup();
+    await context?.cleanup();
   });
 
   describe('createState', () => {

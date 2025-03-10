@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mockDeep, mockReset } from 'vitest-mock-extended';
 import { ValidationService } from './ValidationService.js';
 import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
@@ -25,20 +25,25 @@ import {
 import { textDirectiveExamples } from '@core/syntax/index.js';
 import { getExample, getInvalidExample } from '@tests/utils/syntax-test-helpers.js';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
+import type { IValidationService } from './IValidationService.js';
 
 describe('ValidationService', () => {
-  let service: ValidationService;
+  let service: IValidationService;
   let context: TestContextDI;
   
   beforeEach(async () => {
     // Create isolated test context
     context = TestContextDI.createIsolated();
     
+    // Create and register the validation service
+    const validationService = new ValidationService();
+    context.registerMock('IValidationService', validationService);
+    
     // Initialize context
     await context.initialize();
     
     // Resolve the validation service from the container
-    service = context.container.resolve(ValidationService);
+    service = await context.container.resolve('IValidationService');
   });
   
   afterEach(async () => {
@@ -88,33 +93,31 @@ describe('ValidationService', () => {
     it('should throw on missing name with Fatal severity', async () => {
       const node = createTextDirective('', 'Hello', createLocation(1, 1));
       
-      try {
-        await service.validate(node);
-        fail('Expected an error to be thrown');
-      } catch (error) {
-        expect(error).toBeInstanceOf(MeldDirectiveError);
-        const directiveError = error as MeldDirectiveError;
-        expect(directiveError.code).toBe(DirectiveErrorCode.VALIDATION_FAILED);
-        expect(directiveError.directiveKind).toBe('text');
-        expect(directiveError.severity).toBe(ErrorSeverity.Fatal);
-        expect(directiveError.message.toLowerCase()).toContain('identifier');
-      }
+      await expectToThrowWithConfig(
+        async () => service.validate(node),
+        {
+          type: 'MeldDirectiveError',
+          code: DirectiveErrorCode.VALIDATION_FAILED,
+          severity: ErrorSeverity.Fatal,
+          directiveKind: 'text',
+          messageContains: 'identifier'
+        }
+      );
     });
     
     it('should throw on missing value with Fatal severity', async () => {
       const node = createTextDirective('greeting', '', createLocation(1, 1));
       
-      try {
-        await service.validate(node);
-        fail('Expected an error to be thrown');
-      } catch (error) {
-        expect(error).toBeInstanceOf(MeldDirectiveError);
-        const directiveError = error as MeldDirectiveError;
-        expect(directiveError.code).toBe(DirectiveErrorCode.VALIDATION_FAILED);
-        expect(directiveError.directiveKind).toBe('text');
-        expect(directiveError.severity).toBe(ErrorSeverity.Fatal);
-        expect(directiveError.message.toLowerCase()).toContain('value');
-      }
+      await expectToThrowWithConfig(
+        async () => service.validate(node),
+        {
+          type: 'MeldDirectiveError',
+          code: DirectiveErrorCode.VALIDATION_FAILED,
+          severity: ErrorSeverity.Fatal,
+          directiveKind: 'text',
+          messageContains: 'value'
+        }
+      );
     });
     
     it('should throw on invalid name format with Fatal severity', async () => {

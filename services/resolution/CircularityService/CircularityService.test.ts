@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { CircularityService } from './CircularityService.js';
 import { MeldImportError } from '@core/errors/MeldImportError.js';
-import { ICircularityService } from './ICircularityService';
-import { TestContextDI } from '@tests/utils/di/TestContextDI';
+import { ICircularityService } from './ICircularityService.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 
 describe('CircularityService', () => {
   let context: TestContextDI;
@@ -10,14 +10,15 @@ describe('CircularityService', () => {
 
   beforeEach(async () => {
     // Create context with DI
-    context = TestContextDI.create({ isolatedContainer: true });
+    context = TestContextDI.createIsolated();
+    await context.initialize();
     
-    // Resolve service from DI container
+    // Resolve service from DI container with await
     service = await context.resolve(CircularityService);
   });
 
   afterEach(async () => {
-    await context.cleanup();
+    await context?.cleanup();
   });
 
   describe('Basic import tracking', () => {

@@ -49,11 +49,16 @@ describe('FileSystemService', () => {
     context.registerMock('IPathService', pathService);
     context.registerMock('PathService', pathService);
     
-    // Resolve file system service from container
-    service = context.resolveSync(FileSystemService);
-    
     // Connect services through the mediator to resolve circular dependencies
     serviceMediator.setPathService(pathService);
+    
+    // Initialize the context
+    await context.initialize();
+    
+    // Resolve file system service from container with await for proper initialization
+    service = await context.resolve(FileSystemService);
+    
+    // Connect file system service to the mediator
     serviceMediator.setFileSystemService(service);
 
     // Set up test files and directories
@@ -68,7 +73,7 @@ describe('FileSystemService', () => {
   });
 
   afterEach(async () => {
-    await context.cleanup();
+    await context?.cleanup();
   });
 
   describe('File operations', () => {

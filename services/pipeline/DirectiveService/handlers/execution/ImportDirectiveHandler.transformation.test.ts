@@ -12,7 +12,7 @@ import { createLocation } from '@tests/utils/testFactories.js';
 // Import centralized syntax examples and helpers
 import { importDirectiveExamples } from '@core/syntax/index.js';
 import { createNodeFromExample } from '@core/syntax/helpers';
-import { TestContextDI } from '@tests/utils/di/TestContextDI';
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { mockDeep, mockReset } from 'vitest-mock-extended';
 import {
   createValidationServiceMock,
@@ -95,9 +95,9 @@ describe('ImportDirectiveHandler Transformation', () => {
   let stateService: ReturnType<typeof createStateServiceMock>;
   let resolutionService: ReturnType<typeof createResolutionServiceMock>;
   let fileSystemService: ReturnType<typeof createFileSystemServiceMock>;
-  let parserService: jest.Mocked<IParserService>;
-  let interpreterService: jest.Mocked<IInterpreterService>;
-  let circularityService: jest.Mocked<ICircularityService>;
+  let parserService: ReturnType<typeof mockDeep<IParserService>>;
+  let interpreterService: ReturnType<typeof mockDeep<IInterpreterService>>;
+  let circularityService: ReturnType<typeof mockDeep<ICircularityService>>;
   let clonedState: ReturnType<typeof createStateServiceMock>;
   let childState: ReturnType<typeof createStateServiceMock>;
   let context: TestContextDI;
@@ -183,7 +183,7 @@ describe('ImportDirectiveHandler Transformation', () => {
   });
 
   afterEach(async () => {
-    await context.cleanup();
+    await context?.cleanup();
   });
 
   describe('transformation behavior', () => {

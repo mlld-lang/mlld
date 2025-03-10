@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { TestContextDI } from '@tests/utils/di/TestContextDI';
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { PathService } from './PathService.js';
 import { PathValidationError, PathErrorCode } from './errors/PathValidationError.js';
 import type { Location } from '@core/types/index.js';
 import type { MeldNode } from 'meld-spec';
 import { StructuredPath, IPathService } from './IPathService.js';
-import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
+import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import { ProjectPathResolver } from '../ProjectPathResolver.js';
 import { ServiceMediator } from '@services/mediator/ServiceMediator.js';
 import { FileSystemService } from '../FileSystemService/FileSystemService.js';

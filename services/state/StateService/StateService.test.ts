@@ -11,6 +11,7 @@ import { StateHistoryService } from '@tests/utils/debug/StateHistoryService/Stat
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { StateEventService } from '../StateEventService/StateEventService.js';
 import { ServiceMediator } from '@services/mediator/ServiceMediator.js';
+import { mockDeep, mockReset } from 'vitest-mock-extended';
 
 class MockStateEventService implements IStateEventService {
   private handlers = new Map<string, Array<{
@@ -60,13 +61,12 @@ class MockStateEventService implements IStateEventService {
 
 // Test context creation function - DI-only approach with isolated container
 async function createTestContext() {
-  // Initialize test context with isolated DI container
   const testContext = TestContextDI.createIsolated();
   await testContext.initialize();
   
-  // Create mock services
+  // Create mocks
   const mockEventService = new MockStateEventService();
-  const mockTrackingService = new StateTrackingService();
+  const mockTrackingService = mockDeep<IStateTrackingService>();
   const serviceMediator = new ServiceMediator();
   
   // Register mocks with the context
@@ -77,9 +77,9 @@ async function createTestContext() {
   testContext.registerMock('IServiceMediator', serviceMediator);
   testContext.registerMock('ServiceMediator', serviceMediator);
   
-  // Resolve the services from the container
-  const stateFactory = testContext.container.resolve(StateFactory);
-  const state = testContext.container.resolve(StateService);
+  // Resolve the services from the container with proper await
+  const stateFactory = await testContext.container.resolve(StateFactory);
+  const state = await testContext.container.resolve(StateService);
   
   return { state, eventService: mockEventService, testContext, stateFactory };
 }
@@ -93,7 +93,7 @@ describe('StateService', () => {
   });
   
   afterEach(async () => {
-    await context.testContext.cleanup();
+    await context?.testContext?.cleanup();
   });
   
   // Helper functions to get current state in tests
