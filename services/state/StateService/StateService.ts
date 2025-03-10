@@ -118,13 +118,20 @@ export class StateService implements IStateService {
   /**
    * Initialize the service or re-initialize it
    * Can be used to reset the service to initial state
+   * 
+   * @deprecated Use constructor injection instead. This method will be removed in a future version.
+   * @param eventService - Optional event service to use
+   * @param parentState - Optional parent state to inherit from
    */
   initialize(eventService?: IStateEventService, parentState?: IStateService): void {
+    logger.warn('StateService.initialize is deprecated. Use constructor injection instead.');
+    
+    // For backward compatibility, if the eventService was provided, use it
     if (eventService) {
       this.eventService = eventService;
     }
     
-    // Re-initialize the state
+    // Initialize state with parent state
     this.initializeState(parentState);
   }
 

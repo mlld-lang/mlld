@@ -10,10 +10,39 @@ import { IStateService } from '../state/StateService/IStateService.js';
  */
 export interface IServiceMediator {
   // Service registration methods
+  /**
+   * Registers a parser service with the mediator
+   * @deprecated This method is deprecated and will be removed in a future version.
+   * Use the Factory Pattern instead for circular dependency resolution.
+   */
   setParserService(service: IParserService): void;
+  
+  /**
+   * Registers a resolution service with the mediator
+   * @deprecated This method is deprecated and will be removed in a future version.
+   * Use the Factory Pattern instead for circular dependency resolution.
+   */
   setResolutionService(service: IResolutionService): void;
+  
+  /**
+   * Registers a file system service with the mediator
+   * @deprecated This method is deprecated and will be removed in a future version.
+   * Use the Factory Pattern instead for circular dependency resolution.
+   */
   setFileSystemService(service: IFileSystemService): void;
+  
+  /**
+   * Registers a path service with the mediator
+   * @deprecated This method is deprecated and will be removed in a future version.
+   * Use the Factory Pattern instead for circular dependency resolution.
+   */
   setPathService(service: IPathService): void;
+  
+  /**
+   * Registers a state service with the mediator
+   * @deprecated This method is deprecated and will be removed in a future version.
+   * Use the Factory Pattern instead for circular dependency resolution.
+   */
   setStateService(service: IStateService): void;
   
   // Parser ↔ Resolution mediation

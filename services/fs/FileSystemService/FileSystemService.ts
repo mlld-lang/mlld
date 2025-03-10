@@ -357,4 +357,19 @@ export class FileSystemService implements IFileSystemService {
       });
     }
   }
+
+  /**
+   * Creates a directory and any necessary parent directories.
+   * 
+   * @deprecated Use `ensureDir` instead. This method will be removed in a future version.
+   * @param dirPath - Path to the directory to create
+   * @param options - Options for directory creation
+   * @param options.recursive - Whether to create parent directories if they don't exist
+   * @returns A promise that resolves when the directory is created
+   * @throws {MeldFileSystemError} If the directory cannot be created
+   */
+  async mkdir(dirPath: string, options?: { recursive?: boolean }): Promise<void> {
+    logger.warn('FileSystemService.mkdir is deprecated. Use ensureDir instead.');
+    return this.ensureDir(dirPath);
+  }
 } 

@@ -24,22 +24,47 @@ export class ServiceMediator implements IServiceMediator {
   private stateService?: IStateService;
 
   // Setters for each service
+  /**
+   * Registers a parser service with the mediator
+   * @deprecated This method is deprecated and will be removed in a future version.
+   * Use the Factory Pattern instead for circular dependency resolution.
+   */
   setParserService(service: IParserService): void {
     this.parserService = service;
   }
   
+  /**
+   * Registers a resolution service with the mediator
+   * @deprecated This method is deprecated and will be removed in a future version.
+   * Use the Factory Pattern instead for circular dependency resolution.
+   */
   setResolutionService(service: IResolutionService): void {
     this.resolutionService = service;
   }
   
+  /**
+   * Registers a file system service with the mediator
+   * @deprecated This method is deprecated and will be removed in a future version.
+   * Use the Factory Pattern instead for circular dependency resolution.
+   */
   setFileSystemService(service: IFileSystemService): void {
     this.fileSystemService = service;
   }
   
+  /**
+   * Registers a path service with the mediator
+   * @deprecated This method is deprecated and will be removed in a future version.
+   * Use the Factory Pattern instead for circular dependency resolution.
+   */
   setPathService(service: IPathService): void {
     this.pathService = service;
   }
   
+  /**
+   * Registers a state service with the mediator
+   * @deprecated This method is deprecated and will be removed in a future version.
+   * Use the Factory Pattern instead for circular dependency resolution.
+   */
   setStateService(service: IStateService): void {
     this.stateService = service;
   }
