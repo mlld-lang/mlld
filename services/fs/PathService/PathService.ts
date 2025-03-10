@@ -25,23 +25,20 @@ import { pathLogger as logger } from '@core/utils/logger.js';
   description: 'Service for validating and normalizing paths according to Meld rules'
 })
 export class PathService implements IPathService {
-  private fs: IFileSystemService | null = null;
-  private serviceMediator?: IServiceMediator;
   private testMode: boolean = false;
   private homePath: string;
   private projectPath: string;
-  private projectPathResolver: ProjectPathResolver;
   private projectPathResolved: boolean = false;
 
   /**
    * Creates a new PathService with dependencies injected.
    * 
-   * @param serviceMediator Optional service mediator for resolving circular dependencies
+   * @param serviceMediator Service mediator for resolving circular dependencies
    * @param projectPathResolver Resolver for project paths
    */
   constructor(
-    @inject('ServiceMediator') serviceMediator?: IServiceMediator,
-    @inject(ProjectPathResolver) projectPathResolver?: ProjectPathResolver
+    @inject('IServiceMediator') private readonly serviceMediator: IServiceMediator,
+    @inject(ProjectPathResolver) private readonly projectPathResolver: ProjectPathResolver
   ) {
     const homeEnv = process.env.HOME || process.env.USERPROFILE;
     if (!homeEnv && !this.testMode) {
@@ -50,14 +47,8 @@ export class PathService implements IPathService {
     this.homePath = homeEnv || '';
     this.projectPath = process.cwd();
     
-    // Store services
-    this.serviceMediator = serviceMediator;
-    this.projectPathResolver = projectPathResolver || container.resolve(ProjectPathResolver);
-    
-    // Register this service with the mediator if available
-    if (this.serviceMediator) {
-      this.serviceMediator.setPathService(this);
-    }
+    // Register this service with the mediator
+    this.serviceMediator.setPathService(this);
     
     if (process.env.DEBUG === 'true') {
       console.log('PathService: Initialized with serviceMediator:', {
@@ -68,20 +59,12 @@ export class PathService implements IPathService {
   }
 
   /**
-   * Sets the service mediator for breaking circular dependencies
-   */
-  setMediator(mediator: IServiceMediator): void {
-    this.serviceMediator = mediator;
-    mediator.setPathService(this);
-  }
-
-  /**
-   * @deprecated Use dependency injection through constructor instead.
-   * This method is kept for backward compatibility but will be removed in a future version.
+   * @deprecated This method is deprecated and will be removed in a future version.
+   * Use dependency injection through constructor instead. This is now a no-op method.
    */
   initialize(fileSystem: IFileSystemService, parser: any = null): void {
-    logger.warn('PathService.initialize is deprecated. Use dependency injection instead.');
-    this.fs = fileSystem;
+    logger.warn('PathService.initialize is deprecated and is now a no-op. Use dependency injection instead.');
+    // No-op - all services are now injected in the constructor
   }
 
   /**
@@ -643,9 +626,9 @@ export class PathService implements IPathService {
         
         if (this.serviceMediator) {
           exists = await this.serviceMediator.exists(resolvedPath);
-        } else if (this.fs) {
+        } else if ((this as any).fs) {
           // Fallback to direct reference (legacy mode)
-          exists = await this.fs.exists(resolvedPath);
+          exists = await (this as any).fs.exists(resolvedPath);
         } else {
           // No file system available, can't check existence
           logger.warn('Cannot check path existence: no file system service available', {
@@ -670,13 +653,13 @@ export class PathService implements IPathService {
       }
       
       // Check file type if required
-      if ((options.mustBeFile || options.mustBeDirectory) && (this.serviceMediator || this.fs)) {
+      if ((options.mustBeFile || options.mustBeDirectory) && (this.serviceMediator || (this as any).fs)) {
         let isDirectory = false;
         
         if (this.serviceMediator) {
           isDirectory = await this.serviceMediator.isDirectory(resolvedPath);
-        } else if (this.fs) {
-          isDirectory = await this.fs.isDirectory(resolvedPath);
+        } else if ((this as any).fs) {
+          isDirectory = await (this as any).fs.isDirectory(resolvedPath);
         }
         
         // Validate file type constraints
@@ -783,21 +766,7 @@ export class PathService implements IPathService {
     
     try {
       const resolvedPath = this.resolvePath(targetPath);
-      
-      // Use service mediator if available
-      if (this.serviceMediator) {
-        return this.serviceMediator.exists(resolvedPath);
-      } else if (this.fs) {
-        // Fallback to direct reference
-        return this.fs.exists(resolvedPath);
-      } else {
-        // No file system available
-        logger.warn('Cannot check path existence: no file system service available', {
-          path: targetPath,
-          resolvedPath
-        });
-        return false;
-      }
+      return this.serviceMediator.exists(resolvedPath);
     } catch (error) {
       logger.error('Error checking path existence', { path: targetPath, error });
       return false;
@@ -814,21 +783,7 @@ export class PathService implements IPathService {
     
     try {
       const resolvedPath = this.resolvePath(targetPath);
-      
-      // Use service mediator if available
-      if (this.serviceMediator) {
-        return this.serviceMediator.isDirectory(resolvedPath);
-      } else if (this.fs) {
-        // Fallback to direct reference
-        return this.fs.isDirectory(resolvedPath);
-      } else {
-        // No file system available
-        logger.warn('Cannot check if path is directory: no file system service available', {
-          path: targetPath,
-          resolvedPath
-        });
-        return false;
-      }
+      return this.serviceMediator.isDirectory(resolvedPath);
     } catch (error) {
       logger.error('Error checking if path is directory', { path: targetPath, error });
       return false;
@@ -898,5 +853,17 @@ export class PathService implements IPathService {
    */
   basename(filePath: string): string {
     return path.basename(filePath);
+  }
+
+  /**
+   * Sets the service mediator for breaking circular dependencies
+   * @deprecated This method is deprecated and will be removed in a future version.
+   * Use constructor injection with IServiceMediator for handling circular dependencies.
+   * In the future, the Factory Pattern will replace the ServiceMediator for circular dependency resolution.
+   */
+  setMediator(mediator: IServiceMediator): void {
+    logger.warn('PathService.setMediator is deprecated. Use constructor injection instead.');
+    // No-op - the mediator is now injected in the constructor
+    // This method is kept for backward compatibility only
   }
 }

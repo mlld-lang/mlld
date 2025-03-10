@@ -36,17 +36,14 @@ export class FileSystemService implements IFileSystemService {
    * 
    * @param pathOps - Service for handling path operations and normalization
    * @param serviceMediator - Service mediator for resolving circular dependencies with PathService
-   * @param fileSystem - File system implementation to use (defaults to NodeFileSystem if not provided)
+   * @param fileSystem - File system implementation to use
    */
   constructor(
     @inject('IPathOperationsService') private readonly pathOps: IPathOperationsService,
-    @inject('ServiceMediator') serviceMediator?: IServiceMediator,
-    @inject('IFileSystem') fileSystem: IFileSystem | null = null
+    @inject('IServiceMediator') private readonly serviceMediator: IServiceMediator,
+    @inject('IFileSystem') private fs: IFileSystem
   ) {
-    this.fs = fileSystem || new NodeFileSystem();
-    this.serviceMediator = serviceMediator;
-    
-    // Register this service with the mediator if available
+    // Register this service with the mediator
     if (this.serviceMediator) {
       this.serviceMediator.setFileSystemService(this);
     }
@@ -55,18 +52,23 @@ export class FileSystemService implements IFileSystemService {
   /**
    * Sets the service mediator for breaking circular dependencies
    * @deprecated This method is deprecated and will be removed in a future version.
-   * Use constructor injection instead.
+   * Use constructor injection with IServiceMediator for handling circular dependencies.
+   * In the future, the Factory Pattern will replace the ServiceMediator for circular dependency resolution.
    */
   setMediator(mediator: IServiceMediator): void {
+    logger.warn('FileSystemService.setMediator is deprecated. Use constructor injection instead.');
     this.serviceMediator = mediator;
     this.serviceMediator.setFileSystemService(this);
   }
 
   /**
    * Sets the file system implementation
+   * @deprecated This method is deprecated and will be removed in a future version.
+   * Use dependency injection instead by registering the file system implementation with the DI container.
    * @param fileSystem - The file system implementation to use
    */
   setFileSystem(fileSystem: IFileSystem): void {
+    logger.warn('FileSystemService.setFileSystem is deprecated. Use dependency injection instead.');
     this.fs = fileSystem;
   }
 
@@ -79,11 +81,12 @@ export class FileSystemService implements IFileSystemService {
   }
 
   /**
-   * @deprecated Use setMediator instead, which will be deprecated in a future version.
-   * Ultimately, use constructor injection for all dependencies.
+   * @deprecated This method is deprecated and will be removed in a future version.
+   * Use dependency injection with IServiceMediator for handling circular dependencies.
+   * In the future, the Factory Pattern will replace the ServiceMediator for circular dependency resolution.
    */
   setPathService(pathService: IPathService): void {
-    logger.warn('setPathService is deprecated. Use setMediator instead.');
+    logger.warn('setPathService is deprecated. Use dependency injection with IServiceMediator instead.');
     // This method is kept for backward compatibility only
   }
 
@@ -92,16 +95,8 @@ export class FileSystemService implements IFileSystemService {
    * @private
    * @param filePath - The path to resolve
    * @returns The resolved path
-   * @throws If no ServiceMediator is available
    */
   private resolvePath(filePath: string): string {
-    if (!this.serviceMediator) {
-      throw new MeldError(
-        'No ServiceMediator available for path resolution',
-        { filePath }
-      );
-    }
-    
     return this.serviceMediator.resolvePath(filePath);
   }
 

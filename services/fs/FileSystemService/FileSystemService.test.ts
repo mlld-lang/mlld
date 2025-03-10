@@ -22,25 +22,35 @@ describe('FileSystemService', () => {
   let projectPathResolver: ProjectPathResolver;
 
   beforeEach(async () => {
-    // Initialize test context
-    context = TestContextDI.create();
+    // Initialize test context with isolated container
+    context = TestContextDI.createIsolated();
     await context.initialize();
 
     // Load test fixture
     await context.fixtures.load('fileSystemProject');
 
-    // Initialize services using DI approach
+    // Create test services with proper DI
     serviceMediator = new ServiceMediator();
     pathOps = new PathOperationsService();
     projectPathResolver = new ProjectPathResolver();
+    
+    // Register services with container using the correct methods
+    context.registerMock('IServiceMediator', serviceMediator);
+    context.registerMock('ServiceMediator', serviceMediator);
+    context.registerMock('IPathOperationsService', pathOps);
+    context.registerMock('PathOperationsService', pathOps);
+    context.registerMock(ProjectPathResolver, projectPathResolver);
+    context.registerMock('IFileSystem', context.fs);
     
     // Create path service and register with mediator
     pathService = new PathService(serviceMediator, projectPathResolver);
     pathService.enableTestMode();
     pathService.setProjectPath('/project');
+    context.registerMock('IPathService', pathService);
+    context.registerMock('PathService', pathService);
     
-    // Create file system service and register with mediator
-    service = new FileSystemService(pathOps, serviceMediator, context.fs);
+    // Resolve file system service from container
+    service = context.resolveSync(FileSystemService);
     
     // Connect services through the mediator to resolve circular dependencies
     serviceMediator.setPathService(pathService);
