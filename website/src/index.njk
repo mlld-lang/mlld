@@ -58,45 +58,61 @@ Here's the structure of the codebase:
   </div>
 </section>
 
-<section>  
-  <h2>What is prompt scripting?</h2>
-  <p>If you've already experienced the <strong>pain</strong>, you already know what you <strong>want</strong> it to be.</p>
-  <div class="examples">
-    <div>
-      <h3>Tired of repeating yourself</h3>
-      <p>"Working with LLMs is like having a brilliant intern with chronic amnesia."</p>
-    </div>
-    <div>
-      <h3>Tired of curating context</h3>
-      <p>"I'd do a lot more with LLMs if re-assembling context wasn't such a chore."</p>
-    </div>
-    <div>
-      <h3>Tired of wrong tools for the job</h3>
-      <p>"I just want to script LLMs. A chat or an IDE isn't helpful for that."</p>
+<hr class="hero-separator">
+
+<section class="content-section">  
+  <h2>what is prompt scripting?</h2>
+  <p class="section-description">If you've experienced the <strong>pain</strong>,<br>you know what you <strong>want</strong> it to be.</p>
+  
+  <div class="container">
+    <div class="content-grid">
+      <!-- First row -->
+      <div class="grid-row">
+        <h3 class="card-heading">Tired of repeating yourself</h3>
+        <div class="card-content">
+          <p class="pain-quote">"Working with LLMs is like having a brilliant intern with chronic amnesia. I'd do a lot more if re-assembling context wasn't such a chore."</p>
+        </div>
+      </div>
+      
+      <!-- Second row -->
+      <div class="grid-row">
+        <h3 class="card-heading">Tired of wrong tools for the job</h3>
+        <div class="card-content">
+          <p class="pain-quote">"I just want to script LLMs. A chat or an IDE isn't helpful for that. Don't give me a kitchen sink 'agentic framework' or a magic black box. Give me a unix pipe."</p>
+        </div>
+      </div>
     </div>
   </div>
 </section>
 
-<section>  
-  <h2>What is prompt scripting?</h2>
-  <p>If you've already seen the <strong>possibility</strong>, you already know what you <strong>want</strong> it to be.</p>
-  <div class="examples">
-    <div>
-      <h3>Write scripts to embed LLM context in the middle of your markdown docs.</h3>
-      <pre>
-<code>
+<section class="content-section">  
+  <h2>what is prompt scripting?</h2>
+  <p class="section-description">If you've experienced the <strong>possibility</strong>,<br>you know what you <strong>want</strong> it to be.</p>
+  
+  <div class="container">
+    <div class="content-grid">
+      <!-- First row -->
+      <div class="grid-row">
+        <h3 class="card-heading">Embed LLM context in your docs</h3>
+        <div class="card-content">
+          <div class="possibility-example">
+            <pre><code>
   # Overview
 
   Here's the structure of the codebase:
   
   <span class="token keyword">@run</span> <span class="token bracket">[</span>tree --gitignore<span class="token bracket">]</span>  
-</code>
-      </pre>
-    </div>
-    <div>
-      <h3>Chain LLM requests and responses like you'd pipe shell commands</h3>
-      <pre>
-<code>
+            </code></pre>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Second row -->
+      <div class="grid-row">
+        <h3 class="card-heading">Chain requests like shell commands</h3>
+        <div class="card-content">
+          <div class="possibility-example">
+            <pre><code>
 <span class="token keyword">@text</span> <span class="token variable">tests</span> = <span class="token keyword">@run</span> <span class="token bracket">[</span>npm test<span class="token bracket">]</span>
 
 <span class="token keyword">@text</span> <span class="token variable">res</span> = <span class="token keyword">@run</span> <span class="token bracket">[</span>oneshot "What's broken here? <span class="token variable">{% raw %}{{tests}}{% endraw %}</span>"<span class="token bracket">]</span>
@@ -106,14 +122,18 @@ Here's the structure of the codebase:
 <span class="token operator">---</span>
 
 <span class="token string">"Here's a plan to fix the failing tests."</span>
-</code>
-    </pre>
-    </div>
-    <div>
-      <h3>Use imports and treat markdown doc sections like modules</h3>
-      <pre>
-<code>
-  <span class="token keyword">@import</span> <span class="token bracket">[</span><span class="token variable">roles</span><span class="token bracket">]</span> from <span class="token bracket">[</span>roles.mld<span class="token bracket">]</span>
+            </code></pre>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Third row -->
+      <div class="grid-row">
+        <h3 class="card-heading">Use imports and module sections</h3>
+        <div class="card-content">
+          <div class="possibility-example">
+            <pre><code>
+  <span class="token keyword">@import</span> <span class="token bracket">[</span><span class="token variable">roles</span><span class="token bracket">]</span> <span class="token keyword">from</span> <span class="token bracket">[</span>roles.mld<span class="token bracket">]</span>
 
 
   <span class="token keyword">@text</span> <span class="token variable">infra</span> = <span class="token keyword">@embed</span> <span class="token bracket">[</span>TESTING.md <span class="token selector"># Infrastructure</span><span class="token bracket">]</span>
@@ -130,14 +150,15 @@ Here's the structure of the codebase:
   <span class="token operator">---</span>
 
   <span class="token string">"Here's a list of the tests to add…"</span>  
-</code>
-      </pre>
+            </code></pre>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </section>
 
 
-  <div class="cta-link">
-    <a href="/docs/introduction/">Read the Introduction →</a>
-  </div>
-</section>
+<div class="cta-link">
+  <a href="/docs/introduction/">Read the Introduction →</a>
+</div>
