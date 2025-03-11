@@ -668,9 +668,7 @@ footer {
   padding: 1.5rem;
   background: var(--bg-color);
   z-index: 10;
-  border-right: 1px solid var(--border-color);
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
-  border-radius: 8px;
+  
 }
 
 .docs-sidebar nav {
