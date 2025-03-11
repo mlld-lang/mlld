@@ -441,7 +441,6 @@ hr {
     align-items: center;
     gap: 1rem;
   }
-  
   .logo-container {
     margin-bottom: 0.5rem;
   }
@@ -459,7 +458,7 @@ hr {
   }
   
   .terminal-content {
-    font-size: 14px;
+    font-size: 12px;
   }
   
   pre {
@@ -469,18 +468,69 @@ hr {
   pre::before {
     font-size: 0.7rem;
   }
-  
+
+  header .container {
+    gap: 0;
+  }
+  .logo-tagline {
+    display: none;
+  }
+  nav {
+    font-size: 14px;
+  }
+  main {
+    padding-top: 0;
+  }
+  .hero {
+    padding-top: 0;
+    margin-top: 0;
+  }
+  .hero-content {
+    padding: 0 0 0 10px; 
+  }
+  .hero-content p {
+    margin-bottom: 0;
+  }
+  .hero-terminal-container {
+    padding: 0 0 0 10px;
+  }
+  .hero-terminal {
+    height: 400px;
+  }
+  .possibility-example, .hero-terminal {
+    border-radius: 8px 0px 0px 8px !important;
+  }
+  .title-bar {
+    border-radius: 8px 0px 0px 0px !important;
+  }
+  .terminal-content, .possibility-example pre {
+    padding: 20px;
+    font-size: 12px !important;
+  }
+  .possibility-example code {
+    font-size: 12px !important;
+  }
+  .section-description br {
+    display: none;
+  }
+  .card-content {
+    margin-left: 20px !important;
+    padding-left: 0rem;
+  }
   .install-command {
-    font-size: 1rem;
+    font-size: 1rem !important;
     padding: 0.8rem 1.5rem;
     width: 90%;
     max-width: 100%;
   }
-  
   .install-options {
     flex-direction: column;
     align-items: center;
   }
+  section.content-section {
+    margin: 3rem 0 !important;
+  }
+  
 }
 
 .features {
@@ -895,32 +945,6 @@ section.content-section h2 {
 }
 
 @media (max-width: 950px) {
-  main {
-    padding-top: 0;
-  }
-  .hero {
-    padding-top: 0;
-    margin-top: 0;
-  }
-  .hero-content {
-    padding: 0 0 0 10px; 
-  }
-  .hero-content p {
-    margin-bottom: 0;
-  }
-  .hero-terminal-container {
-    padding: 0 0 0 10px;
-  }
-  .terminal-content, .possibility-example pre {
-    padding: 20px;
-    font-size: 12px;
-  }
-  .section-description br {
-    display: none;
-  }
-  .card-content {
-    margin: 0 30px;
-  }
   .grid-row {
     grid-template-columns: 1fr;
     gap: 1rem;
