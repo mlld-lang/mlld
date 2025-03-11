@@ -4,10 +4,23 @@
   --text-color-rgb: 0, 0, 0;
   --accent-color: #000000;
   --code-bg: #1a1a1a;
-  --terminal-bg: #1a1a1a;
-  --terminal-bg-rgb: 26, 26, 26;
+  --terminal-bg: #fdfdfd;
+  --terminal-bg-rgb: 253, 253, 253;
+  --terminal-text: var(--text-color);
+  --terminal-text-dim: rgba(var(--text-color-rgb), 0.7);
+  --terminal-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  --terminal-gradient-start: rgba(253, 253, 253, 0);
+  --terminal-gradient-middle: rgba(253, 253, 253, 0.7);
+  --terminal-gradient-end: rgba(253, 253, 253, 1);
   --border-color: #dedede;
-  --terminal-shadow: rgba(0, 0, 0, 0.2);
+  
+  /* Syntax highlighting colors - light theme */
+  --token-keyword: #d73a49;
+  --token-operator: #6f42c1;
+  --token-string: #22863a;
+  --token-bracket: #666666;
+  --token-selector: #e36209;
+  --token-variable: #005cc5;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -19,8 +32,21 @@
     --code-bg: #1a1a1a;
     --terminal-bg: #1a1a1a;
     --terminal-bg-rgb: 26, 26, 26;
+    --terminal-text: #ffffff;
+    --terminal-text-dim: rgba(255, 255, 255, 0.7);
+    --terminal-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+    --terminal-gradient-start: rgba(26, 26, 26, 0);
+    --terminal-gradient-middle: rgba(26, 26, 26, 0.7);
+    --terminal-gradient-end: rgba(26, 26, 26, 1);
     --border-color: #333333;
-    --terminal-shadow: rgba(0, 0, 0, 0.4);
+    
+    /* Syntax highlighting colors - dark theme */
+    --token-keyword: #ff79c6;
+    --token-operator: #bd93f9;
+    --token-string: #50fa7b;
+    --token-bracket: #666666;
+    --token-selector: #f1fa8c;
+    --token-variable: #8be9fd;
   }
 }
 
@@ -163,15 +189,15 @@ a:hover:not(nav a) {
 
 code {
   font-family: 'Cousine', monospace;
-  background-color: var(--code-bg);
+  background-color: var(--terminal-bg);
   padding: 0;
   border-radius: 3px;
   font-size: 0.9em;
-  color: #fff;
+  color: var(--terminal-text);
 }
 
 pre {
-  background-color: var(--code-bg);
+  background-color: var(--terminal-bg);
   border-radius: 8px;
   padding: 30px;
   overflow-x: auto;
@@ -184,7 +210,7 @@ pre code {
   font-family: 'Cousine', monospace;
   font-size: 15px;
   line-height: 1.6;
-  color: #fff;
+  color: var(--terminal-text);
   background: transparent;
   padding: 0;
   border-radius: 0;
@@ -192,27 +218,27 @@ pre code {
 
 /* Apply syntax highlighting to code blocks */
 pre code .token.keyword {
-  color: #ff79c6;
+  color: var(--token-keyword);
 }
 
 pre code .token.operator {
-  color: #bd93f9;
+  color: var(--token-operator);
 }
 
 pre code .token.string {
-  color: #50fa7b;
+  color: var(--token-string);
 }
 
 pre code .token.bracket {
-  color: #666666;
+  color: var(--token-bracket);
 }
 
 pre code .token.selector {
-  color: #f1fa8c;
+  color: var(--token-selector);
 }
 
 pre code .token.variable {
-  color: #8be9fd;
+  color: var(--token-variable);
 }
 
 blockquote {
@@ -276,43 +302,29 @@ hr {
   position: relative;
   background-color: var(--terminal-bg);
   border-radius: 8px;
-  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
-  padding: 0; /* Remove default padding */
+  box-shadow: var(--terminal-shadow);
+  padding: 0;
   width: 100%;
-  height: 510px; /* Fixed height of 510px instead of dynamic height */
-  overflow-y: hidden; /* Changed from auto to hidden to prevent scrolling */
+  height: 510px;
+  overflow-y: hidden;
   z-index: 1;
 }
 
-/* Add a subtle titlebar effect at the top of the terminal */
-.hero-terminal::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 36px; /* Standard titlebar height */
-  border-top-left-radius: 8px;
-  border-top-right-radius: 8px;
-  border-bottom: 1px solid rgba(70, 70, 70, 0.25);
-  z-index: 1;
-}
-
-/* Add fade overlay at the bottom of the terminal */
+/* Update the fade overlay gradient */
 .hero-terminal::after {
   content: "";
   position: absolute;
   bottom: 0;
   left: 0;
   width: 100%;
-  height: 90px; /* Total height of fade effect */
+  height: 90px;
   background: linear-gradient(
     to bottom, 
-    rgba(26, 26, 26, 0) 0%, /* Fully transparent at top of gradient (80px from bottom) */
-    rgba(26, 26, 26, 0.7) 40%, /* 40% through the gradient */
-    rgba(26, 26, 26, 1) 70% /* Fully opaque at 20px from bottom (70% of 80px) */
+    var(--terminal-gradient-start) 0%,
+    var(--terminal-gradient-middle) 40%,
+    var(--terminal-gradient-end) 70%
   );
-  pointer-events: none; /* Allow clicking through the gradient */
+  pointer-events: none;
   z-index: 2;
   border-bottom-left-radius: 8px;
   border-bottom-right-radius: 8px;
@@ -341,11 +353,11 @@ hr {
   font-family: 'Cousine', monospace;
   font-size: 15px;
   line-height: 1.6;
-  color: #fff;
+  color: var(--terminal-text);
   white-space: pre-wrap;
-  padding: 30px; /* Top, right, bottom, left padding */
-  max-height: 100%; /* Ensure content respects the container height */
-  overflow-y: visible; /* Allow content to be scrollable in the parent container */
+  padding: 30px;
+  max-height: 100%;
+  overflow-y: visible;
 }
 
 .terminal-content.not-visible .animated-line {
@@ -366,29 +378,29 @@ hr {
   }
 }
 
-/* Syntax highlighting */
+/* Terminal content syntax highlighting */
 .terminal-content .token.keyword {
-  color: #ff79c6;
+  color: var(--token-keyword);
 }
 
 .terminal-content .token.operator {
-  color: #bd93f9;
+  color: var(--token-operator);
 }
 
 .terminal-content .token.string {
-  color: #50fa7b;
+  color: var(--token-string);
 }
 
 .terminal-content .token.bracket {
-  color: #666666;
+  color: var(--token-bracket);
 }
 
 .terminal-content .token.selector {
-  color: #f1fa8c;
+  color: var(--token-selector);
 }
 
 .terminal-content .token.variable {
-  color: #8be9fd;
+  color: var(--token-variable);
 }
 
 .terminal-content .space {
@@ -919,8 +931,9 @@ section.content-section h2 {
   position: relative;
   border-radius: 8px;
   overflow: hidden;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--terminal-shadow);
   width: 100%;
+  background-color: var(--terminal-bg);
 }
 
 .second-possibility-example {
@@ -933,6 +946,7 @@ section.content-section h2 {
   padding: 1.5rem;
   white-space: pre-wrap;
   word-break: break-word;
+  background-color: var(--terminal-bg);
 }
 
 .possibility-example code {
@@ -951,6 +965,7 @@ section.content-section h2 {
 .possibility-example pre code {
   max-width: 100%;
   display: block;
+  color: var(--terminal-text);
 }
 
 /* Enhance readability of wrapped code */
@@ -1026,28 +1041,21 @@ section.content-section h2 {
 
 .install-command {
   display: inline-block;
-  background-color: var(--code-bg);
+  background-color: var(--terminal-bg);
   padding: 1rem 3rem .8rem 2rem;
   border-radius: 8px;
   font-family: 'Cousine', monospace;
   font-size: 1.2rem;
-  color: rgba(255, 255, 255, 0.7);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  color: var(--terminal-text);
+  box-shadow: var(--terminal-shadow);
   position: relative;
   overflow: hidden;
   transition: color 0.2s;
 }
 
-.install-command code {
-  background: none;
-  padding: 0;
-  font-size: inherit;
-  color: inherit;
-}
-
 .install-command:hover {
   cursor: pointer;
-  color: #fff;
+  color: var(--terminal-text);
 }
 
 .copy-button {
@@ -1059,7 +1067,7 @@ section.content-section h2 {
   border-radius: 4px;
   padding: 0.4rem 0.6rem;
   background: rgba(255, 255, 255, 0);
-  color: rgba(255, 255, 255, 0.2);
+  color: var(--terminal-text-dim);
   transition: color 0.2s;
   display: flex;
   align-items: center;
@@ -1068,7 +1076,7 @@ section.content-section h2 {
 }
 
 .install-command:hover .copy-button {
-  color: rgba(255, 255, 255, 1);
+  color: var(--terminal-text);
 }
 
 .copy-button svg {
