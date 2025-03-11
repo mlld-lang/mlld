@@ -10,6 +10,14 @@ document.addEventListener('DOMContentLoaded', () => {
   // Track if initial animation has run
   let hasAnimationRun = false;
   
+  // Function to remove animated line from a terminal
+  function removeAnimatedLine(terminal) {
+    const animatedLine = terminal.querySelector('.animated-line');
+    if (animatedLine) {
+      animatedLine.remove();
+    }
+  }
+  
   // Function to display static content without animation
   function showStaticContent(terminal) {
     const animatedLine = terminal.querySelector('.animated-line');
@@ -83,8 +91,8 @@ document.addEventListener('DOMContentLoaded', () => {
     addNextToken();
   }
   
-  // Preload content of the scripts tab so it's ready when switching
-  showStaticContent(terminalScripts);
+  // Remove animated line from scripts tab completely
+  removeAnimatedLine(terminalScripts);
   
   // Start with the modules animation after a short delay
   setTimeout(() => {
