@@ -3,22 +3,25 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>@data Directive - meld</title>
+  <title>@data Directive - mlld</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Tektur:wght@800&family=Cousine:wght@400;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/style.css">
   <script src="/js/theme.js" defer></script>
   <script src="/js/terminal.js" defer></script>
+  <script src="/js/animation.js" defer></script>
 </head>
 <body>
   <header>
     <div class="container">
-      <a href="/" class="logo">meld</a>
+      <div class="logo-container">
+        <a href="/" class="logo">mlld</a>
+        <span class="logo-tagline">modular prompt scripting</span>
+      </div>
       <nav>
         <ul>
-          <li><a href="/" aria-current=&quot;page&quot;>Home</a></li>
-          <li><a href="/docs/introduction/" >Docs</a></li>
+          <li><a href="/docs/" aria-current=&quot;page&quot;>Docs</a></li>
           <li><a href="https://github.com/meldorg/meld">GitHub</a></li>
         </ul>
       </nav>
@@ -33,24 +36,26 @@
     <nav>
       <h3>Documentation</h3>
       <ul class="nav-list">
-        <li><a href="/docs/introduction/" >Introduction</a></li>
+        <li><a href="/docs/" >Introduction</a></li>
         <li><a href="/docs/cli-usage/" >CLI Usage</a></li>
         <li><a href="/docs/sdk-usage/" >SDK Usage</a></li>
         <li><a href="/docs/variables/" >Variables</a></li>
         <li><a href="/docs/error-handling/" >Error Handling</a></li>
         <li><a href="/docs/grammar-reference/" >Grammar Reference</a></li>
-      </ul>
-      
-      <h3>Directives</h3>
-      <ul class="nav-list">
-        <li><a href="/docs/directives/" aria-current=&quot;page&quot;>Overview</a></li>
-        <li><a href="/docs/directives/data/" aria-current=&quot;page&quot;>@data</a></li>
-        <li><a href="/docs/directives/define/" >@define</a></li>
-        <li><a href="/docs/directives/embed/" >@embed</a></li>
-        <li><a href="/docs/directives/import/" >@import</a></li>
-        <li><a href="/docs/directives/path/" >@path</a></li>
-        <li><a href="/docs/directives/run/" >@run</a></li>
-        <li><a href="/docs/directives/text/" >@text</a></li>
+        
+        <li>
+          <h3>Directives</h3>
+          <ul class="nav-list">
+            <li><a href="/docs/directives/" aria-current=&quot;page&quot;>Overview</a></li>
+            <li><a href="/docs/directives/data/" aria-current=&quot;page&quot;>@data</a></li>
+            <li><a href="/docs/directives/define/" >@define</a></li>
+            <li><a href="/docs/directives/embed/" >@embed</a></li>
+            <li><a href="/docs/directives/import/" >@import</a></li>
+            <li><a href="/docs/directives/path/" >@path</a></li>
+            <li><a href="/docs/directives/run/" >@run</a></li>
+            <li><a href="/docs/directives/text/" >@text</a></li>
+          </ul>
+        </li>
       </ul>
     </nav>
   </aside>

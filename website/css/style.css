@@ -4,7 +4,7 @@
   --text-color-rgb: 0, 0, 0;
   --accent-color: #000000;
   --code-bg: #1a1a1a;
-  --terminal-bg: #fdfdfd;
+  --terminal-bg: #fafafa;
   --terminal-bg-rgb: 253, 253, 253;
   --terminal-text: #333333;
   --terminal-text-dim: rgba(var(--text-color-rgb), 0.7);
@@ -113,12 +113,12 @@ header .container {
   color: var(--text-color);
 }
 
-nav {
+header nav {
   display: flex;
   align-items: center;
 }
 
-nav ul {
+header nav ul {
   display: flex;
   list-style: none;
   gap: 1.5rem;
@@ -127,7 +127,7 @@ nav ul {
   padding: 0;
 }
 
-nav a {
+header nav a {
   text-decoration: none;
   color: var(--text-color);
   font-weight: 400;
@@ -136,7 +136,7 @@ nav a {
   transition: border-color 0.2s;
 }
 
-nav a:hover {
+header nav a:hover {
   text-decoration: none;
   border-color: var(--text-color);
 }
@@ -198,6 +198,7 @@ code {
 
 pre {
   background-color: var(--terminal-bg);
+  border-bottom: 1px solid #eee;
   border-radius: 8px;
   padding: 30px;
   overflow-x: auto;
@@ -490,12 +491,12 @@ hr {
     font-size: 1.25rem;
   }
   
-  nav {
+  header nav {
     font-size: 14px;
     margin: 0;
   }
 
-  nav ul {
+  header nav ul {
     gap: 1rem;
   }
   
@@ -644,7 +645,7 @@ footer {
 /* Documentation layout */
 .docs-layout {
   display: grid;
-  grid-template-columns: 250px 1fr;
+  grid-template-columns: 280px 1fr;
   gap: 3rem;
   margin-top: 2rem;
 }
@@ -655,9 +656,12 @@ footer {
   align-self: start;
   height: calc(100vh - 12rem);
   overflow-y: auto;
-  padding-right: 1rem;
+  padding: 1.5rem;
   background: var(--bg-color);
   z-index: 10;
+  border-right: 1px solid var(--border-color);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+  border-radius: 8px;
 }
 
 .docs-sidebar nav {
@@ -667,17 +671,21 @@ footer {
 .docs-sidebar h3 {
   margin-top: 2rem;
   margin-bottom: 1rem;
-  font-size: 1.1rem;
+  font-size: 1.2rem;
   font-weight: 600;
   color: var(--text-color);
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border-color);
 }
 
 /* Adjust nested h3 styling */
 .nav-list li h3 {
-  margin: 1rem 0 0.5rem;
-  padding-left: 0.75rem;
-  font-size: 1rem;
-  opacity: 0.8;
+  margin: 1.5rem 0 0.75rem;
+  padding-left: 0;
+  font-size: 1.1rem;
+  opacity: 0.9;
+  border-bottom: none;
+  color: var(--text-color);
 }
 
 .docs-sidebar h3:first-child {
@@ -690,15 +698,16 @@ footer {
   margin-bottom: 2rem;
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.4rem;
 }
 
 /* Nested nav-list for directives */
 .nav-list .nav-list {
-  margin: 0;
+  margin: 0.25rem 0 0.75rem;
   padding-left: 1rem;
   margin-bottom: 1rem;
-  border-left: 1px solid var(--border-color);
+  border-left: 2px solid var(--border-color);
+  gap: 0.25rem;
 }
 
 .nav-list li {
@@ -710,12 +719,13 @@ footer {
   padding: 0.5rem 0.75rem;
   text-decoration: none;
   color: var(--text-color);
-  border-left: 2px solid transparent;
+  border-left: 3px solid transparent;
   line-height: 1.4;
-  border-radius: 0 4px 4px 0;
-  transition: background-color 0.2s, border-color 0.2s;
+  border-radius: 4px;
+  transition: all 0.2s ease;
   font-size: 0.95rem;
   opacity: 0.8;
+  background-color: transparent;
 }
 
 .nav-list a:hover {
@@ -723,6 +733,7 @@ footer {
   border-color: var(--border-color);
   text-decoration: none !important;
   opacity: 1;
+  transform: translateX(2px);
 }
 
 .nav-list a[aria-current="page"] {
@@ -730,12 +741,14 @@ footer {
   font-weight: 600;
   background-color: rgba(128, 128, 128, 0.1);
   opacity: 1;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .docs-content {
   min-width: 0;
   max-width: 100%;
   overflow-x: auto;
+  padding: 0 1rem;
 }
 
 .docs-content h1 {
@@ -756,7 +769,7 @@ footer {
     position: relative;
     height: auto;
     margin-bottom: 2rem;
-    padding: 1rem;
+    padding: 1.5rem;
     border-radius: 8px;
     border: 1px solid var(--border-color);
     top: 0;
@@ -949,6 +962,9 @@ section.content-section h2 {
 @media (prefers-color-scheme: dark) {
   .title-bar {
     background-color: #333;
+  }
+  pre {
+    border-bottom: 0px none;
   }
 }
 

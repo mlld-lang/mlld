@@ -3,22 +3,25 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Introduction to Meld - meld</title>
+  <title>Introduction to Meld - mlld</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Tektur:wght@800&family=Cousine:wght@400;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/style.css">
   <script src="/js/theme.js" defer></script>
   <script src="/js/terminal.js" defer></script>
+  <script src="/js/animation.js" defer></script>
 </head>
 <body>
   <header>
     <div class="container">
-      <a href="/" class="logo">meld</a>
+      <div class="logo-container">
+        <a href="/" class="logo">mlld</a>
+        <span class="logo-tagline">modular prompt scripting</span>
+      </div>
       <nav>
         <ul>
-          <li><a href="/" aria-current=&quot;page&quot;>Home</a></li>
-          <li><a href="/docs/introduction/" aria-current=&quot;page&quot;>Docs</a></li>
+          <li><a href="/docs/" aria-current=&quot;page&quot;>Docs</a></li>
           <li><a href="https://github.com/meldorg/meld">GitHub</a></li>
         </ul>
       </nav>
@@ -33,24 +36,26 @@
     <nav>
       <h3>Documentation</h3>
       <ul class="nav-list">
-        <li><a href="/docs/introduction/" aria-current=&quot;page&quot;>Introduction</a></li>
+        <li><a href="/docs/" aria-current=&quot;page&quot;>Introduction</a></li>
         <li><a href="/docs/cli-usage/" >CLI Usage</a></li>
         <li><a href="/docs/sdk-usage/" >SDK Usage</a></li>
         <li><a href="/docs/variables/" >Variables</a></li>
         <li><a href="/docs/error-handling/" >Error Handling</a></li>
         <li><a href="/docs/grammar-reference/" >Grammar Reference</a></li>
-      </ul>
-      
-      <h3>Directives</h3>
-      <ul class="nav-list">
-        <li><a href="/docs/directives/" >Overview</a></li>
-        <li><a href="/docs/directives/data/" >@data</a></li>
-        <li><a href="/docs/directives/define/" >@define</a></li>
-        <li><a href="/docs/directives/embed/" >@embed</a></li>
-        <li><a href="/docs/directives/import/" >@import</a></li>
-        <li><a href="/docs/directives/path/" >@path</a></li>
-        <li><a href="/docs/directives/run/" >@run</a></li>
-        <li><a href="/docs/directives/text/" >@text</a></li>
+        
+        <li>
+          <h3>Directives</h3>
+          <ul class="nav-list">
+            <li><a href="/docs/directives/" >Overview</a></li>
+            <li><a href="/docs/directives/data/" >@data</a></li>
+            <li><a href="/docs/directives/define/" >@define</a></li>
+            <li><a href="/docs/directives/embed/" >@embed</a></li>
+            <li><a href="/docs/directives/import/" >@import</a></li>
+            <li><a href="/docs/directives/path/" >@path</a></li>
+            <li><a href="/docs/directives/run/" >@run</a></li>
+            <li><a href="/docs/directives/text/" >@text</a></li>
+          </ul>
+        </li>
       </ul>
     </nav>
   </aside>
@@ -69,9 +74,16 @@
 </ul>
 <h2 id="basic-example" tabindex="-1">Basic Example</h2>
 <pre><code class="language-meld">@text name = &quot;World&quot;
-@path docs = &quot;$PROJECTPATH/docs&quot;
+@path docs = &quot;$./docs&quot;
 
-Hello, {{name}}!
+This line will be interpreted as plain text.
+
+</code></pre>
+<p>This will remain a codefence.</p>
+<pre><code>
+@embed [[
+    Hello, {{name}}!
+]]
 
 @embed [$docs/example.md]
 
@@ -81,7 +93,7 @@ Hello, {{name}}!
 <ol>
 <li>Defines a text variable <code>name</code> with the value &quot;World&quot;</li>
 <li>Defines a path variable <code>docs</code> pointing to the project's docs folder</li>
-<li>Uses the text variable in a template string</li>
+<li>Uses the text variable in a template string and embeds it in the output</li>
 <li>Embeds content from an external file</li>
 <li>Runs a shell command and includes its output</li>
 </ol>
