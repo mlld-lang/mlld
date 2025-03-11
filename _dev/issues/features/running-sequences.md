@@ -1,0 +1,1 @@
+should be able to use a data object to run a command or embed in a templated fashion without needing to repeat
