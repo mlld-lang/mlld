@@ -348,6 +348,24 @@ hr {
   overflow-y: visible; /* Allow content to be scrollable in the parent container */
 }
 
+.terminal-content.not-visible .animated-line {
+  visibility: hidden;
+}
+
+.terminal-content.visible .animated-line {
+  visibility: visible;
+}
+
+@media (max-width: 768px) {
+  .terminal-content .animated-line {
+    visibility: hidden;
+  }
+  
+  .terminal-content.visible .animated-line {
+    visibility: visible;
+  }
+}
+
 /* Syntax highlighting */
 .terminal-content .token.keyword {
   color: #ff79c6;
@@ -503,14 +521,15 @@ hr {
   .hero-content {
     padding: 0 0 0 10px; 
   }
-  .hero-content p {
+  .hero-content p:last-child {
     margin-bottom: 0;
+    padding-right: 10px;
   }
   .hero-terminal-container {
     padding: 0 0 0 10px;
   }
   .hero-terminal {
-    height: 400px;
+    height: 450px;
   }
   .card-content p {
     margin-right: 20px;
