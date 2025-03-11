@@ -864,6 +864,10 @@ section.content-section h2 {
   z-index: 1;
 }
 
+.possibility-example .title-bar {
+  border-bottom: 1px solid rgba(70, 70, 70, 0.25);
+}
+
 @media (prefers-color-scheme: dark) {
   .title-bar {
     background-color: #333;
@@ -894,7 +898,6 @@ section.content-section h2 {
   color: var(--text-color);
   user-select: none;
   font-weight: 400;
-  text-shadow: 0px -1px 0px #000000;
 }
 .filename::before {
   content: "—— ";
