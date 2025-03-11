@@ -22,7 +22,7 @@ npx meld <options>
 Process a Meld file with default options:
 
 ```bash
-meld input.meld
+meld input.mld
 ```
 
 By default, this will:
@@ -37,7 +37,7 @@ By default, this will:
 Specify the output format with the `--format` or `-f` option:
 
 ```bash
-meld input.meld --format md
+meld input.mld --format md
 ```
 
 Supported formats:
@@ -49,7 +49,7 @@ Supported formats:
 Specify the output file with the `--output` or `-o` option:
 
 ```bash
-meld input.meld --output output.llm
+meld input.mld --output output.llm
 ```
 
 By default, the output file uses the input filename with a new extension.
@@ -59,7 +59,7 @@ By default, the output file uses the input filename with a new extension.
 Print to stdout instead of writing to a file with the `--stdout` option:
 
 ```bash
-meld input.meld --stdout
+meld input.mld --stdout
 ```
 
 ### Combined Options
@@ -67,15 +67,15 @@ meld input.meld --stdout
 You can combine multiple options:
 
 ```bash
-meld input.meld --format md --output custom.md --stdout
+meld input.mld --format md --output custom.md --stdout
 ```
 
 ## File Extensions
 
 Meld supports several file extensions:
 
-- `.meld` - Standard Meld files
-- `.meld.md` - Meld files with Markdown content
+- `.mld` - Standard Meld files
+- `.mld.md` - Meld files with Markdown content
 - `.mll` - Alternative extension for Meld files
 - `.mll.md` - Alternative extension for Meld Markdown files
 
@@ -83,27 +83,27 @@ Meld supports several file extensions:
 
 Process a Meld file with default options:
 ```bash
-meld document.meld
+meld document.mld
 ```
 
 Process a Meld file and output as Markdown:
 ```bash
-meld document.meld --format md
+meld document.mld --format md
 ```
 
 Process a Meld file and save with custom name:
 ```bash
-meld document.meld --output result.llm
+meld document.mld --output result.llm
 ```
 
 Process a Meld file and print to console:
 ```bash
-meld document.meld --stdout
+meld document.mld --stdout
 ```
 
 Process a Meld file with multiple options:
 ```bash
-meld document.meld --format md --output result.md --stdout
+meld document.mld --format md --output result.md --stdout
 ```
 
 ## Environment Variables
@@ -117,7 +117,7 @@ Meld scripts can access environment variables using the `{{ENV_NAME}}` syntax:
 You can set these when running the CLI:
 
 ```bash
-ENV_TOKEN=12345 meld script.meld
+ENV_TOKEN=12345 meld script.mld
 ```
 
 ## Project Path

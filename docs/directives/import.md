@@ -6,20 +6,20 @@ The `@import` directive allows you to import variables and commands from other M
 
 Modern syntax:
 ```meld
-@import [path.meld]                           # Import all variables
-@import [*] from [path.meld]                  # Import all variables (equivalent)
-@import [var1, var2] from [path.meld]        # Import specific variables
-@import [var1 as alias1, var2] from [path.meld] # Import with aliases
+@import [path.mld]                           # Import all variables
+@import [*] from [path.mld]                  # Import all variables (equivalent)
+@import [var1, var2] from [path.mld]        # Import specific variables
+@import [var1 as alias1, var2] from [path.mld] # Import with aliases
 ```
 
 Legacy syntax (also supported):
 ```meld
-@import path="path.meld"                     # Import all variables
-@import path="path.meld" imports=[var1, var2] # Import specific variables
+@import path="path.mld"                     # Import all variables
+@import path="path.mld" imports=[var1, var2] # Import specific variables
 ```
 
 Where:
-- `path.meld` is the path to the Meld file to import
+- `path.mld` is the path to the Meld file to import
 - `var1`, `var2` are variable names to import
 - `alias1` is an alternative name to use for the imported variable
 
@@ -50,45 +50,45 @@ The path can be:
 
 Specify selective imports using a comma-separated list:
 ```meld
-@import [var1, var2, var3] from [path.meld]
+@import [var1, var2, var3] from [path.mld]
 ```
 
 Import with aliases to avoid name conflicts:
 ```meld
-@import [var1 as myVar1, var2 as myVar2] from [path.meld]
+@import [var1 as myVar1, var2 as myVar2] from [path.mld]
 ```
 
 Alternative alias syntax with colon:
 ```meld
-@import [var1:myVar1, var2:myVar2] from [path.meld]
+@import [var1:myVar1, var2:myVar2] from [path.mld]
 ```
 
 ## Examples
 
 Basic import:
 ```meld
-@import ["$PROJECTPATH/utils.meld"]
+@import ["$PROJECTPATH/utils.mld"]
 ```
 
 Import with path variables:
 ```meld
 @path lib = "$PROJECTPATH/lib"
-@import [$lib/utils.meld]
+@import [$lib/utils.mld]
 ```
 
 Selective import:
 ```meld
-@import [textVar, dataVar] from [$lib/utils.meld]
+@import [textVar, dataVar] from [$lib/utils.mld]
 ```
 
 Import with aliases:
 ```meld
-@import [textVar as myText, dataVar as myData] from [$lib/utils.meld]
+@import [textVar as myText, dataVar as myData] from [$lib/utils.mld]
 ```
 
 Using imported variables:
 ```meld
-@import ["$PROJECTPATH/utils.meld"]
+@import ["$PROJECTPATH/utils.mld"]
 
 @text message = `Hello, {{importedName}}!`
 @run [$importedCommand({{param}})]

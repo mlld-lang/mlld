@@ -282,10 +282,10 @@ describe('ImportDirectiveHandler', () => {
   it('should import variables from a file', async () => {
     // Arrange
     fileSystemService.readFile.mockResolvedValue('@text greeting = "Hello"');
-    resolutionService.resolveValue.mockResolvedValue('file.meld');
+    resolutionService.resolveValue.mockResolvedValue('file.mld');
     
     // Act
-    await handler.execute(createDirectiveNode('import', 'file.meld'), context);
+    await handler.execute(createDirectiveNode('import', 'file.mld'), context);
     
     // Assert
     expect(context.state.getVariable('greeting')).toBe('Hello');
@@ -294,11 +294,11 @@ describe('ImportDirectiveHandler', () => {
   it('should throw DirectiveError for missing file in strict mode', async () => {
     // Arrange
     fileSystemService.readFile.mockRejectedValue(new MeldFileNotFoundError('File not found'));
-    resolutionService.resolveValue.mockResolvedValue('missing.meld');
+    resolutionService.resolveValue.mockResolvedValue('missing.mld');
     
     // Act & Assert
     await expectThrowsWithSeverity(
-      () => handler.execute(createDirectiveNode('import', 'missing.meld'), { ...context, strict: true }),
+      () => handler.execute(createDirectiveNode('import', 'missing.mld'), { ...context, strict: true }),
       DirectiveError,
       ErrorSeverity.Recoverable
     );
@@ -307,7 +307,7 @@ describe('ImportDirectiveHandler', () => {
   it('should warn for missing file in permissive mode', async () => {
     // Arrange
     fileSystemService.readFile.mockRejectedValue(new MeldFileNotFoundError('File not found'));
-    resolutionService.resolveValue.mockResolvedValue('missing.meld');
+    resolutionService.resolveValue.mockResolvedValue('missing.mld');
     
     // Act & Assert
     const collector = new ErrorCollector();
@@ -317,7 +317,7 @@ describe('ImportDirectiveHandler', () => {
       errorHandler: collector.handleError 
     };
     
-    await handler.execute(createDirectiveNode('import', 'missing.meld'), permissiveContext);
+    await handler.execute(createDirectiveNode('import', 'missing.mld'), permissiveContext);
     
     expect(collector.warnings).toHaveLength(1);
     expect(collector.getWarningsOfType(DirectiveError)).toHaveLength(1);

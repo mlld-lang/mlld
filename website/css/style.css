@@ -4,6 +4,8 @@
   --text-color-rgb: 0, 0, 0;
   --accent-color: #000000;
   --code-bg: #1a1a1a;
+  --terminal-bg: #1a1a1a;
+  --terminal-bg-rgb: 26, 26, 26;
   --border-color: #dedede;
   --terminal-shadow: rgba(0, 0, 0, 0.2);
 }
@@ -15,6 +17,8 @@
     --text-color-rgb: 255, 255, 255;
     --accent-color: #ffffff;
     --code-bg: #1a1a1a;
+    --terminal-bg: #1a1a1a;
+    --terminal-bg-rgb: 26, 26, 26;
     --border-color: #333333;
     --terminal-shadow: rgba(0, 0, 0, 0.4);
   }
@@ -39,29 +43,53 @@ html, body {
   width: 100%;
   max-width: 900px;
   margin: 0 auto;
-  padding: 0 1.5rem;
+  padding: 0 ;
 }
 
 /* Header styles */
 header {
-  padding: 2rem 0;
-  border-bottom: 1px solid var(--border-color);
+  padding: 0rem 0 1rem 0;
 }
 
 header .container {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  flex-wrap: wrap;
+  padding: 1.5rem 0;
   gap: 1rem;
 }
 
 .logo {
   font-family: 'Tektur', sans-serif;
   font-weight: 800;
-  font-size: 1.75rem;
+  font-size: 1.5rem;
   text-decoration: none;
   color: var(--text-color);
+}
+
+.logo-container {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.logo-tagline {
+  font-size: 0.9rem;
+  color: rgba(var(--text-color-rgb), 0.7);
+  font-weight: 400;
+  white-space: nowrap;
+  margin-left: 0.5rem;
+}
+
+.tektur {
+  font-family: 'Tektur', sans-serif;
+  font-weight: 800;
+  color: var(--text-color);
+}
+
+nav {
+  display: flex;
+  align-items: center;
 }
 
 nav ul {
@@ -69,6 +97,8 @@ nav ul {
   list-style: none;
   gap: 1.5rem;
   flex-wrap: wrap;
+  margin: 0;
+  padding: 0;
 }
 
 nav a {
@@ -100,9 +130,15 @@ h1 {
   margin-top: 0;
 }
 
+.hero h1 {
+  font-size: 4rem;
+  line-height: 1.2;
+  margin-bottom: 1.5rem;
+  font-weight: 700;
+}
+
 h2 {
   font-size: 1.75rem;
-  border-bottom: 1px solid var(--border-color);
   padding-bottom: 0.5rem;
 }
 
@@ -127,7 +163,7 @@ a:hover {
 code {
   font-family: 'Cousine', monospace;
   background-color: var(--code-bg);
-  padding: 0.2em 0.4em;
+  padding: 0;
   border-radius: 3px;
   font-size: 0.9em;
   color: #fff;
@@ -135,32 +171,47 @@ code {
 
 pre {
   background-color: var(--code-bg);
-  padding: 2rem 1.5rem 1.5rem;
   border-radius: 8px;
+  padding: 30px;
   overflow-x: auto;
-  margin-bottom: 1.5rem;
-  box-shadow: 0 4px 10px var(--terminal-shadow);
+  white-space: pre;
   position: relative;
-}
-
-pre::before {
-  content: "";
-  position: absolute;
-  top: 0.75rem;
-  left: 0.75rem;
-  height: 12px;
-  width: 12px;
-  border-radius: 50%;
-  background-color: #ff5f56;
-  box-shadow: 20px 0 0 #ffbd2e, 40px 0 0 #27c93f;
+  margin: 1.5rem 0;
 }
 
 pre code {
-  background-color: transparent;
+  font-family: 'Cousine', monospace;
+  font-size: 15px;
+  line-height: 1.6;
+  color: #fff;
+  background: transparent;
   padding: 0;
   border-radius: 0;
-  display: block;
-  color: #fff;
+}
+
+/* Apply syntax highlighting to code blocks */
+pre code .token.keyword {
+  color: #ff79c6;
+}
+
+pre code .token.operator {
+  color: #bd93f9;
+}
+
+pre code .token.string {
+  color: #50fa7b;
+}
+
+pre code .token.bracket {
+  color: #666666;
+}
+
+pre code .token.selector {
+  color: #f1fa8c;
+}
+
+pre code .token.variable {
+  color: #8be9fd;
 }
 
 blockquote {
@@ -179,20 +230,23 @@ hr {
 
 /* Home page specific styles */
 .hero {
-  margin: 4rem 0 5rem;
   display: flex;
   flex-direction: row;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 3rem;
-  position: relative;
-  overflow: hidden;
-  z-index: 1;
+  padding: 3rem 0;
+  gap: 2rem;
 }
 
 .hero-content {
-  flex: 1;
+  flex: 0 0 33%;
   text-align: left;
+  padding-top: 1rem;
+}
+
+.hero-content p {
+  font-size: 1.5rem;
+  line-height: 1.5;
 }
 
 .hero-logo {
@@ -214,51 +268,143 @@ hr {
 }
 
 .hero-terminal-container {
-  flex: 1.2;
+  flex: 0 0 66%;
 }
 
 .hero-terminal {
-  width: 100%;
-  background-color: var(--code-bg);
-  border-radius: 8px;
-  padding: 2.5rem 1.75rem 1.75rem;
-  box-shadow: 0 4px 10px var(--terminal-shadow);
   position: relative;
-  margin-bottom: 1rem;
+  background-color: var(--terminal-bg);
+  border-radius: 8px;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+  padding: 0; /* Remove default padding */
+  width: 100%;
+  height: 510px; /* Fixed height of 510px instead of dynamic height */
+  overflow-y: hidden; /* Changed from auto to hidden to prevent scrolling */
+  z-index: 1;
 }
 
+/* Add a subtle titlebar effect at the top of the terminal */
 .hero-terminal::before {
   content: "";
   position: absolute;
-  top: 0.75rem;
-  left: 0.75rem;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 36px; /* Standard titlebar height */
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
+  border-bottom: 1px solid rgba(70, 70, 70, 0.25);
+  z-index: 1;
+}
+
+/* Add fade overlay at the bottom of the terminal */
+.hero-terminal::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 90px; /* Total height of fade effect */
+  background: linear-gradient(
+    to bottom, 
+    rgba(26, 26, 26, 0) 0%, /* Fully transparent at top of gradient (80px from bottom) */
+    rgba(26, 26, 26, 0.7) 40%, /* 40% through the gradient */
+    rgba(26, 26, 26, 1) 70% /* Fully opaque at 20px from bottom (70% of 80px) */
+  );
+  pointer-events: none; /* Allow clicking through the gradient */
+  z-index: 2;
+  border-bottom-left-radius: 8px;
+  border-bottom-right-radius: 8px;
+}
+
+.terminal-dots {
+  position: absolute;
+  top: 12px; /* Center in titlebar */
+  left: 16px;
+  display: flex;
+  gap: 8px;
+  z-index: 10; /* Make sure dots are above the fade and titlebar */
+}
+
+.terminal-dots .dot {
   height: 12px;
   width: 12px;
   border-radius: 50%;
-  background-color: #ff5f56;
-  box-shadow: 20px 0 0 #ffbd2e, 40px 0 0 #27c93f;
 }
+
+.dot.red { background-color: #ff5f56; }
+.dot.yellow { background-color: #ffbd2e; }
+.dot.green { background-color: #27c93f; }
 
 .terminal-content {
   font-family: 'Cousine', monospace;
-  font-size: 16px;
+  font-size: 15px;
   line-height: 1.6;
   color: #fff;
   white-space: pre-wrap;
+  padding: 30px; /* Top, right, bottom, left padding */
+  max-height: 100%; /* Ensure content respects the container height */
+  overflow-y: visible; /* Allow content to be scrollable in the parent container */
+}
+
+/* Syntax highlighting */
+.terminal-content .token.keyword {
+  color: #ff79c6;
+}
+
+.terminal-content .token.operator {
+  color: #bd93f9;
+}
+
+.terminal-content .token.string {
+  color: #50fa7b;
+}
+
+.terminal-content .token.bracket {
+  color: #666666;
+}
+
+.terminal-content .token.selector {
+  color: #f1fa8c;
+}
+
+.terminal-content .token.variable {
+  color: #8be9fd;
+}
+
+.terminal-content .space {
+  display: block;
+  margin: -10px 0;
 }
 
 .terminal-content div {
   min-height: 1.6em;
 }
 
+/* Make animated line take full space from the beginning */
+.animated-line {
+  display: block;
+  padding-top: 1em;
+  min-height: 1.5em;
+  height: 1.5em;
+  line-height: 1.5em;
+  margin-bottom: 0.5em;
+}
+
+.animated-line .token.string {
+  display: inline-block;
+  min-width: 2px;
+  height: 100%;
+}
+
 .terminal-cursor {
   display: inline-block;
-  width: 0.6em;
-  height: 1.2em;
-  background-color: #fff;
+  width: 8px;
+  height: 16px;
+  background-color: currentColor;
   margin-left: 2px;
-  vertical-align: middle;
   animation: blink 1s step-end infinite;
+  vertical-align: middle;
 }
 
 @keyframes blink {
@@ -266,68 +412,50 @@ hr {
   50% { opacity: 0; }
 }
 
-.terminal-tabs {
-  display: flex;
-  gap: 1rem;
-  margin-top: 1rem;
-  justify-content: center;
-}
+/* Removing terminal tab and toggle styles since we're simplifying to a single terminal view */
 
-.terminal-tab {
-  padding: 0.5rem 1rem;
-  border-radius: 4px;
-  cursor: pointer;
-  text-decoration: none;
-  color: var(--text-color);
-  font-weight: 500;
-  border: 1px solid var(--border-color);
-  transition: all 0.2s ease;
-}
-
-.terminal-tab:hover {
-  background-color: rgba(128, 128, 128, 0.1);
-  text-decoration: none;
-}
-
-.terminal-tab.active {
-  border-color: var(--text-color);
-  background-color: rgba(128, 128, 128, 0.15);
-  font-weight: 700;
-}
-
-/* Responsive */
 @media (max-width: 950px) {
   .hero {
     flex-direction: column;
-    align-items: stretch;
-    gap: 2rem;
+    text-align: left;
   }
-  
+
+  .hero-content,
+  .hero-terminal-container {
+    flex: none;
+    width: 100%;
+  }
+
   .hero-content {
-    text-align: center;
+    text-align: left;
   }
-  
+
   .hero-logo {
     font-size: 100px;
-  }
-  
-  .hero-terminal-container {
-    width: 100%;
   }
 }
 
 @media (max-width: 768px) {
   header .container {
     flex-direction: column;
-    align-items: flex-start;
+    align-items: center;
+    gap: 1rem;
+  }
+  
+  .logo-container {
+    margin-bottom: 0.5rem;
+  }
+  
+  .logo-tagline {
+    font-size: 0.8rem;
   }
   
   .hero-logo {
-    font-size: 70px;
+    font-size: 2.5rem;
   }
   
   .tagline {
-    font-size: 18px;
+    font-size: 1.2rem;
   }
   
   .terminal-content {
@@ -335,12 +463,23 @@ hr {
   }
   
   pre {
-    padding: 1.75rem 1.25rem 1.25rem;
+    padding: 1.5rem;
   }
   
   pre::before {
-    top: 0.5rem;
-    left: 0.5rem;
+    font-size: 0.7rem;
+  }
+  
+  .install-command {
+    font-size: 1rem;
+    padding: 0.8rem 1.5rem;
+    width: 90%;
+    max-width: 100%;
+  }
+  
+  .install-options {
+    flex-direction: column;
+    align-items: center;
   }
 }
 
@@ -483,4 +622,384 @@ footer {
     border-bottom: 1px solid var(--border-color);
     padding-bottom: 2rem;
   }
+}
+
+/* Updated Section Styles */
+section.content-section {
+  position: relative;
+  margin: 8rem 0;
+}
+
+section.content-section + section.content-section {
+  padding-top: 4rem;
+}
+
+section.content-section h2 {
+  font-family: 'Tektur', monospace;
+  font-size: 3rem;
+  text-align: center;
+  font-weight: 400;
+  text-transform: lowercase;
+  margin-bottom: 0.5rem;
+  color: var(--accent-color);
+  letter-spacing: -0.5px;
+}
+
+.section-description {
+  text-align: center;
+  font-size: 1.9rem;
+  line-height: 1.4;
+  margin-bottom: 4rem;
+  max-width: 800px;
+  margin-left: auto;
+  margin-right: auto;
+  padding: 0 1rem;
+  font-weight: 100;
+}
+
+.second-section-description {
+  margin-top: 100px;
+}
+
+.section-description strong {
+  font-weight: 600;
+  color: var(--accent-color);
+}
+
+/* Two-column layout for cards */
+.content-grid {
+  display: block;
+  max-width: 1200px;
+  margin: 0 auto 2rem auto;
+  position: relative;
+}
+
+/* Common styles for cards */
+.content-card {
+  margin-bottom: 5rem;
+}
+
+.content-card:last-child {
+  margin-bottom: 0;
+}
+
+/* Row container for proper alignment */
+.grid-row {
+  display: grid;
+  grid-template-columns: minmax(200px, 1fr) minmax(400px, 3fr);
+  position: relative;
+  margin-bottom: 5rem; /* Space between rows */
+  padding-bottom: 1rem; /* Add some padding at the bottom */
+  min-height: 100px; /* Ensure minimum height for short content */
+}
+
+/* Vertical line styling */
+.vertical-line {
+  position: absolute;
+  left: 0;
+  top: 0.5rem;
+  bottom: 1rem; /* Stop slightly above the bottom padding */
+  width: 1px;
+  background-color: rgba(var(--text-color-rgb), 0.1); /* Slightly more visible */
+  height: auto; /* Let the top and bottom positions determine the height */
+}
+
+/* Remove the previous border implementation */
+.grid-row::before {
+  display: none;
+}
+
+/* Headings on the left */
+.card-heading {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+  font-size: 1.4rem;
+  font-weight: 200;
+  margin: 0;
+  color: var(--text-color);
+  padding-left: 1.5rem;
+  line-height: 1.3;
+  position: relative;
+  align-self: flex-start;
+  padding-top: 0.5rem; /* Match the top padding of content */
+  grid-column: 1;
+}
+
+/* Content on the right */
+.card-content {
+  display: flex;
+  flex-direction: column;
+  padding-top: 0.5rem;
+  grid-column: 2;
+  margin-left: 40px;
+}
+
+/* Last row doesn't need as much bottom margin */
+.grid-row:last-child {
+  margin-bottom: 1rem;
+}
+
+/* Pain quote styling */
+.pain-quote {
+  font-family: 'Georgia', serif;
+  font-size: 1.6rem;
+  line-height: 1.4;
+  padding: 0;
+  position: relative;
+  font-style: italic;
+  color: var(--text-color);
+  margin: 0;
+}
+
+.pain-quote::before {
+  content: """;
+  position: absolute;
+  top: -1.5rem;
+  left: -0.5rem;
+  font-size: 6rem;
+  color: rgba(var(--text-color-rgb), 0.15);
+  font-family: 'Georgia', serif;
+  line-height: 1;
+}
+
+/* Title bar styling */
+.title-bar {
+  position: relative;
+  height: 36px;
+  background-color: #f0f0f0;
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
+  border-bottom: 1px solid rgba(70, 70, 70, 0.25);
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  z-index: 1;
+}
+
+@media (prefers-color-scheme: dark) {
+  .title-bar {
+    background-color: #333;
+  }
+}
+
+.window-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.window-control {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+.window-control.red { background-color: #ff5f56; }
+.window-control.yellow { background-color: #ffbd2e; }
+.window-control.green { background-color: #27c93f; }
+
+.filename {
+  flex: 1;
+  text-align: center;
+  font-size: 13px;
+  font-family: system-ui, -apple-system, sans-serif;
+  color: var(--text-color);
+  user-select: none;
+  font-weight: 400;
+  text-shadow: 0px -1px 0px #000000;
+}
+.filename::before {
+  content: "—— ";
+  color: rgba(255,255,255,0.3);
+  margin-right: 5px;
+}
+.filename::after {
+  content: " ——";
+  color: rgba(255,255,255,0.3);
+  margin-left: 5px;
+}
+
+.spacer {
+  width: 52px; /* Match the width of window controls to center the filename */
+}
+
+/* Example styling */
+.possibility-example {
+  position: relative;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+  width: 100%;
+}
+
+.second-possibility-example {
+  margin-top: 2rem;
+}
+
+.possibility-example pre {
+  margin: 0;
+  border-radius: 0;
+  padding: 1.5rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.possibility-example code {
+  font-size: 0.9rem;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.possibility-example code .token {
+  display: inline-flex;
+  flex-wrap: wrap;
+  white-space: normal;
+}
+
+/* Make code blocks responsive */
+.possibility-example pre code {
+  max-width: 100%;
+  display: block;
+}
+
+/* Enhance readability of wrapped code */
+.possibility-example .token.bracket,
+.possibility-example .token.selector,
+.possibility-example .token.variable,
+.possibility-example .token.string {
+  max-width: 100%;
+  white-space: normal;
+}
+
+/* CTA link styling */
+.cta-link {
+  text-align: center;
+  margin: 4rem 0;
+}
+
+.cta-link a {
+  display: inline-block;
+  padding: 1rem 2rem;
+  background-color: var(--accent-color);
+  color: var(--bg-color);
+  text-decoration: none;
+  border-radius: 8px;
+  font-family: 'Tektur', monospace;
+  font-size: 1.2rem;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.cta-link a:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+}
+
+@media (max-width: 950px) {
+  .grid-row {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+    margin-bottom: 3rem;
+  }
+  
+  .card-heading {
+    grid-column: 1;
+    margin-bottom: 1rem;
+  }
+  
+  .card-content {
+    grid-column: 1;
+  }
+  
+  .vertical-line {
+    display: none; /* Hide the vertical line on mobile */
+  }
+}
+
+/* Install section */
+.install {
+  text-align: center;
+  padding: 3rem 0;
+  border-top: 1px solid rgba(var(--text-color-rgb), 0.1);
+  border-bottom: 1px solid rgba(var(--text-color-rgb), 0.1);
+}
+
+.install-container {
+  max-width: 800px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: .25rem;
+}
+
+.install-command {
+  display: inline-block;
+  background-color: var(--code-bg);
+  padding: 1rem 3rem .8rem 2rem;
+  border-radius: 8px;
+  font-family: 'Cousine', monospace;
+  font-size: 1.2rem;
+  color: rgba(255, 255, 255, 0.7);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  position: relative;
+  overflow: hidden;
+  transition: color 0.2s;
+}
+
+.install-command code {
+  background: none;
+  padding: 0;
+  font-size: inherit;
+  color: inherit;
+}
+
+.install-command:hover {
+  cursor: pointer;
+  color: #fff;
+}
+
+.copy-button {
+  position: absolute;
+  right: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  border: none;
+  border-radius: 4px;
+  padding: 0.4rem 0.6rem;
+  background: rgba(255, 255, 255, 0);
+  color: rgba(255, 255, 255, 0.2);
+  transition: color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.install-command:hover .copy-button {
+  color: rgba(255, 255, 255, 1);
+}
+
+.copy-button svg {
+  display: block;
+}
+
+.copy-button.copied {
+  color: #27c93f !important;
+  transition: color 0.2s;
+}
+
+.vscode-link {
+  margin-top: 0.5rem;
+}
+
+.vscode-link a {
+  color: var(--primary-color);
+  text-decoration: none;
+  font-weight: 100;
+  font-size: 0.9rem;
+  transition: color 0.2s;
+}
+
+.vscode-link a:hover {
+  text-decoration: underline;
 }

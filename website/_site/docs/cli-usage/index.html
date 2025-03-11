@@ -68,7 +68,7 @@ npx meld &lt;options&gt;
 </code></pre>
 <h2 id="basic-usage" tabindex="-1">Basic Usage</h2>
 <p>Process a Meld file with default options:</p>
-<pre><code class="language-bash">meld input.meld
+<pre><code class="language-bash">meld input.mld
 </code></pre>
 <p>By default, this will:</p>
 <ul>
@@ -79,7 +79,7 @@ npx meld &lt;options&gt;
 <h2 id="command-line-options" tabindex="-1">Command Line Options</h2>
 <h3 id="output-format" tabindex="-1">Output Format</h3>
 <p>Specify the output format with the <code>--format</code> or <code>-f</code> option:</p>
-<pre><code class="language-bash">meld input.meld --format md
+<pre><code class="language-bash">meld input.mld --format md
 </code></pre>
 <p>Supported formats:</p>
 <ul>
@@ -88,47 +88,47 @@ npx meld &lt;options&gt;
 </ul>
 <h3 id="output-file" tabindex="-1">Output File</h3>
 <p>Specify the output file with the <code>--output</code> or <code>-o</code> option:</p>
-<pre><code class="language-bash">meld input.meld --output output.llm
+<pre><code class="language-bash">meld input.mld --output output.llm
 </code></pre>
 <p>By default, the output file uses the input filename with a new extension.</p>
 <h3 id="output-to-console" tabindex="-1">Output to Console</h3>
 <p>Print to stdout instead of writing to a file with the <code>--stdout</code> option:</p>
-<pre><code class="language-bash">meld input.meld --stdout
+<pre><code class="language-bash">meld input.mld --stdout
 </code></pre>
 <h3 id="combined-options" tabindex="-1">Combined Options</h3>
 <p>You can combine multiple options:</p>
-<pre><code class="language-bash">meld input.meld --format md --output custom.md --stdout
+<pre><code class="language-bash">meld input.mld --format md --output custom.md --stdout
 </code></pre>
 <h2 id="file-extensions" tabindex="-1">File Extensions</h2>
 <p>Meld supports several file extensions:</p>
 <ul>
-<li><code>.meld</code> - Standard Meld files</li>
-<li><code>.meld.md</code> - Meld files with Markdown content</li>
+<li><code>.mld</code> - Standard Meld files</li>
+<li><code>.mld.md</code> - Meld files with Markdown content</li>
 <li><code>.mll</code> - Alternative extension for Meld files</li>
 <li><code>.mll.md</code> - Alternative extension for Meld Markdown files</li>
 </ul>
 <h2 id="examples" tabindex="-1">Examples</h2>
 <p>Process a Meld file with default options:</p>
-<pre><code class="language-bash">meld document.meld
+<pre><code class="language-bash">meld document.mld
 </code></pre>
 <p>Process a Meld file and output as Markdown:</p>
-<pre><code class="language-bash">meld document.meld --format md
+<pre><code class="language-bash">meld document.mld --format md
 </code></pre>
 <p>Process a Meld file and save with custom name:</p>
-<pre><code class="language-bash">meld document.meld --output result.llm
+<pre><code class="language-bash">meld document.mld --output result.llm
 </code></pre>
 <p>Process a Meld file and print to console:</p>
-<pre><code class="language-bash">meld document.meld --stdout
+<pre><code class="language-bash">meld document.mld --stdout
 </code></pre>
 <p>Process a Meld file with multiple options:</p>
-<pre><code class="language-bash">meld document.meld --format md --output result.md --stdout
+<pre><code class="language-bash">meld document.mld --format md --output result.md --stdout
 </code></pre>
 <h2 id="environment-variables" tabindex="-1">Environment Variables</h2>
 <p>Meld scripts can access environment variables using the <code>{{ENV_NAME}}</code> syntax:</p>
 <pre><code class="language-meld">@text token = &quot;{{ENV_TOKEN}}&quot;
 </code></pre>
 <p>You can set these when running the CLI:</p>
-<pre><code class="language-bash">ENV_TOKEN=12345 meld script.meld
+<pre><code class="language-bash">ENV_TOKEN=12345 meld script.mld
 </code></pre>
 <h2 id="project-path" tabindex="-1">Project Path</h2>
 <p>The special <code>$PROJECTPATH</code> or <code>$.</code> variable refers to the directory where the Meld CLI is executed. All relative paths in Meld scripts are resolved relative to this directory.</p>
