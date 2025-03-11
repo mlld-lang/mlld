@@ -38,8 +38,11 @@
       <span class="hamburger-line"></span>
       <span class="hamburger-line"></span>
     </span>
-    <span class="toggle-text"></span>
+    <span class="toggle-text">Menu</span>
   </button>
+  
+  <!-- Add overlay for mobile --> 
+  <div class="docs-overlay" id="docs-overlay"></div>
   
   <aside class="docs-sidebar" id="docs-sidebar">
     <nav>
@@ -263,12 +266,16 @@ npx meld &lt;options&gt;
   document.addEventListener('DOMContentLoaded', function() {
     const toggleButton = document.querySelector('.docs-sidebar-toggle');
     const sidebar = document.getElementById('docs-sidebar');
+    const overlay = document.getElementById('docs-overlay');
     
     // Function to toggle the sidebar
     function toggleSidebar() {
       const isExpanded = toggleButton.getAttribute('aria-expanded') === 'true';
       toggleButton.setAttribute('aria-expanded', !isExpanded);
       sidebar.classList.toggle('open');
+      
+      // Toggle overlay
+      overlay.classList.toggle('active');
       
       // Lock/unlock body scroll when sidebar is open on mobile
       if (window.innerWidth <= 950) {
@@ -279,6 +286,13 @@ npx meld &lt;options&gt;
     // Add click event for toggle button
     toggleButton.addEventListener('click', toggleSidebar);
     
+    // Add click event for overlay to close sidebar
+    overlay.addEventListener('click', function() {
+      if (sidebar.classList.contains('open')) {
+        toggleSidebar();
+      }
+    });
+    
     // Close sidebar when clicking on a link (mobile only)
     sidebar.querySelectorAll('a').forEach(link => {
       link.addEventListener('click', function() {
@@ -288,12 +302,13 @@ npx meld &lt;options&gt;
       });
     });
     
-    // Close sidebar when clicking outside of it (mobile only)
+    // Close sidebar when clicking outside of it (mobile only) - now handled by overlay
     document.addEventListener('click', function(event) {
       if (window.innerWidth <= 950 && 
           sidebar.classList.contains('open') && 
           !sidebar.contains(event.target) && 
-          !toggleButton.contains(event.target)) {
+          !toggleButton.contains(event.target) &&
+          !overlay.contains(event.target)) {
         toggleSidebar();
       }
     });

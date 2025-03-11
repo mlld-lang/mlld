@@ -58,7 +58,7 @@
 
 html, body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  font-weight: 100;
+  font-weight: 300;
   font-size: 16px;
   line-height: 1.6;
   color: var(--text-color);
@@ -276,6 +276,7 @@ hr {
 .hero-content p {
   font-size: 1.5rem;
   line-height: 1.5;
+  font-weight: 100;
 }
 
 .hero-logo {
@@ -671,6 +672,25 @@ footer {
   z-index: 10;
 }
 
+/* Overlay for mobile menu */
+.docs-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 5; /* Lower than sidebar but higher than content */
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.docs-overlay.active {
+  opacity: 1;
+  display: block;
+}
+
 /* Hamburger menu for mobile */
 .docs-sidebar-toggle {
   display: none;
@@ -686,6 +706,7 @@ footer {
   font-size: 0.9rem;
   cursor: pointer;
   align-items: center;
+  gap: 0.5rem;
   transition: all 0.2s ease;
 }
 
@@ -851,23 +872,9 @@ body.sidebar-open {
     transform: translateX(0);
   }
   
+  /* Remove the pseudo-element overlay from the sidebar */
   .docs-sidebar::after {
-    content: '';
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
-    z-index: -1;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.3s ease;
-  }
-  
-  .docs-sidebar.open::after {
-    opacity: 1;
-    pointer-events: auto;
+    display: none;
   }
   
   .docs-sidebar nav {
@@ -938,6 +945,10 @@ section.content-section h2 {
   margin-right: auto;
   padding: 0 1rem;
   font-weight: 100;
+}
+
+.section-description strong {
+  font-weight: 300 !important;
 }
 
 .second-section-description {
@@ -1034,7 +1045,7 @@ section.content-section h2 {
 }
 
 .pain-quote::before {
-  content: """;
+  content: '"';
   position: absolute;
   top: -1.5rem;
   left: -0.5rem;
