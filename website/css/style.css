@@ -48,15 +48,14 @@ html, body {
 
 /* Header styles */
 header {
-  padding: 2rem 0;
-  border-bottom: 1px solid var(--border-color);
+  padding: 0rem 0 1rem 0;
 }
 
 header .container {
   display: flex;
   justify-content: space-between;
-  align-items: left;
-  flex-wrap: wrap;
+  align-items: center;
+  padding: 1.5rem 0;
   gap: 1rem;
 }
 
@@ -88,11 +87,18 @@ header .container {
   color: var(--text-color);
 }
 
+nav {
+  display: flex;
+  align-items: center;
+}
+
 nav ul {
   display: flex;
   list-style: none;
   gap: 1.5rem;
   flex-wrap: wrap;
+  margin: 0;
+  padding: 0;
 }
 
 nav a {
@@ -545,6 +551,18 @@ hr {
   pre::before {
     font-size: 0.7rem;
   }
+  
+  .install-command {
+    font-size: 1rem;
+    padding: 0.8rem 1.5rem;
+    width: 90%;
+    max-width: 100%;
+  }
+  
+  .install-options {
+    flex-direction: column;
+    align-items: center;
+  }
 }
 
 .features {
@@ -719,6 +737,10 @@ section.content-section h2 {
   margin-right: auto;
   padding: 0 1rem;
   font-weight: 100;
+}
+
+.second-section-description {
+  margin-top: 100px;
 }
 
 .section-description strong {
@@ -896,4 +918,93 @@ section.content-section h2 {
   .vertical-line {
     display: none; /* Hide the vertical line on mobile */
   }
+}
+
+/* Install section */
+.install {
+  text-align: center;
+  padding: 3rem 0;
+  border-top: 1px solid rgba(var(--text-color-rgb), 0.1);
+  border-bottom: 1px solid rgba(var(--text-color-rgb), 0.1);
+}
+
+.install-container {
+  max-width: 800px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: .25rem;
+}
+
+.install-command {
+  display: inline-block;
+  background-color: var(--code-bg);
+  padding: 1rem 3rem .8rem 2rem;
+  border-radius: 8px;
+  font-family: 'Cousine', monospace;
+  font-size: 1.2rem;
+  color: rgba(255, 255, 255, 0.7);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  position: relative;
+  overflow: hidden;
+  transition: color 0.2s;
+}
+
+.install-command code {
+  background: none;
+  padding: 0;
+  font-size: inherit;
+  color: inherit;
+}
+
+.install-command:hover {
+  cursor: pointer;
+  color: #fff;
+}
+
+.copy-button {
+  position: absolute;
+  right: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  border: none;
+  border-radius: 4px;
+  padding: 0.4rem 0.6rem;
+  background: rgba(255, 255, 255, 0);
+  color: rgba(255, 255, 255, 0.2);
+  transition: color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.install-command:hover .copy-button {
+  color: rgba(255, 255, 255, 1);
+}
+
+.copy-button svg {
+  display: block;
+}
+
+.copy-button.copied {
+  color: #27c93f !important;
+  transition: color 0.2s;
+}
+
+.vscode-link {
+  margin-top: 0.5rem;
+}
+
+.vscode-link a {
+  color: var(--primary-color);
+  text-decoration: none;
+  font-weight: 100;
+  font-size: 0.9rem;
+  transition: color 0.2s;
+}
+
+.vscode-link a:hover {
+  text-decoration: underline;
 }
