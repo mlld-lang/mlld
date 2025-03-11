@@ -110,6 +110,10 @@ h1 {
   margin-top: 0;
 }
 
+.hero h1 {
+  font-size: 3rem;
+}
+
 h2 {
   font-size: 1.75rem;
   padding-bottom: 0.5rem;
@@ -271,10 +275,9 @@ hr {
   left: 0;
   right: 0;
   height: 36px; /* Standard titlebar height */
-  background-color: rgba(40, 40, 40, 1); /* Slightly lighter than terminal bg */
   border-top-left-radius: 8px;
   border-top-right-radius: 8px;
-  border-bottom: 1px solid rgba(70, 70, 70, 0.5);
+  border-bottom: 1px solid rgba(70, 70, 70, 0.25);
   z-index: 1;
 }
 
@@ -657,17 +660,12 @@ footer {
 
 /* Updated Section Styles */
 section.content-section {
-  padding: 8rem 0;
   position: relative;
+  margin: 8rem 0;
 }
 
 section.content-section + section.content-section {
   padding-top: 4rem;
-}
-
-/* Horizontal rule after hero section */
-.hero-separator {
-  display: none; /* Hide the separator */
 }
 
 section.content-section h2 {
@@ -700,9 +698,7 @@ section.content-section h2 {
 
 /* Two-column layout for cards */
 .content-grid {
-  display: grid;
-  grid-template-columns: minmax(200px, 1fr) minmax(400px, 3fr);
-  gap: 4rem 3rem;
+  display: block;
   max-width: 1200px;
   margin: 0 auto 2rem auto;
   position: relative;
@@ -719,21 +715,28 @@ section.content-section h2 {
 
 /* Row container for proper alignment */
 .grid-row {
-  display: contents;
+  display: grid;
+  grid-template-columns: minmax(200px, 1fr) minmax(400px, 3fr);
   position: relative;
+  margin-bottom: 5rem; /* Space between rows */
+  padding-bottom: 1rem; /* Add some padding at the bottom */
+  min-height: 100px; /* Ensure minimum height for short content */
 }
 
-/* Left border line */
-.grid-row::before {
-  content: "";
+/* Vertical line styling */
+.vertical-line {
   position: absolute;
   left: 0;
-  top: -10px; /* Extend 10px above content */
-  bottom: -10px; /* Extend 10px below content */
+  top: 0.5rem;
+  bottom: 1rem; /* Stop slightly above the bottom padding */
   width: 1px;
-  background-color: rgba(var(--text-color-rgb), 0.025);
-  grid-column: 1;
-  z-index: 1;
+  background-color: rgba(var(--text-color-rgb), 0.1); /* Slightly more visible */
+  height: auto; /* Let the top and bottom positions determine the height */
+}
+
+/* Remove the previous border implementation */
+.grid-row::before {
+  display: none;
 }
 
 /* Headings on the left */
@@ -748,6 +751,7 @@ section.content-section h2 {
   position: relative;
   align-self: flex-start;
   padding-top: 0.5rem; /* Match the top padding of content */
+  grid-column: 1;
 }
 
 /* Content on the right */
@@ -755,6 +759,13 @@ section.content-section h2 {
   display: flex;
   flex-direction: column;
   padding-top: 0.5rem;
+  grid-column: 2;
+  margin-left: 40px;
+}
+
+/* Last row doesn't need as much bottom margin */
+.grid-row:last-child {
+  margin-bottom: 1rem;
 }
 
 /* Pain quote styling */
@@ -780,8 +791,22 @@ section.content-section h2 {
   line-height: 1;
 }
 
+.possibility-example::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 36px; /* Standard titlebar height */
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
+  border-bottom: 1px solid rgba(70, 70, 70, 0.25);
+  z-index: 1;
+}
+
 /* Example styling */
 .possibility-example {
+  position: relative;
   border-radius: 8px;
   overflow: hidden;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
@@ -823,35 +848,22 @@ section.content-section h2 {
 }
 
 @media (max-width: 950px) {
-  .content-grid {
+  .grid-row {
     grid-template-columns: 1fr;
     gap: 1rem;
-  }
-  
-  section.content-section h2 {
-    font-size: 2.5rem;
-    margin-bottom: 0.5rem;
-  }
-  
-  .section-description {
-    font-size: 1.2rem;
-    margin-bottom: 3rem;<h2>what is prompt scripting?</h2>
-  }
-  
-  .card-heading {
-    margin-bottom: 0.5rem;
-    padding-left: 1rem;
-  }
-  
-  .content-card {
     margin-bottom: 3rem;
   }
   
-  .pain-quote {
-    font-size: 1.3rem;
+  .card-heading {
+    grid-column: 1;
+    margin-bottom: 1rem;
   }
   
-  .grid-row::before {
+  .card-content {
+    grid-column: 1;
+  }
+  
+  .vertical-line {
     display: none; /* Hide the vertical line on mobile */
   }
 }
