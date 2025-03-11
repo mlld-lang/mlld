@@ -16,7 +16,7 @@ layout: base.njk
         <span class="dot green"></span>
       </div>
 
-      <div id="terminal-modules" class="terminal-content active"><span class="token keyword">@import</span> <span class="token bracket">[</span><span class="token variable">roles</span><span class="token bracket">, </span><span class="token variable">tasks</span><span class="token bracket">]</span> <span class="token keyword">from</span> <span class="token bracket">[</span>prompts.mld<span class="token bracket">]</span>
+      <div class="terminal-content"><span class="token keyword">@import</span> <span class="token bracket">[</span><span class="token variable">roles</span><span class="token bracket">, </span><span class="token variable">tasks</span><span class="token bracket">]</span> <span class="token keyword">from</span> <span class="token bracket">[</span>prompts.mld<span class="token bracket">]</span>
 <span class="space"></span>
 <span class="token keyword">@text</span> <span class="token variable">arch</span> = <span class="token keyword">@embed</span> <span class="token bracket">[</span>README.md <span class="token selector"># Architecture</span><span class="token bracket">]</span>
 <span class="token keyword">@text</span> <span class="token variable">standards</span> = <span class="token keyword">@embed</span> <span class="token bracket">[</span>README.md <span class="token selector"># Code Standards</span><span class="token bracket">]</span>
@@ -33,26 +33,6 @@ layout: base.njk
 <span class="token operator">---</span>
 <span class="animated-line" data-text="Looking at the TypeBlorp updates, the new unidirectional flow implementation correctly separates concerns between state mutations and subscriptions. The observer pattern implementation is clean but has potential race conditions in the notification queue that should be addressed with a proper message ordering mechanism. I recommend adding tests for concurrent updates."></span>
       </div>
-
-      <div id="terminal-scripts" class="terminal-content" style="display: none;"><span class="token bracket">#</span> <span class="token selector">TypeBlorp</span>
-
-<span class="token bracket">##</span> <span class="token selector">Overview</span> 
-
-TypeBlorp is lightweight state management library built with TypeScript, with a unidirectional data flow pattern combined with observer-based pub/sub architecture.
-
-Here's the structure of the codebase:
-<span class="token keyword">@run</span> <span class="token bracket">[</span>tree --gitignore<span class="token bracket">]</span>
-
-<span class="token keyword">@embed</span> <span class="token variable">{% raw %}{{docs.architecture}}{% endraw %}</span> <span class="token keyword">as</span> <span class="token bracket">##</span> <span class="token selector">Architecture</span>
-<span class="token keyword">@embed</span> <span class="token variable">{% raw %}{{docs.standards}}{% endraw %}</span> <span class="token keyword">as</span> <span class="token bracket">##</span> <span class="token selector">Code Standards</span>
-</div>
-    </div>
-    <div class="terminal-toggle">
-      <p>Treat markdown as</p>
-      <div class="toggle-buttons">
-        <button id="toggle-modules" class="toggle-btn active">modules</button>
-        <button id="toggle-scripts" class="toggle-btn">scripts</button>
-      </div>
     </div>
   </div>
 
@@ -67,14 +47,14 @@ Here's the structure of the codebase:
 </svg></button>
     </div>
     <div class="vscode-link">
-      <a href="https://marketplace.visualstudio.com/items?itemName=meld.meld-vscode" target="_blank">VSCode/Cursor extension</a>
+      <a href="https://marketplace.visualstudio.com/items?itemName=meld.meld-vscode" target="_blank">VSCode/Cursor extension »</a>
     </div>
   </div>
 </section>
 
 <section class="content-section">  
   <h2>what is prompt scripting?</h2>
-  <h3 class="section-description">If you've experienced the <strong>pain</strong>,<br>you know what you <strong>want</strong> it to be.</h3>
+  <h3 class="section-description">If you've experienced the <strong>pain</strong>,<br>you know what you <strong>need</strong> it to be.</h3>
   
   <div class="container">
     <div class="content-grid">
@@ -98,22 +78,30 @@ Here's the structure of the codebase:
     </div>
   </div>
 
-  <h3 class="section-description second-section-description">And if you've experienced the <strong>possibility</strong>,<br>you know what you <strong>want</strong> it to be.</h3>
+  <h3 class="section-description second-section-description">And if you've seen the <strong>possibility</strong>,<br>you know what you <strong>want</strong> it to be.</h3>
   
   <div class="container">
     <div class="content-grid">
       <!-- First row -->
       <div class="grid-row">
         <span class="vertical-line"></span>
-        <h3 class="card-heading">Embed LLM context in your docs</h3>
+        <h3 class="card-heading">Embed LLM context in your docs and treat markdown sections as modules you can import</h3>
         <div class="card-content">
           <div class="possibility-example">
             <pre><code>
-  # Overview
+<span class="token bracket">#</span> <span class="token selector">TypeBlorp</span>
 
-  Here's the structure of the codebase:
-  
-  <span class="token keyword">@run</span> <span class="token bracket">[</span>tree --gitignore<span class="token bracket">]</span>  
+<span class="token bracket">##</span> <span class="token selector">Overview</span> 
+
+TypeBlorp is lightweight state management library built with
+TypeScript, with a unidirectional data flow pattern combined 
+with observer-based pub/sub architecture.
+
+Here's the structure of the codebase:
+<span class="token keyword">@run</span> <span class="token bracket">[</span>tree --gitignore<span class="token bracket">]</span>
+
+<span class="token keyword">@embed</span> <span class="token bracket">[</span><span class="token variable">$.</span>/docs/ARCHITECTURE.md<span class="token bracket">]</span> <span class="token keyword">as</span> <span class="token bracket">##</span> <span class="token selector">Architecture</span>
+<span class="token keyword">@embed</span> <span class="token bracket">[</span><span class="token variable">$.</span>/docs/STANDARDS.md<span class="token bracket">]</span> <span class="token keyword">as</span> <span class="token bracket">##</span> <span class="token selector">Code Standards</span>
             </code></pre>
           </div>
         </div>
@@ -125,7 +113,7 @@ Here's the structure of the codebase:
         <h3 class="card-heading">Chain requests like shell commands</h3>
         <div class="card-content">
           <div class="possibility-example">
-            <pre><code>
+            <pre><code>            
 <span class="token keyword">@text</span> <span class="token variable">tests</span> = <span class="token keyword">@run</span> <span class="token bracket">[</span>npm test<span class="token bracket">]</span>
 
 <span class="token keyword">@text</span> <span class="token variable">res</span> = <span class="token keyword">@run</span> <span class="token bracket">[</span>oneshot "What's broken here? <span class="token variable">{% raw %}{{tests}}{% endraw %}</span>"<span class="token bracket">]</span>
@@ -147,23 +135,28 @@ Here's the structure of the codebase:
         <div class="card-content">
           <div class="possibility-example">
             <pre><code>
-  <span class="token keyword">@import</span> <span class="token bracket">[</span><span class="token variable">roles</span><span class="token bracket">]</span> <span class="token keyword">from</span> <span class="token bracket">[</span>roles.mld<span class="token bracket">]</span>
 
 
-  <span class="token keyword">@text</span> <span class="token variable">infra</span> = <span class="token keyword">@embed</span> <span class="token bracket">[</span>TESTING.md <span class="token selector"># Infrastructure</span><span class="token bracket">]</span>
+            </code></pre>
+          </div>
+          <div class="possibility-example">
+            <pre><code>
+<span class="token keyword">@import</span> <span class="token bracket">[</span><span class="token variable">roles</span><span class="token bracket">]</span> <span class="token keyword">from</span> <span class="token bracket">[</span>roles.mld<span class="token bracket">]</span>
+
+<span class="token keyword">@text</span> <span class="token variable">infra</span> = <span class="token keyword">@embed</span> <span class="token bracket">[</span>TESTING.md <span class="token selector"># Infrastructure</span><span class="token bracket">]</span>
   
-  <span class="token keyword">@text</span> <span class="token variable">prompt</span> = <span class="token bracket">[[</span>
-    Read our docs: <span class="token variable">{% raw %}{{infra}}{% endraw %}</span> <span class="token variable">{% raw %}{{standards}}{% endraw %}</span>
-    Review this set of changes: <span class="token variable">{% raw %}{{diff}}{% endraw %}</span>
-    Please create a list of the tests we
-    should add to cover the changes.
-  <span class="token bracket">]]</span>
-  
-  <span class="token keyword">@run</span> <span class="token bracket">[</span>oneshot <span class="token variable">{% raw %}{{prompt}}{% endraw %}</span> --system <span class="token variable">{% raw %}{{roles.architect}}{% endraw %}</span><span class="token bracket">]</span>
+<span class="token keyword">@text</span> <span class="token variable">prompt</span> = <span class="token bracket">[[</span>
+  Read our docs: <span class="token variable">{% raw %}{{infra}}{% endraw %}</span> <span class="token variable">{% raw %}{{standards}}{% endraw %}</span>
+  Review this set of changes: <span class="token variable">{% raw %}{{diff}}{% endraw %}</span>
+  Please create a list of the tests we
+  should add to cover the changes.
+<span class="token bracket">]]</span>
 
-  <span class="token operator">---</span>
+<span class="token keyword">@run</span> <span class="token bracket">[</span>oneshot <span class="token variable">{% raw %}{{prompt}}{% endraw %}</span> --system <span class="token variable">{% raw %}{{roles.architect}}{% endraw %}</span><span class="token bracket">]</span>
 
-  <span class="token string">"Here's a list of the tests to add…"</span>  
+<span class="token operator">---</span>
+
+<span class="token string">"Here's a list of the tests to add…"</span>  
             </code></pre>
           </div>
         </div>
@@ -171,7 +164,6 @@ Here's the structure of the codebase:
     </div>
   </div>
 </section>
-
 
 <div class="cta-link">
   <a href="/docs/introduction/">Read the Introduction →</a>

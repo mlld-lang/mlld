@@ -1,22 +1,9 @@
 document.addEventListener('DOMContentLoaded', () => {
-  // Get terminal elements
-  const terminalModules = document.getElementById('terminal-modules');
-  const terminalScripts = document.getElementById('terminal-scripts');
-  
-  // Get toggle buttons
-  const toggleModules = document.getElementById('toggle-modules');
-  const toggleScripts = document.getElementById('toggle-scripts');
+  // Get terminal element
+  const terminalContent = document.querySelector('.terminal-content');
   
   // Track if initial animation has run
   let hasAnimationRun = false;
-  
-  // Function to remove animated line from a terminal
-  function removeAnimatedLine(terminal) {
-    const animatedLine = terminal.querySelector('.animated-line');
-    if (animatedLine) {
-      animatedLine.remove();
-    }
-  }
   
   // Function to display static content without animation
   function showStaticContent(terminal) {
@@ -74,11 +61,11 @@ document.addEventListener('DOMContentLoaded', () => {
         tokenIndex++;
         
         // Random delay between tokens to simulate LLM thinking/generating
-        const delay = Math.random() * 60 + 20; // 20-80ms random delay (even faster)
+        const delay = Math.random() * 60 + 20; // 20-80ms random delay
         
         // Sometimes pause a bit longer to make it more realistic
-        const shouldPauseLonger = Math.random() < 0.1; // 10% chance (reduced from 15%)
-        const actualDelay = shouldPauseLonger ? delay * 1.5 : delay; // 1.5x pause (reduced from 2x)
+        const shouldPauseLonger = Math.random() < 0.1; // 10% chance
+        const actualDelay = shouldPauseLonger ? delay * 1.5 : delay;
         
         setTimeout(addNextToken, actualDelay);
       } else {
@@ -91,26 +78,8 @@ document.addEventListener('DOMContentLoaded', () => {
     addNextToken();
   }
   
-  // Remove animated line from scripts tab completely
-  removeAnimatedLine(terminalScripts);
-  
-  // Start with the modules animation after a short delay
+  // Start the animation after a short delay
   setTimeout(() => {
-    animateLastLine(terminalModules);
+    animateLastLine(terminalContent);
   }, 300);
-
-  // Toggle between modules and scripts
-  toggleModules.addEventListener('click', () => {
-    terminalModules.style.display = 'block';
-    terminalScripts.style.display = 'none';
-    toggleModules.classList.add('active');
-    toggleScripts.classList.remove('active');
-  });
-
-  toggleScripts.addEventListener('click', () => {
-    terminalModules.style.display = 'none';
-    terminalScripts.style.display = 'block';
-    toggleModules.classList.remove('active');
-    toggleScripts.classList.add('active');
-  });
 }); 
