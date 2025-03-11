@@ -104,13 +104,14 @@ nav ul {
 nav a {
   text-decoration: none;
   color: var(--text-color);
-  font-weight: 700;
+  font-weight: 400;
   padding: 0.5rem 0;
   border-bottom: 2px solid transparent;
   transition: border-color 0.2s;
 }
 
 nav a:hover {
+  text-decoration: none;
   border-color: var(--text-color);
 }
 
@@ -155,7 +156,7 @@ a {
   text-decoration: none;
 }
 
-a:hover {
+a:hover:not(nav a) {
   text-decoration: underline;
   text-underline-offset: 3px;
 }
@@ -437,16 +438,27 @@ hr {
 
 @media (max-width: 768px) {
   header .container {
-    flex-direction: column;
+    flex-direction: row;
+    justify-content: space-between;
     align-items: center;
-    gap: 1rem;
+    padding: 1rem 10px;
+    gap: 0;
   }
+  
   .logo-container {
-    margin-bottom: 0.5rem;
+    margin-bottom: 0;
+  }
+  
+  nav {
+    font-size: 14px;
   }
   
   .logo-tagline {
-    font-size: 0.8rem;
+    display: none;
+  }
+  
+  main {
+    padding-top: 0;
   }
   
   .hero-logo {
@@ -469,18 +481,6 @@ hr {
     font-size: 0.7rem;
   }
 
-  header .container {
-    gap: 0;
-  }
-  .logo-tagline {
-    display: none;
-  }
-  nav {
-    font-size: 14px;
-  }
-  main {
-    padding-top: 0;
-  }
   .hero {
     padding-top: 0;
     margin-top: 0;
@@ -641,6 +641,7 @@ footer {
 .nav-list a:hover {
   background-color: rgba(128, 128, 128, 0.1);
   border-color: var(--border-color);
+  text-decoration: none !important;
 }
 
 .nav-list a[aria-current="page"] {
