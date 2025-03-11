@@ -646,6 +646,7 @@ footer {
   display: grid;
   grid-template-columns: 250px 1fr;
   gap: 3rem;
+  margin-top: 2rem;
 }
 
 .docs-sidebar {
@@ -654,12 +655,29 @@ footer {
   align-self: start;
   height: calc(100vh - 12rem);
   overflow-y: auto;
+  padding-right: 1rem;
+  background: var(--bg-color);
+  z-index: 10;
+}
+
+.docs-sidebar nav {
+  position: relative;
 }
 
 .docs-sidebar h3 {
   margin-top: 2rem;
-  margin-bottom: 0.75rem;
-  font-size: 1.25rem;
+  margin-bottom: 1rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-color);
+}
+
+/* Adjust nested h3 styling */
+.nav-list li h3 {
+  margin: 1rem 0 0.5rem;
+  padding-left: 0.75rem;
+  font-size: 1rem;
+  opacity: 0.8;
 }
 
 .docs-sidebar h3:first-child {
@@ -672,10 +690,19 @@ footer {
   margin-bottom: 2rem;
   display: flex;
   flex-direction: column;
+  gap: 0.25rem;
+}
+
+/* Nested nav-list for directives */
+.nav-list .nav-list {
+  margin: 0;
+  padding-left: 1rem;
+  margin-bottom: 1rem;
+  border-left: 1px solid var(--border-color);
 }
 
 .nav-list li {
-  margin-bottom: 0.5rem;
+  margin: 0;
 }
 
 .nav-list a {
@@ -687,22 +714,28 @@ footer {
   line-height: 1.4;
   border-radius: 0 4px 4px 0;
   transition: background-color 0.2s, border-color 0.2s;
+  font-size: 0.95rem;
+  opacity: 0.8;
 }
 
 .nav-list a:hover {
   background-color: rgba(128, 128, 128, 0.1);
   border-color: var(--border-color);
   text-decoration: none !important;
+  opacity: 1;
 }
 
 .nav-list a[aria-current="page"] {
   border-color: var(--text-color);
-  font-weight: 700;
-  background-color: rgba(128, 128, 128, 0.15);
+  font-weight: 600;
+  background-color: rgba(128, 128, 128, 0.1);
+  opacity: 1;
 }
 
 .docs-content {
   min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
 }
 
 .docs-content h1 {
@@ -715,14 +748,46 @@ footer {
 @media (max-width: 950px) {
   .docs-layout {
     grid-template-columns: 1fr;
+    margin-top: 1rem;
+    gap: 2rem;
   }
   
   .docs-sidebar {
-    position: static;
+    position: relative;
     height: auto;
     margin-bottom: 2rem;
-    border-bottom: 1px solid var(--border-color);
-    padding-bottom: 2rem;
+    padding: 1rem;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    top: 0;
+  }
+
+  .docs-sidebar nav {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 2rem;
+  }
+
+  .docs-sidebar h3 {
+    margin-top: 0;
+  }
+
+  .nav-list {
+    margin-bottom: 0;
+  }
+}
+
+@media (max-width: 600px) {
+  .docs-sidebar nav {
+    display: block;
+  }
+
+  .docs-sidebar h3 {
+    margin-top: 2rem;
+  }
+
+  .docs-sidebar h3:first-child {
+    margin-top: 0;
   }
 }
 
