@@ -895,6 +895,32 @@ section.content-section h2 {
 }
 
 @media (max-width: 950px) {
+  main {
+    padding-top: 0;
+  }
+  .hero {
+    padding-top: 0;
+    margin-top: 0;
+  }
+  .hero-content {
+    padding: 0 0 0 10px; 
+  }
+  .hero-content p {
+    margin-bottom: 0;
+  }
+  .hero-terminal-container {
+    padding: 0 0 0 10px;
+  }
+  .terminal-content, .possibility-example pre {
+    padding: 20px;
+    font-size: 12px;
+  }
+  .section-description br {
+    display: none;
+  }
+  .card-content {
+    margin: 0 30px;
+  }
   .grid-row {
     grid-template-columns: 1fr;
     gap: 1rem;
