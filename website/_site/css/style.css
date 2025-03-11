@@ -1044,17 +1044,6 @@ section.content-section h2 {
   margin: 0;
 }
 
-.pain-quote::before {
-  content: '"';
-  position: absolute;
-  top: -1.5rem;
-  left: -0.5rem;
-  font-size: 6rem;
-  color: rgba(var(--text-color-rgb), 0.15);
-  font-family: 'Georgia', serif;
-  line-height: 1;
-}
-
 /* Title bar styling */
 .title-bar {
   position: relative;
