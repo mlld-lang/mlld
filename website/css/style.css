@@ -360,23 +360,32 @@ hr {
   padding: 30px;
   max-height: 100%;
   overflow-y: visible;
+  position: relative;
 }
 
 .terminal-content.not-visible .animated-line {
   visibility: hidden;
+  opacity: 0;
+  transition: visibility 0s, opacity 0.3s ease-in-out;
 }
 
 .terminal-content.visible .animated-line {
   visibility: visible;
+  opacity: 1;
+  transition: visibility 0s, opacity 0.3s ease-in-out;
 }
 
 @media (max-width: 768px) {
   .terminal-content .animated-line {
     visibility: hidden;
+    opacity: 0;
+    transition: visibility 0s, opacity 0.3s ease-in-out;
   }
   
   .terminal-content.visible .animated-line {
     visibility: visible;
+    opacity: 1;
+    transition: visibility 0s, opacity 0.3s ease-in-out;
   }
 }
 
