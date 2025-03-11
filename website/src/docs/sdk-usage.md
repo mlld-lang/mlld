@@ -1,9 +1,9 @@
 ---
 layout: docs.njk
-title: "Meld SDK Usage"
+title: "SDK Usage"
 ---
 
-# Meld SDK Usage
+# SDK Usage
 
 The Meld SDK allows you to integrate Meld processing into your JavaScript or TypeScript applications.
 

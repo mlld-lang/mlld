@@ -1,4 +1,4 @@
-# Meld Grammar Reference
+# Syntax Reference
 
 This document provides a comprehensive reference for the Meld syntax.
 

@@ -1,4 +1,4 @@
-# Error Handling in Meld
+# Error Handling
 
 Meld has a structured approach to error handling, categorizing errors into different severity levels.
 

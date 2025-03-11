@@ -1,9 +1,9 @@
 ---
 layout: docs.njk
-title: "Meld Grammar Reference"
+title: "Syntax Reference"
 ---
 
-# Meld Grammar Reference
+# Syntax Reference
 
 This document provides a comprehensive reference for the Meld syntax.
 

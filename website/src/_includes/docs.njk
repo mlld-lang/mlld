@@ -7,24 +7,34 @@ layout: base.njk
     <nav>
       <h3>Documentation</h3>
       <ul class="nav-list">
-        <li><a href="/docs/" {{ "/docs/introduction/" | isActive(page.url) }}>Introduction</a></li>
-        <li><a href="/docs/cli-usage/" {{ "/docs/cli-usage/" | isActive(page.url) }}>CLI Usage</a></li>
-        <li><a href="/docs/sdk-usage/" {{ "/docs/sdk-usage/" | isActive(page.url) }}>SDK Usage</a></li>
-        <li><a href="/docs/variables/" {{ "/docs/variables/" | isActive(page.url) }}>Variables</a></li>
-        <li><a href="/docs/error-handling/" {{ "/docs/error-handling/" | isActive(page.url) }}>Error Handling</a></li>
-        <li><a href="/docs/grammar-reference/" {{ "/docs/grammar-reference/" | isActive(page.url) }}>Grammar Reference</a></li>
+        <li><a href="/docs/introduction/" {{ "/docs/introduction/" | isActive(page.url) }}>Introduction</a></li>
+        {% for docPage in collections.docs %}
+          {% if not docPage.url.includes('/directives/') and 
+                not docPage.url.includes('/index.html') and 
+                not docPage.url.includes('/introduction/') and
+                docPage.url != '/docs/' %}
+            <li><a href="{{ docPage.url }}" {{ docPage.url | isActive(page.url) }}>{{ docPage.data.title }}</a></li>
+          {% endif %}
+        {% endfor %}
         
         <li>
           <h4>Directives</h4>
           <ul class="nav-list">
             <li><a href="/docs/directives/" {{ "/docs/directives/" | isActive(page.url) }}>Overview</a></li>
-            <li><a href="/docs/directives/data/" {{ "/docs/directives/data/" | isActive(page.url) }}>@data</a></li>
-            <li><a href="/docs/directives/define/" {{ "/docs/directives/define/" | isActive(page.url) }}>@define</a></li>
-            <li><a href="/docs/directives/embed/" {{ "/docs/directives/embed/" | isActive(page.url) }}>@embed</a></li>
-            <li><a href="/docs/directives/import/" {{ "/docs/directives/import/" | isActive(page.url) }}>@import</a></li>
-            <li><a href="/docs/directives/path/" {{ "/docs/directives/path/" | isActive(page.url) }}>@path</a></li>
-            <li><a href="/docs/directives/run/" {{ "/docs/directives/run/" | isActive(page.url) }}>@run</a></li>
-            <li><a href="/docs/directives/text/" {{ "/docs/directives/text/" | isActive(page.url) }}>@text</a></li>
+            {% for docPage in collections.docs %}
+              {% if docPage.url.includes('/directives/') and 
+                    not docPage.url.endsWith('/directives/') and 
+                    not docPage.url.endsWith('/directives/index.html') %}
+                {% set directiveName = docPage.url.split('/').slice(-2)[0] %}
+                <li><a href="{{ docPage.url }}" {{ docPage.url | isActive(page.url) }}>
+                  {% if directiveName.startsWith('@') %}
+                    {{ directiveName }}
+                  {% else %}
+                    @{{ directiveName }}
+                  {% endif %}
+                </a></li>
+              {% endif %}
+            {% endfor %}
           </ul>
         </li>
       </ul>

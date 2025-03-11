@@ -1,9 +1,9 @@
 ---
 layout: docs.njk
-title: "Variables in Meld"
+title: "Variables"
 ---
 
-# Variables in Meld
+# Variables
 
 Meld has three distinct types of variables, each with its own syntax and usage patterns.
 

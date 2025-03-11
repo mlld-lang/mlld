@@ -654,7 +654,7 @@ footer {
 /* Documentation layout */
 .docs-layout {
   display: grid;
-  grid-template-columns: 280px 1fr;
+  grid-template-columns: 200px 1fr;
   gap: 3rem;
   margin-top: 2rem;
 }
@@ -665,7 +665,7 @@ footer {
   align-self: start;
   height: calc(100vh - 12rem);
   overflow-y: auto;
-  padding: 1.5rem;
+  padding: 1.5rem 1.5rem 0 0;
   background: var(--bg-color);
   z-index: 10;
   

@@ -1,9 +1,9 @@
 ---
 layout: docs.njk
-title: "Meld CLI Usage"
+title: "CLI Usage"
 ---
 
-# Meld CLI Usage
+# CLI Usage
 
 The Meld CLI provides a simple way to process Meld files from the command line.
 
