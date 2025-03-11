@@ -6,7 +6,7 @@
   --code-bg: #1a1a1a;
   --terminal-bg: #fdfdfd;
   --terminal-bg-rgb: 253, 253, 253;
-  --terminal-text: var(--text-color);
+  --terminal-text: #333333;
   --terminal-text-dim: rgba(var(--text-color-rgb), 0.7);
   --terminal-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
   --terminal-gradient-start: rgba(253, 253, 253, 0);
@@ -15,12 +15,12 @@
   --border-color: #dedede;
   
   /* Syntax highlighting colors - light theme */
-  --token-keyword: #d73a49;
-  --token-operator: #6f42c1;
-  --token-string: #22863a;
-  --token-bracket: #666666;
-  --token-selector: #e36209;
-  --token-variable: #005cc5;
+  --token-keyword: #0983d5;
+  --token-operator: #0983d5;
+  --token-string: #999999;
+  --token-bracket: #1f3a4160;
+  --token-selector: #e06900;
+  --token-variable: #0a9621;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -43,7 +43,7 @@
     /* Syntax highlighting colors - dark theme */
     --token-keyword: #ff79c6;
     --token-operator: #bd93f9;
-    --token-string: #50fa7b;
+    --token-string: #30653c;
     --token-bracket: #666666;
     --token-selector: #f1fa8c;
     --token-variable: #8be9fd;
@@ -227,6 +227,7 @@ pre code .token.operator {
 
 pre code .token.string {
   color: var(--token-string);
+  opacity: 0.5;
 }
 
 pre code .token.bracket {
@@ -866,10 +867,10 @@ section.content-section h2 {
 .title-bar {
   position: relative;
   height: 36px;
-  background-color: #f0f0f0;
+  background-color: #fafafa;
   border-top-left-radius: 8px;
   border-top-right-radius: 8px;
-  border-bottom: 1px solid rgba(70, 70, 70, 0.25);
+  border-bottom: 1px solid rgba(70, 70, 70, 0.1);
   display: flex;
   align-items: center;
   padding: 0 12px;
@@ -907,7 +908,7 @@ section.content-section h2 {
   text-align: center;
   font-size: 13px;
   font-family: system-ui, -apple-system, sans-serif;
-  color: var(--text-color);
+  color: #999;
   user-select: none;
   font-weight: 400;
 }
@@ -1102,4 +1103,137 @@ section.content-section h2 {
 
 .vscode-link a:hover {
   text-decoration: underline;
+}
+
+/* Common Terminal Window Styles */
+.terminal-window {
+  position: relative;
+  background-color: var(--terminal-bg);
+  border-radius: 8px;
+  box-shadow: var(--terminal-shadow);
+  width: 100%;
+  overflow: hidden;
+}
+
+.terminal-window .title-bar {
+  position: relative;
+  height: 36px;
+  background-color: #fafafa;
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
+  border-bottom: 1px solid rgba(70, 70, 70, 0.1);
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  z-index: 1;
+}
+
+.terminal-window .window-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.terminal-window .window-control {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+.terminal-window .window-control.red { background-color: #ff5f56; }
+.terminal-window .window-control.yellow { background-color: #ffbd2e; }
+.terminal-window .window-control.green { background-color: #27c93f; }
+
+.terminal-window .filename {
+  flex: 1;
+  text-align: center;
+  font-size: 13px;
+  font-family: system-ui, -apple-system, sans-serif;
+  color: #999;
+  user-select: none;
+  font-weight: 400;
+}
+
+.terminal-window .filename::before {
+  content: "—— ";
+  color: rgba(var(--text-color-rgb), 0.3);
+  margin-right: 5px;
+}
+
+.terminal-window .filename::after {
+  content: " ——";
+  color: rgba(var(--text-color-rgb), 0.3);
+  margin-left: 5px;
+}
+
+.terminal-window .spacer {
+  width: 52px;
+}
+
+.terminal-window .terminal-content {
+  font-family: 'Cousine', monospace;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--terminal-text);
+  white-space: pre-wrap;
+  padding: 30px;
+  background-color: var(--terminal-bg);
+}
+
+/* Hero Terminal Specific */
+.hero-terminal {
+  height: 510px;
+  overflow-y: hidden;
+  z-index: 1;
+}
+
+.hero-terminal::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 90px;
+  background: linear-gradient(
+    to bottom, 
+    var(--terminal-gradient-start) 0%,
+    var(--terminal-gradient-middle) 40%,
+    var(--terminal-gradient-end) 70%
+  );
+  pointer-events: none;
+  z-index: 2;
+  border-bottom-left-radius: 8px;
+  border-bottom-right-radius: 8px;
+}
+
+/* Example Terminal Specific */
+.possibility-example {
+  margin-bottom: 2rem;
+}
+
+.possibility-example:last-child {
+  margin-bottom: 0;
+}
+
+/* Dark mode title bar */
+@media (prefers-color-scheme: dark) {
+  .terminal-window .title-bar {
+    background-color: #333;
+  }
+}
+
+/* Mobile adjustments */
+@media (max-width: 768px) {
+  .terminal-window .terminal-content {
+    padding: 20px;
+    font-size: 12px;
+  }
+  
+  .terminal-window, .hero-terminal {
+    border-radius: 8px 0 0 8px;
+  }
+  
+  .terminal-window .title-bar {
+    border-radius: 8px 0 0 0;
+  }
 }
