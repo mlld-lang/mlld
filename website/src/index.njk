@@ -63,7 +63,7 @@ layout: base.njk
         <span class="vertical-line"></span>
         <h3 class="card-heading">Tired of repeating yourself</h3>
         <div class="card-content">
-          <p class="pain-quote">"Working with LLMs is like having a brilliant intern with chronic amnesia. I'd do a lot more if re-assembling context wasn't such a chore."</p>
+          <p class="pain-quote">“Working with LLMs is like having a brilliant intern with chronic amnesia. I'd do a lot more if re-assembling context wasn't such a chore.”</p>
         </div>
       </div>
       
@@ -72,7 +72,7 @@ layout: base.njk
         <span class="vertical-line"></span>
         <h3 class="card-heading">Tired of wrong tools for the job</h3>
         <div class="card-content">
-          <p class="pain-quote">"I just want to script LLMs. A chat or an IDE isn't helpful for that. Don't give me a kitchen sink 'agentic framework' or a magic black box. Give me a unix pipe."</p>
+          <p class="pain-quote">“I just want to script LLMs. Don't give me a chat or a kitchen sink 'agentic framework' or a magic black box. Give me a unix pipe.”</p>
         </div>
       </div>
     </div>
@@ -131,15 +131,31 @@ Here's the structure of the codebase:
       <!-- Third row -->
       <div class="grid-row">
         <span class="vertical-line"></span>
-        <h3 class="card-heading">Use imports and module sections</h3>
+        <h3 class="card-heading">Imports, templating, command creation</h3>
         <div class="card-content">
           <div class="possibility-example">
             <pre><code>
+@data role = {
+    "architect": "You are a software architect.",
+    "security": "You are a security engineer.",
+    "ux": "You are a ux designer."
+    "pm": "You are a project manager."
+}
 
+@data task = {
+    "code_review": "Identify the most central flaw.",
+    "ux_review": "Carefully review the user experience and advise on the quality of the user experience and areas of improvement.",
+    "security_review": "Carefully review the security of the code and advise on the quality of the security and areas of improvement."
+}
 
+// recursively concatenates paths wrapped in xml tags
+@define codecat(dir) = @run [find /path/to/your/directory -type f -exec sh -c 'echo "<$(realpath --relative-to={{dir}} {})>"; cat {}; echo "</$(realpath --relative-to={{dir}} {})>"' \;]
+
+@define plan(role, task) = @run [oneshot "Make a plan to <span class="token variable">{% raw %}{{task}}{% endraw %}</span> 
+for <span class="token variable">{% raw %}{{role}}{% endraw %}"<span class="token bracket">]</span>
             </code></pre>
           </div>
-          <div class="possibility-example">
+          <div class="possibility-example second-possibility-example">
             <pre><code>
 <span class="token keyword">@import</span> <span class="token bracket">[</span><span class="token variable">roles</span><span class="token bracket">]</span> <span class="token keyword">from</span> <span class="token bracket">[</span>roles.mld<span class="token bracket">]</span>
 

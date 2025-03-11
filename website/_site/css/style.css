@@ -795,6 +795,10 @@ section.content-section h2 {
   width: 100%;
 }
 
+.second-possibility-example {
+  margin-top: 2rem;
+}
+
 .possibility-example pre {
   margin: 0;
   border-radius: 0;
