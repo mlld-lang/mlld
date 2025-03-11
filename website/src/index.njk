@@ -10,12 +10,15 @@ layout: base.njk
   
   <div class="hero-terminal-container">
     <div class="hero-terminal">
-      <div class="terminal-dots">
-        <span class="dot red"></span>
-        <span class="dot yellow"></span>
-        <span class="dot green"></span>
+      <div class="example-title-bar">
+        <div class="window-controls">
+          <span class="window-control red"></span>
+          <span class="window-control yellow"></span>
+          <span class="window-control green"></span>
+        </div>
+        <div class="filename">code-review.mld</div>
+        <div class="spacer"></div>
       </div>
-
       <div class="terminal-content"><span class="token keyword">@import</span> <span class="token bracket">[</span><span class="token variable">roles</span><span class="token bracket">, </span><span class="token variable">tasks</span><span class="token bracket">]</span> <span class="token keyword">from</span> <span class="token bracket">[</span>prompts.mld<span class="token bracket">]</span>
 <span class="space"></span>
 <span class="token keyword">@text</span> <span class="token variable">arch</span> = <span class="token keyword">@embed</span> <span class="token bracket">[</span>README.md <span class="token selector"># Architecture</span><span class="token bracket">]</span>
@@ -88,6 +91,15 @@ layout: base.njk
         <h3 class="card-heading">Embed LLM context in your docs and treat markdown sections as modules you can import</h3>
         <div class="card-content">
           <div class="possibility-example">
+            <div class="example-title-bar">
+              <div class="window-controls">
+                <span class="window-control red"></span>
+                <span class="window-control yellow"></span>
+                <span class="window-control green"></span>
+              </div>
+              <div class="filename">README.md</div>
+              <div class="spacer"></div>
+            </div>
             <pre><code>
 <span class="token bracket">#</span> <span class="token selector">TypeBlorp</span>
 
@@ -113,6 +125,15 @@ Here's the structure of the codebase:
         <h3 class="card-heading">Chain requests like shell commands</h3>
         <div class="card-content">
           <div class="possibility-example">
+          <div class="example-title-bar">
+              <div class="window-controls">
+                <span class="window-control red"></span>
+                <span class="window-control yellow"></span>
+                <span class="window-control green"></span>
+              </div>
+              <div class="filename">test-plan.mld</div>
+              <div class="spacer"></div>
+            </div>
             <pre><code>            
 <span class="token keyword">@text</span> <span class="token variable">tests</span> = <span class="token keyword">@run</span> <span class="token bracket">[</span>npm test<span class="token bracket">]</span>
 
@@ -134,29 +155,49 @@ Here's the structure of the codebase:
         <h3 class="card-heading">Imports, templating, command creation</h3>
         <div class="card-content">
           <div class="possibility-example">
+          <div class="example-title-bar">
+              <div class="window-controls">
+                <span class="window-control red"></span>
+                <span class="window-control yellow"></span>
+                <span class="window-control green"></span>
+              </div>
+              <div class="filename">imports.mld</div>
+              <div class="spacer"></div>
+            </div>
             <pre><code>
-@data role = {
+<span class="token keyword">@data</span> <span class="token variable">role</span> = {
     "architect": "You are a software architect.",
     "security": "You are a security engineer.",
     "ux": "You are a ux designer."
     "pm": "You are a project manager."
 }
 
-@data task = {
+<span class="token keyword">@data</span> <span class="token variable">task</span> = {
     "code_review": "Identify the most central flaw.",
-    "ux_review": "Carefully review the user experience and advise on the quality of the user experience and areas of improvement.",
-    "security_review": "Carefully review the security of the code and advise on the quality of the security and areas of improvement."
+    "ux_review": "Review the UX of this code",
+    "security_review": "Rreview this code for vulnerabilities"
 }
 
-// recursively concatenates paths wrapped in xml tags
-@define codecat(dir) = @run [find {{dir}} -type f -exec sh -c 'echo "<$(realpath --relative-to={{dir}} {})>"; cat {}; echo "</$(realpath --relative-to={{dir}} {})>"' \;]
+<span class="token bracket">>> recursively concatenate paths wrapped in xml tags</span>
+<span class="token keyword">@define</span> <span class="token selector">codecat</span><span class="token bracket">(</span><span class="token variable">dir</span><span class="token bracket">)</span> = <span class="token keyword">@run</span> <span class="token bracket">[</span>find <span class="token variable">{% raw %}{{dir}}{% endraw %}</span> -type f -exec sh -c 'echo "<$(realpath --relative-to=<span class="token variable">{% raw %}{{dir}}{% endraw %}</span> {})>"; cat {}; echo "</$(realpath --relative-to=<span class="token variable">{% raw %}{{dir}}{% endraw %}</span> {})>"' \;<span class="token bracket">]</span>
 
-@define plan(role, task) = @run [oneshot "Make a plan to <span class="token variable">{% raw %}{{task}}{% endraw %}</span> 
+<span class="token keyword">@run</span> plan(role, task) = @run [oneshot "Make a plan to <span class="token variable">{% raw %}{{task}}{% endraw %}</span> 
 for <span class="token variable">{% raw %}{{role}}{% endraw %}"<span class="token bracket">]</span>
             </code></pre>
           </div>
           <div class="possibility-example second-possibility-example">
+          <div class="example-title-bar">
+              <div class="window-controls">
+                <span class="window-control red"></span>
+                <span class="window-control yellow"></span>
+                <span class="window-control green"></span>
+              </div>
+              <div class="filename">plan.mld</div>
+              <div class="spacer"></div>
+            </div>
             <pre><code>
+
+            
 <span class="token keyword">@import</span> <span class="token bracket">[</span><span class="token variable">roles</span><span class="token bracket">]</span> <span class="token keyword">from</span> <span class="token bracket">[</span>roles.mld<span class="token bracket">]</span>
 
 <span class="token keyword">@text</span> <span class="token variable">infra</span> = <span class="token keyword">@embed</span> <span class="token bracket">[</span>TESTING.md <span class="token selector"># Infrastructure</span><span class="token bracket">]</span>

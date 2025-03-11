@@ -1,7 +1,7 @@
 >> This is a commment and should be ignored
 >> I can write a couple lines of them if I want and no one will ever know.
 
-@import [$./examples/imports.meld]
+@import [$./examples/imports.mld]
 
 @data role = {
     "architect": "You are a senior architect skilled in assessing TypeScript codebases.",
@@ -19,8 +19,6 @@
 @embed {{role.architect}}
 
 ## Documentation
-### Target UX
-@embed [$./docs/dev/UX.md]
 ### Architecture
 @embed [$./docs/dev/ARCHITECTURE.md] 
 ### Meld Processing Pipeline
@@ -31,3 +29,6 @@
 
 ## Your task
 @embed {{task.code_review}}
+
+>> this doesn't work but should
+>> @run $codecat($./examples)

@@ -12,4 +12,6 @@
     "security_review": "Carefully review the security of the code and advise on the quality of the security and areas of improvement."
 }
 
+@define codecat(dir) = @run [find {{dir}} -type f -exec sh -c 'echo "<$(realpath --relative-to={{dir}} {})>"; cat {}; echo "{{dir}} {})>"' \;]
+
 @define echo(var) = @run [echo {{var}}]

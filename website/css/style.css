@@ -290,7 +290,7 @@ hr {
   box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
   padding: 0; /* Remove default padding */
   width: 100%;
-  height: 480px; /* Fixed height of 480px instead of dynamic height */
+  height: 510px; /* Fixed height of 510px instead of dynamic height */
   overflow-y: hidden; /* Changed from auto to hidden to prevent scrolling */
   z-index: 1;
 }
@@ -354,7 +354,7 @@ hr {
   line-height: 1.6;
   color: #fff;
   white-space: pre-wrap;
-  padding: 60px 20px 40px 20px; /* Top, right, bottom, left padding */
+  padding: 30px; /* Top, right, bottom, left padding */
   max-height: 100%; /* Ensure content respects the container height */
   overflow-y: visible; /* Allow content to be scrollable in the parent container */
 }
@@ -773,17 +773,59 @@ section.content-section h2 {
   line-height: 1;
 }
 
-.possibility-example::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 36px; /* Standard titlebar height */
+/* Replace pseudo-element with actual title bar */
+.example-title-bar {
+  position: relative;
+  height: 36px;
+  background-color: #f0f0f0;
   border-top-left-radius: 8px;
   border-top-right-radius: 8px;
   border-bottom: 1px solid rgba(70, 70, 70, 0.25);
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
   z-index: 1;
+}
+
+@media (prefers-color-scheme: dark) {
+  .example-title-bar {
+    background-color: #333;
+  }
+}
+
+.window-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.window-control {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+.window-control.red { background-color: #ff5f56; }
+.window-control.yellow { background-color: #ffbd2e; }
+.window-control.green { background-color: #27c93f; }
+
+.filename {
+  flex: 1;
+  text-align: center;
+  font-size: 13px;
+  font-family: system-ui, -apple-system, sans-serif;
+  color: var(--text-color);
+  opacity: 0.8;
+  user-select: none;
+}
+
+.spacer {
+  width: 52px; /* Match the width of window controls to center the filename */
+}
+
+/* Remove the ::before pseudo-element */
+.possibility-example::before {
+  content: none;
 }
 
 /* Example styling */
@@ -803,10 +845,35 @@ section.content-section h2 {
   margin: 0;
   border-radius: 0;
   padding: 1.5rem;
+  white-space: pre-wrap;       /* Allow wrapping */
+  word-break: break-word;      /* Break words to prevent overflow */
 }
 
 .possibility-example code {
   font-size: 0.9rem;
+  word-wrap: break-word;       /* Ensure words wrap */
+  overflow-wrap: break-word;   /* Modern alternative to word-wrap */
+}
+
+.possibility-example code .token {
+  display: inline-flex;
+  flex-wrap: wrap;
+  white-space: normal;
+}
+
+/* Make code blocks responsive */
+.possibility-example pre code {
+  max-width: 100%;
+  display: block;
+}
+
+/* Enhance readability of wrapped code */
+.possibility-example .token.bracket,
+.possibility-example .token.selector,
+.possibility-example .token.variable,
+.possibility-example .token.string {
+  max-width: 100%;
+  white-space: normal;
 }
 
 /* CTA link styling */
