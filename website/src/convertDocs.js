@@ -40,7 +40,21 @@ function convertFile(filePath) {
   }
 
   const relativePath = path.relative(sourceDir, filePath);
-  const outputPath = path.join(outputDir, relativePath);
+  
+  // Special handling for README.md files - they should generate index.html in their directory
+  const baseFileName = path.basename(filePath);
+  const isReadme = baseFileName.toLowerCase() === 'readme.md';
+  
+  let outputPath;
+  if (isReadme) {
+    // For README.md, create index.html in the same directory
+    const dirName = path.dirname(relativePath);
+    outputPath = path.join(outputDir, dirName, 'index.md');
+    console.log(`Special handling for README: ${filePath} -> ${outputPath}`);
+  } else {
+    // Normal handling for other files
+    outputPath = path.join(outputDir, relativePath);
+  }
   
   // Create output directory if it doesn't exist
   const outputDirPath = path.dirname(outputPath);
