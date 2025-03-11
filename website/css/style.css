@@ -163,7 +163,7 @@ a:hover {
 code {
   font-family: 'Cousine', monospace;
   background-color: var(--code-bg);
-  padding: 0.2em 0.4em;
+  padding: 0;
   border-radius: 3px;
   font-size: 0.9em;
   color: #fff;
@@ -172,23 +172,11 @@ code {
 pre {
   background-color: var(--code-bg);
   border-radius: 8px;
-  padding: 2rem 1.5rem 1.5rem;
+  padding: 30px;
   overflow-x: auto;
   white-space: pre;
   position: relative;
   margin: 1.5rem 0;
-}
-
-pre::before {
-  content: "";
-  position: absolute;
-  top: 0.75rem;
-  left: 0.75rem;
-  height: 12px;
-  width: 12px;
-  border-radius: 50%;
-  background-color: #ff5f56;
-  box-shadow: 20px 0 0 #ffbd2e, 40px 0 0 #27c93f;
 }
 
 pre code {
@@ -773,8 +761,8 @@ section.content-section h2 {
   line-height: 1;
 }
 
-/* Replace pseudo-element with actual title bar */
-.example-title-bar {
+/* Title bar styling */
+.title-bar {
   position: relative;
   height: 36px;
   background-color: #f0f0f0;
@@ -788,7 +776,7 @@ section.content-section h2 {
 }
 
 @media (prefers-color-scheme: dark) {
-  .example-title-bar {
+  .title-bar {
     background-color: #333;
   }
 }
@@ -815,17 +803,23 @@ section.content-section h2 {
   font-size: 13px;
   font-family: system-ui, -apple-system, sans-serif;
   color: var(--text-color);
-  opacity: 0.8;
   user-select: none;
+  font-weight: 400;
+  text-shadow: 0px -1px 0px #000000;
+}
+.filename::before {
+  content: "—— ";
+  color: rgba(255,255,255,0.3);
+  margin-right: 5px;
+}
+.filename::after {
+  content: " ——";
+  color: rgba(255,255,255,0.3);
+  margin-left: 5px;
 }
 
 .spacer {
   width: 52px; /* Match the width of window controls to center the filename */
-}
-
-/* Remove the ::before pseudo-element */
-.possibility-example::before {
-  content: none;
 }
 
 /* Example styling */
@@ -845,14 +839,14 @@ section.content-section h2 {
   margin: 0;
   border-radius: 0;
   padding: 1.5rem;
-  white-space: pre-wrap;       /* Allow wrapping */
-  word-break: break-word;      /* Break words to prevent overflow */
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .possibility-example code {
   font-size: 0.9rem;
-  word-wrap: break-word;       /* Ensure words wrap */
-  overflow-wrap: break-word;   /* Modern alternative to word-wrap */
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 .possibility-example code .token {

@@ -39,7 +39,7 @@
   
   <div class="hero-terminal-container">
     <div class="hero-terminal">
-      <div class="example-title-bar">
+      <div class="title-bar">
         <div class="window-controls">
           <span class="window-control red"></span>
           <span class="window-control yellow"></span>
@@ -120,7 +120,7 @@
         <h3 class="card-heading">Embed LLM context in your docs and treat markdown sections as modules you can import</h3>
         <div class="card-content">
           <div class="possibility-example">
-            <div class="example-title-bar">
+            <div class="title-bar">
               <div class="window-controls">
                 <span class="window-control red"></span>
                 <span class="window-control yellow"></span>
@@ -129,9 +129,8 @@
               <div class="filename">README.md</div>
               <div class="spacer"></div>
             </div>
-            <pre><code>
-<span class="token bracket">#</span> <span class="token selector">TypeBlorp</span>
-
+            <pre><code><span class="token bracket">#</span> <span class="token selector">TypeBlorp</span>
+              
 <span class="token bracket">##</span> <span class="token selector">Overview</span> 
 
 TypeBlorp is lightweight state management library built with
@@ -154,7 +153,7 @@ Here's the structure of the codebase:
         <h3 class="card-heading">Chain requests like shell commands</h3>
         <div class="card-content">
           <div class="possibility-example">
-          <div class="example-title-bar">
+          <div class="title-bar">
               <div class="window-controls">
                 <span class="window-control red"></span>
                 <span class="window-control yellow"></span>
@@ -163,8 +162,7 @@ Here's the structure of the codebase:
               <div class="filename">test-plan.mld</div>
               <div class="spacer"></div>
             </div>
-            <pre><code>            
-<span class="token keyword">@text</span> <span class="token variable">tests</span> = <span class="token keyword">@run</span> <span class="token bracket">[</span>npm test<span class="token bracket">]</span>
+            <pre><code><span class="token keyword">@text</span> <span class="token variable">tests</span> = <span class="token keyword">@run</span> <span class="token bracket">[</span>npm test<span class="token bracket">]</span>
 
 <span class="token keyword">@text</span> <span class="token variable">res</span> = <span class="token keyword">@run</span> <span class="token bracket">[</span>oneshot "What's broken here? <span class="token variable">{{tests}}</span>"<span class="token bracket">]</span>
 
@@ -184,7 +182,7 @@ Here's the structure of the codebase:
         <h3 class="card-heading">Imports, templating, command creation</h3>
         <div class="card-content">
           <div class="possibility-example">
-          <div class="example-title-bar">
+          <div class="title-bar">
               <div class="window-controls">
                 <span class="window-control red"></span>
                 <span class="window-control yellow"></span>
@@ -193,7 +191,8 @@ Here's the structure of the codebase:
               <div class="filename">imports.mld</div>
               <div class="spacer"></div>
             </div>
-            <pre><code>
+            <pre><code><span class="token keyword">@text</span> <span class="token variable">docs</span> = <span class="token keyword">@embed</span> <span class="token bracket">[</span>README.md<span class="token bracket">]</span>
+              
 <span class="token keyword">@data</span> <span class="token variable">role</span> = {
     "architect": "You are a software architect.",
     "security": "You are a security engineer.",
@@ -202,20 +201,25 @@ Here's the structure of the codebase:
 }
 
 <span class="token keyword">@data</span> <span class="token variable">task</span> = {
-    "code_review": "Identify the most central flaw.",
-    "ux_review": "Review the UX of this code",
-    "security_review": "Rreview this code for vulnerabilities"
+    "archrev": "Identify the architecture's most concerning flaw.",
+    "uxrev": "Review the UX of this code",
+    "secrev": "Review this code for vulnerabilities",
+    "roadmap": "Create a roadmap based on highest priority tasks"
 }
 
 <span class="token bracket">>> recursively concatenate paths wrapped in xml tags</span>
 <span class="token keyword">@define</span> <span class="token selector">codecat</span><span class="token bracket">(</span><span class="token variable">dir</span><span class="token bracket">)</span> = <span class="token keyword">@run</span> <span class="token bracket">[</span>find <span class="token variable">{{dir}}</span> -type f -exec sh -c 'echo "<$(realpath --relative-to=<span class="token variable">{{dir}}</span> {})>"; cat {}; echo "</$(realpath --relative-to=<span class="token variable">{{dir}}</span> {})>"' \;<span class="token bracket">]</span>
 
-<span class="token keyword">@run</span> plan(role, task) = @run [oneshot "Make a plan to <span class="token variable">{{task}}</span> 
-for <span class="token variable">{{role}}"<span class="token bracket">]</span>
+@define $ask(context, role, task) = @run [oneshot 
+  --context <span class="token variable">{{context}}</span>
+  --instructions <span class="token variable">{{task}}</span>
+  --system <span class="token variable">{{role}}</span>
+]
+
             </code></pre>
           </div>
           <div class="possibility-example second-possibility-example">
-          <div class="example-title-bar">
+          <div class="title-bar">
               <div class="window-controls">
                 <span class="window-control red"></span>
                 <span class="window-control yellow"></span>
@@ -224,25 +228,31 @@ for <span class="token variable">{{role}}"<span class="token bracket">]</span>
               <div class="filename">plan.mld</div>
               <div class="spacer"></div>
             </div>
-            <pre><code>
+            <pre><code><span class="token keyword">@import</span> <span class="token bracket"></span><span class="token bracket">[</span>imports.mld<span class="token bracket">]</span>
 
-            
-<span class="token keyword">@import</span> <span class="token bracket">[</span><span class="token variable">roles</span><span class="token bracket">]</span> <span class="token keyword">from</span> <span class="token bracket">[</span>roles.mld<span class="token bracket">]</span>
+@path services = "$./src/services"
+@text code = @run $codecat($services)
 
-<span class="token keyword">@text</span> <span class="token variable">infra</span> = <span class="token keyword">@embed</span> <span class="token bracket">[</span>TESTING.md <span class="token selector"># Infrastructure</span><span class="token bracket">]</span>
-  
-<span class="token keyword">@text</span> <span class="token variable">prompt</span> = <span class="token bracket">[[</span>
-  Read our docs: <span class="token variable">{{infra}}</span> <span class="token variable">{{standards}}</span>
-  Review this set of changes: <span class="token variable">{{diff}}</span>
-  Please create a list of the tests we
-  should add to cover the changes.
+<span class="token keyword">@text</span> <span class="token variable">context</span> = <span class="token bracket">[[</span>
+  Read our docs: <span class="token variable">{{docs}}</span>
+  Review our code: <span class="token variable">{{code}}</span>
 <span class="token bracket">]]</span>
 
-<span class="token keyword">@run</span> <span class="token bracket">[</span>oneshot <span class="token variable">{{prompt}}</span> --system <span class="token variable">{{roles.architect}}</span><span class="token bracket">]</span>
+<span class="token keyword">@run</span> <span class="token bracket">[</span>oneshot <span class="token variable">{{prompt}}</span> --system <span class="token variable">{{role.architect}}</span><span class="token bracket">]</span>
 
-<span class="token operator">---</span>
+@text arch_review = @run $ask(, , )
+@text ux_review   = @run $ask(, , )
+@text sec_review  = @run $ask(, , )
 
-<span class="token string">"Here's a list of the tests to add…"</span>  
+@text pm_review = [[
+  Here's the team's input on our priorities:
+  - Architect review: 
+  - UX review: 
+  - Security review: 
+  Your task: 
+]]
+
+@run $ask(, , )
             </code></pre>
           </div>
         </div>
