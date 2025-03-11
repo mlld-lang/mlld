@@ -199,31 +199,29 @@ Here's the structure of the codebase:
               <div class="filename">plan.mld</div>
               <div class="spacer"></div>
             </div>
-            <pre><code><span class="token keyword">@import</span> <span class="token bracket"></span><span class="token bracket">[</span>imports.mld<span class="token bracket">]</span>
+            <pre><code><span class="token keyword">@import</span> <span class="token bracket">[</span>imports.mld<span class="token bracket">]</span>
 
-@path services = "$./src/services"
-@text code = @run $codecat($services)
+<span class="token keyword">@path</span> <span class="token variable">services</span> = <span class="token string">"$./src/services"</span>
+<span class="token keyword">@text</span> <span class="token variable">code</span> = <span class="token keyword">@run</span> <span class="token variable">$codecat</span><span class="token bracket">(</span><span class="token variable">$services</span><span class="token bracket">)</span>
 
 <span class="token keyword">@text</span> <span class="token variable">context</span> = <span class="token bracket">[[</span>
   Read our docs: <span class="token variable">{% raw %}{{docs}}{% endraw %}</span>
   Review our code: <span class="token variable">{% raw %}{{code}}{% endraw %}</span>
 <span class="token bracket">]]</span>
 
-<span class="token keyword">@run</span> <span class="token bracket">[</span>oneshot <span class="token variable">{% raw %}{{prompt}}{% endraw %}</span> --system <span class="token variable">{% raw %}{{role.architect}}{% endraw %}</span><span class="token bracket">]</span>
+<span class="token keyword">@text</span> <span class="token variable">arch_review</span> = <span class="token keyword">@run</span> <span class="token selector">$ask</span><span class="token bracket">(</span><span class="token variable">{% raw %}{{context}}{% endraw %}</span>, <span class="token variable">{% raw %}{{role.architect}}{% endraw %}</span>, <span class="token variable">{% raw %}{{task.code_review}}{% endraw %}</span><span class="token bracket">)</span>
+<span class="token keyword">@text</span> <span class="token variable">ux_review</span>   = <span class="token keyword">@run</span> <span class="token selector">$ask</span><span class="token bracket">(</span><span class="token variable">{% raw %}{{context}}{% endraw %}</span>, <span class="token variable">{% raw %}{{role.ux}}{% endraw %}</span>, <span class="token variable">{% raw %}{{task.ux_review}}{% endraw %}</span><span class="token bracket">)</span>
+<span class="token keyword">@text</span> <span class="token variable">sec_review</span>  = <span class="token keyword">@run</span> <span class="token selector">$ask</span><span class="token bracket">(</span><span class="token variable">{% raw %}{{context}}{% endraw %}</span>, <span class="token variable">{% raw %}{{role.security}}{% endraw %}</span>, <span class="token variable">{% raw %}{{task.sec_review}}{% endraw %}</span><span class="token bracket">)</span>
 
-@text arch_review = @run $ask({{context}}, {{role.architect}}, {{task.code_review}})
-@text ux_review   = @run $ask({{context}}, {{role.ux}}, {{task.ux_review}})
-@text sec_review  = @run $ask({{context}}, {{role.security}}, {{task.sec_review}})
-
-@text pm_review = [[
+<span class="token keyword">@text</span> <span class="token variable">pm_review</span> = <span class="token bracket">[[</span>
   Here's the team's input on our priorities:
-  - Architect review: {{arch_review}}
-  - UX review: {{ux_review}}
-  - Security review: {{sec_review}}
-  Your task: {{task.pmrev}}
-]]
+  - Architect review: <span class="token variable">{% raw %}{{arch_review}}{% endraw %}</span>
+  - UX review: <span class="token variable">{% raw %}{{ux_review}}{% endraw %}</span>
+  - Security review: <span class="token variable">{% raw %}{{sec_review}}{% endraw %}</span>
+  Your task: <span class="token variable">{% raw %}{{task.pmrev}}{% endraw %}</span>
+<span class="token bracket">]]</span>
 
-@run $ask({{context}}, {{role.pm}}, {{pm_review}})
+<span class="token keyword">@run</span> <span class="token selector">$ask</span><span class="token bracket">(</span><span class="token variable">{% raw %}{{context}}{% endraw %}</span>, <span class="token variable">{% raw %}{{role.pm}}{% endraw %}</span>, <span class="token variable">{% raw %}{{pm_review}}{% endraw %}</span><span class="token bracket">)</span>
             </code></pre>
           </div>
         </div>

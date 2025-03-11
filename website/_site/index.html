@@ -228,31 +228,29 @@ Here's the structure of the codebase:
               <div class="filename">plan.mld</div>
               <div class="spacer"></div>
             </div>
-            <pre><code><span class="token keyword">@import</span> <span class="token bracket"></span><span class="token bracket">[</span>imports.mld<span class="token bracket">]</span>
+            <pre><code><span class="token keyword">@import</span> <span class="token bracket">[</span>imports.mld<span class="token bracket">]</span>
 
-@path services = "$./src/services"
-@text code = @run $codecat($services)
+<span class="token keyword">@path</span> <span class="token variable">services</span> = <span class="token string">"$./src/services"</span>
+<span class="token keyword">@text</span> <span class="token variable">code</span> = <span class="token keyword">@run</span> <span class="token variable">$codecat</span><span class="token bracket">(</span><span class="token variable">$services</span><span class="token bracket">)</span>
 
 <span class="token keyword">@text</span> <span class="token variable">context</span> = <span class="token bracket">[[</span>
   Read our docs: <span class="token variable">{{docs}}</span>
   Review our code: <span class="token variable">{{code}}</span>
 <span class="token bracket">]]</span>
 
-<span class="token keyword">@run</span> <span class="token bracket">[</span>oneshot <span class="token variable">{{prompt}}</span> --system <span class="token variable">{{role.architect}}</span><span class="token bracket">]</span>
+<span class="token keyword">@text</span> <span class="token variable">arch_review</span> = <span class="token keyword">@run</span> <span class="token selector">$ask</span><span class="token bracket">(</span><span class="token variable">{{context}}</span>, <span class="token variable">{{role.architect}}</span>, <span class="token variable">{{task.code_review}}</span><span class="token bracket">)</span>
+<span class="token keyword">@text</span> <span class="token variable">ux_review</span>   = <span class="token keyword">@run</span> <span class="token selector">$ask</span><span class="token bracket">(</span><span class="token variable">{{context}}</span>, <span class="token variable">{{role.ux}}</span>, <span class="token variable">{{task.ux_review}}</span><span class="token bracket">)</span>
+<span class="token keyword">@text</span> <span class="token variable">sec_review</span>  = <span class="token keyword">@run</span> <span class="token selector">$ask</span><span class="token bracket">(</span><span class="token variable">{{context}}</span>, <span class="token variable">{{role.security}}</span>, <span class="token variable">{{task.sec_review}}</span><span class="token bracket">)</span>
 
-@text arch_review = @run $ask(, , )
-@text ux_review   = @run $ask(, , )
-@text sec_review  = @run $ask(, , )
-
-@text pm_review = [[
+<span class="token keyword">@text</span> <span class="token variable">pm_review</span> = <span class="token bracket">[[</span>
   Here's the team's input on our priorities:
-  - Architect review: 
-  - UX review: 
-  - Security review: 
-  Your task: 
-]]
+  - Architect review: <span class="token variable">{{arch_review}}</span>
+  - UX review: <span class="token variable">{{ux_review}}</span>
+  - Security review: <span class="token variable">{{sec_review}}</span>
+  Your task: <span class="token variable">{{task.pmrev}}</span>
+<span class="token bracket">]]</span>
 
-@run $ask(, , )
+<span class="token keyword">@run</span> <span class="token selector">$ask</span><span class="token bracket">(</span><span class="token variable">{{context}}</span>, <span class="token variable">{{role.pm}}</span>, <span class="token variable">{{pm_review}}</span><span class="token bracket">)</span>
             </code></pre>
           </div>
         </div>
