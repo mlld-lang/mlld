@@ -149,7 +149,7 @@ Here's the structure of the codebase:
 }
 
 // recursively concatenates paths wrapped in xml tags
-@define codecat(dir) = @run [find /path/to/your/directory -type f -exec sh -c 'echo "<$(realpath --relative-to={{dir}} {})>"; cat {}; echo "</$(realpath --relative-to={{dir}} {})>"' \;]
+@define codecat(dir) = @run [find {{dir}} -type f -exec sh -c 'echo "<$(realpath --relative-to={{dir}} {})>"; cat {}; echo "</$(realpath --relative-to={{dir}} {})>"' \;]
 
 @define plan(role, task) = @run [oneshot "Make a plan to <span class="token variable">{% raw %}{{task}}{% endraw %}</span> 
 for <span class="token variable">{% raw %}{{role}}{% endraw %}"<span class="token bracket">]</span>
