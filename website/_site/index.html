@@ -56,8 +56,8 @@
 <span class="space"></span>
 <span class="token keyword">@text</span> <span class="token variable">prompt</span> = <span class="token bracket">[[</span>
    Read our docs: <span class="token variable">{{arch}}</span> <span class="token variable">{{standards}}</span>
-   Latest changes: <span class="token variable">{{diff}}</span>
-   Your task: <span class="token variable">{{tasks.codereview}}</span>
+   Review the latest changes: <span class="token variable">{{diff}}</span>
+   Here's your task: <span class="token variable">{{tasks.codereview}}</span>
 <span class="token bracket">]]</span>
 <span class="space"></span>
 <span class="token keyword">@run</span> <span class="token bracket">[</span>oneshot <span class="token variable">{{prompt}}</span> --system <span class="token variable">{{roles.architect}}</span><span class="token bracket">]</span>
