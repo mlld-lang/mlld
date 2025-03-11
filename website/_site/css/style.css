@@ -63,9 +63,23 @@ header .container {
 .logo {
   font-family: 'Tektur', sans-serif;
   font-weight: 800;
-  font-size: 1.75rem;
+  font-size: 1.5rem;
   text-decoration: none;
   color: var(--text-color);
+}
+
+.logo-container {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.logo-tagline {
+  font-size: 0.9rem;
+  color: rgba(var(--text-color-rgb), 0.7);
+  font-weight: 400;
+  white-space: nowrap;
+  margin-left: 0.5rem;
 }
 
 .tektur {
@@ -111,7 +125,10 @@ h1 {
 }
 
 .hero h1 {
-  font-size: 3rem;
+  font-size: 4rem;
+  line-height: 1.2;
+  margin-bottom: 1.5rem;
+  font-weight: 700;
 }
 
 h2 {
@@ -231,6 +248,11 @@ hr {
   flex: 0 0 33%;
   text-align: left;
   padding-top: 1rem;
+}
+
+.hero-content p {
+  font-size: 1.5rem;
+  line-height: 1.5;
 }
 
 .hero-logo {
@@ -492,15 +514,24 @@ hr {
 @media (max-width: 768px) {
   header .container {
     flex-direction: column;
-    align-items: flex-start;
+    align-items: center;
+    gap: 1rem;
+  }
+  
+  .logo-container {
+    margin-bottom: 0.5rem;
+  }
+  
+  .logo-tagline {
+    font-size: 0.8rem;
   }
   
   .hero-logo {
-    font-size: 70px;
+    font-size: 2.5rem;
   }
   
   .tagline {
-    font-size: 18px;
+    font-size: 1.2rem;
   }
   
   .terminal-content {
@@ -508,12 +539,11 @@ hr {
   }
   
   pre {
-    padding: 1.75rem 1.25rem 1.25rem;
+    padding: 1.5rem;
   }
   
   pre::before {
-    top: 0.5rem;
-    left: 0.5rem;
+    font-size: 0.7rem;
   }
 }
 
