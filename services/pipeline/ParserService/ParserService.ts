@@ -8,7 +8,6 @@ import { IResolutionService } from '@services/resolution/ResolutionService/IReso
 import type { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { injectable, inject } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
-import { IServiceMediator } from '@services/mediator/index.js';
 import { container } from 'tsyringe';
 import { IResolutionServiceClient } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClient.js';
 import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientFactory.js';
@@ -47,28 +46,17 @@ function isMeldAstError(error: unknown): error is MeldAstError {
   description: 'Service responsible for parsing Meld syntax into AST nodes'
 })
 export class ParserService implements IParserService {
-  private mediator?: IServiceMediator;
   private resolutionClient?: IResolutionServiceClient;
   private resolutionClientFactory?: ResolutionServiceClientFactory;
   private factoryInitialized: boolean = false;
 
   /**
    * Creates a new instance of the ParserService
-   * 
-   * @param mediator - Service mediator for resolving circular dependencies
    */
-  constructor(@inject('IServiceMediator') mediator?: IServiceMediator) {
-    this.mediator = mediator;
-    
-    if (this.mediator) {
-      this.mediator.setParserService(this);
-    }
-    
+  constructor() {
     // We'll initialize the factory lazily to avoid circular dependencies
     if (process.env.DEBUG === 'true') {
-      console.log('ParserService: Initialized with', {
-        hasMediator: !!this.mediator
-      });
+      console.log('ParserService: Initialized');
     }
   }
 
@@ -87,8 +75,8 @@ export class ParserService implements IParserService {
       this.resolutionClientFactory = container.resolve('ResolutionServiceClientFactory');
       this.initializeResolutionClient();
     } catch (error) {
-      // Factory not available, will use mediator
-      logger.debug('ResolutionServiceClientFactory not available, using ServiceMediator for resolution operations');
+      // Factory not available
+      logger.debug('ResolutionServiceClientFactory not available');
     }
   }
 
@@ -104,20 +92,9 @@ export class ParserService implements IParserService {
       this.resolutionClient = this.resolutionClientFactory.createClient();
       logger.debug('Successfully created ResolutionServiceClient using factory');
     } catch (error) {
-      logger.warn('Failed to create ResolutionServiceClient, falling back to ServiceMediator', { error });
+      logger.warn('Failed to create ResolutionServiceClient', { error });
       this.resolutionClient = undefined;
     }
-  }
-
-  /**
-   * Sets the service mediator for breaking circular dependencies
-   * @deprecated This method is deprecated and will be removed in a future version.
-   * Use constructor injection instead.
-   */
-  setMediator(mediator: IServiceMediator): void {
-    logger.warn('ParserService.setMediator is deprecated. Use constructor injection instead.');
-    this.mediator = mediator;
-    this.mediator.setParserService(this);
   }
 
   private async parseContent(content: string, filePath?: string): Promise<MeldNode[]> {
@@ -374,9 +351,8 @@ export class ParserService implements IParserService {
   }
 
   /**
-   * Transform a variable node to its resolved value
-   * Used for preview and transformation mode to resolve values
-   * @param node The node to transform
+   * Transforms a variable node into a text node with the resolved value
+   * @param node The variable node to transform
    * @param state The state service to use for lookup
    * @returns A text node with the resolved value if transformation is enabled
    */
@@ -400,7 +376,7 @@ export class ParserService implements IParserService {
       // Ensure factory is initialized before trying to use it
       this.ensureFactoryInitialized();
       
-      // Try to use the resolution client first if available
+      // Try to use the resolution client if available
       if (this.resolutionClient) {
         try {
           const result = await this.resolutionClient.resolveVariableReference(node, {
@@ -415,31 +391,16 @@ export class ParserService implements IParserService {
             location: node.location
           };
         } catch (error) {
-          logger.warn('Error using resolutionClient.resolveVariableReference, falling back to ServiceMediator', { 
+          logger.warn('Error using resolutionClient.resolveVariableReference', { 
             error, 
             node 
           });
         }
       }
       
-      // Fall back to mediator
-      if (!this.mediator) {
-        logger.warn('No mediator available for variable transformation');
-        return node;
-      }
-      
-      // Use the mediator to resolve the variable
-      const result = await this.mediator.resolveVariableReference(node, {
-        context,
-        allowUndefined: true
-      });
-
-      // Create a text node with the resolved value
-      return {
-        type: 'text',
-        value: String(result),
-        location: node.location
-      };
+      // If we get here, we couldn't resolve the variable
+      logger.warn('No resolution client available for variable transformation');
+      return node;
     } catch (error) {
       logger.warn('Failed to transform variable node', { error, node });
       return node;
