@@ -10,8 +10,9 @@ import { StateDebuggerService } from '@tests/utils/debug/StateDebuggerService/St
 import { StateHistoryService } from '@tests/utils/debug/StateHistoryService/StateHistoryService.js';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { StateEventService } from '../StateEventService/StateEventService.js';
-import { ServiceMediator } from '@services/mediator/ServiceMediator.js';
 import { mockDeep, mockReset } from 'vitest-mock-extended';
+import { StateTrackingServiceClientFactory } from '../StateTrackingService/factories/StateTrackingServiceClientFactory.js';
+import { IStateTrackingServiceClient } from '../StateTrackingService/interfaces/IStateTrackingServiceClient.js';
 
 class MockStateEventService implements IStateEventService {
   private handlers = new Map<string, Array<{
@@ -67,21 +68,32 @@ async function createTestContext() {
   // Create mocks
   const mockEventService = new MockStateEventService();
   const mockTrackingService = mockDeep<IStateTrackingService>();
-  const serviceMediator = new ServiceMediator();
+  
+  // Create mock factory and client
+  const mockTrackingClient = mockDeep<IStateTrackingServiceClient>();
+  const mockTrackingClientFactory = {
+    createClient: () => mockTrackingClient
+  };
   
   // Register mocks with the context
   testContext.registerMock('IStateEventService', mockEventService);
   testContext.registerMock('StateEventService', mockEventService);
   testContext.registerMock('IStateTrackingService', mockTrackingService);
   testContext.registerMock('StateTrackingService', mockTrackingService);
-  testContext.registerMock('IServiceMediator', serviceMediator);
-  testContext.registerMock('ServiceMediator', serviceMediator);
+  testContext.registerMock('StateTrackingServiceClientFactory', mockTrackingClientFactory);
   
   // Resolve the services from the container with proper await
   const stateFactory = await testContext.container.resolve(StateFactory);
   const state = await testContext.container.resolve(StateService);
   
-  return { state, eventService: mockEventService, testContext, stateFactory };
+  return { 
+    state, 
+    eventService: mockEventService, 
+    testContext, 
+    stateFactory,
+    trackingService: mockTrackingService,
+    trackingClient: mockTrackingClient
+  };
 }
 
 // Main test suite - using DI-only mode

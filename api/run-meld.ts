@@ -74,6 +74,7 @@ export async function runMeld(
   let parserClientFactory;
   let resolutionClientFactory;
   let stateClientFactory;
+  let stateTrackingClientFactory;
   
   try {
     // Get factories from the container
@@ -82,6 +83,53 @@ export async function runMeld(
     parserClientFactory = resolveService('ParserServiceClientFactory');
     resolutionClientFactory = resolveService('ResolutionServiceClientFactory');
     stateClientFactory = resolveService('StateServiceClientFactory');
+    stateTrackingClientFactory = resolveService('StateTrackingServiceClientFactory');
+    
+    // Create clients and connect services
+    if (services.filesystem && fileSystemClientFactory) {
+      try {
+        const pathClient = pathClientFactory.createClient();
+        services.filesystem['pathClient'] = pathClient;
+      } catch (error) {
+        console.warn('Failed to create PathServiceClient for FileSystemService', error);
+      }
+    }
+    
+    if (services.path && pathClientFactory) {
+      try {
+        const fileSystemClient = fileSystemClientFactory.createClient();
+        services.path['fileSystemClient'] = fileSystemClient;
+      } catch (error) {
+        console.warn('Failed to create FileSystemServiceClient for PathService', error);
+      }
+    }
+    
+    if (services.parser && parserClientFactory) {
+      try {
+        const resolutionClient = resolutionClientFactory.createClient();
+        services.parser['resolutionClient'] = resolutionClient;
+      } catch (error) {
+        console.warn('Failed to create ResolutionServiceClient for ParserService', error);
+      }
+    }
+    
+    if (services.resolution && resolutionClientFactory) {
+      try {
+        const parserClient = parserClientFactory.createClient();
+        services.resolution['parserClient'] = parserClient;
+      } catch (error) {
+        console.warn('Failed to create ParserServiceClient for ResolutionService', error);
+      }
+    }
+    
+    if (services.state && stateClientFactory) {
+      try {
+        const stateTrackingClient = stateTrackingClientFactory.createClient();
+        services.state['stateTrackingClient'] = stateTrackingClient;
+      } catch (error) {
+        console.warn('Failed to create StateTrackingServiceClient for StateService', error);
+      }
+    }
   } catch (error) {
     console.warn('Failed to resolve one or more service factories, falling back to ServiceMediator', error);
   }

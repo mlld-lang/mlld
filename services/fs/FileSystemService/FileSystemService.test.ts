@@ -4,22 +4,25 @@ import { FileSystemService } from './FileSystemService.js';
 import { PathOperationsService } from './PathOperationsService.js';
 import { MeldError } from '@core/errors/MeldError.js';
 import path from 'path';
-import { ServiceMediator } from '@services/mediator/ServiceMediator.js';
 import { PathService } from '@services/fs/PathService/PathService.js';
 import { ProjectPathResolver } from '@services/fs/ProjectPathResolver.js';
 import { IPathService } from '../PathService/IPathService.js';
 import { IFileSystemService } from './IFileSystemService.js';
 import { IFileSystem } from './IFileSystem.js';
 import { IPathOperationsService } from './IPathOperationsService.js';
+import { IPathServiceClient } from '../PathService/interfaces/IPathServiceClient.js';
+import { PathServiceClientFactory } from '../PathService/factories/PathServiceClientFactory.js';
 import { IServiceMediator } from '@services/mediator/IServiceMediator.js';
 
 describe('FileSystemService', () => {
   let context: TestContextDI;
   let service: FileSystemService;
   let pathOps: PathOperationsService;
-  let serviceMediator: ServiceMediator;
   let pathService: PathService;
   let projectPathResolver: ProjectPathResolver;
+  let mockPathClient: IPathServiceClient;
+  let mockPathClientFactory: PathServiceClientFactory;
+  let mockServiceMediator: IServiceMediator;
 
   beforeEach(async () => {
     // Initialize test context with isolated container
@@ -30,36 +33,50 @@ describe('FileSystemService', () => {
     await context.fixtures.load('fileSystemProject');
 
     // Create test services with proper DI
-    serviceMediator = new ServiceMediator();
     pathOps = new PathOperationsService();
     projectPathResolver = new ProjectPathResolver();
     
+    // Create mock path client and factory
+    mockPathClient = {
+      resolvePath: (path: string) => path,
+      normalizePath: (path: string) => path
+    };
+    
+    mockPathClientFactory = {
+      createClient: () => mockPathClient
+    } as unknown as PathServiceClientFactory;
+    
+    // Create mock service mediator
+    mockServiceMediator = {
+      // Add required methods for backward compatibility
+      setPathService: (service: any) => {},
+      setFileSystemService: (service: any) => {},
+      setParserService: (service: any) => {},
+      setResolutionService: (service: any) => {},
+      setStateService: (service: any) => {}
+    } as unknown as IServiceMediator;
+    
     // Register services with container using the correct methods
-    context.registerMock('IServiceMediator', serviceMediator);
-    context.registerMock('ServiceMediator', serviceMediator);
     context.registerMock('IPathOperationsService', pathOps);
     context.registerMock('PathOperationsService', pathOps);
     context.registerMock(ProjectPathResolver, projectPathResolver);
     context.registerMock('IFileSystem', context.fs);
+    context.registerMock('PathServiceClientFactory', mockPathClientFactory);
+    context.registerMock('IServiceMediator', mockServiceMediator);
+    context.registerMock('ServiceMediator', mockServiceMediator);
     
-    // Create path service and register with mediator
-    pathService = new PathService(serviceMediator, projectPathResolver);
+    // Create path service
+    pathService = new PathService(mockServiceMediator, projectPathResolver);
     pathService.enableTestMode();
     pathService.setProjectPath('/project');
     context.registerMock('IPathService', pathService);
     context.registerMock('PathService', pathService);
-    
-    // Connect services through the mediator to resolve circular dependencies
-    serviceMediator.setPathService(pathService);
     
     // Initialize the context
     await context.initialize();
     
     // Resolve file system service from container with await for proper initialization
     service = await context.resolve(FileSystemService);
-    
-    // Connect file system service to the mediator
-    serviceMediator.setFileSystemService(service);
 
     // Set up test files and directories
     await service.ensureDir('project/list-dir');
