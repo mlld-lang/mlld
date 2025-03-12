@@ -75,25 +75,38 @@ Based on analysis of test failures, we need to be particularly careful about the
 
 ## Revised Removal Order and Approach
 
-We'll take an outside-in approach, updating consumers before modifying the services they depend on:
+We'll take an outside-in approach with specific dependency analysis to address StateService issues and API layer dependencies. The updated approach takes into account the deeper dependency relationships between services:
 
 1. **Phase 5.1: API Layer Updates**
-   - Update api/index.ts and api/run-meld.ts to use factory pattern instead of ServiceMediator
-   - Maintain backward compatibility in services during this transition
-   - Ensure all API tests pass after these changes
+   - Update api/index.ts and api/run-meld.ts to use the factory pattern instead of ServiceMediator
+   - Add new helper methods for configuring services via factories
+   - Identify explicit service dependencies in API layer
+   - Maintain backward compatibility in the `main()` and `runMeld()` functions
 
 2. **Phase 5.2: Service Tests Updates**
    - Update service-specific tests to use factories instead of ServiceMediator
+   - Create helper utilities for common factory setup patterns
    - Maintain backward compatibility in services during this transition
-   - Ensure all service tests pass after these changes
 
-3. **Phase 5.3: Service Removal** (after API and tests are updated)
+3. **Phase 5.3: Low-Risk Service Removal**
    - ParserService - Simplest to remove, minimal dependencies
    - ✅ VariableReferenceResolver - Depends on ResolutionService but can be updated independently
-   - ✅ FileSystemService - Already mostly using factory pattern
-   - ✅ PathService - Already mostly using factory pattern
-   - StateService - More complex but has factory pattern implemented
+   
+4. **Phase 5.4: Mid-Risk Service Removal**
+   - ✅ FileSystemService - Explicit API layer dependencies that must be addressed first
+   - ✅ PathService - Related to FileSystemService, requires careful coordination
+   
+5. **Phase 5.5: High-Risk Service Removal**
+   - StateService - Complex integration with API layer and other services:
+     - Issues found: The API layer explicitly sets `services.filesystem.setMediator(mediator)` and expects StateService to work with ServiceMediator
+     - Has many dependencies with other services through ServiceMediator
+     - Is used extensively in `createChildState()` and `clone()` methods
    - ResolutionService - Most complex, remove last
+
+6. **Phase 5.6: Final Cleanup**
+   - Remove ServiceMediator class and interface
+   - Update DI configuration
+   - Remove any lingering references to ServiceMediator
 
 ## Progress Summary
 

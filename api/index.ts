@@ -165,7 +165,6 @@ export async function main(filePath: string, options: ProcessOptions = {}): Prom
   if (services.path) mediator.setPathService(services.path);
   if (services.filesystem) mediator.setFileSystemService(services.filesystem);
   if (services.state) mediator.setStateService(services.state);
-  if (services.parser) mediator.setParserService(services.parser);
   if (services.resolution) mediator.setResolutionService(services.resolution);
 
   // Ensure FileSystemService has the mediator set

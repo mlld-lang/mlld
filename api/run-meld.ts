@@ -6,6 +6,7 @@ import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js
 import { ProcessOptions } from '@core/types/index.js';
 import { validateServicePipeline } from '@core/utils/serviceValidation.js';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem.js';
+import { resolveService } from '@core/ServiceProvider';
 
 // Export the MemoryFileSystem for users who want to use it
 export { MemoryFileSystem };
@@ -92,7 +93,6 @@ export async function runMeld(
     if (services.path) mediator.setPathService(services.path);
     if (services.filesystem) mediator.setFileSystemService(services.filesystem);
     if (services.state) mediator.setStateService(services.state);
-    if (services.parser) mediator.setParserService(services.parser);
     if (services.resolution) mediator.setResolutionService(services.resolution);
     
     // Ensure FileSystemService has the mediator set for backward compatibility

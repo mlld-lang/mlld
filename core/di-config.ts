@@ -67,7 +67,7 @@ container.registerInstance('IServiceMediator', serviceMediator);
 const pathOps = new PathOperationsService();
 const fileSystemService = new FileSystemService(pathOps, serviceMediator);
 const pathService = new PathService(serviceMediator);
-const parserService = new ParserService(serviceMediator);
+const parserService = new ParserService();
 
 // Create StateService with early initialization
 // This is needed because ResolutionService depends on StateService
@@ -95,7 +95,6 @@ container.registerInstance('IStateService', stateService);
 // Connect services through the mediator
 serviceMediator.setFileSystemService(fileSystemService);
 serviceMediator.setPathService(pathService);
-serviceMediator.setParserService(parserService);
 serviceMediator.setResolutionService(resolutionService);
 serviceMediator.setStateService(stateService);
 
