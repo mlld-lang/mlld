@@ -33,6 +33,8 @@ export class FileSystemService implements IFileSystemService {
   private fs: IFileSystem;
   private serviceMediator?: IServiceMediator;
   private pathClient?: IPathServiceClient;
+  private pathClientFactory?: PathServiceClientFactory;
+  private factoryInitialized: boolean = false;
 
   /**
    * Creates a new instance of the FileSystemService
@@ -56,17 +58,8 @@ export class FileSystemService implements IFileSystemService {
       this.serviceMediator.setFileSystemService(this);
     }
     
-    // Use factory if available (new approach)
-    if (this.pathClientFactory && typeof this.pathClientFactory.createClient === 'function') {
-      try {
-        this.pathClient = this.pathClientFactory.createClient();
-        logger.debug('Successfully created PathServiceClient using factory');
-      } catch (error) {
-        logger.warn('Failed to create PathServiceClient, falling back to ServiceMediator', { error });
-      }
-    } else {
-      logger.debug('PathServiceClientFactory not available or invalid, using ServiceMediator for path operations');
-    }
+    // Initialize factory if available
+    this.ensureFactoryInitialized();
     
     if (process.env.DEBUG === 'true') {
       console.log('FileSystemService: Initialized with', {
@@ -80,15 +73,43 @@ export class FileSystemService implements IFileSystemService {
   }
 
   /**
+   * Lazily initialize the PathServiceClient factory
+   * This is called only when needed to avoid circular dependencies
+   */
+  private ensureFactoryInitialized(): void {
+    if (this.factoryInitialized) {
+      return;
+    }
+    
+    this.factoryInitialized = true;
+    
+    // Use factory if available (new approach)
+    if (this.pathClientFactory && typeof this.pathClientFactory.createClient === 'function') {
+      try {
+        this.pathClient = this.pathClientFactory.createClient();
+        logger.debug('Successfully created PathServiceClient using factory');
+      } catch (error) {
+        logger.warn('Failed to create PathServiceClient', { error });
+      }
+    } else {
+      logger.debug('PathServiceClientFactory not available or invalid');
+    }
+  }
+
+  /**
    * Sets the service mediator for breaking circular dependencies
-   * @deprecated This method is deprecated and will be removed in a future version.
-   * Use constructor injection with IServiceMediator for handling circular dependencies.
-   * In the future, the Factory Pattern will replace the ServiceMediator for circular dependency resolution.
+   * @deprecated This method is maintained for backward compatibility. Use factory pattern instead.
    */
   setMediator(mediator: IServiceMediator): void {
-    logger.warn('FileSystemService.setMediator is deprecated. Use constructor injection instead.');
+    logger.warn('FileSystemService.setMediator is deprecated. Use factory pattern instead.');
+    
+    // Store reference for backward compatibility
     this.serviceMediator = mediator;
-    this.serviceMediator.setFileSystemService(this);
+    
+    // Register with mediator for backward compatibility
+    if (mediator) {
+      mediator.setFileSystemService(this);
+    }
   }
 
   /**
@@ -121,18 +142,21 @@ export class FileSystemService implements IFileSystemService {
   }
 
   /**
-   * Resolves a path using the path client or service mediator
+   * Resolves a path using the path service
    * @private
    * @param filePath - The path to resolve
    * @returns The resolved path
    */
   private resolvePath(filePath: string): string {
-    // Try new approach first (factory pattern)
-    if (this.pathClient && typeof this.pathClient.resolvePath === 'function') {
+    // Ensure factory is initialized
+    this.ensureFactoryInitialized();
+    
+    // Try to use the path client
+    if (this.pathClient) {
       try {
         return this.pathClient.resolvePath(filePath);
       } catch (error) {
-        logger.warn('Error using pathClient.resolvePath, falling back to ServiceMediator', { 
+        logger.warn('Error using pathClient.resolvePath', { 
           error, 
           path: filePath 
         });
@@ -141,7 +165,14 @@ export class FileSystemService implements IFileSystemService {
     
     // Fall back to mediator for backward compatibility
     if (this.serviceMediator) {
-      return this.serviceMediator.resolvePath(filePath);
+      try {
+        return this.serviceMediator.resolvePath(filePath);
+      } catch (error) {
+        logger.warn('Error using serviceMediator.resolvePath', { 
+          error, 
+          path: filePath 
+        });
+      }
     }
     
     // Last resort fallback
