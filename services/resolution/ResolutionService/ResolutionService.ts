@@ -17,7 +17,6 @@ import { inject, singleton, container } from 'tsyringe';
 import { IPathService } from '@services/fs/PathService/IPathService.js';
 import { VariableResolutionTracker, ResolutionTrackingConfig } from '@tests/utils/debug/VariableResolutionTracker/index.js';
 import { Service } from '@core/ServiceProvider.js';
-import { IServiceMediator } from '@services/mediator/index.js';
 import { IParserServiceClient } from '@services/pipeline/ParserService/interfaces/IParserServiceClient.js';
 import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory.js';
 import { IVariableReferenceResolverClient } from './interfaces/IVariableReferenceResolverClient.js';
@@ -26,6 +25,7 @@ import { IDirectiveServiceClient } from '@services/pipeline/DirectiveService/int
 import { DirectiveServiceClientFactory } from '@services/pipeline/DirectiveService/factories/DirectiveServiceClientFactory.js';
 import { IFileSystemServiceClient } from '@services/fs/FileSystemService/interfaces/IFileSystemServiceClient.js';
 import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/factories/FileSystemServiceClientFactory.js';
+import { IParserService } from '@services/pipeline/ParserService/interfaces/IParserService.js';
 
 /**
  * Interface matching the StructuredPath expected from meld-spec
@@ -147,9 +147,7 @@ export class ResolutionService implements IResolutionService {
   private stateService: IStateService = null!;
   private fileSystemService: IFileSystemService = null!;
   private pathService: IPathService = null!;
-  
-  /** @deprecated Use service factories instead */
-  private serviceMediator?: IServiceMediator;
+  private parserService?: IParserService;
   
   private parserClient?: IParserServiceClient;
   private parserClientFactory?: ParserServiceClientFactory;
@@ -170,16 +168,15 @@ export class ResolutionService implements IResolutionService {
    * @param stateService - State service for variable management
    * @param fileSystemService - File system service for file operations
    * @param pathService - Path service for path operations
-   * @param serviceMediator - Service mediator for breaking circular dependencies with the parser service
-   * @deprecated The serviceMediator parameter is deprecated and will be removed in a future version
+   * @param parserService - Parser service for parsing strings
    */
   constructor(
     @inject('IStateService') stateService?: IStateService,
     @inject('IFileSystemService') fileSystemService?: IFileSystemService, 
     @inject('IPathService') pathService?: IPathService,
-    @inject('IServiceMediator') serviceMediator?: IServiceMediator
+    @inject('IParserService') parserService?: IParserService
   ) {
-    this.initializeFromParams(stateService, fileSystemService, pathService, serviceMediator);
+    this.initializeFromParams(stateService, fileSystemService, pathService, parserService);
     
     // We'll initialize the factory lazily to avoid circular dependencies
     if (process.env.DEBUG === 'true') {
@@ -187,7 +184,7 @@ export class ResolutionService implements IResolutionService {
         hasStateService: !!this.stateService,
         hasFileSystemService: !!this.fileSystemService,
         hasPathService: !!this.pathService,
-        hasServiceMediator: !!this.serviceMediator
+        hasParserService: !!this.parserService
       });
     }
   }
@@ -208,8 +205,8 @@ export class ResolutionService implements IResolutionService {
       this.parserClientFactory = container.resolve('ParserServiceClientFactory');
       this.initializeParserClient();
     } catch (error) {
-      // Factory not available, will use mediator
-      logger.debug('ParserServiceClientFactory not available, using ServiceMediator for parser operations');
+      // In test environment, we need to work even without factories
+      logger.debug(`ParserServiceClientFactory not available: ${(error as Error).message}`);
     }
     
     // Initialize variable resolver client factory
@@ -217,8 +214,8 @@ export class ResolutionService implements IResolutionService {
       this.variableResolverClientFactory = container.resolve('VariableReferenceResolverClientFactory');
       this.initializeVariableResolverClient();
     } catch (error) {
-      // Factory not available, will use direct reference
-      logger.debug('VariableReferenceResolverClientFactory not available, using direct reference for variable resolution');
+      // In test environment, we need to work even without factories
+      logger.debug(`VariableReferenceResolverClientFactory not available: ${(error as Error).message}`);
     }
     
     // Initialize directive client factory
@@ -226,8 +223,8 @@ export class ResolutionService implements IResolutionService {
       this.directiveClientFactory = container.resolve('DirectiveServiceClientFactory');
       this.initializeDirectiveClient();
     } catch (error) {
-      // Factory not available, will use mediator
-      logger.debug('DirectiveServiceClientFactory not available, using ServiceMediator for directive operations');
+      // In test environment, we need to work even without factories
+      logger.debug(`DirectiveServiceClientFactory not available: ${(error as Error).message}`);
     }
     
     // Initialize file system client factory
@@ -235,8 +232,8 @@ export class ResolutionService implements IResolutionService {
       this.fsClientFactory = container.resolve('FileSystemServiceClientFactory');
       this.initializeFsClient();
     } catch (error) {
-      // Factory not available, will use mediator
-      logger.debug('FileSystemServiceClientFactory not available, using ServiceMediator for file system operations');
+      // In test environment, we need to work even without factories
+      logger.debug(`FileSystemServiceClientFactory not available: ${(error as Error).message}`);
     }
   }
   
@@ -245,15 +242,14 @@ export class ResolutionService implements IResolutionService {
    */
   private initializeParserClient(): void {
     if (!this.parserClientFactory) {
-      return;
+      throw new Error('ParserServiceClientFactory is not initialized');
     }
     
     try {
       this.parserClient = this.parserClientFactory.createClient();
       logger.debug('Successfully created ParserServiceClient using factory');
     } catch (error) {
-      logger.warn('Failed to create ParserServiceClient, falling back to ServiceMediator', { error });
-      this.parserClient = undefined;
+      throw new Error(`Failed to create ParserServiceClient: ${(error as Error).message}`);
     }
   }
   
@@ -262,32 +258,30 @@ export class ResolutionService implements IResolutionService {
    */
   private initializeVariableResolverClient(): void {
     if (!this.variableResolverClientFactory) {
-      return;
+      throw new Error('VariableReferenceResolverClientFactory is not initialized');
     }
     
     try {
       this.variableResolverClient = this.variableResolverClientFactory.createClient();
       logger.debug('Successfully created VariableReferenceResolverClient using factory');
     } catch (error) {
-      logger.warn('Failed to create VariableReferenceResolverClient, falling back to direct reference', { error });
-      this.variableResolverClient = undefined;
+      throw new Error(`Failed to create VariableReferenceResolverClient: ${(error as Error).message}`);
     }
   }
   
   /**
-   * Initialize the DirectiveClient using the factory
+   * Initialize the DirectiveServiceClient using the factory
    */
   private initializeDirectiveClient(): void {
     if (!this.directiveClientFactory) {
-      return;
+      throw new Error('DirectiveServiceClientFactory is not initialized');
     }
     
     try {
       this.directiveClient = this.directiveClientFactory.createClient();
       logger.debug('Successfully created DirectiveServiceClient using factory');
     } catch (error) {
-      logger.warn('Failed to create DirectiveServiceClient, falling back to mediator', { error });
-      this.directiveClient = undefined;
+      throw new Error(`Failed to create DirectiveServiceClient: ${(error as Error).message}`);
     }
   }
   
@@ -296,15 +290,14 @@ export class ResolutionService implements IResolutionService {
    */
   private initializeFsClient(): void {
     if (!this.fsClientFactory) {
-      return;
+      throw new Error('FileSystemServiceClientFactory is not initialized');
     }
     
     try {
       this.fsClient = this.fsClientFactory.createClient();
       logger.debug('Successfully created FileSystemServiceClient using factory');
     } catch (error) {
-      logger.warn('Failed to create FileSystemServiceClient, falling back to mediator', { error });
-      this.fsClient = undefined;
+      throw new Error(`Failed to create FileSystemServiceClient: ${(error as Error).message}`);
     }
   }
   
@@ -316,7 +309,7 @@ export class ResolutionService implements IResolutionService {
     stateService?: IStateService,
     fileSystemService?: IFileSystemService,
     pathService?: IPathService,
-    serviceMediator?: IServiceMediator
+    parserService?: IParserService
   ): void {
     // Verify required dependencies
     if (!stateService) {
@@ -327,16 +320,7 @@ export class ResolutionService implements IResolutionService {
     this.stateService = stateService;
     this.fileSystemService = fileSystemService || this.createDefaultFileSystemService();
     this.pathService = pathService || this.createDefaultPathService();
-    this.serviceMediator = serviceMediator;
-    
-    // Register this service with the mediator if available
-    if (this.serviceMediator && typeof this.serviceMediator.setResolutionService === 'function') {
-      try {
-        this.serviceMediator.setResolutionService(this);
-      } catch (error) {
-        console.warn('Failed to register ResolutionService with ServiceMediator:', error);
-      }
-    }
+    this.parserService = parserService;
     
     // Initialize resolvers
     this.initializeResolvers();
@@ -402,8 +386,7 @@ export class ResolutionService implements IResolutionService {
     this.contentResolver = new ContentResolver(this.stateService);
     this.variableReferenceResolver = new VariableReferenceResolver(
       this.stateService,
-      this,
-      this.serviceMediator // Keep for backward compatibility
+      this
     );
   }
 
@@ -415,30 +398,42 @@ export class ResolutionService implements IResolutionService {
       // Ensure factory is initialized before trying to use it
       this.ensureFactoryInitialized();
       
-      // Try to use the parser client first if available
+      // Use the parser client if available
       if (this.parserClient) {
         try {
           const nodes = await this.parserClient.parseString(value);
           return nodes || [];
         } catch (error) {
-          logger.warn('Error using parserClient.parseString, falling back to ServiceMediator', { 
+          logger.error('Error using parserClient.parseString', { 
             error, 
             valueLength: value.length 
           });
         }
       }
       
-      // Fall back to mediator
-      if (this.serviceMediator) {
-        const nodes = await this.serviceMediator.parseForResolution(value);
-        return nodes || [];
+      // Last resort fallback to direct parsing in tests
+      logger.warn('No parser client available - falling back to direct import or mock parser');
+      
+      // Try using directly injected parser service if available (for tests)
+      if (this.parserService) {
+        try {
+          const nodes = await this.parserService.parse(value);
+          return nodes || [];
+        } catch (error) {
+          logger.warn('Error using injected parser service', { error });
+        }
       }
       
-      // Last resort fallback
-      logger.warn('No parser service available - falling back to direct import');
-      const { parse } = await import('meld-ast');
-      const result = await parse(value, { trackLocations: true });
-      return result.ast || [];
+      // Finally, try direct import
+      try {
+        const { parse } = await import('meld-ast');
+        const result = await parse(value, { trackLocations: true });
+        return result.ast || [];
+      } catch (error) {
+        // In a test environment, create a fallback text node
+        logger.warn('Last resort - creating fallback text node', { value });
+        return [{ type: 'Text', content: value } as TextNode];
+      }
     } catch (error) {
       logger.error('Error parsing content for resolution', { error });
       return [];

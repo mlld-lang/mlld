@@ -10,7 +10,6 @@ import { VariableResolutionTracker } from '@tests/utils/debug/VariableResolution
 import { container } from 'tsyringe';
 import { IResolutionServiceClient } from '../interfaces/IResolutionServiceClient.js';
 import { ResolutionServiceClientFactory } from '../factories/ResolutionServiceClientFactory.js';
-import { IServiceMediator } from '@services/mediator/index.js';
 import { IParserServiceClient } from '@services/pipeline/ParserService/interfaces/IParserServiceClient.js';
 import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory.js';
 
@@ -33,24 +32,16 @@ export class VariableReferenceResolver {
   private parserClient?: IParserServiceClient;
   private parserClientFactory?: ParserServiceClientFactory;
   private factoryInitialized: boolean = false;
-  
-  /** @deprecated Use service factories instead */
-  private serviceMediator?: IServiceMediator;
 
   /**
    * Creates a new instance of the VariableReferenceResolver
    * @param stateService - State service for variable management
    * @param resolutionService - Resolution service for resolving variables
-   * @param serviceMediator - Service mediator for breaking circular dependencies
-   * @deprecated The serviceMediator parameter is deprecated and will be removed in a future version
    */
   constructor(
     private readonly stateService: IStateService,
-    private readonly resolutionService?: IResolutionService,
-    serviceMediator?: IServiceMediator
-  ) {
-    this.serviceMediator = serviceMediator;
-  }
+    private readonly resolutionService?: IResolutionService
+  ) {}
 
   /**
    * Lazily initialize the service client factories
@@ -68,8 +59,7 @@ export class VariableReferenceResolver {
       this.resolutionClientFactory = container.resolve('ResolutionServiceClientFactory');
       this.initializeResolutionClient();
     } catch (error) {
-      // Factory not available, will use mediator or direct reference
-      logger.debug('ResolutionServiceClientFactory not available, using fallback for resolution operations');
+      throw new Error(`Failed to resolve ResolutionServiceClientFactory: ${(error as Error).message}`);
     }
     
     // Initialize parser client factory
@@ -77,8 +67,7 @@ export class VariableReferenceResolver {
       this.parserClientFactory = container.resolve('ParserServiceClientFactory');
       this.initializeParserClient();
     } catch (error) {
-      // Factory not available, will use mediator
-      logger.debug('ParserServiceClientFactory not available, using ServiceMediator for parser operations');
+      throw new Error(`Failed to resolve ParserServiceClientFactory: ${(error as Error).message}`);
     }
   }
   
@@ -87,15 +76,14 @@ export class VariableReferenceResolver {
    */
   private initializeResolutionClient(): void {
     if (!this.resolutionClientFactory) {
-      return;
+      throw new Error('ResolutionServiceClientFactory is not initialized');
     }
     
     try {
       this.resolutionClient = this.resolutionClientFactory.createClient();
       logger.debug('Successfully created ResolutionServiceClient using factory');
     } catch (error) {
-      logger.warn('Failed to create ResolutionServiceClient, falling back to direct reference or mediator', { error });
-      this.resolutionClient = undefined;
+      throw new Error(`Failed to create ResolutionServiceClient: ${(error as Error).message}`);
     }
   }
   
@@ -104,15 +92,14 @@ export class VariableReferenceResolver {
    */
   private initializeParserClient(): void {
     if (!this.parserClientFactory) {
-      return;
+      throw new Error('ParserServiceClientFactory is not initialized');
     }
     
     try {
       this.parserClient = this.parserClientFactory.createClient();
       logger.debug('Successfully created ParserServiceClient using factory');
     } catch (error) {
-      logger.warn('Failed to create ParserServiceClient, falling back to ServiceMediator', { error });
-      this.parserClient = undefined;
+      throw new Error(`Failed to create ParserServiceClient: ${(error as Error).message}`);
     }
   }
 
@@ -138,7 +125,12 @@ export class VariableReferenceResolver {
     
     // Track this resolution attempt if debug tracking is enabled
     if (this.resolutionTracker) {
-      this.resolutionTracker.trackResolution('start', content, context);
+      this.resolutionTracker.trackResolutionAttempt(
+        'variable-resolution', 
+        JSON.stringify(context),
+        true, 
+        content
+      );
     }
     
     try {
@@ -342,7 +334,13 @@ export class VariableReferenceResolver {
     } catch (error) {
       // Track error if debug tracking is enabled
       if (this.resolutionTracker) {
-        this.resolutionTracker.trackResolution('error', content, context, error);
+        this.resolutionTracker.trackResolutionAttempt(
+          'variable-resolution-error', 
+          JSON.stringify(context),
+          false, 
+          undefined, 
+          (error as Error).message
+        );
       }
       
       // Re-throw the error
@@ -350,7 +348,11 @@ export class VariableReferenceResolver {
     } finally {
       // Track completion if debug tracking is enabled
       if (this.resolutionTracker) {
-        this.resolutionTracker.trackResolution('end', content, context);
+        this.resolutionTracker.trackResolutionAttempt(
+          'variable-resolution-complete', 
+          JSON.stringify(context),
+          true
+        );
       }
     }
   }
@@ -564,85 +566,77 @@ export class VariableReferenceResolver {
     // Ensure factory is initialized
     this.ensureFactoryInitialized();
     
-    // Try to use the parser client if available
-    if (this.parserClient) {
-      try {
-        return await this.parserClient.parseString(content);
-      } catch (error) {
-        logger.warn('Error using parserClient.parseString, falling back to ServiceMediator', { error });
-      }
+    // Use the parser client
+    if (!this.parserClient) {
+      throw new Error('ParserClient is not initialized');
     }
     
-    // Use the parser service if available through mediator
-    if (this.serviceMediator) {
-      try {
-        return await this.serviceMediator.parse(content);
-      } catch (error) {
-        logger.error('Error parsing content for variable resolution', { content, error });
-        throw error;
+    try {
+      return await this.parserClient.parseString(content);
+    } catch (error) {
+      logger.error('Error parsing content with parser client', { error });
+      
+      // Fallback to simple regex parsing
+      const nodes: MeldNode[] = [];
+      const variableMatcher = /\{\{([^}]+)\}\}/g;
+      let lastIndex = 0;
+      let match;
+      
+      while ((match = variableMatcher.exec(content)) !== null) {
+        // Add text before the variable
+        if (match.index > lastIndex) {
+          const textValue = content.substring(lastIndex, match.index);
+          nodes.push({
+            type: 'Text',
+            value: textValue
+          } as TextNode);
+        }
+        
+        // Add the variable reference
+        const varName = match[1];
+        
+        // Check if this is a field access
+        if (varName.includes('.')) {
+          const parts = varName.split('.');
+          const baseName = parts[0];
+          const fields = parts.slice(1).map(field => {
+            // Check if this is a numeric index
+            const numIndex = parseInt(field, 10);
+            if (!isNaN(numIndex)) {
+              return { type: 'index', value: numIndex };
+            }
+            // Otherwise it's a field name
+            return { type: 'field', value: field };
+          });
+          
+          nodes.push({
+            type: 'VariableReference',
+            identifier: baseName,
+            fields
+          } as DataVarNode);
+        } else {
+          // Simple variable reference
+          nodes.push({
+            type: 'VariableReference',
+            identifier: varName
+          } as TextVarNode);
+        }
+        
+        // Update last index
+        lastIndex = match.index + match[0].length;
       }
-    }
-    
-    // Fallback to simple regex parsing
-    const nodes: MeldNode[] = [];
-    const variableMatcher = /\{\{([^}]+)\}\}/g;
-    let lastIndex = 0;
-    let match;
-    
-    while ((match = variableMatcher.exec(content)) !== null) {
-      // Add text before the variable
-      if (match.index > lastIndex) {
-        const textValue = content.substring(lastIndex, match.index);
+      
+      // Add remaining text
+      if (lastIndex < content.length) {
+        const textValue = content.substring(lastIndex);
         nodes.push({
           type: 'Text',
           value: textValue
         } as TextNode);
       }
       
-      // Add the variable reference
-      const varName = match[1];
-      
-      // Check if this is a field access
-      if (varName.includes('.')) {
-        const parts = varName.split('.');
-        const baseName = parts[0];
-        const fields = parts.slice(1).map(field => {
-          // Check if this is a numeric index
-          const numIndex = parseInt(field, 10);
-          if (!isNaN(numIndex)) {
-            return { type: 'index', value: numIndex };
-          }
-          // Otherwise it's a field name
-          return { type: 'field', value: field };
-        });
-        
-        nodes.push({
-          type: 'VariableReference',
-          identifier: baseName,
-          fields
-        } as DataVarNode);
-      } else {
-        // Simple variable reference
-        nodes.push({
-          type: 'VariableReference',
-          identifier: varName
-        } as TextVarNode);
-      }
-      
-      // Update last index
-      lastIndex = match.index + match[0].length;
+      return nodes;
     }
-    
-    // Add remaining text
-    if (lastIndex < content.length) {
-      const textValue = content.substring(lastIndex);
-      nodes.push({
-        type: 'Text',
-        value: textValue
-      } as TextNode);
-    }
-    
-    return nodes;
   }
 
   /**
@@ -853,7 +847,7 @@ export class VariableReferenceResolver {
   }
   
   /**
-   * Access fields in a nested object or array
+   * Access fields in an object
    */
   private async accessFields(
     baseValue: any, 
@@ -861,102 +855,112 @@ export class VariableReferenceResolver {
     context: ResolutionContext,
     originalPath: string
   ): Promise<string> {
-    // Start with the base value
-    let current = baseValue;
+    let currentValue = baseValue;
     
-    // Handle each field
-    for (let i = 0; i < fields.length; i++) {
-      const field = fields[i];
-      
-      // Check if current value exists
-      if (current === undefined || current === null) {
+    for (const field of fields) {
+      // Handle undefined or null values
+      if (currentValue === undefined || currentValue === null) {
         if (context.strict) {
           throw new MeldResolutionError(
-            `Cannot access field ${field.value} in undefined value`,
+            `Cannot access field of ${currentValue} value`,
             {
-              code: ResolutionErrorCode.FIELD_NOT_FOUND,
-              severity: ErrorSeverity.Error,
-              details: { path: originalPath, field: field.value }
+              code: ResolutionErrorCode.FIELD_ACCESS_ERROR,
+              severity: ErrorSeverity.Recoverable,
+              details: { variableName: originalPath }
             }
           );
         }
         return '';
       }
       
-      // Read the field value
-      if (field.type === 'index') {
-        // Array access
-        if (Array.isArray(current)) {
-          // Numeric index
-          if (typeof field.value === 'number') {
-            current = current[field.value];
-          }
-          // String index (might be a variable)
-          else if (typeof field.value === 'string') {
-            const resolvedIndex = await this.resolveVariableInFieldName(field.value, context);
-            
-            if (typeof resolvedIndex === 'number') {
-              current = current[resolvedIndex];
-            } else {
-              // Try to parse as number
-              const numIndex = parseInt(resolvedIndex, 10);
-              if (!isNaN(numIndex)) {
-                current = current[numIndex];
-              } else {
-                // Use as string index (for objects disguised as arrays)
-                current = current[resolvedIndex];
-              }
-            }
-          }
-        }
-        // Object access (treat like a regular field)
-        else if (typeof current === 'object') {
-          const fieldName = typeof field.value === 'number' 
-            ? field.value.toString() 
-            : field.value;
+      // Get the field name or index
+      let fieldNameOrIndex = field.value;
+      
+      // Check if the field name is a variable reference
+      if (typeof fieldNameOrIndex === 'string' && 
+          fieldNameOrIndex.startsWith('{{') && 
+          fieldNameOrIndex.endsWith('}}')) {
+        // Resolve the variable reference
+        fieldNameOrIndex = await this.resolveVariableInFieldName(fieldNameOrIndex, context);
+      }
+      
+      // Access the field
+      try {
+        if (Array.isArray(currentValue) && field.type === 'index') {
+          // Validate index is in bounds
+          const index = typeof fieldNameOrIndex === 'number' ? 
+            fieldNameOrIndex : parseInt(fieldNameOrIndex as string, 10);
           
-          const resolvedField = await this.resolveVariableInFieldName(fieldName, context);
-          current = current[resolvedField];
-        }
-        // Primitive value - cannot access indices
-        else {
-          if (context.strict) {
-    throw new MeldResolutionError(
-              `Cannot access array index in non-array value`,
-      {
-                code: ResolutionErrorCode.INVALID_ACCESS,
-        severity: ErrorSeverity.Error,
-                details: { path: originalPath, type: typeof current }
-              }
-            );
+          if (isNaN(index) || index < 0 || index >= currentValue.length) {
+            if (context.strict) {
+              throw new MeldResolutionError(
+                `Array index ${fieldNameOrIndex} out of bounds for array of length ${currentValue.length}`,
+                {
+                  code: ResolutionErrorCode.FIELD_ACCESS_ERROR,
+                  severity: ErrorSeverity.Recoverable,
+                  details: { variableName: originalPath }
+                }
+              );
+            }
+            return '';
           }
-          return '';
-        }
-    } else {
-        // Field access (dot notation)
-        if (typeof current === 'object' && current !== null) {
-          const resolvedField = await this.resolveVariableInFieldName(field.value as string, context);
-          current = current[resolvedField];
-        }
-        // Primitive value - cannot access fields
-        else {
+          
+          currentValue = currentValue[index];
+        } else if (typeof currentValue === 'object' && currentValue !== null) {
+          // Using fieldNameOrIndex as a property name
+          const propName = String(fieldNameOrIndex);
+          
+          if (!(propName in currentValue)) {
+            if (context.strict) {
+              throw new MeldResolutionError(
+                `Object has no property named '${propName}'`,
+                {
+                  code: ResolutionErrorCode.FIELD_ACCESS_ERROR,
+                  severity: ErrorSeverity.Recoverable,
+                  details: { variableName: originalPath }
+                }
+              );
+            }
+            return '';
+          }
+          
+          currentValue = currentValue[propName];
+        } else {
+          // Can't access fields on primitive values
           if (context.strict) {
             throw new MeldResolutionError(
-              `Cannot access field in non-object value`,
+              `Cannot access field '${fieldNameOrIndex}' of non-object value`,
               {
-                code: ResolutionErrorCode.INVALID_ACCESS,
-                severity: ErrorSeverity.Error,
-                details: { path: originalPath, type: typeof current }
+                code: ResolutionErrorCode.FIELD_ACCESS_ERROR,
+                severity: ErrorSeverity.Recoverable,
+                details: { variableName: originalPath }
               }
             );
           }
           return '';
         }
+      } catch (error) {
+        // Handle errors during property access
+        if (error instanceof MeldResolutionError) {
+          throw error;
+        }
+        
+        if (context.strict) {
+          throw new MeldResolutionError(
+            `Error accessing field '${fieldNameOrIndex}': ${(error as Error).message}`,
+            {
+              code: ResolutionErrorCode.FIELD_ACCESS_ERROR,
+              severity: ErrorSeverity.Recoverable,
+              details: { variableName: originalPath }
+            }
+          );
+        }
+        return '';
       }
     }
     
-    // Convert the final value to string
-    return this.convertToString(current);
+    // Return the final value
+    return this.convertToString(currentValue);
   }
 
   /**
@@ -1005,31 +1009,32 @@ export class VariableReferenceResolver {
     this.ensureFactoryInitialized();
     
     // Try to use the resolution client
-    if (this.resolutionClient) {
-      try {
-        return await this.resolutionClient.resolveInContext(reference, context);
-      } catch (error) {
-        logger.warn('Error using resolutionClient.resolveInContext', { 
-          error, 
-          reference 
-        });
-      }
+    if (!this.resolutionClient) {
+      throw new Error('ResolutionClient is not initialized');
     }
     
-    // Try direct resolution service reference
-    if (this.resolutionService) {
-      try {
-        return await this.resolutionService.resolveInContext(reference, context);
-      } catch (error) {
-        logger.warn('Error using resolutionService.resolveInContext', { 
-          error, 
-          reference 
-        });
+    try {
+      return await this.resolutionClient.resolveInContext(reference, context);
+    } catch (error) {
+      logger.error('Error using resolutionClient.resolveInContext', { 
+        error, 
+        reference 
+      });
+      
+      // Try direct resolution service reference as fallback
+      if (this.resolutionService) {
+        try {
+          return await this.resolutionService.resolveInContext(reference, context);
+        } catch (err) {
+          logger.error('Error using resolutionService.resolveInContext', { 
+            error: err, 
+            reference 
+          });
+          throw err;
+        }
       }
+      
+      throw error;
     }
-    
-    // If we get here, we couldn't resolve the variable
-    logger.warn('No resolution service available for nested variable resolution');
-    return reference;
   }
 }
