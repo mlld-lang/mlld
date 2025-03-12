@@ -775,15 +775,12 @@ export class VariableReferenceResolver {
           const nodes = await this.parserClient.parseString(text);
           return this.extractVariableReferencesFromNodes(nodes);
         } catch (error) {
-          logger.warn('Error using parserClient.parseString, falling back to ServiceMediator', { error });
+          logger.warn('Error using parserClient.parseString', { error });
         }
       }
       
-      // Try to use AST-based parsing if mediator is available
-      if (this.serviceMediator) {
-        const nodes = await this.serviceMediator.parse(text);
-        return this.extractVariableReferencesFromNodes(nodes);
-      }
+      // If we get here, we couldn't parse with the client
+      logger.debug('Parser client unavailable or failed, falling back to regex extraction');
     } catch (error) {
       logger.debug('Error extracting references with AST', { error });
       // Fall back to regex-based extraction
