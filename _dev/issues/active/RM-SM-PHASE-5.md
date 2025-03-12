@@ -114,7 +114,7 @@ We'll take an outside-in approach with specific dependency analysis to address S
      6. ✅ Update all methods to exclusively use `StateTrackingServiceClient`
      7. ✅ Ensure factory initialization is robust without fallbacks
 
-   B. **ResolutionService**
+   B. **ResolutionService** 🚧
    - File: `services/resolution/ResolutionService/ResolutionService.ts`
    - Test: `services/resolution/ResolutionService/ResolutionService.test.ts` (already updated)
    - Current Usage:
@@ -122,12 +122,12 @@ We'll take an outside-in approach with specific dependency analysis to address S
      - Uses mediator as fallback in factory initialization
      - Contains multiple fallback paths in methods
    - Changes:
-     1. ✅ Remove `IServiceMediator` import
-     2. ✅ Remove `serviceMediator` parameter from constructor
-     3. ✅ Remove `serviceMediator` property
-     4. ✅ Remove all fallback code in `ensureFactoryInitialized` and related methods
-     5. ✅ Make factory initialization throw errors instead of falling back
-     6. ✅ Remove any direct service access that bypasses clients
+     1. 🚧 Remove `IServiceMediator` import
+     2. 🚧 Remove `serviceMediator` parameter from constructor
+     3. 🚧 Remove `serviceMediator` property
+     4. 🚧 Remove all fallback code in `ensureFactoryInitialized` and related methods
+     5. 🚧 Make factory initialization throw errors instead of falling back
+     6. 🚧 Remove any direct service access that bypasses clients
 
    C. **VariableReferenceResolver** ✅
    - File: `services/resolution/ResolutionService/resolvers/VariableReferenceResolver.ts`
@@ -142,27 +142,38 @@ We'll take an outside-in approach with specific dependency analysis to address S
      
    **Note**: During the removal of ServiceMediator from VariableReferenceResolver, we discovered a constructor parameter mismatch and several TypeScript errors. These have been documented as a separate issue in `_dev/issues/bugs/variable-reference-resolver-refactoring-needed.md` for future refactoring.
 
-   D. **FileSystemService**
+   D. **FileSystemService** ✅
    - File: `services/fs/FileSystemService/FileSystemService.ts`
    - Test: `services/fs/FileSystemService/FileSystemService.test.ts`
    - Current Usage:
      - Has `IServiceMediator` import
      - Tests still reference ServiceMediator
    - Changes:
-     1. Verify all ServiceMediator references are fully removed from implementation
-     2. Update test to remove all remaining references to ServiceMediator
+     1. ✅ Verify all ServiceMediator references are fully removed from implementation
+     2. ✅ Update test to remove all remaining references to ServiceMediator
 
-   E. **PathService**
+   E. **PathService** ✅
    - File: `services/fs/PathService/PathService.ts`
    - Test: `services/fs/PathService/PathService.test.ts`
    - Current Usage:
      - Has `IServiceMediator` import
      - Tests still reference ServiceMediator
    - Changes:
-     1. Verify all ServiceMediator references are fully removed from implementation
-     2. Update test to remove all remaining references to ServiceMediator
+     1. ✅ Verify all ServiceMediator references are fully removed from implementation
+     2. ✅ Update test to remove all remaining references to ServiceMediator
 
-   F. **ServiceMediator Test**
+   F. **CLIService** ✅
+   - File: `services/cli/CLIService/CLIService.ts`
+   - Test: `services/cli/CLIService/CLIService.test.ts`
+   - Current Usage:
+     - May have dependencies on services that used ServiceMediator
+     - Tests fail when ServiceMediator is removed from dependencies
+   - Changes:
+     1. ✅ Update tests to properly mock services without ServiceMediator
+     2. ✅ Ensure proper initialization of service dependencies
+     3. ✅ Verify CLIService continues to function without ServiceMediator
+
+   G. **ServiceMediator Test**
    - File: `services/mediator/__tests__/ServiceMediator.test.ts`
    - Current Usage:
      - Tests the ServiceMediator itself
@@ -172,10 +183,16 @@ We'll take an outside-in approach with specific dependency analysis to address S
    **DI Configuration Updates:**
    - File: `core/di-config.ts`
    - Changes:
-     1. Remove ServiceMediator registration
-     2. Remove ServiceMediator injection into services
-     3. Ensure all factory registrations are in place
-     4. Update any service registration that still mentions ServiceMediator
+     1. 🚧 Remove ServiceMediator registration
+     2. 🚧 Remove ServiceMediator injection into services
+     3. 🚧 Ensure all factory registrations are in place
+     4. 🚧 Update any service registration that still mentions ServiceMediator
+   
+   **Note**: Based on our research, the DI configuration in `core/di-config.ts` still heavily uses ServiceMediator, including:
+   - Creating and registering a ServiceMediator instance 
+   - Injecting it into services like ResolutionService
+   - Connecting services through mediator methods
+   - This should be a high priority to update once ResolutionService is fixed
 
    **API Layer Final Updates:**
    - Files:
@@ -282,20 +299,32 @@ As of the latest update, we have successfully completed the following:
    - Added proper error handling for cases where factories are not available
    - All tests pass with these changes
 
-2. **Service Implementations** - Partially Updated
+2. **Service Implementations** - Significantly Advanced
    - ✅ Implemented factory pattern for all services with circular dependencies
    - ✅ Added factory interfaces and client interfaces for all services
-   - ✅ Services prefer factories but still include mediator fallback code
-   - ✅ Updated various tests to use factories instead of ServiceMediator:
+   - ✅ Removed ServiceMediator from key services:
+     - ✅ StateService
+     - ✅ FileSystemService
+     - ✅ PathService
+     - ✅ VariableReferenceResolver
+     - ✅ CLIService tests now work without ServiceMediator
+   - 🚧 Major remaining components to update:
+     - 🚧 ResolutionService is the last major service to fully update
+     - 🚧 DI configuration in core/di-config.ts needs complete overhaul to remove ServiceMediator
+   - ✅ Updated various tests to work without ServiceMediator:
+     - ✅ `StateService.test.ts`
      - ✅ `ResolutionService.test.ts`
      - ✅ `FileSystemService.test.ts`
      - ✅ `PathService.test.ts`
+     - ✅ `CLIService.test.ts`
 
-3. **Service Mediator Removal** - In Progress
+3. **Service Mediator Removal** - Significant Progress
    - ✅ Added deprecation notices to all ServiceMediator methods
    - ✅ Updated documentation to describe the factory pattern
-   - 🚧 Full removal of ServiceMediator is currently in progress
-   - 🚧 Still need to finish removing all ServiceMediator references
+   - 🚧 Next key steps:
+     - 🚧 Update ResolutionService to remove ServiceMediator
+     - 🚧 Overhaul core/di-config.ts to use factories consistently and remove ServiceMediator
+     - 🚧 Final step: delete ServiceMediator files after complete removal of all references
 
 ## Detailed Implementation Plan
 
