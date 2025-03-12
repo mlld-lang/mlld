@@ -160,29 +160,7 @@ export async function main(filePath: string, options: ProcessOptions = {}): Prom
   // Validate the service pipeline after merging
   validateServicePipeline(services);
 
-  // Initialize connections between services using factories (preferred) or ServiceMediator (fallback)
-  
-  // Try to get factories from the container
-  let pathClientFactory;
-  let fileSystemClientFactory;
-  let parserClientFactory;
-  let resolutionClientFactory;
-  let stateClientFactory;
-  
-  try {
-    // Get factories from the container
-    pathClientFactory = resolveService('PathServiceClientFactory');
-    fileSystemClientFactory = resolveService('FileSystemServiceClientFactory');
-    parserClientFactory = resolveService('ParserServiceClientFactory');
-    resolutionClientFactory = resolveService('ResolutionServiceClientFactory');
-    stateClientFactory = resolveService('StateServiceClientFactory');
-    
-    logger.debug('Successfully resolved service factories');
-  } catch (error) {
-    logger.warn('Failed to resolve one or more service factories, falling back to ServiceMediator', { error });
-  }
-  
-  // For backward compatibility, also initialize the ServiceMediator
+  // Initialize the ServiceMediator with the merged services
   const mediator = resolveService('ServiceMediator');
   if (services.path) mediator.setPathService(services.path);
   if (services.filesystem) mediator.setFileSystemService(services.filesystem);
@@ -190,8 +168,8 @@ export async function main(filePath: string, options: ProcessOptions = {}): Prom
   if (services.parser) mediator.setParserService(services.parser);
   if (services.resolution) mediator.setResolutionService(services.resolution);
 
-  // Ensure FileSystemService has the mediator set for backward compatibility
-  if (services.filesystem && typeof services.filesystem.setMediator === 'function') {
+  // Ensure FileSystemService has the mediator set
+  if (services.filesystem) {
     services.filesystem.setMediator(mediator);
   }
 
