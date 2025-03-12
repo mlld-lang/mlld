@@ -14,13 +14,13 @@ import { cliLogger, type Logger } from '@core/utils/logger.js';
 // Import the centralized syntax examples
 import { textDirectiveExamples } from '@core/syntax/index.js';
 
+// Set test environment flag
+process.env.NODE_ENV = 'test';
+
 // Mock the API module
 vi.mock('@api/index.js', () => ({
   main: vi.fn().mockResolvedValue('test output')
 }));
-
-// Mock console.log
-const consoleLog = vi.spyOn(console, 'log');
 
 // Create a mock prompt service
 const mockPromptService: IPromptService = {
@@ -83,6 +83,7 @@ describe('CLIService', () => {
   let mockFileSystemService: IFileSystemService;
   let mockPathService: IPathService;
   let mockStateService: IStateService;
+  let mockChildState: any;
   let mockReadline: any;
   let mockLogger: Logger;
 
@@ -91,6 +92,7 @@ describe('CLIService', () => {
     vi.clearAllMocks();
     vi.mocked(mockPromptService.getText).mockReset();
     
+    // Create an isolated test context
     context = TestContextDI.createIsolated();
     await context.initialize();
 
@@ -101,50 +103,40 @@ describe('CLIService', () => {
     };
     vi.mocked(readline.createInterface).mockReturnValue(mockReadline);
 
-    // Create mock services
-    mockParserService = {
-      parse: vi.fn().mockResolvedValue([]),
-      parseWithLocations: vi.fn().mockResolvedValue([])
-    } as unknown as IParserService;
-
-    mockInterpreterService = {
-      initialize: vi.fn(),
-      interpret: vi.fn().mockResolvedValue(undefined),
-      interpretNode: vi.fn(),
-      createChildContext: vi.fn(),
-      canHandleTransformations: vi.fn().mockReturnValue(true)
-    } as unknown as IInterpreterService;
-
+    // Get mock services from the context
+    mockParserService = await context.resolve('IParserService');
+    mockInterpreterService = await context.resolve('IInterpreterService');
+    
+    // Create a custom mock for OutputService with the required methods
     mockOutputService = {
       convert: vi.fn().mockResolvedValue('test output'),
-      registerFormat: vi.fn(),
-      supportsFormat: vi.fn(),
-      getSupportedFormats: vi.fn(),
-      canAccessTransformedNodes: vi.fn().mockReturnValue(true)
+      getAvailableFormats: vi.fn().mockReturnValue(['xml', 'json', 'markdown']),
+      getFormatAliases: vi.fn().mockReturnValue({
+        md: 'markdown',
+        yml: 'yaml'
+      })
     } as unknown as IOutputService;
+    
+    mockFileSystemService = await context.resolve('IFileSystemService');
 
-    // Use the DI context filesystem for file operations
-    const filesystem = context.services.filesystem;
-    mockFileSystemService = {
-      readFile: filesystem.readFile.bind(filesystem),
-      writeFile: filesystem.writeFile.bind(filesystem),
-      exists: filesystem.exists.bind(filesystem),
-      watch: filesystem.watch.bind(filesystem),
-      getFileSystem: vi.fn().mockReturnValue(filesystem)
-    } as unknown as IFileSystemService;
-
+    // Create a custom mock for PathService with the required methods
     mockPathService = {
-      initialize: vi.fn(),
       resolvePath: vi.fn().mockImplementation(path => path),
       enableTestMode: vi.fn(),
       disableTestMode: vi.fn(),
-      isTestMode: vi.fn(),
+      isTestMode: vi.fn().mockReturnValue(true),
       validatePath: vi.fn(),
-      normalizePath: vi.fn(),
-      isAbsolute: vi.fn(),
-      join: vi.fn(),
-      dirname: vi.fn(),
-      basename: vi.fn(),
+      normalizePath: vi.fn().mockImplementation(path => path),
+      isAbsolute: vi.fn().mockReturnValue(true),
+      join: vi.fn().mockImplementation((...paths) => paths.join('/')),
+      dirname: vi.fn().mockImplementation(path => {
+        const parts = path.split('/');
+        return parts.slice(0, -1).join('/') || '/';
+      }),
+      basename: vi.fn().mockImplementation(path => {
+        const parts = path.split('/');
+        return parts[parts.length - 1];
+      }),
       getHomePath: vi.fn().mockReturnValue('/home'),
       getProjectPath: vi.fn().mockReturnValue('/project'),
       resolveProjectPath: vi.fn().mockResolvedValue('/project'),
@@ -152,25 +144,35 @@ describe('CLIService', () => {
       setProjectPath: vi.fn()
     } as unknown as IPathService;
 
-    const mockChildState = {
+    // Create a child state mock with the needed methods
+    mockChildState = {
       setPathVar: vi.fn(),
-      getNodes: vi.fn().mockReturnValue([])
-    } as unknown as IStateService;
+      getNodes: vi.fn().mockReturnValue([]),
+      setupTemplate: vi.fn(),
+      getTextVar: vi.fn(),
+      getDataVar: vi.fn(),
+      getPathVar: vi.fn(),
+      getAllTextVars: vi.fn().mockReturnValue(new Map()),
+      getAllDataVars: vi.fn().mockReturnValue(new Map()),
+      getAllPathVars: vi.fn().mockReturnValue(new Map()),
+      getAllCommands: vi.fn().mockReturnValue(new Map()),
+      getStateId: vi.fn().mockReturnValue('test-state-id'),
+      getCurrentFilePath: vi.fn().mockReturnValue('/test/file.meld'),
+      isTransformationEnabled: vi.fn().mockReturnValue(false)
+    };
 
+    // Create a StateService mock with a working createChildState method
     mockStateService = {
       createChildState: vi.fn().mockReturnValue(mockChildState)
     } as unknown as IStateService;
 
     // Register mocks with the DI container
-    context.registerMock('IParserService', mockParserService);
-    context.registerMock('IInterpreterService', mockInterpreterService);
-    context.registerMock('IOutputService', mockOutputService);
-    context.registerMock('IFileSystemService', mockFileSystemService);
     context.registerMock('IPathService', mockPathService);
     context.registerMock('IStateService', mockStateService);
     context.registerMock('IPromptService', mockPromptService);
+    context.registerMock('IOutputService', mockOutputService);
     
-    // Create CLI service with mocks
+    // Create CLI service with resolved mocks
     service = new CLIService(
       mockParserService,
       mockInterpreterService,
@@ -183,7 +185,7 @@ describe('CLIService', () => {
 
     // Set up test files
     const textExample = textDirectiveExamples.atomic.simpleString;
-    await context.services.filesystem.writeFile('test.mld', textExample.code);
+    await mockFileSystemService.writeFile('test.mld', textExample.code);
 
     // Initialize mock logger
     mockLogger = {
@@ -334,9 +336,14 @@ describe('CLIService', () => {
 
   describe('File Overwrite Handling', () => {
     it('should prompt for overwrite when file exists', async () => {
+      // Setup file system mocks
+      mockFileSystemService.exists = vi.fn().mockImplementation(async (path) => {
+        return path === 'test.md' || path === 'test.mld';
+      });
+      mockFileSystemService.readFile = vi.fn().mockResolvedValue('test content');
+      mockFileSystemService.writeFile = vi.fn().mockResolvedValue(undefined);
+      
       const args = ['node', 'meld', 'test.mld', '--output', 'test.md'];
-      await context.services.filesystem.writeFile('test.mld', 'input content');
-      await context.services.filesystem.writeFile('test.md', 'existing content');
       
       // Mock the prompt service to return 'y'
       vi.mocked(mockPromptService.getText).mockResolvedValueOnce('y');
@@ -346,6 +353,12 @@ describe('CLIService', () => {
       expect(mockPromptService.getText).toHaveBeenCalledWith(
         'File test.md already exists. Overwrite? [Y/n] ',
         'y'
+      );
+      
+      // Verify the file was written after confirmation
+      expect(mockFileSystemService.writeFile).toHaveBeenCalledWith(
+        'test.md',
+        'test output'
       );
     });
 
