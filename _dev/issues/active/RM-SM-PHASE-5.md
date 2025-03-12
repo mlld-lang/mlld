@@ -189,6 +189,12 @@ The API layer has been successfully updated to use service factories instead of 
    - Create helper utilities for common factory setup patterns
    - Ensure all tests pass with the updated approach
 
+#### Current Next Steps
+
+- Complete the implementation updates for ResolutionService to fully remove ServiceMediator
+- Update the StateService to remove ServiceMediator
+- Proceed with the final cleanup phase to remove the ServiceMediator class and interface
+
 #### Testing:
 ```
 npm test services/fs/FileSystemService/FileSystemService.test.ts
