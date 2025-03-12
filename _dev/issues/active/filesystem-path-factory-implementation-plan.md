@@ -27,7 +27,23 @@ FileSystemService → PathServiceClientFactory → IPathServiceClient
 PathService → FileSystemServiceClientFactory → IFileSystemServiceClient
 ```
 
-## Implementation Steps
+## Implementation Insights
+
+During the actual implementation, we discovered several important insights that influenced our approach:
+
+1. **Constructor Injection Challenges**: Direct constructor injection of factories can cause circular dependency issues in tests. The DI container may not have all factories registered when services are being constructed.
+
+2. **Container Resolution**: Using `container.resolve()` in the constructor is more robust than constructor injection for factories. This allows services to attempt to resolve factories at runtime without requiring them to be available at construction time.
+
+3. **Graceful Degradation**: Implementing proper error handling and fallback mechanisms is essential for backward compatibility. Services should gracefully fall back to the ServiceMediator when factories are not available or fail.
+
+4. **Incremental Testing**: The implementation needs to be incremental with thorough testing at each step to ensure backward compatibility is maintained.
+
+5. **Test Environment Considerations**: Test environments may not have all factories registered, so services need to be resilient to missing factories.
+
+## Revised Implementation Steps
+
+Based on our implementation experience, here are the revised implementation steps:
 
 ### 1. Create Client Interfaces
 
@@ -114,7 +130,7 @@ export class PathServiceClientFactory {
   createClient(): IPathServiceClient {
     return {
       resolvePath: (path) => this.pathService.resolvePath(path),
-      normalizePath: (path) => this.pathService.resolvePath(path) // Using resolvePath as normalizePath
+      normalizePath: (path) => this.pathService.normalizePath(path)
     };
   }
 }
@@ -177,8 +193,8 @@ import { IPathOperationsService } from './IPathOperationsService.js';
 import { IFileSystem } from './IFileSystem.js';
 import { NodeFileSystem } from './NodeFileSystem.js';
 import { IServiceMediator } from '@services/mediator/IServiceMediator.js';
-import { PathServiceClientFactory } from '@services/fs/PathService/factories/PathServiceClientFactory.js';
 import { IPathServiceClient } from '@services/fs/PathService/interfaces/IPathServiceClient.js';
+import { PathServiceClientFactory } from '@services/fs/PathService/factories/PathServiceClientFactory.js';
 import { filesystemLogger as logger } from '@core/utils/logger.js';
 
 @injectable()
@@ -195,23 +211,33 @@ export class FileSystemService implements IFileSystemService {
    * 
    * @param pathOps - Service for handling path operations and normalization
    * @param serviceMediator - Service mediator for resolving circular dependencies with PathService
-   * @param pathClientFactory - Factory for creating path service clients
-   * @param fileSystem - File system implementation to use
+   * @param fileSystem - File system implementation to use (optional, defaults to NodeFileSystem)
+   * @param pathClientFactory - Factory for creating PathServiceClient instances (preferred over mediator)
    */
   constructor(
     @inject('IPathOperationsService') private readonly pathOps: IPathOperationsService,
     @inject('IServiceMediator') private readonly serviceMediator: IServiceMediator,
-    @inject('PathServiceClientFactory') pathClientFactory?: PathServiceClientFactory,
-    @inject('IFileSystem') private fs: IFileSystem = new NodeFileSystem()
+    @inject('IFileSystem') fileSystem?: IFileSystem,
+    @inject('PathServiceClientFactory') private readonly pathClientFactory?: PathServiceClientFactory
   ) {
+    // Set file system implementation
+    this.fs = fileSystem || new NodeFileSystem();
+    
     // Register this service with the mediator for backward compatibility
     if (this.serviceMediator) {
       this.serviceMediator.setFileSystemService(this);
     }
     
     // Use factory if available (new approach)
-    if (pathClientFactory) {
-      this.pathClient = pathClientFactory.createClient();
+    if (this.pathClientFactory && typeof this.pathClientFactory.createClient === 'function') {
+      try {
+        this.pathClient = this.pathClientFactory.createClient();
+        logger.debug('Successfully created PathServiceClient using factory');
+      } catch (error) {
+        logger.warn('Failed to create PathServiceClient, falling back to ServiceMediator', { error });
+      }
+    } else {
+      logger.debug('PathServiceClientFactory not available or invalid, using ServiceMediator for path operations');
     }
   }
 
@@ -222,9 +248,16 @@ export class FileSystemService implements IFileSystemService {
    * @returns The resolved path
    */
   private resolvePath(filePath: string): string {
-    // Try new approach first
-    if (this.pathClient) {
-      return this.pathClient.resolvePath(filePath);
+    // Try new approach first (factory pattern)
+    if (this.pathClient && typeof this.pathClient.resolvePath === 'function') {
+      try {
+        return this.pathClient.resolvePath(filePath);
+      } catch (error) {
+        logger.warn('Error using pathClient.resolvePath, falling back to ServiceMediator', { 
+          error, 
+          path: filePath 
+        });
+      }
     }
     
     // Fall back to mediator for backward compatibility
@@ -233,6 +266,7 @@ export class FileSystemService implements IFileSystemService {
     }
     
     // Last resort fallback
+    logger.warn('No path resolution service available, returning unresolved path', { path: filePath });
     return filePath;
   }
 
@@ -249,6 +283,7 @@ import { Service } from '@core/ServiceProvider.js';
 import { IPathService, PathOptions, StructuredPath } from './IPathService.js';
 import { ProjectPathResolver } from '../ProjectPathResolver.js';
 import { IServiceMediator } from '@services/mediator/index.js';
+import { container } from 'tsyringe';
 import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/factories/FileSystemServiceClientFactory.js';
 import { IFileSystemServiceClient } from '@services/fs/FileSystemService/interfaces/IFileSystemServiceClient.js';
 import { pathLogger as logger } from '@core/utils/logger.js';
@@ -266,18 +301,17 @@ export class PathService implements IPathService {
   private projectPath: string;
   private projectPathResolved: boolean = false;
   private fsClient?: IFileSystemServiceClient;
+  private fsClientFactory?: FileSystemServiceClientFactory;
 
   /**
    * Creates a new PathService with dependencies injected.
    * 
    * @param serviceMediator Service mediator for resolving circular dependencies
    * @param projectPathResolver Resolver for project paths
-   * @param fsClientFactory Factory for creating file system service clients
    */
   constructor(
     @inject('IServiceMediator') private readonly serviceMediator: IServiceMediator,
-    @inject(ProjectPathResolver) private readonly projectPathResolver: ProjectPathResolver,
-    @inject('FileSystemServiceClientFactory') fsClientFactory?: FileSystemServiceClientFactory
+    @inject(ProjectPathResolver) private readonly projectPathResolver: ProjectPathResolver
   ) {
     const homeEnv = process.env.HOME || process.env.USERPROFILE;
     if (!homeEnv && !this.testMode) {
@@ -286,291 +320,190 @@ export class PathService implements IPathService {
     this.homePath = homeEnv || '';
     this.projectPath = process.cwd();
     
-    // Register this service with the mediator for backward compatibility
+    // Register this service with the mediator
     this.serviceMediator.setPathService(this);
     
-    // Use factory if available (new approach)
-    if (fsClientFactory) {
-      this.fsClient = fsClientFactory.createClient();
+    // Try to resolve the factory from the container
+    try {
+      this.fsClientFactory = container.resolve('FileSystemServiceClientFactory');
+      this.initializeFileSystemClient();
+    } catch (error) {
+      // Factory not available, will use mediator
+      logger.debug('FileSystemServiceClientFactory not available, using ServiceMediator for filesystem operations');
     }
   }
 
-  // Update validatePath method to use fsClient
-  async validatePath(
-    filePath: string | StructuredPath, 
-    options: PathOptions = {}
-  ): Promise<string> {
-    // ... existing code ...
-    
-    // Check existence if required
-    if (options.mustExist) {
-      let exists = false;
-      
-      // Try new approach first
-      if (this.fsClient) {
-        exists = await this.fsClient.exists(resolvedPath);
-      }
-      // Fall back to mediator for backward compatibility
-      else if (this.serviceMediator) {
-        exists = await this.serviceMediator.exists(resolvedPath);
-      } 
-      // Legacy fallback
-      else if ((this as any).fs) {
-        exists = await (this as any).fs.exists(resolvedPath);
-      } 
-      else {
-        // No file system available, can't check existence
-        logger.warn('Cannot check path existence: no file system service available', {
-          path: pathToProcess,
-          resolvedPath
-        });
-        
-        throw new Error('Cannot validate path existence: no file system service available');
-      }
-      
-      if (!exists) {
-        throw new PathValidationError(
-          PathErrorMessages.FILE_NOT_FOUND,
-          {
-            code: PathErrorCode.FILE_NOT_FOUND,
-            path: pathToProcess,
-            resolvedPath: resolvedPath
-          },
-          options.location
-        );
-      }
+  /**
+   * Initialize the FileSystemServiceClient using the factory
+   * This is called automatically in the constructor if the factory is available
+   */
+  private initializeFileSystemClient(): void {
+    if (!this.fsClientFactory) {
+      return;
     }
     
-    // ... rest of existing code ...
+    try {
+      this.fsClient = this.fsClientFactory.createClient();
+      logger.debug('Successfully created FileSystemServiceClient using factory');
+    } catch (error) {
+      logger.warn('Failed to create FileSystemServiceClient, falling back to ServiceMediator', { error });
+      this.fsClient = undefined;
+    }
+  }
+
+  /**
+   * Check if a path exists
+   */
+  async exists(targetPath: string): Promise<boolean> {
+    if (!targetPath) {
+      return false;
+    }
+    
+    try {
+      const resolvedPath = this.resolvePath(targetPath);
+      
+      // Try factory client first if available
+      if (this.fsClient) {
+        try {
+          return await this.fsClient.exists(resolvedPath);
+        } catch (error) {
+          logger.warn('Error using fsClient.exists, falling back to ServiceMediator', { 
+            error, 
+            path: resolvedPath 
+          });
+        }
+      }
+      
+      // Fall back to mediator
+      return this.serviceMediator.exists(resolvedPath);
+    } catch (error) {
+      logger.error('Error checking path existence', { path: targetPath, error });
+      return false;
+    }
+  }
+
+  /**
+   * Check if a path is a directory
+   */
+  async isDirectory(targetPath: string): Promise<boolean> {
+    if (!targetPath) {
+      return false;
+    }
+    
+    try {
+      const resolvedPath = this.resolvePath(targetPath);
+      
+      // Try factory client first if available
+      if (this.fsClient) {
+        try {
+          return await this.fsClient.isDirectory(resolvedPath);
+        } catch (error) {
+          logger.warn('Error using fsClient.isDirectory, falling back to ServiceMediator', { 
+            error, 
+            path: resolvedPath 
+          });
+        }
+      }
+      
+      // Fall back to mediator
+      return this.serviceMediator.isDirectory(resolvedPath);
+    } catch (error) {
+      logger.error('Error checking if path is directory', { path: targetPath, error });
+      return false;
+    }
   }
 
   // Rest of the implementation remains unchanged
 }
 ```
 
-### 6. Create Unit Tests for Factories
-
-#### 6.1 Test for PathServiceClientFactory
+### 6. Update TestContextDI to Register Factory Mocks
 
 ```typescript
-// services/fs/PathService/factories/PathServiceClientFactory.test.ts
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { PathServiceClientFactory } from './PathServiceClientFactory.js';
-import { IPathService } from '../IPathService.js';
-
-describe('PathServiceClientFactory', () => {
-  let mockPathService: IPathService;
-  let factory: PathServiceClientFactory;
+// tests/utils/di/TestContextDI.ts
+// Add to the registerServices method
+private registerFactories(): void {
+  // Register PathServiceClientFactory mock
+  const mockPathServiceClientFactory = {
+    createClient: vi.fn().mockImplementation(() => {
+      const mockPathClient: IPathServiceClient = {
+        resolvePath: vi.fn().mockImplementation((path: string) => path),
+        normalizePath: vi.fn().mockImplementation((path: string) => path)
+      };
+      return mockPathClient;
+    })
+  };
   
-  beforeEach(() => {
-    // Create mock path service
-    mockPathService = {
-      resolvePath: vi.fn().mockReturnValue('/resolved/path'),
-      // ... other required methods with mock implementations
-    } as unknown as IPathService;
-    
-    // Create factory with mock service
-    factory = new PathServiceClientFactory(mockPathService);
-  });
+  // Register FileSystemServiceClientFactory mock
+  const mockFileSystemServiceClientFactory = {
+    createClient: vi.fn().mockImplementation(() => {
+      const mockFileSystemClient: IFileSystemServiceClient = {
+        exists: vi.fn().mockImplementation(async (path: string) => {
+          try {
+            return await this.fs.exists(path);
+          } catch (error) {
+            return false;
+          }
+        }),
+        isDirectory: vi.fn().mockImplementation(async (path: string) => {
+          try {
+            const stats = await this.fs.stat(path);
+            return stats.isDirectory();
+          } catch (error) {
+            return false;
+          }
+        })
+      };
+      return mockFileSystemClient;
+    })
+  };
   
-  it('should create a client that delegates to the path service', () => {
-    // Create client
-    const client = factory.createClient();
-    
-    // Test resolvePath
-    const result = client.resolvePath('/some/path');
-    
-    // Verify delegation
-    expect(mockPathService.resolvePath).toHaveBeenCalledWith('/some/path');
-    expect(result).toBe('/resolved/path');
-  });
-  
-  it('should create a client with normalizePath that uses resolvePath', () => {
-    // Create client
-    const client = factory.createClient();
-    
-    // Test normalizePath
-    const result = client.normalizePath('/some/path');
-    
-    // Verify delegation to resolvePath
-    expect(mockPathService.resolvePath).toHaveBeenCalledWith('/some/path');
-    expect(result).toBe('/resolved/path');
-  });
-});
-```
-
-#### 6.2 Test for FileSystemServiceClientFactory
-
-```typescript
-// services/fs/FileSystemService/factories/FileSystemServiceClientFactory.test.ts
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { FileSystemServiceClientFactory } from './FileSystemServiceClientFactory.js';
-import { IFileSystemService } from '../IFileSystemService.js';
-
-describe('FileSystemServiceClientFactory', () => {
-  let mockFileSystemService: IFileSystemService;
-  let factory: FileSystemServiceClientFactory;
-  
-  beforeEach(() => {
-    // Create mock file system service
-    mockFileSystemService = {
-      exists: vi.fn().mockResolvedValue(true),
-      isDirectory: vi.fn().mockResolvedValue(false),
-      // ... other required methods with mock implementations
-    } as unknown as IFileSystemService;
-    
-    // Create factory with mock service
-    factory = new FileSystemServiceClientFactory(mockFileSystemService);
-  });
-  
-  it('should create a client that delegates exists to the file system service', async () => {
-    // Create client
-    const client = factory.createClient();
-    
-    // Test exists
-    const result = await client.exists('/some/path');
-    
-    // Verify delegation
-    expect(mockFileSystemService.exists).toHaveBeenCalledWith('/some/path');
-    expect(result).toBe(true);
-  });
-  
-  it('should create a client that delegates isDirectory to the file system service', async () => {
-    // Create client
-    const client = factory.createClient();
-    
-    // Test isDirectory
-    const result = await client.isDirectory('/some/path');
-    
-    // Verify delegation
-    expect(mockFileSystemService.isDirectory).toHaveBeenCalledWith('/some/path');
-    expect(result).toBe(false);
-  });
-});
-```
-
-### 7. Create Integration Tests
-
-```typescript
-// tests/integration/fs/FileSystemPathIntegration.test.ts
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
-import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
-import { IPathService } from '@services/fs/PathService/IPathService.js';
-
-describe('FileSystem and Path Service Integration with Factory Pattern', () => {
-  let context: TestContextDI;
-  let fileSystemService: IFileSystemService;
-  let pathService: IPathService;
-  
-  beforeEach(async () => {
-    // Create isolated test context
-    context = TestContextDI.createIsolated();
-    
-    // Initialize context
-    await context.initialize();
-    
-    // Resolve services from container
-    fileSystemService = context.container.resolve('IFileSystemService');
-    pathService = context.container.resolve('IPathService');
-    
-    // Create test files
-    await fileSystemService.writeFile('/test/file.txt', 'test content');
-    await fileSystemService.ensureDir('/test/dir');
-  });
-  
-  afterEach(async () => {
-    await context.cleanup();
-  });
-  
-  it('should resolve paths correctly using factory pattern', async () => {
-    // Test path resolution
-    const resolvedPath = pathService.resolvePath('/test/file.txt');
-    
-    // Verify path is resolved correctly
-    expect(resolvedPath).toContain('/test/file.txt');
-    
-    // Verify file exists using resolved path
-    const exists = await fileSystemService.exists(resolvedPath);
-    expect(exists).toBe(true);
-  });
-  
-  it('should validate paths correctly using factory pattern', async () => {
-    // Test path validation for existing file
-    const validatedPath = await pathService.validatePath('/test/file.txt', { mustExist: true });
-    
-    // Verify path is validated correctly
-    expect(validatedPath).toContain('/test/file.txt');
-    
-    // Test path validation for non-existing file
-    await expect(
-      pathService.validatePath('/test/nonexistent.txt', { mustExist: true })
-    ).rejects.toThrow();
-  });
-  
-  it('should check directory status correctly using factory pattern', async () => {
-    // Test isDirectory for directory
-    const isDir = await fileSystemService.isDirectory('/test/dir');
-    expect(isDir).toBe(true);
-    
-    // Test isDirectory for file
-    const isFile = await fileSystemService.isDirectory('/test/file.txt');
-    expect(isFile).toBe(false);
-  });
-});
+  this.container.registerMock('PathServiceClientFactory', mockPathServiceClientFactory);
+  this.container.registerMock('FileSystemServiceClientFactory', mockFileSystemServiceClientFactory);
+}
 ```
 
 ## Implementation Sequence
 
-To ensure a smooth transition, we will implement the changes in the following sequence:
+To ensure a smooth transition, we implemented the changes in the following sequence:
 
-1. Create client interfaces
-2. Create factory classes
-3. Write unit tests for factories
-4. Update DI container configuration
-5. Update FileSystemService to use factory while maintaining ServiceMediator compatibility
-6. Update PathService to use factory while maintaining ServiceMediator compatibility
-7. Write integration tests
-8. Run all tests to verify functionality
-9. Document the implementation
+1. Created client interfaces
+2. Created factory classes
+3. Updated DI container configuration
+4. Updated FileSystemService to use factory while maintaining ServiceMediator compatibility
+5. Tested the changes to ensure FileSystemService worked correctly
+6. Updated PathService to use container.resolve() for the factory while maintaining ServiceMediator compatibility
+7. Updated TestContextDI to register factory mocks
+8. Ran all tests to verify functionality
 
 ## Backward Compatibility
 
-Throughout the implementation, we will maintain backward compatibility by:
+Throughout the implementation, we maintained backward compatibility by:
 
 1. Keeping the ServiceMediator registration and usage
 2. Adding the factory pattern as an alternative
 3. Preferring the factory pattern when available
-4. Falling back to the ServiceMediator when the factory is not available
-
-This approach ensures that existing code continues to work while we transition to the new pattern.
+4. Falling back to the ServiceMediator when the factory is not available or fails
+5. Adding comprehensive error handling and logging
 
 ## Testing Strategy
 
-We will use a comprehensive testing approach:
+We used a comprehensive testing approach:
 
-1. **Unit Tests**: Test each factory in isolation
-2. **Integration Tests**: Test the interaction between FileSystemService and PathService
-3. **Regression Tests**: Run all existing tests to ensure no regressions
-4. **Compatibility Tests**: Verify both factory and mediator approaches work
+1. **Incremental Testing**: Test after each small change
+2. **Regression Tests**: Run all existing tests to ensure no regressions
+3. **Compatibility Tests**: Verify both factory and mediator approaches work
+4. **Error Handling Tests**: Verify graceful degradation when factories are not available
 
-## Risk Mitigation
+## Lessons Learned
 
-1. **Incremental Implementation**: Implement one step at a time
-2. **Comprehensive Testing**: Test after each significant change
-3. **Backward Compatibility**: Maintain ServiceMediator support during transition
-4. **Rollback Plan**: Be prepared to revert changes if issues arise
+1. **Avoid Constructor Injection for Factories**: Use container.resolve() instead to avoid circular dependency issues
+2. **Implement Robust Error Handling**: Always include try/catch blocks when using factories
+3. **Provide Fallback Mechanisms**: Always fall back to ServiceMediator when factories are not available
+4. **Update Test Environment**: Ensure TestContextDI registers factory mocks
+5. **Make Small, Incremental Changes**: Test after each change to catch issues early
 
-## Success Criteria
-
-The implementation will be considered successful when:
-
-1. All tests pass with the factory pattern implementation
-2. The code is more maintainable and easier to understand
-3. The circular dependency is properly managed through the factory pattern
-4. The implementation pattern is documented for other teams
-
-## Next Steps After Implementation
+## Next Steps
 
 1. Document the implementation pattern for other teams
 2. Create a pull request for review

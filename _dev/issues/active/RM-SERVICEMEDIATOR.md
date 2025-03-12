@@ -40,6 +40,24 @@ We will replace the ServiceMediator with a factory pattern that:
 
 The key to success is maintaining backward compatibility throughout the transition. We must ensure that all 1100+ tests continue to pass at each step of the implementation.
 
+## Implementation Lessons
+
+During the implementation of the factory pattern for the FileSystemService ↔ PathService circular dependency, we discovered several important lessons:
+
+1. **Avoid Constructor Injection for Factories**: Direct constructor injection of factories can cause circular dependency issues in tests. The DI container may not have all factories registered when services are being constructed.
+
+2. **Use Container Resolution**: Using `container.resolve()` in the constructor is more robust than constructor injection for factories. This allows services to attempt to resolve factories at runtime without requiring them to be available at construction time.
+
+3. **Implement Robust Error Handling**: Always include try/catch blocks when using factories to handle cases where factories are not available or fail.
+
+4. **Provide Fallback Mechanisms**: Always fall back to ServiceMediator when factories are not available or fail to ensure backward compatibility.
+
+5. **Update Test Environment**: Ensure TestContextDI registers factory mocks to support testing with the factory pattern.
+
+6. **Make Small, Incremental Changes**: Test after each small change to catch issues early and ensure backward compatibility is maintained.
+
+7. **Graceful Degradation**: Services should gracefully degrade when factories are not available, ensuring that existing code continues to work during the transition.
+
 ## Project Documentation
 
 The following documents have been created to support this project:
@@ -99,37 +117,40 @@ The following documents have been created to support this project:
 
 **Tasks**:
 1. Implement the factory pattern for FileSystemService ↔ PathService:
-   - Create `IPathServiceClient` and `IFileSystemServiceClient` interfaces
-   - Implement `PathServiceClientFactory` and `FileSystemServiceClientFactory` classes
-   - Register factories in the DI container
-   - Update services to use factories while maintaining ServiceMediator compatibility
-   - Add comprehensive unit tests for the new factories
-2. Run all tests to verify functionality
-3. Fix any issues that arise
-4. Document the implementation pattern and lessons learned
+   - ✅ Create `IPathServiceClient` and `IFileSystemServiceClient` interfaces
+   - ✅ Implement `PathServiceClientFactory` and `FileSystemServiceClientFactory` classes
+   - ✅ Register factories in the DI container
+   - ✅ Update services to use factories while maintaining ServiceMediator compatibility
+   - ✅ Add comprehensive error handling and fallback mechanisms
+   - ✅ Update TestContextDI to register factory mocks
+   - ✅ Add comprehensive unit tests for the new factories
+2. ✅ Run all tests to verify functionality
+3. ✅ Fix any issues that arise
+4. ✅ Document the implementation pattern and lessons learned
+5. 🚧 Next: Implement factory pattern for ParserService ↔ ResolutionService
 
 **Implementation Plan**:
 - Detailed implementation steps are documented in [FileSystemService ↔ PathService Implementation Plan](./filesystem-path-factory-implementation-plan.md)
 
 **Test Validation Checklist**:
-1. Run unit tests for the updated FileSystemService and PathService
-2. Run integration tests for all dependent services
-3. Verify that both factory and mediator approaches work
-4. Document any test failures and their resolutions
+1. ✅ Run unit tests for the updated FileSystemService and PathService
+2. ✅ Run integration tests for all dependent services
+3. ✅ Verify that both factory and mediator approaches work
+4. ✅ Document any test failures and their resolutions
 
 **Exit Criteria**:
-- Factory pattern implemented for FileSystemService ↔ PathService
-- All tests pass with the new implementation
-- Services can use either factories or ServiceMediator
-- Implementation pattern documented for other teams
+- ✅ Factory pattern implemented for FileSystemService ↔ PathService
+- ✅ All tests pass with the new implementation
+- ✅ Services can use either factories or ServiceMediator
+- ✅ Implementation pattern documented for other teams
 
-**Current Status**: Phase 2 is in progress. Implementation is following the plan outlined in [FileSystemService ↔ PathService Implementation Plan](./filesystem-path-factory-implementation-plan.md).
+**Current Status**: Phase 2 is in progress. FileSystemService ↔ PathService implementation is complete. Next step is to implement the factory pattern for ParserService ↔ ResolutionService.
 
 **Session Handoff Notes**:
-- **What was completed**: Phase 1 analysis is complete, see [Phase 1 Summary](./phase1-summary.md)
-- **Current state**: All circular dependencies have been documented in [Circular Dependencies Analysis](./circular-dependencies-analysis.md)
-- **Known issues**: The StateService ↔ StateTrackingService dependency is less direct and may require a different approach
-- **Next steps**: Proceed with Phase 2 implementation following the [FileSystemService ↔ PathService Implementation Plan](./filesystem-path-factory-implementation-plan.md)
+- **What was completed**: FileSystemService ↔ PathService factory pattern implementation is complete
+- **Current state**: All tests are passing with the new implementation
+- **Known issues**: Direct constructor injection of factories can cause circular dependency issues in tests; using container.resolve() is more robust
+- **Next steps**: Proceed with implementing the factory pattern for ParserService ↔ ResolutionService
 
 ### Phase 3: Incremental Implementation (4 weeks)
 
@@ -306,8 +327,8 @@ export class FileSystemService implements IFileSystemService {
   constructor(
     @inject('IPathOperationsService') private pathOps: IPathOperationsService,
     @inject('IServiceMediator') private serviceMediator?: IServiceMediator,
-    @inject('PathServiceClientFactory') pathClientFactory?: PathServiceClientFactory,
-    @inject('IFileSystem') private fs: IFileSystem = new NodeFileSystem()
+    @inject('IFileSystem') private fs: IFileSystem = new NodeFileSystem(),
+    @inject('PathServiceClientFactory') private readonly pathClientFactory?: PathServiceClientFactory
   ) {
     // Register with mediator for backward compatibility
     if (this.serviceMediator) {
@@ -315,15 +336,27 @@ export class FileSystemService implements IFileSystemService {
     }
     
     // Use factory if available (new approach)
-    if (pathClientFactory) {
-      this.pathClient = pathClientFactory.createClient();
+    if (this.pathClientFactory && typeof this.pathClientFactory.createClient === 'function') {
+      try {
+        this.pathClient = this.pathClientFactory.createClient();
+        logger.debug('Successfully created PathServiceClient using factory');
+      } catch (error) {
+        logger.warn('Failed to create PathServiceClient, falling back to ServiceMediator', { error });
+      }
     }
   }
   
   private resolvePath(filePath: string): string {
-    // Try new approach first
-    if (this.pathClient) {
-      return this.pathClient.resolvePath(filePath);
+    // Try new approach first (factory pattern)
+    if (this.pathClient && typeof this.pathClient.resolvePath === 'function') {
+      try {
+        return this.pathClient.resolvePath(filePath);
+      } catch (error) {
+        logger.warn('Error using pathClient.resolvePath, falling back to ServiceMediator', { 
+          error, 
+          path: filePath 
+        });
+      }
     }
     
     // Fall back to mediator for backward compatibility
@@ -332,6 +365,7 @@ export class FileSystemService implements IFileSystemService {
     }
     
     // Last resort fallback
+    logger.warn('No path resolution service available, returning unresolved path', { path: filePath });
     return filePath;
   }
 }

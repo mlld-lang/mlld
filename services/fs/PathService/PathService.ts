@@ -17,6 +17,7 @@ import { container } from 'tsyringe';
 import { IServiceMediator } from '@services/mediator/index.js';
 import { pathLogger as logger } from '@core/utils/logger.js';
 import { IFileSystemServiceClient } from '../FileSystemService/interfaces/IFileSystemServiceClient.js';
+import { FileSystemServiceClientFactory } from '../FileSystemService/factories/FileSystemServiceClientFactory.js';
 
 /**
  * Service for validating and normalizing paths
@@ -31,6 +32,7 @@ export class PathService implements IPathService {
   private projectPath: string;
   private projectPathResolved: boolean = false;
   private fsClient?: IFileSystemServiceClient;
+  private fsClientFactory?: FileSystemServiceClientFactory;
 
   /**
    * Creates a new PathService with dependencies injected.
@@ -52,12 +54,40 @@ export class PathService implements IPathService {
     // Register this service with the mediator
     this.serviceMediator.setPathService(this);
     
+    // Try to resolve the factory from the container
+    try {
+      this.fsClientFactory = container.resolve('FileSystemServiceClientFactory');
+      this.initializeFileSystemClient();
+    } catch (error) {
+      // Factory not available, will use mediator
+      logger.debug('FileSystemServiceClientFactory not available, using ServiceMediator for filesystem operations');
+    }
+    
     if (process.env.DEBUG === 'true') {
       console.log('PathService: Initialized with serviceMediator:', {
         hasServiceMediator: !!this.serviceMediator,
         hasFileSystemClient: !!this.fsClient,
+        hasFactory: !!this.fsClientFactory,
         testMode: this.testMode
       });
+    }
+  }
+
+  /**
+   * Initialize the FileSystemServiceClient using the factory
+   * This is called automatically in the constructor if the factory is available
+   */
+  private initializeFileSystemClient(): void {
+    if (!this.fsClientFactory) {
+      return;
+    }
+    
+    try {
+      this.fsClient = this.fsClientFactory.createClient();
+      logger.debug('Successfully created FileSystemServiceClient using factory');
+    } catch (error) {
+      logger.warn('Failed to create FileSystemServiceClient, falling back to ServiceMediator', { error });
+      this.fsClient = undefined;
     }
   }
 
@@ -769,6 +799,20 @@ export class PathService implements IPathService {
     
     try {
       const resolvedPath = this.resolvePath(targetPath);
+      
+      // Try factory client first if available
+      if (this.fsClient) {
+        try {
+          return await this.fsClient.exists(resolvedPath);
+        } catch (error) {
+          logger.warn('Error using fsClient.exists, falling back to ServiceMediator', { 
+            error, 
+            path: resolvedPath 
+          });
+        }
+      }
+      
+      // Fall back to mediator
       return this.serviceMediator.exists(resolvedPath);
     } catch (error) {
       logger.error('Error checking path existence', { path: targetPath, error });
@@ -786,6 +830,20 @@ export class PathService implements IPathService {
     
     try {
       const resolvedPath = this.resolvePath(targetPath);
+      
+      // Try factory client first if available
+      if (this.fsClient) {
+        try {
+          return await this.fsClient.isDirectory(resolvedPath);
+        } catch (error) {
+          logger.warn('Error using fsClient.isDirectory, falling back to ServiceMediator', { 
+            error, 
+            path: resolvedPath 
+          });
+        }
+      }
+      
+      // Fall back to mediator
       return this.serviceMediator.isDirectory(resolvedPath);
     } catch (error) {
       logger.error('Error checking if path is directory', { path: targetPath, error });
@@ -856,17 +914,5 @@ export class PathService implements IPathService {
    */
   basename(filePath: string): string {
     return path.basename(filePath);
-  }
-
-  /**
-   * Sets the service mediator for breaking circular dependencies
-   * @deprecated This method is deprecated and will be removed in a future version.
-   * Use constructor injection with IServiceMediator for handling circular dependencies.
-   * In the future, the Factory Pattern will replace the ServiceMediator for circular dependency resolution.
-   */
-  setMediator(mediator: IServiceMediator): void {
-    logger.warn('PathService.setMediator is deprecated. Use constructor injection instead.');
-    // No-op - the mediator is now injected in the constructor
-    // This method is kept for backward compatibility only
   }
 }
