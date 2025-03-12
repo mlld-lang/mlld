@@ -24,6 +24,8 @@ import { IVariableReferenceResolverClient } from './interfaces/IVariableReferenc
 import { VariableReferenceResolverClientFactory } from './factories/VariableReferenceResolverClientFactory.js';
 import { IDirectiveServiceClient } from '@services/pipeline/DirectiveService/interfaces/IDirectiveServiceClient.js';
 import { DirectiveServiceClientFactory } from '@services/pipeline/DirectiveService/factories/DirectiveServiceClientFactory.js';
+import { IFileSystemServiceClient } from '@services/fs/FileSystemService/interfaces/IFileSystemServiceClient.js';
+import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/factories/FileSystemServiceClientFactory.js';
 
 /**
  * Interface matching the StructuredPath expected from meld-spec
@@ -131,16 +133,9 @@ function isHeadingTextNode(node: MeldNode): node is TextNode {
  */
 @singleton()
 @Service({
-  description: 'Service responsible for resolving variables, commands, and paths',
-  dependencies: [
-    { token: 'IStateService', name: 'stateService' },
-    { token: 'IFileSystemService', name: 'fileSystemService' },
-    { token: 'IParserService', name: 'parserService' },
-    { token: 'IPathService', name: 'pathService' }
-  ]
+  description: 'Service responsible for resolving variable references and other dynamic content'
 })
 export class ResolutionService implements IResolutionService {
-  // Initialize with null values that will be set in initialization methods
   private textResolver: TextResolver = null!;
   private dataResolver: DataResolver = null!;
   private pathResolver: PathResolver = null!;
@@ -152,22 +147,31 @@ export class ResolutionService implements IResolutionService {
   private stateService: IStateService = null!;
   private fileSystemService: IFileSystemService = null!;
   private pathService: IPathService = null!;
+  
+  /** @deprecated Use service factories instead */
   private serviceMediator?: IServiceMediator;
+  
   private parserClient?: IParserServiceClient;
   private parserClientFactory?: ParserServiceClientFactory;
+  
   private variableResolverClient?: IVariableReferenceResolverClient;
   private variableResolverClientFactory?: VariableReferenceResolverClientFactory;
+  
   private directiveClient?: IDirectiveServiceClient;
   private directiveClientFactory?: DirectiveServiceClientFactory;
+  
+  private fsClient?: IFileSystemServiceClient;
+  private fsClientFactory?: FileSystemServiceClientFactory;
+  
   private factoryInitialized: boolean = false;
 
   /**
-   * Creates a new ResolutionService instance using dependency injection
-   * 
-   * @param stateService - State service for accessing variables and commands
-   * @param fileSystemService - File system service for resolving file paths and content
-   * @param pathService - Path service for validating and normalizing paths
+   * Creates a new instance of the ResolutionService
+   * @param stateService - State service for variable management
+   * @param fileSystemService - File system service for file operations
+   * @param pathService - Path service for path operations
    * @param serviceMediator - Service mediator for breaking circular dependencies with the parser service
+   * @deprecated The serviceMediator parameter is deprecated and will be removed in a future version
    */
   constructor(
     @inject('IStateService') stateService?: IStateService,
@@ -225,6 +229,15 @@ export class ResolutionService implements IResolutionService {
       // Factory not available, will use mediator
       logger.debug('DirectiveServiceClientFactory not available, using ServiceMediator for directive operations');
     }
+    
+    // Initialize file system client factory
+    try {
+      this.fsClientFactory = container.resolve('FileSystemServiceClientFactory');
+      this.initializeFsClient();
+    } catch (error) {
+      // Factory not available, will use mediator
+      logger.debug('FileSystemServiceClientFactory not available, using ServiceMediator for file system operations');
+    }
   }
   
   /**
@@ -275,6 +288,23 @@ export class ResolutionService implements IResolutionService {
     } catch (error) {
       logger.warn('Failed to create DirectiveServiceClient, falling back to mediator', { error });
       this.directiveClient = undefined;
+    }
+  }
+  
+  /**
+   * Initialize the FileSystemServiceClient using the factory
+   */
+  private initializeFsClient(): void {
+    if (!this.fsClientFactory) {
+      return;
+    }
+    
+    try {
+      this.fsClient = this.fsClientFactory.createClient();
+      logger.debug('Successfully created FileSystemServiceClient using factory');
+    } catch (error) {
+      logger.warn('Failed to create FileSystemServiceClient, falling back to mediator', { error });
+      this.fsClient = undefined;
     }
   }
   
@@ -351,7 +381,7 @@ export class ResolutionService implements IResolutionService {
     this.variableReferenceResolver = new VariableReferenceResolver(
       this.stateService,
       this,
-      this.serviceMediator // Pass the mediator instead of parser service
+      this.serviceMediator // Keep for backward compatibility
     );
   }
 
@@ -438,10 +468,24 @@ export class ResolutionService implements IResolutionService {
    * Resolve content from a file path
    */
   async resolveFile(path: string): Promise<string> {
-    if (!await this.fileSystemService.exists(path)) {
-      throw new MeldFileNotFoundError(path);
+    try {
+      // Ensure factory is initialized
+      this.ensureFactoryInitialized();
+      
+      // Try to use the file system client if available
+      if (this.fsClient) {
+        try {
+          return await this.fsClient.readFile(path);
+        } catch (error) {
+          logger.warn('Error using fsClient.readFile, falling back to fileSystemService', { error, path });
+        }
+      }
+      
+      // Fall back to direct file system service
+      return await this.fileSystemService.readFile(path);
+    } catch (error) {
+      throw new MeldFileNotFoundError(`Failed to read file: ${path}`, { cause: error });
     }
-    return this.fileSystemService.readFile(path);
   }
 
   /**
