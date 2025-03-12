@@ -26,16 +26,42 @@ const createMockDirectiveService = () => ({
   getSupportedDirectives: vi.fn().mockReturnValue(['text', 'data'])
 });
 
-const createMockStateService = () => ({
+// Create a more complete mock state object structure with all required methods
+const createBaseMockState = () => ({
   addNode: vi.fn(),
   setCurrentFilePath: vi.fn(),
   getCurrentFilePath: vi.fn().mockReturnValue('/test/file.meld'),
-  clone: vi.fn().mockReturnValue({
-    addNode: vi.fn(),
-    setCurrentFilePath: vi.fn(),
-    getCurrentFilePath: vi.fn().mockReturnValue('/test/file.meld')
-  })
+  getAllTextVars: vi.fn().mockReturnValue({}),
+  getAllDataVars: vi.fn().mockReturnValue({}),
+  getAllPathVars: vi.fn().mockReturnValue({}),
+  getNodes: vi.fn().mockReturnValue([]),
+  clone: vi.fn(),
+  createChildState: vi.fn()
 });
+
+// Create a shared mock state object structure to ensure consistency
+const createMockStateObject = () => {
+  // Create a base object with all the needed methods
+  const stateObj = createBaseMockState();
+  
+  // Instead of recursively calling createMockStateObject, just return a simple mock
+  // that has the same API but doesn't cause infinite recursion
+  stateObj.clone.mockImplementation(() => {
+    return createBaseMockState();
+  });
+  
+  // Child state creation should also return a properly mocked state
+  stateObj.createChildState.mockImplementation(() => {
+    return createBaseMockState();
+  });
+  
+  return stateObj;
+};
+
+const createMockStateService = () => {
+  // Create a properly mocked state service
+  return createMockStateObject();
+};
 
 describe('InterpreterService Unit', () => {
   let context: TestContextDI;
