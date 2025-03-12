@@ -7,7 +7,6 @@ import type { IStateEventService, StateEvent } from '../StateEventService/IState
 import type { IStateTrackingService } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
 import { inject, container, injectable } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
-import { IServiceMediator } from '@services/mediator/IServiceMediator.js';
 import { StateTrackingServiceClientFactory } from '../StateTrackingService/factories/StateTrackingServiceClientFactory.js';
 import { IStateTrackingServiceClient } from '../StateTrackingService/interfaces/IStateTrackingServiceClient.js';
 import { randomUUID } from 'crypto';
@@ -40,7 +39,6 @@ export class StateService implements IStateService {
   };
   private eventService?: IStateEventService;
   private trackingService?: IStateTrackingService;
-  private serviceMediator?: IServiceMediator;
   
   // Factory pattern properties
   private trackingServiceClientFactory?: StateTrackingServiceClientFactory;
@@ -53,17 +51,15 @@ export class StateService implements IStateService {
    * @param stateFactory - Factory for creating state nodes and managing state operations
    * @param eventService - Service for handling state events and notifications
    * @param trackingService - Service for tracking state changes and relationships (used for debugging)
-   * @param serviceMediator - Mediator for resolving circular dependencies with other services
    * @param parentState - Optional parent state to inherit from (used for nested imports)
    */
   constructor(
     @inject(StateFactory) stateFactory?: StateFactory,
     @inject('IStateEventService') eventService?: IStateEventService,
     @inject('IStateTrackingService') trackingService?: IStateTrackingService,
-    @inject('IServiceMediator') serviceMediator?: IServiceMediator,
     parentState?: IStateService
   ) {
-    this.initializeFromParams(stateFactory, eventService, trackingService, serviceMediator, parentState);
+    this.initializeFromParams(stateFactory, eventService, trackingService, parentState);
   }
 
   /**
@@ -81,8 +77,8 @@ export class StateService implements IStateService {
       this.trackingServiceClientFactory = container.resolve('StateTrackingServiceClientFactory');
       this.initializeTrackingClient();
     } catch (error) {
-      // Factory not available, will use mediator or direct trackingService
-      logger.debug('StateTrackingServiceClientFactory not available, using direct service or ServiceMediator');
+      // Factory not available, will use direct service
+      logger.debug('StateTrackingServiceClientFactory not available, will use direct service if available');
     }
   }
   
@@ -98,7 +94,7 @@ export class StateService implements IStateService {
       this.trackingClient = this.trackingServiceClientFactory.createClient();
       logger.debug('Successfully created StateTrackingServiceClient using factory');
     } catch (error) {
-      logger.warn('Failed to create StateTrackingServiceClient, falling back to direct service or ServiceMediator', { error });
+      logger.warn('Failed to create StateTrackingServiceClient, will use direct service if available', { error });
       this.trackingClient = undefined;
     }
   }
@@ -111,7 +107,6 @@ export class StateService implements IStateService {
     stateFactory?: StateFactory,
     eventService?: IStateEventService | IStateService,
     trackingService?: IStateTrackingService,
-    serviceMediator?: IServiceMediator,
     parentState?: IStateService
   ): void {
     // Always use DI mode
@@ -119,16 +114,6 @@ export class StateService implements IStateService {
       this.stateFactory = stateFactory;
       this.eventService = eventService as IStateEventService;
       this.trackingService = trackingService;
-      this.serviceMediator = serviceMediator;
-      
-      // Register this service with the mediator if available
-      if (this.serviceMediator && typeof this.serviceMediator.setStateService === 'function') {
-        try {
-          this.serviceMediator.setStateService(this);
-        } catch (error) {
-          console.warn('Failed to register StateService with ServiceMediator:', error);
-        }
-      }
       
       this.initializeState(parentState);
     } else {
@@ -142,14 +127,8 @@ export class StateService implements IStateService {
         this.eventService = eventService as IStateEventService;
       }
       
-      // Store tracking service and mediator if provided
+      // Store tracking service only
       this.trackingService = trackingService;
-      this.serviceMediator = serviceMediator;
-      
-      // Register with mediator if available
-      if (this.serviceMediator) {
-        this.serviceMediator.setStateService(this);
-      }
       
       // Initialize state with parent if provided
       const actualParentState = parentState || 
@@ -200,9 +179,6 @@ export class StateService implements IStateService {
       if (!this.trackingService && parent.trackingService) {
         this.trackingService = parent.trackingService;
       }
-      if (!this.serviceMediator && parent.serviceMediator) {
-        this.setServiceMediator(parent.serviceMediator);
-      }
     }
     
     // Register state with tracking service if available
@@ -237,7 +213,7 @@ export class StateService implements IStateService {
         
         return; // Successfully used the client, no need to try other methods
       } catch (error) {
-        logger.warn('Error using trackingClient.registerState, falling back to direct service or ServiceMediator', { error });
+        logger.warn('Error using trackingClient.registerState, will fall back to direct service if available', { error });
       }
     }
     
@@ -565,94 +541,100 @@ export class StateService implements IStateService {
     return this._isImmutable;
   }
 
+  /**
+   * Creates a new child state that inherits from this state.
+   * Used for import resolution to maintain variable scope.
+   */
   createChildState(): IStateService {
-    // Always use DI mode
-    const container = getContainer();
-    const child = container.resolve(StateService);
+    this.checkMutable();
     
-    // Set the service mediator to ensure proper circular dependency handling
-    if (this.serviceMediator && typeof child.setServiceMediator === 'function') {
-      child.setServiceMediator(this.serviceMediator);
-    }
-    
-    // Set parent state reference - using any to avoid TypeScript property access error
-    (child as any).parentState = this;
+    // Create a new StateService instance that inherits from this one
+    const childState = new StateService(
+      this.stateFactory,
+      this.eventService,
+      this.trackingService
+    );
     
     // Transfer parent variables to child
     // Copy text variables
     this.getAllTextVars().forEach((value, key) => {
-      child.setTextVar(key, value);
+      childState.setTextVar(key, value);
     });
     
     // Copy data variables
     this.getAllDataVars().forEach((value, key) => {
-      child.setDataVar(key, value);
+      childState.setDataVar(key, value);
     });
     
     // Copy path variables
     this.getAllPathVars().forEach((value, key) => {
-      child.setPathVar(key, value);
+      childState.setPathVar(key, value);
     });
     
     // Copy commands
     this.getAllCommands().forEach((command, name) => {
-      child.setCommand(name, command);
+      childState.setCommand(name, command);
     });
     
     // Copy import info
     this.getImports().forEach(importPath => {
-      child.addImport(importPath);
+      childState.addImport(importPath);
     });
     
     // Copy current file path
     const filePath = this.getCurrentFilePath();
     if (filePath) {
-      child.setCurrentFilePath(filePath);
+      childState.setCurrentFilePath(filePath);
     }
     
-    // Copy transformation settings
-    if (this.isTransformationEnabled()) {
-      child.enableTransformation(this.getTransformationOptions());
+    // Set child state to transform if parent is transforming
+    if (this._transformationEnabled) {
+      childState.enableTransformation(this._transformationOptions);
     }
     
-    // Register with tracking service if available and set parent ID
-    if (this.currentState.stateId) {
-      // Set the state ID, which will register with tracking and establish the parent relationship
-      child.setStateId({
-        parentId: this.currentState.stateId,
-        source: 'child'
-      });
-      
-      // Explicitly create the parent-child relationship in the tracking service
-      // Ensure factory is initialized before trying to use it
-      this.ensureFactoryInitialized();
-      
-      // Try to use the client from the factory first
-      if (this.trackingClient) {
-        try {
-          this.trackingClient.addRelationship(
-            this.currentState.stateId,
-            child.getStateId()!,
-            'parent-child'
-          );
-          
-          return child; // Successfully used the client, return the child
-        } catch (error) {
-          logger.warn('Error using trackingClient.addRelationship, falling back to direct service', { error });
-        }
+    // Track child state creation
+    // Ensure factory is initialized before trying to use it
+    this.ensureFactoryInitialized();
+    
+    if (this.trackingClient) {
+      try {
+        // Register the parent-child relationship 
+        this.trackingClient.registerRelationship({
+          sourceId: this.currentState.stateId,
+          targetId: (childState as StateService).currentState.stateId,
+          type: 'parent-child',
+          timestamp: Date.now(),
+          source: 'parent'
+        });
+        
+        // Register a "created" event for the child state
+        this.trackingClient.registerEvent({
+          stateId: this.currentState.stateId,
+          type: 'created-child',
+          timestamp: Date.now(),
+          details: {
+            childId: (childState as StateService).currentState.stateId
+          },
+          source: 'parent'
+        });
+      } catch (error) {
+        logger.warn('Failed to register child state creation with tracking client', { error });
       }
-      
-      // Fall back to direct tracking service if available
-      if (this.trackingService) {
+    } else if (this.trackingService) {
+      // Fall back to direct service
+      // Register the parent-child relationship 
+      try {
         this.trackingService.addRelationship(
           this.currentState.stateId,
-          child.getStateId()!,
+          (childState as StateService).currentState.stateId,
           'parent-child'
         );
+      } catch (error) {
+        logger.warn('Failed to register parent-child relationship with tracking service', { error });
       }
     }
     
-    return child;
+    return childState;
   }
 
   mergeChildState(childState: IStateService): void {
@@ -733,57 +715,79 @@ export class StateService implements IStateService {
     });
   }
 
+  /**
+   * Creates a deep clone of this state service
+   */
   clone(): IStateService {
-    // Always use DI mode
-    const container = getContainer();
-    const cloned = container.resolve(StateService);
-    
-    // Set the service mediator to ensure proper circular dependency handling
-    if (this.serviceMediator && typeof cloned.setServiceMediator === 'function') {
-      cloned.setServiceMediator(this.serviceMediator);
-    }
-    
-    // Transfer event service if available
-    if (this.eventService) {
-      cloned.setEventService(this.eventService);
-    }
-    
-    // Transfer tracking service if available
-    if (this.trackingService) {
-      cloned.setTrackingService(this.trackingService);
-    }
+    // Create a new StateService with the same factory, eventService and trackingService
+    const cloned = new StateService(
+      this.stateFactory,
+      this.eventService,
+      this.trackingService
+    );
     
     // Create a completely new state without parent reference
-    cloned.currentState = this.stateFactory.createState({
+    (cloned as StateService).currentState = this.stateFactory.createState({
       source: 'clone',
       filePath: this.currentState.filePath
     });
 
-    // Deep clone all state using our helper
-    cloned.updateState({
-      variables: {
-        text: this.deepCloneValue(this.currentState.variables.text),
-        data: this.deepCloneValue(this.currentState.variables.data),
-        path: this.deepCloneValue(this.currentState.variables.path)
-      },
-      commands: this.deepCloneValue(this.currentState.commands),
-      nodes: this.deepCloneValue(this.currentState.nodes),
-      transformedNodes: this.currentState.transformedNodes ? 
-        this.deepCloneValue(this.currentState.transformedNodes) : undefined,
-      imports: this.deepCloneValue(this.currentState.imports)
-    }, 'clone');
+    // Deep clone all state
+    (cloned as StateService).currentState.variables.text = new Map(this.currentState.variables.text);
+    (cloned as StateService).currentState.variables.data = new Map(this.currentState.variables.data);
+    (cloned as StateService).currentState.variables.path = new Map(this.currentState.variables.path);
+    (cloned as StateService).currentState.commands = new Map(this.currentState.commands);
+    (cloned as StateService).currentState.nodes = [...this.currentState.nodes];
+    if (this.currentState.transformedNodes) {
+      (cloned as StateService).currentState.transformedNodes = [...this.currentState.transformedNodes];
+    }
+    (cloned as StateService).currentState.imports = new Set(this.currentState.imports);
     
     // Copy transformation settings
-    if (this.isTransformationEnabled()) {
-      cloned.enableTransformation(this.getTransformationOptions());
-    }
+    (cloned as StateService)._transformationEnabled = this._transformationEnabled;
+    (cloned as StateService)._transformationOptions = { ...this._transformationOptions };
+    (cloned as StateService)._isImmutable = this._isImmutable;
     
-    // Register with tracking service if present
-    if (this.trackingService && this.currentState.stateId) {
-      cloned.setStateId({
-        parentId: this.currentState.stateId,
-        source: 'clone'
-      });
+    // Track cloning
+    // Ensure factory is initialized before trying to use it
+    this.ensureFactoryInitialized();
+    
+    if (this.trackingClient) {
+      try {
+        // Register the clone-original relationship
+        this.trackingClient.registerRelationship({
+          sourceId: this.currentState.stateId,
+          targetId: (cloned as StateService).currentState.stateId,
+          type: 'clone-original',
+          timestamp: Date.now(),
+          source: 'original'
+        });
+        
+        // Register a "cloned" event for the state
+        this.trackingClient.registerEvent({
+          stateId: this.currentState.stateId,
+          type: 'cloned',
+          timestamp: Date.now(),
+          details: {
+            cloneId: (cloned as StateService).currentState.stateId
+          },
+          source: 'original'
+        });
+      } catch (error) {
+        logger.warn('Failed to register clone with tracking client', { error });
+      }
+    } else if (this.trackingService) {
+      // Fall back to direct service
+      try {
+        // Register the clone-original relationship
+        this.trackingService.addRelationship(
+          this.currentState.stateId,
+          (cloned as StateService).currentState.stateId,
+          'clone-original'
+        );
+      } catch (error) {
+        logger.warn('Failed to register clone-original relationship with tracking service', { error });
+      }
     }
     
     return cloned;
@@ -793,72 +797,6 @@ export class StateService implements IStateService {
     if (this._isImmutable) {
       throw new Error('Cannot modify immutable state');
     }
-  }
-
-  /**
-   * Deep clones a value, handling objects, arrays, Maps, Sets, and circular references.
-   * @param value The value to clone
-   * @param seen A WeakMap to track circular references
-   * @returns A deep clone of the value
-   */
-  private deepCloneValue<T>(value: T, seen: WeakMap<any, any> = new WeakMap()): T {
-    // Handle null, undefined, and primitive types
-    if (value === null || value === undefined || typeof value !== 'object') {
-      return value;
-    }
-
-    // Handle circular references
-    if (seen.has(value)) {
-      return seen.get(value);
-    }
-
-    // Handle Date objects
-    if (value instanceof Date) {
-      return new Date(value.getTime()) as unknown as T;
-    }
-
-    // Handle Arrays
-    if (Array.isArray(value)) {
-      const clone = [] as unknown as T;
-      seen.set(value, clone);
-      (value as unknown as any[]).forEach((item, index) => {
-        (clone as unknown as any[])[index] = this.deepCloneValue(item, seen);
-      });
-      return clone;
-    }
-
-    // Handle Maps
-    if (value instanceof Map) {
-      const clone = new Map() as unknown as T;
-      seen.set(value, clone);
-      (value as Map<any, any>).forEach((val, key) => {
-        (clone as unknown as Map<any, any>).set(
-          this.deepCloneValue(key, seen),
-          this.deepCloneValue(val, seen)
-        );
-      });
-      return clone;
-    }
-
-    // Handle Sets
-    if (value instanceof Set) {
-      const clone = new Set() as unknown as T;
-      seen.set(value, clone);
-      (value as Set<any>).forEach(item => {
-        (clone as unknown as Set<any>).add(this.deepCloneValue(item, seen));
-      });
-      return clone;
-    }
-
-    // Handle plain objects (including MeldNodes and CommandDefinitions)
-    const clone = Object.create(Object.getPrototypeOf(value));
-    seen.set(value, clone);
-    
-    Object.entries(value as object).forEach(([key, val]) => {
-      clone[key] = this.deepCloneValue(val, seen);
-    });
-    
-    return clone;
   }
 
   private updateState(updates: Partial<StateNode>, source: string): void {
@@ -874,45 +812,6 @@ export class StateService implements IStateService {
         file: this.getCurrentFilePath() || undefined
       }
     });
-  }
-
-  // Add new methods for state tracking
-  setTrackingService(trackingService: IStateTrackingService): void {
-    this.trackingService = trackingService;
-    
-    // Register existing state if not already registered
-    if (this.currentState.stateId) {
-      // Ensure factory is initialized before trying to use it
-      this.ensureFactoryInitialized();
-      
-      // Try to use the client from the factory first
-      if (this.trackingClient) {
-        try {
-          this.trackingClient.registerState({
-            id: this.currentState.stateId,
-            source: this.currentState.source || 'new',  // Use original source or default to 'new'
-            filePath: this.getCurrentFilePath() || undefined,
-            transformationEnabled: this._transformationEnabled
-          });
-          
-          return; // Successfully used the client, no need to try other methods
-        } catch (error) {
-          logger.warn('Error using trackingClient in setTrackingService, falling back to direct service', { error });
-        }
-      }
-      
-      // Fall back to direct tracking service
-      try {
-        this.trackingService.registerState({
-          id: this.currentState.stateId,
-          source: this.currentState.source || 'new',  // Use original source or default to 'new'
-          filePath: this.getCurrentFilePath() || undefined,
-          transformationEnabled: this._transformationEnabled
-        });
-      } catch (error) {
-        logger.warn('Failed to register existing state with tracking service', { error, stateId: this.currentState.stateId });
-      }
-    }
   }
 
   getStateId(): string | undefined {
@@ -1019,19 +918,43 @@ export class StateService implements IStateService {
     };
   }
 
-  /**
-   * Set the service mediator for this state service
-   * This is useful when creating a state service outside the DI container
-   */
-  setServiceMediator(mediator: IServiceMediator): void {
-    this.serviceMediator = mediator;
+  // Add back the setTrackingService method
+  setTrackingService(trackingService: IStateTrackingService): void {
+    this.trackingService = trackingService;
     
-    // Register this service with the mediator
-    if (typeof this.serviceMediator.setStateService === 'function') {
+    // Register existing state if not already registered
+    if (this.currentState.stateId) {
+      // Ensure factory is initialized before trying to use it
+      this.ensureFactoryInitialized();
+      
+      // Try to use the client from the factory first
+      if (this.trackingClient) {
+        try {
+          this.trackingClient.registerState({
+            id: this.currentState.stateId,
+            source: this.currentState.source || 'new',  // Use original source or default to 'new'
+            filePath: this.getCurrentFilePath() || undefined,
+            transformationEnabled: this._transformationEnabled,
+            createdAt: Date.now()
+          });
+          
+          return; // Successfully used the client, no need to try other methods
+        } catch (error) {
+          logger.warn('Error using trackingClient in setTrackingService, will fall back to direct service', { error });
+        }
+      }
+      
+      // Fall back to direct tracking service
       try {
-        this.serviceMediator.setStateService(this);
+        this.trackingService.registerState({
+          id: this.currentState.stateId,
+          source: this.currentState.source || 'new',  // Use original source or default to 'new'
+          filePath: this.getCurrentFilePath() || undefined,
+          transformationEnabled: this._transformationEnabled,
+          createdAt: Date.now()
+        });
       } catch (error) {
-        logger.warn('Failed to register StateService with ServiceMediator:', error);
+        logger.warn('Failed to register existing state with tracking service', { error, stateId: this.currentState.stateId });
       }
     }
   }
