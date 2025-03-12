@@ -1,6 +1,6 @@
 {
   "name": "meld",
-  "version": "10.3.0",
+  "version": "10.3.1",
   "description": "Meld: A template language for LLM prompts",
   "type": "commonjs",
   "main": "dist/index.cjs",
@@ -9,7 +9,7 @@
   "exports": {
     ".": {
       "require": {
-        "types": "./dist/index.d.ts", 
+        "types": "./dist/index.d.ts",
         "default": "./dist/index.cjs"
       },
       "import": {
