@@ -10,6 +10,9 @@ import { VariableResolutionTracker } from '@tests/utils/debug/VariableResolution
 import { container } from 'tsyringe';
 import { IResolutionServiceClient } from '../interfaces/IResolutionServiceClient.js';
 import { ResolutionServiceClientFactory } from '../factories/ResolutionServiceClientFactory.js';
+import { IServiceMediator } from '@services/mediator/index.js';
+import { IParserServiceClient } from '@services/pipeline/ParserService/interfaces/IParserServiceClient.js';
+import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory.js';
 
 // Define the field type for clarity
 interface Field {
@@ -27,15 +30,30 @@ export class VariableReferenceResolver {
   private resolutionTracker?: VariableResolutionTracker;
   private resolutionClient?: IResolutionServiceClient;
   private resolutionClientFactory?: ResolutionServiceClientFactory;
+  private parserClient?: IParserServiceClient;
+  private parserClientFactory?: ParserServiceClientFactory;
   private factoryInitialized: boolean = false;
-
-  constructor(
-    private readonly stateService: IStateService,
-    private readonly resolutionService?: IResolutionService
-  ) {}
+  
+  /** @deprecated Use service factories instead */
+  private serviceMediator?: IServiceMediator;
 
   /**
-   * Lazily initialize the ResolutionServiceClient factory
+   * Creates a new instance of the VariableReferenceResolver
+   * @param stateService - State service for variable management
+   * @param resolutionService - Resolution service for resolving variables
+   * @param serviceMediator - Service mediator for breaking circular dependencies
+   * @deprecated The serviceMediator parameter is deprecated and will be removed in a future version
+   */
+  constructor(
+    private readonly stateService: IStateService,
+    private readonly resolutionService?: IResolutionService,
+    serviceMediator?: IServiceMediator
+  ) {
+    this.serviceMediator = serviceMediator;
+  }
+
+  /**
+   * Lazily initialize the service client factories
    * This is called only when needed to avoid circular dependencies
    */
   private ensureFactoryInitialized(): void {
@@ -45,12 +63,22 @@ export class VariableReferenceResolver {
     
     this.factoryInitialized = true;
     
+    // Initialize resolution client factory
     try {
       this.resolutionClientFactory = container.resolve('ResolutionServiceClientFactory');
       this.initializeResolutionClient();
     } catch (error) {
       // Factory not available, will use mediator or direct reference
       logger.debug('ResolutionServiceClientFactory not available, using fallback for resolution operations');
+    }
+    
+    // Initialize parser client factory
+    try {
+      this.parserClientFactory = container.resolve('ParserServiceClientFactory');
+      this.initializeParserClient();
+    } catch (error) {
+      // Factory not available, will use mediator
+      logger.debug('ParserServiceClientFactory not available, using ServiceMediator for parser operations');
     }
   }
   
@@ -68,6 +96,23 @@ export class VariableReferenceResolver {
     } catch (error) {
       logger.warn('Failed to create ResolutionServiceClient, falling back to direct reference or mediator', { error });
       this.resolutionClient = undefined;
+    }
+  }
+  
+  /**
+   * Initialize the ParserServiceClient using the factory
+   */
+  private initializeParserClient(): void {
+    if (!this.parserClientFactory) {
+      return;
+    }
+    
+    try {
+      this.parserClient = this.parserClientFactory.createClient();
+      logger.debug('Successfully created ParserServiceClient using factory');
+    } catch (error) {
+      logger.warn('Failed to create ParserServiceClient, falling back to ServiceMediator', { error });
+      this.parserClient = undefined;
     }
   }
 
@@ -516,11 +561,23 @@ export class VariableReferenceResolver {
    * Parse the content to extract variable references
    */
   private async parseContent(content: string): Promise<MeldNode[]> {
-    // Use the parser service if available
+    // Ensure factory is initialized
+    this.ensureFactoryInitialized();
+    
+    // Try to use the parser client if available
+    if (this.parserClient) {
+      try {
+        return await this.parserClient.parseString(content);
+      } catch (error) {
+        logger.warn('Error using parserClient.parseString, falling back to ServiceMediator', { error });
+      }
+    }
+    
+    // Use the parser service if available through mediator
     if (this.serviceMediator) {
       try {
         return await this.serviceMediator.parse(content);
-    } catch (error) {
+      } catch (error) {
         logger.error('Error parsing content for variable resolution', { content, error });
         throw error;
       }
@@ -715,10 +772,23 @@ export class VariableReferenceResolver {
     }
     
     try {
+      // Ensure factory is initialized
+      this.ensureFactoryInitialized();
+      
+      // Try to use the parser client if available
+      if (this.parserClient) {
+        try {
+          const nodes = await this.parserClient.parseString(text);
+          return this.extractVariableReferencesFromNodes(nodes);
+        } catch (error) {
+          logger.warn('Error using parserClient.parseString, falling back to ServiceMediator', { error });
+        }
+      }
+      
       // Try to use AST-based parsing if mediator is available
       if (this.serviceMediator) {
         const nodes = await this.serviceMediator.parse(text);
-          return this.extractVariableReferencesFromNodes(nodes);
+        return this.extractVariableReferencesFromNodes(nodes);
       }
     } catch (error) {
       logger.debug('Error extracting references with AST', { error });
@@ -749,14 +819,12 @@ export class VariableReferenceResolver {
         const directive = (node as DirectiveNode).directive;
         if (directive?.kind === 'text' || directive?.kind === 'data') {
           // Text or data directive
-          if (directive.items?.[0]?.value) {
-            references.add(directive.items[0].value);
-          }
+          references.add(directive.identifier);
         }
       }
     }
     
-    return Array.from(references);
+    return [...references];
   }
 
   /**
