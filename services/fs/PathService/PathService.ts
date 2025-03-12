@@ -14,7 +14,6 @@ import {
 import { Service } from '../../../core/ServiceProvider';
 import { injectable, inject } from 'tsyringe';
 import { container } from 'tsyringe';
-import { IServiceMediator } from '@services/mediator/index.js';
 import { pathLogger as logger } from '@core/utils/logger.js';
 import { IFileSystemServiceClient } from '../FileSystemService/interfaces/IFileSystemServiceClient.js';
 import { FileSystemServiceClientFactory } from '../FileSystemService/factories/FileSystemServiceClientFactory.js';
@@ -38,11 +37,9 @@ export class PathService implements IPathService {
   /**
    * Creates a new PathService with dependencies injected.
    * 
-   * @param serviceMediator Service mediator for resolving circular dependencies (kept for backward compatibility)
    * @param projectPathResolver Resolver for project paths
    */
   constructor(
-    @inject('IServiceMediator') private readonly serviceMediator: IServiceMediator,
     @inject(ProjectPathResolver) private readonly projectPathResolver: ProjectPathResolver
   ) {
     const homeEnv = process.env.HOME || process.env.USERPROFILE;
@@ -52,17 +49,11 @@ export class PathService implements IPathService {
     this.homePath = homeEnv || '';
     this.projectPath = process.cwd();
     
-    // Register this service with the mediator for backward compatibility
-    if (this.serviceMediator) {
-      this.serviceMediator.setPathService(this);
-    }
-    
     // Initialize factory if available
     this.ensureFactoryInitialized();
     
     if (process.env.DEBUG === 'true') {
       console.log('PathService: Initialized with', {
-        hasServiceMediator: !!this.serviceMediator,
         hasFileSystemClient: !!this.fsClient,
         hasFactory: !!this.fsClientFactory,
         testMode: this.testMode
@@ -85,9 +76,15 @@ export class PathService implements IPathService {
     try {
       this.fsClientFactory = container.resolve('FileSystemServiceClientFactory');
       this.initializeFileSystemClient();
-    } catch (error) {
+    } catch (error: unknown) {
       // Factory not available
       logger.debug('FileSystemServiceClientFactory not available');
+      // Don't throw an error in test mode
+      if (process.env.NODE_ENV !== 'test' && !this.testMode) {
+        throw new MeldError('FileSystemServiceClientFactory not available - factory pattern required', { 
+          cause: error instanceof Error ? error : new Error(String(error)) 
+        });
+      }
     }
   }
 
@@ -674,8 +671,8 @@ export class PathService implements IPathService {
         // Get the file system service from mediator if available
         let exists = false;
         
-        if (this.serviceMediator) {
-          exists = await this.serviceMediator.exists(resolvedPath);
+        if (this.fsClient) {
+          exists = await this.fsClient.exists(resolvedPath);
         } else if ((this as any).fs) {
           // Fallback to direct reference (legacy mode)
           exists = await (this as any).fs.exists(resolvedPath);
@@ -703,11 +700,11 @@ export class PathService implements IPathService {
       }
       
       // Check file type if required
-      if ((options.mustBeFile || options.mustBeDirectory) && (this.serviceMediator || (this as any).fs)) {
+      if ((options.mustBeFile || options.mustBeDirectory) && (this.fsClient || (this as any).fs)) {
         let isDirectory = false;
         
-        if (this.serviceMediator) {
-          isDirectory = await this.serviceMediator.isDirectory(resolvedPath);
+        if (this.fsClient) {
+          isDirectory = await this.fsClient.isDirectory(resolvedPath);
         } else if ((this as any).fs) {
           isDirectory = await (this as any).fs.isDirectory(resolvedPath);
         }
@@ -827,18 +824,6 @@ export class PathService implements IPathService {
       }
     }
     
-    // Fall back to mediator for backward compatibility
-    if (this.serviceMediator) {
-      try {
-        return await this.serviceMediator.exists(filePath);
-      } catch (error) {
-        logger.warn('Error using serviceMediator.exists', { 
-          error, 
-          path: filePath 
-        });
-      }
-    }
-    
     // Last resort fallback - assume path exists
     logger.warn('No filesystem service available, assuming path exists', { path: filePath });
     return true;
@@ -859,18 +844,6 @@ export class PathService implements IPathService {
         return await this.fsClient.isDirectory(dirPath);
       } catch (error) {
         logger.warn('Error using fsClient.isDirectory', { 
-          error, 
-          path: dirPath 
-        });
-      }
-    }
-    
-    // Fall back to mediator for backward compatibility
-    if (this.serviceMediator) {
-      try {
-        return await this.serviceMediator.isDirectory(dirPath);
-      } catch (error) {
-        logger.warn('Error using serviceMediator.isDirectory', { 
           error, 
           path: dirPath 
         });

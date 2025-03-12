@@ -12,7 +12,7 @@ import { IFileSystem } from './IFileSystem.js';
 import { IPathOperationsService } from './IPathOperationsService.js';
 import { IPathServiceClient } from '../PathService/interfaces/IPathServiceClient.js';
 import { PathServiceClientFactory } from '../PathService/factories/PathServiceClientFactory.js';
-import { IServiceMediator } from '@services/mediator/IServiceMediator.js';
+import { FileSystemServiceClientFactory } from './factories/FileSystemServiceClientFactory.js';
 
 describe('FileSystemService', () => {
   let context: TestContextDI;
@@ -22,7 +22,8 @@ describe('FileSystemService', () => {
   let projectPathResolver: ProjectPathResolver;
   let mockPathClient: IPathServiceClient;
   let mockPathClientFactory: PathServiceClientFactory;
-  let mockServiceMediator: IServiceMediator;
+  let mockFileSystemClient: any;
+  let mockFileSystemClientFactory: FileSystemServiceClientFactory;
 
   beforeEach(async () => {
     // Initialize test context with isolated container
@@ -46,15 +47,15 @@ describe('FileSystemService', () => {
       createClient: () => mockPathClient
     } as unknown as PathServiceClientFactory;
     
-    // Create mock service mediator
-    mockServiceMediator = {
-      // Add required methods for backward compatibility
-      setPathService: (service: any) => {},
-      setFileSystemService: (service: any) => {},
-      setParserService: (service: any) => {},
-      setResolutionService: (service: any) => {},
-      setStateService: (service: any) => {}
-    } as unknown as IServiceMediator;
+    // Create mock FileSystem client and factory
+    mockFileSystemClient = {
+      isDirectory: async (path: string) => path.endsWith('dir') || path.endsWith('directory'),
+      exists: async (path: string) => true
+    };
+    
+    mockFileSystemClientFactory = {
+      createClient: () => mockFileSystemClient
+    } as unknown as FileSystemServiceClientFactory;
     
     // Register services with container using the correct methods
     context.registerMock('IPathOperationsService', pathOps);
@@ -62,11 +63,10 @@ describe('FileSystemService', () => {
     context.registerMock(ProjectPathResolver, projectPathResolver);
     context.registerMock('IFileSystem', context.fs);
     context.registerMock('PathServiceClientFactory', mockPathClientFactory);
-    context.registerMock('IServiceMediator', mockServiceMediator);
-    context.registerMock('ServiceMediator', mockServiceMediator);
+    context.registerMock('FileSystemServiceClientFactory', mockFileSystemClientFactory);
     
-    // Create path service
-    pathService = new PathService(mockServiceMediator, projectPathResolver);
+    // Create path service - now without ServiceMediator
+    pathService = new PathService(projectPathResolver);
     pathService.enableTestMode();
     pathService.setProjectPath('/project');
     context.registerMock('IPathService', pathService);
