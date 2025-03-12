@@ -702,7 +702,7 @@ export class TestContextDI extends TestContext {
     // Register VariableReferenceResolverClientFactory mock
     const mockVariableReferenceResolverClientFactory = {
       createClient: vi.fn().mockImplementation(() => {
-        const mockVariableReferenceResolverClient = {
+        const mockVariableReferenceResolverClient: IVariableReferenceResolverClient = {
           resolve: vi.fn().mockImplementation(async (text: string, context: any) => {
             // Simple mock implementation that returns the text unchanged
             return text;
@@ -716,7 +716,7 @@ export class TestContextDI extends TestContext {
     // Register DirectiveServiceClientFactory mock
     const mockDirectiveServiceClientFactory = {
       createClient: vi.fn().mockImplementation(() => {
-        const mockDirectiveServiceClient = {
+        const mockDirectiveServiceClient: IDirectiveServiceClient = {
           supportsDirective: vi.fn().mockImplementation((kind: string) => {
             // Default to supporting all directives in tests
             return true;
@@ -733,7 +733,7 @@ export class TestContextDI extends TestContext {
     // Register ResolutionServiceClientForDirectiveFactory mock
     const mockResolutionServiceClientForDirectiveFactory = {
       createClient: vi.fn().mockImplementation(() => {
-        const mockResolutionServiceClientForDirective = {
+        const mockResolutionServiceClientForDirective: IResolutionServiceClientForDirective = {
           resolveText: vi.fn().mockImplementation(async (text: string, context: any) => {
             // Simple mock implementation that returns the text unchanged
             return text;
@@ -762,7 +762,7 @@ export class TestContextDI extends TestContext {
     // Register StateServiceClientFactory mock
     const mockStateServiceClientFactory = {
       createClient: vi.fn().mockImplementation(() => {
-        const mockStateServiceClient = {
+        const mockStateServiceClient: IStateServiceClient = {
           getStateId: vi.fn().mockImplementation(() => 'test-state-id'),
           getCurrentFilePath: vi.fn().mockImplementation(() => '/test/file.meld'),
           getAllTextVars: vi.fn().mockImplementation(() => new Map()),
@@ -778,7 +778,7 @@ export class TestContextDI extends TestContext {
     // Register StateTrackingServiceClientFactory mock
     const mockStateTrackingServiceClientFactory = {
       createClient: vi.fn().mockImplementation(() => {
-        const mockStateTrackingServiceClient = {
+        const mockStateTrackingServiceClient: IStateTrackingServiceClient = {
           registerState: vi.fn(),
           addRelationship: vi.fn(),
           registerRelationship: vi.fn()
