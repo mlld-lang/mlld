@@ -30,6 +30,7 @@ import {
   createFileSystemServiceMock,
   createDirectiveErrorMock
 } from '@tests/utils/mocks/serviceMocks';
+import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory.js';
 
 /**
  * ImportDirectiveHandler Test Status
@@ -95,6 +96,7 @@ describe('ImportDirectiveHandler', () => {
   let fileSystemService: ReturnType<typeof createFileSystemServiceMock>;
   let parserService: any;
   let interpreterService: any;
+  let interpreterServiceClientFactory: InterpreterServiceClientFactory;
   let circularityService: any;
   let clonedState: any;
   let childState: any;
@@ -158,25 +160,33 @@ describe('ImportDirectiveHandler', () => {
       parse: vi.fn()
     };
 
+    // Create interpreter service mock
     interpreterService = {
-      interpret: vi.fn().mockResolvedValue(childState)
+      interpret: vi.fn().mockImplementation(async (nodes, contextParam) => {
+        return contextParam.state;
+      })
     };
+
+    // Create interpreter service client factory mock
+    interpreterServiceClientFactory = new InterpreterServiceClientFactory();
+    interpreterServiceClientFactory.setInterpreterServiceForTests(interpreterService);
 
     circularityService = {
       beginImport: vi.fn(),
       endImport: vi.fn()
     };
 
-    // Create handler directly with the mocks
-    handler = new ImportDirectiveHandler(
-      validationService,
-      resolutionService,
-      stateService,
-      fileSystemService,
-      parserService,
-      interpreterService,
-      circularityService
-    );
+    // Register all mocks with the context
+    context.registerMock('IValidationService', validationService);
+    context.registerMock('IStateService', stateService);
+    context.registerMock('IResolutionService', resolutionService);
+    context.registerMock('IFileSystemService', fileSystemService);
+    context.registerMock('IParserService', parserService);
+    context.registerMock('ICircularityService', circularityService);
+    context.registerMock('InterpreterServiceClientFactory', interpreterServiceClientFactory);
+    
+    // Create handler from container
+    handler = await context.container.resolve(ImportDirectiveHandler);
   });
 
   afterEach(async () => {

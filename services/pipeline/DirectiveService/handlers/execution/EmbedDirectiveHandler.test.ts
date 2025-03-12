@@ -20,6 +20,7 @@ import type { ICircularityService } from '@services/resolution/CircularityServic
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 import type { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
+import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory.js';
 import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { createLocation } from '@tests/utils/testFactories.js';
 // Import the centralized syntax examples and helpers
@@ -137,6 +138,7 @@ describe('EmbedDirectiveHandler', () => {
   let circularityService: any;
   let parserService: any;
   let interpreterService: any;
+  let interpreterServiceClientFactory: InterpreterServiceClientFactory;
   let clonedState: any;
   let childState: any;
   let context: TestContextDI;
@@ -226,6 +228,10 @@ describe('EmbedDirectiveHandler', () => {
       })
     };
 
+    // Create interpreter service client factory mock
+    interpreterServiceClientFactory = new InterpreterServiceClientFactory();
+    interpreterServiceClientFactory.setInterpreterServiceForTests(interpreterService);
+
     // Create state tracking service
     trackingService = new StateTrackingService();
 
@@ -280,7 +286,7 @@ describe('EmbedDirectiveHandler', () => {
     context.registerMock('IPathService', pathService);
     context.registerMock('IParserService', parserService);
     context.registerMock('ICircularityService', circularityService);
-    context.registerMock('IInterpreterService', interpreterService);
+    context.registerMock('InterpreterServiceClientFactory', interpreterServiceClientFactory);
     context.registerMock('StateTrackingService', trackingService);
     
     // Register the logger mock - this is the correct way
