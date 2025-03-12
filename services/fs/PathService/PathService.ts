@@ -33,11 +33,12 @@ export class PathService implements IPathService {
   private projectPathResolved: boolean = false;
   private fsClient?: IFileSystemServiceClient;
   private fsClientFactory?: FileSystemServiceClientFactory;
+  private factoryInitialized: boolean = false;
 
   /**
    * Creates a new PathService with dependencies injected.
    * 
-   * @param serviceMediator Service mediator for resolving circular dependencies
+   * @param serviceMediator Service mediator for resolving circular dependencies (kept for backward compatibility)
    * @param projectPathResolver Resolver for project paths
    */
   constructor(
@@ -51,20 +52,16 @@ export class PathService implements IPathService {
     this.homePath = homeEnv || '';
     this.projectPath = process.cwd();
     
-    // Register this service with the mediator
-    this.serviceMediator.setPathService(this);
-    
-    // Try to resolve the factory from the container
-    try {
-      this.fsClientFactory = container.resolve('FileSystemServiceClientFactory');
-      this.initializeFileSystemClient();
-    } catch (error) {
-      // Factory not available, will use mediator
-      logger.debug('FileSystemServiceClientFactory not available, using ServiceMediator for filesystem operations');
+    // Register this service with the mediator for backward compatibility
+    if (this.serviceMediator) {
+      this.serviceMediator.setPathService(this);
     }
     
+    // Initialize factory if available
+    this.ensureFactoryInitialized();
+    
     if (process.env.DEBUG === 'true') {
-      console.log('PathService: Initialized with serviceMediator:', {
+      console.log('PathService: Initialized with', {
         hasServiceMediator: !!this.serviceMediator,
         hasFileSystemClient: !!this.fsClient,
         hasFactory: !!this.fsClientFactory,
@@ -74,8 +71,28 @@ export class PathService implements IPathService {
   }
 
   /**
+   * Lazily initialize the FileSystemServiceClient factory
+   * This is called only when needed to avoid circular dependencies
+   */
+  private ensureFactoryInitialized(): void {
+    if (this.factoryInitialized) {
+      return;
+    }
+    
+    this.factoryInitialized = true;
+    
+    // Try to resolve the factory from the container
+    try {
+      this.fsClientFactory = container.resolve('FileSystemServiceClientFactory');
+      this.initializeFileSystemClient();
+    } catch (error) {
+      // Factory not available
+      logger.debug('FileSystemServiceClientFactory not available');
+    }
+  }
+
+  /**
    * Initialize the FileSystemServiceClient using the factory
-   * This is called automatically in the constructor if the factory is available
    */
   private initializeFileSystemClient(): void {
     if (!this.fsClientFactory) {
@@ -86,7 +103,7 @@ export class PathService implements IPathService {
       this.fsClient = this.fsClientFactory.createClient();
       logger.debug('Successfully created FileSystemServiceClient using factory');
     } catch (error) {
-      logger.warn('Failed to create FileSystemServiceClient, falling back to ServiceMediator', { error });
+      logger.warn('Failed to create FileSystemServiceClient', { error });
       this.fsClient = undefined;
     }
   }
@@ -790,65 +807,79 @@ export class PathService implements IPathService {
   }
 
   /**
-   * Check if a path exists
+   * Checks if a path exists
+   * @param filePath - The path to check
+   * @returns True if the path exists, false otherwise
    */
-  async exists(targetPath: string): Promise<boolean> {
-    if (!targetPath) {
-      return false;
+  async exists(filePath: string): Promise<boolean> {
+    // Ensure factory is initialized
+    this.ensureFactoryInitialized();
+    
+    // Try to use the filesystem client
+    if (this.fsClient) {
+      try {
+        return await this.fsClient.exists(filePath);
+      } catch (error) {
+        logger.warn('Error using fsClient.exists', { 
+          error, 
+          path: filePath 
+        });
+      }
     }
     
-    try {
-      const resolvedPath = this.resolvePath(targetPath);
-      
-      // Try factory client first if available
-      if (this.fsClient) {
-        try {
-          return await this.fsClient.exists(resolvedPath);
-        } catch (error) {
-          logger.warn('Error using fsClient.exists, falling back to ServiceMediator', { 
-            error, 
-            path: resolvedPath 
-          });
-        }
+    // Fall back to mediator for backward compatibility
+    if (this.serviceMediator) {
+      try {
+        return await this.serviceMediator.exists(filePath);
+      } catch (error) {
+        logger.warn('Error using serviceMediator.exists', { 
+          error, 
+          path: filePath 
+        });
       }
-      
-      // Fall back to mediator
-      return this.serviceMediator.exists(resolvedPath);
-    } catch (error) {
-      logger.error('Error checking path existence', { path: targetPath, error });
-      return false;
     }
+    
+    // Last resort fallback - assume path exists
+    logger.warn('No filesystem service available, assuming path exists', { path: filePath });
+    return true;
   }
 
   /**
-   * Check if a path is a directory
+   * Checks if a path is a directory
+   * @param dirPath - The path to check
+   * @returns True if the path is a directory, false otherwise
    */
-  async isDirectory(targetPath: string): Promise<boolean> {
-    if (!targetPath) {
-      return false;
+  async isDirectory(dirPath: string): Promise<boolean> {
+    // Ensure factory is initialized
+    this.ensureFactoryInitialized();
+    
+    // Try to use the filesystem client
+    if (this.fsClient) {
+      try {
+        return await this.fsClient.isDirectory(dirPath);
+      } catch (error) {
+        logger.warn('Error using fsClient.isDirectory', { 
+          error, 
+          path: dirPath 
+        });
+      }
     }
     
-    try {
-      const resolvedPath = this.resolvePath(targetPath);
-      
-      // Try factory client first if available
-      if (this.fsClient) {
-        try {
-          return await this.fsClient.isDirectory(resolvedPath);
-        } catch (error) {
-          logger.warn('Error using fsClient.isDirectory, falling back to ServiceMediator', { 
-            error, 
-            path: resolvedPath 
-          });
-        }
+    // Fall back to mediator for backward compatibility
+    if (this.serviceMediator) {
+      try {
+        return await this.serviceMediator.isDirectory(dirPath);
+      } catch (error) {
+        logger.warn('Error using serviceMediator.isDirectory', { 
+          error, 
+          path: dirPath 
+        });
       }
-      
-      // Fall back to mediator
-      return this.serviceMediator.isDirectory(resolvedPath);
-    } catch (error) {
-      logger.error('Error checking if path is directory', { path: targetPath, error });
-      return false;
     }
+    
+    // Last resort fallback - assume path is not a directory
+    logger.warn('No filesystem service available, assuming path is not a directory', { path: dirPath });
+    return false;
   }
 
   /**
