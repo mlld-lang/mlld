@@ -192,27 +192,39 @@ npm test services/fs/PathService/PathService.test.ts
 #### Rollback Plan:
 If issues arise, revert changes to specific test files and investigate further.
 
-### Phase 5.3: ParserService Removal
+### Phase 5.3: ParserService Removal - COMPLETED
 
 #### Tasks:
-1. Remove IServiceMediator import
-2. Remove ServiceMediator injection in constructor
-3. Remove setMediator method
-4. Update resolveVariableReference method to only use ResolutionServiceClient
-5. Remove any other references to mediator
+1. ✅ Remove IServiceMediator import
+2. ✅ Remove ServiceMediator injection in constructor
+3. ✅ Remove setMediator method
+4. ✅ Update resolveVariableReference method to only use ResolutionServiceClient
+5. ✅ Remove any other references to mediator
+6. ✅ Update API layer (api/index.ts and api/run-meld.ts) to not set ParserService in ServiceMediator
+7. ✅ Update DI configuration (core/di-config.ts) to not pass ServiceMediator to ParserService constructor
+8. ✅ Update DI configuration to not set ParserService in ServiceMediator
 
 #### Testing:
-1. Run ParserService tests:
+1. ✅ Run ParserService tests:
    ```
    npm test services/pipeline/ParserService/ParserService.test.ts
    ```
-2. Run related tests:
+2. ✅ Run related tests:
    ```
    npm test services/pipeline/ParserService
    ```
+3. ✅ Run all tests to ensure no regressions:
+   ```
+   npm test
+   ```
 
-#### Rollback Plan:
-If issues arise, revert changes to ParserService.ts and investigate further.
+#### Summary:
+The ParserService was already updated to use the factory pattern and no longer had any direct dependencies on ServiceMediator. We only needed to:
+1. Update the API layer (api/index.ts and run-meld.ts) to not set the ParserService in the ServiceMediator
+2. Update the DI configuration (core/di-config.ts) to not pass ServiceMediator to the ParserService constructor
+3. Update the DI configuration to not set the ParserService in the ServiceMediator
+
+All tests are passing, which means we've successfully removed the ServiceMediator dependency from the ParserService.
 
 ### Phase 5.3: VariableReferenceResolver Removal - COMPLETED
 
