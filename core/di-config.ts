@@ -20,7 +20,6 @@ import { PathOperationsService } from '../services/fs/FileSystemService/PathOper
 import { NodeFileSystem } from '../services/fs/FileSystemService/NodeFileSystem.js';
 import { SourceMapService, sourceMapService } from '../core/utils/SourceMapService.js';
 import { CLIService, DefaultPromptService } from '../services/cli/CLIService/CLIService.js';
-import { ServiceMediator } from '../services/mediator/ServiceMediator.js';
 import { PathServiceClientFactory } from '../services/fs/PathService/factories/PathServiceClientFactory.js';
 import { FileSystemServiceClientFactory } from '../services/fs/FileSystemService/factories/FileSystemServiceClientFactory.js';
 import { ParserServiceClientFactory } from '../services/pipeline/ParserService/factories/ParserServiceClientFactory.js';
@@ -55,24 +54,16 @@ import { Logger, fsLogger } from '../core/utils/simpleLogger.js';
  * that use dependency injection decorators.
  */
 
-// First, register the ServiceMediator to break circular dependencies
-const serviceMediator = new ServiceMediator();
-container.registerInstance('ServiceMediator', serviceMediator);
-container.registerInstance('IServiceMediator', serviceMediator);
-
-// Create instances of services with circular dependencies first
-// so we can connect them through the mediator
-
-// Create minimal instances of core services with circular dependencies
+// Create minimal instances of core services with circular dependencies first
 const pathOps = new PathOperationsService();
 const nodeFileSystem = new NodeFileSystem();
 const projectPathResolver = new ProjectPathResolver();
 
-// Create instances in the right order to resolve circular dependencies
-const pathService = new PathService(serviceMediator, projectPathResolver);
+// Create instances in the right order to resolve dependencies
+const pathService = new PathService(projectPathResolver);
 const parserService = new ParserService();
 
-// Register PathServiceClientFactory first
+// Register PathService first
 container.registerInstance('PathService', pathService);
 container.registerInstance('IPathService', pathService);
 
@@ -81,7 +72,7 @@ const pathServiceClientFactory = new PathServiceClientFactory(pathService);
 container.registerInstance('PathServiceClientFactory', pathServiceClientFactory);
 
 // Now create FileSystemService with all dependencies
-const fileSystemService = new FileSystemService(pathOps, serviceMediator, nodeFileSystem, pathServiceClientFactory);
+const fileSystemService = new FileSystemService(pathOps, nodeFileSystem, pathServiceClientFactory);
 
 // Create StateService with early initialization
 // This is needed because ResolutionService depends on StateService
@@ -89,7 +80,9 @@ const stateFactory = new StateFactory();
 container.registerInstance(StateFactory, stateFactory);
 const stateEventService = new StateEventService();
 const stateTrackingService = new StateTrackingService();
-const stateService = new StateService(stateFactory, stateEventService, stateTrackingService, serviceMediator);
+const stateTrackingServiceClientFactory = new StateTrackingServiceClientFactory(stateTrackingService);
+container.registerInstance('StateTrackingServiceClientFactory', stateTrackingServiceClientFactory);
+const stateService = new StateService(stateFactory, stateEventService, stateTrackingServiceClientFactory);
 
 // Create the ResolutionService with the StateService dependency
 const resolutionService = new ResolutionService(stateService, fileSystemService, pathService);
@@ -105,11 +98,6 @@ container.registerInstance('ResolutionService', resolutionService);
 container.registerInstance('IResolutionService', resolutionService);
 container.registerInstance('StateService', stateService);
 container.registerInstance('IStateService', stateService);
-
-// Connect services through the mediator
-serviceMediator.setFileSystemService(fileSystemService);
-serviceMediator.setPathService(pathService);
-serviceMediator.setStateService(stateService);
 
 // Register client factories for circular dependency resolution
 container.register('PathServiceClientFactory', { useClass: PathServiceClientFactory });

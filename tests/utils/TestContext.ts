@@ -18,7 +18,6 @@ import { FileSystemService } from '@services/fs/FileSystemService/FileSystemServ
 import { OutputService } from '@services/pipeline/OutputService/OutputService.js';
 import { OutputFormat } from '@services/pipeline/OutputService/IOutputService.js';
 import { StateTrackingService } from './debug/StateTrackingService/StateTrackingService.js';
-import { ServiceMediator } from '@services/mediator/index.js';
 import { StateVisualizationService } from './debug/StateVisualizationService/StateVisualizationService.js';
 import { StateDebuggerService } from './debug/StateDebuggerService/StateDebuggerService.js';
 import { StateHistoryService } from './debug/StateHistoryService/StateHistoryService.js';
@@ -47,6 +46,11 @@ import type { DebugSessionConfig, DebugSessionResult } from './debug/StateDebugg
 import { TestDebuggerService } from './debug/TestDebuggerService.js';
 import { mockProcessExit } from './cli/mockProcessExit.js';
 import { mockConsole } from './cli/mockConsole.js';
+import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/factories/FileSystemServiceClientFactory.js';
+import { PathServiceClientFactory } from '@services/fs/PathService/factories/PathServiceClientFactory.js';
+import { StateTrackingServiceClientFactory } from '@services/state/StateTrackingService/factories/StateTrackingServiceClientFactory.js';
+import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory.js';
+import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientFactory.js';
 
 interface SnapshotDiff {
   added: string[];
@@ -124,21 +128,26 @@ export class TestContext {
     // Create ProjectPathResolver
     const projectPathResolver = new ProjectPathResolver();
     
-    // Create ServiceMediator to manage circular dependencies
-    const mediator = new ServiceMediator();
-    
-    // Create services with circular dependencies first
-    const filesystem = new FileSystemService(pathOps, mediator, this.fs);
-    const path = new PathService(mediator, projectPathResolver);
-    const parser = new ParserService(mediator);
+    // Create services with factory pattern
+    const pathService = new PathService(projectPathResolver);
     
     // Set test mode for PathService
-    path.setTestMode(true);
+    pathService.setTestMode(true);
     
-    // Connect services through the mediator
-    mediator.setFileSystemService(filesystem);
-    mediator.setPathService(path);
-    mediator.setParserService(parser);
+    // Create factories
+    const pathServiceClientFactory = new PathServiceClientFactory(pathService);
+    
+    // Create FileSystemService with factory
+    const filesystem = new FileSystemService(pathOps, this.fs, pathServiceClientFactory);
+    
+    // Create FileSystemServiceClientFactory
+    const fileSystemServiceClientFactory = new FileSystemServiceClientFactory(filesystem);
+    
+    // Create parser service
+    const parser = new ParserService();
+    
+    // Create ParserServiceClientFactory
+    const parserServiceClientFactory = new ParserServiceClientFactory(parser);
     
     const circularity = new CircularityService();
     const interpreter = new InterpreterService();
@@ -146,10 +155,15 @@ export class TestContext {
     // Initialize event service
     const eventService = new StateEventService();
     
-    // Initialize state service (using legacy constructor form)
+    // Create StateTrackingService
+    const stateTracking = new StateTrackingService();
+    
+    // Create StateTrackingServiceClientFactory
+    const stateTrackingServiceClientFactory = new StateTrackingServiceClientFactory(stateTracking);
+    
+    // Initialize state service with factories
     let stateFactory = new StateFactory();
-    const state = new StateService();
-    state.initialize(eventService);
+    const state = new StateService(stateFactory, eventService, stateTrackingServiceClientFactory);
     state.setCurrentFilePath('test.meld'); // Set initial file path
     state.enableTransformation(true);
     
@@ -158,8 +172,10 @@ export class TestContext {
     state.setPathVar('HOMEPATH', '/home/user');
     
     // Initialize resolution service
-    const resolution = new ResolutionService(state, filesystem, path, mediator);
-    mediator.setResolutionService(resolution);
+    const resolution = new ResolutionService(state, filesystem, pathService);
+    
+    // Create ResolutionServiceClientFactory
+    const resolutionServiceClientFactory = new ResolutionServiceClientFactory(resolution);
 
     // Initialize debugger service
     const debuggerService = new TestDebuggerService(state);
@@ -170,7 +186,7 @@ export class TestContext {
     directive.initialize(
       validation,
       state,
-      path,
+      pathService,
       filesystem,
       parser,
       interpreter,
@@ -195,7 +211,7 @@ export class TestContext {
       directive,
       validation,
       state,
-      path,
+      path: pathService,
       circularity,
       resolution,
       filesystem,

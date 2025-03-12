@@ -237,6 +237,7 @@ describe('StateService', () => {
     let historyService: StateHistoryService;
     let stateFactory: StateFactory;
     let testContext: TestContextDI;
+    let trackingServiceClientFactory: StateTrackingServiceClientFactory;
 
     beforeEach(() => {
       // Create test context with DI
@@ -253,6 +254,10 @@ describe('StateService', () => {
       testContext.registerMock('IStateTrackingService', trackingService);
       testContext.registerMock('StateTrackingService', trackingService);
       
+      // Create and register the tracking service client factory
+      trackingServiceClientFactory = new StateTrackingServiceClientFactory(trackingService);
+      testContext.registerMock('StateTrackingServiceClientFactory', trackingServiceClientFactory);
+      
       historyService = new StateHistoryService(eventService);
       testContext.registerMock('StateHistoryService', historyService);
       
@@ -262,8 +267,8 @@ describe('StateService', () => {
       debuggerService = new StateDebuggerService(visualizationService, historyService, trackingService);
       testContext.registerMock('StateDebuggerService', debuggerService);
       
-      // Resolve the service from the container
-      service = testContext.container.resolve(StateService);
+      // Create service directly with the factory
+      service = new StateService(stateFactory, eventService, trackingServiceClientFactory);
       
       // Add services to the service instance for visualization and debugging
       (service as any).services = {
@@ -351,6 +356,10 @@ describe('StateService', () => {
       testContext.registerMock('IStateTrackingService', trackingService);
       testContext.registerMock('StateTrackingService', trackingService);
       
+      // Create and register the tracking service client factory
+      const trackingServiceClientFactory = new StateTrackingServiceClientFactory(trackingService);
+      testContext.registerMock('StateTrackingServiceClientFactory', trackingServiceClientFactory);
+      
       historyService = new StateHistoryService(eventService);
       testContext.registerMock('StateHistoryService', historyService);
       
@@ -360,11 +369,8 @@ describe('StateService', () => {
       debuggerService = new StateDebuggerService(visualizationService, historyService, trackingService);
       testContext.registerMock('StateDebuggerService', debuggerService);
       
-      // Resolve the service from the container
-      service = testContext.container.resolve(StateService);
-      
-      // Add services to the service instance for visualization and debugging
-      service.setTrackingService(trackingService);
+      // Create service directly with the factory
+      service = new StateService(stateFactory, eventService, trackingServiceClientFactory);
 
       // Create a root state and keep track of its ID
       const rootId = service.getStateId();

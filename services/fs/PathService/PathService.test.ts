@@ -5,7 +5,6 @@ import { PathValidationError, PathErrorCode } from './errors/PathValidationError
 import { ProjectPathResolver } from '../ProjectPathResolver.js';
 import { IFileSystemService } from '../FileSystemService/IFileSystemService.js';
 import { FileSystemServiceClientFactory } from '../FileSystemService/factories/FileSystemServiceClientFactory.js';
-import { IServiceMediator } from '@services/mediator/IServiceMediator.js';
 import { StructuredPath } from './IPathService.js';
 
 describe('PathService', () => {
@@ -14,7 +13,6 @@ describe('PathService', () => {
   let projectPathResolver: ProjectPathResolver;
   let mockFileSystemService: IFileSystemService;
   let mockFileSystemClientFactory: FileSystemServiceClientFactory;
-  let mockServiceMediator: IServiceMediator;
 
   beforeEach(async () => {
     context = TestContextDI.createIsolated();
@@ -48,25 +46,13 @@ describe('PathService', () => {
       createClient: () => mockFileSystemService
     } as unknown as FileSystemServiceClientFactory;
     
-    // Create mock service mediator
-    mockServiceMediator = {
-      // Add required methods for backward compatibility
-      setPathService: (service: any) => {},
-      setFileSystemService: (service: any) => {},
-      setParserService: (service: any) => {},
-      setResolutionService: (service: any) => {},
-      setStateService: (service: any) => {}
-    } as unknown as IServiceMediator;
-
     // Register services
     context.registerMock('ProjectPathResolver', projectPathResolver);
     context.registerMock(ProjectPathResolver, projectPathResolver);
     context.registerMock('FileSystemServiceClientFactory', mockFileSystemClientFactory);
-    context.registerMock('IServiceMediator', mockServiceMediator);
-    context.registerMock('ServiceMediator', mockServiceMediator);
 
-    // Create service
-    service = new PathService(mockServiceMediator, projectPathResolver);
+    // Create service with updated constructor
+    service = new PathService(projectPathResolver);
     
     // Important: Set test mode and project path BEFORE registering the service
     service.enableTestMode();

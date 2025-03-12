@@ -50,16 +50,44 @@ export class StateService implements IStateService {
    * 
    * @param stateFactory - Factory for creating state nodes and managing state operations
    * @param eventService - Service for handling state events and notifications
-   * @param trackingService - Service for tracking state changes and relationships (used for debugging)
+   * @param trackingServiceClientFactory - Factory for creating tracking service clients
    * @param parentState - Optional parent state to inherit from (used for nested imports)
    */
   constructor(
     @inject(StateFactory) stateFactory?: StateFactory,
     @inject('IStateEventService') eventService?: IStateEventService,
-    @inject('IStateTrackingService') trackingService?: IStateTrackingService,
+    @inject('StateTrackingServiceClientFactory') trackingServiceClientFactory?: StateTrackingServiceClientFactory,
     parentState?: IStateService
   ) {
-    this.initializeFromParams(stateFactory, eventService, trackingService, parentState);
+    if (stateFactory) {
+      this.stateFactory = stateFactory;
+      this.eventService = eventService;
+      
+      // Initialize tracking client factory
+      this.trackingServiceClientFactory = trackingServiceClientFactory;
+      if (this.trackingServiceClientFactory) {
+        this.factoryInitialized = true;
+        this.initializeTrackingClient();
+      }
+      
+      this.initializeState(parentState);
+    } else {
+      // Fallback for non-DI initialization
+      logger.warn('StateService initialized without factory in DI-only mode');
+      this.stateFactory = new StateFactory();
+      
+      // Use event service if provided as first parameter
+      if (eventService && !(eventService as IStateService).createChildState) {
+        this.eventService = eventService as IStateEventService;
+      }
+      
+      // Initialize state with parent if provided
+      const actualParentState = parentState || 
+        (eventService && (eventService as IStateService).createChildState ? 
+          eventService as IStateService : undefined);
+      
+      this.initializeState(actualParentState);
+    }
   }
 
   /**
@@ -96,46 +124,6 @@ export class StateService implements IStateService {
     } catch (error) {
       logger.warn('Failed to create StateTrackingServiceClient, will use direct service if available', { error });
       this.trackingClient = undefined;
-    }
-  }
-
-  /**
-   * Initialize this service with the given parameters
-   * Using DI-only mode
-   */
-  private initializeFromParams(
-    stateFactory?: StateFactory,
-    eventService?: IStateEventService | IStateService,
-    trackingService?: IStateTrackingService,
-    parentState?: IStateService
-  ): void {
-    // Always use DI mode
-    if (stateFactory) {
-      this.stateFactory = stateFactory;
-      this.eventService = eventService as IStateEventService;
-      this.trackingService = trackingService;
-      
-      this.initializeState(parentState);
-    } else {
-      // This branch should not be reached in DI-only mode, but keeping as fallback
-      // Creating a default factory for robustness
-      logger.warn('StateService initialized without factory in DI-only mode');
-      this.stateFactory = new StateFactory();
-      
-      // Use event service if provided as first parameter
-      if (eventService && !(eventService as IStateService).createChildState) {
-        this.eventService = eventService as IStateEventService;
-      }
-      
-      // Store tracking service only
-      this.trackingService = trackingService;
-      
-      // Initialize state with parent if provided
-      const actualParentState = parentState || 
-        (eventService && (eventService as IStateService).createChildState ? 
-          eventService as IStateService : undefined);
-      
-      this.initializeState(actualParentState);
     }
   }
 
