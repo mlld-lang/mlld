@@ -4,7 +4,6 @@ import { IStateService } from '@services/state/StateService/IStateService.js';
 import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 import { IPathService } from '@services/fs/PathService/IPathService.js';
-import { IServiceMediator } from '@services/mediator/IServiceMediator.js';
 import { ResolutionContext } from './IResolutionService.js';
 import { ResolutionError } from './errors/ResolutionError.js';
 import type { MeldNode, DirectiveNode, TextNode } from 'meld-spec';
@@ -50,7 +49,6 @@ describe('ResolutionService', () => {
   let fileSystemService: IFileSystemService;
   let parserService: IParserService;
   let pathService: IPathService;
-  let serviceMediator: IServiceMediator;
   let context: ResolutionContext;
   let testContext: TestContextDI;
   
@@ -99,15 +97,6 @@ describe('ResolutionService', () => {
       normalizePath: vi.fn(p => p),
     } as unknown as IPathService;
     
-    // Create mock service mediator (for backward compatibility)
-    serviceMediator = {
-      setParserService: vi.fn(),
-      setResolutionService: vi.fn(),
-      setFileSystemService: vi.fn(),
-      setPathService: vi.fn(),
-      setStateService: vi.fn(),
-    } as unknown as IServiceMediator;
-    
     // Create mock clients
     mockParserClient = {
       parseString: vi.fn().mockResolvedValue([{ type: 'Text', value: 'parsed content' }]),
@@ -155,8 +144,6 @@ describe('ResolutionService', () => {
     testContext.registerMock('IFileSystemService', fileSystemService);
     testContext.registerMock('IParserService', parserService);
     testContext.registerMock('IPathService', pathService);
-    testContext.registerMock('IServiceMediator', serviceMediator);
-    testContext.registerMock('ServiceMediator', serviceMediator);
     
     // Register mock factories with the container
     testContext.registerMock('ParserServiceClientFactory', mockParserClientFactory);

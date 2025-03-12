@@ -92,7 +92,7 @@ const stateTrackingService = new StateTrackingService();
 const stateService = new StateService(stateFactory, stateEventService, stateTrackingService, serviceMediator);
 
 // Create the ResolutionService with the StateService dependency
-const resolutionService = new ResolutionService(stateService, fileSystemService, pathService, serviceMediator);
+const resolutionService = new ResolutionService(stateService, fileSystemService, pathService);
 
 // Register instances of services with circular dependencies
 container.registerInstance('FileSystemService', fileSystemService);
@@ -109,7 +109,6 @@ container.registerInstance('IStateService', stateService);
 // Connect services through the mediator
 serviceMediator.setFileSystemService(fileSystemService);
 serviceMediator.setPathService(pathService);
-serviceMediator.setResolutionService(resolutionService);
 serviceMediator.setStateService(stateService);
 
 // Register client factories for circular dependency resolution
