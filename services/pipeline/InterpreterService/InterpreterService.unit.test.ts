@@ -1,14 +1,15 @@
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import type { Mocked } from 'vitest';
-import { InterpreterService } from './InterpreterService.js';
-import { DirectiveService } from '@services/pipeline/DirectiveService/DirectiveService.js';
-import { StateService } from '@services/state/StateService/StateService.js';
+import { InterpreterService } from '@services/pipeline/InterpreterService/InterpreterService.js';
+import type { MeldNode, TextNode, DirectiveNode } from 'meld-spec';
 import { MeldInterpreterError } from '@core/errors/MeldInterpreterError.js';
-import { MeldNode, DirectiveNode as MeldDirective, TextNode, SourceLocation } from 'meld-spec';
-import { IInterpreterService } from './IInterpreterService.js';
-import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { DependencyContainer } from 'tsyringe';
 import { TestContainerHelper } from '@tests/utils/di/TestContainerHelper.js';
+import { DirectiveService } from '@services/pipeline/DirectiveService/DirectiveService.js';
+import { StateService } from '@services/state/StateService/StateService.js';
+import { IInterpreterService } from './IInterpreterService.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
+import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory.js';
 
 // Mock dependencies
 vi.mock('@services/pipeline/DirectiveService/DirectiveService.js');
@@ -139,65 +140,135 @@ describe('InterpreterService Unit', () => {
   });
 
   describe('initialization', () => {
-    it('initializes with required services', (): void => {
+    it('initializes with required services', () => {
+      // Create a mock DirectiveServiceClientFactory that works with type checks
+      const mockDirectiveServiceClientFactory = {
+        createClient: vi.fn().mockReturnValue({
+          supportsDirective: vi.fn().mockReturnValue(true),
+          getSupportedDirectives: vi.fn().mockReturnValue(['text', 'data']),
+          handleDirective: vi.fn().mockImplementation(async (node, context) => {
+            return context.state;
+          })
+        }),
+        // Add getDirectiveService to satisfy type checks
+        getDirectiveService: vi.fn()
+      } as unknown as InterpreterServiceClientFactory;
+      
+      // Pass the factory instead of the service directly
+      const service = new InterpreterService(
+        mockDirectiveServiceClientFactory,
+        mockStateService
+      );
+      
       expect(service).toBeDefined();
-      // Access to private properties should still work in tests
-      expect(service['directiveService']).toStrictEqual(mockDirectiveService);
+      
+      // Instead of checking directiveService, check if the client is initialized
+      expect(service['directiveClientFactory']).toStrictEqual(mockDirectiveServiceClientFactory);
       expect(service['stateService']).toStrictEqual(mockStateService);
     });
 
-    it('throws if initialized without required services', async (): Promise<void> => {
+    it('throws if initialized without required services', async () => {
       const uninitializedService = new InterpreterService();
-      await expect(() => uninitializedService.interpret([])).rejects.toThrow('InterpreterService must be initialized before use');
+      await expect(uninitializedService.interpret([])).rejects.toThrow(/InterpreterService must be initialized/);
     });
   });
 
   describe('node interpretation', () => {
-    it('processes text nodes directly', async (): Promise<void> => {
+    it('processes text nodes directly', async () => {
+      // Create a mock DirectiveServiceClientFactory
+      const mockDirectiveServiceClientFactory = {
+        createClient: vi.fn().mockReturnValue({
+          supportsDirective: vi.fn().mockReturnValue(true),
+          getSupportedDirectives: vi.fn().mockReturnValue(['text', 'data']),
+          handleDirective: vi.fn().mockImplementation(async (node, context) => {
+            return context.state;
+          })
+        }),
+        getDirectiveService: vi.fn()
+      } as unknown as InterpreterServiceClientFactory;
+      
+      // Initialize the service with the mock factory
+      const service = new InterpreterService(
+        mockDirectiveServiceClientFactory,
+        mockStateService
+      );
+      
+      // Set up the test
       const textNode: TextNode = {
         type: 'Text',
-        content: 'Hello world',
-        location: {
-          start: { line: 1, column: 1 },
-          end: { line: 1, column: 12 }
-        }
-      } as TextNode;
-
-      await service.interpret([textNode]);
-      expect(mockChildState.addNode).toHaveBeenCalledWith(textNode);
-    });
-
-    it('delegates directive nodes to directive service', async (): Promise<void> => {
-      const directiveNode: MeldDirective = {
-        type: 'Directive',
-        directive: {
-          kind: 'text',
-          identifier: 'test',
-          value: 'value'
-        },
-        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 30 } }
+        content: 'Sample text',
+        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 11 } }
       };
-
-      mockChildState.getCurrentFilePath.mockReturnValue('test.meld');
-      await service.interpret([directiveNode]);
-      expect(mockDirectiveService.processDirective).toHaveBeenCalledWith(
-        directiveNode,
-        expect.objectContaining({
-          state: expect.any(Object),
-          currentFilePath: 'test.meld'
-        })
-      );
-
-      expect(directiveNode.type).toBe('Directive');
-      expect(directiveNode.directive.kind).toBe('text');
+      
+      // Execute
+      await service.interpret([textNode]);
+      
+      // Verify state was updated correctly
+      expect(mockStateService.addNode).toHaveBeenCalledWith(textNode);
     });
 
-    it('throws on unknown node types', async (): Promise<void> => {
+    it('delegates directive nodes to directive service', async () => {
+      // Mock the directive client that will be returned by the factory
+      const mockDirectiveClient = {
+        supportsDirective: vi.fn().mockReturnValue(true),
+        getSupportedDirectives: vi.fn().mockReturnValue(['text', 'data']),
+        handleDirective: vi.fn().mockImplementation(async (node, context) => {
+          return context.state;
+        })
+      };
+      
+      // Create the factory mock
+      const mockDirectiveServiceClientFactory = {
+        createClient: vi.fn().mockReturnValue(mockDirectiveClient),
+        getDirectiveService: vi.fn()
+      } as unknown as InterpreterServiceClientFactory;
+      
+      // Initialize with the factory
+      const service = new InterpreterService(
+        mockDirectiveServiceClientFactory,
+        mockStateService
+      );
+      
+      // Create directive node for testing
+      const directiveNode: DirectiveNode = {
+        type: 'Directive',
+        directive: { kind: 'text', identifier: 'var', value: 'value' },
+        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 11 } }
+      };
+      
+      // Execute
+      await service.interpret([directiveNode]);
+      
+      // Verify the client's handleDirective was called
+      expect(mockDirectiveClient.handleDirective).toHaveBeenCalled();
+    });
+
+    it('throws on unknown node types', async () => {
+      // Create a mock DirectiveServiceClientFactory
+      const mockDirectiveServiceClientFactory = {
+        createClient: vi.fn().mockReturnValue({
+          supportsDirective: vi.fn().mockReturnValue(true),
+          getSupportedDirectives: vi.fn().mockReturnValue(['text', 'data']),
+          handleDirective: vi.fn().mockImplementation(async (node, context) => {
+            return context.state;
+          })
+        }),
+        getDirectiveService: vi.fn()
+      } as unknown as InterpreterServiceClientFactory;
+      
+      // Initialize the service
+      const service = new InterpreterService(
+        mockDirectiveServiceClientFactory,
+        mockStateService
+      );
+      
+      // Create an unknown node type for testing
       const unknownNode = {
         type: 'Unknown',
-        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 30 } }
+        content: 'unknown content'
       } as unknown as MeldNode;
-
+      
+      // Execute and verify it throws with the expected message
       await expect(service.interpret([unknownNode])).rejects.toThrow(/unknown node type/i);
     });
   });
@@ -228,11 +299,26 @@ describe('InterpreterService Unit', () => {
   });
 
   describe('error handling', () => {
-    it('wraps non-interpreter errors', async (): Promise<void> => {
-      const error = new Error('Test error');
-      mockDirectiveService.processDirective.mockRejectedValue(error);
-
-      const directiveNode: MeldDirective = {
+    it('wraps non-interpreter errors', async () => {
+      // Create a mock DirectiveServiceClientFactory
+      const mockDirectiveServiceClientFactory = {
+        createClient: vi.fn().mockReturnValue({
+          supportsDirective: vi.fn().mockReturnValue(true),
+          getSupportedDirectives: vi.fn().mockReturnValue(['text', 'data']),
+          handleDirective: vi.fn().mockImplementation(async (node, context) => {
+            throw new Error('Generic error');
+          })
+        })
+      } as unknown as InterpreterServiceClientFactory;
+      
+      // Initialize the service
+      const service = new InterpreterService(
+        mockDirectiveServiceClientFactory,
+        mockStateService
+      );
+      
+      // Create directive node for testing
+      const directiveNode: DirectiveNode = {
         type: 'Directive',
         directive: {
           kind: 'text',
@@ -241,15 +327,34 @@ describe('InterpreterService Unit', () => {
         },
         location: { start: { line: 1, column: 1 }, end: { line: 1, column: 30 } }
       };
-
+      
+      // Execute and verify the error is wrapped
       await expect(service.interpret([directiveNode])).rejects.toBeInstanceOf(MeldInterpreterError);
     });
 
-    it('preserves interpreter errors', async (): Promise<void> => {
+    it('preserves interpreter errors', async () => {
+      // Create an error to be thrown
       const error = new MeldInterpreterError('Test error', 'test');
-      mockDirectiveService.processDirective.mockRejectedValue(error);
-
-      const directiveNode: MeldDirective = {
+      
+      // Create a mock DirectiveServiceClientFactory
+      const mockDirectiveServiceClientFactory = {
+        createClient: vi.fn().mockReturnValue({
+          supportsDirective: vi.fn().mockReturnValue(true),
+          getSupportedDirectives: vi.fn().mockReturnValue(['text', 'data']),
+          handleDirective: vi.fn().mockImplementation(async (node, context) => {
+            throw error;
+          })
+        })
+      } as unknown as InterpreterServiceClientFactory;
+      
+      // Initialize the service
+      const service = new InterpreterService(
+        mockDirectiveServiceClientFactory,
+        mockStateService
+      );
+      
+      // Create directive node for testing
+      const directiveNode: DirectiveNode = {
         type: 'Directive',
         directive: {
           kind: 'text',
@@ -258,15 +363,38 @@ describe('InterpreterService Unit', () => {
         },
         location: { start: { line: 1, column: 1 }, end: { line: 1, column: 30 } }
       };
-
-      await expect(service.interpret([directiveNode])).rejects.toEqual(error);
+      
+      // Execute and verify the specific error instance is preserved
+      try {
+        await service.interpret([directiveNode]);
+        fail('Should have thrown an error');
+      } catch (e) {
+        expect(e).toBeInstanceOf(MeldInterpreterError);
+        expect(e.message).toBe('Test error');
+        expect(e.code).toBe('test');
+      }
     });
 
-    it('includes node location in errors', async (): Promise<void> => {
-      const error = new Error('Test error');
-      mockDirectiveService.processDirective.mockRejectedValue(error);
-
-      const directiveNode: MeldDirective = {
+    it('includes node location in errors', async () => {
+      // Create a mock DirectiveServiceClientFactory
+      const mockDirectiveServiceClientFactory = {
+        createClient: vi.fn().mockReturnValue({
+          supportsDirective: vi.fn().mockReturnValue(true),
+          getSupportedDirectives: vi.fn().mockReturnValue(['text', 'data']),
+          handleDirective: vi.fn().mockImplementation(async (node, context) => {
+            throw new Error('Error with location');
+          })
+        })
+      } as unknown as InterpreterServiceClientFactory;
+      
+      // Initialize the service
+      const service = new InterpreterService(
+        mockDirectiveServiceClientFactory,
+        mockStateService
+      );
+      
+      // Create directive node with specific location
+      const directiveNode: DirectiveNode = {
         type: 'Directive',
         directive: {
           kind: 'text',
@@ -275,18 +403,18 @@ describe('InterpreterService Unit', () => {
         },
         location: { start: { line: 42, column: 10 }, end: { line: 42, column: 30 } }
       };
-
+      
+      // Execute and verify location is included in error
       try {
         await service.interpret([directiveNode]);
-        expect.fail('Should have thrown error');
+        fail('Should have thrown an error');
       } catch (e) {
         expect(e).toBeInstanceOf(MeldInterpreterError);
-        if (e instanceof MeldInterpreterError && directiveNode.location) {
-          expect(e.location).toEqual({
-            line: directiveNode.location.start.line,
-            column: directiveNode.location.start.column
-          });
-        }
+        // The location should be extracted from the node
+        expect(e.location).toMatchObject({
+          line: 42,
+          column: 10
+        });
       }
     });
   });
@@ -301,7 +429,7 @@ describe('InterpreterService Unit', () => {
     });
 
     it('passes options to directive service', async (): Promise<void> => {
-      const directiveNode: MeldDirective = {
+      const directiveNode: DirectiveNode = {
         type: 'Directive',
         directive: {
           kind: 'text',
@@ -372,7 +500,7 @@ describe('InterpreterService Unit', () => {
     });
 
     it('handles directive service initialization failures', async () => {
-      const directiveNode: MeldDirective = {
+      const directiveNode: DirectiveNode = {
         type: 'Directive',
         directive: {
           kind: 'text',
@@ -440,7 +568,7 @@ describe('InterpreterService Unit', () => {
             value: 'value'
           },
           location: { start: { line: 2, column: 1 }, end: { line: 2, column: 30 } }
-        } as MeldDirective,
+        } as DirectiveNode,
         {
           type: 'Text',
           content: 'third',

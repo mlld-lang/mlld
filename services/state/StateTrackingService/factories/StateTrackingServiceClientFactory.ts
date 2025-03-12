@@ -31,7 +31,20 @@ export class StateTrackingServiceClientFactory {
       addRelationship: (sourceId, targetId, type) => 
         this.trackingService.addRelationship(sourceId, targetId, type),
       registerRelationship: (relationship) => 
-        this.trackingService.registerRelationship(relationship)
+        this.trackingService.registerRelationship(relationship),
+      registerEvent: (event) => {
+        // This method is optional in the interface, but we implement it here
+        // for completeness and to support testing
+        if (this.trackingService.registerEvent) {
+          this.trackingService.registerEvent(event);
+        }
+      },
+      hasState: (stateId) => this.trackingService.hasState(stateId),
+      getStateMetadata: (stateId) => this.trackingService.getStateMetadata(stateId),
+      getParentState: (stateId) => this.trackingService.getParentState(stateId),
+      getChildStates: (stateId) => this.trackingService.getChildStates(stateId),
+      getRelationships: (stateId) => this.trackingService.getRelationships(stateId),
+      getStateDescendants: (stateId) => this.trackingService.getStateDescendants(stateId)
     };
   }
 } 

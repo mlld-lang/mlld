@@ -21,7 +21,7 @@ export interface IStateTrackingServiceClient {
    * @param targetId - The target state ID
    * @param type - The type of relationship
    */
-  addRelationship(sourceId: string, targetId: string, type: 'parent-child' | 'merge-source' | 'merge-target'): void;
+  addRelationship(sourceId: string, targetId: string, type: 'parent-child' | 'merge-source' | 'merge-target' | 'clone-original'): void;
 
   /**
    * Register a relationship between two states with additional metadata.
@@ -30,8 +30,65 @@ export interface IStateTrackingServiceClient {
   registerRelationship(relationship: {
     sourceId: string;
     targetId: string;
-    type: 'parent-child' | 'merge-source' | 'merge-target';
+    type: 'parent-child' | 'merge-source' | 'merge-target' | 'clone-original';
     timestamp: number;
     source: string;
   }): void;
+
+  /**
+   * Register an event for a state.
+   * @param event - The event details
+   */
+  registerEvent?(event: {
+    stateId: string;
+    type: string;
+    timestamp: number;
+    details?: any;
+    source: string;
+  }): void;
+
+  /**
+   * Check if a state is registered with the tracking service.
+   * @param stateId - The state ID to check
+   * @returns Whether the state is registered
+   */
+  hasState?(stateId: string): boolean;
+
+  /**
+   * Get metadata for a state.
+   * @param stateId - The state ID to get metadata for
+   * @returns The state metadata, or undefined if not found
+   */
+  getStateMetadata?(stateId: string): Partial<StateMetadata> | undefined;
+
+  /**
+   * Get the parent state ID of a state.
+   * @param stateId - The state ID to get the parent for
+   * @returns The parent state ID, or undefined if not found
+   */
+  getParentState?(stateId: string): string | undefined;
+
+  /**
+   * Get child state IDs of a state.
+   * @param stateId - The state ID to get children for
+   * @returns An array of child state IDs
+   */
+  getChildStates?(stateId: string): string[];
+
+  /**
+   * Get relationships for a state.
+   * @param stateId - The state ID to get relationships for
+   * @returns An array of relationships
+   */
+  getRelationships?(stateId: string): Array<{
+    type: string;
+    targetId: string;
+  }>;
+
+  /**
+   * Get all descendant state IDs of a state.
+   * @param stateId - The state ID to get descendants for 
+   * @returns An array of descendant state IDs
+   */
+  getStateDescendants?(stateId: string): string[];
 } 

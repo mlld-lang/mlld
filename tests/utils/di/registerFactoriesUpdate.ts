@@ -6,6 +6,7 @@ import { IDirectiveServiceClient } from '@services/pipeline/DirectiveService/int
 import { IResolutionServiceClientForDirective } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClientForDirective';
 import { IStateServiceClient } from '@services/state/StateService/interfaces/IStateServiceClient';
 import { IStateTrackingServiceClient } from '@services/state/StateTrackingService/interfaces/IStateTrackingServiceClient';
+import { IInterpreterServiceClient } from '@services/pipeline/InterpreterService/interfaces/IInterpreterServiceClient';
 
 /**
  * Updated registerFactories method for TestContextDI
@@ -129,9 +130,43 @@ export function registerFactories(container: any, fs: any) {
       const mockStateTrackingServiceClient: IStateTrackingServiceClient = {
         registerState: vi.fn(),
         addRelationship: vi.fn(),
-        registerRelationship: vi.fn()
+        registerRelationship: vi.fn(),
+        registerEvent: vi.fn(),
+        hasState: vi.fn().mockReturnValue(true),
+        getStateMetadata: vi.fn().mockReturnValue({
+          id: 'test-state-id',
+          source: 'test',
+          createdAt: Date.now(),
+          transformationEnabled: false
+        }),
+        getParentState: vi.fn().mockReturnValue('parent-state-id'),
+        getChildStates: vi.fn().mockReturnValue(['child-state-id']),
+        getRelationships: vi.fn().mockReturnValue([
+          { sourceId: 'parent-state-id', targetId: 'child-state-id', type: 'parent-child' }
+        ]),
+        getStateDescendants: vi.fn().mockReturnValue(['child-state-id'])
       };
       return mockStateTrackingServiceClient;
+    })
+  };
+  
+  // Register InterpreterServiceClientFactory mock
+  const mockInterpreterServiceClientFactory = {
+    createClient: vi.fn().mockImplementation(() => {
+      const mockInterpreterServiceClient: IInterpreterServiceClient = {
+        createChildContext: vi.fn().mockImplementation(async (parentState: any, filePath?: string, options?: any) => {
+          // Create a simple mock state that's a clone of the parent state
+          return parentState.clone ? parentState.clone() : parentState;
+        }),
+        interpret: vi.fn().mockImplementation(async (nodes: any[], options?: any) => {
+          // Return initialState or a simple mock state
+          return options?.initialState || { 
+            clone: () => ({}) as any,
+            createChildState: () => ({}) as any
+          };
+        })
+      };
+      return mockInterpreterServiceClient;
     })
   };
   
@@ -142,4 +177,5 @@ export function registerFactories(container: any, fs: any) {
   container.registerMock('ResolutionServiceClientForDirectiveFactory', mockResolutionServiceClientForDirectiveFactory);
   container.registerMock('StateServiceClientFactory', mockStateServiceClientFactory);
   container.registerMock('StateTrackingServiceClientFactory', mockStateTrackingServiceClientFactory);
+  container.registerMock('InterpreterServiceClientFactory', mockInterpreterServiceClientFactory);
 } 

@@ -8,6 +8,7 @@ import { EmbedDirectiveHandler } from '@services/pipeline/DirectiveService/handl
 import { RunDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler.js';
 import { IDirectiveService } from '@services/pipeline/DirectiveService/IDirectiveService.js';
 import { TestContextDI } from './TestContextDI.js';
+import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory.js';
 
 /**
  * Helper class for setting up directive handlers in tests
@@ -30,7 +31,25 @@ export class TestDirectiveHandlerHelper {
     const filesystemService = context.services.filesystem;
     const parserService = context.services.parser;
     const circularityService = context.services.circularity;
-    const interpreterService = context.services.interpreter;
+    
+    // Create or get the interpreter service client factory
+    let interpreterServiceClientFactory: InterpreterServiceClientFactory;
+    try {
+      interpreterServiceClientFactory = context.container.resolve('InterpreterServiceClientFactory');
+    } catch (error) {
+      // If factory doesn't exist in container, create a new one
+      interpreterServiceClientFactory = new InterpreterServiceClientFactory();
+      
+      // Register the interpreter service to be resolved by the factory
+      if (context.services.interpreter) {
+        // For test compatibility, directly set the interpreter service on the factory
+        // This is specifically for tests where we need a concrete service instance
+        interpreterServiceClientFactory.setInterpreterServiceForTests(context.services.interpreter);
+      }
+      
+      // Register the factory in the container for future use
+      context.container.registerInstance('InterpreterServiceClientFactory', interpreterServiceClientFactory);
+    }
     
     // Initialize the service with all dependencies
     await directiveService.initialize(
@@ -39,7 +58,7 @@ export class TestDirectiveHandlerHelper {
       pathService,
       filesystemService,
       parserService,
-      interpreterService,
+      interpreterServiceClientFactory, // Use factory instead of direct service reference
       circularityService,
       resolutionService
     );
@@ -91,38 +110,61 @@ export class TestDirectiveHandlerHelper {
     service.registerHandler(pathHandler);
     
     const defineHandler = new DefineDirectiveHandler(
-      validation,
+      validation, 
       state,
       resolution
     );
     service.registerHandler(defineHandler);
     
     // Create and register execution handlers
-    const importHandler = new ImportDirectiveHandler(
+    const runHandler = new RunDirectiveHandler(
       validation,
-      state,
       resolution,
-      path,
-      filesystem,
-      parser,
-      circularity
+      state,
+      filesystem
     );
-    service.registerHandler(importHandler);
+    service.registerHandler(runHandler);
+    
+    // For embed and import handlers, use the interpreter service client factory
+    let interpreterServiceClientFactory: InterpreterServiceClientFactory;
+    try {
+      interpreterServiceClientFactory = context.container.resolve('InterpreterServiceClientFactory');
+    } catch (error) {
+      // If factory doesn't exist in container, create a new one
+      interpreterServiceClientFactory = new InterpreterServiceClientFactory();
+      
+      // Register the interpreter service to be resolved by the factory
+      if (context.services.interpreter) {
+        // For test compatibility, directly set the interpreter service on the factory
+        // This is specifically for tests where we need a concrete service instance
+        interpreterServiceClientFactory.setInterpreterServiceForTests(context.services.interpreter);
+      }
+      
+      // Register the factory in the container for future use
+      context.container.registerInstance('InterpreterServiceClientFactory', interpreterServiceClientFactory);
+    }
     
     const embedHandler = new EmbedDirectiveHandler(
       validation,
-      state,
       resolution,
-      path,
-      filesystem
+      state,
+      circularity,
+      filesystem,
+      parser,
+      interpreterServiceClientFactory,
+      undefined // Use default logger
     );
     service.registerHandler(embedHandler);
     
-    const runHandler = new RunDirectiveHandler(
+    const importHandler = new ImportDirectiveHandler(
       validation,
+      resolution,
       state,
-      resolution
+      filesystem,
+      parser,
+      interpreterServiceClientFactory,
+      circularity
     );
-    service.registerHandler(runHandler);
+    service.registerHandler(importHandler);
   }
 } 

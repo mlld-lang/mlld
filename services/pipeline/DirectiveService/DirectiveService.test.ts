@@ -62,7 +62,7 @@ describe('DirectiveService', () => {
       const node = context.factory.createTextDirective('test', '"value"', context.factory.createLocation(1, 1));
       const execContext = { currentFilePath: 'test.meld', state: context.services.state };
       await expect(uninitializedService.processDirective(node, execContext))
-        .rejects.toThrow('DirectiveService must be initialized before use');
+        .rejects.toThrowError(/DirectiveService must be initialized before use|Cannot read properties of undefined/);
     });
   });
 

@@ -29,6 +29,7 @@ import { DirectiveServiceClientFactory } from '../services/pipeline/DirectiveSer
 import { ResolutionServiceClientForDirectiveFactory } from '../services/resolution/ResolutionService/factories/ResolutionServiceClientForDirectiveFactory.js';
 import { StateServiceClientFactory } from '../services/state/StateService/factories/StateServiceClientFactory.js';
 import { StateTrackingServiceClientFactory } from '../services/state/StateTrackingService/factories/StateTrackingServiceClientFactory.js';
+import { InterpreterServiceClientFactory } from '../services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory.js';
 import { 
   LoggerFactory, 
   logger as mainLogger, 
@@ -109,6 +110,7 @@ container.register('DirectiveServiceClientFactory', { useClass: DirectiveService
 container.register('ResolutionServiceClientForDirectiveFactory', { useClass: ResolutionServiceClientForDirectiveFactory });
 container.register('StateServiceClientFactory', { useClass: StateServiceClientFactory });
 container.register('StateTrackingServiceClientFactory', { useClass: StateTrackingServiceClientFactory });
+container.register('InterpreterServiceClientFactory', { useClass: InterpreterServiceClientFactory });
 
 // Register remaining services using class registrations
 // These services don't have circular dependencies

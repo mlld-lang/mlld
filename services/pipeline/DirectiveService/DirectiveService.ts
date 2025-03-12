@@ -18,6 +18,8 @@ import { inject, delay, injectable } from 'tsyringe';
 import { container } from 'tsyringe';
 import { IResolutionServiceClientForDirective } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClientForDirective.js';
 import { ResolutionServiceClientForDirectiveFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientForDirectiveFactory.js';
+import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory.js';
+import { IInterpreterServiceClient } from '@services/pipeline/InterpreterService/interfaces/IInterpreterServiceClient.js';
 
 // Import all handlers
 import { TextDirectiveHandler } from './handlers/definition/TextDirectiveHandler.js';
@@ -52,7 +54,7 @@ export class MeldLLMXMLError extends Error {
     { token: 'IPathService', name: 'pathService' },
     { token: 'IFileSystemService', name: 'fileSystemService' },
     { token: 'IParserService', name: 'parserService' },
-    { token: 'IInterpreterService', name: 'interpreterService' },
+    { token: 'InterpreterServiceClientFactory', name: 'interpreterServiceClientFactory' },
     { token: 'ICircularityService', name: 'circularityService' },
     { token: 'IResolutionService', name: 'resolutionService' }
   ]
@@ -63,12 +65,15 @@ export class DirectiveService implements IDirectiveService {
   private pathService!: IPathService;
   private fileSystemService!: IFileSystemService;
   private parserService!: IParserService;
-  private interpreterService?: IInterpreterService; // Will be set by updateInterpreterService for circular dependency
+  private interpreterService?: IInterpreterService; // Legacy reference
+  private interpreterClient?: IInterpreterServiceClient; // Client from factory pattern
+  private interpreterClientFactory?: InterpreterServiceClientFactory;
   private circularityService!: ICircularityService;
   private resolutionService!: IResolutionService;
   private resolutionClient?: IResolutionServiceClientForDirective;
   private resolutionClientFactory?: ResolutionServiceClientForDirectiveFactory;
   private factoryInitialized: boolean = false;
+  private interpreterFactoryInitialized: boolean = false;
   private initialized = false;
   private logger: ILogger;
 
@@ -83,7 +88,7 @@ export class DirectiveService implements IDirectiveService {
    * @param pathService Path service for handling file paths (injected)
    * @param fileSystemService File system service for file operations (injected)
    * @param parserService Parser service for parsing Meld files (injected)
-   * @param interpreterService Interpreter service for nested interpretation (injected)
+   * @param interpreterServiceClientFactory Factory for creating interpreter clients (injected)
    * @param circularityService Circularity service for detecting circular imports (injected)
    * @param resolutionService Resolution service for variable resolution (injected)
    * @param logger Logger for directive operations (optional)
@@ -94,22 +99,35 @@ export class DirectiveService implements IDirectiveService {
     @inject('IPathService') pathService?: IPathService,
     @inject('IFileSystemService') fileSystemService?: IFileSystemService,
     @inject('IParserService') parserService?: IParserService,
-    @inject('IInterpreterService') interpreterService?: IInterpreterService,
+    @inject('InterpreterServiceClientFactory') interpreterServiceClientFactory?: InterpreterServiceClientFactory,
     @inject('ICircularityService') circularityService?: ICircularityService,
     @inject('IResolutionService') resolutionService?: IResolutionService,
     logger?: ILogger
   ) {
     this.logger = logger || directiveLogger;
     this.initializeFromParams(
-      validationService, 
-      stateService, 
-      pathService, 
-      fileSystemService, 
-      parserService, 
-      interpreterService, 
-      circularityService, 
+      validationService,
+      stateService,
+      pathService,
+      fileSystemService,
+      parserService,
+      undefined, // Replaced by interpreterServiceClientFactory
+      circularityService,
       resolutionService
     );
+    
+    // Initialize interpreter client factory
+    this.interpreterClientFactory = interpreterServiceClientFactory;
+    if (this.interpreterClientFactory) {
+      this.interpreterFactoryInitialized = true;
+      this.initializeInterpreterClient();
+    }
+    
+    // Set initialized to true before registering handlers
+    this.initialized = true;
+    
+    // Register default handlers
+    this.registerDefaultHandlers();
   }
   
   /**
@@ -122,7 +140,7 @@ export class DirectiveService implements IDirectiveService {
     pathService?: IPathService,
     fileSystemService?: IFileSystemService,
     parserService?: IParserService,
-    interpreterService?: IInterpreterService,
+    interpreterServiceClientFactory?: InterpreterServiceClientFactory,
     circularityService?: ICircularityService,
     resolutionService?: IResolutionService
   ): void {
@@ -143,14 +161,15 @@ export class DirectiveService implements IDirectiveService {
     this.circularityService = circularityService;
     this.resolutionService = resolutionService;
     
+    // Set initialized to true
+    this.initialized = true;
+    
     // Handle the circular dependency with InterpreterService
     // We'll set this later in updateInterpreterService()
     // but use the delay-injected service if available
-    if (interpreterService) {
+    if (interpreterServiceClientFactory) {
       // Use setTimeout to ensure all services are fully initialized
       setTimeout(() => {
-        this.interpreterService = interpreterService;
-        this.initialized = true;
         this.registerDefaultHandlers();
         this.logger.debug('DirectiveService initialized via DI', {
           handlers: Array.from(this.handlers.keys())
@@ -170,7 +189,7 @@ export class DirectiveService implements IDirectiveService {
     pathService: IPathService,
     fileSystemService: IFileSystemService,
     parserService: IParserService,
-    interpreterService: IInterpreterService,
+    interpreterServiceClientFactory: InterpreterServiceClientFactory,
     circularityService: ICircularityService,
     resolutionService: IResolutionService
   ): void {
@@ -179,10 +198,16 @@ export class DirectiveService implements IDirectiveService {
     this.pathService = pathService;
     this.fileSystemService = fileSystemService;
     this.parserService = parserService;
-    this.interpreterService = interpreterService;
     this.circularityService = circularityService;
     this.resolutionService = resolutionService;
     this.initialized = true;
+
+    // Initialize interpreter client factory
+    this.interpreterClientFactory = interpreterServiceClientFactory;
+    if (this.interpreterClientFactory) {
+      this.interpreterFactoryInitialized = true;
+      this.initializeInterpreterClient();
+    }
 
     // Register default handlers
     this.registerDefaultHandlers();
@@ -271,7 +296,7 @@ export class DirectiveService implements IDirectiveService {
         this.circularityService!,
         this.fileSystemService!,
         this.parserService!,
-        this.interpreterService!,
+        this.interpreterServiceClientFactory!,
         this.logger
       )
     );
@@ -283,7 +308,7 @@ export class DirectiveService implements IDirectiveService {
         this.stateService!,
         this.fileSystemService!,
         this.parserService!,
-        this.interpreterService!,
+        this.interpreterServiceClientFactory!,
         this.circularityService!
       )
     );
@@ -544,7 +569,7 @@ export class DirectiveService implements IDirectiveService {
 
         // Parse and interpret the content
         const parsedNodes = await this.parserService!.parse(processedContent);
-        await this.interpreterService!.interpret(parsedNodes, {
+        await this.callInterpreterInterpret(parsedNodes, {
           initialState: childState,
           filePath: fullPath,
           mergeState: true
@@ -734,7 +759,7 @@ export class DirectiveService implements IDirectiveService {
 
         // Parse and interpret the content
         const parsedNodes = await this.parserService!.parse(processedContent);
-        await this.interpreterService!.interpret(parsedNodes, {
+        await this.callInterpreterInterpret(parsedNodes, {
           initialState: childState,
           filePath: fullPath,
           mergeState: true
@@ -960,5 +985,92 @@ export class DirectiveService implements IDirectiveService {
     
     // Fall back to direct reference
     return this.resolutionService.resolvePath(path, context.resolutionContext);
+  }
+
+  /**
+   * Initialize the interpreterClient using the factory
+   */
+  private initializeInterpreterClient(): void {
+    if (!this.interpreterClientFactory) {
+      return;
+    }
+    
+    try {
+      this.interpreterClient = this.interpreterClientFactory.createClient();
+      this.logger.debug('Successfully created InterpreterServiceClient using factory');
+    } catch (error) {
+      this.logger.warn('Failed to create InterpreterServiceClient', { error });
+      this.interpreterClient = undefined;
+    }
+  }
+  
+  /**
+   * Lazily initialize the InterpreterServiceClient factory
+   * This is called only when needed to avoid circular dependencies
+   */
+  private ensureInterpreterFactoryInitialized(): void {
+    if (this.interpreterFactoryInitialized) {
+      return;
+    }
+    
+    this.interpreterFactoryInitialized = true;
+    
+    try {
+      this.interpreterClientFactory = container.resolve('InterpreterServiceClientFactory');
+      this.initializeInterpreterClient();
+    } catch (error) {
+      // Factory not available, will use direct service
+      this.logger.debug('InterpreterServiceClientFactory not available, will use direct service if available');
+    }
+  }
+  
+  /**
+   * Calls the interpret method on the interpreter service
+   * Uses the client if available, falls back to direct service reference
+   */
+  private async callInterpreterInterpret(nodes: any[], options?: any): Promise<IStateService> {
+    // Ensure factory is initialized
+    this.ensureInterpreterFactoryInitialized();
+    
+    // Try to use the client from factory first
+    if (this.interpreterClient) {
+      try {
+        return await this.interpreterClient.interpret(nodes, options);
+      } catch (error) {
+        this.logger.warn('Error using interpreterClient.interpret, falling back to direct service', { error });
+      }
+    }
+    
+    // Fall back to direct service reference
+    if (this.interpreterService) {
+      return await this.interpreterService.interpret(nodes, options);
+    }
+    
+    throw new Error('No interpreter service available');
+  }
+  
+  /**
+   * Calls the createChildContext method on the interpreter service
+   * Uses the client if available, falls back to direct service reference
+   */
+  private async callInterpreterCreateChildContext(parentState: IStateService, filePath?: string, options?: any): Promise<IStateService> {
+    // Ensure factory is initialized
+    this.ensureInterpreterFactoryInitialized();
+    
+    // Try to use the client from factory first
+    if (this.interpreterClient) {
+      try {
+        return await this.interpreterClient.createChildContext(parentState, filePath, options);
+      } catch (error) {
+        this.logger.warn('Error using interpreterClient.createChildContext, falling back to direct service', { error });
+      }
+    }
+    
+    // Fall back to direct service reference
+    if (this.interpreterService) {
+      return await this.interpreterService.createChildContext(parentState, filePath, options);
+    }
+    
+    throw new Error('No interpreter service available');
   }
 } 

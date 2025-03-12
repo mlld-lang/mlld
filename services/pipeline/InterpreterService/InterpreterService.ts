@@ -7,7 +7,9 @@ import { MeldInterpreterError, type InterpreterLocation } from '@core/errors/Mel
 import { MeldError, ErrorSeverity } from '@core/errors/MeldError.js';
 import { StateVariableCopier } from '@services/state/utilities/StateVariableCopier.js';
 import { Service } from '@core/ServiceProvider.js';
-import { inject, injectable, delay } from 'tsyringe';
+import { inject, injectable, delay, container } from 'tsyringe';
+import { DirectiveServiceClientFactory } from '@services/pipeline/DirectiveService/factories/DirectiveServiceClientFactory.js';
+import { IDirectiveServiceClient } from '@services/pipeline/DirectiveService/interfaces/IDirectiveServiceClient.js';
 
 const DEFAULT_OPTIONS: Required<Omit<InterpreterOptions, 'initialState' | 'errorHandler'>> = {
   filePath: '',
@@ -37,42 +39,147 @@ function getErrorMessage(error: unknown): string {
 @Service({
   description: 'Service for interpreting Meld AST nodes and executing directives',
   dependencies: [
-    { token: 'IDirectiveService', name: 'directiveService' },
+    { token: 'DirectiveServiceClientFactory', name: 'directiveServiceClientFactory' },
     { token: 'IStateService', name: 'stateService' }
   ]
 })
 export class InterpreterService implements IInterpreterService {
-  private directiveService?: IDirectiveService;
+  private directiveService?: IDirectiveService; // Legacy reference
+  private directiveClient?: IDirectiveServiceClient; // Client from factory pattern
+  private directiveClientFactory?: DirectiveServiceClientFactory;
   private stateService?: IStateService;
   private initialized = false;
   private stateVariableCopier = new StateVariableCopier();
   private initializationPromise: Promise<void> | null = null;
+  private factoryInitialized: boolean = false;
 
   /**
    * Creates a new InterpreterService instance
    * 
-   * @param directiveService - Service for handling and processing directives (injected with delay to handle circular dependency)
+   * @param directiveServiceClientFactory - Factory for creating directive service clients (injected)
    * @param stateService - Service for managing and accessing state
    */
   constructor(
-    @inject('IDirectiveService') directiveService?: IDirectiveService,
+    @inject('DirectiveServiceClientFactory') directiveServiceClientFactory?: DirectiveServiceClientFactory,
     @inject('IStateService') stateService?: IStateService
   ) {
     // Handle DI constructor injection
-    if (directiveService && stateService) {
+    if (directiveServiceClientFactory && stateService) {
       // Create a promise that resolves when initialization completes
       this.initializationPromise = new Promise<void>((resolve) => {
-        // Initialization happens immediately, but promise resolves on next tick
-        // to avoid circular dependency issues
-        this.directiveService = directiveService;
+        // Initialize the factory and client
+        this.directiveClientFactory = directiveServiceClientFactory;
         this.stateService = stateService;
-        setTimeout(() => {
-          this.initialized = true;
-          logger.debug('InterpreterService initialized via DI');
-          resolve();
-        }, 0);
+        
+        // Initialize the client immediately
+        if (this.directiveClientFactory) {
+          this.factoryInitialized = true;
+          this.initializeDirectiveClient();
+        }
+        
+        // Mark as initialized
+        this.initialized = true;
+        logger.debug('InterpreterService initialized via DI');
+        resolve();
       });
     }
+  }
+
+  /**
+   * Initialize the directiveClient using the factory
+   */
+  private initializeDirectiveClient(): void {
+    if (!this.directiveClientFactory) {
+      return;
+    }
+    
+    try {
+      this.directiveClient = this.directiveClientFactory.createClient();
+      logger.debug('Successfully created DirectiveServiceClient using factory');
+    } catch (error) {
+      logger.warn('Failed to create DirectiveServiceClient', { error });
+      this.directiveClient = undefined;
+    }
+  }
+
+  /**
+   * Lazily initialize the DirectiveServiceClient factory
+   * This is called only when needed to avoid circular dependencies
+   */
+  private ensureFactoryInitialized(): void {
+    if (this.factoryInitialized) {
+      return;
+    }
+    
+    this.factoryInitialized = true;
+    try {
+      this.directiveClientFactory = container.resolve<DirectiveServiceClientFactory>('DirectiveServiceClientFactory');
+      this.initializeDirectiveClient();
+    } catch (error) {
+      logger.warn('Failed to resolve DirectiveServiceClientFactory', { error });
+    }
+  }
+
+  /**
+   * Ensure the service is initialized before use
+   * @private
+   */
+  private ensureInitialized(): void {
+    if (!this.initialized) {
+      throw new MeldInterpreterError(
+        'InterpreterService must be initialized before use',
+        'initialization',
+        { severity: ErrorSeverity.Fatal }
+      );
+    }
+  }
+
+  /**
+   * Calls the directive service to handle a directive node
+   * Uses the client if available, falls back to direct service reference
+   */
+  private async callDirectiveHandleDirective(node: DirectiveNode, context: any): Promise<any> {
+    this.ensureFactoryInitialized();
+    
+    if (this.directiveClient && this.directiveClient.handleDirective) {
+      try {
+        return await this.directiveClient.handleDirective(node, context);
+      } catch (error) {
+        logger.warn('Error using directiveClient.handleDirective, falling back to direct service', { error });
+      }
+    }
+    
+    if (this.directiveService) {
+      return await this.directiveService.handleDirective(node, context);
+    }
+    
+    throw new MeldInterpreterError(
+      'No directive service available to handle directive',
+      'directive_handling',
+      { severity: ErrorSeverity.Fatal }
+    );
+  }
+
+  /**
+   * Calls the directive service to check if it supports a directive kind
+   * Uses the client if available, falls back to direct service reference
+   */
+  private callDirectiveSupportsDirective(kind: string): boolean {
+    this.ensureFactoryInitialized();
+    
+    if (this.directiveClient) {
+      try {
+        return this.directiveClient.supportsDirective(kind);
+      } catch (error) {
+        logger.warn('Error using directiveClient.supportsDirective, falling back to direct service', { error });
+      }
+    }
+    
+    if (this.directiveService) {
+      return this.directiveService.supportsDirective(kind);
+    }
+    
+    return false;
   }
 
   /**
@@ -83,48 +190,21 @@ export class InterpreterService implements IInterpreterService {
     return true;
   }
 
+  /**
+   * Explicitly initialize the service with all required dependencies.
+   * @deprecated This method is maintained for backward compatibility. 
+   * The service is automatically initialized via dependency injection.
+   */
   initialize(
     directiveService: IDirectiveService,
     stateService: IStateService
   ): void {
+    // Store the direct reference for backward compatibility
     this.directiveService = directiveService;
     this.stateService = stateService;
     this.initialized = true;
     this.initializationPromise = Promise.resolve();
     logger.debug('InterpreterService initialized manually');
-  }
-
-  /**
-   * Ensures that service is properly initialized before use
-   * Returns a promise that resolves when initialization is complete
-   */
-  private async ensureInitialized(): Promise<void> {
-    if (this.initialized && this.directiveService && this.stateService) {
-      return Promise.resolve();
-    }
-
-    if (this.initializationPromise) {
-      await this.initializationPromise;
-      
-      // After waiting for initialization, check if services are actually defined
-      if (!this.directiveService || !this.stateService) {
-        throw new MeldInterpreterError(
-          'InterpreterService must be initialized before use',
-          'initialization',
-          undefined,
-          { severity: ErrorSeverity.Fatal }
-        );
-      }
-      
-      return;
-    }
-
-    throw new MeldInterpreterError(
-      'InterpreterService must be initialized before use',
-      'initialization',
-      undefined,
-      { severity: ErrorSeverity.Fatal }
-    );
   }
 
   /**
@@ -161,8 +241,8 @@ export class InterpreterService implements IInterpreterService {
     nodes: MeldNode[],
     options?: InterpreterOptions
   ): Promise<IStateService> {
-    // Wait for initialization to complete before proceeding
-    await this.ensureInitialized();
+    // Ensure we're initialized before processing
+    this.ensureInitialized();
 
     if (!nodes) {
       throw new MeldInterpreterError(
@@ -280,6 +360,8 @@ export class InterpreterService implements IInterpreterService {
     state: IStateService,
     options?: InterpreterOptions
   ): Promise<IStateService> {
+    this.ensureInitialized();
+
     if (!node) {
       throw new MeldInterpreterError(
         'No node provided for interpretation',
@@ -350,12 +432,6 @@ export class InterpreterService implements IInterpreterService {
           break;
 
         case 'Directive':
-          if (!this.directiveService) {
-            throw new MeldInterpreterError(
-              'Directive service not initialized',
-              'directive_service'
-            );
-          }
           // Process directive with cloned state to maintain immutability
           const directiveState = currentState.clone();
           // Add the node first to maintain order
@@ -374,7 +450,7 @@ export class InterpreterService implements IInterpreterService {
           const isImportDirective = directiveNode.directive.kind === 'import';
           
           // Store the directive result to check for replacement nodes
-          const directiveResult = await this.directiveService.processDirective(directiveNode, {
+          const directiveResult = await this.callDirectiveHandleDirective(directiveNode, {
             state: directiveState,
             parentState: currentState,
             currentFilePath: state.getCurrentFilePath() ?? undefined
@@ -493,7 +569,7 @@ export class InterpreterService implements IInterpreterService {
     filePath?: string,
     options?: InterpreterOptions
   ): Promise<IStateService> {
-    await this.ensureInitialized();
+    this.ensureInitialized();
 
     if (!parentState) {
       throw new MeldInterpreterError(
