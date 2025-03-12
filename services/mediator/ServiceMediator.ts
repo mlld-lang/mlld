@@ -26,6 +26,20 @@ export class ServiceMediator implements IServiceMediator {
   private pathService?: IPathService;
   private stateService?: IStateService;
 
+  /**
+   * Helper method to log deprecation warnings
+   * @private
+   * @param methodName - The name of the deprecated method
+   * @param alternativeFactory - The name of the factory to use instead
+   */
+  private logDeprecationWarning(methodName: string, alternativeFactory: string): void {
+    console.warn(
+      `[DEPRECATED] ServiceMediator.${methodName} is deprecated and will be removed in a future version. ` +
+      `Use ${alternativeFactory} instead. ` +
+      `See docs/dev/DI-ARCHITECTURE.md for more information on the factory pattern.`
+    );
+  }
+
   // Setters for each service
   /**
    * Registers a parser service with the mediator
@@ -33,6 +47,7 @@ export class ServiceMediator implements IServiceMediator {
    * Use the Factory Pattern instead for circular dependency resolution.
    */
   setParserService(service: IParserService): void {
+    this.logDeprecationWarning('setParserService', 'ParserServiceClientFactory');
     this.parserService = service;
   }
   
@@ -42,6 +57,7 @@ export class ServiceMediator implements IServiceMediator {
    * Use the Factory Pattern instead for circular dependency resolution.
    */
   setResolutionService(service: IResolutionService): void {
+    this.logDeprecationWarning('setResolutionService', 'ResolutionServiceClientFactory');
     this.resolutionService = service;
   }
   
@@ -51,6 +67,7 @@ export class ServiceMediator implements IServiceMediator {
    * Use the Factory Pattern instead for circular dependency resolution.
    */
   setFileSystemService(service: IFileSystemService): void {
+    this.logDeprecationWarning('setFileSystemService', 'FileSystemServiceClientFactory');
     this.fileSystemService = service;
   }
   
@@ -60,6 +77,7 @@ export class ServiceMediator implements IServiceMediator {
    * Use the Factory Pattern instead for circular dependency resolution.
    */
   setPathService(service: IPathService): void {
+    this.logDeprecationWarning('setPathService', 'PathServiceClientFactory');
     this.pathService = service;
   }
   
@@ -69,6 +87,7 @@ export class ServiceMediator implements IServiceMediator {
    * Use the Factory Pattern instead for circular dependency resolution.
    */
   setStateService(service: IStateService): void {
+    this.logDeprecationWarning('setStateService', 'StateServiceClientFactory');
     this.stateService = service;
   }
 
@@ -82,6 +101,8 @@ export class ServiceMediator implements IServiceMediator {
    * Use ParserServiceClientFactory and ResolutionServiceClientFactory instead.
    */
   async resolveVariableForParser(variable: string, context: ResolutionContext): Promise<string> {
+    this.logDeprecationWarning('resolveVariableForParser', 'ResolutionServiceClientFactory');
+    
     if (!this.resolutionService) {
       throw new Error('ResolutionService not initialized in mediator');
     }
@@ -106,6 +127,8 @@ export class ServiceMediator implements IServiceMediator {
    * Use ParserServiceClientFactory and ResolutionServiceClientFactory instead.
    */
   async resolveFieldAccess(variable: string, field: string, context: ResolutionContext): Promise<unknown> {
+    this.logDeprecationWarning('resolveFieldAccess', 'ResolutionServiceClientFactory');
+    
     if (!this.resolutionService) {
       throw new Error('ResolutionService not initialized in mediator');
     }
@@ -140,6 +163,8 @@ export class ServiceMediator implements IServiceMediator {
    * Use ParserServiceClientFactory and ResolutionServiceClientFactory instead.
    */
   debugFieldAccess(variable: string, context: ResolutionContext): unknown {
+    this.logDeprecationWarning('debugFieldAccess', 'ResolutionServiceClientFactory');
+    
     if (!this.stateService) {
       throw new Error('StateService not initialized in mediator');
     }
@@ -164,6 +189,8 @@ export class ServiceMediator implements IServiceMediator {
    * Use ParserServiceClientFactory and ResolutionServiceClientFactory instead.
    */
   async parseForResolution(content: string, filePath?: string): Promise<any[]> {
+    this.logDeprecationWarning('parseForResolution', 'ParserServiceClientFactory');
+    
     if (!this.parserService) {
       throw new Error('ParserService not initialized in mediator');
     }
@@ -181,6 +208,8 @@ export class ServiceMediator implements IServiceMediator {
    * Use ParserServiceClientFactory and ResolutionServiceClientFactory instead.
    */
   async parseWithLocationsForResolution(content: string, filePath?: string): Promise<any[]> {
+    this.logDeprecationWarning('parseWithLocationsForResolution', 'ParserServiceClientFactory');
+    
     if (!this.parserService) {
       throw new Error('ParserService not initialized in mediator');
     }
@@ -197,6 +226,8 @@ export class ServiceMediator implements IServiceMediator {
    * Use PathServiceClientFactory and FileSystemServiceClientFactory instead.
    */
   resolvePath(path: string): string {
+    this.logDeprecationWarning('resolvePath', 'PathServiceClientFactory');
+    
     if (!this.pathService) {
       throw new Error('PathService not initialized in mediator');
     }
@@ -211,6 +242,8 @@ export class ServiceMediator implements IServiceMediator {
    * Use PathServiceClientFactory and FileSystemServiceClientFactory instead.
    */
   normalizePath(path: string): string {
+    this.logDeprecationWarning('normalizePath', 'PathServiceClientFactory');
+    
     if (!this.pathService) {
       throw new Error('PathService not initialized in mediator');
     }
@@ -226,6 +259,8 @@ export class ServiceMediator implements IServiceMediator {
    * Use PathServiceClientFactory and FileSystemServiceClientFactory instead.
    */
   async isDirectory(path: string): Promise<boolean> {
+    this.logDeprecationWarning('isDirectory', 'FileSystemServiceClientFactory');
+    
     if (!this.fileSystemService) {
       throw new Error('FileSystemService not initialized in mediator');
     }
@@ -240,6 +275,8 @@ export class ServiceMediator implements IServiceMediator {
    * Use PathServiceClientFactory and FileSystemServiceClientFactory instead.
    */
   async exists(path: string): Promise<boolean> {
+    this.logDeprecationWarning('exists', 'FileSystemServiceClientFactory');
+    
     if (!this.fileSystemService) {
       throw new Error('FileSystemService not initialized in mediator');
     }
@@ -256,6 +293,8 @@ export class ServiceMediator implements IServiceMediator {
    * Use StateServiceClientFactory and StateTrackingServiceClientFactory instead.
    */
   getTextVar(name: string): string | undefined {
+    this.logDeprecationWarning('getTextVar', 'StateServiceClientFactory');
+    
     if (!this.stateService) {
       throw new Error('StateService not initialized in mediator');
     }
@@ -270,6 +309,8 @@ export class ServiceMediator implements IServiceMediator {
    * Use StateServiceClientFactory and StateTrackingServiceClientFactory instead.
    */
   getDataVar(name: string): unknown {
+    this.logDeprecationWarning('getDataVar', 'StateServiceClientFactory');
+    
     if (!this.stateService) {
       throw new Error('StateService not initialized in mediator');
     }
@@ -284,6 +325,8 @@ export class ServiceMediator implements IServiceMediator {
    * Use StateServiceClientFactory and StateTrackingServiceClientFactory instead.
    */
   getPathVar(name: string): string | undefined {
+    this.logDeprecationWarning('getPathVar', 'StateServiceClientFactory');
+    
     if (!this.stateService) {
       throw new Error('StateService not initialized in mediator');
     }
@@ -298,6 +341,8 @@ export class ServiceMediator implements IServiceMediator {
    * Use StateServiceClientFactory and StateTrackingServiceClientFactory instead.
    */
   getAllTextVars(): Map<string, string> {
+    this.logDeprecationWarning('getAllTextVars', 'StateServiceClientFactory');
+    
     if (!this.stateService) {
       throw new Error('StateService not initialized in mediator');
     }
@@ -312,6 +357,8 @@ export class ServiceMediator implements IServiceMediator {
    * Use StateServiceClientFactory and StateTrackingServiceClientFactory instead.
    */
   getAllDataVars(): Map<string, unknown> {
+    this.logDeprecationWarning('getAllDataVars', 'StateServiceClientFactory');
+    
     if (!this.stateService) {
       throw new Error('StateService not initialized in mediator');
     }
@@ -326,6 +373,8 @@ export class ServiceMediator implements IServiceMediator {
    * Use StateServiceClientFactory and StateTrackingServiceClientFactory instead.
    */
   getAllPathVars(): Map<string, string> {
+    this.logDeprecationWarning('getAllPathVars', 'StateServiceClientFactory');
+    
     if (!this.stateService) {
       throw new Error('StateService not initialized in mediator');
     }

@@ -8,6 +8,8 @@ import type { IStateTrackingService } from '@tests/utils/debug/StateTrackingServ
 import { inject, container, injectable } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
 import { IServiceMediator } from '@services/mediator/IServiceMediator.js';
+import { StateTrackingServiceClientFactory } from '../StateTrackingService/factories/StateTrackingServiceClientFactory.js';
+import { IStateTrackingServiceClient } from '../StateTrackingService/interfaces/IStateTrackingServiceClient.js';
 
 // Helper function to get the container
 function getContainer() {
@@ -38,6 +40,11 @@ export class StateService implements IStateService {
   private eventService?: IStateEventService;
   private trackingService?: IStateTrackingService;
   private serviceMediator?: IServiceMediator;
+  
+  // Factory pattern properties
+  private trackingServiceClientFactory?: StateTrackingServiceClientFactory;
+  private trackingClient?: IStateTrackingServiceClient;
+  private factoryInitialized: boolean = false;
 
   /**
    * Creates a new StateService instance using dependency injection
@@ -56,6 +63,43 @@ export class StateService implements IStateService {
     parentState?: IStateService
   ) {
     this.initializeFromParams(stateFactory, eventService, trackingService, serviceMediator, parentState);
+  }
+
+  /**
+   * Lazily initialize the StateTrackingServiceClient factory
+   * This is called only when needed to avoid circular dependencies
+   */
+  private ensureFactoryInitialized(): void {
+    if (this.factoryInitialized) {
+      return;
+    }
+    
+    this.factoryInitialized = true;
+    
+    try {
+      this.trackingServiceClientFactory = container.resolve('StateTrackingServiceClientFactory');
+      this.initializeTrackingClient();
+    } catch (error) {
+      // Factory not available, will use mediator or direct trackingService
+      logger.debug('StateTrackingServiceClientFactory not available, using direct service or ServiceMediator');
+    }
+  }
+  
+  /**
+   * Initialize the StateTrackingServiceClient using the factory
+   */
+  private initializeTrackingClient(): void {
+    if (!this.trackingServiceClientFactory) {
+      return;
+    }
+    
+    try {
+      this.trackingClient = this.trackingServiceClientFactory.createClient();
+      logger.debug('Successfully created StateTrackingServiceClient using factory');
+    } catch (error) {
+      logger.warn('Failed to create StateTrackingServiceClient, falling back to direct service or ServiceMediator', { error });
+      this.trackingClient = undefined;
+    }
   }
 
   /**
@@ -143,7 +187,7 @@ export class StateService implements IStateService {
       source: 'new',
       parentState: parentState ? (parentState as StateService).currentState : undefined
     });
-
+    
     // If parent has services, inherit them
     if (parentState) {
       const parent = parentState as StateService;
@@ -159,11 +203,45 @@ export class StateService implements IStateService {
         this.setServiceMediator(parent.serviceMediator);
       }
     }
-
+    
     // Register state with tracking service if available
+    // Ensure factory is initialized before trying to use it
+    this.ensureFactoryInitialized();
+    
+    const parentId = parentState ? (parentState as StateService).currentState.stateId : undefined;
+    
+    // Try to use the client from the factory first
+    if (this.trackingClient) {
+      try {
+        // Register the state with the pre-generated ID
+        this.trackingClient.registerState({
+          id: this.currentState.stateId,
+          parentId,
+          filePath: this.currentState.filePath,
+          createdAt: Date.now(),
+          transformationEnabled: this._transformationEnabled,
+          source: 'child'
+        });
+        
+        // Explicitly register parent-child relationship if parent exists
+        if (parentState && parentId) {
+          this.trackingClient.registerRelationship({
+            sourceId: parentId,
+            targetId: this.currentState.stateId,
+            type: 'parent-child',
+            timestamp: Date.now(),
+            source: 'child'
+          });
+        }
+        
+        return; // Successfully used the client, no need to try other methods
+      } catch (error) {
+        logger.warn('Error using trackingClient.registerState, falling back to direct service or ServiceMediator', { error });
+      }
+    }
+    
+    // Fall back to direct tracking service if available
     if (this.trackingService) {
-      const parentId = parentState ? (parentState as StateService).currentState.stateId : undefined;
-      
       // Register the state with the pre-generated ID
       this.trackingService.registerState({
         id: this.currentState.stateId,
@@ -537,7 +615,7 @@ export class StateService implements IStateService {
     }
     
     // Register with tracking service if available and set parent ID
-    if (this.trackingService && this.currentState.stateId) {
+    if (this.currentState.stateId) {
       // Set the state ID, which will register with tracking and establish the parent relationship
       child.setStateId({
         parentId: this.currentState.stateId,
@@ -545,11 +623,32 @@ export class StateService implements IStateService {
       });
       
       // Explicitly create the parent-child relationship in the tracking service
-      this.trackingService.addRelationship(
-        this.currentState.stateId,
-        child.getStateId()!,
-        'parent-child'
-      );
+      // Ensure factory is initialized before trying to use it
+      this.ensureFactoryInitialized();
+      
+      // Try to use the client from the factory first
+      if (this.trackingClient) {
+        try {
+          this.trackingClient.addRelationship(
+            this.currentState.stateId,
+            child.getStateId()!,
+            'parent-child'
+          );
+          
+          return child; // Successfully used the client, return the child
+        } catch (error) {
+          logger.warn('Error using trackingClient.addRelationship, falling back to direct service', { error });
+        }
+      }
+      
+      // Fall back to direct tracking service if available
+      if (this.trackingService) {
+        this.trackingService.addRelationship(
+          this.currentState.stateId,
+          child.getStateId()!,
+          'parent-child'
+        );
+      }
     }
     
     return child;
@@ -561,20 +660,64 @@ export class StateService implements IStateService {
     this.currentState = this.stateFactory.mergeStates(this.currentState, child.currentState);
 
     // Add merge relationship if tracking enabled
-    if (this.trackingService && this.currentState.stateId && child.currentState.stateId) {
-      // Make sure parent-child relationship exists
-      this.trackingService.addRelationship(
-        this.currentState.stateId,
-        child.currentState.stateId,
-        'parent-child'
-      );
+    if (this.currentState.stateId && child.currentState.stateId) {
+      // Ensure factory is initialized before trying to use it
+      this.ensureFactoryInitialized();
       
-      // Add merge-source relationship
-      this.trackingService.addRelationship(
-        this.currentState.stateId,
-        child.currentState.stateId,
-        'merge-source'
-      );
+      // Try to use the client from the factory first
+      if (this.trackingClient) {
+        try {
+          // Make sure parent-child relationship exists
+          this.trackingClient.addRelationship(
+            this.currentState.stateId,
+            child.currentState.stateId,
+            'parent-child'
+          );
+          
+          // Add merge-source relationship
+          this.trackingClient.addRelationship(
+            this.currentState.stateId,
+            child.currentState.stateId,
+            'merge-source'
+          );
+          
+          // Successfully used the client, proceed to emit event
+        } catch (error) {
+          logger.warn('Error using trackingClient in mergeChildState, falling back to direct service', { error });
+          
+          // Fall back to direct tracking service if available
+          if (this.trackingService) {
+            // Make sure parent-child relationship exists
+            this.trackingService.addRelationship(
+              this.currentState.stateId,
+              child.currentState.stateId,
+              'parent-child'
+            );
+            
+            // Add merge-source relationship
+            this.trackingService.addRelationship(
+              this.currentState.stateId,
+              child.currentState.stateId,
+              'merge-source'
+            );
+          }
+        }
+      } else if (this.trackingService) {
+        // Fall back to direct tracking service if client not available
+        // Make sure parent-child relationship exists
+        this.trackingService.addRelationship(
+          this.currentState.stateId,
+          child.currentState.stateId,
+          'parent-child'
+        );
+        
+        // Add merge-source relationship
+        this.trackingService.addRelationship(
+          this.currentState.stateId,
+          child.currentState.stateId,
+          'merge-source'
+        );
+      }
     }
 
     // Emit merge event
@@ -738,6 +881,26 @@ export class StateService implements IStateService {
     
     // Register existing state if not already registered
     if (this.currentState.stateId) {
+      // Ensure factory is initialized before trying to use it
+      this.ensureFactoryInitialized();
+      
+      // Try to use the client from the factory first
+      if (this.trackingClient) {
+        try {
+          this.trackingClient.registerState({
+            id: this.currentState.stateId,
+            source: this.currentState.source || 'new',  // Use original source or default to 'new'
+            filePath: this.getCurrentFilePath() || undefined,
+            transformationEnabled: this._transformationEnabled
+          });
+          
+          return; // Successfully used the client, no need to try other methods
+        } catch (error) {
+          logger.warn('Error using trackingClient in setTrackingService, falling back to direct service', { error });
+        }
+      }
+      
+      // Fall back to direct tracking service
       try {
         this.trackingService.registerState({
           id: this.currentState.stateId,
@@ -764,6 +927,35 @@ export class StateService implements IStateService {
     this.currentState.source = params.source;
     
     // Register with tracking service if available
+    // Ensure factory is initialized before trying to use it
+    this.ensureFactoryInitialized();
+    
+    // Try to use the client from the factory first
+    if (this.trackingClient) {
+      try {
+        this.trackingClient.registerState({
+          id: stateId,
+          source: params.source,
+          filePath: this.getCurrentFilePath() || undefined,
+          transformationEnabled: this._transformationEnabled
+        });
+        
+        // Add parent-child relationship if parentId provided
+        if (params.parentId) {
+          this.trackingClient.addRelationship(
+            params.parentId,
+            stateId,
+            'parent-child'
+          );
+        }
+        
+        return; // Successfully used the client, no need to try other methods
+      } catch (error) {
+        logger.warn('Error using trackingClient in setStateId, falling back to direct service', { error });
+      }
+    }
+    
+    // Fall back to direct tracking service if available
     if (this.trackingService) {
       try {
         this.trackingService.registerState({
