@@ -25,6 +25,9 @@ import { PathServiceClientFactory } from '../services/fs/PathService/factories/P
 import { FileSystemServiceClientFactory } from '../services/fs/FileSystemService/factories/FileSystemServiceClientFactory.js';
 import { ParserServiceClientFactory } from '../services/pipeline/ParserService/factories/ParserServiceClientFactory.js';
 import { ResolutionServiceClientFactory } from '../services/resolution/ResolutionService/factories/ResolutionServiceClientFactory.js';
+import { VariableReferenceResolverClientFactory } from '../services/resolution/ResolutionService/factories/VariableReferenceResolverClientFactory.js';
+import { DirectiveServiceClientFactory } from '../services/pipeline/DirectiveService/factories/DirectiveServiceClientFactory.js';
+import { ResolutionServiceClientForDirectiveFactory } from '../services/resolution/ResolutionService/factories/ResolutionServiceClientForDirectiveFactory.js';
 import { 
   LoggerFactory, 
   logger as mainLogger, 
@@ -99,6 +102,9 @@ container.register('PathServiceClientFactory', { useClass: PathServiceClientFact
 container.register('FileSystemServiceClientFactory', { useClass: FileSystemServiceClientFactory });
 container.register('ParserServiceClientFactory', { useClass: ParserServiceClientFactory });
 container.register('ResolutionServiceClientFactory', { useClass: ResolutionServiceClientFactory });
+container.register('VariableReferenceResolverClientFactory', { useClass: VariableReferenceResolverClientFactory });
+container.register('DirectiveServiceClientFactory', { useClass: DirectiveServiceClientFactory });
+container.register('ResolutionServiceClientForDirectiveFactory', { useClass: ResolutionServiceClientForDirectiveFactory });
 
 // Register remaining services using class registrations
 // These services don't have circular dependencies

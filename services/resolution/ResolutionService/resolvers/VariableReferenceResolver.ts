@@ -8,6 +8,9 @@ import type { MeldNode, TextNode, DirectiveNode, TextVarNode, DataVarNode } from
 import { resolutionLogger as logger } from '@core/utils/logger.js';
 import { VariableResolutionTracker } from '@tests/utils/debug/VariableResolutionTracker/index.js';
 import { IServiceMediator } from '@services/mediator/index.js';
+import { container } from 'tsyringe';
+import { IResolutionServiceClient } from '../interfaces/IResolutionServiceClient.js';
+import { ResolutionServiceClientFactory } from '../factories/ResolutionServiceClientFactory.js';
 
 // Define the field type for clarity
 interface Field {
@@ -23,12 +26,52 @@ export class VariableReferenceResolver {
   private readonly MAX_RESOLUTION_DEPTH = 10;
   private readonly MAX_ITERATIONS = 100;
   private resolutionTracker?: VariableResolutionTracker;
+  private resolutionClient?: IResolutionServiceClient;
+  private resolutionClientFactory?: ResolutionServiceClientFactory;
+  private factoryInitialized: boolean = false;
 
   constructor(
     private readonly stateService: IStateService,
     private readonly resolutionService?: IResolutionService,
     private readonly serviceMediator?: IServiceMediator
   ) {}
+
+  /**
+   * Lazily initialize the ResolutionServiceClient factory
+   * This is called only when needed to avoid circular dependencies
+   */
+  private ensureFactoryInitialized(): void {
+    if (this.factoryInitialized) {
+      return;
+    }
+    
+    this.factoryInitialized = true;
+    
+    try {
+      this.resolutionClientFactory = container.resolve('ResolutionServiceClientFactory');
+      this.initializeResolutionClient();
+    } catch (error) {
+      // Factory not available, will use mediator or direct reference
+      logger.debug('ResolutionServiceClientFactory not available, using fallback for resolution operations');
+    }
+  }
+  
+  /**
+   * Initialize the ResolutionServiceClient using the factory
+   */
+  private initializeResolutionClient(): void {
+    if (!this.resolutionClientFactory) {
+      return;
+    }
+    
+    try {
+      this.resolutionClient = this.resolutionClientFactory.createClient();
+      logger.debug('Successfully created ResolutionServiceClient using factory');
+    } catch (error) {
+      logger.warn('Failed to create ResolutionServiceClient, falling back to direct reference or mediator', { error });
+      this.resolutionClient = undefined;
+    }
+  }
 
   /**
    * Set the resolution tracker for debugging
@@ -885,5 +928,55 @@ export class VariableReferenceResolver {
     
     // Not a variable reference
     return fieldName;
+  }
+
+  /**
+   * Resolves a variable reference that contains another variable reference
+   * For example: {{var_{{nested}}}}
+   */
+  private async resolveNestedVariableReference(reference: string, context: ResolutionContext): Promise<string> {
+    // Ensure factory is initialized before trying to use it
+    this.ensureFactoryInitialized();
+    
+    // Try new approach first (factory pattern)
+    if (this.resolutionClient) {
+      try {
+        return await this.resolutionClient.resolveVariables(reference, context);
+      } catch (error) {
+        logger.warn('Error using resolutionClient.resolveVariables, falling back to alternatives', { 
+          error, 
+          reference 
+        });
+      }
+    }
+    
+    // Try direct reference next
+    if (this.resolutionService) {
+      try {
+        return await this.resolutionService.resolveInContext(reference, context);
+      } catch (error) {
+        logger.warn('Error using resolutionService.resolveInContext, falling back to mediator', { 
+          error, 
+          reference 
+        });
+      }
+    }
+    
+    // Fall back to mediator for backward compatibility
+    if (this.serviceMediator) {
+      try {
+        return await this.serviceMediator.resolveInContext(reference, context);
+      } catch (error) {
+        logger.error('Error using serviceMediator.resolveInContext', { 
+          error, 
+          reference 
+        });
+        throw error;
+      }
+    }
+    
+    // Last resort fallback
+    logger.warn('No resolution service available, returning unresolved reference', { reference });
+    return reference;
   }
 }

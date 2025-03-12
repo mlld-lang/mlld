@@ -15,6 +15,9 @@ import { ErrorSeverity } from '@core/errors/MeldError.js';
 import type { ILogger } from './handlers/execution/EmbedDirectiveHandler.js';
 import { Service } from '@core/ServiceProvider.js';
 import { inject, delay, injectable } from 'tsyringe';
+import { container } from 'tsyringe';
+import { IResolutionServiceClientForDirective } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClientForDirective.js';
+import { ResolutionServiceClientForDirectiveFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientForDirectiveFactory.js';
 
 // Import all handlers
 import { TextDirectiveHandler } from './handlers/definition/TextDirectiveHandler.js';
@@ -63,6 +66,9 @@ export class DirectiveService implements IDirectiveService {
   private interpreterService?: IInterpreterService; // Will be set by updateInterpreterService for circular dependency
   private circularityService!: ICircularityService;
   private resolutionService!: IResolutionService;
+  private resolutionClient?: IResolutionServiceClientForDirective;
+  private resolutionClientFactory?: ResolutionServiceClientForDirectiveFactory;
+  private factoryInitialized: boolean = false;
   private initialized = false;
   private logger: ILogger;
 
@@ -845,5 +851,114 @@ export class DirectiveService implements IDirectiveService {
         }
       );
     }
+  }
+
+  /**
+   * Lazily initialize the ResolutionServiceClientForDirective factory
+   * This is called only when needed to avoid circular dependencies
+   */
+  private ensureFactoryInitialized(): void {
+    if (this.factoryInitialized) {
+      return;
+    }
+    
+    this.factoryInitialized = true;
+    
+    try {
+      this.resolutionClientFactory = container.resolve('ResolutionServiceClientForDirectiveFactory');
+      this.initializeResolutionClient();
+    } catch (error) {
+      // Factory not available, will use direct reference
+      this.logger.debug('ResolutionServiceClientForDirectiveFactory not available, using direct reference for resolution operations');
+    }
+  }
+  
+  /**
+   * Initialize the ResolutionServiceClientForDirective using the factory
+   */
+  private initializeResolutionClient(): void {
+    if (!this.resolutionClientFactory) {
+      return;
+    }
+    
+    try {
+      this.resolutionClient = this.resolutionClientFactory.createClient();
+      this.logger.debug('Successfully created ResolutionServiceClientForDirective using factory');
+    } catch (error) {
+      this.logger.warn('Failed to create ResolutionServiceClientForDirective, falling back to direct reference', { error });
+      this.resolutionClient = undefined;
+    }
+  }
+
+  /**
+   * Resolve text using the resolution service
+   * @private
+   */
+  private async resolveText(text: string, context: DirectiveContext): Promise<string> {
+    // Ensure factory is initialized before trying to use it
+    this.ensureFactoryInitialized();
+    
+    // Try new approach first (factory pattern)
+    if (this.resolutionClient) {
+      try {
+        return await this.resolutionClient.resolveText(text, context.resolutionContext);
+      } catch (error) {
+        this.logger.warn('Error using resolutionClient.resolveText, falling back to direct reference', { 
+          error, 
+          text 
+        });
+      }
+    }
+    
+    // Fall back to direct reference
+    return this.resolutionService.resolveText(text, context.resolutionContext);
+  }
+
+  /**
+   * Resolve data using the resolution service
+   * @private
+   */
+  private async resolveData(ref: string, context: DirectiveContext): Promise<any> {
+    // Ensure factory is initialized before trying to use it
+    this.ensureFactoryInitialized();
+    
+    // Try new approach first (factory pattern)
+    if (this.resolutionClient) {
+      try {
+        return await this.resolutionClient.resolveData(ref, context.resolutionContext);
+      } catch (error) {
+        this.logger.warn('Error using resolutionClient.resolveData, falling back to direct reference', { 
+          error, 
+          ref 
+        });
+      }
+    }
+    
+    // Fall back to direct reference
+    return this.resolutionService.resolveData(ref, context.resolutionContext);
+  }
+
+  /**
+   * Resolve path using the resolution service
+   * @private
+   */
+  private async resolvePath(path: string, context: DirectiveContext): Promise<string> {
+    // Ensure factory is initialized before trying to use it
+    this.ensureFactoryInitialized();
+    
+    // Try new approach first (factory pattern)
+    if (this.resolutionClient) {
+      try {
+        return await this.resolutionClient.resolvePath(path, context.resolutionContext);
+      } catch (error) {
+        this.logger.warn('Error using resolutionClient.resolvePath, falling back to direct reference', { 
+          error, 
+          path 
+        });
+      }
+    }
+    
+    // Fall back to direct reference
+    return this.resolutionService.resolvePath(path, context.resolutionContext);
   }
 } 

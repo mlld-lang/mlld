@@ -20,6 +20,10 @@ import { Service } from '@core/ServiceProvider.js';
 import { IServiceMediator } from '@services/mediator/index.js';
 import { IParserServiceClient } from '@services/pipeline/ParserService/interfaces/IParserServiceClient.js';
 import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory.js';
+import { IVariableReferenceResolverClient } from './interfaces/IVariableReferenceResolverClient.js';
+import { VariableReferenceResolverClientFactory } from './factories/VariableReferenceResolverClientFactory.js';
+import { IDirectiveServiceClient } from '@services/pipeline/DirectiveService/interfaces/IDirectiveServiceClient.js';
+import { DirectiveServiceClientFactory } from '@services/pipeline/DirectiveService/factories/DirectiveServiceClientFactory.js';
 
 /**
  * Interface matching the StructuredPath expected from meld-spec
@@ -151,6 +155,10 @@ export class ResolutionService implements IResolutionService {
   private serviceMediator?: IServiceMediator;
   private parserClient?: IParserServiceClient;
   private parserClientFactory?: ParserServiceClientFactory;
+  private variableResolverClient?: IVariableReferenceResolverClient;
+  private variableResolverClientFactory?: VariableReferenceResolverClientFactory;
+  private directiveClient?: IDirectiveServiceClient;
+  private directiveClientFactory?: DirectiveServiceClientFactory;
   private factoryInitialized: boolean = false;
 
   /**
@@ -181,7 +189,7 @@ export class ResolutionService implements IResolutionService {
   }
   
   /**
-   * Lazily initialize the ParserServiceClient factory
+   * Lazily initialize all factories
    * This is called only when needed to avoid circular dependencies
    */
   private ensureFactoryInitialized(): void {
@@ -191,12 +199,31 @@ export class ResolutionService implements IResolutionService {
     
     this.factoryInitialized = true;
     
+    // Initialize parser client factory
     try {
       this.parserClientFactory = container.resolve('ParserServiceClientFactory');
       this.initializeParserClient();
     } catch (error) {
       // Factory not available, will use mediator
       logger.debug('ParserServiceClientFactory not available, using ServiceMediator for parser operations');
+    }
+    
+    // Initialize variable resolver client factory
+    try {
+      this.variableResolverClientFactory = container.resolve('VariableReferenceResolverClientFactory');
+      this.initializeVariableResolverClient();
+    } catch (error) {
+      // Factory not available, will use direct reference
+      logger.debug('VariableReferenceResolverClientFactory not available, using direct reference for variable resolution');
+    }
+    
+    // Initialize directive client factory
+    try {
+      this.directiveClientFactory = container.resolve('DirectiveServiceClientFactory');
+      this.initializeDirectiveClient();
+    } catch (error) {
+      // Factory not available, will use mediator
+      logger.debug('DirectiveServiceClientFactory not available, using ServiceMediator for directive operations');
     }
   }
   
@@ -214,6 +241,40 @@ export class ResolutionService implements IResolutionService {
     } catch (error) {
       logger.warn('Failed to create ParserServiceClient, falling back to ServiceMediator', { error });
       this.parserClient = undefined;
+    }
+  }
+  
+  /**
+   * Initialize the VariableResolverClient using the factory
+   */
+  private initializeVariableResolverClient(): void {
+    if (!this.variableResolverClientFactory) {
+      return;
+    }
+    
+    try {
+      this.variableResolverClient = this.variableResolverClientFactory.createClient();
+      logger.debug('Successfully created VariableReferenceResolverClient using factory');
+    } catch (error) {
+      logger.warn('Failed to create VariableReferenceResolverClient, falling back to direct reference', { error });
+      this.variableResolverClient = undefined;
+    }
+  }
+  
+  /**
+   * Initialize the DirectiveClient using the factory
+   */
+  private initializeDirectiveClient(): void {
+    if (!this.directiveClientFactory) {
+      return;
+    }
+    
+    try {
+      this.directiveClient = this.directiveClientFactory.createClient();
+      logger.debug('Successfully created DirectiveServiceClient using factory');
+    } catch (error) {
+      logger.warn('Failed to create DirectiveServiceClient, falling back to mediator', { error });
+      this.directiveClient = undefined;
     }
   }
   
@@ -512,7 +573,22 @@ export class ResolutionService implements IResolutionService {
     if (value.includes('{{') || value.includes('${') || value.includes('$')) {
       logger.debug('Resolving variables in string:', { value });
       
-      // Pass to VariableReferenceResolver for both {{var}} syntax and $pathvar syntax
+      // Ensure factory is initialized before trying to use it
+      this.ensureFactoryInitialized();
+      
+      // Try new approach first (factory pattern)
+      if (this.variableResolverClient) {
+        try {
+          return await this.variableResolverClient.resolve(value, context);
+        } catch (error) {
+          logger.warn('Error using variableResolverClient.resolve, falling back to direct reference', { 
+            error, 
+            value 
+          });
+        }
+      }
+      
+      // Fall back to direct reference
       return this.variableReferenceResolver.resolve(value, context);
     }
     

@@ -5,8 +5,8 @@ import { IResolutionServiceClient } from '../interfaces/IResolutionServiceClient
 import { resolutionLogger as logger } from '@core/utils/logger.js';
 
 /**
- * Factory for creating ResolutionServiceClient instances.
- * This factory is used to break the circular dependency between ResolutionService and ParserService.
+ * Factory for creating resolution service clients for VariableReferenceResolver
+ * This factory is used to break the circular dependency between ResolutionService and VariableReferenceResolver
  */
 @injectable()
 @Service({
@@ -14,26 +14,24 @@ import { resolutionLogger as logger } from '@core/utils/logger.js';
 })
 export class ResolutionServiceClientFactory {
   /**
-   * Creates a new ResolutionServiceClientFactory.
-   * 
-   * @param resolutionService - The resolution service to delegate to
+   * Creates a new ResolutionServiceClientFactory
+   * @param resolutionService - The resolution service to create clients for
    */
   constructor(@inject('IResolutionService') private resolutionService: IResolutionService) {}
   
   /**
-   * Creates a new ResolutionServiceClient that delegates to the ResolutionService.
-   * 
-   * @returns A client that provides the minimal interface needed by ParserService
+   * Creates a client for the resolution service
+   * @returns A client that provides resolution service functionality
    */
   createClient(): IResolutionServiceClient {
     logger.debug('Creating ResolutionServiceClient');
     
     return {
-      resolveVariableReference: (reference, options) => 
-        this.resolutionService.resolveVariableReference(reference, options),
-      
-      extractSection: (content, heading, options) => 
-        this.resolutionService.extractSection(content, heading, options)
+      resolveVariables: async (value, context) => {
+        // This is a private method in ResolutionService, but we're exposing it through the client
+        // The actual implementation will delegate to the private method
+        return this.resolutionService.resolveInContext(value, context);
+      }
     };
   }
 } 

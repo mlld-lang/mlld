@@ -28,6 +28,9 @@ import { DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/D
 import { createPathValidationError } from '../errorFactories';
 import { IPathServiceClient } from '@services/fs/PathService/interfaces/IPathServiceClient';
 import { IFileSystemServiceClient } from '@services/fs/FileSystemService/interfaces/IFileSystemServiceClient';
+import { IVariableReferenceResolverClient } from '@services/resolution/ResolutionService/interfaces/IVariableReferenceResolverClient';
+import { IDirectiveServiceClient } from '@services/pipeline/DirectiveService/interfaces/IDirectiveServiceClient';
+import { IResolutionServiceClientForDirective } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClientForDirective';
 
 import type { IOutputService } from '@services/pipeline/OutputService/IOutputService';
 import type { IDirectiveService } from '@services/pipeline/DirectiveService/IDirectiveService';
@@ -696,8 +699,71 @@ export class TestContextDI extends TestContext {
       })
     };
     
+    // Register VariableReferenceResolverClientFactory mock
+    const mockVariableReferenceResolverClientFactory = {
+      createClient: vi.fn().mockImplementation(() => {
+        const mockVariableReferenceResolverClient = {
+          resolve: vi.fn().mockImplementation(async (text: string, context: any) => {
+            // Simple mock implementation that returns the text unchanged
+            return text;
+          }),
+          setResolutionTracker: vi.fn()
+        };
+        return mockVariableReferenceResolverClient;
+      })
+    };
+    
+    // Register DirectiveServiceClientFactory mock
+    const mockDirectiveServiceClientFactory = {
+      createClient: vi.fn().mockImplementation(() => {
+        const mockDirectiveServiceClient = {
+          supportsDirective: vi.fn().mockImplementation((kind: string) => {
+            // Default to supporting all directives in tests
+            return true;
+          }),
+          getSupportedDirectives: vi.fn().mockImplementation(() => {
+            // Return common directive kinds
+            return ['text', 'data', 'path', 'define', 'run', 'embed', 'import'];
+          })
+        };
+        return mockDirectiveServiceClient;
+      })
+    };
+    
+    // Register ResolutionServiceClientForDirectiveFactory mock
+    const mockResolutionServiceClientForDirectiveFactory = {
+      createClient: vi.fn().mockImplementation(() => {
+        const mockResolutionServiceClientForDirective = {
+          resolveText: vi.fn().mockImplementation(async (text: string, context: any) => {
+            // Simple mock implementation that returns the text unchanged
+            return text;
+          }),
+          resolveData: vi.fn().mockImplementation(async (ref: string, context: any) => {
+            // Simple mock implementation that returns the ref as a string
+            return ref;
+          }),
+          resolvePath: vi.fn().mockImplementation(async (path: string, context: any) => {
+            // Simple mock implementation that returns the path unchanged
+            return path;
+          }),
+          resolveContent: vi.fn().mockImplementation(async (nodes: any[], context: any) => {
+            // Simple mock implementation that returns empty string
+            return '';
+          }),
+          resolveInContext: vi.fn().mockImplementation(async (value: string | any, context: any) => {
+            // Simple mock implementation that returns the value as a string
+            return typeof value === 'string' ? value : JSON.stringify(value);
+          })
+        };
+        return mockResolutionServiceClientForDirective;
+      })
+    };
+    
     this.container.registerMock('PathServiceClientFactory', mockPathServiceClientFactory);
     this.container.registerMock('FileSystemServiceClientFactory', mockFileSystemServiceClientFactory);
+    this.container.registerMock('VariableReferenceResolverClientFactory', mockVariableReferenceResolverClientFactory);
+    this.container.registerMock('DirectiveServiceClientFactory', mockDirectiveServiceClientFactory);
+    this.container.registerMock('ResolutionServiceClientForDirectiveFactory', mockResolutionServiceClientForDirectiveFactory);
   }
   
   /**

@@ -21,4 +21,18 @@ export interface IResolutionServiceClient {
    * @returns The extracted section content
    */
   extractSection(content: string, heading: string, options?: any): string;
+}
+
+/**
+ * Client interface for ResolutionService functionality needed by VariableReferenceResolver
+ * This interface is used to break the circular dependency between ResolutionService and VariableReferenceResolver
+ */
+export interface IResolutionServiceClient {
+  /**
+   * Resolves variables within a string value
+   * @param value - The string containing variables to resolve
+   * @param context - The resolution context
+   * @returns A promise that resolves to the string with variables resolved
+   */
+  resolveVariables(value: string, context: any): Promise<string>;
 } 
