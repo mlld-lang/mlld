@@ -35,9 +35,8 @@ function runTestWithDIOnly(testFile) {
   console.log(`${colors.bright}Running ${colors.cyan}${testFile}${colors.reset} with DI-only mode...`);
   
   try {
-    // Set environment variables for DI-only mode
+    // Set environment variable for DI-only mode
     process.env.MIGRATE_TO_DI_ONLY = 'true';
-    process.env.USE_DI = 'true';
     
     // Run the test using npm test
     execSync(`npm test ${testFile}`, { stdio: 'inherit' });
@@ -48,9 +47,8 @@ function runTestWithDIOnly(testFile) {
     console.error(`${colors.red}❌ ${testFile} failed in DI-only mode:${colors.reset}`, error.message);
     return false;
   } finally {
-    // Clean up environment variables
+    // Clean up environment variable
     delete process.env.MIGRATE_TO_DI_ONLY;
-    delete process.env.USE_DI;
   }
 }
 

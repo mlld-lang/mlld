@@ -15,11 +15,9 @@ const glob = require('glob');
 // Regular expressions for finding deprecated test context initialization
 const withDIRegex = /TestContextDI\.withDI\(\)/g;
 const withoutDIRegex = /TestContextDI\.withoutDI\(\)/g;
-const conditionalContextRegex = /context\s*=\s*useDI\s*\?\s*TestContextDI\.withDI\(\)\s*:\s*TestContextDI\.withoutDI\(\);/g;
 
 // Replacement pattern
-const createReplacementSimple = 'TestContextDI.create({ isolatedContainer: true })';
-const createReplacementCondition = 'context = TestContextDI.create({ isolatedContainer: true });';
+const createReplacement = 'TestContextDI.create({ isolatedContainer: true })';
 
 function processFile(filePath) {
   console.log(`Processing ${filePath}...`);
@@ -28,22 +26,15 @@ function processFile(filePath) {
   let content = fs.readFileSync(filePath, 'utf8');
   let modified = false;
   
-  // First, handle the conditional initialization pattern
-  if (conditionalContextRegex.test(content)) {
-    content = content.replace(conditionalContextRegex, createReplacementCondition);
-    modified = true;
-    console.log(`  - Replaced conditional context initialization in ${filePath}`);
-  }
-  
-  // Replace individual method calls
+  // Replace deprecated method calls
   if (withDIRegex.test(content)) {
-    content = content.replace(withDIRegex, createReplacementSimple);
+    content = content.replace(withDIRegex, createReplacement);
     modified = true;
     console.log(`  - Replaced TestContextDI.withDI() in ${filePath}`);
   }
   
   if (withoutDIRegex.test(content)) {
-    content = content.replace(withoutDIRegex, createReplacementSimple);
+    content = content.replace(withoutDIRegex, createReplacement);
     modified = true;
     console.log(`  - Replaced TestContextDI.withoutDI() in ${filePath}`);
   }

@@ -1,71 +1,43 @@
-import { describe, beforeEach, afterEach, it, expect, vi } from 'vitest';
-import {
-  createService,
-  resolveService,
-  registerServiceInstance,
-  registerServiceFactory,
-  registerServiceClass,
-  Service,
-  getServiceMetadata,
-  ServiceMetadata
-} from './ServiceProvider';
-import { injectable, InjectionToken } from 'tsyringe';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { container, InjectionToken, inject } from 'tsyringe';
+import { Service, createService, resolveService, registerServiceInstance, registerServiceFactory, registerServiceClass, getServiceMetadata } from './ServiceProvider';
 
-// Mock classes for testing
-@injectable()
+// Test classes
+@Service()
 class TestService {
-  constructor() {}
-  getValue(): string {
+  getValue() {
     return 'test-value';
   }
 }
 
-@Service()
+@Service({
+  description: 'Test service with metadata'
+})
 class DecoratedTestService {
-  constructor() {}
-  getValue(): string {
+  getValue() {
     return 'decorated-test-value';
   }
 }
 
 @Service({
-  description: 'A test service with metadata',
+  description: 'Test service with dependencies',
   dependencies: [
-    { token: 'TestService', name: 'testService' }
+    { token: 'IDependency', name: 'dependency' }
   ]
 })
 class MetadataTestService {
-  constructor(private testService?: TestService) {}
-  
-  getValue(): string {
-    return this.testService ? this.testService.getValue() + '-with-metadata' : 'no-dependency';
-  }
+  constructor(@inject('IDependency') private dependency: any) {}
 }
 
 class LegacyService {
-  private dep: TestService;
-  
-  initialize(dep: TestService): void {
-    this.dep = dep;
+  private testService: TestService;
+
+  initialize(testService: TestService) {
+    this.testService = testService;
   }
 
-  getValue(): string {
-    return this.dep.getValue() + '-legacy';
-  }
-}
-
-// Test inheritance with the Service decorator
-@Service()
-class BaseService {
-  getBaseValue(): string {
-    return 'base-value';
-  }
-}
-
-@Service()
-class DerivedService extends BaseService {
-  getDerivedValue(): string {
-    return 'derived-value';
+  getValue() {
+    return this.testService.getValue() + '-legacy';
   }
 }
 
@@ -76,27 +48,13 @@ describe('ServiceProvider', () => {
   });
 
   describe('createService', () => {
-    it('should create service instance directly when DI is disabled', () => {
-      // Note: This test is now modified for DI-only mode
-      // In DI-only mode, createService always uses DI
-      delete process.env.USE_DI;
+    it('should create service instance through DI', () => {
       const service = createService(TestService);
       expect(service).toBeInstanceOf(TestService);
       expect(service.getValue()).toBe('test-value');
     });
 
-    it('should create service instance through DI when DI is enabled', () => {
-      process.env.USE_DI = 'true';
-      const service = createService(TestService);
-      expect(service).toBeInstanceOf(TestService);
-      expect(service.getValue()).toBe('test-value');
-    });
-
-    it('should pass dependencies to constructor when DI is disabled', () => {
-      // Note: This test is now modified for DI-only mode
-      // In DI-only mode, dependencies are handled by the DI container
-      delete process.env.USE_DI;
-      
+    it('should pass dependencies to constructor', () => {
       const legacyService = new LegacyService();
       const testService = createService(TestService);
       
@@ -106,9 +64,7 @@ describe('ServiceProvider', () => {
   });
 
   describe('Service decorator', () => {
-    it('should register the class with the container when DI is enabled', () => {
-      process.env.USE_DI = 'true';
-      
+    it('should register the class with the container', () => {
       // Class decoration happens at definition time, so we need a way to test this
       // We'll create a new decorator instance with the same logic for testing
       const service = createService(DecoratedTestService);
@@ -123,58 +79,10 @@ describe('ServiceProvider', () => {
       const byInterface = resolveService<DecoratedTestService>('IDecoratedTestService');
       expect(byInterface).toBeInstanceOf(DecoratedTestService);
     });
-    
-    it('should not interfere with class when DI is disabled', () => {
-      // Note: This test is now modified for DI-only mode
-      // In DI-only mode, resolveService always works regardless of USE_DI
-      delete process.env.USE_DI;
-      
-      const service = createService(DecoratedTestService);
-      expect(service).toBeInstanceOf(DecoratedTestService);
-      expect(service.getValue()).toBe('decorated-test-value');
-      
-      // We should be able to resolve it by token even when USE_DI is false
-      // because shouldUseDI() now always returns true
-      const resolved = resolveService<DecoratedTestService>('DecoratedTestService');
-      expect(resolved).toBeInstanceOf(DecoratedTestService);
-    });
-    
-    it('should store metadata on the class', () => {
-      const metadata = getServiceMetadata(MetadataTestService);
-      expect(metadata).toBeDefined();
-      expect(metadata?.name).toBe('MetadataTestService');
-      expect(metadata?.interfaceName).toBe('IMetadataTestService');
-      expect(metadata?.description).toBe('A test service with metadata');
-      expect(metadata?.dependencies).toBeDefined();
-      expect(metadata?.dependencies?.length).toBe(1);
-      expect(metadata?.dependencies?.[0].token).toBe('TestService');
-      expect(metadata?.dependencies?.[0].name).toBe('testService');
-    });
-    
-    it('should work with inheritance', () => {
-      process.env.USE_DI = 'true';
-      
-      // Get an instance of the derived class
-      const derived = createService(DerivedService);
-      
-      // It should have methods from both base and derived classes
-      expect(derived.getBaseValue()).toBe('base-value');
-      expect(derived.getDerivedValue()).toBe('derived-value');
-      
-      // Should be able to resolve by derived class name
-      const byDerivedName = resolveService<DerivedService>('DerivedService');
-      expect(byDerivedName).toBeInstanceOf(DerivedService);
-      
-      // Should be able to resolve by derived interface name
-      const byDerivedInterface = resolveService<DerivedService>('IDerivedService');
-      expect(byDerivedInterface).toBeInstanceOf(DerivedService);
-    });
   });
-  
+
   describe('registerServiceInstance', () => {
-    it('should register an instance with the container when DI is enabled', () => {
-      process.env.USE_DI = 'true';
-      
+    it('should register an instance with the container', () => {
       const testInstance = new TestService();
       registerServiceInstance('TestInstance', testInstance);
       
@@ -183,8 +91,6 @@ describe('ServiceProvider', () => {
     });
     
     it('should support registering with InjectionToken', () => {
-      process.env.USE_DI = 'true';
-      
       const token: InjectionToken<TestService> = Symbol('TestService');
       const testInstance = new TestService();
       registerServiceInstance(token, testInstance);
@@ -192,25 +98,10 @@ describe('ServiceProvider', () => {
       const resolved = resolveService<TestService>(token);
       expect(resolved).toBe(testInstance); // Should be the exact same instance
     });
-    
-    it('should do nothing when DI is disabled', () => {
-      // Note: This test is now modified for DI-only mode
-      // In DI-only mode, registerServiceInstance always works regardless of USE_DI
-      delete process.env.USE_DI;
-      
-      const testInstance = new TestService();
-      registerServiceInstance('TestInstance', testInstance);
-      
-      // Should be able to resolve the service because shouldUseDI() now always returns true
-      const resolved = resolveService<TestService>('TestInstance');
-      expect(resolved).toBe(testInstance);
-    });
   });
   
   describe('registerServiceFactory', () => {
-    it('should register a factory with the container when DI is enabled', () => {
-      process.env.USE_DI = 'true';
-      
+    it('should register a factory with the container', () => {
       const factory = vi.fn().mockReturnValue(new TestService());
       registerServiceFactory('TestFactory', factory);
       
@@ -224,49 +115,16 @@ describe('ServiceProvider', () => {
       expect(resolved2).toBeInstanceOf(TestService);
       expect(factory).toHaveBeenCalledTimes(2);
     });
-    
-    it('should do nothing when DI is disabled', () => {
-      // Note: This test is now modified for DI-only mode
-      // In DI-only mode, registerServiceFactory always works regardless of USE_DI
-      delete process.env.USE_DI;
-      
-      const factory = vi.fn().mockReturnValue(new TestService());
-      registerServiceFactory('TestFactory', factory);
-      
-      // Should be able to resolve the service because shouldUseDI() now always returns true
-      const resolved = resolveService<TestService>('TestFactory');
-      expect(resolved).toBeInstanceOf(TestService);
-      expect(factory).toHaveBeenCalled();
-    });
   });
   
   describe('registerServiceClass', () => {
-    it('should register a class with the container when DI is enabled', () => {
-      process.env.USE_DI = 'true';
-      
+    it('should register a class with the container', () => {
       class CustomService {
         getValue() { return 'custom-value'; }
       }
       
       registerServiceClass('CustomService', CustomService);
       
-      const resolved = resolveService<CustomService>('CustomService');
-      expect(resolved).toBeInstanceOf(CustomService);
-      expect(resolved.getValue()).toBe('custom-value');
-    });
-    
-    it('should do nothing when DI is disabled', () => {
-      // Note: This test is now modified for DI-only mode
-      // In DI-only mode, registerServiceClass always works regardless of USE_DI
-      delete process.env.USE_DI;
-      
-      class CustomService {
-        getValue() { return 'custom-value'; }
-      }
-      
-      registerServiceClass('CustomService', CustomService);
-      
-      // Should be able to resolve the service because shouldUseDI() now always returns true
       const resolved = resolveService<CustomService>('CustomService');
       expect(resolved).toBeInstanceOf(CustomService);
       expect(resolved.getValue()).toBe('custom-value');

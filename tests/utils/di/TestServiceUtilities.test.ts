@@ -7,8 +7,7 @@ import {
   createService, 
   createServiceSync,
   createDiagnosticReport, 
-  createTestSetup,
-  testInBothModes 
+  createTestSetup
 } from './TestServiceUtilities';
 import { MockValidationService } from './MockServices';
 
@@ -144,25 +143,6 @@ describe('TestServiceUtilities', () => {
       
       // Clean up
       await cleanup(testContext);
-    });
-  });
-  
-  describe('testInBothModes', () => {
-    it('should create test cases for service testing', () => {
-      // Create a spy on the describe function
-      const describeSpy = vi.spyOn(global, 'describe');
-      
-      // Create a test function
-      const testFn = vi.fn();
-      
-      // Call testInBothModes
-      testInBothModes('TestService', testFn);
-      
-      // Verify describe was called with the correct arguments
-      expect(describeSpy).toHaveBeenCalledWith('TestService', expect.any(Function));
-      
-      // Restore the spy
-      describeSpy.mockRestore();
     });
   });
 });

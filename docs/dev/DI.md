@@ -23,7 +23,7 @@ export class FileSystemService implements IFileSystemService {
 }
 ```
 
-The `@Service()` decorator registers the class with the container and adds some metadata for documentation purposes.
+The `@Service()` decorator registers the class with the container and adds metadata for documentation purposes.
 
 ### 2. Dependency Injection
 
@@ -47,7 +47,7 @@ export class ResolutionService implements IResolutionService {
 
 ### 3. Creating Services
 
-Services should be created using the DI container, not with `new`:
+Services should be created using the DI container:
 
 ```typescript
 // CORRECT: Let the DI container create the service
@@ -62,6 +62,59 @@ const service = createService(ServiceClass);
 const service = new ServiceClass(); // Avoid this
 ```
 
+## Testing with DI
+
+### 1. Test Context
+
+Use `TestContextDI` for test setup:
+
+```typescript
+import { TestContextDI } from '@tests/utils/di';
+
+describe('MyService', () => {
+  let context: TestContextDI;
+  
+  beforeEach(() => {
+    context = TestContextDI.create();
+  });
+  
+  afterEach(async () => {
+    await context?.cleanup();
+  });
+  
+  it('should do something', async () => {
+    const service = await context.resolve('IMyService');
+    // Test implementation...
+  });
+});
+```
+
+### 2. Mocking Services
+
+Register mocks using the test context:
+
+```typescript
+// Register a mock implementation
+context.registerMock('IMyService', {
+  doSomething: vi.fn().mockReturnValue('mocked result')
+});
+
+// Or use the mock helpers
+import { createServiceMock } from '@tests/utils/di';
+const mockService = createServiceMock();
+context.registerMock('IMyService', mockService);
+```
+
+### 3. Isolated Testing
+
+For tests that need complete isolation:
+
+```typescript
+const context = TestContextDI.createIsolated();
+```
+
+This creates a container that won't affect or be affected by other tests.
+
 ## Best Practices
 
 ### Service Design
@@ -72,192 +125,66 @@ const service = new ServiceClass(); // Avoid this
 4. **Explicit Return Types**: Always provide return types for methods
 5. **Proper Initialization**: Services should be fully initialized after construction
 
+### Testing
+
+1. **Use TestContextDI**: Always use TestContextDI for test setup
+2. **Proper Cleanup**: Always clean up test contexts in afterEach
+3. **Async Resolution**: Use async/await with context.resolve()
+4. **Mock Registration**: Register mocks before resolving services
+5. **Isolation**: Use createIsolated() when tests need complete isolation
+
 ### Example Service
 
 ```typescript
-import { inject } from 'tsyringe';
-import { Service } from '@core/ServiceProvider';
-
-// 1. Define the interface
-export interface IExampleService {
-  process(data: string): Promise<string>;
-  getStatus(): string;
+// IMyService.ts
+export interface IMyService {
+  doSomething(): Promise<string>;
 }
 
-// 2. Implement the service
-@Service({
-  description: 'Example service that demonstrates best practices'
-})
-export class ExampleService implements IExampleService {
-  // 3. Constructor injection with explicit dependencies
+// MyService.ts
+@Service()
+export class MyService implements IMyService {
   constructor(
-    @inject('IDependencyService') private dependency: IDependencyService,
-    @inject('ILoggerService') private logger: ILoggerService
+    @inject('ILogger') private logger: ILogger,
+    @inject('IConfig') private config: IConfig
   ) {}
 
-  // 4. Explicit return type
-  async process(data: string): Promise<string> {
-    this.logger.log('Processing data...');
-    return this.dependency.transform(data);
-  }
-
-  getStatus(): string {
-    return 'Ready';
+  async doSomething(): Promise<string> {
+    this.logger.info('Doing something');
+    return 'done';
   }
 }
-```
 
-## Testing with DI
-
-### Using TestContextDI
-
-The `TestContextDI` class provides utilities for testing with DI:
-
-```typescript
-import { TestContextDI } from '@tests/utils/di/TestContextDI';
-
+// MyService.test.ts
 describe('MyService', () => {
   let context: TestContextDI;
   
   beforeEach(() => {
-    // Create a test context with DI
-    context = TestContextDI.create();
+    context = TestContextDI.createIsolated();
   });
   
   afterEach(async () => {
-    // Clean up resources
-    await context.cleanup();
+    await context?.cleanup();
   });
   
-  it('should process data correctly', async () => {
-    // Register a mock dependency
-    const mockDependency = { transform: vi.fn().mockReturnValue('transformed') };
-    context.registerMock('IDependencyService', mockDependency);
+  it('should do something', async () => {
+    // Register mocks
+    context.registerMock('ILogger', {
+      info: vi.fn()
+    });
     
-    // Get the service from the container
-    const service = context.container.resolve('IExampleService');
+    context.registerMock('IConfig', {
+      get: vi.fn()
+    });
     
-    // Test the service
-    const result = await service.process('input');
-    expect(result).toBe('transformed');
-    expect(mockDependency.transform).toHaveBeenCalledWith('input');
+    // Resolve service
+    const service = await context.resolve<IMyService>('IMyService');
+    
+    // Test implementation
+    const result = await service.doSomething();
+    expect(result).toBe('done');
   });
 });
-```
-
-### Mocking Services
-
-To register mock implementations:
-
-```typescript
-// Register a mock instance
-context.registerMock('IServiceName', mockImplementation);
-
-// Register a mock class
-context.container.registerMockClass('IServiceName', MockClass);
-```
-
-## Common Patterns
-
-### Dual-Mode Constructor Pattern
-
-Meld services need to support both DI and non-DI modes. The recommended pattern is:
-
-```typescript
-/**
- * Constructor with DI annotations
- */
-constructor(
-  @inject(SomeFactory) factory?: SomeFactory,
-  @inject('IService1') service1?: IService1,
-  @inject('IService2') service2?: IService2
-) {
-  this.initializeFromParams(factory, service1, service2);
-}
-
-/**
- * Helper that chooses initialization path
- */
-private initializeFromParams(
-  factory?: SomeFactory,
-  service1?: IService1,
-  service2?: IService2
-): void {
-  if (factory) {
-    this.initializeDIMode(factory, service1, service2);
-  } else {
-    this.initializeLegacyMode(service1, service2);
-  }
-}
-
-/**
- * DI mode initialization
- */
-private initializeDIMode(
-  factory: SomeFactory,
-  service1?: IService1,
-  service2?: IService2
-): void {
-  this.factory = factory;
-  this.service1 = service1;
-  this.service2 = service2;
-  // Additional initialization
-}
-
-/**
- * Legacy mode initialization
- */
-private initializeLegacyMode(
-  service1?: IService1,
-  service2?: IService2
-): void {
-  // Create default dependencies
-  this.factory = new SomeFactory();
-  
-  // Additional initialization
-}
-```
-
-This pattern:
-1. Keeps the constructor simple
-2. Clearly separates DI and non-DI initialization logic
-3. Makes maintenance easier
-4. Preserves dual-mode functionality
-5. Provides a clear path to eventually remove legacy mode
-
-See `_dev/issues/features/service-initialization-patterns.md` for more examples.
-
-### Factory Pattern
-
-For services that need complex initialization or multiple instances:
-
-```typescript
-@Service()
-export class ServiceFactory {
-  constructor(
-    @inject('IDependencyA') private depA: IDependencyA,
-    @inject('IDependencyB') private depB: IDependencyB
-  ) {}
-  
-  createService(config: ServiceConfig): IService {
-    // Create a specialized instance with the given config
-    // The factory can use its injected dependencies
-    return new SpecializedService(this.depA, this.depB, config);
-  }
-}
-```
-
-### Service Providers
-
-For centralized service registration:
-
-```typescript
-// In a central di-config.ts file:
-import { container } from 'tsyringe';
-
-// Register core services
-container.register('FileSystemService', { useClass: FileSystemService });
-container.register('IFileSystemService', { useToken: 'FileSystemService' });
 ```
 
 ## Troubleshooting

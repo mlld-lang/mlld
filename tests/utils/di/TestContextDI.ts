@@ -81,12 +81,6 @@ export class TestContextDI extends TestContext {
   public readonly container: TestContainerHelper;
 
   /**
-   * For backward compatibility - always returns true
-   * @deprecated DI is now always enabled
-   */
-  public readonly useDI: boolean = true;
-
-  /**
    * Helper method for normalizing paths in tests
    */
   private normalizePathForTests: (path: string) => string;

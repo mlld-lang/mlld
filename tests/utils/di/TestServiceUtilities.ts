@@ -266,11 +266,6 @@ export function createTestSetup(options: {
    * Use isolated container
    */
   isolatedContainer?: boolean;
-  
-  /**
-   * For backwards compatibility
-   */
-  useDI?: boolean;
 }): {
   /**
    * Creates a test context
@@ -300,31 +295,26 @@ export function createTestSetup(options: {
 }
 
 /**
- * Tests a service in both DI and non-DI modes
- * This is useful for ensuring services work correctly in both modes
+ * Tests a service with dependency injection
  * 
  * @param serviceName The name of the service being tested
  * @param testFn The test function to run
  */
-export function testInBothModes(
+export function testService(
   serviceName: string,
   testFn: (context: TestContextDI) => Promise<void> | void
 ): void {
-  // For backward compatibility, keep the original structure but only test DI mode
   describe(serviceName, () => {
     let context: TestContextDI;
     
     beforeEach(() => {
-      // Create a test context with DI enabled
       context = TestContextDI.create();
     });
     
     afterEach(async () => {
-      // Clean up the context
-      await context.cleanup();
+      await context?.cleanup();
     });
     
-    // Run the test function
     it('should work correctly', async () => {
       await testFn(context);
     });
@@ -339,5 +329,5 @@ export default {
   createServiceSync,
   createDiagnosticReport,
   createTestSetup,
-  testInBothModes
+  testService
 };

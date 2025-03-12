@@ -1,23 +1,10 @@
 /**
- * ServiceProvider is a compatibility layer that provides dependency injection 
- * with a seamless transition between the legacy manual instantiation and the 
- * new tsyringe-based DI system.
- * 
- * It supports both modes of operation based on the USE_DI environment variable.
+ * ServiceProvider provides dependency injection using TSyringe.
+ * All services are created and managed through the DI container.
  */
 
 import { container, injectable, ClassProvider, InjectionToken } from 'tsyringe';
 import 'reflect-metadata';
-
-/**
- * Determines if dependency injection should be used.
- * @deprecated This function is maintained for backward compatibility and always returns true.
- * All new code should assume DI is enabled.
- * @returns Always returns true
- */
-export function shouldUseDI(): boolean {
-  return true;
-}
 
 /**
  * Metadata key for storing service dependencies
@@ -35,18 +22,12 @@ export interface ServiceMetadata {
 }
 
 /**
- * Creates a new instance of a service through DI.
- * 
- * @param ServiceClass The service class to instantiate
- * @param dependencies These parameters are ignored and maintained only for backward compatibility
- * @returns A new instance of the service
+ * Creates a service instance using dependency injection
+ * @param serviceClass The service class to create
+ * @returns The created service instance
  */
-export function createService<T, D extends any[]>(
-  ServiceClass: new (...args: D) => T,
-  ...dependencies: D
-): T {
-  // Always use DI
-  return container.resolve(ServiceClass);
+export function createService<T>(serviceClass: new (...args: any[]) => T): T {
+  return container.resolve(serviceClass);
 }
 
 /**
@@ -66,7 +47,6 @@ export function resolveService<T>(token: string | InjectionToken<T>): T {
  * @param useValue The implementation to use
  */
 export function registerServiceInstance<T>(token: string | InjectionToken<T>, useValue: T): void {
-  // DI is now always enabled, so we always register with the container
   container.registerInstance(token, useValue);
 }
 
@@ -80,7 +60,6 @@ export function registerServiceFactory<T>(
   token: string | InjectionToken<T>,
   factory: () => T
 ): void {
-  // DI is now always enabled, so we always register with the container
   container.register(token, { useFactory: factory });
 }
 
@@ -94,7 +73,6 @@ export function registerServiceClass<T>(
   token: string | InjectionToken<T>,
   serviceClass: new (...args: any[]) => T
 ): void {
-  // DI is now always enabled, so we always register with the container
   container.register(token, { useClass: serviceClass });
 }
 
@@ -109,8 +87,7 @@ export function getServiceMetadata(target: any): ServiceMetadata | undefined {
 }
 
 /**
- * Creates a wrapper for a service class that can be used in both DI and legacy modes.
- * In DI mode, it's the decorator to use for service registration
+ * Service decorator that registers a class with the DI container
  * 
  * @param options Optional metadata for the service
  */
@@ -133,14 +110,8 @@ export function Service(options: Partial<ServiceMetadata> = {}) {
     // Store metadata on the class
     Reflect.defineMetadata(SERVICE_METADATA_KEY, metadata, target);
     
-    // Register this class with tsyringe regardless of DI mode
-    // This ensures classes are registered at definition time, not at runtime
-    // which is important for tests that toggle DI mode
-    
-    // Register the class directly for use with container.resolve(Class)
+    // Register the class with tsyringe
     container.register(target, { useClass: target });
-    
-    // Also register by name for string token resolution
     container.register(name, { useClass: target });
     
     // If there's an interface token like "IServiceName", register that too
@@ -148,7 +119,6 @@ export function Service(options: Partial<ServiceMetadata> = {}) {
       container.register(interfaceName, { useClass: target });
     }
     
-    // No modification to the class
     return target;
   };
 }

@@ -11,8 +11,6 @@ describe('StateService node transformation', () => {
   let testContext: TestContextDI;
 
   beforeEach(() => {
-    // Set up DI environment
-    process.env.USE_DI = 'true';
     testContext = TestContextDI.create({ isolatedContainer: true });
     
     // Register necessary services
