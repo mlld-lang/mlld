@@ -67,18 +67,39 @@ export async function runMeld(
   // Validate services
   validateServicePipeline(services);
 
-  // Initialize the ServiceMediator with all services
-  const mediator = services.filesystem['serviceMediator'];
-  if (mediator) {
-    mediator.setPathService(services.path);
-    mediator.setFileSystemService(services.filesystem);
-    mediator.setStateService(services.state);
-    mediator.setParserService(services.parser);
-    mediator.setResolutionService(services.resolution);
+  // Try to get factories from the container
+  let pathClientFactory;
+  let fileSystemClientFactory;
+  let parserClientFactory;
+  let resolutionClientFactory;
+  let stateClientFactory;
+  
+  try {
+    // Get factories from the container
+    pathClientFactory = resolveService('PathServiceClientFactory');
+    fileSystemClientFactory = resolveService('FileSystemServiceClientFactory');
+    parserClientFactory = resolveService('ParserServiceClientFactory');
+    resolutionClientFactory = resolveService('ResolutionServiceClientFactory');
+    stateClientFactory = resolveService('StateServiceClientFactory');
+  } catch (error) {
+    console.warn('Failed to resolve one or more service factories, falling back to ServiceMediator', error);
   }
 
-  // Ensure FileSystemService has the mediator set
-  services.filesystem.setMediator(mediator);
+  // For backward compatibility, also initialize the ServiceMediator
+  // Get the mediator from the filesystem service or resolve it from the container
+  const mediator = services.filesystem['serviceMediator'] || resolveService('ServiceMediator');
+  if (mediator) {
+    if (services.path) mediator.setPathService(services.path);
+    if (services.filesystem) mediator.setFileSystemService(services.filesystem);
+    if (services.state) mediator.setStateService(services.state);
+    if (services.parser) mediator.setParserService(services.parser);
+    if (services.resolution) mediator.setResolutionService(services.resolution);
+    
+    // Ensure FileSystemService has the mediator set for backward compatibility
+    if (services.filesystem && typeof services.filesystem.setMediator === 'function') {
+      services.filesystem.setMediator(mediator);
+    }
+  }
 
   // Re-initialize directive and interpreter services to ensure they have the correct dependencies
   services.directive.initialize(
