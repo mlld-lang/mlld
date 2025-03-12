@@ -9,6 +9,9 @@ import type { ResolutionContext } from '@services/resolution/ResolutionService/I
 import { injectable, inject } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
 import { IServiceMediator } from '@services/mediator/index.js';
+import { container } from 'tsyringe';
+import { IResolutionServiceClient } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClient.js';
+import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientFactory.js';
 
 // Define our own ParseError type since it's not exported from meld-ast
 interface ParseError {
@@ -45,6 +48,9 @@ function isMeldAstError(error: unknown): error is MeldAstError {
 })
 export class ParserService implements IParserService {
   private mediator?: IServiceMediator;
+  private resolutionClient?: IResolutionServiceClient;
+  private resolutionClientFactory?: ResolutionServiceClientFactory;
+  private factoryInitialized: boolean = false;
 
   /**
    * Creates a new instance of the ParserService
@@ -53,6 +59,54 @@ export class ParserService implements IParserService {
    */
   constructor(@inject('IServiceMediator') mediator?: IServiceMediator) {
     this.mediator = mediator;
+    
+    if (this.mediator) {
+      this.mediator.setParserService(this);
+    }
+    
+    // We'll initialize the factory lazily to avoid circular dependencies
+    if (process.env.DEBUG === 'true') {
+      console.log('ParserService: Initialized with', {
+        hasMediator: !!this.mediator
+      });
+    }
+  }
+
+  /**
+   * Lazily initialize the ResolutionServiceClient factory
+   * This is called only when needed to avoid circular dependencies
+   */
+  private ensureFactoryInitialized(): void {
+    if (this.factoryInitialized) {
+      return;
+    }
+    
+    this.factoryInitialized = true;
+    
+    try {
+      this.resolutionClientFactory = container.resolve('ResolutionServiceClientFactory');
+      this.initializeResolutionClient();
+    } catch (error) {
+      // Factory not available, will use mediator
+      logger.debug('ResolutionServiceClientFactory not available, using ServiceMediator for resolution operations');
+    }
+  }
+
+  /**
+   * Initialize the ResolutionServiceClient using the factory
+   */
+  private initializeResolutionClient(): void {
+    if (!this.resolutionClientFactory) {
+      return;
+    }
+    
+    try {
+      this.resolutionClient = this.resolutionClientFactory.createClient();
+      logger.debug('Successfully created ResolutionServiceClient using factory');
+    } catch (error) {
+      logger.warn('Failed to create ResolutionServiceClient, falling back to ServiceMediator', { error });
+      this.resolutionClient = undefined;
+    }
   }
 
   /**
@@ -61,7 +115,9 @@ export class ParserService implements IParserService {
    * Use constructor injection instead.
    */
   setMediator(mediator: IServiceMediator): void {
+    logger.warn('ParserService.setMediator is deprecated. Use constructor injection instead.');
     this.mediator = mediator;
+    this.mediator.setParserService(this);
   }
 
   private async parseContent(content: string, filePath?: string): Promise<MeldNode[]> {
@@ -330,58 +386,62 @@ export class ParserService implements IParserService {
       return node;
     }
 
-    // Ensure we have a mediator
-    if (!this.mediator) {
-      logger.warn('No mediator available for variable transformation');
-      return node;
-    }
-
     // Create a simple resolution context
     const context: ResolutionContext = {
       state,
       currentFilePath: '/',
-      strict: false,
-      allowedVariableTypes: { text: true, data: true, path: true, command: false }
+      options: {
+        strict: false,
+        allowUndefined: true
+      }
     };
 
     try {
-      // Handle different node types
-      switch (node.type) {
-        case 'TextVar':
-        case 'DataVar': {
-          // Extract variable name (simplified approach without serializer)
-          let variableName = '';
-          if (node.type === 'TextVar' && 'name' in node) {
-            variableName = `\${${(node as any).name}}`;
-          } else if (node.type === 'DataVar' && 'name' in node) {
-            variableName = `\${{${(node as any).name}}}`;
-          }
+      // Ensure factory is initialized before trying to use it
+      this.ensureFactoryInitialized();
+      
+      // Try to use the resolution client first if available
+      if (this.resolutionClient) {
+        try {
+          const result = await this.resolutionClient.resolveVariableReference(node, {
+            context,
+            allowUndefined: true
+          });
           
-          if (!variableName) {
-            return node;
-          }
-          
-          // Resolve the variable reference through the mediator
-          const resolved = await this.mediator.resolveVariableForParser(variableName, context);
-          
-          // Create a new Text node with the resolved value
-          const textNode: TextNode = {
-            type: 'Text',
-            content: resolved || ''
+          // Create a text node with the resolved value
+          return {
+            type: 'text',
+            value: String(result),
+            location: node.location
           };
-          
-          // Copy location if available
-          if (node.location) {
-            textNode.location = node.location;
-          }
-          
-          return textNode;
+        } catch (error) {
+          logger.warn('Error using resolutionClient.resolveVariableReference, falling back to ServiceMediator', { 
+            error, 
+            node 
+          });
         }
-        default:
-          return node;
       }
+      
+      // Fall back to mediator
+      if (!this.mediator) {
+        logger.warn('No mediator available for variable transformation');
+        return node;
+      }
+      
+      // Use the mediator to resolve the variable
+      const result = await this.mediator.resolveVariableReference(node, {
+        context,
+        allowUndefined: true
+      });
+
+      // Create a text node with the resolved value
+      return {
+        type: 'text',
+        value: String(result),
+        location: node.location
+      };
     } catch (error) {
-      logger.error('Error transforming variable node:', { error });
+      logger.warn('Failed to transform variable node', { error, node });
       return node;
     }
   }

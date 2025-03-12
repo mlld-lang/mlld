@@ -58,6 +58,12 @@ During the implementation of the factory pattern for the FileSystemService ↔ P
 
 7. **Graceful Degradation**: Services should gracefully degrade when factories are not available, ensuring that existing code continues to work during the transition.
 
+8. **Use Lazy Initialization**: Implement lazy initialization for factories to prevent circular dependencies during service initialization:
+   - Add a `factoryInitialized` flag to track whether the factory has been initialized
+   - Create an `ensureFactoryInitialized()` method that initializes the factory only when needed
+   - Call `ensureFactoryInitialized()` before using the client in any method
+   - This approach ensures that dependencies are resolved only when actually needed, not during construction
+
 ## Project Documentation
 
 The following documents have been created to support this project:
@@ -127,30 +133,41 @@ The following documents have been created to support this project:
 2. ✅ Run all tests to verify functionality
 3. ✅ Fix any issues that arise
 4. ✅ Document the implementation pattern and lessons learned
-5. 🚧 Next: Implement factory pattern for ParserService ↔ ResolutionService
+5. ✅ Implement factory pattern for ParserService ↔ ResolutionService:
+   - ✅ Create `IParserServiceClient` and `IResolutionServiceClient` interfaces
+   - ✅ Implement `ParserServiceClientFactory` and `ResolutionServiceClientFactory` classes
+   - ✅ Register factories in the DI container
+   - ✅ Update services to use factories with lazy initialization pattern
+   - ✅ Add comprehensive error handling and fallback mechanisms
+   - ✅ Update tests to work with the new implementation
+   - ✅ Verify all tests pass with the new implementation
 
 **Implementation Plan**:
 - Detailed implementation steps are documented in [FileSystemService ↔ PathService Implementation Plan](./filesystem-path-factory-implementation-plan.md)
+- The ParserService ↔ ResolutionService implementation follows the same pattern but adds lazy initialization to prevent circular dependencies during service initialization
 
 **Test Validation Checklist**:
 1. ✅ Run unit tests for the updated FileSystemService and PathService
 2. ✅ Run integration tests for all dependent services
 3. ✅ Verify that both factory and mediator approaches work
 4. ✅ Document any test failures and their resolutions
+5. ✅ Run unit tests for the updated ParserService and ResolutionService
+6. ✅ Run API integration tests to verify the complete pipeline works
 
 **Exit Criteria**:
 - ✅ Factory pattern implemented for FileSystemService ↔ PathService
-- ✅ All tests pass with the new implementation
+- ✅ Factory pattern implemented for ParserService ↔ ResolutionService
+- ✅ All tests pass with the new implementations
 - ✅ Services can use either factories or ServiceMediator
 - ✅ Implementation pattern documented for other teams
 
-**Current Status**: Phase 2 is in progress. FileSystemService ↔ PathService implementation is complete. Next step is to implement the factory pattern for ParserService ↔ ResolutionService.
+**Current Status**: Phase 2 is complete. Both FileSystemService ↔ PathService and ParserService ↔ ResolutionService implementations are complete. Next step is to proceed with Phase 3 and implement the factory pattern for StateService ↔ StateTrackingService.
 
 **Session Handoff Notes**:
-- **What was completed**: FileSystemService ↔ PathService factory pattern implementation is complete
-- **Current state**: All tests are passing with the new implementation
-- **Known issues**: Direct constructor injection of factories can cause circular dependency issues in tests; using container.resolve() is more robust
-- **Next steps**: Proceed with implementing the factory pattern for ParserService ↔ ResolutionService
+- **What was completed**: FileSystemService ↔ PathService and ParserService ↔ ResolutionService factory pattern implementations are complete
+- **Current state**: All tests are passing with the new implementations
+- **Known issues**: Direct constructor injection of factories can cause circular dependency issues in tests; using container.resolve() with lazy initialization is more robust
+- **Next steps**: Proceed with implementing the factory pattern for StateService ↔ StateTrackingService
 
 ### Phase 3: Incremental Implementation (4 weeks)
 
@@ -160,20 +177,30 @@ The following documents have been created to support this project:
 
 1. **FileSystemService ↔ PathService** (already covered in Phase 2)
 
-2. **ParserService ↔ ResolutionService**
-   - Task 3.1: Create interfaces and factories
-   - Task 3.2: Update ParserService to use factories
-   - Task 3.3: Update ResolutionService to use factories
-   - Task 3.4: Test and validate
+2. **ParserService ↔ ResolutionService** (already covered in Phase 2)
 
-3. **StateService ↔ StateTrackingService**
-   - Task 3.5: Create interfaces and factories
-   - Task 3.6: Update StateService to use factories
-   - Task 3.7: Update StateTrackingService to use factories
-   - Task 3.8: Test and validate
+3. **StateService ↔ StateTrackingService** 🚧
+   - Task 3.1: Create interfaces and factories
+     - Create `IStateServiceClient` and `IStateTrackingServiceClient` interfaces
+     - Implement `StateServiceClientFactory` and `StateTrackingServiceClientFactory` classes
+     - Register factories in the DI container
+   - Task 3.2: Update StateService to use factories
+     - Implement lazy initialization pattern with `factoryInitialized` flag
+     - Add `ensureFactoryInitialized()` method
+     - Update methods to call `ensureFactoryInitialized()` before using the client
+     - Add comprehensive error handling and fallback mechanisms
+   - Task 3.3: Update StateTrackingService to use factories
+     - Implement lazy initialization pattern with `factoryInitialized` flag
+     - Add `ensureFactoryInitialized()` method
+     - Update methods to call `ensureFactoryInitialized()` before using the client
+     - Add comprehensive error handling and fallback mechanisms
+   - Task 3.4: Test and validate
+     - Run unit tests for the updated services
+     - Run integration tests for dependent services
+     - Fix any issues that arise
 
 4. **Any other identified circular dependencies**
-   - Follow the same pattern
+   - Follow the same pattern with lazy initialization
 
 **Test Validation Checklist** (after each service update):
 1. Run unit tests for the updated service
@@ -323,30 +350,66 @@ container.register('FileSystemServiceClientFactory', { useClass: FileSystemServi
 // Update FileSystemService
 export class FileSystemService implements IFileSystemService {
   private pathClient?: IPathServiceClient;
+  private pathClientFactory?: PathServiceClientFactory;
+  private factoryInitialized: boolean = false;
   
   constructor(
     @inject('IPathOperationsService') private pathOps: IPathOperationsService,
     @inject('IServiceMediator') private serviceMediator?: IServiceMediator,
-    @inject('IFileSystem') private fs: IFileSystem = new NodeFileSystem(),
-    @inject('PathServiceClientFactory') private readonly pathClientFactory?: PathServiceClientFactory
+    @inject('IFileSystem') private fs: IFileSystem = new NodeFileSystem()
   ) {
     // Register with mediator for backward compatibility
     if (this.serviceMediator) {
       this.serviceMediator.setFileSystemService(this);
     }
     
-    // Use factory if available (new approach)
-    if (this.pathClientFactory && typeof this.pathClientFactory.createClient === 'function') {
-      try {
-        this.pathClient = this.pathClientFactory.createClient();
-        logger.debug('Successfully created PathServiceClient using factory');
-      } catch (error) {
-        logger.warn('Failed to create PathServiceClient, falling back to ServiceMediator', { error });
-      }
+    // We'll initialize the factory lazily to avoid circular dependencies
+    logger.debug('FileSystemService: Initialized with', {
+      hasMediator: !!this.serviceMediator
+    });
+  }
+  
+  /**
+   * Lazily initialize the PathServiceClient factory
+   * This is called only when needed to avoid circular dependencies
+   */
+  private ensureFactoryInitialized(): void {
+    if (this.factoryInitialized) {
+      return;
+    }
+    
+    this.factoryInitialized = true;
+    
+    try {
+      this.pathClientFactory = container.resolve('PathServiceClientFactory');
+      this.initializePathClient();
+    } catch (error) {
+      // Factory not available, will use mediator
+      logger.debug('PathServiceClientFactory not available, using ServiceMediator for path operations');
+    }
+  }
+  
+  /**
+   * Initialize the PathServiceClient using the factory
+   */
+  private initializePathClient(): void {
+    if (!this.pathClientFactory) {
+      return;
+    }
+    
+    try {
+      this.pathClient = this.pathClientFactory.createClient();
+      logger.debug('Successfully created PathServiceClient using factory');
+    } catch (error) {
+      logger.warn('Failed to create PathServiceClient, falling back to ServiceMediator', { error });
+      this.pathClient = undefined;
     }
   }
   
   private resolvePath(filePath: string): string {
+    // Ensure factory is initialized before trying to use it
+    this.ensureFactoryInitialized();
+    
     // Try new approach first (factory pattern)
     if (this.pathClient && typeof this.pathClient.resolvePath === 'function') {
       try {

@@ -13,11 +13,13 @@ import type { MeldNode, DirectiveNode, TextNode, DirectiveKind, CodeFenceNode } 
 import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
 import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
-import { inject, singleton } from 'tsyringe';
+import { inject, singleton, container } from 'tsyringe';
 import { IPathService } from '@services/fs/PathService/IPathService.js';
 import { VariableResolutionTracker, ResolutionTrackingConfig } from '@tests/utils/debug/VariableResolutionTracker/index.js';
 import { Service } from '@core/ServiceProvider.js';
 import { IServiceMediator } from '@services/mediator/index.js';
+import { IParserServiceClient } from '@services/pipeline/ParserService/interfaces/IParserServiceClient.js';
+import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory.js';
 
 /**
  * Interface matching the StructuredPath expected from meld-spec
@@ -147,6 +149,9 @@ export class ResolutionService implements IResolutionService {
   private fileSystemService: IFileSystemService = null!;
   private pathService: IPathService = null!;
   private serviceMediator?: IServiceMediator;
+  private parserClient?: IParserServiceClient;
+  private parserClientFactory?: ParserServiceClientFactory;
+  private factoryInitialized: boolean = false;
 
   /**
    * Creates a new ResolutionService instance using dependency injection
@@ -163,6 +168,53 @@ export class ResolutionService implements IResolutionService {
     @inject('IServiceMediator') serviceMediator?: IServiceMediator
   ) {
     this.initializeFromParams(stateService, fileSystemService, pathService, serviceMediator);
+    
+    // We'll initialize the factory lazily to avoid circular dependencies
+    if (process.env.DEBUG === 'true') {
+      console.log('ResolutionService: Initialized with', {
+        hasStateService: !!this.stateService,
+        hasFileSystemService: !!this.fileSystemService,
+        hasPathService: !!this.pathService,
+        hasServiceMediator: !!this.serviceMediator
+      });
+    }
+  }
+  
+  /**
+   * Lazily initialize the ParserServiceClient factory
+   * This is called only when needed to avoid circular dependencies
+   */
+  private ensureFactoryInitialized(): void {
+    if (this.factoryInitialized) {
+      return;
+    }
+    
+    this.factoryInitialized = true;
+    
+    try {
+      this.parserClientFactory = container.resolve('ParserServiceClientFactory');
+      this.initializeParserClient();
+    } catch (error) {
+      // Factory not available, will use mediator
+      logger.debug('ParserServiceClientFactory not available, using ServiceMediator for parser operations');
+    }
+  }
+  
+  /**
+   * Initialize the ParserServiceClient using the factory
+   */
+  private initializeParserClient(): void {
+    if (!this.parserClientFactory) {
+      return;
+    }
+    
+    try {
+      this.parserClient = this.parserClientFactory.createClient();
+      logger.debug('Successfully created ParserServiceClient using factory');
+    } catch (error) {
+      logger.warn('Failed to create ParserServiceClient, falling back to ServiceMediator', { error });
+      this.parserClient = undefined;
+    }
   }
   
   /**
@@ -247,23 +299,36 @@ export class ResolutionService implements IResolutionService {
    */
   private async parseForResolution(value: string): Promise<MeldNode[]> {
     try {
-      // Use the mediator to get AST nodes if available
+      // Ensure factory is initialized before trying to use it
+      this.ensureFactoryInitialized();
+      
+      // Try to use the parser client first if available
+      if (this.parserClient) {
+        try {
+          const nodes = await this.parserClient.parseString(value);
+          return nodes || [];
+        } catch (error) {
+          logger.warn('Error using parserClient.parseString, falling back to ServiceMediator', { 
+            error, 
+            valueLength: value.length 
+          });
+        }
+      }
+      
+      // Fall back to mediator
       if (this.serviceMediator) {
         const nodes = await this.serviceMediator.parseForResolution(value);
         return nodes || [];
       }
       
-      // Fallback for backward compatibility during transition
-      logger.warn('No mediator available for parsing - falling back to direct import');
+      // Last resort fallback
+      logger.warn('No parser service available - falling back to direct import');
       const { parse } = await import('meld-ast');
       const result = await parse(value, { trackLocations: true });
       return result.ast || [];
     } catch (error) {
-      // If parsing fails, treat the value as literal text
-      return [{
-        type: 'Text',
-        content: value
-      } as TextNode];
+      logger.error('Error parsing content for resolution', { error });
+      return [];
     }
   }
 

@@ -23,6 +23,8 @@ import { CLIService, DefaultPromptService } from '../services/cli/CLIService/CLI
 import { ServiceMediator } from '../services/mediator/ServiceMediator.js';
 import { PathServiceClientFactory } from '../services/fs/PathService/factories/PathServiceClientFactory.js';
 import { FileSystemServiceClientFactory } from '../services/fs/FileSystemService/factories/FileSystemServiceClientFactory.js';
+import { ParserServiceClientFactory } from '../services/pipeline/ParserService/factories/ParserServiceClientFactory.js';
+import { ResolutionServiceClientFactory } from '../services/resolution/ResolutionService/factories/ResolutionServiceClientFactory.js';
 import { 
   LoggerFactory, 
   logger as mainLogger, 
@@ -95,6 +97,8 @@ serviceMediator.setStateService(stateService);
 // Register client factories for circular dependency resolution
 container.register('PathServiceClientFactory', { useClass: PathServiceClientFactory });
 container.register('FileSystemServiceClientFactory', { useClass: FileSystemServiceClientFactory });
+container.register('ParserServiceClientFactory', { useClass: ParserServiceClientFactory });
+container.register('ResolutionServiceClientFactory', { useClass: ResolutionServiceClientFactory });
 
 // Register remaining services using class registrations
 // These services don't have circular dependencies
