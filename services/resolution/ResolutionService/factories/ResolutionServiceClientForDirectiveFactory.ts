@@ -1,0 +1,51 @@
+import { injectable, inject } from 'tsyringe';
+import { Service } from '@core/ServiceProvider.js';
+import { IResolutionService } from '../IResolutionService.js';
+import { IResolutionServiceClientForDirective } from '../interfaces/IResolutionServiceClientForDirective.js';
+import { resolutionLogger as logger } from '@core/utils/logger.js';
+
+/**
+ * Factory for creating resolution service clients for DirectiveService
+ * This factory is used to break the circular dependency between ResolutionService and DirectiveService
+ */
+@injectable()
+@Service({
+  description: 'Factory for creating resolution service clients for directive service'
+})
+export class ResolutionServiceClientForDirectiveFactory {
+  /**
+   * Creates a new ResolutionServiceClientForDirectiveFactory
+   * @param resolutionService - The resolution service to create clients for
+   */
+  constructor(@inject('IResolutionService') private resolutionService: IResolutionService) {}
+  
+  /**
+   * Creates a client for the resolution service
+   * @returns A client that provides resolution service functionality for directive service
+   */
+  createClient(): IResolutionServiceClientForDirective {
+    logger.debug('Creating ResolutionServiceClientForDirective');
+    
+    return {
+      resolveText: (text, context) => {
+        return this.resolutionService.resolveText(text, context);
+      },
+      
+      resolveData: (ref, context) => {
+        return this.resolutionService.resolveData(ref, context);
+      },
+      
+      resolvePath: (path, context) => {
+        return this.resolutionService.resolvePath(path, context);
+      },
+      
+      resolveContent: (nodes, context) => {
+        return this.resolutionService.resolveContent(nodes, context);
+      },
+      
+      resolveInContext: (value, context) => {
+        return this.resolutionService.resolveInContext(value, context);
+      }
+    };
+  }
+} 
