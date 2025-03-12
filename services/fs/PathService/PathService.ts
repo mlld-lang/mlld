@@ -99,7 +99,7 @@ export class PathService implements IPathService {
   }
   
   /**
-   * Check if test mode is enabled.
+   * Check if test mode is enabled
    */
   isTestMode(): boolean {
     return this.testMode;

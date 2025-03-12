@@ -13,6 +13,8 @@ import { injectable, inject } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
 import { IServiceMediator } from '@services/mediator/IServiceMediator.js';
 import { IPathService } from '../PathService/IPathService.js';
+import { IPathServiceClient } from '../PathService/interfaces/IPathServiceClient.js';
+import { PathServiceClientFactory } from '../PathService/factories/PathServiceClientFactory.js';
 
 const execAsync = promisify(exec);
 
@@ -30,22 +32,50 @@ interface FileOperationContext {
 export class FileSystemService implements IFileSystemService {
   private fs: IFileSystem;
   private serviceMediator?: IServiceMediator;
+  private pathClient?: IPathServiceClient;
 
   /**
    * Creates a new instance of the FileSystemService
    * 
    * @param pathOps - Service for handling path operations and normalization
    * @param serviceMediator - Service mediator for resolving circular dependencies with PathService
-   * @param fileSystem - File system implementation to use
+   * @param fileSystem - File system implementation to use (optional, defaults to NodeFileSystem)
+   * @param pathClientFactory - Factory for creating PathServiceClient instances (preferred over mediator)
    */
   constructor(
     @inject('IPathOperationsService') private readonly pathOps: IPathOperationsService,
     @inject('IServiceMediator') private readonly serviceMediator: IServiceMediator,
-    @inject('IFileSystem') private fs: IFileSystem
+    @inject('IFileSystem') fileSystem?: IFileSystem,
+    @inject('PathServiceClientFactory') private readonly pathClientFactory?: PathServiceClientFactory
   ) {
-    // Register this service with the mediator
+    // Set file system implementation
+    this.fs = fileSystem || new NodeFileSystem();
+    
+    // Register this service with the mediator for backward compatibility
     if (this.serviceMediator) {
       this.serviceMediator.setFileSystemService(this);
+    }
+    
+    // Use factory if available (new approach)
+    if (this.pathClientFactory && typeof this.pathClientFactory.createClient === 'function') {
+      try {
+        this.pathClient = this.pathClientFactory.createClient();
+        logger.debug('Successfully created PathServiceClient using factory');
+      } catch (error) {
+        logger.warn('Failed to create PathServiceClient, falling back to ServiceMediator', { error });
+      }
+    } else {
+      logger.debug('PathServiceClientFactory not available or invalid, using ServiceMediator for path operations');
+    }
+    
+    if (process.env.DEBUG === 'true') {
+      console.log('FileSystemService: Initialized with', {
+        hasPathOps: !!this.pathOps,
+        hasServiceMediator: !!this.serviceMediator,
+        hasPathClientFactory: !!this.pathClientFactory,
+        hasPathClient: !!this.pathClient,
+        fileSystemType: this.fs.constructor.name
+      });
     }
   }
 
@@ -91,13 +121,32 @@ export class FileSystemService implements IFileSystemService {
   }
 
   /**
-   * Resolves a path using the service mediator
+   * Resolves a path using the path client or service mediator
    * @private
    * @param filePath - The path to resolve
    * @returns The resolved path
    */
   private resolvePath(filePath: string): string {
-    return this.serviceMediator.resolvePath(filePath);
+    // Try new approach first (factory pattern)
+    if (this.pathClient && typeof this.pathClient.resolvePath === 'function') {
+      try {
+        return this.pathClient.resolvePath(filePath);
+      } catch (error) {
+        logger.warn('Error using pathClient.resolvePath, falling back to ServiceMediator', { 
+          error, 
+          path: filePath 
+        });
+      }
+    }
+    
+    // Fall back to mediator for backward compatibility
+    if (this.serviceMediator) {
+      return this.serviceMediator.resolvePath(filePath);
+    }
+    
+    // Last resort fallback
+    logger.warn('No path resolution service available, returning unresolved path', { path: filePath });
+    return filePath;
   }
 
   // File operations
@@ -109,10 +158,10 @@ export class FileSystemService implements IFileSystemService {
       path: filePath,
       resolvedPath
     };
-
+    
     try {
       logger.debug('Reading file', context);
-      const content = await this.fs.readFile(resolvedPath);
+      const content = await this.fs.readFile(resolvedPath, 'utf8');
       logger.debug('Successfully read file', { ...context, contentLength: content.length });
       return content;
     } catch (error) {
@@ -122,9 +171,10 @@ export class FileSystemService implements IFileSystemService {
         throw new MeldFileNotFoundError(filePath, { cause: err });
       }
       logger.error('Error reading file', { ...context, error: err });
-      throw new MeldError(`Error reading file: ${filePath}`, { 
+      throw new MeldFileSystemError(`Error reading file: ${filePath}`, { 
         cause: err,
-        filePath
+        filePath,
+        resolvedPath
       });
     }
   }

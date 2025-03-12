@@ -26,6 +26,8 @@ import { MeldDirectiveError } from '@core/errors/MeldDirectiveError';
 import { ErrorSeverity } from '@core/errors/MeldError';
 import { DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError';
 import { createPathValidationError } from '../errorFactories';
+import { IPathServiceClient } from '@services/fs/PathService/interfaces/IPathServiceClient';
+import { IFileSystemServiceClient } from '@services/fs/FileSystemService/interfaces/IFileSystemServiceClient';
 
 import type { IOutputService } from '@services/pipeline/OutputService/IOutputService';
 import type { IDirectiveService } from '@services/pipeline/DirectiveService/IDirectiveService';
@@ -353,6 +355,7 @@ export class TestContextDI extends TestContext {
     this.registerInterpreterService();
     this.registerOutputService();
     this.registerDebugServices();
+    this.registerFactories();
   }
 
   /**
@@ -652,6 +655,49 @@ export class TestContextDI extends TestContext {
     };
     
     this.container.registerMock('IStateDebuggerService', mockStateDebuggerService);
+  }
+
+  /**
+   * Registers factory classes for circular dependency resolution
+   */
+  private registerFactories(): void {
+    // Register PathServiceClientFactory mock
+    const mockPathServiceClientFactory = {
+      createClient: vi.fn().mockImplementation(() => {
+        const mockPathClient: IPathServiceClient = {
+          resolvePath: vi.fn().mockImplementation((path: string) => path),
+          normalizePath: vi.fn().mockImplementation((path: string) => path)
+        };
+        return mockPathClient;
+      })
+    };
+    
+    // Register FileSystemServiceClientFactory mock
+    const mockFileSystemServiceClientFactory = {
+      createClient: vi.fn().mockImplementation(() => {
+        const mockFileSystemClient: IFileSystemServiceClient = {
+          exists: vi.fn().mockImplementation(async (path: string) => {
+            try {
+              return await this.fs.exists(path);
+            } catch (error) {
+              return false;
+            }
+          }),
+          isDirectory: vi.fn().mockImplementation(async (path: string) => {
+            try {
+              const stats = await this.fs.stat(path);
+              return stats.isDirectory();
+            } catch (error) {
+              return false;
+            }
+          })
+        };
+        return mockFileSystemClient;
+      })
+    };
+    
+    this.container.registerMock('PathServiceClientFactory', mockPathServiceClientFactory);
+    this.container.registerMock('FileSystemServiceClientFactory', mockFileSystemServiceClientFactory);
   }
   
   /**

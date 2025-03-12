@@ -21,6 +21,8 @@ import { NodeFileSystem } from '../services/fs/FileSystemService/NodeFileSystem.
 import { SourceMapService, sourceMapService } from '../core/utils/SourceMapService.js';
 import { CLIService, DefaultPromptService } from '../services/cli/CLIService/CLIService.js';
 import { ServiceMediator } from '../services/mediator/ServiceMediator.js';
+import { PathServiceClientFactory } from '../services/fs/PathService/factories/PathServiceClientFactory.js';
+import { FileSystemServiceClientFactory } from '../services/fs/FileSystemService/factories/FileSystemServiceClientFactory.js';
 import { 
   LoggerFactory, 
   logger as mainLogger, 
@@ -89,6 +91,10 @@ serviceMediator.setPathService(pathService);
 serviceMediator.setParserService(parserService);
 serviceMediator.setResolutionService(resolutionService);
 serviceMediator.setStateService(stateService);
+
+// Register client factories for circular dependency resolution
+container.register('PathServiceClientFactory', { useClass: PathServiceClientFactory });
+container.register('FileSystemServiceClientFactory', { useClass: FileSystemServiceClientFactory });
 
 // Register remaining services using class registrations
 // These services don't have circular dependencies

@@ -12,7 +12,7 @@ npm run dev          # Build in watch mode
 ```
 
 ## Code Style
-- **Imports**: Use paths aliases (@core/, @services/, etc.) as defined in tsconfig.json
+- **Imports**: Use @ paths aliases (@core/, @services/, etc.) as defined in tsconfig.json -- no relative paths for imports
 - **Structure**: Use interface-first design (I[Name]Service interfaces + implementation)
 - **Services**: Follow dependency injection pattern (initialize() with dependencies)
 - **Formatting**: 2-space indentation, single quotes, semicolons
