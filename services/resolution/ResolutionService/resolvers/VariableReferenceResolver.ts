@@ -7,7 +7,6 @@ import type { IResolutionService } from '@services/resolution/ResolutionService/
 import type { MeldNode, TextNode, DirectiveNode, TextVarNode, DataVarNode } from 'meld-spec';
 import { resolutionLogger as logger } from '@core/utils/logger.js';
 import { VariableResolutionTracker } from '@tests/utils/debug/VariableResolutionTracker/index.js';
-import { IServiceMediator } from '@services/mediator/index.js';
 import { container } from 'tsyringe';
 import { IResolutionServiceClient } from '../interfaces/IResolutionServiceClient.js';
 import { ResolutionServiceClientFactory } from '../factories/ResolutionServiceClientFactory.js';
@@ -32,8 +31,7 @@ export class VariableReferenceResolver {
 
   constructor(
     private readonly stateService: IStateService,
-    private readonly resolutionService?: IResolutionService,
-    private readonly serviceMediator?: IServiceMediator
+    private readonly resolutionService?: IResolutionService
   ) {}
 
   /**
@@ -935,48 +933,35 @@ export class VariableReferenceResolver {
    * For example: {{var_{{nested}}}}
    */
   private async resolveNestedVariableReference(reference: string, context: ResolutionContext): Promise<string> {
-    // Ensure factory is initialized before trying to use it
+    // Ensure factory is initialized
     this.ensureFactoryInitialized();
     
-    // Try new approach first (factory pattern)
+    // Try to use the resolution client
     if (this.resolutionClient) {
       try {
-        return await this.resolutionClient.resolveVariables(reference, context);
+        return await this.resolutionClient.resolveInContext(reference, context);
       } catch (error) {
-        logger.warn('Error using resolutionClient.resolveVariables, falling back to alternatives', { 
+        logger.warn('Error using resolutionClient.resolveInContext', { 
           error, 
           reference 
         });
       }
     }
     
-    // Try direct reference next
+    // Try direct resolution service reference
     if (this.resolutionService) {
       try {
         return await this.resolutionService.resolveInContext(reference, context);
       } catch (error) {
-        logger.warn('Error using resolutionService.resolveInContext, falling back to mediator', { 
+        logger.warn('Error using resolutionService.resolveInContext', { 
           error, 
           reference 
         });
       }
     }
     
-    // Fall back to mediator for backward compatibility
-    if (this.serviceMediator) {
-      try {
-        return await this.serviceMediator.resolveInContext(reference, context);
-      } catch (error) {
-        logger.error('Error using serviceMediator.resolveInContext', { 
-          error, 
-          reference 
-        });
-        throw error;
-      }
-    }
-    
-    // Last resort fallback
-    logger.warn('No resolution service available, returning unresolved reference', { reference });
+    // If we get here, we couldn't resolve the variable
+    logger.warn('No resolution service available for nested variable resolution');
     return reference;
   }
 }
