@@ -16,6 +16,7 @@ import { injectable, inject } from 'tsyringe';
 import { container } from 'tsyringe';
 import { IServiceMediator } from '@services/mediator/index.js';
 import { pathLogger as logger } from '@core/utils/logger.js';
+import { IFileSystemServiceClient } from '../FileSystemService/interfaces/IFileSystemServiceClient.js';
 
 /**
  * Service for validating and normalizing paths
@@ -29,6 +30,7 @@ export class PathService implements IPathService {
   private homePath: string;
   private projectPath: string;
   private projectPathResolved: boolean = false;
+  private fsClient?: IFileSystemServiceClient;
 
   /**
    * Creates a new PathService with dependencies injected.
@@ -53,6 +55,7 @@ export class PathService implements IPathService {
     if (process.env.DEBUG === 'true') {
       console.log('PathService: Initialized with serviceMediator:', {
         hasServiceMediator: !!this.serviceMediator,
+        hasFileSystemClient: !!this.fsClient,
         testMode: this.testMode
       });
     }
