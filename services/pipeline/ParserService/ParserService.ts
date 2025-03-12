@@ -364,7 +364,8 @@ export class ParserService implements IParserService {
       // Try to use the resolution client
       if (this.resolutionClient) {
         try {
-          return await this.resolutionClient.resolve(node, context);
+          // Use resolveVariableReference method which is in the interface
+          return await this.resolutionClient.resolveVariableReference(node, context);
         } catch (error) {
           logger.warn('Error using resolutionClient.resolve', { 
             error, 

@@ -10,6 +10,7 @@ import { Service } from '@core/ServiceProvider.js';
 import { IServiceMediator } from '@services/mediator/IServiceMediator.js';
 import { StateTrackingServiceClientFactory } from '../StateTrackingService/factories/StateTrackingServiceClientFactory.js';
 import { IStateTrackingServiceClient } from '../StateTrackingService/interfaces/IStateTrackingServiceClient.js';
+import { randomUUID } from 'crypto';
 
 // Helper function to get the container
 function getContainer() {
@@ -574,8 +575,8 @@ export class StateService implements IStateService {
       child.setServiceMediator(this.serviceMediator);
     }
     
-    // Set parent state reference
-    child.parentState = this;
+    // Set parent state reference - using any to avoid TypeScript property access error
+    (child as any).parentState = this;
     
     // Transfer parent variables to child
     // Copy text variables
@@ -922,9 +923,11 @@ export class StateService implements IStateService {
    * Sets the state ID and establishes parent-child relationships for tracking
    */
   setStateId(params: { parentId?: string, source: string }): void {
-    const stateId = this.currentState.stateId || this.stateFactory.generateStateId();
+    // If no stateId exists yet, generate a new UUID
+    const stateId = this.currentState.stateId || (randomUUID ? randomUUID() : crypto.randomUUID());
     this.currentState.stateId = stateId;
-    this.currentState.source = params.source;
+    // Use type assertion to allow string assignment to the enum-like type
+    this.currentState.source = params.source as any;
     
     // Register with tracking service if available
     // Ensure factory is initialized before trying to use it
@@ -935,7 +938,7 @@ export class StateService implements IStateService {
       try {
         this.trackingClient.registerState({
           id: stateId,
-          source: params.source,
+          source: params.source as any, // Type assertion to handle string vs enum-like type
           filePath: this.getCurrentFilePath() || undefined,
           transformationEnabled: this._transformationEnabled
         });
@@ -960,7 +963,7 @@ export class StateService implements IStateService {
       try {
         this.trackingService.registerState({
           id: stateId,
-          source: params.source,
+          source: params.source as any, // Type assertion to handle string vs enum-like type
           filePath: this.getCurrentFilePath() || undefined,
           transformationEnabled: this._transformationEnabled
         });

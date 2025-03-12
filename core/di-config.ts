@@ -65,9 +65,23 @@ container.registerInstance('IServiceMediator', serviceMediator);
 
 // Create minimal instances of core services with circular dependencies
 const pathOps = new PathOperationsService();
-const fileSystemService = new FileSystemService(pathOps, serviceMediator);
-const pathService = new PathService(serviceMediator);
+const nodeFileSystem = new NodeFileSystem();
+const projectPathResolver = new ProjectPathResolver();
+
+// Create instances in the right order to resolve circular dependencies
+const pathService = new PathService(serviceMediator, projectPathResolver);
 const parserService = new ParserService();
+
+// Register PathServiceClientFactory first
+container.registerInstance('PathService', pathService);
+container.registerInstance('IPathService', pathService);
+
+// Create PathServiceClientFactory
+const pathServiceClientFactory = new PathServiceClientFactory(pathService);
+container.registerInstance('PathServiceClientFactory', pathServiceClientFactory);
+
+// Now create FileSystemService with all dependencies
+const fileSystemService = new FileSystemService(pathOps, serviceMediator, nodeFileSystem, pathServiceClientFactory);
 
 // Create StateService with early initialization
 // This is needed because ResolutionService depends on StateService

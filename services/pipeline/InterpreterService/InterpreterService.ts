@@ -55,7 +55,7 @@ export class InterpreterService implements IInterpreterService {
    * @param stateService - Service for managing and accessing state
    */
   constructor(
-    @inject(delay(() => 'IDirectiveService')) directiveService?: IDirectiveService,
+    @inject('IDirectiveService') directiveService?: IDirectiveService,
     @inject('IStateService') stateService?: IStateService
   ) {
     // Handle DI constructor injection

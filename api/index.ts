@@ -14,7 +14,6 @@ export * from '@services/fs/FileSystemService/FileSystemService.js';
 export * from '@services/fs/FileSystemService/PathOperationsService.js';
 export * from '@services/pipeline/OutputService/OutputService.js';
 export * from '@services/resolution/CircularityService/CircularityService.js';
-export * from '@services/mediator/ServiceMediator.js';
 
 // Core types and errors
 export * from '@core/types/index.js';
@@ -45,12 +44,19 @@ import { FileSystemService } from '@services/fs/FileSystemService/FileSystemServ
 import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService.js';
 import { OutputService } from '@services/pipeline/OutputService/OutputService.js';
 import { CircularityService } from '@services/resolution/CircularityService/CircularityService.js';
-import { ServiceMediator } from '@services/mediator/ServiceMediator.js';
 import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
 import { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
 import { StateDebuggerService } from '@tests/utils/debug/StateDebuggerService/StateDebuggerService.js';
 import { ProcessOptions, Services } from '@core/types/index.js';
 import type { IStateDebuggerService } from '@tests/utils/debug/StateDebuggerService/IStateDebuggerService.js';
+
+// Import service factory types
+import { PathServiceClientFactory } from '@services/fs/PathService/factories/PathServiceClientFactory.js';
+import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/factories/FileSystemServiceClientFactory.js';
+import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory.js';
+import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientFactory.js';
+import { StateServiceClientFactory } from '@services/state/StateService/factories/StateServiceClientFactory.js';
+import { StateTrackingServiceClientFactory } from '@services/state/StateTrackingService/factories/StateTrackingServiceClientFactory.js';
 
 // Import debug services
 import { StateTrackingService } from '@tests/utils/debug/StateTrackingService/StateTrackingService.js';
@@ -90,33 +96,34 @@ export function createDefaultServices(options: ProcessOptions): Services & Requi
     registerServiceInstance('NodeFileSystem', options.fs);
   }
   
-  // Resolve services from the container
-  const filesystem = resolveService('FileSystemService');
-  const path = resolveService('PathService');
-  const eventService = resolveService('StateEventService');
-  const state = resolveService('StateService');
-  const parser = resolveService('ParserService');
-  const resolution = resolveService('ResolutionService');
-  const validation = resolveService('ValidationService');
-  const circularity = resolveService('CircularityService');
-  const directive = resolveService('DirectiveService');
-  const interpreter = resolveService('InterpreterService');
-  const output = resolveService('OutputService');
+  // Resolve services from the container with proper type assertions
+  const filesystem = resolveService<FileSystemService>('FileSystemService');
+  const path = resolveService<PathService>('PathService');
+  const eventService = resolveService<StateEventService>('StateEventService');
+  const state = resolveService<StateService>('StateService');
+  const parser = resolveService<ParserService>('ParserService');
+  const resolution = resolveService<ResolutionService>('ResolutionService');
+  const validation = resolveService<ValidationService>('ValidationService');
+  const circularity = resolveService<CircularityService>('CircularityService');
+  const directive = resolveService<DirectiveService>('DirectiveService');
+  const interpreter = resolveService<InterpreterService>('InterpreterService');
+  const output = resolveService<OutputService>('OutputService');
   
   // Initialize special path variables
   state.setPathVar('PROJECTPATH', process.cwd());
   state.setPathVar('HOMEPATH', process.env.HOME || process.env.USERPROFILE || '/home');
 
   // Create debug service if requested
-  let debug = undefined;
+  let debug: StateDebuggerService | undefined = undefined;
   if (options.debug) {
     try {
       // Try to resolve from the container first
-      debug = resolveService('StateDebuggerService');
+      debug = resolveService<StateDebuggerService>('StateDebuggerService');
     } catch (e) {
       // If not available in container, create manually
       const debugService = new TestDebuggerService(state);
       debugService.initialize(state);
+      // Use unknown as an intermediate type for the conversion
       debug = debugService as unknown as StateDebuggerService;
     }
   }
@@ -162,18 +169,20 @@ export async function main(filePath: string, options: ProcessOptions = {}): Prom
 
   // Initialize service clients using factories
   try {
-    // Get factories from the container
-    const pathClientFactory = resolveService('PathServiceClientFactory');
-    const fileSystemClientFactory = resolveService('FileSystemServiceClientFactory');
-    const parserClientFactory = resolveService('ParserServiceClientFactory');
-    const resolutionClientFactory = resolveService('ResolutionServiceClientFactory');
-    const stateClientFactory = resolveService('StateServiceClientFactory');
+    // Get factories from the container with proper type assertions
+    const pathClientFactory = resolveService<PathServiceClientFactory>('PathServiceClientFactory');
+    const fileSystemClientFactory = resolveService<FileSystemServiceClientFactory>('FileSystemServiceClientFactory');
+    const parserClientFactory = resolveService<ParserServiceClientFactory>('ParserServiceClientFactory');
+    const resolutionClientFactory = resolveService<ResolutionServiceClientFactory>('ResolutionServiceClientFactory');
+    const stateClientFactory = resolveService<StateServiceClientFactory>('StateServiceClientFactory');
+    const stateTrackingClientFactory = resolveService<StateTrackingServiceClientFactory>('StateTrackingServiceClientFactory');
     
     // Create clients and connect services
     if (services.filesystem && fileSystemClientFactory) {
       try {
         const pathClient = pathClientFactory.createClient();
-        services.filesystem['pathClient'] = pathClient;
+        // Use type assertion for property assignment
+        (services.filesystem as any)['pathClient'] = pathClient;
         logger.debug('Successfully created PathServiceClient for FileSystemService');
       } catch (error) {
         logger.warn('Failed to create PathServiceClient for FileSystemService', { error });
@@ -183,7 +192,8 @@ export async function main(filePath: string, options: ProcessOptions = {}): Prom
     if (services.path && pathClientFactory) {
       try {
         const fileSystemClient = fileSystemClientFactory.createClient();
-        services.path['fileSystemClient'] = fileSystemClient;
+        // Use type assertion for property assignment
+        (services.path as any)['fileSystemClient'] = fileSystemClient;
         logger.debug('Successfully created FileSystemServiceClient for PathService');
       } catch (error) {
         logger.warn('Failed to create FileSystemServiceClient for PathService', { error });
@@ -193,7 +203,8 @@ export async function main(filePath: string, options: ProcessOptions = {}): Prom
     if (services.parser && parserClientFactory) {
       try {
         const resolutionClient = resolutionClientFactory.createClient();
-        services.parser['resolutionClient'] = resolutionClient;
+        // Use type assertion for property assignment
+        (services.parser as any)['resolutionClient'] = resolutionClient;
         logger.debug('Successfully created ResolutionServiceClient for ParserService');
       } catch (error) {
         logger.warn('Failed to create ResolutionServiceClient for ParserService', { error });
@@ -203,36 +214,26 @@ export async function main(filePath: string, options: ProcessOptions = {}): Prom
     if (services.resolution && resolutionClientFactory) {
       try {
         const parserClient = parserClientFactory.createClient();
-        services.resolution['parserClient'] = parserClient;
+        // Use type assertion for property assignment
+        (services.resolution as any)['parserClient'] = parserClient;
         logger.debug('Successfully created ParserServiceClient for ResolutionService');
       } catch (error) {
         logger.warn('Failed to create ParserServiceClient for ResolutionService', { error });
       }
     }
     
-    if (services.state && stateClientFactory) {
+    if (services.state && stateClientFactory && stateTrackingClientFactory) {
       try {
-        const stateTrackingClient = resolveService('StateTrackingServiceClientFactory').createClient();
-        services.state['stateTrackingClient'] = stateTrackingClient;
+        const stateTrackingClient = stateTrackingClientFactory.createClient();
+        // Use type assertion for property assignment - renamed from stateTrackingClient to trackingClient
+        (services.state as any)['trackingClient'] = stateTrackingClient;
         logger.debug('Successfully created StateTrackingServiceClient for StateService');
       } catch (error) {
         logger.warn('Failed to create StateTrackingServiceClient for StateService', { error });
       }
     }
   } catch (error) {
-    logger.warn('Failed to resolve one or more service factories, falling back to ServiceMediator', { error });
-  }
-
-  // For backward compatibility, also initialize the ServiceMediator
-  const mediator = resolveService('ServiceMediator');
-  if (services.path) mediator.setPathService(services.path);
-  if (services.filesystem) mediator.setFileSystemService(services.filesystem);
-  if (services.state) mediator.setStateService(services.state);
-  if (services.resolution) mediator.setResolutionService(services.resolution);
-
-  // Ensure FileSystemService has the mediator set for backward compatibility
-  if (services.filesystem && typeof services.filesystem.setMediator === 'function') {
-    services.filesystem.setMediator(mediator);
+    logger.warn('Failed to resolve one or more service factories', { error });
   }
 
   // Re-initialize directive and interpreter services to ensure they have the correct dependencies

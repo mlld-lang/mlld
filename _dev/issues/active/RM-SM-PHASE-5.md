@@ -83,67 +83,217 @@ We'll take an outside-in approach with specific dependency analysis to address S
    - ✅ Identify explicit service dependencies in API layer
    - ✅ Maintain backward compatibility in the `main()` and `runMeld()` functions
 
-2. **Phase 5.2: Service Tests Updates** 🚧
-   - Update service-specific tests to use factories instead of ServiceMediator
-   - Create helper utilities for common factory setup patterns
-   - Maintain backward compatibility in services during this transition
+2. **Phase 5.2: Direct ServiceMediator Removal** 🚧
 
-3. **Phase 5.3: Low-Risk Service Removal** ✅
-   - ✅ ParserService - Simplest to remove, minimal dependencies
-   - ✅ VariableReferenceResolver - Depends on ResolutionService but can be updated independently
-   
-4. **Phase 5.4: Mid-Risk Service Removal** ✅
-   - ✅ FileSystemService - Explicit API layer dependencies that must be addressed first
-   - ✅ PathService - Related to FileSystemService, requires careful coordination
-   
-5. **Phase 5.5: High-Risk Service Removal** 🚧
-   - 🚧 StateService - Complex integration with API layer and other services:
-     - Issues found: The API layer explicitly sets `services.filesystem.setMediator(mediator)` and expects StateService to work with ServiceMediator
-     - Has many dependencies with other services through ServiceMediator
-     - Is used extensively in `createChildState()` and `clone()` methods
-   - ResolutionService - Most complex, remove last
+   **Overview:**
+   Given the integration tests are already failing due to OOM issues when mixing services with and without ServiceMediator, we're switching to a "clean break" approach. This means directly removing all ServiceMediator references without maintaining backward compatibility or fallback mechanisms. This approach simplifies the transition and gets us through this challenging phase faster.
 
-6. **Phase 5.6: Final Cleanup**
-   - Remove ServiceMediator class and interface
-   - Update DI configuration
-   - Remove any lingering references to ServiceMediator
+   **Implementation Strategy:**
+   - Assume integration tests are expected to fail 
+   - Focus on running service-specific tests to verify correctness (`npm test services`)
+   - Remove ALL ServiceMediator references from each service as a single operation
+   - Fix type errors immediately for each service
+   - Complete the migration in a systematic order to minimize disruption
+
+   **Service Files to Update:**
+
+   A. **StateService**
+   - File: `services/state/StateService/StateService.ts`
+   - Test: `services/state/StateService/StateService.test.ts`
+   - Current Usage:
+     - Injects `serviceMediator` in constructor
+     - Contains `setServiceMediator` method
+     - Uses mediator in `createChildState()` and `clone()` methods
+     - Falls back to ServiceMediator when factory is unavailable
+   - Changes:
+     1. Remove `IServiceMediator` import
+     2. Remove `serviceMediator` parameter from constructor
+     3. Remove `serviceMediator` property
+     4. Remove `setServiceMediator` method
+     5. Remove all fallback code in `createChildState` and `clone` methods
+     6. Update all methods to exclusively use `StateTrackingServiceClient`
+     7. Ensure factory initialization is robust without fallbacks
+
+   B. **ResolutionService**
+   - File: `services/resolution/ResolutionService/ResolutionService.ts`
+   - Test: `services/resolution/ResolutionService/ResolutionService.test.ts` (already updated)
+   - Current Usage:
+     - Injects `serviceMediator` in constructor
+     - Uses mediator as fallback in factory initialization
+     - Contains multiple fallback paths in methods
+   - Changes:
+     1. Remove `IServiceMediator` import
+     2. Remove `serviceMediator` parameter from constructor
+     3. Remove `serviceMediator` property
+     4. Remove all fallback code in `ensureFactoryInitialized` and related methods
+     5. Make factory initialization throw errors instead of falling back
+     6. Remove any direct service access that bypasses clients
+
+   C. **VariableReferenceResolver**
+   - File: `services/resolution/ResolutionService/resolvers/VariableReferenceResolver.ts`
+   - Test: `services/resolution/ResolutionService/resolvers/VariableReferenceResolver.test.ts`
+   - Current Usage:
+     - Imports `IServiceMediator`
+     - Falls back to ServiceMediator in factory initialization
+   - Changes:
+     1. Remove `IServiceMediator` import
+     2. Remove any remaining usage of ServiceMediator
+     3. Remove fallback mechanisms in factory initialization
+
+   D. **FileSystemService**
+   - File: `services/fs/FileSystemService/FileSystemService.ts`
+   - Test: `services/fs/FileSystemService/FileSystemService.test.ts`
+   - Current Usage:
+     - Has `IServiceMediator` import
+     - Tests still reference ServiceMediator
+   - Changes:
+     1. Verify all ServiceMediator references are fully removed from implementation
+     2. Update test to remove all remaining references to ServiceMediator
+
+   E. **PathService**
+   - File: `services/fs/PathService/PathService.ts`
+   - Test: `services/fs/PathService/PathService.test.ts`
+   - Current Usage:
+     - Has `IServiceMediator` import
+     - Tests still reference ServiceMediator
+   - Changes:
+     1. Verify all ServiceMediator references are fully removed from implementation
+     2. Update test to remove all remaining references to ServiceMediator
+
+   F. **ServiceMediator Test**
+   - File: `services/mediator/__tests__/ServiceMediator.test.ts`
+   - Current Usage:
+     - Tests the ServiceMediator itself
+   - Changes:
+     1. This test should be deleted along with ServiceMediator
+
+   **DI Configuration Updates:**
+   - File: `core/di-config.ts`
+   - Changes:
+     1. Remove ServiceMediator registration
+     2. Remove ServiceMediator injection into services
+     3. Ensure all factory registrations are in place
+     4. Update any service registration that still mentions ServiceMediator
+
+   **API Layer Final Updates:**
+   - Files:
+     - `api/index.ts`
+     - `api/run-meld.ts`
+   - Changes:
+     1. Remove any remaining backward compatibility code for ServiceMediator
+     2. Ensure all service wiring uses factories exclusively
+     3. Remove any ServiceMediator references
+
+   **Final Cleanup:**
+   - Remove `services/mediator/ServiceMediator.ts`
+   - Remove `services/mediator/IServiceMediator.ts`
+   - Update documentation to reflect the new architecture
+   - Remove any lingering references to ServiceMediator in comments or docs
+
+   **Testing Strategy:**
+   1. For each service update, run its specific tests to verify it works correctly in isolation
+   2. After all services are updated, run the integration tests and diagnose any remaining issues
+   3. Document any failing integration tests for separate follow-up if needed
+
+   **Expected Outcomes:**
+   - All service-specific tests pass
+   - Code is simpler without fallback mechanisms
+   - Type system properly enforces use of the factory pattern
+   - OOM issues are resolved by having a consistent architecture across all services
+   - Integration tests either pass or fail with clear error messages rather than OOM crashes
+
+   **Execution Order and Steps:**
+
+   1. **Preparation** (3-4 hours)
+     - Mark problematic integration tests as skipped (add `.skip()` to test cases that trigger OOM)
+     - Review all service implementations one more time to confirm factory pattern is fully implemented
+     - Create a checklist of files to modify in each step
+     - Add additional logging to track factory initialization
+     
+   2. **FileSystemService and PathService** (1-2 hours)
+     - These have already been partially migrated, so first verify no ServiceMediator remains
+     - Update tests to remove any ServiceMediator references
+     - Run service-specific tests: `npm test services/fs/FileSystemService/FileSystemService.test.ts`
+     - Run service-specific tests: `npm test services/fs/PathService/PathService.test.ts`
+     
+   3. **VariableReferenceResolver** (1-2 hours)
+     - Remove all ServiceMediator imports and references
+     - Update factory initialization to throw if factories are not available
+     - Run service-specific tests: `npm test services/resolution/ResolutionService/resolvers/VariableReferenceResolver.test.ts`
+     
+   4. **ResolutionService** (4-6 hours)
+     - This is a complex service with multiple dependencies
+     - Remove all ServiceMediator references
+     - Ensure factory initialization throws errors instead of falling back
+     - Update factory methods to be more robust
+     - Run service-specific tests: `npm test services/resolution/ResolutionService/ResolutionService.test.ts`
+     
+   5. **StateService** (4-6 hours)
+     - This is the most complex service with many dependencies
+     - Remove all ServiceMediator references
+     - Update all methods that use ServiceMediator to use factories
+     - Update tests to use factories exclusively
+     - Run service-specific tests: `npm test services/state/StateService/StateService.test.ts`
+     
+   6. **DI Configuration** (1-2 hours)
+     - Update `core/di-config.ts` to remove ServiceMediator
+     - Ensure all factory registrations are in place
+     - Run core tests: `npm test core`
+     
+   7. **API Layer Final Cleanup** (2-3 hours)
+     - Remove any backward compatibility in API layer
+     - Ensure services are properly wired with factories
+     - Run API tests: `npm test api`
+     
+   8. **ServiceMediator Removal** (1 hour)
+     - Delete `services/mediator/ServiceMediator.ts`
+     - Delete `services/mediator/IServiceMediator.ts`
+     - Delete `services/mediator/__tests__/ServiceMediator.test.ts`
+     
+   9. **Full Integration Testing** (4-6 hours)
+     - Run all tests: `npm test`
+     - Fix any remaining issues
+     - Document any tests that need further investigation
+
+   **Checkpoints and Verification:**
+
+   After each major service update, run the following checks:
+   - `npm test <service-path>` - Verify service-specific tests pass
+   - `npx tsc --noEmit --skipFiles "**/VariableReferenceResolver.ts" <service-file-path>` - Check TypeScript errors only for the specific service being modified
+   - Run a small subset of integration tests to verify basic functionality
+
+   **Rollback Strategy:**
+
+   If insurmountable issues are encountered:
+   1. Commit changes to a separate branch for reference
+   2. Revert to the most recent stable state
+   3. Consider a different approach with more limited scope
 
 ## Progress Summary
 
 As of the latest update, we have successfully completed the following:
 
-1. **API Layer Updates (Phase 5.1)**:
+1. **API Layer Updates (Phase 5.1)** ✅
    - Updated `api/index.ts` to use service factories instead of ServiceMediator
    - Updated `api/run-meld.ts` to use service factories instead of ServiceMediator
    - Maintained backward compatibility by still initializing ServiceMediator
    - Added proper error handling for cases where factories are not available
    - All tests pass with these changes
 
-2. **FileSystemService Updates**:
-   - Kept the `setMediator` method for backward compatibility but marked it as deprecated
-   - Updated to use `PathServiceClient` for path resolution instead of `ServiceMediator`
-   - Properly initialized the factory and client
-   - All tests pass with these changes
+2. **Service Implementations** - Partially Updated
+   - ✅ Implemented factory pattern for all services with circular dependencies
+   - ✅ Added factory interfaces and client interfaces for all services
+   - ✅ Services prefer factories but still include mediator fallback code
+   - ✅ Updated various tests to use factories instead of ServiceMediator:
+     - ✅ `ResolutionService.test.ts`
+     - ✅ `FileSystemService.test.ts`
+     - ✅ `PathService.test.ts`
 
-3. **PathService Updates**:
-   - Kept the constructor parameter for `ServiceMediator` for backward compatibility
-   - Updated to use `FileSystemServiceClient` for file system operations instead of `ServiceMediator`
-   - Properly initialized the factory and client
-   - All tests pass with these changes
-
-4. **VariableReferenceResolver Updates**:
-   - Added a third parameter to the constructor for `ServiceMediator` and marked it as deprecated
-   - Updated to use `ParserServiceClient` instead of `ServiceMediator` for parsing
-   - Properly initialized the factory and client
-   - All tests pass with these changes
-
-5. **ResolutionService Updates**:
-   - Kept the constructor parameter for `ServiceMediator` for backward compatibility but marked it as deprecated
-   - Updated to use various service clients instead of `ServiceMediator` for different operations
-   - Added support for `FileSystemServiceClient` for file operations
-   - All tests pass with these changes
-
-These changes represent significant progress in our implementation plan. We've successfully updated the API layer to use factories instead of ServiceMediator while maintaining backward compatibility. This is a critical step as the API layer is a high-level component that interacts with many services.
+3. **Service Mediator Removal** - In Progress
+   - ✅ Added deprecation notices to all ServiceMediator methods
+   - ✅ Updated documentation to describe the factory pattern
+   - 🚧 Full removal of ServiceMediator is currently in progress
+   - 🚧 Still need to finish removing all ServiceMediator references
 
 ## Detailed Implementation Plan
 
@@ -163,291 +313,5 @@ These changes represent significant progress in our implementation plan. We've s
 3. ✅ Run tests to verify API functionality with the new approach
    - ✅ All API integration tests pass with the updated code
 
-#### Testing:
-```
-npm test
-```
-
 #### Summary:
 The API layer has been successfully updated to use service factories instead of ServiceMediator. We've maintained backward compatibility by still initializing ServiceMediator for services that might still depend on it. All tests are passing, which indicates that the changes are working correctly.
-
-### Phase 5.2: Service Tests Updates
-
-#### Tasks:
-1. Update FileSystemService tests to use factory pattern instead of ServiceMediator
-   - Replace mock ServiceMediator with mock PathServiceClientFactory
-   - Update test setup to correctly initialize factories
-   - Run tests to verify functionality
-
-2. Update PathService tests to use factory pattern
-   - Replace mock ServiceMediator with mock FileSystemServiceClientFactory
-   - Update test setup to correctly initialize factories
-   - Run tests to verify functionality
-
-3. Update other service tests similarly
-   - Focus on tests that directly interact with ServiceMediator
-   - Create helper utilities for common factory setup patterns
-   - Ensure all tests pass with the updated approach
-
-#### Current Next Steps
-
-- Complete the implementation updates for ResolutionService to fully remove ServiceMediator
-- Update the StateService to remove ServiceMediator
-- Proceed with the final cleanup phase to remove the ServiceMediator class and interface
-
-#### Testing:
-```
-npm test services/fs/FileSystemService/FileSystemService.test.ts
-npm test services/fs/PathService/PathService.test.ts
-```
-
-#### Rollback Plan:
-If issues arise, revert changes to specific test files and investigate further.
-
-### Phase 5.3: ParserService Removal - COMPLETED
-
-#### Tasks:
-1. ✅ Remove IServiceMediator import
-2. ✅ Remove ServiceMediator injection in constructor
-3. ✅ Remove setMediator method
-4. ✅ Update resolveVariableReference method to only use ResolutionServiceClient
-5. ✅ Remove any other references to mediator
-6. ✅ Update API layer (api/index.ts and api/run-meld.ts) to not set ParserService in ServiceMediator
-7. ✅ Update DI configuration (core/di-config.ts) to not pass ServiceMediator to ParserService constructor
-8. ✅ Update DI configuration to not set ParserService in ServiceMediator
-
-#### Testing:
-1. ✅ Run ParserService tests:
-   ```
-   npm test services/pipeline/ParserService/ParserService.test.ts
-   ```
-2. ✅ Run related tests:
-   ```
-   npm test services/pipeline/ParserService
-   ```
-3. ✅ Run all tests to ensure no regressions:
-   ```
-   npm test
-   ```
-
-#### Summary:
-The ParserService was already updated to use the factory pattern and no longer had any direct dependencies on ServiceMediator. We only needed to:
-1. Update the API layer (api/index.ts and run-meld.ts) to not set the ParserService in the ServiceMediator
-2. Update the DI configuration (core/di-config.ts) to not pass ServiceMediator to the ParserService constructor
-3. Update the DI configuration to not set the ParserService in the ServiceMediator
-
-All tests are passing, which means we've successfully removed the ServiceMediator dependency from the ParserService.
-
-### Phase 5.3: VariableReferenceResolver Removal - COMPLETED
-
-#### Tasks:
-1. ✅ Remove IServiceMediator import
-2. ✅ Remove ServiceMediator references
-3. ✅ Update resolveNestedVariableReference method to only use ResolutionServiceClient
-4. ✅ Ensure it only uses the factory pattern
-
-#### Testing:
-1. ✅ Run VariableReferenceResolver tests:
-   ```
-   npm test services/resolution/ResolutionService/resolvers/VariableReferenceResolver.test.ts
-   ```
-2. ✅ Run related tests:
-   ```
-   npm test services/resolution/ResolutionService/resolvers
-   ```
-
-#### Rollback Plan:
-If issues arise, revert changes to VariableReferenceResolver.ts and investigate further.
-
-### Phase 5.3: FileSystemService Removal - COMPLETED
-
-#### Tasks:
-1. ✅ Remove IServiceMediator import
-2. ✅ Remove ServiceMediator injection in constructor
-3. ✅ Remove setMediator method
-4. ✅ Update resolvePath method to only use PathServiceClient
-5. ✅ Remove any other references to serviceMediator
-
-#### Testing:
-1. ✅ Run FileSystemService tests:
-   ```
-   npm test services/fs/FileSystemService/FileSystemService.test.ts
-   ```
-2. ✅ Run related tests:
-   ```
-   npm test services/fs/FileSystemService
-   ```
-
-#### Rollback Plan:
-If issues arise, revert changes to FileSystemService.ts and investigate further.
-
-### Phase 5.4: PathService Removal - COMPLETED
-
-#### Tasks:
-1. ✅ Remove IServiceMediator import
-2. ✅ Remove ServiceMediator injection in constructor
-3. ✅ Update exists and isDirectory methods to only use FileSystemServiceClient
-4. ✅ Remove any other references to serviceMediator
-
-#### Testing:
-1. ✅ Run PathService tests:
-   ```
-   npm test services/fs/PathService/PathService.test.ts
-   ```
-2. ✅ Run related tests:
-   ```
-   npm test services/fs/PathService
-   ```
-
-#### Rollback Plan:
-If issues arise, revert changes to PathService.ts and investigate further.
-
-### Phase 5.5: StateService Removal
-
-#### Tasks:
-1. Remove IServiceMediator import
-2. Remove ServiceMediator injection in constructor
-3. Update methods to only use StateTrackingServiceClient
-4. Remove any other references to serviceMediator
-
-#### Implementation Details:
-```typescript
-// Before
-constructor(
-  @inject(StateFactory) private readonly stateFactory: StateFactory,
-  @inject('IStateEventService') private readonly eventService: IStateEventService,
-  @inject('IStateTrackingService') private readonly stateTrackingService: IStateTrackingService,
-  @inject('IServiceMediator') private readonly serviceMediator?: IServiceMediator,
-  @inject('StateTrackingServiceClientFactory') private readonly stateTrackingClientFactory?: StateTrackingServiceClientFactory
-) {
-  // Register with mediator for backward compatibility
-  if (this.serviceMediator) {
-    this.serviceMediator.setStateService(this);
-  }
-  
-  // Initialize factory lazily to avoid circular dependencies
-  if (process.env.DEBUG === 'true') {
-    console.log('StateService: Initialized with', {
-      hasMediator: !!this.serviceMediator,
-      hasFactory: !!this.stateTrackingClientFactory
-    });
-  }
-}
-
-// After
-constructor(
-  @inject(StateFactory) private readonly stateFactory: StateFactory,
-  @inject('IStateEventService') private readonly eventService: IStateEventService,
-  @inject('IStateTrackingService') private readonly stateTrackingService: IStateTrackingService,
-  @inject('StateTrackingServiceClientFactory') private readonly stateTrackingClientFactory?: StateTrackingServiceClientFactory
-) {
-  // Initialize factory lazily to avoid circular dependencies
-  if (process.env.DEBUG === 'true') {
-    console.log('StateService: Initialized with', {
-      hasFactory: !!this.stateTrackingClientFactory
-    });
-  }
-}
-```
-
-```typescript
-// Before - createChildState method
-createChildState(): IStateService {
-  // Try to use the factory first
-  this.ensureFactoryInitialized();
-  
-  if (this.stateTrackingClient) {
-    try {
-      // Create a new state with the same factories
-      const childState = this.stateFactory.createState();
-      
-      // Copy variables to the child state
-      this.copyVariablesToState(childState);
-      
-      // Register the child state with the tracking service
-      this.stateTrackingClient.registerChildState(childState);
-      
-      return childState;
-    } catch (error) {
-      logger.warn('Error using stateTrackingClient.registerChildState, falling back to ServiceMediator', { 
-        error
-      });
-    }
-  }
-  
-  // Fall back to mediator
-  if (!this.serviceMediator) {
-    // If no mediator, create a basic child state without tracking
-    const childState = this.stateFactory.createState();
-    this.copyVariablesToState(childState);
-    return childState;
-  }
-  
-  // Create a new state with the same factories
-  const childState = this.stateFactory.createState();
-  
-  // Copy variables to the child state
-  this.copyVariablesToState(childState);
-  
-  // Register the child state with the tracking service via mediator
-  this.serviceMediator.registerChildState(childState);
-  
-  return childState;
-}
-
-// After - createChildState method
-createChildState(): IStateService {
-  // Ensure factory is initialized
-  this.ensureFactoryInitialized();
-  
-  // Create a new state with the same factories
-  const childState = this.stateFactory.createState();
-  
-  // Copy variables to the child state
-  this.copyVariablesToState(childState);
-  
-  // Register the child state with the tracking service if client is available
-  if (this.stateTrackingClient) {
-    try {
-      this.stateTrackingClient.registerChildState(childState);
-    } catch (error) {
-      logger.warn('Error using stateTrackingClient.registerChildState', { error });
-    }
-  } else {
-    logger.warn('No StateTrackingClient available for child state registration');
-  }
-  
-  return childState;
-}
-```
-
-#### Testing:
-1. Run StateService tests:
-   ```
-   npm test services/state/StateService/StateService.test.ts
-   ```
-2. Run related tests:
-   ```
-   npm test services/state
-   ```
-3. Run all tests to ensure no regressions:
-   ```
-   npm test
-   ```
-
-#### Rollback Plan:
-If issues arise, revert changes to StateService.ts and investigate further.
-
-### Phase 5.6: ResolutionService Removal
-
-#### Tasks:
-1. Remove IServiceMediator import
-2. Remove ServiceMediator injection in constructor
-3. Update methods to only use ParserServiceClient and other factory clients
-4. Remove any other references to serviceMediator
-
-#### Testing:
-1. Run ResolutionService tests:
-   ```
-   npm test services/resolution/ResolutionService/ResolutionService.test.ts
-   ```

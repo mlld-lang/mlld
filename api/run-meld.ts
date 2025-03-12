@@ -8,6 +8,14 @@ import { validateServicePipeline } from '@core/utils/serviceValidation.js';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem.js';
 import { resolveService } from '@core/ServiceProvider';
 
+// Import service factory types
+import { PathServiceClientFactory } from '@services/fs/PathService/factories/PathServiceClientFactory.js';
+import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/factories/FileSystemServiceClientFactory.js';
+import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory.js';
+import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientFactory.js';
+import { StateServiceClientFactory } from '@services/state/StateService/factories/StateServiceClientFactory.js';
+import { StateTrackingServiceClientFactory } from '@services/state/StateTrackingService/factories/StateTrackingServiceClientFactory.js';
+
 // Export the MemoryFileSystem for users who want to use it
 export { MemoryFileSystem };
 
@@ -69,84 +77,74 @@ export async function runMeld(
   validateServicePipeline(services);
 
   // Try to get factories from the container
-  let pathClientFactory;
-  let fileSystemClientFactory;
-  let parserClientFactory;
-  let resolutionClientFactory;
-  let stateClientFactory;
-  let stateTrackingClientFactory;
+  let pathClientFactory: PathServiceClientFactory | undefined;
+  let fileSystemClientFactory: FileSystemServiceClientFactory | undefined;
+  let parserClientFactory: ParserServiceClientFactory | undefined;
+  let resolutionClientFactory: ResolutionServiceClientFactory | undefined;
+  let stateClientFactory: StateServiceClientFactory | undefined;
+  let stateTrackingClientFactory: StateTrackingServiceClientFactory | undefined;
   
   try {
-    // Get factories from the container
-    pathClientFactory = resolveService('PathServiceClientFactory');
-    fileSystemClientFactory = resolveService('FileSystemServiceClientFactory');
-    parserClientFactory = resolveService('ParserServiceClientFactory');
-    resolutionClientFactory = resolveService('ResolutionServiceClientFactory');
-    stateClientFactory = resolveService('StateServiceClientFactory');
-    stateTrackingClientFactory = resolveService('StateTrackingServiceClientFactory');
+    // Get factories from the container with proper type assertions
+    pathClientFactory = resolveService<PathServiceClientFactory>('PathServiceClientFactory');
+    fileSystemClientFactory = resolveService<FileSystemServiceClientFactory>('FileSystemServiceClientFactory');
+    parserClientFactory = resolveService<ParserServiceClientFactory>('ParserServiceClientFactory');
+    resolutionClientFactory = resolveService<ResolutionServiceClientFactory>('ResolutionServiceClientFactory');
+    stateClientFactory = resolveService<StateServiceClientFactory>('StateServiceClientFactory');
+    stateTrackingClientFactory = resolveService<StateTrackingServiceClientFactory>('StateTrackingServiceClientFactory');
     
     // Create clients and connect services
-    if (services.filesystem && fileSystemClientFactory) {
+    if (services.filesystem && fileSystemClientFactory && pathClientFactory) {
       try {
         const pathClient = pathClientFactory.createClient();
-        services.filesystem['pathClient'] = pathClient;
+        // Use type assertion for property assignment
+        (services.filesystem as any)['pathClient'] = pathClient;
       } catch (error) {
         console.warn('Failed to create PathServiceClient for FileSystemService', error);
       }
     }
     
-    if (services.path && pathClientFactory) {
+    if (services.path && pathClientFactory && fileSystemClientFactory) {
       try {
         const fileSystemClient = fileSystemClientFactory.createClient();
-        services.path['fileSystemClient'] = fileSystemClient;
+        // Use type assertion for property assignment
+        (services.path as any)['fileSystemClient'] = fileSystemClient;
       } catch (error) {
         console.warn('Failed to create FileSystemServiceClient for PathService', error);
       }
     }
     
-    if (services.parser && parserClientFactory) {
+    if (services.parser && parserClientFactory && resolutionClientFactory) {
       try {
         const resolutionClient = resolutionClientFactory.createClient();
-        services.parser['resolutionClient'] = resolutionClient;
+        // Use type assertion for property assignment
+        (services.parser as any)['resolutionClient'] = resolutionClient;
       } catch (error) {
         console.warn('Failed to create ResolutionServiceClient for ParserService', error);
       }
     }
     
-    if (services.resolution && resolutionClientFactory) {
+    if (services.resolution && resolutionClientFactory && parserClientFactory) {
       try {
         const parserClient = parserClientFactory.createClient();
-        services.resolution['parserClient'] = parserClient;
+        // Use type assertion for property assignment
+        (services.resolution as any)['parserClient'] = parserClient;
       } catch (error) {
         console.warn('Failed to create ParserServiceClient for ResolutionService', error);
       }
     }
     
-    if (services.state && stateClientFactory) {
+    if (services.state && stateClientFactory && stateTrackingClientFactory) {
       try {
         const stateTrackingClient = stateTrackingClientFactory.createClient();
-        services.state['stateTrackingClient'] = stateTrackingClient;
+        // Use type assertion for property assignment - renamed from stateTrackingClient to trackingClient
+        (services.state as any)['trackingClient'] = stateTrackingClient;
       } catch (error) {
         console.warn('Failed to create StateTrackingServiceClient for StateService', error);
       }
     }
   } catch (error) {
-    console.warn('Failed to resolve one or more service factories, falling back to ServiceMediator', error);
-  }
-
-  // For backward compatibility, also initialize the ServiceMediator
-  // Get the mediator from the filesystem service or resolve it from the container
-  const mediator = services.filesystem['serviceMediator'] || resolveService('ServiceMediator');
-  if (mediator) {
-    if (services.path) mediator.setPathService(services.path);
-    if (services.filesystem) mediator.setFileSystemService(services.filesystem);
-    if (services.state) mediator.setStateService(services.state);
-    if (services.resolution) mediator.setResolutionService(services.resolution);
-    
-    // Ensure FileSystemService has the mediator set for backward compatibility
-    if (services.filesystem && typeof services.filesystem.setMediator === 'function') {
-      services.filesystem.setMediator(mediator);
-    }
+    console.warn('Failed to resolve one or more service factories', error);
   }
 
   // Re-initialize directive and interpreter services to ensure they have the correct dependencies

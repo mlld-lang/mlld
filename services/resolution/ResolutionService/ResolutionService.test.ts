@@ -126,9 +126,7 @@ describe('ResolutionService', () => {
     
     mockFileSystemClient = {
       exists: vi.fn().mockResolvedValue(true),
-      readFile: vi.fn().mockResolvedValue('file content'),
-      isDirectory: vi.fn().mockResolvedValue(false),
-      readDirectory: vi.fn().mockResolvedValue([])
+      isDirectory: vi.fn().mockResolvedValue(false)
     } as unknown as IFileSystemServiceClient;
     
     // Create mock factories
@@ -354,28 +352,20 @@ describe('ResolutionService', () => {
   describe('resolveContent', () => {
     it('should read file content', async () => {
       vi.mocked(mockFileSystemClient.exists).mockResolvedValue(true);
-      vi.mocked(mockFileSystemClient.readFile).mockResolvedValue('file content');
       
-      // Spy on the fileSystemService.readFile method as a fallback
+      // Spy on the fileSystemService.readFile method
       const fileSystemReadFileSpy = vi.spyOn(fileSystemService, 'readFile');
-      fileSystemReadFileSpy.mockResolvedValue('file content from fs service');
+      fileSystemReadFileSpy.mockResolvedValue('file content');
 
       const result = await service.resolveFile('/path/to/file');
       
-      // The test should pass regardless of which implementation is used
-      if (result === 'file content') {
-        expect(result).toBe('file content');
-        expect(mockFileSystemClient.readFile).toHaveBeenCalledWith('/path/to/file');
-      } else {
-        expect(result).toBe('file content from fs service');
-        expect(fileSystemReadFileSpy).toHaveBeenCalledWith('/path/to/file');
-      }
+      expect(result).toBe('file content');
+      expect(fileSystemReadFileSpy).toHaveBeenCalledWith('/path/to/file');
     });
 
     it('should throw when file does not exist', async () => {
       // Mock both the client and service to ensure the test passes
       vi.mocked(mockFileSystemClient.exists).mockResolvedValue(false);
-      vi.mocked(mockFileSystemClient.readFile).mockRejectedValue(new Error('File not found'));
       
       // Also mock the fileSystemService for fallback
       vi.spyOn(fileSystemService, 'exists').mockResolvedValue(false);

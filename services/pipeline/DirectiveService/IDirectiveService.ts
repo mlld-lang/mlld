@@ -21,6 +21,8 @@ export interface DirectiveContext {
   state: IStateService;
   /** Working directory for command execution */
   workingDirectory?: string;
+  /** Resolution context for variable resolution */
+  resolutionContext?: any;
 }
 
 /**

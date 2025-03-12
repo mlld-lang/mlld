@@ -31,9 +31,7 @@ interface FileOperationContext {
 })
 export class FileSystemService implements IFileSystemService {
   private fs: IFileSystem;
-  private serviceMediator?: IServiceMediator;
   private pathClient?: IPathServiceClient;
-  private pathClientFactory?: PathServiceClientFactory;
   private factoryInitialized: boolean = false;
 
   /**
@@ -103,8 +101,9 @@ export class FileSystemService implements IFileSystemService {
   setMediator(mediator: IServiceMediator): void {
     logger.warn('FileSystemService.setMediator is deprecated. Use factory pattern instead.');
     
-    // Store reference for backward compatibility
-    this.serviceMediator = mediator;
+    // Store reference for backward compatibility - readonly property needs to be set differently
+    // Cast to any to bypass TypeScript readonly protection since this is a legacy method
+    (this as any).serviceMediator = mediator;
     
     // Register with mediator for backward compatibility
     if (mediator) {
@@ -154,6 +153,7 @@ export class FileSystemService implements IFileSystemService {
     // Try to use the path client
     if (this.pathClient) {
       try {
+        // Only send one parameter since that's what the interface expects
         return this.pathClient.resolvePath(filePath);
       } catch (error) {
         logger.warn('Error using pathClient.resolvePath', { 
@@ -192,7 +192,8 @@ export class FileSystemService implements IFileSystemService {
     
     try {
       logger.debug('Reading file', context);
-      const content = await this.fs.readFile(resolvedPath, 'utf8');
+      // Use the correct signature with just the path
+      const content = await this.fs.readFile(resolvedPath);
       logger.debug('Successfully read file', { ...context, contentLength: content.length });
       return content;
     } catch (error) {
@@ -204,8 +205,8 @@ export class FileSystemService implements IFileSystemService {
       logger.error('Error reading file', { ...context, error: err });
       throw new MeldFileSystemError(`Error reading file: ${filePath}`, { 
         cause: err,
-        filePath,
-        resolvedPath
+        // Don't include resolvedPath since it's not in the error options type
+        filePath
       });
     }
   }

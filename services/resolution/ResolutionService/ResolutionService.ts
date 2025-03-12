@@ -348,11 +348,22 @@ export class ResolutionService implements IResolutionService {
    */
   private createDefaultFileSystemService(): IFileSystemService {
     logger.warn('Using default FileSystemService - this should only happen in tests');
+    // Use unknown as an intermediate cast to avoid strict type checking
     return {
-      readFile: async () => '',
-      exists: async () => false,
-      // Minimal implementation for fallback
-    } as IFileSystemService;
+      readFile: async (): Promise<string> => '',
+      exists: async (): Promise<boolean> => false,
+      writeFile: async (): Promise<void> => {},
+      stat: async (): Promise<any> => ({ isDirectory: () => false }),
+      isFile: async (): Promise<boolean> => false,
+      readDir: async (): Promise<string[]> => [],
+      ensureDir: async (): Promise<void> => {},
+      isDirectory: async (): Promise<boolean> => false,
+      getCwd: (): string => '',
+      dirname: (filePath: string): string => '',
+      watch: (): any => ({ [Symbol.asyncIterator]: () => ({ next: async () => ({ done: true, value: undefined }) }) }),
+      executeCommand: async (): Promise<any> => ({ stdout: '', stderr: '' }),
+      mkdir: async (): Promise<void> => {},
+    } as unknown as IFileSystemService;
   }
   
   /**
@@ -361,12 +372,23 @@ export class ResolutionService implements IResolutionService {
    */
   private createDefaultPathService(): IPathService {
     logger.warn('Using default PathService - this should only happen in tests');
+    // Use unknown as an intermediate cast to avoid strict type checking
     return {
-      validatePath: async (path) => path,
-      resolvePath: (path) => path,
-      normalizePath: (path) => path,
+      validatePath: async (path: string | StructuredPath): Promise<string | StructuredPath> => path,
+      resolvePath: (path: string | StructuredPath): string | StructuredPath => path,
+      normalizePath: (path: string): string => path,
+      initialize: (): void => {},
+      enableTestMode: (): void => {},
+      disableTestMode: (): void => {},
+      isTestMode: (): boolean => false,
+      setTestMode: (): void => {},
+      getHomePath: (): string => '',
+      getProjectPath: (): string => '',
+      setProjectPath: (): void => {},
+      dirname: (): string => '',
+      isAbsolute: (): boolean => false,
       // Minimal implementation for fallback
-    } as IPathService;
+    } as unknown as IPathService;
   }
   
   /**
@@ -475,16 +497,23 @@ export class ResolutionService implements IResolutionService {
       // Try to use the file system client if available
       if (this.fsClient) {
         try {
-          return await this.fsClient.readFile(path);
+          // The IFileSystemServiceClient interface doesn't include readFile
+          // so we need to directly use the fileSystemService instead
+          return await this.fileSystemService.readFile(path);
         } catch (error) {
-          logger.warn('Error using fsClient.readFile, falling back to fileSystemService', { error, path });
+          logger.warn('Error reading file with fileSystemService', { 
+            error: error instanceof Error ? error.message : 'Unknown error', 
+            path 
+          });
         }
       }
       
       // Fall back to direct file system service
       return await this.fileSystemService.readFile(path);
     } catch (error) {
-      throw new MeldFileNotFoundError(`Failed to read file: ${path}`, { cause: error });
+      throw new MeldFileNotFoundError(`Failed to read file: ${path}`, { 
+        cause: error instanceof Error ? error : new Error(String(error)) 
+      });
     }
   }
 
