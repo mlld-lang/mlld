@@ -759,11 +759,41 @@ export class TestContextDI extends TestContext {
       })
     };
     
+    // Register StateServiceClientFactory mock
+    const mockStateServiceClientFactory = {
+      createClient: vi.fn().mockImplementation(() => {
+        const mockStateServiceClient = {
+          getStateId: vi.fn().mockImplementation(() => 'test-state-id'),
+          getCurrentFilePath: vi.fn().mockImplementation(() => '/test/file.meld'),
+          getAllTextVars: vi.fn().mockImplementation(() => new Map()),
+          getAllDataVars: vi.fn().mockImplementation(() => new Map()),
+          getAllPathVars: vi.fn().mockImplementation(() => new Map()),
+          getAllCommands: vi.fn().mockImplementation(() => new Map()),
+          isTransformationEnabled: vi.fn().mockImplementation(() => false)
+        };
+        return mockStateServiceClient;
+      })
+    };
+    
+    // Register StateTrackingServiceClientFactory mock
+    const mockStateTrackingServiceClientFactory = {
+      createClient: vi.fn().mockImplementation(() => {
+        const mockStateTrackingServiceClient = {
+          registerState: vi.fn(),
+          addRelationship: vi.fn(),
+          registerRelationship: vi.fn()
+        };
+        return mockStateTrackingServiceClient;
+      })
+    };
+    
     this.container.registerMock('PathServiceClientFactory', mockPathServiceClientFactory);
     this.container.registerMock('FileSystemServiceClientFactory', mockFileSystemServiceClientFactory);
     this.container.registerMock('VariableReferenceResolverClientFactory', mockVariableReferenceResolverClientFactory);
     this.container.registerMock('DirectiveServiceClientFactory', mockDirectiveServiceClientFactory);
     this.container.registerMock('ResolutionServiceClientForDirectiveFactory', mockResolutionServiceClientForDirectiveFactory);
+    this.container.registerMock('StateServiceClientFactory', mockStateServiceClientFactory);
+    this.container.registerMock('StateTrackingServiceClientFactory', mockStateTrackingServiceClientFactory);
   }
   
   /**

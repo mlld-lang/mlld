@@ -11,6 +11,9 @@ import { IServiceMediator } from './IServiceMediator.js';
  * ServiceMediator acts as a central point for breaking circular dependencies between services.
  * It stores references to services and provides methods to interact with them,
  * allowing services to communicate without directly depending on each other.
+ * 
+ * @deprecated This class is deprecated and will be removed in a future version.
+ * Use the Factory Pattern instead for circular dependency resolution.
  */
 @singleton()
 @Service({
@@ -74,6 +77,9 @@ export class ServiceMediator implements IServiceMediator {
   /**
    * Resolves a variable in a given context using the resolution service
    * This method is used by the parser service to resolve variables during transformation
+   * 
+   * @deprecated This method is deprecated and will be removed in a future version.
+   * Use ParserServiceClientFactory and ResolutionServiceClientFactory instead.
    */
   async resolveVariableForParser(variable: string, context: ResolutionContext): Promise<string> {
     if (!this.resolutionService) {
@@ -95,6 +101,9 @@ export class ServiceMediator implements IServiceMediator {
   /**
    * Resolves field access for complex variables 
    * This method is used to access fields within data variables
+   * 
+   * @deprecated This method is deprecated and will be removed in a future version.
+   * Use ParserServiceClientFactory and ResolutionServiceClientFactory instead.
    */
   async resolveFieldAccess(variable: string, field: string, context: ResolutionContext): Promise<unknown> {
     if (!this.resolutionService) {
@@ -126,6 +135,9 @@ export class ServiceMediator implements IServiceMediator {
   /**
    * Debug helper for field access problems
    * This helps diagnose issues with field access in tests
+   * 
+   * @deprecated This method is deprecated and will be removed in a future version.
+   * Use ParserServiceClientFactory and ResolutionServiceClientFactory instead.
    */
   debugFieldAccess(variable: string, context: ResolutionContext): unknown {
     if (!this.stateService) {
@@ -147,6 +159,9 @@ export class ServiceMediator implements IServiceMediator {
   /**
    * Parses content for resolution using the parser service
    * This is used by resolution service when parsing variable references
+   * 
+   * @deprecated This method is deprecated and will be removed in a future version.
+   * Use ParserServiceClientFactory and ResolutionServiceClientFactory instead.
    */
   async parseForResolution(content: string, filePath?: string): Promise<any[]> {
     if (!this.parserService) {
@@ -161,6 +176,9 @@ export class ServiceMediator implements IServiceMediator {
   /**
    * Parses content with location information using the parser service
    * This is used by resolution service when source mapping is important
+   * 
+   * @deprecated This method is deprecated and will be removed in a future version.
+   * Use ParserServiceClientFactory and ResolutionServiceClientFactory instead.
    */
   async parseWithLocationsForResolution(content: string, filePath?: string): Promise<any[]> {
     if (!this.parserService) {
@@ -174,6 +192,9 @@ export class ServiceMediator implements IServiceMediator {
   /**
    * Resolves a path using the path service
    * This is used by filesystem service to resolve paths
+   * 
+   * @deprecated This method is deprecated and will be removed in a future version.
+   * Use PathServiceClientFactory and FileSystemServiceClientFactory instead.
    */
   resolvePath(path: string): string {
     if (!this.pathService) {
@@ -185,6 +206,9 @@ export class ServiceMediator implements IServiceMediator {
   /**
    * Normalizes a path using the path service
    * This method is used by the filesystem service for path normalization
+   * 
+   * @deprecated This method is deprecated and will be removed in a future version.
+   * Use PathServiceClientFactory and FileSystemServiceClientFactory instead.
    */
   normalizePath(path: string): string {
     if (!this.pathService) {
@@ -197,6 +221,9 @@ export class ServiceMediator implements IServiceMediator {
   /**
    * Checks if a path is a directory using the filesystem service
    * This method is used by the path service to verify paths
+   * 
+   * @deprecated This method is deprecated and will be removed in a future version.
+   * Use PathServiceClientFactory and FileSystemServiceClientFactory instead.
    */
   async isDirectory(path: string): Promise<boolean> {
     if (!this.fileSystemService) {
@@ -208,6 +235,9 @@ export class ServiceMediator implements IServiceMediator {
   /**
    * Checks if a path exists using the filesystem service
    * This method is used by the path service to verify paths
+   * 
+   * @deprecated This method is deprecated and will be removed in a future version.
+   * Use PathServiceClientFactory and FileSystemServiceClientFactory instead.
    */
   async exists(path: string): Promise<boolean> {
     if (!this.fileSystemService) {
@@ -221,6 +251,9 @@ export class ServiceMediator implements IServiceMediator {
   /**
    * Gets a text variable from the state service
    * This method is used by the resolution service to access text variables
+   * 
+   * @deprecated This method is deprecated and will be removed in a future version.
+   * Use StateServiceClientFactory and StateTrackingServiceClientFactory instead.
    */
   getTextVar(name: string): string | undefined {
     if (!this.stateService) {
@@ -232,6 +265,9 @@ export class ServiceMediator implements IServiceMediator {
   /**
    * Gets a data variable from the state service
    * This method is used by the resolution service to access data variables
+   * 
+   * @deprecated This method is deprecated and will be removed in a future version.
+   * Use StateServiceClientFactory and StateTrackingServiceClientFactory instead.
    */
   getDataVar(name: string): unknown {
     if (!this.stateService) {
@@ -243,6 +279,9 @@ export class ServiceMediator implements IServiceMediator {
   /**
    * Gets a path variable from the state service
    * This method is used by the resolution service to access path variables
+   * 
+   * @deprecated This method is deprecated and will be removed in a future version.
+   * Use StateServiceClientFactory and StateTrackingServiceClientFactory instead.
    */
   getPathVar(name: string): string | undefined {
     if (!this.stateService) {
@@ -254,6 +293,9 @@ export class ServiceMediator implements IServiceMediator {
   /**
    * Gets all text variables from the state service
    * This method is used by the resolution service to access all text variables
+   * 
+   * @deprecated This method is deprecated and will be removed in a future version.
+   * Use StateServiceClientFactory and StateTrackingServiceClientFactory instead.
    */
   getAllTextVars(): Map<string, string> {
     if (!this.stateService) {
@@ -265,6 +307,9 @@ export class ServiceMediator implements IServiceMediator {
   /**
    * Gets all data variables from the state service
    * This method is used by the resolution service to access all data variables
+   * 
+   * @deprecated This method is deprecated and will be removed in a future version.
+   * Use StateServiceClientFactory and StateTrackingServiceClientFactory instead.
    */
   getAllDataVars(): Map<string, unknown> {
     if (!this.stateService) {
@@ -276,6 +321,9 @@ export class ServiceMediator implements IServiceMediator {
   /**
    * Gets all path variables from the state service
    * This method is used by the resolution service to access all path variables
+   * 
+   * @deprecated This method is deprecated and will be removed in a future version.
+   * Use StateServiceClientFactory and StateTrackingServiceClientFactory instead.
    */
   getAllPathVars(): Map<string, string> {
     if (!this.stateService) {

@@ -28,6 +28,8 @@ import { ResolutionServiceClientFactory } from '../services/resolution/Resolutio
 import { VariableReferenceResolverClientFactory } from '../services/resolution/ResolutionService/factories/VariableReferenceResolverClientFactory.js';
 import { DirectiveServiceClientFactory } from '../services/pipeline/DirectiveService/factories/DirectiveServiceClientFactory.js';
 import { ResolutionServiceClientForDirectiveFactory } from '../services/resolution/ResolutionService/factories/ResolutionServiceClientForDirectiveFactory.js';
+import { StateServiceClientFactory } from '../services/state/StateService/factories/StateServiceClientFactory.js';
+import { StateTrackingServiceClientFactory } from '../services/state/StateTrackingService/factories/StateTrackingServiceClientFactory.js';
 import { 
   LoggerFactory, 
   logger as mainLogger, 
@@ -105,6 +107,8 @@ container.register('ResolutionServiceClientFactory', { useClass: ResolutionServi
 container.register('VariableReferenceResolverClientFactory', { useClass: VariableReferenceResolverClientFactory });
 container.register('DirectiveServiceClientFactory', { useClass: DirectiveServiceClientFactory });
 container.register('ResolutionServiceClientForDirectiveFactory', { useClass: ResolutionServiceClientForDirectiveFactory });
+container.register('StateServiceClientFactory', { useClass: StateServiceClientFactory });
+container.register('StateTrackingServiceClientFactory', { useClass: StateTrackingServiceClientFactory });
 
 // Register remaining services using class registrations
 // These services don't have circular dependencies
