@@ -160,15 +160,78 @@ export async function main(filePath: string, options: ProcessOptions = {}): Prom
   // Validate the service pipeline after merging
   validateServicePipeline(services);
 
-  // Initialize the ServiceMediator with the merged services
+  // Initialize service clients using factories
+  try {
+    // Get factories from the container
+    const pathClientFactory = resolveService('PathServiceClientFactory');
+    const fileSystemClientFactory = resolveService('FileSystemServiceClientFactory');
+    const parserClientFactory = resolveService('ParserServiceClientFactory');
+    const resolutionClientFactory = resolveService('ResolutionServiceClientFactory');
+    const stateClientFactory = resolveService('StateServiceClientFactory');
+    
+    // Create clients and connect services
+    if (services.filesystem && fileSystemClientFactory) {
+      try {
+        const pathClient = pathClientFactory.createClient();
+        services.filesystem['pathClient'] = pathClient;
+        logger.debug('Successfully created PathServiceClient for FileSystemService');
+      } catch (error) {
+        logger.warn('Failed to create PathServiceClient for FileSystemService', { error });
+      }
+    }
+    
+    if (services.path && pathClientFactory) {
+      try {
+        const fileSystemClient = fileSystemClientFactory.createClient();
+        services.path['fileSystemClient'] = fileSystemClient;
+        logger.debug('Successfully created FileSystemServiceClient for PathService');
+      } catch (error) {
+        logger.warn('Failed to create FileSystemServiceClient for PathService', { error });
+      }
+    }
+    
+    if (services.parser && parserClientFactory) {
+      try {
+        const resolutionClient = resolutionClientFactory.createClient();
+        services.parser['resolutionClient'] = resolutionClient;
+        logger.debug('Successfully created ResolutionServiceClient for ParserService');
+      } catch (error) {
+        logger.warn('Failed to create ResolutionServiceClient for ParserService', { error });
+      }
+    }
+    
+    if (services.resolution && resolutionClientFactory) {
+      try {
+        const parserClient = parserClientFactory.createClient();
+        services.resolution['parserClient'] = parserClient;
+        logger.debug('Successfully created ParserServiceClient for ResolutionService');
+      } catch (error) {
+        logger.warn('Failed to create ParserServiceClient for ResolutionService', { error });
+      }
+    }
+    
+    if (services.state && stateClientFactory) {
+      try {
+        const stateTrackingClient = resolveService('StateTrackingServiceClientFactory').createClient();
+        services.state['stateTrackingClient'] = stateTrackingClient;
+        logger.debug('Successfully created StateTrackingServiceClient for StateService');
+      } catch (error) {
+        logger.warn('Failed to create StateTrackingServiceClient for StateService', { error });
+      }
+    }
+  } catch (error) {
+    logger.warn('Failed to resolve one or more service factories, falling back to ServiceMediator', { error });
+  }
+
+  // For backward compatibility, also initialize the ServiceMediator
   const mediator = resolveService('ServiceMediator');
   if (services.path) mediator.setPathService(services.path);
   if (services.filesystem) mediator.setFileSystemService(services.filesystem);
   if (services.state) mediator.setStateService(services.state);
   if (services.resolution) mediator.setResolutionService(services.resolution);
 
-  // Ensure FileSystemService has the mediator set
-  if (services.filesystem) {
+  // Ensure FileSystemService has the mediator set for backward compatibility
+  if (services.filesystem && typeof services.filesystem.setMediator === 'function') {
     services.filesystem.setMediator(mediator);
   }
 
