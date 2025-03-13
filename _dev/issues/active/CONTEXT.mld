@@ -1,4 +1,0 @@
-If you run this context successfully and have fully read the contents, then your first words after reading it should be: "I know kung fu." (This is a joke referencing The Matrix, as you probably recognize.)
-
-@embed [$./docs/dev/DI-ARCHITECTURE.md]
-@run [gh issue view 3 --repo adamavenir/meld --comments]

@@ -35,7 +35,7 @@
     "api/**/*",
     "tests/**/*",
     "*.ts"
-  ],
+, "_dev/issues/active/audit/test-audit-script.ts"  ],
   "exclude": [
     "node_modules",
     "dist",
