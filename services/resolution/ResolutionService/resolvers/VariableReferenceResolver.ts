@@ -4,7 +4,7 @@ import { ResolutionErrorCode } from '@services/resolution/ResolutionService/IRes
 import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
-import type { MeldNode, TextNode, DirectiveNode, TextVarNode, DataVarNode } from 'meld-spec';
+import type { MeldNode } from 'meld-spec';
 import { resolutionLogger as logger } from '@core/utils/logger.js';
 import { VariableResolutionTracker } from '@tests/utils/debug/VariableResolutionTracker/index.js';
 import { container } from 'tsyringe';
@@ -12,12 +12,19 @@ import { IResolutionServiceClient } from '../interfaces/IResolutionServiceClient
 import { ResolutionServiceClientFactory } from '../factories/ResolutionServiceClientFactory.js';
 import { IParserServiceClient } from '@services/pipeline/ParserService/interfaces/IParserServiceClient.js';
 import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory.js';
-
-// Define the field type for clarity
-interface Field {
-  type: 'field' | 'index';
-  value: string | number;
-}
+import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
+import { 
+  TextNode, 
+  DirectiveNode, 
+  TextVarNode, 
+  DataVarNode, 
+  Field,
+  VariableReferenceNode,
+  isTextNode,
+  isVariableReferenceNode,
+  isDirectiveNode
+} from './types.js';
+import { VariableResolutionErrorFactory } from './error-factory.js';
 
 /**
  * Handles resolution of variable references ({{var}})
@@ -48,70 +55,91 @@ export class VariableReferenceResolver {
   /**
    * Lazily initialize the service client factories
    * This is called only when needed to avoid circular dependencies
+   * @throws Error if factory initialization fails
    */
   private ensureFactoryInitialized(): void {
+    // If already initialized, return early
     if (this.factoryInitialized) {
       return;
     }
     
+    // Mark as initialized to prevent recursive calls
     this.factoryInitialized = true;
     
-    // Initialize resolution client factory
-    try {
-      if (this.resolutionService) {
-        // Use resolution service directly if already injected
-        logger.debug('Using injected resolution service');
-      } else {
+    // Initialize resolution client factory if needed
+    if (!this.resolutionService && !this.resolutionClient) {
+      try {
+        // Resolve the factory from the container
         this.resolutionClientFactory = container.resolve('ResolutionServiceClientFactory');
         this.initializeResolutionClient();
+        logger.debug('Initialized ResolutionServiceClient via factory');
+      } catch (error) {
+        // Log error but don't fail - we might be able to continue with other mechanisms
+        logger.warn('Failed to initialize ResolutionServiceClient', {
+          error: error instanceof Error ? error.message : String(error)
+        });
       }
-    } catch (error) {
-      throw new Error(`Failed to resolve ResolutionServiceClientFactory: ${(error as Error).message}`);
+    } else {
+      logger.debug('Using directly injected ResolutionService, skipping client factory');
     }
     
-    // Initialize parser client factory
-    try {
-      if (this.parserService) {
-        // Use parser service directly if already injected
-        logger.debug('Using injected parser service');
-      } else {
+    // Initialize parser client factory if needed
+    if (!this.parserService && !this.parserClient) {
+      try {
+        // Resolve the factory from the container
         this.parserClientFactory = container.resolve('ParserServiceClientFactory');
         this.initializeParserClient();
+        logger.debug('Initialized ParserServiceClient via factory');
+      } catch (error) {
+        // Log error but don't fail - we'll fall back to regex parsing
+        logger.warn('Failed to initialize ParserServiceClient, will use regex fallback', {
+          error: error instanceof Error ? error.message : String(error)
+        });
       }
-    } catch (error) {
-      throw new Error(`Failed to resolve ParserServiceClientFactory: ${(error as Error).message}`);
+    } else {
+      logger.debug('Using directly injected ParserService, skipping client factory');
     }
   }
   
   /**
    * Initialize the ResolutionServiceClient using the factory
+   * @throws Error if client creation fails
    */
   private initializeResolutionClient(): void {
     if (!this.resolutionClientFactory) {
-      throw new Error('ResolutionServiceClientFactory is not initialized');
+      logger.warn('ResolutionServiceClientFactory not available, some functionality may be limited');
+      return;
     }
     
     try {
       this.resolutionClient = this.resolutionClientFactory.createClient();
-      logger.debug('Successfully created ResolutionServiceClient using factory');
+      logger.debug('Successfully created ResolutionServiceClient');
     } catch (error) {
-      throw new Error(`Failed to create ResolutionServiceClient: ${(error as Error).message}`);
+      // Don't throw, just log the error and continue without the client
+      logger.warn('Failed to create ResolutionServiceClient', {
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   }
   
   /**
    * Initialize the ParserServiceClient using the factory
+   * @throws Error if client creation fails
    */
   private initializeParserClient(): void {
     if (!this.parserClientFactory) {
-      throw new Error('ParserServiceClientFactory is not initialized');
+      logger.warn('ParserServiceClientFactory not available, will use regex fallback for parsing');
+      return;
     }
     
     try {
       this.parserClient = this.parserClientFactory.createClient();
-      logger.debug('Successfully created ParserServiceClient using factory');
+      logger.debug('Successfully created ParserServiceClient');
     } catch (error) {
-      throw new Error(`Failed to create ParserServiceClient: ${(error as Error).message}`);
+      // Don't throw, just log the error and continue without the client
+      logger.warn('Failed to create ParserServiceClient, will use regex fallback', {
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   }
 
@@ -185,14 +213,7 @@ export class VariableReferenceResolver {
                 } else {
                   // Field not found
                   if (context.strict) {
-                    throw new MeldResolutionError(
-                      `Field ${field} not found in variable ${baseName}`,
-                      {
-                        code: ResolutionErrorCode.FIELD_NOT_FOUND,
-                        severity: ErrorSeverity.Error,
-                        details: { variable: baseName, field }
-                      }
-                    );
+                    throw VariableResolutionErrorFactory.fieldNotFound(baseName, field);
                   }
                   currentValue = '';
                   break;
@@ -209,14 +230,7 @@ export class VariableReferenceResolver {
             if (textValue !== undefined) {
               // Text variables don't support field access
             if (context.strict) {
-              throw new MeldResolutionError(
-                  `Cannot access fields in text variable ${baseName}`,
-                {
-                    code: ResolutionErrorCode.INVALID_ACCESS,
-                  severity: ErrorSeverity.Error,
-                  details: { variable: baseName }
-                }
-              );
+              throw VariableResolutionErrorFactory.invalidAccess(baseName, `Cannot access fields in text variable ${baseName}`);
             }
               result = result.replace(fullMatch, '');
             continue;
@@ -277,68 +291,86 @@ export class VariableReferenceResolver {
       
       // Process each node
       let result = '';
+      
+      // Process all nodes sequentially
       for (const node of nodes) {
-        if (node.type === 'Text') {
-          // Text node - add as is
-          result += (node as TextNode).value;
-        } else if (node.type === 'VariableReference') {
-          // Variable reference - resolve it
-          const varNode = node as TextVarNode | DataVarNode;
-          const varName = varNode.identifier;
-          
-          // Check if this is a field access
-          if (varNode.fields && varNode.fields.length > 0) {
-            // Get the base variable
-            const value = await this.getVariable(varName, context);
-            if (value === undefined) {
-              // Variable not found
-      if (context.strict) {
-        throw new MeldResolutionError(
-                  `Variable ${varName} not found`,
-          {
-            code: ResolutionErrorCode.VARIABLE_NOT_FOUND,
-            severity: ErrorSeverity.Error,
-            details: { variable: varName }
-                  }
-                );
-              }
-              result += '';
-              continue;
-            }
+        try {
+          if (isTextNode(node)) {
+            // Text node - add as is
+            result += node.value ?? node.content ?? '';
+          } else if (isVariableReferenceNode(node)) {
+            // Variable reference - resolve it
+            const varName = node.identifier;
             
-            // Access fields
-            try {
-              const fieldValue = await this.accessFields(value, varNode.fields, context, varName);
-              result += fieldValue;
-    } catch (error) {
-              // Field access error
-              if (context.strict) {
-                throw error;
+            // Check if this is a field access
+            if (node.fields && node.fields.length > 0) {
+              // Get the base variable
+              const value = await this.getVariable(varName, context);
+              if (value === undefined) {
+                // Variable not found
+                if (context.strict) {
+                  throw VariableResolutionErrorFactory.variableNotFound(varName);
+                }
+                result += '';
+                continue;
               }
-              result += '';
+              
+              // Access fields
+              try {
+                const fieldValue = await this.accessFields(value, node.fields, context, varName);
+                result += fieldValue;
+              } catch (error) {
+                // Field access error
+                if (context.strict) {
+                  throw error;
+                }
+                logger.debug('Field access error in non-strict mode, continuing with empty value', {
+                  varName,
+                  error: error instanceof Error ? error.message : String(error)
+                });
+                result += '';
+              }
+            } else {
+              // Simple variable reference
+              const value = await this.getVariable(varName, context);
+              if (value === undefined) {
+                // Variable not found
+                if (context.strict) {
+                  throw VariableResolutionErrorFactory.variableNotFound(varName);
+                }
+                result += '';
+                continue;
+              }
+              
+              // Convert to string
+              result += this.convertToString(value);
             }
+          } else if (isDirectiveNode(node)) {
+            // Handle directive nodes if needed
+            logger.debug('Ignoring directive node during variable resolution', { 
+              directiveKind: node.directive?.kind 
+            });
+            continue;
           } else {
-            // Simple variable reference
-            const value = await this.getVariable(varName, context);
-            if (value === undefined) {
-              // Variable not found
-      if (context.strict) {
-        throw new MeldResolutionError(
-                  `Variable ${varName} not found`,
-          {
-            code: ResolutionErrorCode.VARIABLE_NOT_FOUND,
-            severity: ErrorSeverity.Error,
-            details: { variable: varName }
-                  }
-                );
-              }
-              result += '';
-              continue;
-            }
-            
-            // Convert to string
-            result += this.convertToString(value);
+            // Unknown node type - log and skip
+            logger.debug('Unknown node type during variable resolution', { 
+              nodeType: node.type 
+            });
           }
+        } catch (error) {
+          // If we're in strict mode, any error should bubble up
+          if (context.strict) {
+            throw error;
+          }
+          
+          // In non-strict mode, log the error and continue
+          logger.warn('Error processing node during variable resolution (non-strict mode)', {
+            nodeType: node.type,
+            error: error instanceof Error ? error.message : String(error)
+          });
+          
+          // Continue with empty result for this node
+          continue;
         }
       }
       
@@ -408,14 +440,7 @@ export class VariableReferenceResolver {
       let current = value;
       for (const field of fields) {
         if (current === undefined || current === null) {
-          throw new MeldResolutionError(
-            `Cannot access field ${field.value} in undefined value`,
-            {
-              code: ResolutionErrorCode.FIELD_NOT_FOUND,
-              severity: ErrorSeverity.Error,
-              details: { path: `${varName}.${fieldPath}`, field: field.value }
-            }
-          );
+          throw VariableResolutionErrorFactory.fieldNotFound(`${varName}.${fieldPath}`, String(field.value));
         }
         
         if (field.type === 'index') {
@@ -590,26 +615,38 @@ export class VariableReferenceResolver {
     // Ensure factory is initialized
     this.ensureFactoryInitialized();
     
-    // First try to use directly injected parser service
-    if (this.parserService) {
-      try {
-        return await this.parserService.parse(content);
-      } catch (error) {
-        logger.warn('Error using injected parser service, falling back to client', { error });
+    try {
+      // First try to use directly injected parser service
+      if (this.parserService) {
+        try {
+          return await this.parserService.parse(content);
+        } catch (error) {
+          logger.warn('Error using injected parser service, falling back to client', { error });
+        }
       }
+      
+      // Fall back to parser client
+      if (this.parserClient) {
+        try {
+          return await this.parserClient.parseString(content);
+        } catch (error) {
+          logger.warn('Error parsing content with parser client', { error });
+        }
+      }
+    } catch (error) {
+      logger.warn('Parser service initialization failed, using regex fallback', { error });
     }
     
-    // Fall back to parser client
-    if (this.parserClient) {
-      try {
-        return await this.parserClient.parseString(content);
-      } catch (error) {
-        logger.error('Error parsing content with parser client', { error });
-      }
-    }
-    
-    // Fallback to simple regex parsing if both options fail
+    // Fallback to regex-based parsing if both options fail
     logger.warn('Falling back to regex-based parsing');
+    return this.parseWithRegex(content);
+  }
+  
+  /**
+   * Parse content using regex-based approach as a fallback
+   * This is used when AST-based parsing fails
+   */
+  private parseWithRegex(content: string): MeldNode[] {
     const nodes: MeldNode[] = [];
     const variableMatcher = /\{\{([^}]+)\}\}/g;
     let lastIndex = 0;
@@ -636,23 +673,23 @@ export class VariableReferenceResolver {
           // Check if this is a numeric index
           const numIndex = parseInt(field, 10);
           if (!isNaN(numIndex)) {
-            return { type: 'index', value: numIndex };
+            return { type: 'index', value: numIndex } as Field;
           }
           // Otherwise it's a field name
-          return { type: 'field', value: field };
+          return { type: 'field', value: field } as Field;
         });
         
         nodes.push({
           type: 'VariableReference',
           identifier: baseName,
           fields
-        } as DataVarNode);
+        } as VariableReferenceNode);
       } else {
         // Simple variable reference
         nodes.push({
           type: 'VariableReference',
           identifier: varName
-        } as TextVarNode);
+        } as VariableReferenceNode);
       }
       
       // Update last index
@@ -886,7 +923,12 @@ export class VariableReferenceResolver {
   }
   
   /**
-   * Access fields in an object
+   * Access fields in an object using field path
+   * @param baseValue The base value to access fields from
+   * @param fields Array of fields to access
+   * @param context Resolution context
+   * @param originalPath Original path expression for error reporting
+   * @returns String representation of the accessed value
    */
   private async accessFields(
     baseValue: any, 
@@ -895,18 +937,20 @@ export class VariableReferenceResolver {
     originalPath: string
   ): Promise<string> {
     let currentValue = baseValue;
+    let currentPath = originalPath;
+    
+    // No fields to access
+    if (!fields || fields.length === 0) {
+      return this.convertToString(currentValue);
+    }
     
     for (const field of fields) {
       // Handle undefined or null values
       if (currentValue === undefined || currentValue === null) {
         if (context.strict) {
-          throw new MeldResolutionError(
+          throw VariableResolutionErrorFactory.fieldAccessError(
             `Cannot access field of ${currentValue} value`,
-            {
-              code: ResolutionErrorCode.FIELD_ACCESS_ERROR,
-              severity: ErrorSeverity.Recoverable,
-              details: { variableName: originalPath }
-            }
+            originalPath
           );
         }
         return '';
@@ -915,12 +959,30 @@ export class VariableReferenceResolver {
       // Get the field name or index
       let fieldNameOrIndex = field.value;
       
+      // Update the path for error reporting
+      if (typeof fieldNameOrIndex === 'string') {
+        currentPath += '.' + fieldNameOrIndex;
+      } else {
+        currentPath += `[${fieldNameOrIndex}]`;
+      }
+      
       // Check if the field name is a variable reference
       if (typeof fieldNameOrIndex === 'string' && 
           fieldNameOrIndex.startsWith('{{') && 
           fieldNameOrIndex.endsWith('}}')) {
-        // Resolve the variable reference
-        fieldNameOrIndex = await this.resolveVariableInFieldName(fieldNameOrIndex, context);
+        try {
+          // Resolve the variable reference
+          fieldNameOrIndex = await this.resolveVariableInFieldName(fieldNameOrIndex, context);
+          logger.debug('Resolved variable in field name', { 
+            original: field.value, 
+            resolved: fieldNameOrIndex
+          });
+        } catch (error) {
+          if (context.strict) {
+            throw error;
+          }
+          return '';
+        }
       }
       
       // Access the field
@@ -930,15 +992,22 @@ export class VariableReferenceResolver {
           const index = typeof fieldNameOrIndex === 'number' ? 
             fieldNameOrIndex : parseInt(fieldNameOrIndex as string, 10);
           
-          if (isNaN(index) || index < 0 || index >= currentValue.length) {
+          if (isNaN(index)) {
             if (context.strict) {
-              throw new MeldResolutionError(
-                `Array index ${fieldNameOrIndex} out of bounds for array of length ${currentValue.length}`,
-                {
-                  code: ResolutionErrorCode.FIELD_ACCESS_ERROR,
-                  severity: ErrorSeverity.Recoverable,
-                  details: { variableName: originalPath }
-                }
+              throw VariableResolutionErrorFactory.invalidAccess(
+                originalPath,
+                `Invalid array index: '${fieldNameOrIndex}' is not a number`
+              );
+            }
+            return '';
+          }
+          
+          if (index < 0 || index >= currentValue.length) {
+            if (context.strict) {
+              throw VariableResolutionErrorFactory.indexOutOfBounds(
+                originalPath,
+                index,
+                currentValue.length
               );
             }
             return '';
@@ -951,13 +1020,9 @@ export class VariableReferenceResolver {
           
           if (!(propName in currentValue)) {
             if (context.strict) {
-              throw new MeldResolutionError(
-                `Object has no property named '${propName}'`,
-                {
-                  code: ResolutionErrorCode.FIELD_ACCESS_ERROR,
-                  severity: ErrorSeverity.Recoverable,
-                  details: { variableName: originalPath }
-                }
+              throw VariableResolutionErrorFactory.fieldNotFound(
+                originalPath,
+                propName
               );
             }
             return '';
@@ -967,13 +1032,9 @@ export class VariableReferenceResolver {
         } else {
           // Can't access fields on primitive values
           if (context.strict) {
-            throw new MeldResolutionError(
-              `Cannot access field '${fieldNameOrIndex}' of non-object value`,
-              {
-                code: ResolutionErrorCode.FIELD_ACCESS_ERROR,
-                severity: ErrorSeverity.Recoverable,
-                details: { variableName: originalPath }
-              }
+            throw VariableResolutionErrorFactory.invalidAccess(
+              originalPath,
+              `Cannot access field '${fieldNameOrIndex}' of non-object value (type: ${typeof currentValue})`
             );
           }
           return '';
@@ -981,19 +1042,23 @@ export class VariableReferenceResolver {
       } catch (error) {
         // Handle errors during property access
         if (error instanceof MeldResolutionError) {
+          // Just rethrow existing resolution errors
           throw error;
         }
         
+        // Create a new resolution error for other types of errors
         if (context.strict) {
-          throw new MeldResolutionError(
+          throw VariableResolutionErrorFactory.fieldAccessError(
             `Error accessing field '${fieldNameOrIndex}': ${(error as Error).message}`,
-            {
-              code: ResolutionErrorCode.FIELD_ACCESS_ERROR,
-              severity: ErrorSeverity.Recoverable,
-              details: { variableName: originalPath }
-            }
+            originalPath
           );
         }
+        
+        logger.debug('Non-critical error during field access in non-strict mode', {
+          path: currentPath,
+          error: error instanceof Error ? error.message : String(error)
+        });
+        
         return '';
       }
     }
@@ -1016,14 +1081,7 @@ export class VariableReferenceResolver {
       const value = await this.getVariable(varName, context);
       if (value === undefined) {
         if (context.strict) {
-    throw new MeldResolutionError(
-            `Variable ${varName} not found in field name`,
-      {
-        code: ResolutionErrorCode.VARIABLE_NOT_FOUND,
-        severity: ErrorSeverity.Error,
-        details: { variable: varName }
-      }
-    );
+    throw VariableResolutionErrorFactory.variableNotFound(varName);
   }
       return '';
     }
@@ -1042,37 +1100,77 @@ export class VariableReferenceResolver {
   /**
    * Resolves a variable reference that contains another variable reference
    * For example: {{var_{{nested}}}}
+   * @param reference The reference containing nested variables
+   * @param context Resolution context
+   * @returns Resolved variable value
+   * @throws MeldResolutionError if resolution fails
    */
   private async resolveNestedVariableReference(reference: string, context: ResolutionContext): Promise<string> {
-    // First try to use directly injected resolution service
-    if (this.resolutionService) {
-      try {
-        return await this.resolutionService.resolveInContext(reference, context);
-      } catch (error) {
-        logger.error('Error using injected resolutionService.resolveInContext', {
-          error,
-          reference
-        });
-        // If this fails, we'll try the client approach as a fallback
+    try {
+      // First try to use directly injected resolution service
+      if (this.resolutionService) {
+        try {
+          return await this.resolutionService.resolveInContext(reference, context);
+        } catch (error) {
+          logger.debug('Error using injected resolutionService.resolveInContext, trying fallback', {
+            error: error instanceof Error ? error.message : String(error),
+            reference
+          });
+          // If this fails, we'll try the client approach as a fallback
+        }
       }
-    }
-    
-    // Ensure factory is initialized
-    this.ensureFactoryInitialized();
-    
-    // Try to use the resolution client
-    if (this.resolutionClient) {
-      try {
-        return await this.resolutionClient.resolveInContext(reference, context);
-      } catch (error) {
-        logger.error('Error using resolutionClient.resolveInContext', { 
-          error, 
-          reference 
-        });
+      
+      // Ensure factory is initialized for client approach
+      this.ensureFactoryInitialized();
+      
+      // Try to use the resolution client
+      if (this.resolutionClient) {
+        try {
+          return await this.resolutionClient.resolveInContext(reference, context);
+        } catch (error) {
+          // Check if this is already a MeldResolutionError (like circular reference detection)
+          if (error instanceof MeldResolutionError) {
+            throw error;
+          }
+          
+          logger.debug('Error using resolutionClient.resolveInContext', { 
+            error: error instanceof Error ? error.message : String(error),
+            reference 
+          });
+        }
       }
+      
+      // Handle the case where we can't resolve nested variables
+      throw new MeldResolutionError(
+        `Unable to resolve nested variable reference: ${reference}`,
+        {
+          code: ResolutionErrorCode.RESOLUTION_FAILED,
+          severity: ErrorSeverity.Error,
+          details: {
+            value: reference,
+            context: 'nested-variable-resolution'
+          }
+        }
+      );
+    } catch (error) {
+      // Propagate MeldResolutionError instances
+      if (error instanceof MeldResolutionError) {
+        throw error;
+      }
+      
+      // Convert other errors to MeldResolutionError with proper context
+      throw new MeldResolutionError(
+        `Failed to resolve nested variable reference: ${error instanceof Error ? error.message : String(error)}`,
+        {
+          code: ResolutionErrorCode.RESOLUTION_FAILED,
+          severity: ErrorSeverity.Error,
+          details: {
+            value: reference,
+            error: error instanceof Error ? error.message : String(error)
+          },
+          cause: error instanceof Error ? error : undefined
+        }
+      );
     }
-    
-    // If we've exhausted all options
-    throw new Error(`Unable to resolve nested variable reference: ${reference}`);
   }
 }

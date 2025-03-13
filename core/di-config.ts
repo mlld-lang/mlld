@@ -25,6 +25,7 @@ import { FileSystemServiceClientFactory } from '../services/fs/FileSystemService
 import { ParserServiceClientFactory } from '../services/pipeline/ParserService/factories/ParserServiceClientFactory.js';
 import { ResolutionServiceClientFactory } from '../services/resolution/ResolutionService/factories/ResolutionServiceClientFactory.js';
 import { VariableReferenceResolverClientFactory } from '../services/resolution/ResolutionService/factories/VariableReferenceResolverClientFactory.js';
+import { VariableReferenceResolverFactory } from '../services/resolution/ResolutionService/factories/VariableReferenceResolverFactory.js';
 import { DirectiveServiceClientFactory } from '../services/pipeline/DirectiveService/factories/DirectiveServiceClientFactory.js';
 import { ResolutionServiceClientForDirectiveFactory } from '../services/resolution/ResolutionService/factories/ResolutionServiceClientForDirectiveFactory.js';
 import { StateServiceClientFactory } from '../services/state/StateService/factories/StateServiceClientFactory.js';
@@ -106,6 +107,7 @@ container.register('FileSystemServiceClientFactory', { useClass: FileSystemServi
 container.register('ParserServiceClientFactory', { useClass: ParserServiceClientFactory });
 container.register('ResolutionServiceClientFactory', { useClass: ResolutionServiceClientFactory });
 container.register('VariableReferenceResolverClientFactory', { useClass: VariableReferenceResolverClientFactory });
+container.register('VariableReferenceResolverFactory', { useClass: VariableReferenceResolverFactory });
 container.register('DirectiveServiceClientFactory', { useClass: DirectiveServiceClientFactory });
 container.register('ResolutionServiceClientForDirectiveFactory', { useClass: ResolutionServiceClientForDirectiveFactory });
 container.register('StateServiceClientFactory', { useClass: StateServiceClientFactory });

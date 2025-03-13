@@ -102,7 +102,11 @@ export enum ResolutionErrorCode {
   /** Command not found in the current state */
   COMMAND_NOT_FOUND = 'COMMAND_NOT_FOUND',
   /** Section not found in the content */
-  SECTION_NOT_FOUND = 'SECTION_NOT_FOUND'
+  SECTION_NOT_FOUND = 'SECTION_NOT_FOUND',
+  /** Specific field not found in variable */
+  FIELD_NOT_FOUND = 'FIELD_NOT_FOUND',
+  /** Invalid access pattern (e.g., array access on non-array) */
+  INVALID_ACCESS = 'INVALID_ACCESS'
 }
 
 /**

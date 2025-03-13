@@ -11,6 +11,13 @@ export interface ResolutionErrorDetails {
   contentPreview?: string;
   error?: string;
   availableHeadings?: string;
+  // Additional properties used in VariableReferenceResolver
+  variable?: string;
+  field?: string;
+  path?: string;
+  index?: number;
+  length?: number;
+  type?: string;
 }
 
 export interface MeldResolutionErrorOptions {
