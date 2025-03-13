@@ -2,6 +2,6 @@
 
 This is a simple test file for the Meld processor.
 
-@text greet = "Hello, world\!"
+@text greet = "Hello, world!"
 
-${greet}
+@embed {{greet}}

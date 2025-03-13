@@ -1,0 +1,5 @@
+# Path embed example
+
+@path valid = "$./tests/cases/valid"
+
+@embed [$valid/text.mld]
