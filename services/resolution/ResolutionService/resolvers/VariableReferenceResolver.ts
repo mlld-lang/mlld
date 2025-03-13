@@ -37,10 +37,12 @@ export class VariableReferenceResolver {
    * Creates a new instance of the VariableReferenceResolver
    * @param stateService - State service for variable management
    * @param resolutionService - Resolution service for resolving variables
+   * @param parserService - Parser service for parsing content with variables
    */
   constructor(
     private readonly stateService: IStateService,
-    private readonly resolutionService?: IResolutionService
+    private readonly resolutionService?: IResolutionService,
+    private readonly parserService?: IParserService
   ) {}
 
   /**
@@ -56,16 +58,26 @@ export class VariableReferenceResolver {
     
     // Initialize resolution client factory
     try {
-      this.resolutionClientFactory = container.resolve('ResolutionServiceClientFactory');
-      this.initializeResolutionClient();
+      if (this.resolutionService) {
+        // Use resolution service directly if already injected
+        logger.debug('Using injected resolution service');
+      } else {
+        this.resolutionClientFactory = container.resolve('ResolutionServiceClientFactory');
+        this.initializeResolutionClient();
+      }
     } catch (error) {
       throw new Error(`Failed to resolve ResolutionServiceClientFactory: ${(error as Error).message}`);
     }
     
     // Initialize parser client factory
     try {
-      this.parserClientFactory = container.resolve('ParserServiceClientFactory');
-      this.initializeParserClient();
+      if (this.parserService) {
+        // Use parser service directly if already injected
+        logger.debug('Using injected parser service');
+      } else {
+        this.parserClientFactory = container.resolve('ParserServiceClientFactory');
+        this.initializeParserClient();
+      }
     } catch (error) {
       throw new Error(`Failed to resolve ParserServiceClientFactory: ${(error as Error).message}`);
     }
@@ -362,103 +374,115 @@ export class VariableReferenceResolver {
    * This is used for direct field access in tests
    */
   async resolveFieldAccess(varName: string, fieldPath: string, context: ResolutionContext): Promise<any> {
-    // Get the base variable
-    const value = await this.getVariable(varName, context);
-    if (value === undefined) {
+    try {
+      // Get the base variable
+      const value = await this.getVariable(varName, context);
+      if (value === undefined) {
         throw new MeldResolutionError(
-        `Variable ${varName} not found`,
+          `Variable ${varName} not found`,
           {
             code: ResolutionErrorCode.VARIABLE_NOT_FOUND,
             severity: ErrorSeverity.Error,
             details: { variable: varName }
-        }
-      );
-    }
-    
-    // No fields to access
-    if (!fieldPath) {
-      return value;
-    }
-    
-    // Split the field path
-    const fields = fieldPath.split('.').map(field => {
-      // Check if this is a numeric index
-      const numIndex = parseInt(field, 10);
-      if (!isNaN(numIndex)) {
-        return { type: 'index', value: numIndex };
+          }
+        );
       }
-      // Otherwise it's a field name
-      return { type: 'field', value: field };
-    });
-    
-    // Access the fields
-    let current = value;
-    for (const field of fields) {
-      if (current === undefined || current === null) {
+      
+      // No fields to access
+      if (!fieldPath) {
+        return value;
+      }
+      
+      // Split the field path
+      const fields = fieldPath.split('.').map(field => {
+        // Check if this is a numeric index
+        const numIndex = parseInt(field, 10);
+        if (!isNaN(numIndex)) {
+          return { type: 'index', value: numIndex };
+        }
+        // Otherwise it's a field name
+        return { type: 'field', value: field };
+      });
+      
+      // Access the fields
+      let current = value;
+      for (const field of fields) {
+        if (current === undefined || current === null) {
           throw new MeldResolutionError(
             `Cannot access field ${field.value} in undefined value`,
             {
               code: ResolutionErrorCode.FIELD_NOT_FOUND,
               severity: ErrorSeverity.Error,
-            details: { path: `${varName}.${fieldPath}`, field: field.value }
+              details: { path: `${varName}.${fieldPath}`, field: field.value }
             }
           );
-      }
-      
-      if (field.type === 'index') {
-        // Array access
-        if (Array.isArray(current)) {
-          if (typeof field.value === 'number' && field.value >= 0 && field.value < current.length) {
-            current = current[field.value];
+        }
+        
+        if (field.type === 'index') {
+          // Array access
+          if (Array.isArray(current)) {
+            if (typeof field.value === 'number' && field.value >= 0 && field.value < current.length) {
+              current = current[field.value];
             } else {
-            throw new MeldResolutionError(
-              `Array index ${field.value} out of bounds for array of length ${current.length}`,
-              {
-                code: ResolutionErrorCode.INVALID_ACCESS,
-                severity: ErrorSeverity.Error,
-                details: { path: `${varName}.${fieldPath}`, index: field.value, length: current.length }
-              }
-            );
-          }
-        } else {
+              throw new MeldResolutionError(
+                `Array index ${field.value} out of bounds for array of length ${current.length}`,
+                {
+                  code: ResolutionErrorCode.INVALID_ACCESS,
+                  severity: ErrorSeverity.Error,
+                  details: { path: `${varName}.${fieldPath}`, index: field.value, length: current.length }
+                }
+              );
+            }
+          } else {
             throw new MeldResolutionError(
               `Cannot access array index in non-array value`,
               {
                 code: ResolutionErrorCode.INVALID_ACCESS,
                 severity: ErrorSeverity.Error,
-              details: { path: `${varName}.${fieldPath}`, type: typeof current }
-              }
-            );
-        }
-      } else {
-        // Field access
-        if (typeof current === 'object' && current !== null) {
-          if (field.value in current) {
-            current = current[field.value as string];
-          } else {
-            throw new MeldResolutionError(
-              `Field ${field.value} not found in object`,
-              {
-                code: ResolutionErrorCode.FIELD_NOT_FOUND,
-                severity: ErrorSeverity.Error,
-                details: { path: `${varName}.${fieldPath}`, field: field.value }
+                details: { path: `${varName}.${fieldPath}`, type: typeof current }
               }
             );
           }
         } else {
+          // Field access
+          if (typeof current === 'object' && current !== null) {
+            if (field.value in current) {
+              current = current[field.value as string];
+            } else {
+              throw new MeldResolutionError(
+                `Field ${field.value} not found in object`,
+                {
+                  code: ResolutionErrorCode.FIELD_NOT_FOUND,
+                  severity: ErrorSeverity.Error,
+                  details: { path: `${varName}.${fieldPath}`, field: field.value }
+                }
+              );
+            }
+          } else {
             throw new MeldResolutionError(
               `Cannot access field in non-object value`,
               {
                 code: ResolutionErrorCode.INVALID_ACCESS,
                 severity: ErrorSeverity.Error,
-              details: { path: `${varName}.${fieldPath}`, type: typeof current }
-            }
-          );
+                details: { path: `${varName}.${fieldPath}`, type: typeof current }
+              }
+            );
+          }
         }
       }
+      
+      return current;
+    } catch (error) {
+      // Log the error for diagnostic purposes
+      logger.error('Error in resolveFieldAccess', {
+        varName,
+        fieldPath,
+        error: error instanceof Error ? error.message : String(error)
+      });
+      
+      // Rethrow to maintain behavior
+      throw error;
     }
-    
-    return current;
   }
 
   /**
@@ -566,77 +590,85 @@ export class VariableReferenceResolver {
     // Ensure factory is initialized
     this.ensureFactoryInitialized();
     
-    // Use the parser client
-    if (!this.parserClient) {
-      throw new Error('ParserClient is not initialized');
+    // First try to use directly injected parser service
+    if (this.parserService) {
+      try {
+        return await this.parserService.parse(content);
+      } catch (error) {
+        logger.warn('Error using injected parser service, falling back to client', { error });
+      }
     }
     
-    try {
-      return await this.parserClient.parseString(content);
-    } catch (error) {
-      logger.error('Error parsing content with parser client', { error });
-      
-      // Fallback to simple regex parsing
-      const nodes: MeldNode[] = [];
-      const variableMatcher = /\{\{([^}]+)\}\}/g;
-      let lastIndex = 0;
-      let match;
-      
-      while ((match = variableMatcher.exec(content)) !== null) {
-        // Add text before the variable
-        if (match.index > lastIndex) {
-          const textValue = content.substring(lastIndex, match.index);
-          nodes.push({
-            type: 'Text',
-            value: textValue
-          } as TextNode);
-        }
-        
-        // Add the variable reference
-        const varName = match[1];
-        
-        // Check if this is a field access
-        if (varName.includes('.')) {
-          const parts = varName.split('.');
-          const baseName = parts[0];
-          const fields = parts.slice(1).map(field => {
-            // Check if this is a numeric index
-            const numIndex = parseInt(field, 10);
-            if (!isNaN(numIndex)) {
-              return { type: 'index', value: numIndex };
-            }
-            // Otherwise it's a field name
-            return { type: 'field', value: field };
-          });
-          
-          nodes.push({
-            type: 'VariableReference',
-            identifier: baseName,
-            fields
-          } as DataVarNode);
-        } else {
-          // Simple variable reference
-          nodes.push({
-            type: 'VariableReference',
-            identifier: varName
-          } as TextVarNode);
-        }
-        
-        // Update last index
-        lastIndex = match.index + match[0].length;
+    // Fall back to parser client
+    if (this.parserClient) {
+      try {
+        return await this.parserClient.parseString(content);
+      } catch (error) {
+        logger.error('Error parsing content with parser client', { error });
       }
-      
-      // Add remaining text
-      if (lastIndex < content.length) {
-        const textValue = content.substring(lastIndex);
+    }
+    
+    // Fallback to simple regex parsing if both options fail
+    logger.warn('Falling back to regex-based parsing');
+    const nodes: MeldNode[] = [];
+    const variableMatcher = /\{\{([^}]+)\}\}/g;
+    let lastIndex = 0;
+    let match;
+    
+    while ((match = variableMatcher.exec(content)) !== null) {
+      // Add text before the variable
+      if (match.index > lastIndex) {
+        const textValue = content.substring(lastIndex, match.index);
         nodes.push({
           type: 'Text',
           value: textValue
         } as TextNode);
       }
       
-      return nodes;
+      // Add the variable reference
+      const varName = match[1];
+      
+      // Check if this is a field access
+      if (varName.includes('.')) {
+        const parts = varName.split('.');
+        const baseName = parts[0];
+        const fields = parts.slice(1).map(field => {
+          // Check if this is a numeric index
+          const numIndex = parseInt(field, 10);
+          if (!isNaN(numIndex)) {
+            return { type: 'index', value: numIndex };
+          }
+          // Otherwise it's a field name
+          return { type: 'field', value: field };
+        });
+        
+        nodes.push({
+          type: 'VariableReference',
+          identifier: baseName,
+          fields
+        } as DataVarNode);
+      } else {
+        // Simple variable reference
+        nodes.push({
+          type: 'VariableReference',
+          identifier: varName
+        } as TextVarNode);
+      }
+      
+      // Update last index
+      lastIndex = match.index + match[0].length;
     }
+    
+    // Add remaining text
+    if (lastIndex < content.length) {
+      const textValue = content.substring(lastIndex);
+      nodes.push({
+        type: 'Text',
+        value: textValue
+      } as TextNode);
+    }
+    
+    return nodes;
   }
 
   /**
@@ -766,7 +798,17 @@ export class VariableReferenceResolver {
     }
     
     try {
-      // Ensure factory is initialized
+      // Try to use directly injected parser service first
+      if (this.parserService) {
+        try {
+          const nodes = await this.parserService.parse(text);
+          return this.extractVariableReferencesFromNodes(nodes);
+        } catch (error) {
+          logger.warn('Error using injected parser service, falling back to client', { error });
+        }
+      }
+      
+      // Ensure factory is initialized for client approach
       this.ensureFactoryInitialized();
       
       // Try to use the parser client if available
@@ -779,8 +821,8 @@ export class VariableReferenceResolver {
         }
       }
       
-      // If we get here, we couldn't parse with the client
-      logger.debug('Parser client unavailable or failed, falling back to regex extraction');
+      // If we get here, we couldn't parse with any method
+      logger.debug('Parser services unavailable or failed, falling back to regex extraction');
     } catch (error) {
       logger.debug('Error extracting references with AST', { error });
       // Fall back to regex-based extraction
@@ -1002,36 +1044,35 @@ export class VariableReferenceResolver {
    * For example: {{var_{{nested}}}}
    */
   private async resolveNestedVariableReference(reference: string, context: ResolutionContext): Promise<string> {
+    // First try to use directly injected resolution service
+    if (this.resolutionService) {
+      try {
+        return await this.resolutionService.resolveInContext(reference, context);
+      } catch (error) {
+        logger.error('Error using injected resolutionService.resolveInContext', {
+          error,
+          reference
+        });
+        // If this fails, we'll try the client approach as a fallback
+      }
+    }
+    
     // Ensure factory is initialized
     this.ensureFactoryInitialized();
     
     // Try to use the resolution client
-    if (!this.resolutionClient) {
-      throw new Error('ResolutionClient is not initialized');
+    if (this.resolutionClient) {
+      try {
+        return await this.resolutionClient.resolveInContext(reference, context);
+      } catch (error) {
+        logger.error('Error using resolutionClient.resolveInContext', { 
+          error, 
+          reference 
+        });
+      }
     }
     
-    try {
-      return await this.resolutionClient.resolveInContext(reference, context);
-    } catch (error) {
-      logger.error('Error using resolutionClient.resolveInContext', { 
-        error, 
-        reference 
-      });
-      
-      // Try direct resolution service reference as fallback
-      if (this.resolutionService) {
-        try {
-          return await this.resolutionService.resolveInContext(reference, context);
-        } catch (err) {
-          logger.error('Error using resolutionService.resolveInContext', { 
-            error: err, 
-            reference 
-          });
-          throw err;
-        }
-      }
-      
-      throw error;
-    }
+    // If we've exhausted all options
+    throw new Error(`Unable to resolve nested variable reference: ${reference}`);
   }
 }

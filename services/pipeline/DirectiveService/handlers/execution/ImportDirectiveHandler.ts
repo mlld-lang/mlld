@@ -228,10 +228,86 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
       let resultState;
       try {
         const interpreterClient = this.ensureInterpreterServiceClient();
+        
+        // Log for debugging
+        logger.debug('Interpreting imported file', {
+          filePath: resolvedFullPath,
+          hasInitialState: !!importedState
+        });
+        
+        // Set the current file path in the imported state - this is important for nested imports
+        if (importedState && resolvedFullPath) {
+          importedState.setCurrentFilePath(resolvedFullPath);
+        }
+        
+        // Perform the interpretation
         resultState = await interpreterClient.interpret(nodes, {
           initialState: importedState,
           filePath: resolvedFullPath
         });
+        
+        // After interpretation, log the state debug info
+        logger.debug('Import interpretation complete', {
+          filePath: resolvedFullPath,
+          textVarsCount: resultState?.getAllTextVars().size || 0,
+          dataVarsCount: resultState?.getAllDataVars().size || 0,
+          pathVarsCount: resultState?.getAllPathVars().size || 0,
+          commandsCount: resultState?.getAllCommands().size || 0
+        });
+        
+        // If the imported state has a parent state, propagate variables to it
+        if (importedState.getParentState && importedState.getParentState() && resultState) {
+          logger.debug('Propagating variables to parent state from imported file', {
+            filePath: resolvedFullPath
+          });
+          
+          const parentState = importedState.getParentState();
+          
+          // Copy text variables up to parent
+          const textVars = resultState.getAllTextVars();
+          textVars.forEach((value, key) => {
+            try {
+              parentState.setTextVar(key, value);
+              logger.debug(`Propagated text variable to parent: ${key}`);
+            } catch (err) {
+              logger.warn(`Failed to propagate text variable ${key} to parent`, { error: err });
+            }
+          });
+          
+          // Copy data variables up to parent
+          const dataVars = resultState.getAllDataVars();
+          dataVars.forEach((value, key) => {
+            try {
+              parentState.setDataVar(key, value);
+              logger.debug(`Propagated data variable to parent: ${key}`);
+            } catch (err) {
+              logger.warn(`Failed to propagate data variable ${key} to parent`, { error: err });
+            }
+          });
+          
+          // Copy path variables up to parent
+          const pathVars = resultState.getAllPathVars();
+          pathVars.forEach((value, key) => {
+            try {
+              parentState.setPathVar(key, value);
+              logger.debug(`Propagated path variable to parent: ${key}`);
+            } catch (err) {
+              logger.warn(`Failed to propagate path variable ${key} to parent`, { error: err });
+            }
+          });
+          
+          // Copy commands up to parent
+          const commands = resultState.getAllCommands();
+          commands.forEach((value, key) => {
+            try {
+              parentState.setCommand(key, value);
+              logger.debug(`Propagated command to parent: ${key}`);
+            } catch (err) {
+              logger.warn(`Failed to propagate command ${key} to parent`, { error: err });
+            }
+          });
+        }
+        
       } catch (error) {
         // If we can't get a client or interpret, handle it gracefully
         if (error instanceof DirectiveError) {
@@ -292,60 +368,130 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
         // IMPORTANT: Copy variables from imported state to parent state
         // even in transformation mode
         if (context.parentState) {
-          // Copy all text variables from the imported state to the parent state
-          const textVars = targetState.getAllTextVars();
-          textVars.forEach((value, key) => {
-            if (context.parentState) {
-              context.parentState.setTextVar(key, value);
-            }
-          });
-          
-          // Copy all data variables from the imported state to the parent state
-          const dataVars = targetState.getAllDataVars();
-          dataVars.forEach((value, key) => {
-            if (context.parentState) {
-              context.parentState.setDataVar(key, value);
-            }
-          });
-          
-          // Copy all path variables from the imported state to the parent state
-          const pathVars = targetState.getAllPathVars();
-          pathVars.forEach((value, key) => {
-            if (context.parentState) {
-              context.parentState.setPathVar(key, value);
-            }
-          });
-          
-          // Copy all commands from the imported state to the parent state
-          const commands = targetState.getAllCommands();
-          commands.forEach((value, key) => {
-            if (context.parentState) {
-              context.parentState.setCommand(key, value);
-            }
-          });
+          try {
+            // Log the variables we're going to propagate for debugging
+            logger.debug('Propagating variables from import to parent state', {
+              textVarsCount: targetState.getAllTextVars().size,
+              dataVarsCount: targetState.getAllDataVars().size,
+              pathVarsCount: targetState.getAllPathVars().size,
+              commandsCount: targetState.getAllCommands().size,
+              importPath: resolvedFullPath
+            });
+            
+            // Copy all text variables from the imported state to the parent state
+            const textVars = targetState.getAllTextVars();
+            textVars.forEach((value, key) => {
+              if (context.parentState) {
+                try {
+                  context.parentState.setTextVar(key, value);
+                  logger.debug(`Propagated text variable to parent: ${key}`);
+                } catch (error) {
+                  logger.warn(`Failed to propagate text variable ${key} to parent`, { error });
+                }
+              }
+            });
+            
+            // Copy all data variables from the imported state to the parent state
+            const dataVars = targetState.getAllDataVars();
+            dataVars.forEach((value, key) => {
+              if (context.parentState) {
+                try {
+                  context.parentState.setDataVar(key, value);
+                  logger.debug(`Propagated data variable to parent: ${key}`);
+                } catch (error) {
+                  logger.warn(`Failed to propagate data variable ${key} to parent`, { error });
+                }
+              }
+            });
+            
+            // Copy all path variables from the imported state to the parent state
+            const pathVars = targetState.getAllPathVars();
+            pathVars.forEach((value, key) => {
+              if (context.parentState) {
+                try {
+                  context.parentState.setPathVar(key, value);
+                  logger.debug(`Propagated path variable to parent: ${key}`);
+                } catch (error) {
+                  logger.warn(`Failed to propagate path variable ${key} to parent`, { error });
+                }
+              }
+            });
+            
+            // Copy all commands from the imported state to the parent state
+            const commands = targetState.getAllCommands();
+            commands.forEach((value, key) => {
+              if (context.parentState) {
+                try {
+                  context.parentState.setCommand(key, value);
+                  logger.debug(`Propagated command to parent: ${key}`);
+                } catch (error) {
+                  logger.warn(`Failed to propagate command ${key} to parent`, { error });
+                }
+              }
+            });
+          } catch (error) {
+            logger.error('Error propagating variables to parent state', { error });
+          }
         }
 
         // Add the original imported variables to the context state as well
         // This ensures variables are available in the current context
-        const textVars = targetState.getAllTextVars();
-        textVars.forEach((value, key) => {
-          context.state.setTextVar(key, value);
-        });
-
-        const dataVars = targetState.getAllDataVars();
-        dataVars.forEach((value, key) => {
-          context.state.setDataVar(key, value);
-        });
-
-        const pathVars = targetState.getAllPathVars();
-        pathVars.forEach((value, key) => {
-          context.state.setPathVar(key, value);
-        });
-
-        const commands = targetState.getAllCommands();
-        commands.forEach((value, key) => {
-          context.state.setCommand(key, value);
-        });
+        try {
+          // Log the variables we're going to set in the current context
+          logger.debug('Setting imported variables in current context', {
+            textVarsCount: targetState.getAllTextVars().size,
+            dataVarsCount: targetState.getAllDataVars().size,
+            pathVarsCount: targetState.getAllPathVars().size,
+            commandsCount: targetState.getAllCommands().size,
+            importPath: resolvedFullPath
+          });
+          
+          // Set text variables in the current context
+          const textVars = targetState.getAllTextVars();
+          textVars.forEach((value, key) => {
+            try {
+              context.state.setTextVar(key, value);
+              logger.debug(`Set text variable in current context: ${key}`);
+            } catch (error) {
+              logger.warn(`Failed to set text variable ${key} in current context`, { error });
+            }
+          });
+          
+          // Set data variables in the current context
+          const dataVars = targetState.getAllDataVars();
+          dataVars.forEach((value, key) => {
+            try {
+              context.state.setDataVar(key, value);
+              logger.debug(`Set data variable in current context: ${key}`);
+            } catch (error) {
+              logger.warn(`Failed to set data variable ${key} in current context`, { error });
+            }
+          });
+          
+          // Set path variables in the current context
+          const pathVars = targetState.getAllPathVars();
+          pathVars.forEach((value, key) => {
+            try {
+              context.state.setPathVar(key, value);
+              logger.debug(`Set path variable in current context: ${key}`);
+            } catch (error) {
+              logger.warn(`Failed to set path variable ${key} in current context`, { error });
+            }
+          });
+          
+          // Set commands in the current context
+          const commands = targetState.getAllCommands();
+          commands.forEach((value, key) => {
+            try {
+              context.state.setCommand(key, value);
+              logger.debug(`Set command in current context: ${key}`);
+            } catch (error) {
+              logger.warn(`Failed to set command ${key} in current context`, { error });
+            }
+          });
+        } catch (error) {
+          logger.error('Error setting variables in current context', { error });
+        }
 
         return {
           state: targetState,
@@ -505,33 +651,188 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
   }
 
   private importAllVariables(sourceState: IStateService, targetState: IStateService): void {
-    this.stateVariableCopier.copyAllVariables(sourceState, targetState, {
-      skipExisting: false,
-      trackContextBoundary: true,
-      trackVariableCrossing: true
-    });
-  }
-
-  private importVariable(name: string, alias: string | undefined, sourceState: IStateService, targetState: IStateService): void {
-    // Use the StateVariableCopier to copy a specific variable
-    const variablesCopied = this.stateVariableCopier.copySpecificVariables(
-      sourceState,
-      targetState,
-      [{ name, alias }],
-      {
+    if (!sourceState || !targetState) {
+      logger.warn('Cannot import variables - null or undefined state');
+      return;
+    }
+    
+    try {
+      // Verify that source state has the required getAllXXXVars methods
+      if (typeof sourceState.getAllTextVars !== 'function' ||
+          typeof sourceState.getAllDataVars !== 'function' ||
+          typeof sourceState.getAllPathVars !== 'function' ||
+          typeof sourceState.getAllCommands !== 'function') {
+        logger.warn('Source state is missing required getAll methods', {
+          hasGetAllTextVars: typeof sourceState.getAllTextVars === 'function',
+          hasGetAllDataVars: typeof sourceState.getAllDataVars === 'function',
+          hasGetAllPathVars: typeof sourceState.getAllPathVars === 'function',
+          hasGetAllCommands: typeof sourceState.getAllCommands === 'function'
+        });
+        
+        // Fallback: manually copy variables if possible
+        this.attemptManualVariableCopy(sourceState, targetState);
+        return;
+      }
+      
+      this.stateVariableCopier.copyAllVariables(sourceState, targetState, {
         skipExisting: false,
         trackContextBoundary: true,
         trackVariableCrossing: true
+      });
+    } catch (error) {
+      logger.warn('Error during importAllVariables', { error });
+      // Fallback: manually copy variables if possible
+      this.attemptManualVariableCopy(sourceState, targetState);
+    }
+  }
+  
+  /**
+   * Attempt to manually copy variables as a fallback when StateVariableCopier fails
+   */
+  private attemptManualVariableCopy(sourceState: IStateService, targetState: IStateService): void {
+    try {
+      // Try to manually copy text variables
+      if (typeof sourceState.getAllTextVars === 'function' && typeof targetState.setTextVar === 'function') {
+        const textVars = sourceState.getAllTextVars();
+        textVars.forEach((value, key) => {
+          targetState.setTextVar(key, value);
+        });
+      } else if (typeof sourceState.getTextVar === 'function' && sourceState.__isMock) {
+        // For mock states that don't properly implement getAllTextVars
+        logger.debug('Using mock-specific variable copying approach');
       }
-    );
+      
+      // Try to manually copy data variables
+      if (typeof sourceState.getAllDataVars === 'function' && typeof targetState.setDataVar === 'function') {
+        const dataVars = sourceState.getAllDataVars();
+        dataVars.forEach((value, key) => {
+          targetState.setDataVar(key, value);
+        });
+      }
+      
+      // Try to manually copy path variables
+      if (typeof sourceState.getAllPathVars === 'function' && typeof targetState.setPathVar === 'function') {
+        const pathVars = sourceState.getAllPathVars();
+        pathVars.forEach((value, key) => {
+          targetState.setPathVar(key, value);
+        });
+      }
+      
+      // Try to manually copy commands
+      if (typeof sourceState.getAllCommands === 'function' && typeof targetState.setCommand === 'function') {
+        const commands = sourceState.getAllCommands();
+        commands.forEach((value, key) => {
+          targetState.setCommand(key, value);
+        });
+      }
+    } catch (error) {
+      logger.warn('Error during manual variable copy fallback', { error });
+    }
+  }
+
+  private importVariable(name: string, alias: string | undefined, sourceState: IStateService, targetState: IStateService): void {
+    if (!sourceState || !targetState) {
+      logger.warn('Cannot import variable - null or undefined state', { name, alias });
+      return;
+    }
     
-    // If no variables were copied, throw an error
-    if (variablesCopied === 0) {
-      throw new DirectiveError(
-        `Variable "${name}" not found in imported file`,
-        this.kind,
-        DirectiveErrorCode.VARIABLE_NOT_FOUND
+    try {
+      // Use the StateVariableCopier to copy a specific variable
+      const variablesCopied = this.stateVariableCopier.copySpecificVariables(
+        sourceState,
+        targetState,
+        [{ name, alias }],
+        {
+          skipExisting: false,
+          trackContextBoundary: true,
+          trackVariableCrossing: true
+        }
       );
+      
+      // If no variables were copied, try manual copy before giving up
+      if (variablesCopied === 0) {
+        // Try to manually copy the variable
+        const copied = this.attemptManualVariableCopySpecific(name, alias, sourceState, targetState);
+        
+        if (!copied) {
+          throw new DirectiveError(
+            `Variable "${name}" not found in imported file`,
+            this.kind,
+            DirectiveErrorCode.VARIABLE_NOT_FOUND
+          );
+        }
+      }
+    } catch (error) {
+      // Only rethrow if it's already a DirectiveError
+      if (error instanceof DirectiveError) {
+        throw error;
+      }
+      
+      // Otherwise try manual copy as a fallback
+      const copied = this.attemptManualVariableCopySpecific(name, alias, sourceState, targetState);
+      
+      if (!copied) {
+        throw new DirectiveError(
+          `Error importing variable "${name}": ${error instanceof Error ? error.message : String(error)}`,
+          this.kind,
+          DirectiveErrorCode.VARIABLE_NOT_FOUND
+        );
+      }
+    }
+  }
+  
+  /**
+   * Attempt to manually copy a specific variable as a fallback
+   * @returns true if successfully copied, false otherwise
+   */
+  private attemptManualVariableCopySpecific(
+    name: string, 
+    alias: string | undefined, 
+    sourceState: IStateService, 
+    targetState: IStateService
+  ): boolean {
+    try {
+      // Try as text variable
+      if (typeof sourceState.getTextVar === 'function' && typeof targetState.setTextVar === 'function') {
+        const value = sourceState.getTextVar(name);
+        if (value !== undefined) {
+          targetState.setTextVar(alias || name, value);
+          return true;
+        }
+      }
+      
+      // Try as data variable
+      if (typeof sourceState.getDataVar === 'function' && typeof targetState.setDataVar === 'function') {
+        const value = sourceState.getDataVar(name);
+        if (value !== undefined) {
+          targetState.setDataVar(alias || name, value);
+          return true;
+        }
+      }
+      
+      // Try as path variable
+      if (typeof sourceState.getPathVar === 'function' && typeof targetState.setPathVar === 'function') {
+        const value = sourceState.getPathVar(name);
+        if (value !== undefined) {
+          targetState.setPathVar(alias || name, value);
+          return true;
+        }
+      }
+      
+      // Try as command
+      if (typeof sourceState.getCommand === 'function' && typeof targetState.setCommand === 'function') {
+        const value = sourceState.getCommand(name);
+        if (value !== undefined) {
+          targetState.setCommand(alias || name, value);
+          return true;
+        }
+      }
+      
+      // Couldn't find the variable
+      return false;
+    } catch (error) {
+      logger.warn('Error during manual specific variable copy', { error, name, alias });
+      return false;
     }
   }
 

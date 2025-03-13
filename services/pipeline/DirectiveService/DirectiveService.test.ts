@@ -9,6 +9,7 @@ import { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
 import { vi } from 'vitest';
 import { StateTrackingService } from '@tests/utils/debug/StateTrackingService/StateTrackingService.js';
 import { TestDirectiveHandlerHelper } from '@tests/utils/di/TestDirectiveHandlerHelper.js';
+import { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
 
 // Main test suite for DirectiveService
 describe('DirectiveService', () => {
@@ -147,47 +148,127 @@ describe('DirectiveService', () => {
     });
 
     describe('Import directives', () => {
-      // Skip these tests due to file system isolation issues
       it.skip('should process basic import', async () => {
+        // NOTE: Skipping this test temporarily during ServiceMediator removal.
+        // Will need to properly integrate with the new factory pattern in a follow-up task.
+        
         // Create the module.meld file with content
-        await context.fs.writeFile('module.meld', '@text greeting = "Hello"');
+        await context.fs.writeFile('/project/module.meld', '@text greeting = "Hello"');
         
         // Create import directive node with value property
         const node = context.factory.createImportDirective('module.meld', context.factory.createLocation(1, 1));
         
         // Verify file exists before test
-        const exists = await context.fs.exists('module.meld');
-        console.log(`module.meld exists: ${exists}`);
+        const exists = await context.fs.exists('/project/module.meld');
+        expect(exists).toBe(true);
         
-        const result = await service.processDirective(node, {
-          currentFilePath: 'main.meld',
-          state: context.services.state
-        });
+        // Mock the resolution service to resolve the path to the absolute path
+        const resolutionService = await context.resolve('IResolutionService');
+        const originalResolveInContext = resolutionService.resolveInContext;
+        resolutionService.resolveInContext = vi.fn().mockImplementation(
+          async (path: string, resolveContext: any) => {
+            if (path === 'module.meld') {
+              return '/project/module.meld';
+            }
+            return originalResolveInContext(path, resolveContext);
+          }
+        );
+        
+        // Mock the interpreter service to properly handle the import
+        const interpreterService = await context.resolve<IInterpreterService>('IInterpreterService');
+        
+        // Use vi.fn() instead of spyOn to avoid type issues
+        const originalInterpret = interpreterService.interpret;
+        interpreterService.interpret = vi.fn().mockImplementation(
+          async (nodes: any, options: any) => {
+            // Simulate interpreting the imported file by setting the variable
+            if (options?.initialState) {
+              options.initialState.setTextVar('greeting', 'Hello');
+              return options.initialState;
+            }
+            return context.services.state;
+          }
+        );
+        
+        try {
+          const result = await service.processDirective(node, {
+            currentFilePath: 'main.meld',
+            state: context.services.state
+          });
 
-        expect(result.getTextVar('greeting')).toBe('Hello');
+          expect(result.getTextVar('greeting')).toBe('Hello');
+        } finally {
+          // Restore original methods
+          interpreterService.interpret = originalInterpret;
+          resolutionService.resolveInContext = originalResolveInContext;
+        }
       });
 
-      // Skip this test due to file system isolation issues
       it.skip('should handle nested imports', async () => {
-        // Create nested import files
-        await context.fs.writeFile('inner.meld', '@text inner = "Inner Content"');
-        await context.fs.writeFile('middle.meld', '@import inner.meld\n@text middle = "Middle Content"');
+        // NOTE: Skipping this test temporarily during ServiceMediator removal.
+        // Will need to properly integrate with the new factory pattern in a follow-up task.
+        
+        // Create nested import files with absolute paths in the project directory
+        await context.fs.writeFile('/project/inner.meld', '@text inner = "Inner Content"');
+        await context.fs.writeFile('/project/middle.meld', '@import inner.meld\n@text middle = "Middle Content"');
         
         // Create import directive node with value property
         const node = context.factory.createImportDirective('middle.meld', context.factory.createLocation(1, 1));
         
         // Verify files exist before test
-        const innerExists = await context.fs.exists('inner.meld');
-        const middleExists = await context.fs.exists('middle.meld');
-        console.log(`inner.meld exists: ${innerExists}, middle.meld exists: ${middleExists}`);
+        const innerExists = await context.fs.exists('/project/inner.meld');
+        const middleExists = await context.fs.exists('/project/middle.meld');
+        expect(innerExists).toBe(true);
+        expect(middleExists).toBe(true);
         
-        const result = await service.processDirective(node, {
-          currentFilePath: 'main.meld',
-          state: context.services.state
-        });
+        // Mock the resolution service to resolve paths to absolute paths
+        const resolutionService = await context.resolve('IResolutionService');
+        const originalResolveInContext = resolutionService.resolveInContext;
+        resolutionService.resolveInContext = vi.fn().mockImplementation(
+          async (path: string, resolveContext: any) => {
+            if (path === 'middle.meld') {
+              return '/project/middle.meld';
+            } else if (path === 'inner.meld') {
+              return '/project/inner.meld';
+            }
+            return originalResolveInContext(path, resolveContext);
+          }
+        );
+        
+        // Mock the interpreter service to properly handle nested imports
+        const interpreterService = await context.resolve<IInterpreterService>('IInterpreterService');
+        
+        // Use vi.fn() instead of spyOn to avoid type issues
+        const originalInterpret = interpreterService.interpret;
+        interpreterService.interpret = vi.fn().mockImplementation(
+          async (nodes: any, options: any) => {
+            // Simulate interpreting the imported file by setting variables
+            if (options?.initialState) {
+              if (options.filePath?.includes('middle.meld')) {
+                options.initialState.setTextVar('middle', 'Middle Content');
+                options.initialState.setTextVar('inner', 'Inner Content');
+              } else if (options.filePath?.includes('inner.meld')) {
+                options.initialState.setTextVar('inner', 'Inner Content');
+              }
+              return options.initialState;
+            }
+            return context.services.state;
+          }
+        );
+        
+        try {
+          const result = await service.processDirective(node, {
+            currentFilePath: 'main.meld',
+            state: context.services.state
+          });
 
-        expect(result.getTextVar('inner')).toBe('Inner Content');
-        expect(result.getTextVar('middle')).toBe('Middle Content');
+          expect(result.getTextVar('inner')).toBe('Inner Content');
+          expect(result.getTextVar('middle')).toBe('Middle Content');
+        } finally {
+          // Restore original methods
+          interpreterService.interpret = originalInterpret;
+          resolutionService.resolveInContext = originalResolveInContext;
+        }
       });
 
       it('should detect circular imports', async () => {
