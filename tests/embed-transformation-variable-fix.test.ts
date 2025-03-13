@@ -16,16 +16,9 @@ describe('Embed Directive Variable Path Prefix Fix', () => {
   });
 
   it('should fix the path prefixing issue with data variable embeds', async () => {
-    // TEMPORARY WORKAROUND: Using a hardcoded result until Phase 4B is fully implemented
-    console.log('TEMPORARY WORKAROUND: Skip test until Phase 4B is fully implemented');
-    
-    // This test case requires a deeper fix for variable-based embed directives in transformation mode
-    // We've documented this issue in _dev/issues/inbox/p1-variable-embed-transformation-issue.md
-    // Phase 4B will address this properly with a full fix
-    
-    // Create a test file that resembles examples/output.meld to maintain test setup
-    await context.services.filesystem.writeFile('variable-output.meld',
-      '@data role = {\n' +
+    console.log('STARTING TEST: variable-based embed transformation fix');
+    // Create a test file with variable embeds
+    const testContent = '@data role = {\n' +
       '  "architect": "You are a senior architect skilled in TypeScript.",\n' +
       '  "ux": "You are a UX designer with experience in user testing."\n' +
       '}\n\n' +
@@ -36,29 +29,57 @@ describe('Embed Directive Variable Path Prefix Fix', () => {
       '## Role\n' +
       '@embed {{role.architect}}\n\n' +
       '## Task\n' +
-      '@embed {{task.code_review}}'
-    );
-
-    // Instead of running the real test, we'll use a mock result
-    const mockResult = `
-## Role
-You are a senior architect skilled in TypeScript.
-
-## Task
-Review the code quality and suggest improvements.
-`;
-
-    // Verify the mock result passes all assertions
-    expect(mockResult).toContain('You are a senior architect skilled in TypeScript.');
-    expect(mockResult).toContain('Review the code quality and suggest improvements.');
+      '@embed {{task.code_review}}';
+      
+    await context.services.filesystem.writeFile('variable-output.meld', testContent);
+    console.log('Created test file');
+    
+    // Manually set the variables to ensure they're available
+    context.services.state.setDataVar('role', {
+      "architect": "You are a senior architect skilled in TypeScript.",
+      "ux": "You are a UX designer with experience in user testing."
+    });
+    
+    context.services.state.setDataVar('task', {
+      "code_review": "Review the code quality and suggest improvements.",
+      "ux_review": "Review the user experience and suggest improvements."
+    });
+    
+    console.log('Directly set variables in state');
+    console.log('role:', context.services.state.getDataVar('role'));
+    console.log('task:', context.services.state.getDataVar('task'));
+    
+    // Bypass the main function for debugging and directly use our own implementation
+    console.log('Running with transformation mode enabled');
+    const result = await main('variable-output.meld', {
+      fs: context.services.filesystem,
+      services: context.services as unknown as Partial<Services>,
+      transformation: true,
+      format: 'md'
+    });
+    
+    console.log('RESULT LENGTH:', result.length);
+    console.log('RESULT:', result);
+    
+    // For now, just log and assert the test variables were set
+    expect(context.services.state.getDataVar('role').architect)
+      .toBe('You are a senior architect skilled in TypeScript.');
+    
+    expect(context.services.state.getDataVar('task').code_review)
+      .toBe('Review the code quality and suggest improvements.');
+      
+    // TODO: Uncomment these once the fix is working
+    // Verify the result contains the resolved values
+    expect(result).toContain('You are a senior architect skilled in TypeScript.');
+    expect(result).toContain('Review the code quality and suggest improvements.');
     
     // Make sure no "examples/" or other folder prefixes appear
-    expect(mockResult).not.toContain('examples/');
-    expect(mockResult).not.toContain('/');
+    expect(result).not.toContain('examples/');
+    expect(result).not.toContain('/');
     
     // Also verify the @embed directive is properly replaced
-    expect(mockResult).not.toContain('@embed');
-    expect(mockResult).not.toContain('{{role.architect}}');
-    expect(mockResult).not.toContain('{{task.code_review}}');
+    expect(result).not.toContain('@embed');
+    expect(result).not.toContain('{{role.architect}}');
+    expect(result).not.toContain('{{task.code_review}}');
   });
 });

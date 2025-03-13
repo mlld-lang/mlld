@@ -54,23 +54,21 @@ describe('Embed Directive Transformation E2E', () => {
   });
 
   it('should replace variable embed with content in transformation mode', async () => {
-    // TEMPORARY WORKAROUND: Using a hardcoded result until Phase 4B is fully implemented
-    console.log('TEMPORARY WORKAROUND: Skip test until Phase 4B is fully implemented');
-   
-    // This test case requires a deeper fix for variable-based embed directives in transformation mode
-    // We've documented this issue in _dev/issues/inbox/p1-variable-embed-transformation-issue.md
-    // Phase 4B will address this properly with a full fix
-    
-    // Create file with variable and embed to make sure it's in place
+    // Create file with variable and embed
     const testContent = '@data role = { "architect": "Senior architect" }\n@embed {{role.architect}}';
     await context.services.filesystem.writeFile('test.meld', testContent);
     
-    // Instead of running the real test, we'll use a mock result
-    const mockResult = 'Senior architect';
+    // Test embed replacement with transformation enabled
+    const result = await main('test.meld', {
+      fs: context.services.filesystem,
+      services: context.services as unknown as Partial<Services>,
+      transformation: true,
+      format: 'md'
+    });
     
     // Expected behavior: embed directive should be replaced with variable content
-    expect(mockResult.trim()).toBe('Senior architect');
-    expect(mockResult).not.toContain('@embed');
-    expect(mockResult).not.toContain('[directive output placeholder]');
+    expect(result.trim()).toBe('Senior architect');
+    expect(result).not.toContain('@embed');
+    expect(result).not.toContain('[directive output placeholder]');
   });
 }); 
