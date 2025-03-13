@@ -1,0 +1,83 @@
+import { TestContextDI } from '@tests/utils/di/TestContextDI';
+import path from 'path';
+import { promises as realFs } from 'fs';
+
+// Configuration
+export const TEST_CASES_DIR = 'tests/cases';
+export const VALID_CASES_DIR = `${TEST_CASES_DIR}/valid`;
+export const INVALID_CASES_DIR = `${TEST_CASES_DIR}/invalid`;
+export const ERROR_EXTENSION = '.error.mld'; // Files expected to fail
+export const EXPECTED_EXTENSION = '.expected.md'; // Expected output files
+
+// Helper function to recursively find files with a specific extension
+export async function findFiles(dir: string, extension: string): Promise<string[]> {
+  const files: string[] = [];
+  
+  try {
+    const entries = await realFs.readdir(dir, { withFileTypes: true });
+    
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+      
+      if (entry.isDirectory()) {
+        // Recursively scan subdirectories
+        const nestedFiles = await findFiles(fullPath, extension);
+        files.push(...nestedFiles);
+      } else if (entry.isFile() && entry.name.endsWith(extension)) {
+        files.push(fullPath);
+      }
+    }
+  } catch (error) {
+    console.error(`Error scanning directory ${dir}:`, error);
+  }
+  
+  return files;
+}
+
+// Get a list of test case names for reporting
+export function getTestCaseName(filePath: string): string {
+  const relativePath = path.relative(TEST_CASES_DIR, filePath);
+  return relativePath.replace(/\\/g, '/'); // Normalize path separators
+}
+
+// Create and setup test context
+export async function setupTestContext(testFiles: string[]): Promise<TestContextDI> {
+  const context = TestContextDI.create();
+  await context.initialize();
+  
+  // Enable transformation for test examples
+  context.enableTransformation({
+    variables: true,
+    directives: true,
+    commands: true,
+    imports: true
+  });
+  
+  // Add test files to the testing file system
+  for (const filePath of testFiles) {
+    const content = await realFs.readFile(filePath, 'utf-8');
+    await context.services.filesystem.writeFile(filePath, content);
+    
+    // Also add any related files in the same directory
+    const dir = path.dirname(filePath);
+    try {
+      const otherFiles = await realFs.readdir(dir);
+      // Add any supporting files that might be needed (e.g., for imports)
+      for (const otherFile of otherFiles) {
+        const otherPath = path.join(dir, otherFile);
+        if (otherPath !== filePath && (otherFile.endsWith('.mld') || otherFile.endsWith('.md'))) {
+          try {
+            const otherContent = await realFs.readFile(otherPath, 'utf-8');
+            await context.services.filesystem.writeFile(otherPath, otherContent);
+          } catch (error) {
+            // Skip if can't read
+          }
+        }
+      }
+    } catch (error) {
+      // Skip if directory can't be read
+    }
+  }
+  
+  return context;
+}

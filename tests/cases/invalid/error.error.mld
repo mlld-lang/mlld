@@ -1,0 +1,5 @@
+# Error test file
+
+@text = "Missing variable name"
+
+${nonexistent}
