@@ -49,8 +49,8 @@ export class PathService implements IPathService {
     this.homePath = homeEnv || '';
     this.projectPath = process.cwd();
     
-    // Initialize factory if available
-    this.ensureFactoryInitialized();
+    // Initialize factory if available - REMOVED to avoid circular dependency
+    // this.ensureFactoryInitialized();
     
     if (process.env.DEBUG === 'true') {
       console.log('PathService: Initialized with', {
@@ -123,8 +123,9 @@ export class PathService implements IPathService {
     
     // In test mode, set default paths for testing
     if (enabled) {
-      this.homePath = '/home/user';
-      this.projectPath = '/project/root';
+      this.homePath = process.env.HOME || '/home/user';
+      // Use current working directory instead of hardcoded test path
+      this.projectPath = process.cwd();
     }
   }
   
@@ -809,7 +810,7 @@ export class PathService implements IPathService {
    * @returns True if the path exists, false otherwise
    */
   async exists(filePath: string): Promise<boolean> {
-    // Ensure factory is initialized
+    // Ensure factory is initialized - only when needed
     this.ensureFactoryInitialized();
     
     // Try to use the filesystem client
@@ -835,7 +836,7 @@ export class PathService implements IPathService {
    * @returns True if the path is a directory, false otherwise
    */
   async isDirectory(dirPath: string): Promise<boolean> {
-    // Ensure factory is initialized
+    // Ensure factory is initialized - only when needed
     this.ensureFactoryInitialized();
     
     // Try to use the filesystem client

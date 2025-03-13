@@ -48,8 +48,8 @@ export class FileSystemService implements IFileSystemService {
     // Set file system implementation
     this.fs = fileSystem || new NodeFileSystem();
     
-    // Initialize factory if available
-    this.ensureFactoryInitialized();
+    // Initialize factory if available - REMOVED to avoid circular dependency
+    // this.ensureFactoryInitialized();
     
     if (process.env.DEBUG === 'true') {
       console.log('FileSystemService: Initialized with', {

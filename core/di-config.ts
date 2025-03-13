@@ -61,11 +61,16 @@ const pathOps = new PathOperationsService();
 const nodeFileSystem = new NodeFileSystem();
 const projectPathResolver = new ProjectPathResolver();
 
-// Create instances in the right order to resolve dependencies
-const pathService = new PathService(projectPathResolver);
-const parserService = new ParserService();
+// Register the nodeFileSystem instance as IFileSystem
+container.registerInstance('IFileSystem', nodeFileSystem);
+container.registerInstance('NodeFileSystem', nodeFileSystem);
 
-// Register PathService first
+// Create PathService first
+const pathService = new PathService(projectPathResolver);
+// Put PathService in test mode for debugging
+pathService.setTestMode(true);
+
+// Register PathService
 container.registerInstance('PathService', pathService);
 container.registerInstance('IPathService', pathService);
 
@@ -75,6 +80,22 @@ container.registerInstance('PathServiceClientFactory', pathServiceClientFactory)
 
 // Now create FileSystemService with all dependencies
 const fileSystemService = new FileSystemService(pathOps, nodeFileSystem, pathServiceClientFactory);
+container.registerInstance('FileSystemService', fileSystemService);
+container.registerInstance('IFileSystemService', fileSystemService);
+
+// Create FileSystemServiceClientFactory
+const fileSystemServiceClientFactory = new FileSystemServiceClientFactory(fileSystemService);
+container.registerInstance('FileSystemServiceClientFactory', fileSystemServiceClientFactory);
+
+// Manually inject FileSystemServiceClientFactory into PathService
+pathService["fsClientFactory"] = fileSystemServiceClientFactory;
+pathService["factoryInitialized"] = true;
+
+// Manually inject PathServiceClient into FileSystemService
+fileSystemService["pathClient"] = pathServiceClientFactory.createClient();
+fileSystemService["factoryInitialized"] = true;
+
+const parserService = new ParserService();
 
 // Create StateService with early initialization
 // This is needed because ResolutionService depends on StateService
@@ -90,8 +111,6 @@ const stateService = new StateService(stateFactory, stateEventService, stateTrac
 const resolutionService = new ResolutionService(stateService, fileSystemService, pathService);
 
 // Register instances of services with circular dependencies
-container.registerInstance('FileSystemService', fileSystemService);
-container.registerInstance('IFileSystemService', fileSystemService);
 container.registerInstance('PathService', pathService);
 container.registerInstance('IPathService', pathService);
 container.registerInstance('ParserService', parserService);
@@ -103,7 +122,6 @@ container.registerInstance('IStateService', stateService);
 
 // Register client factories for circular dependency resolution
 container.register('PathServiceClientFactory', { useClass: PathServiceClientFactory });
-container.register('FileSystemServiceClientFactory', { useClass: FileSystemServiceClientFactory });
 container.register('ParserServiceClientFactory', { useClass: ParserServiceClientFactory });
 container.register('ResolutionServiceClientFactory', { useClass: ResolutionServiceClientFactory });
 container.register('VariableReferenceResolverClientFactory', { useClass: VariableReferenceResolverClientFactory });
@@ -150,10 +168,6 @@ container.register(ProjectPathResolver, { useClass: ProjectPathResolver });
 // PathOperationsService
 container.register('PathOperationsService', { useClass: PathOperationsService });
 container.register('IPathOperationsService', { useToken: 'PathOperationsService' });
-
-// NodeFileSystem
-container.register('NodeFileSystem', { useClass: NodeFileSystem });
-container.register('IFileSystem', { useToken: 'NodeFileSystem' });
 
 // SourceMapService
 container.register('SourceMapService', { useClass: SourceMapService });
