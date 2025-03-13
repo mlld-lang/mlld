@@ -712,13 +712,14 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
         });
         
         // Log a warning if this is a variable-based embed
-        if (typeof path === 'object' && path.isVariableReference) {
+        if (typeof path === 'object' && path !== null && path.isVariableReference === true) {
           console.log(
             'NOTE: Variable-based embed transformation will be properly fixed in Phase 4B. ' +
             'See _dev/issues/inbox/p1-variable-embed-transformation-issue.md'
           );
         }
         
+        // Register the transformation (this part will be enhanced in Phase 4B)
         newState.transformNode(node, replacement);
       }
 

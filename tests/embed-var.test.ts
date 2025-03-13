@@ -1,0 +1,41 @@
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { main } from '@api/index.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
+import type { Services } from '@core/types/index.js';
+
+describe('Embed Var Test', () => {
+  let context: TestContextDI;
+
+  beforeEach(async () => {
+    context = TestContextDI.create();
+    await context.initialize();
+  });
+
+  afterEach(async () => {
+    await context?.cleanup();
+  });
+
+  it('should handle simple text variable embedding', async () => {
+    // Create file with text variable and embed
+    await context.services.filesystem.writeFile('test.meld', '@text greeting = "Hello World"\n@embed {{greeting}}');
+
+    // Initialize state
+    const state = context.services.state;
+    state.setTextVar('greeting', 'Hello World');
+    console.log('Initial state greeting:', state.getTextVar('greeting'));
+
+    // Test embed replacement with transformation enabled
+    const result = await main('test.meld', {
+      fs: context.services.filesystem,
+      services: context.services as unknown as Partial<Services>,
+      transformation: true,
+      format: 'md'
+    });
+
+    console.log('Result:', result);
+    console.log('Result length:', result.length);
+    
+    // Expected behavior: embed directive should be replaced with variable content
+    expect(result.trim()).toBe('Hello World');
+  });
+});

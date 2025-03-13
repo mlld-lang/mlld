@@ -1868,7 +1868,8 @@ export class OutputService implements IOutputService {
           // For now, we'll add a warning
           if (directive.directive.path && 
               typeof directive.directive.path === 'object' && 
-              directive.directive.path.isVariableReference) {
+              directive.directive.path !== null &&
+              directive.directive.path.isVariableReference === true) {
             logger.warn('Variable-based embed directive transformation will be fixed in Phase 4B', {
               directivePath: directive.directive.path,
               directiveLine: node.location?.start?.line
