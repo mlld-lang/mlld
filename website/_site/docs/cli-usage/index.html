@@ -3,22 +3,25 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Meld CLI Usage - meld</title>
+  <title>CLI Usage - mlld</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Tektur:wght@800&family=Cousine:wght@400;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/style.css">
   <script src="/js/theme.js" defer></script>
   <script src="/js/terminal.js" defer></script>
+  <script src="/js/animation.js" defer></script>
 </head>
 <body>
   <header>
     <div class="container">
-      <a href="/" class="logo">meld</a>
+      <div class="logo-container">
+        <a href="/" class="logo">mlld</a>
+        <span class="logo-tagline">modular prompt scripting</span>
+      </div>
       <nav>
         <ul>
-          <li><a href="/" aria-current=&quot;page&quot;>Home</a></li>
-          <li><a href="/docs/introduction/" >Docs</a></li>
+          <li><a href="/docs/" aria-current=&quot;page&quot;>Docs</a></li>
           <li><a href="https://github.com/meldorg/meld">GitHub</a></li>
         </ul>
       </nav>
@@ -29,37 +32,160 @@
     <div class="container">
       
 <div class="docs-layout">
-  <aside class="docs-sidebar">
+  <button class="docs-sidebar-toggle" aria-label="Toggle menu" aria-expanded="false">
+    <span class="hamburger-icon">
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+    </span>
+    <span class="toggle-text">Menu</span>
+  </button>
+  
+  <!-- Add overlay for mobile --> 
+  <div class="docs-overlay" id="docs-overlay"></div>
+  
+  <aside class="docs-sidebar" id="docs-sidebar">
     <nav>
       <h3>Documentation</h3>
       <ul class="nav-list">
         <li><a href="/docs/introduction/" >Introduction</a></li>
-        <li><a href="/docs/cli-usage/" aria-current=&quot;page&quot;>CLI Usage</a></li>
-        <li><a href="/docs/sdk-usage/" >SDK Usage</a></li>
-        <li><a href="/docs/variables/" >Variables</a></li>
-        <li><a href="/docs/error-handling/" >Error Handling</a></li>
-        <li><a href="/docs/grammar-reference/" >Grammar Reference</a></li>
-      </ul>
-      
-      <h3>Directives</h3>
-      <ul class="nav-list">
-        <li><a href="/docs/directives/" >Overview</a></li>
-        <li><a href="/docs/directives/data/" >@data</a></li>
-        <li><a href="/docs/directives/define/" >@define</a></li>
-        <li><a href="/docs/directives/embed/" >@embed</a></li>
-        <li><a href="/docs/directives/import/" >@import</a></li>
-        <li><a href="/docs/directives/path/" >@path</a></li>
-        <li><a href="/docs/directives/run/" >@run</a></li>
-        <li><a href="/docs/directives/text/" >@text</a></li>
+        
+          
+        
+          
+            <li><a href="/docs/syntax-reference/" >Syntax Reference</a></li>
+          
+        
+          
+            <li><a href="/docs/cli-usage/" aria-current=&quot;page&quot;>CLI Usage</a></li>
+          
+        
+          
+            <li><a href="/docs/sdk-usage/" >SDK Usage</a></li>
+          
+        
+          
+            <li><a href="/docs/variables/" >Variables</a></li>
+          
+        
+          
+            <li><a href="/docs/error-handling/" >Error Handling</a></li>
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+        
+        <li>
+          <h4>Directives</h4>
+          <ul class="nav-list">
+            <li><a href="/docs/directives/" >Overview</a></li>
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+                
+                <li><a href="/docs/directives/data/" >
+                  
+                    @data
+                  
+                </a></li>
+              
+            
+              
+                
+                <li><a href="/docs/directives/define/" >
+                  
+                    @define
+                  
+                </a></li>
+              
+            
+              
+                
+                <li><a href="/docs/directives/embed/" >
+                  
+                    @embed
+                  
+                </a></li>
+              
+            
+              
+                
+                <li><a href="/docs/directives/import/" >
+                  
+                    @import
+                  
+                </a></li>
+              
+            
+              
+                
+                <li><a href="/docs/directives/path/" >
+                  
+                    @path
+                  
+                </a></li>
+              
+            
+              
+                
+                <li><a href="/docs/directives/run/" >
+                  
+                    @run
+                  
+                </a></li>
+              
+            
+              
+                
+                <li><a href="/docs/directives/text/" >
+                  
+                    @text
+                  
+                </a></li>
+              
+            
+              
+            
+          </ul>
+        </li>
       </ul>
     </nav>
   </aside>
   
   <div class="docs-content">
-    <h1 id="meld-cli-usage" tabindex="-1">Meld CLI Usage</h1>
+    <h1 id="cli-usage" tabindex="-1">CLI Usage</h1>
 <p>The Meld CLI provides a simple way to process Meld files from the command line.</p>
 <h2 id="installation" tabindex="-1">Installation</h2>
-<p>Install Meld globally to use the CLI:</p>
+<p>Install globally to use the CLI:</p>
 <pre><code class="language-bash">npm install -g meld
 </code></pre>
 <p>Or use it from a local installation:</p>
@@ -68,7 +194,7 @@ npx meld &lt;options&gt;
 </code></pre>
 <h2 id="basic-usage" tabindex="-1">Basic Usage</h2>
 <p>Process a Meld file with default options:</p>
-<pre><code class="language-bash">meld input.meld
+<pre><code class="language-bash">meld input.mld
 </code></pre>
 <p>By default, this will:</p>
 <ul>
@@ -79,7 +205,7 @@ npx meld &lt;options&gt;
 <h2 id="command-line-options" tabindex="-1">Command Line Options</h2>
 <h3 id="output-format" tabindex="-1">Output Format</h3>
 <p>Specify the output format with the <code>--format</code> or <code>-f</code> option:</p>
-<pre><code class="language-bash">meld input.meld --format md
+<pre><code class="language-bash">meld input.mld --format md
 </code></pre>
 <p>Supported formats:</p>
 <ul>
@@ -88,53 +214,106 @@ npx meld &lt;options&gt;
 </ul>
 <h3 id="output-file" tabindex="-1">Output File</h3>
 <p>Specify the output file with the <code>--output</code> or <code>-o</code> option:</p>
-<pre><code class="language-bash">meld input.meld --output output.llm
+<pre><code class="language-bash">meld input.mld --output output.llm
 </code></pre>
 <p>By default, the output file uses the input filename with a new extension.</p>
 <h3 id="output-to-console" tabindex="-1">Output to Console</h3>
 <p>Print to stdout instead of writing to a file with the <code>--stdout</code> option:</p>
-<pre><code class="language-bash">meld input.meld --stdout
+<pre><code class="language-bash">meld input.mld --stdout
 </code></pre>
 <h3 id="combined-options" tabindex="-1">Combined Options</h3>
 <p>You can combine multiple options:</p>
-<pre><code class="language-bash">meld input.meld --format md --output custom.md --stdout
+<pre><code class="language-bash">meld input.mld --format md --output custom.md --stdout
 </code></pre>
 <h2 id="file-extensions" tabindex="-1">File Extensions</h2>
 <p>Meld supports several file extensions:</p>
 <ul>
-<li><code>.meld</code> - Standard Meld files</li>
-<li><code>.meld.md</code> - Meld files with Markdown content</li>
+<li><code>.mld</code> - Standard Meld files</li>
+<li><code>.mld.md</code> - Meld files with Markdown content</li>
 <li><code>.mll</code> - Alternative extension for Meld files</li>
 <li><code>.mll.md</code> - Alternative extension for Meld Markdown files</li>
 </ul>
 <h2 id="examples" tabindex="-1">Examples</h2>
 <p>Process a Meld file with default options:</p>
-<pre><code class="language-bash">meld document.meld
+<pre><code class="language-bash">meld document.mld
 </code></pre>
 <p>Process a Meld file and output as Markdown:</p>
-<pre><code class="language-bash">meld document.meld --format md
+<pre><code class="language-bash">meld document.mld --format md
 </code></pre>
 <p>Process a Meld file and save with custom name:</p>
-<pre><code class="language-bash">meld document.meld --output result.llm
+<pre><code class="language-bash">meld document.mld --output result.llm
 </code></pre>
 <p>Process a Meld file and print to console:</p>
-<pre><code class="language-bash">meld document.meld --stdout
+<pre><code class="language-bash">meld document.mld --stdout
 </code></pre>
 <p>Process a Meld file with multiple options:</p>
-<pre><code class="language-bash">meld document.meld --format md --output result.md --stdout
+<pre><code class="language-bash">meld document.mld --format md --output result.md --stdout
 </code></pre>
 <h2 id="environment-variables" tabindex="-1">Environment Variables</h2>
 <p>Meld scripts can access environment variables using the <code>{{ENV_NAME}}</code> syntax:</p>
 <pre><code class="language-meld">@text token = &quot;{{ENV_TOKEN}}&quot;
 </code></pre>
 <p>You can set these when running the CLI:</p>
-<pre><code class="language-bash">ENV_TOKEN=12345 meld script.meld
+<pre><code class="language-bash">ENV_TOKEN=12345 meld script.mld
 </code></pre>
 <h2 id="project-path" tabindex="-1">Project Path</h2>
 <p>The special <code>$PROJECTPATH</code> or <code>$.</code> variable refers to the directory where the Meld CLI is executed. All relative paths in Meld scripts are resolved relative to this directory.</p>
 
   </div>
 </div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const toggleButton = document.querySelector('.docs-sidebar-toggle');
+    const sidebar = document.getElementById('docs-sidebar');
+    const overlay = document.getElementById('docs-overlay');
+    
+    // Function to toggle the sidebar
+    function toggleSidebar() {
+      const isExpanded = toggleButton.getAttribute('aria-expanded') === 'true';
+      toggleButton.setAttribute('aria-expanded', !isExpanded);
+      sidebar.classList.toggle('open');
+      
+      // Toggle overlay
+      overlay.classList.toggle('active');
+      
+      // Lock/unlock body scroll when sidebar is open on mobile
+      if (window.innerWidth <= 950) {
+        document.body.classList.toggle('sidebar-open', !isExpanded);
+      }
+    }
+    
+    // Add click event for toggle button
+    toggleButton.addEventListener('click', toggleSidebar);
+    
+    // Add click event for overlay to close sidebar
+    overlay.addEventListener('click', function() {
+      if (sidebar.classList.contains('open')) {
+        toggleSidebar();
+      }
+    });
+    
+    // Close sidebar when clicking on a link (mobile only)
+    sidebar.querySelectorAll('a').forEach(link => {
+      link.addEventListener('click', function() {
+        if (window.innerWidth <= 950 && sidebar.classList.contains('open')) {
+          toggleSidebar();
+        }
+      });
+    });
+    
+    // Close sidebar when clicking outside of it (mobile only) - now handled by overlay
+    document.addEventListener('click', function(event) {
+      if (window.innerWidth <= 950 && 
+          sidebar.classList.contains('open') && 
+          !sidebar.contains(event.target) && 
+          !toggleButton.contains(event.target) &&
+          !overlay.contains(event.target)) {
+        toggleSidebar();
+      }
+    });
+  });
+</script>
     </div>
   </main>
 

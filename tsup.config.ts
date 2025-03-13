@@ -19,7 +19,6 @@ const externalDependencies = [
   
   // Node.js built-ins
   'fs',
-  'fs-extra',
   'graceful-fs',
   'path',
   'util',

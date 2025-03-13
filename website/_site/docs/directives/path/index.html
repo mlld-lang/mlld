@@ -3,22 +3,25 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>@path Directive - meld</title>
+  <title>@path Directive - mlld</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Tektur:wght@800&family=Cousine:wght@400;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/style.css">
   <script src="/js/theme.js" defer></script>
   <script src="/js/terminal.js" defer></script>
+  <script src="/js/animation.js" defer></script>
 </head>
 <body>
   <header>
     <div class="container">
-      <a href="/" class="logo">meld</a>
+      <div class="logo-container">
+        <a href="/" class="logo">mlld</a>
+        <span class="logo-tagline">modular prompt scripting</span>
+      </div>
       <nav>
         <ul>
-          <li><a href="/" aria-current=&quot;page&quot;>Home</a></li>
-          <li><a href="/docs/introduction/" >Docs</a></li>
+          <li><a href="/docs/" aria-current=&quot;page&quot;>Docs</a></li>
           <li><a href="https://github.com/meldorg/meld">GitHub</a></li>
         </ul>
       </nav>
@@ -29,28 +32,151 @@
     <div class="container">
       
 <div class="docs-layout">
-  <aside class="docs-sidebar">
+  <button class="docs-sidebar-toggle" aria-label="Toggle menu" aria-expanded="false">
+    <span class="hamburger-icon">
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+    </span>
+    <span class="toggle-text">Menu</span>
+  </button>
+  
+  <!-- Add overlay for mobile --> 
+  <div class="docs-overlay" id="docs-overlay"></div>
+  
+  <aside class="docs-sidebar" id="docs-sidebar">
     <nav>
       <h3>Documentation</h3>
       <ul class="nav-list">
         <li><a href="/docs/introduction/" >Introduction</a></li>
-        <li><a href="/docs/cli-usage/" >CLI Usage</a></li>
-        <li><a href="/docs/sdk-usage/" >SDK Usage</a></li>
-        <li><a href="/docs/variables/" >Variables</a></li>
-        <li><a href="/docs/error-handling/" >Error Handling</a></li>
-        <li><a href="/docs/grammar-reference/" >Grammar Reference</a></li>
-      </ul>
-      
-      <h3>Directives</h3>
-      <ul class="nav-list">
-        <li><a href="/docs/directives/" aria-current=&quot;page&quot;>Overview</a></li>
-        <li><a href="/docs/directives/data/" >@data</a></li>
-        <li><a href="/docs/directives/define/" >@define</a></li>
-        <li><a href="/docs/directives/embed/" >@embed</a></li>
-        <li><a href="/docs/directives/import/" >@import</a></li>
-        <li><a href="/docs/directives/path/" aria-current=&quot;page&quot;>@path</a></li>
-        <li><a href="/docs/directives/run/" >@run</a></li>
-        <li><a href="/docs/directives/text/" >@text</a></li>
+        
+          
+        
+          
+            <li><a href="/docs/syntax-reference/" >Syntax Reference</a></li>
+          
+        
+          
+            <li><a href="/docs/cli-usage/" >CLI Usage</a></li>
+          
+        
+          
+            <li><a href="/docs/sdk-usage/" >SDK Usage</a></li>
+          
+        
+          
+            <li><a href="/docs/variables/" >Variables</a></li>
+          
+        
+          
+            <li><a href="/docs/error-handling/" >Error Handling</a></li>
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+        
+        <li>
+          <h4>Directives</h4>
+          <ul class="nav-list">
+            <li><a href="/docs/directives/" aria-current=&quot;page&quot;>Overview</a></li>
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+                
+                <li><a href="/docs/directives/data/" >
+                  
+                    @data
+                  
+                </a></li>
+              
+            
+              
+                
+                <li><a href="/docs/directives/define/" >
+                  
+                    @define
+                  
+                </a></li>
+              
+            
+              
+                
+                <li><a href="/docs/directives/embed/" >
+                  
+                    @embed
+                  
+                </a></li>
+              
+            
+              
+                
+                <li><a href="/docs/directives/import/" >
+                  
+                    @import
+                  
+                </a></li>
+              
+            
+              
+                
+                <li><a href="/docs/directives/path/" aria-current=&quot;page&quot;>
+                  
+                    @path
+                  
+                </a></li>
+              
+            
+              
+                
+                <li><a href="/docs/directives/run/" >
+                  
+                    @run
+                  
+                </a></li>
+              
+            
+              
+                
+                <li><a href="/docs/directives/text/" >
+                  
+                    @text
+                  
+                </a></li>
+              
+            
+              
+            
+          </ul>
+        </li>
       </ul>
     </nav>
   </aside>
@@ -147,6 +273,59 @@
 
   </div>
 </div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const toggleButton = document.querySelector('.docs-sidebar-toggle');
+    const sidebar = document.getElementById('docs-sidebar');
+    const overlay = document.getElementById('docs-overlay');
+    
+    // Function to toggle the sidebar
+    function toggleSidebar() {
+      const isExpanded = toggleButton.getAttribute('aria-expanded') === 'true';
+      toggleButton.setAttribute('aria-expanded', !isExpanded);
+      sidebar.classList.toggle('open');
+      
+      // Toggle overlay
+      overlay.classList.toggle('active');
+      
+      // Lock/unlock body scroll when sidebar is open on mobile
+      if (window.innerWidth <= 950) {
+        document.body.classList.toggle('sidebar-open', !isExpanded);
+      }
+    }
+    
+    // Add click event for toggle button
+    toggleButton.addEventListener('click', toggleSidebar);
+    
+    // Add click event for overlay to close sidebar
+    overlay.addEventListener('click', function() {
+      if (sidebar.classList.contains('open')) {
+        toggleSidebar();
+      }
+    });
+    
+    // Close sidebar when clicking on a link (mobile only)
+    sidebar.querySelectorAll('a').forEach(link => {
+      link.addEventListener('click', function() {
+        if (window.innerWidth <= 950 && sidebar.classList.contains('open')) {
+          toggleSidebar();
+        }
+      });
+    });
+    
+    // Close sidebar when clicking outside of it (mobile only) - now handled by overlay
+    document.addEventListener('click', function(event) {
+      if (window.innerWidth <= 950 && 
+          sidebar.classList.contains('open') && 
+          !sidebar.contains(event.target) && 
+          !toggleButton.contains(event.target) &&
+          !overlay.contains(event.target)) {
+        toggleSidebar();
+      }
+    });
+  });
+</script>
     </div>
   </main>
 

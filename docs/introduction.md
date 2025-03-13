@@ -17,9 +17,17 @@ Meld works by processing only lines that begin with directives (like `@text`, `@
 
 ```meld
 @text name = "World"
-@path docs = "$PROJECTPATH/docs"
+@path docs = "$./docs"
 
-Hello, {{name}}!
+This line will be interpreted as plain text.
+
+```
+This will remain a codefence.
+```
+
+@embed [[
+    Hello, {{name}}!
+]]
 
 @embed [$docs/example.md]
 
@@ -29,7 +37,7 @@ Hello, {{name}}!
 This example:
 1. Defines a text variable `name` with the value "World"
 2. Defines a path variable `docs` pointing to the project's docs folder
-3. Uses the text variable in a template string
+3. Uses the text variable in a template string and embeds it in the output
 4. Embeds content from an external file
 5. Runs a shell command and includes its output
 

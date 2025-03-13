@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Meld pipeline processes `.meld` files through several stages to produce either `.xml` or `.md` output. Here's a detailed look at how it works:
+The Meld pipeline processes `.mld` files through several stages to produce either `.xml` or `.md` output. Here's a detailed look at how it works:
 
 ```ascii
 ┌─────────────┐     ┌─────────────┐     ┌──────────────┐     ┌──────────────┐
@@ -88,7 +88,7 @@ The pipeline is organized into logical service groups, with strict initializatio
    - Enables transformation if requested
 
 2. **Input Processing** (`CLIService`)
-   - User runs `meld prompt.meld`
+   - User runs `meld prompt.mld`
    - `CLIService` handles command line options
    - Default output is `.xml` format
    - Can specify `--format markdown` for `.md` output

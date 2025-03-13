@@ -3,28 +3,52 @@ layout: base.njk
 ---
 
 <div class="docs-layout">
-  <aside class="docs-sidebar">
+  <button class="docs-sidebar-toggle" aria-label="Toggle menu" aria-expanded="false">
+    <span class="hamburger-icon">
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+    </span>
+    <span class="toggle-text">Menu</span>
+  </button>
+  
+  <!-- Add overlay for mobile --> 
+  <div class="docs-overlay" id="docs-overlay"></div>
+  
+  <aside class="docs-sidebar" id="docs-sidebar">
     <nav>
       <h3>Documentation</h3>
       <ul class="nav-list">
         <li><a href="/docs/introduction/" {{ "/docs/introduction/" | isActive(page.url) }}>Introduction</a></li>
-        <li><a href="/docs/cli-usage/" {{ "/docs/cli-usage/" | isActive(page.url) }}>CLI Usage</a></li>
-        <li><a href="/docs/sdk-usage/" {{ "/docs/sdk-usage/" | isActive(page.url) }}>SDK Usage</a></li>
-        <li><a href="/docs/variables/" {{ "/docs/variables/" | isActive(page.url) }}>Variables</a></li>
-        <li><a href="/docs/error-handling/" {{ "/docs/error-handling/" | isActive(page.url) }}>Error Handling</a></li>
-        <li><a href="/docs/grammar-reference/" {{ "/docs/grammar-reference/" | isActive(page.url) }}>Grammar Reference</a></li>
-      </ul>
-      
-      <h3>Directives</h3>
-      <ul class="nav-list">
-        <li><a href="/docs/directives/" {{ "/docs/directives/" | isActive(page.url) }}>Overview</a></li>
-        <li><a href="/docs/directives/data/" {{ "/docs/directives/data/" | isActive(page.url) }}>@data</a></li>
-        <li><a href="/docs/directives/define/" {{ "/docs/directives/define/" | isActive(page.url) }}>@define</a></li>
-        <li><a href="/docs/directives/embed/" {{ "/docs/directives/embed/" | isActive(page.url) }}>@embed</a></li>
-        <li><a href="/docs/directives/import/" {{ "/docs/directives/import/" | isActive(page.url) }}>@import</a></li>
-        <li><a href="/docs/directives/path/" {{ "/docs/directives/path/" | isActive(page.url) }}>@path</a></li>
-        <li><a href="/docs/directives/run/" {{ "/docs/directives/run/" | isActive(page.url) }}>@run</a></li>
-        <li><a href="/docs/directives/text/" {{ "/docs/directives/text/" | isActive(page.url) }}>@text</a></li>
+        {% for docPage in collections.docs %}
+          {% if not docPage.url.includes('/directives/') and 
+                not docPage.url.includes('/index.html') and 
+                not docPage.url.includes('/introduction/') and
+                docPage.url != '/docs/' %}
+            <li><a href="{{ docPage.url }}" {{ docPage.url | isActive(page.url) }}>{{ docPage.data.title }}</a></li>
+          {% endif %}
+        {% endfor %}
+        
+        <li>
+          <h4>Directives</h4>
+          <ul class="nav-list">
+            <li><a href="/docs/directives/" {{ "/docs/directives/" | isActive(page.url) }}>Overview</a></li>
+            {% for docPage in collections.docs %}
+              {% if docPage.url.includes('/directives/') and 
+                    not docPage.url.endsWith('/directives/') and 
+                    not docPage.url.endsWith('/directives/index.html') %}
+                {% set directiveName = docPage.url.split('/').slice(-2)[0] %}
+                <li><a href="{{ docPage.url }}" {{ docPage.url | isActive(page.url) }}>
+                  {% if directiveName.startsWith('@') %}
+                    {{ directiveName }}
+                  {% else %}
+                    @{{ directiveName }}
+                  {% endif %}
+                </a></li>
+              {% endif %}
+            {% endfor %}
+          </ul>
+        </li>
       </ul>
     </nav>
   </aside>
@@ -33,3 +57,56 @@ layout: base.njk
     {{ content | safe }}
   </div>
 </div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const toggleButton = document.querySelector('.docs-sidebar-toggle');
+    const sidebar = document.getElementById('docs-sidebar');
+    const overlay = document.getElementById('docs-overlay');
+    
+    // Function to toggle the sidebar
+    function toggleSidebar() {
+      const isExpanded = toggleButton.getAttribute('aria-expanded') === 'true';
+      toggleButton.setAttribute('aria-expanded', !isExpanded);
+      sidebar.classList.toggle('open');
+      
+      // Toggle overlay
+      overlay.classList.toggle('active');
+      
+      // Lock/unlock body scroll when sidebar is open on mobile
+      if (window.innerWidth <= 950) {
+        document.body.classList.toggle('sidebar-open', !isExpanded);
+      }
+    }
+    
+    // Add click event for toggle button
+    toggleButton.addEventListener('click', toggleSidebar);
+    
+    // Add click event for overlay to close sidebar
+    overlay.addEventListener('click', function() {
+      if (sidebar.classList.contains('open')) {
+        toggleSidebar();
+      }
+    });
+    
+    // Close sidebar when clicking on a link (mobile only)
+    sidebar.querySelectorAll('a').forEach(link => {
+      link.addEventListener('click', function() {
+        if (window.innerWidth <= 950 && sidebar.classList.contains('open')) {
+          toggleSidebar();
+        }
+      });
+    });
+    
+    // Close sidebar when clicking outside of it (mobile only) - now handled by overlay
+    document.addEventListener('click', function(event) {
+      if (window.innerWidth <= 950 && 
+          sidebar.classList.contains('open') && 
+          !sidebar.contains(event.target) && 
+          !toggleButton.contains(event.target) &&
+          !overlay.contains(event.target)) {
+        toggleSidebar();
+      }
+    });
+  });
+</script>

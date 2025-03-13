@@ -11,7 +11,8 @@ const fs = require('fs');
 
 // List of dependencies to check and install if needed
 const criticalDependencies = [
-  'reflect-metadata'
+  'reflect-metadata',
+  'fs-extra'
 ];
 
 // Try to check if a module can be loaded

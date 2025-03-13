@@ -235,12 +235,12 @@ Meld includes source mapping to provide better error reporting by tracking the o
 
 Instead of seeing:
 ```
-Error: Invalid syntax at line 42 in main.meld
+Error: Invalid syntax at line 42 in main.mld
 ```
 
 Users will see:
 ```
-Error in /path/to/imported-file.meld:5: Invalid syntax at line 42 in main.meld
+Error in /path/to/imported-file.mld:5: Invalid syntax at line 42 in main.mld
 ```
 
 This makes debugging much easier, especially for files that import or embed content from multiple sources.

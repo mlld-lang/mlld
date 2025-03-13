@@ -1,4 +1,4 @@
-# Meld SDK Usage
+# SDK Usage
 
 The Meld SDK allows you to integrate Meld processing into your JavaScript or TypeScript applications.
 
@@ -54,10 +54,10 @@ Convenience function to read and interpret Meld files in one step:
 import { runMeld } from 'meld';
 
 // Run with default options (XML format)
-const { state, output } = await runMeld('path/to/file.meld');
+const { state, output } = await runMeld('path/to/file.mld');
 
 // Run with custom options
-const { state, output } = await runMeld('path/to/file.meld', {
+const { state, output } = await runMeld('path/to/file.mld', {
   format: 'md',  // or 'xml'
   initialState: new InterpreterState()
 });
@@ -161,7 +161,7 @@ const memfs = createMemoryFileSystem({
 });
 
 // Use the custom file system
-const { state, output } = await runMeld('path/to/file.meld', {
+const { state, output } = await runMeld('path/to/file.mld', {
   fileSystem: memfs
 });
 ```
@@ -175,7 +175,7 @@ import { parseMeld, interpretMeld, InterpreterState } from 'meld';
 import * as fs from 'fs';
 
 // Read a Meld file
-const content = fs.readFileSync('template.meld', 'utf-8');
+const content = fs.readFileSync('template.mld', 'utf-8');
 
 try {
   // Parse the content
