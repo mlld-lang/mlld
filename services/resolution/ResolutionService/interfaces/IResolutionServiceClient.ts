@@ -1,6 +1,6 @@
 /**
- * Minimal interface for what ParserService needs from ResolutionService.
- * This interface is used to break the circular dependency between ParserService and ResolutionService.
+ * Interface for ResolutionService functionality needed by clients.
+ * This interface is used to break circular dependencies with ResolutionService.
  */
 export interface IResolutionServiceClient {
   /**
@@ -20,14 +20,8 @@ export interface IResolutionServiceClient {
    * @param options - Optional extraction options
    * @returns The extracted section content
    */
-  extractSection(content: string, heading: string, options?: any): string;
-}
+  extractSection(content: string, heading: string, options?: any): Promise<string>;
 
-/**
- * Client interface for ResolutionService functionality needed by VariableReferenceResolver
- * This interface is used to break the circular dependency between ResolutionService and VariableReferenceResolver
- */
-export interface IResolutionServiceClient {
   /**
    * Resolves variables within a string value
    * @param value - The string containing variables to resolve
@@ -43,4 +37,12 @@ export interface IResolutionServiceClient {
    * @returns A promise that resolves to the resolved reference
    */
   resolveInContext?(reference: string, context: any): Promise<string>;
+
+  /**
+   * Resolves text content, handling any variables or references within it
+   * @param text - The text to resolve
+   * @param context - The resolution context
+   * @returns A promise that resolves to the resolved text
+   */
+  resolveText(text: string, context: any): Promise<string>;
 } 

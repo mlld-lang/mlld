@@ -81,7 +81,6 @@
     "llmxml": "^1.4.2",
     "marked": "^4.0.12",
     "meld-ast": "^3.4.3",
-    "meld-spec": "^0.4.1",
     "minimatch": "^3.0.4",
     "peggy": "^4.2.0",
     "reflect-metadata": "^0.2.2",

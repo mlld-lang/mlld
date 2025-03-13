@@ -1,7 +1,7 @@
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import { IOutputService, type OutputFormat, type OutputOptions } from './IOutputService.js';
 import type { IResolutionService, ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
-import type { MeldNode, TextNode, CodeFenceNode, DirectiveNode } from 'meld-spec';
+import type { MeldNode, TextNode, CodeFenceNode, DirectiveNode, DataVarNode, Field } from '@core/syntax/types';
 import { outputLogger as logger } from '@core/utils/logger.js';
 import { MeldOutputError } from '@core/errors/MeldOutputError.js';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
@@ -1363,14 +1363,14 @@ export class OutputService implements IOutputService {
           const hasFields = 'fields' in node && Array.isArray(node.fields) && node.fields.length > 0;
           
           // First try our field access handler if fields are present
-          if (variableIdentifier && hasFields) {
+          if (variableIdentifier && hasFields && isDataVarNode(node) && node.fields) {
             // Get the base variable value
             const dataValue = state.getDataVar(variableIdentifier);
             
             if (dataValue !== undefined) {
               // Build the field path from the fields array
               const fieldPath = node.fields
-                .map(field => {
+                .map((field: Field) => {
                   if (field.type === 'index') {
                     return String(field.value);
                   } else if (field.type === 'field') {
@@ -1388,60 +1388,34 @@ export class OutputService implements IOutputService {
               });
               
               try {
-                // Create a resolution context for field access
-                const resolutionContext: ResolutionContext = ResolutionContextFactory.create(
-                  undefined, // current file path not needed for this operation
-                  state
+                // Create resolution context for field access
+                const resolutionContext = ResolutionContextFactory.create(undefined, state);
+                
+                // Use field access handler to resolve fields
+                const result = await this.fieldAccessHandler.accessField(
+                  dataValue,
+                  fieldPath,
+                  resolutionContext,
+                  { strict: true }
                 );
-
-                // Extract the specific field value using our handler (with await!)
-                const fieldValue = await this.fieldAccessHandler.accessField(dataValue, fieldPath, resolutionContext, {
-                  strict: false,
-                  defaultValue: undefined,
-                  variableName: variableIdentifier,
-                  preserveType: false
+                
+                return this.convertToString(result, {
+                  pretty: true,
+                  context: this.getCurrentFormattingContext().contextType
                 });
-                
-                // Determine context based on value type
-                if (typeof fieldValue === 'string') {
-                  formattingContext.contextType = fieldValue.includes('\n') ? 'block' : 'inline';
-                } else if (Array.isArray(fieldValue) && fieldValue.length > 3) {
-                  formattingContext.contextType = 'block';
-                } else if (typeof fieldValue === 'object' && fieldValue !== null && Object.keys(fieldValue).length > 3) {
-                  formattingContext.contextType = 'block';
-                } else {
-                  formattingContext.contextType = 'inline';
-                }
-                
-                // Convert to string with appropriate formatting
-                const result = this.convertToString(fieldValue, {
-                  pretty: formattingContext.contextType === 'block',
-                  preserveType: false,
-                  context: formattingContext.contextType
-                });
-                
-                logger.debug('Successfully resolved field access in DataVar', {
+              } catch (err) {
+                logger.error('Error accessing fields in DataVar', {
+                  error: err,
                   variableIdentifier,
-                  fieldPath,
-                  resultLength: result.length,
-                  contextType: formattingContext.contextType
+                  fieldPath
                 });
-                
-                // Apply proper newline handling
-                return this.handleNewlines(result, formattingContext);
-              } catch (fieldAccessError) {
-                logger.warn('Error accessing field in DataVar, will try resolution service', {
-                  variableIdentifier,
-                  fieldPath,
-                  error: fieldAccessError instanceof Error ? fieldAccessError.message : String(fieldAccessError)
-                });
-                // Continue to try other resolution methods
+                return '';
               }
             }
           }
           
           // Try resolution service as a fallback for field access
-          if (variableIdentifier && hasFields && (this.resolutionService || this.resolutionClient)) {
+          if (variableIdentifier && hasFields && isDataVarNode(node) && node.fields) {
             try {
               // Create a resolution context
               const context: ResolutionContext = ResolutionContextFactory.forDataDirective(
@@ -1450,14 +1424,16 @@ export class OutputService implements IOutputService {
               );
               
               // Build the complete reference with all fields using dot notation
-              const fields = node.fields.map(field => {
-                if (field.type === 'index') {
-                  return String(field.value);
-                } else if (field.type === 'field') {
-                  return field.value;
-                }
-                return '';
-              }).filter(Boolean);
+              const fields = node.fields
+                .map((field: Field) => {
+                  if (field.type === 'index') {
+                    return String(field.value);
+                  } else if (field.type === 'field') {
+                    return field.value;
+                  }
+                  return '';
+                })
+                .filter(Boolean);
               
               // Create a variable reference with all fields using dot notation
               const serializedNode = `{{${variableIdentifier}${fields.length > 0 ? '.' + fields.join('.') : ''}}}`;
@@ -1469,7 +1445,7 @@ export class OutputService implements IOutputService {
               });
               
               // Try to resolve with client first
-              if (this.resolutionClient) {
+              if (this.resolutionClient?.resolveInContext) {
                 try {
                   const resolved = await this.resolutionClient.resolveInContext(serializedNode, context);
                   logger.debug('DataVar resolved with client', {
@@ -1771,7 +1747,7 @@ Transformation enabled?: ${state.isTransformationEnabled()}
             // Direct fields array
             if (directive.directive.path.fields && Array.isArray(directive.directive.path.fields)) {
               fieldPath = directive.directive.path.fields
-                .map(field => {
+                .map((field: { type: 'field' | 'index'; value: string | number }) => {
                   if (field.type === 'field') {
                     return field.value;
                   } else if (field.type === 'index') {
@@ -1788,7 +1764,7 @@ Transformation enabled?: ${state.isTransformationEnabled()}
                      Array.isArray(directive.directive.path.variable.fields)) {
               
               fieldPath = directive.directive.path.variable.fields
-                .map(field => {
+                .map((field: { type: 'field' | 'index'; value: string | number }) => {
                   if (field.type === 'field') {
                     return field.value;
                   } else if (field.type === 'index') {
@@ -1845,7 +1821,7 @@ Transformation enabled?: ${state.isTransformationEnabled()}
             if (value !== undefined && fieldPath) {
               try {
                 const fields = fieldPath.split('.');
-                let current = value;
+                let current: any = value;
                 
                 fs.appendFileSync('/Users/adam/dev/claude-meld/debug-embed.txt', 
                   'Processing field access with fields: ' + JSON.stringify(fields) + '\n'
@@ -1866,7 +1842,7 @@ Transformation enabled?: ${state.isTransformationEnabled()}
                         fs.appendFileSync('/Users/adam/dev/claude-meld/debug-embed.txt', 
                           'Array index out of bounds: ' + index + ' for array length: ' + current.length + '\n'
                         );
-                        current = undefined;
+                        current = null;
                         break;
                       }
                     } else if (field in current) {
@@ -1877,7 +1853,7 @@ Transformation enabled?: ${state.isTransformationEnabled()}
                       fs.appendFileSync('/Users/adam/dev/claude-meld/debug-embed.txt', 
                         'Field not found in object: ' + field + '\n'
                       );
-                      current = undefined;
+                      current = null;
                       break;
                     }
                   } else {
@@ -1885,12 +1861,12 @@ Transformation enabled?: ${state.isTransformationEnabled()}
                     fs.appendFileSync('/Users/adam/dev/claude-meld/debug-embed.txt', 
                       'Cannot access field on non-object: ' + field + ' value type: ' + typeof current + '\n'
                     );
-                    current = undefined;
+                    current = null;
                     break;
                   }
                 }
                 
-                if (current !== undefined) {
+                if (current !== null) {
                   // Convert to string with proper type handling
                   fs.appendFileSync('/Users/adam/dev/claude-meld/debug-embed.txt', 
                     'Final field value: ' + JSON.stringify(current) + '\n'
@@ -2152,4 +2128,8 @@ Transformation enabled?: ${state.isTransformationEnabled()}
     // Use the same logic as markdown for now since we want consistent behavior
     return this.directiveToMarkdown(node);
   }
+}
+
+function isDataVarNode(node: MeldNode): node is DataVarNode {
+  return node.type === 'DataVar';
 }

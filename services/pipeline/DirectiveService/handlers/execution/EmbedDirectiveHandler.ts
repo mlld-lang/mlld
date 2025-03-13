@@ -1,4 +1,4 @@
-import { DirectiveNode, MeldNode, TextNode } from 'meld-spec';
+import { DirectiveNode, MeldNode, TextNode } from '@core/syntax/types';
 import { IDirectiveHandler, DirectiveContext } from '@services/pipeline/DirectiveService/IDirectiveService.js';
 import { DirectiveResult } from '@services/pipeline/DirectiveService/types.js';
 import { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
@@ -308,9 +308,10 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
             // Replace all occurrences of the variable in the path
             if (typeof varValue === 'string') {
               modifiedPath = modifiedPath.replace(new RegExp('\\$' + varName, 'g'), varValue);
-            } else if (typeof varValue === 'object' && varValue !== null && 'raw' in varValue) {
+            } else if (typeof varValue === 'object' && varValue !== null && 
+                      'raw' in varValue && typeof (varValue as { raw: string }).raw === 'string') {
               // Handle structured path objects
-              modifiedPath = modifiedPath.replace(new RegExp('\\$' + varName, 'g'), varValue.raw);
+              modifiedPath = modifiedPath.replace(new RegExp('\\$' + varName, 'g'), (varValue as { raw: string }).raw);
             }
           } else {
             this.logger.warn(`Path variable $${varName} not found in state`, {
@@ -356,9 +357,10 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
               // Replace all occurrences of the variable in the path
               if (typeof varValue === 'string') {
                 modifiedRawPath = modifiedRawPath.replace(new RegExp('\\$' + varName, 'g'), varValue);
-              } else if (typeof varValue === 'object' && varValue !== null && 'raw' in varValue) {
+              } else if (typeof varValue === 'object' && varValue !== null && 
+                        'raw' in varValue && typeof (varValue as { raw: string }).raw === 'string') {
                 // Handle structured path objects
-                modifiedRawPath = modifiedRawPath.replace(new RegExp('\\$' + varName, 'g'), varValue.raw);
+                modifiedRawPath = modifiedRawPath.replace(new RegExp('\\$' + varName, 'g'), (varValue as { raw: string }).raw);
               }
             }
           }

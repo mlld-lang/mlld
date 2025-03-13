@@ -18,7 +18,7 @@ export interface ServiceMetadata {
   name: string;
   interfaceName?: string;
   description?: string;
-  dependencies?: Array<{ token: string | symbol; name: string }>;
+  dependencies?: Array<{ token: string | symbol; name: string; optional?: boolean }>;
 }
 
 /**

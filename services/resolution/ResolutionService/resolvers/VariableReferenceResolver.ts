@@ -4,7 +4,7 @@ import { ResolutionErrorCode } from '@services/resolution/ResolutionService/IRes
 import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
-import type { MeldNode } from 'meld-spec';
+import type { MeldNode } from '@core/syntax/types';
 import { resolutionLogger as logger } from '@core/utils/logger.js';
 import { VariableResolutionTracker } from '@tests/utils/debug/VariableResolutionTracker/index.js';
 import { container } from 'tsyringe';
@@ -463,7 +463,7 @@ export class VariableReferenceResolver {
         if (Array.isArray(result)) {
           return [...result]; // Return a copy of the array
         } else if (typeof result === 'object') {
-          return {...result}; // Return a copy of the object
+          return { ...result as Record<string, unknown> }; // Return a copy of the object
         }
       }
       
@@ -668,18 +668,20 @@ export class VariableReferenceResolver {
         });
         
         nodes.push({
-          type: 'VariableReference' as any,
+          type: 'VariableReference',
           identifier: baseName,
           fields,
+          isVariableReference: true,
           location: { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } }
-        } as unknown as MeldNode);
+        } as VariableReferenceNode);
       } else {
         // Simple variable reference
         nodes.push({
-          type: 'VariableReference' as any,
+          type: 'VariableReference',
           identifier: varName,
+          isVariableReference: true,
           location: { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } }
-        } as unknown as MeldNode);
+        } as VariableReferenceNode);
       }
       
       // Update last index
