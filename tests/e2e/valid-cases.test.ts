@@ -29,7 +29,8 @@ describe('Valid Meld Test Cases', async () => {
       const result = await main(testPath, {
         fs: context.services.filesystem as any,
         services: context.services as unknown as Partial<Services>,
-        transformation: true
+        transformation: true,
+        format: 'markdown'
       });
       
       // Verify basic expectations

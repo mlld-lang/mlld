@@ -78,7 +78,7 @@
     "commander": "^13.1.0",
     "fs-extra": "^11.3.0",
     "glob": "^11.0.1",
-    "llmxml": "^1.4.0",
+    "llmxml": "^1.4.2",
     "marked": "^4.0.12",
     "meld-ast": "^3.4.3",
     "meld-spec": "^0.4.1",

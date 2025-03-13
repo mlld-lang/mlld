@@ -503,19 +503,6 @@ export class PathService implements IPathService {
       resolved = path.join(this.homePath, resolved.substring(2));
     }
     
-    // Check for user-defined path variables ($varname)
-    // This regex finds variable references like $d, $var, etc.
-    const userPathVarRegex = /\$([a-zA-Z_][a-zA-Z0-9_]*)/g;
-    const userVarMatches = resolved.match(userPathVarRegex);
-    
-    if (userVarMatches && userVarMatches.length > 0) {
-      console.log(`[PathService] Found user-defined path variables: ${userVarMatches.join(', ')} in path: ${resolved}`);
-      
-      // We'll need to handle this in EmbedDirectiveHandler or another higher level
-      // that has access to the state, as PathService doesn't have direct state access
-      // This is just an indication that we need to process these variables
-    }
-    
     return this.normalizePath(resolved);
   }
 

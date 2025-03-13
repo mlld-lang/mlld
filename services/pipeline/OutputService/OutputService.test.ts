@@ -5,6 +5,7 @@ import { MeldOutputError } from '@core/errors/MeldOutputError.js';
 import type { MeldNode } from 'meld-spec';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IResolutionService, ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
+import type { OutputFormat } from './IOutputService.js';
 import {
   createTextNode,
   createDirectiveNode,
@@ -92,7 +93,7 @@ describe('OutputService', () => {
       vi.mocked(state.getTransformedNodes).mockReturnValue(nodes);
 
       const output = await service.convert(nodes, state, 'markdown');
-      expect(output).toBe('Hello world\n');
+      expect(output).toBe('Hello world\n\n');
     });
 
     it('should handle directive nodes according to type', async () => {
@@ -116,7 +117,7 @@ describe('OutputService', () => {
       vi.mocked(state.getTransformedNodes).mockReturnValue([runNode]);
       
       output = await service.convert([runNode], state, 'markdown');
-      expect(output).toBe('[run directive output placeholder]\n');
+      expect(output).toBe('[run directive output placeholder]\n\n');
     });
 
     it('should include state variables when requested', async () => {
@@ -153,7 +154,7 @@ describe('OutputService', () => {
       const preserved = await service.convert(nodes, state, 'markdown', {
         preserveFormatting: true
       });
-      expect(preserved).toBe('\n  Hello  \n  World  \n');
+      expect(preserved).toBe('\n  Hello  \n  World  \n\n');
 
       const cleaned = await service.convert(nodes, state, 'markdown', {
         preserveFormatting: false
@@ -292,7 +293,7 @@ describe('OutputService', () => {
       vi.mocked(state.getTransformedNodes).mockReturnValue(nodes);
 
       const output = await service.convert(nodes, state, 'markdown');
-      expect(output).toBe('Before\nAfter\n');
+      expect(output).toBe('Before\n\nAfter\n\n');
     });
 
     it('should show placeholders for execution directives in non-transformation mode', async () => {
@@ -309,7 +310,7 @@ describe('OutputService', () => {
       vi.mocked(state.getTransformedNodes).mockReturnValue(nodes);
 
       const output = await service.convert(nodes, state, 'markdown');
-      expect(output).toBe('Before\n[run directive output placeholder]\nAfter\n');
+      expect(output).toBe('Before\n\n[run directive output placeholder]\n\nAfter\n\n');
     });
 
     it('should preserve code fences in both modes', async () => {
@@ -406,7 +407,7 @@ describe('OutputService', () => {
         throw new Error('Test error');
       });
 
-      await expect(service.convert([], state, 'error'))
+      await expect(service.convert([], state, 'error' as OutputFormat))
         .rejects
         .toThrow(MeldOutputError);
     });
@@ -416,7 +417,7 @@ describe('OutputService', () => {
         throw new MeldOutputError('Test error', 'error');
       });
 
-      await expect(service.convert([], state, 'error'))
+      await expect(service.convert([], state, 'error' as OutputFormat))
         .rejects
         .toThrow(MeldOutputError);
     });
@@ -454,7 +455,7 @@ describe('OutputService', () => {
       vi.mocked(state.getTransformedNodes).mockReturnValue([runNode]);
       
       let output = await service.convert([runNode], state, 'markdown');
-      expect(output).toBe('[run directive output placeholder]\n');
+      expect(output).toBe('[run directive output placeholder]\n\n');
       
       // Test in transformation mode
       vi.mocked(state.isTransformationEnabled).mockReturnValue(true);

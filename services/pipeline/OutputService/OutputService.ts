@@ -421,6 +421,7 @@ export class OutputService implements IOutputService {
           
           // If no matches, return original content
           if (matches.length === 0) {
+            // In transformation mode, preserve original newline handling
             return content.endsWith('\n') ? content : content + '\n';
           }
           
@@ -507,6 +508,7 @@ export class OutputService implements IOutputService {
                 // If a value was found, replace the variable reference with its value
                 if (value !== undefined) {
                   const stringValue = typeof value === 'string' ? value : JSON.stringify(value);
+                  // Replace the variable reference directly without adding any line breaks
                   transformedContent = transformedContent.replace(fullMatch, stringValue);
                   
                   logger.debug('Replaced variable reference in Text node', {
@@ -536,6 +538,7 @@ export class OutputService implements IOutputService {
               }
             }
             
+            // In transformation mode, preserve original newline handling
             return transformedContent.endsWith('\n') ? transformedContent : transformedContent + '\n';
           }
         }
@@ -557,6 +560,15 @@ export class OutputService implements IOutputService {
               resolved: resolvedContent
             });
             
+            // For standard mode (non-transformation), use double newlines for markdown nodes
+            // This follows standard markdown practice which uses double newlines between paragraphs
+            if (!state.isTransformationEnabled()) {
+              return resolvedContent.endsWith('\n\n') ? resolvedContent : 
+                     resolvedContent.endsWith('\n') ? resolvedContent + '\n' : 
+                     resolvedContent + '\n\n';
+            }
+            
+            // In transformation mode, preserve original newline handling
             return resolvedContent.endsWith('\n') ? resolvedContent : resolvedContent + '\n';
           } catch (resolutionError) {
             logger.error('Error resolving variable references in Text node', {
@@ -564,11 +576,18 @@ export class OutputService implements IOutputService {
               error: resolutionError
             });
             // Fall back to original content if resolution fails
-            return content.endsWith('\n') ? content : content + '\n';
           }
         }
         
-        // Return the original content if no transformation needed
+        // For standard mode (non-transformation), use double newlines for markdown nodes
+        // This follows standard markdown practice which uses double newlines between paragraphs
+        if (!state.isTransformationEnabled()) {
+          return content.endsWith('\n\n') ? content : 
+                 content.endsWith('\n') ? content + '\n' : 
+                 content + '\n\n';
+        }
+        
+        // In transformation mode, preserve original newline handling
         return content.endsWith('\n') ? content : content + '\n';
       case 'TextVar':
         // Handle TextVar nodes
@@ -641,9 +660,12 @@ export class OutputService implements IOutputService {
             return String(textVarContent);
           }
           
-          return typeof textVarContent === 'string' 
-            ? (textVarContent.endsWith('\n') ? textVarContent : textVarContent + '\n') 
-            : String(textVarContent) + '\n';
+          // For standard mode (non-transformation), use double newlines for markdown nodes
+          // This follows standard markdown practice which uses double newlines between paragraphs
+          const content = String(textVarContent);
+          return content.endsWith('\n\n') ? content : 
+                 content.endsWith('\n') ? content + '\n' : 
+                 content + '\n\n';
         } catch (e) {
           logger.error('Error processing TextVar node', {
             node: JSON.stringify(node),
@@ -794,9 +816,14 @@ export class OutputService implements IOutputService {
               : JSON.stringify(dataVarContent);
           }
           
-          return typeof dataVarContent === 'string' 
-            ? (dataVarContent.endsWith('\n') ? dataVarContent : dataVarContent + '\n')
-            : JSON.stringify(dataVarContent) + '\n';
+          // For standard mode (non-transformation), use double newlines for markdown nodes
+          const content = typeof dataVarContent === 'string' 
+              ? dataVarContent
+              : JSON.stringify(dataVarContent);
+          
+          return content.endsWith('\n\n') ? content : 
+                 content.endsWith('\n') ? content + '\n' : 
+                 content + '\n\n';
         } catch (e) {
           logger.error('Error processing DataVar node', {
             node: JSON.stringify(node),
@@ -829,7 +856,7 @@ export class OutputService implements IOutputService {
         if (kind === 'run') {
           // In non-transformation mode, return placeholder
           if (!state.isTransformationEnabled()) {
-            return '[run directive output placeholder]\n';
+            return '[run directive output placeholder]\n\n';
           }
           
           // In transformation mode, return the command output
@@ -900,7 +927,7 @@ export class OutputService implements IOutputService {
         if (['embed'].includes(kind)) {
           // In non-transformation mode, return placeholder
           if (!state.isTransformationEnabled()) {
-            return '[directive output placeholder]\n';
+            return '[directive output placeholder]\n\n';
           }
           
           // In transformation mode, return the embedded content
@@ -1005,7 +1032,7 @@ export class OutputService implements IOutputService {
       return '';
     }
     if (kind === 'run') {
-      return '[run directive output placeholder]\n';
+      return '[run directive output placeholder]\n\n';
     }
     // For other execution directives, return empty string for now
     return '';

@@ -309,9 +309,8 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
             if (typeof varValue === 'string') {
               modifiedPath = modifiedPath.replace(new RegExp('\\$' + varName, 'g'), varValue);
             } else if (typeof varValue === 'object' && varValue !== null && 'raw' in varValue) {
-              // Handle structured path objects - ensure TypeScript recognizes this as having a 'raw' property
-              const structuredPathValue = varValue as StructuredPath;
-              modifiedPath = modifiedPath.replace(new RegExp('\\$' + varName, 'g'), structuredPathValue.raw);
+              // Handle structured path objects
+              modifiedPath = modifiedPath.replace(new RegExp('\\$' + varName, 'g'), varValue.raw);
             }
           } else {
             this.logger.warn(`Path variable $${varName} not found in state`, {
@@ -358,18 +357,17 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
               if (typeof varValue === 'string') {
                 modifiedRawPath = modifiedRawPath.replace(new RegExp('\\$' + varName, 'g'), varValue);
               } else if (typeof varValue === 'object' && varValue !== null && 'raw' in varValue) {
-                // Handle structured path objects - ensure TypeScript recognizes this as having a 'raw' property
-                const structuredPathValue = varValue as StructuredPath;
-                modifiedRawPath = modifiedRawPath.replace(new RegExp('\\$' + varName, 'g'), structuredPathValue.raw);
+                // Handle structured path objects
+                modifiedRawPath = modifiedRawPath.replace(new RegExp('\\$' + varName, 'g'), varValue.raw);
               }
             }
           }
           
-          // Create a new structured path with the modified raw value - add type assertion for TypeScript
+          // Create a new structured path with the modified raw value
           processedPath = {
             ...path,
             raw: modifiedRawPath
-          } as StructuredPath;
+          };
           
           this.logger.debug(`Processed structured path after variable substitution: ${JSON.stringify(processedPath)}`);
         }
