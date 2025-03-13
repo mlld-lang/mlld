@@ -57,6 +57,7 @@ import { ParserServiceClientFactory } from '@services/pipeline/ParserService/fac
 import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientFactory.js';
 import { StateServiceClientFactory } from '@services/state/StateService/factories/StateServiceClientFactory.js';
 import { StateTrackingServiceClientFactory } from '@services/state/StateTrackingService/factories/StateTrackingServiceClientFactory.js';
+import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory.js';
 
 // Import debug services
 import { StateTrackingService } from '@tests/utils/debug/StateTrackingService/StateTrackingService.js';
@@ -236,6 +237,9 @@ export async function main(filePath: string, options: ProcessOptions = {}): Prom
     logger.warn('Failed to resolve one or more service factories', { error });
   }
 
+  // Get the interpreter service client factory
+  const interpreterServiceClientFactory = resolveService<InterpreterServiceClientFactory>('InterpreterServiceClientFactory');
+  
   // Re-initialize directive and interpreter services to ensure they have the correct dependencies
   services.directive.initialize(
     services.validation,
@@ -243,7 +247,7 @@ export async function main(filePath: string, options: ProcessOptions = {}): Prom
     services.path,
     services.filesystem,
     services.parser,
-    services.interpreter,
+    interpreterServiceClientFactory,
     services.circularity,
     services.resolution
   );

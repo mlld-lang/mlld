@@ -77,7 +77,7 @@ export interface IDirectiveService {
    * @param pathService - Service for path resolution
    * @param fileSystemService - Service for file operations
    * @param parserService - Service for parsing content
-   * @param interpreterService - Service for nested interpretation
+   * @param interpreterServiceClientFactory - Factory for creating interpreter service clients
    * @param circularityService - Service for detecting circular references
    * @param resolutionService - Service for variable resolution
    */
@@ -87,7 +87,7 @@ export interface IDirectiveService {
     pathService: IPathService,
     fileSystemService: IFileSystemService,
     parserService: IParserService,
-    interpreterService: IInterpreterService,
+    interpreterServiceClientFactory: any, // Use 'any' to allow both IInterpreterService and InterpreterServiceClientFactory
     circularityService: ICircularityService,
     resolutionService: IResolutionService
   ): void;
