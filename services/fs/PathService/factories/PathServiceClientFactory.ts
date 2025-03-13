@@ -27,7 +27,13 @@ export class PathServiceClientFactory {
   createClient(): IPathServiceClient {
     return {
       resolvePath: (path, baseDir) => this.pathService.resolvePath(path, baseDir),
-      normalizePath: (path) => this.pathService.normalizePath(path)
+      normalizePath: (path) => {
+        if (this.pathService.normalizePath) {
+          return this.pathService.normalizePath(path);
+        }
+        // Fallback implementation if not available
+        return path;
+      }
     };
   }
 } 

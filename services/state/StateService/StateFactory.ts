@@ -148,6 +148,40 @@ export class StateFactory implements IStateFactory {
     return updated;
   }
 
+  /**
+   * Creates a cloned state that is a deep copy of the original state
+   * but with a new stateId and no parentState reference
+   */
+  createClonedState(originalState: StateNode, options?: StateNodeOptions): StateNode {
+    // Create a completely new state without parent reference
+    const clonedState: StateNode = {
+      stateId: randomUUID(),
+      variables: {
+        text: new Map(originalState.variables.text),
+        data: new Map(originalState.variables.data),
+        path: new Map(originalState.variables.path)
+      },
+      commands: new Map(originalState.commands),
+      nodes: [...originalState.nodes],
+      transformedNodes: originalState.transformedNodes ? [...originalState.transformedNodes] : undefined,
+      imports: new Set(originalState.imports),
+      filePath: options?.filePath ?? originalState.filePath,
+      source: 'clone'
+    };
+
+    this.logOperation({
+      type: 'create',
+      timestamp: Date.now(),
+      source: options?.source ?? 'createClonedState',
+      details: {
+        operation: 'createClonedState',
+        value: clonedState
+      }
+    });
+
+    return clonedState;
+  }
+
   private logOperation(operation: StateOperation): void {
     this.operations.push(operation);
     logger.debug('State operation', operation);

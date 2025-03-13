@@ -35,4 +35,12 @@ export interface IResolutionServiceClient {
    * @returns A promise that resolves to the string with variables resolved
    */
   resolveVariables(value: string, context: any): Promise<string>;
+  
+  /**
+   * Resolves a reference within a specific context
+   * @param reference - The reference to resolve
+   * @param context - The resolution context
+   * @returns A promise that resolves to the resolved reference
+   */
+  resolveInContext?(reference: string, context: any): Promise<string>;
 } 

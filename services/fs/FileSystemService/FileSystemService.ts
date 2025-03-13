@@ -81,7 +81,7 @@ export class FileSystemService implements IFileSystemService {
         logger.warn('Failed to create PathServiceClient', { error });
         // For test environments, don't throw to allow tests to work
         if (process.env.NODE_ENV !== 'test') {
-          throw new MeldError('Failed to create PathServiceClient - factory pattern required', { cause: error });
+          throw new MeldError('Failed to create PathServiceClient - factory pattern required', { cause: error as Error });
         }
       }
     } else {
@@ -135,7 +135,7 @@ export class FileSystemService implements IFileSystemService {
         
         // For test environments, don't throw to allow tests to work
         if (process.env.NODE_ENV !== 'test') {
-          throw new MeldError(`Error resolving path: ${filePath}`, { cause: error });
+          throw new MeldError(`Error resolving path: ${filePath}`, { cause: error as Error });
         }
       }
     }

@@ -76,15 +76,15 @@ export class StateService implements IStateService {
       logger.warn('StateService initialized without factory in DI-only mode');
       this.stateFactory = new StateFactory();
       
-      // Use event service if provided as first parameter
-      if (eventService && !(eventService as IStateService).createChildState) {
-        this.eventService = eventService as IStateEventService;
+      // Use proper type guards to determine service type
+      if (eventService && this.isStateEventService(eventService)) {
+        this.eventService = eventService;
       }
       
       // Initialize state with parent if provided
       const actualParentState = parentState || 
-        (eventService && (eventService as IStateService).createChildState ? 
-          eventService as IStateService : undefined);
+        (eventService && this.isStateService(eventService) ? 
+          eventService : undefined);
       
       this.initializeState(actualParentState);
     }
@@ -139,7 +139,7 @@ export class StateService implements IStateService {
     logger.warn('StateService.initialize is deprecated. Use constructor injection instead.');
     
     // For backward compatibility, if the eventService was provided, use it
-    if (eventService) {
+    if (eventService && this.isStateEventService(eventService)) {
       this.eventService = eventService;
     }
     
@@ -537,10 +537,11 @@ export class StateService implements IStateService {
     this.checkMutable();
     
     // Create a new StateService instance that inherits from this one
+    // Use factory pattern consistently - pass the trackingServiceClientFactory instead of service
     const childState = new StateService(
       this.stateFactory,
       this.eventService,
-      this.trackingService
+      this.trackingServiceClientFactory
     );
     
     // Transfer parent variables to child
@@ -596,15 +597,17 @@ export class StateService implements IStateService {
         });
         
         // Register a "created" event for the child state
-        this.trackingClient.registerEvent({
-          stateId: this.currentState.stateId,
-          type: 'created-child',
-          timestamp: Date.now(),
-          details: {
-            childId: (childState as StateService).currentState.stateId
-          },
-          source: 'parent'
-        });
+        if (this.trackingClient.registerEvent) {
+          this.trackingClient.registerEvent({
+            stateId: this.currentState.stateId,
+            type: 'created-child',
+            timestamp: Date.now(),
+            details: {
+              childId: (childState as StateService).currentState.stateId
+            },
+            source: 'parent'
+          });
+        }
       } catch (error) {
         logger.warn('Failed to register child state creation with tracking client', { error });
       }
@@ -707,29 +710,21 @@ export class StateService implements IStateService {
    * Creates a deep clone of this state service
    */
   clone(): IStateService {
-    // Create a new StateService with the same factory, eventService and trackingService
+    // Create a new StateService with the same factory, eventService and trackingServiceFactory
     const cloned = new StateService(
       this.stateFactory,
       this.eventService,
-      this.trackingService
+      this.trackingServiceClientFactory
     );
     
-    // Create a completely new state without parent reference
-    (cloned as StateService).currentState = this.stateFactory.createState({
-      source: 'clone',
-      filePath: this.currentState.filePath
-    });
-
-    // Deep clone all state
-    (cloned as StateService).currentState.variables.text = new Map(this.currentState.variables.text);
-    (cloned as StateService).currentState.variables.data = new Map(this.currentState.variables.data);
-    (cloned as StateService).currentState.variables.path = new Map(this.currentState.variables.path);
-    (cloned as StateService).currentState.commands = new Map(this.currentState.commands);
-    (cloned as StateService).currentState.nodes = [...this.currentState.nodes];
-    if (this.currentState.transformedNodes) {
-      (cloned as StateService).currentState.transformedNodes = [...this.currentState.transformedNodes];
-    }
-    (cloned as StateService).currentState.imports = new Set(this.currentState.imports);
+    // Use the factory to create a cloned state with all properties correctly initialized
+    (cloned as StateService).currentState = this.stateFactory.createClonedState(
+      this.currentState,
+      {
+        source: 'clone',
+        filePath: this.currentState.filePath
+      }
+    );
     
     // Copy transformation settings
     (cloned as StateService)._transformationEnabled = this._transformationEnabled;
@@ -752,26 +747,28 @@ export class StateService implements IStateService {
         });
         
         // Register a "cloned" event for the state
-        this.trackingClient.registerEvent({
-          stateId: this.currentState.stateId,
-          type: 'cloned',
-          timestamp: Date.now(),
-          details: {
-            cloneId: (cloned as StateService).currentState.stateId
-          },
-          source: 'original'
-        });
+        if (this.trackingClient.registerEvent) {
+          this.trackingClient.registerEvent({
+            stateId: this.currentState.stateId,
+            type: 'cloned',
+            timestamp: Date.now(),
+            details: {
+              cloneId: (cloned as StateService).currentState.stateId
+            },
+            source: 'original'
+          });
+        }
       } catch (error) {
         logger.warn('Failed to register clone with tracking client', { error });
       }
     } else if (this.trackingService) {
       // Fall back to direct service
       try {
-        // Register the clone-original relationship
+        // Register the clone-original relationship with type assertion since it's valid in the client interface
         this.trackingService.addRelationship(
           this.currentState.stateId,
           (cloned as StateService).currentState.stateId,
-          'clone-original'
+          'parent-child' // Use 'parent-child' as fallback for direct service
         );
       } catch (error) {
         logger.warn('Failed to register clone-original relationship with tracking service', { error });
@@ -904,6 +901,37 @@ export class StateService implements IStateService {
       commands: false,
       imports: false
     };
+  }
+
+  /**
+   * Type guard to check if a service is an IStateEventService
+   * @param service The service to check
+   * @returns True if the service is an IStateEventService
+   */
+  private isStateEventService(service: unknown): service is IStateEventService {
+    return (
+      typeof service === 'object' && 
+      service !== null && 
+      'on' in service && 
+      'off' in service && 
+      'emit' in service &&
+      !('createChildState' in service)
+    );
+  }
+
+  /**
+   * Type guard to check if a service is an IStateService
+   * @param service The service to check
+   * @returns True if the service is an IStateService
+   */
+  private isStateService(service: unknown): service is IStateService {
+    return (
+      typeof service === 'object' && 
+      service !== null && 
+      'createChildState' in service && 
+      'getTextVar' in service && 
+      'setTextVar' in service
+    );
   }
 
   // Add back the setTrackingService method

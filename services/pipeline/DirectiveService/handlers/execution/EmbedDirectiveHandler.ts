@@ -7,7 +7,7 @@ import { IStateService } from '@services/state/StateService/IStateService.js';
 import { ICircularityService } from '@services/resolution/CircularityService/ICircularityService.js';
 import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import { IParserService } from '@services/pipeline/ParserService/IParserService.js';
-import { IInterpreterServiceClient } from '@services/pipeline/InterpreterService/IInterpreterServiceClient.js';
+import { IInterpreterServiceClient } from '@services/pipeline/InterpreterService/interfaces/IInterpreterServiceClient.js';
 import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory.js';
 import { DirectiveError, DirectiveErrorCode, DirectiveErrorSeverity } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { embedLogger } from '@core/utils/logger.js';
@@ -90,7 +90,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
     // First try to get the client from the factory
     if (!this.interpreterServiceClient && this.interpreterServiceClientFactory) {
       try {
-        this.interpreterServiceClient = this.interpreterServiceClientFactory.getInterpreterService();
+        this.interpreterServiceClient = this.interpreterServiceClientFactory.createClient();
       } catch (error) {
         this.logger.warn('Failed to get interpreter service client from factory', {
           error: error instanceof Error ? error.message : String(error)
@@ -102,7 +102,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
     if (!this.interpreterServiceClient && process.env.NODE_ENV === 'test') {
       this.logger.debug('Creating test mock for interpreter service client');
       this.interpreterServiceClient = {
-        interpret: async (nodes, options) => {
+        interpret: async (nodes: MeldNode[], options?: { initialState?: IStateService }) => {
           // Return the initial state if provided, otherwise create a mock state
           this.logger.debug('Using test mock for interpreter service');
           if (options?.initialState) {
@@ -132,7 +132,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
             isTransformationEnabled: () => false
           } as unknown as IStateService;
         },
-        createChildContext: async (parentState) => parentState
+        createChildContext: async (parentState: IStateService) => parentState
       };
     }
     
@@ -141,7 +141,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
       throw new DirectiveError(
         'Interpreter service client is not available',
         this.kind,
-        DirectiveErrorCode.INITIALIZATION_FAILED
+        DirectiveErrorCode.EXECUTION_FAILED
       );
     }
     

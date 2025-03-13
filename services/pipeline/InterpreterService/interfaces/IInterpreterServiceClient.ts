@@ -38,4 +38,4 @@ export interface IInterpreterServiceClient {
     nodes: MeldNode[],
     options?: InterpreterOptions
   ): Promise<IStateService>;
-} 
+}

@@ -15,6 +15,7 @@ import { ParserServiceClientFactory } from '@services/pipeline/ParserService/fac
 import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientFactory.js';
 import { StateServiceClientFactory } from '@services/state/StateService/factories/StateServiceClientFactory.js';
 import { StateTrackingServiceClientFactory } from '@services/state/StateTrackingService/factories/StateTrackingServiceClientFactory.js';
+import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory.js';
 
 // Export the MemoryFileSystem for users who want to use it
 export { MemoryFileSystem };
@@ -147,6 +148,12 @@ export async function runMeld(
     console.warn('Failed to resolve one or more service factories', error);
   }
 
+  // Create a properly typed interpreter factory that wraps the interpreter service
+  // We need to import the real factory and create an instance
+  const interpreterFactory = new InterpreterServiceClientFactory();
+  // Set our interpreter service directly in the factory
+  interpreterFactory.setInterpreterServiceForTests(services.interpreter);
+
   // Re-initialize directive and interpreter services to ensure they have the correct dependencies
   services.directive.initialize(
     services.validation,
@@ -154,7 +161,7 @@ export async function runMeld(
     services.path,
     services.filesystem,
     services.parser,
-    services.interpreter,
+    interpreterFactory,
     services.circularity,
     services.resolution
   );

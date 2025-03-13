@@ -206,10 +206,13 @@ export class VariableReferenceResolver {
             const dataValue = mockStateService.getDataVar(baseName);
             if (dataValue !== undefined) {
               // Access fields in the data object
-              let currentValue = dataValue;
+              // Use any type to avoid TS2322 errors in build
+              let currentValue: any = dataValue;
               for (const field of fields) {
                 if (currentValue && typeof currentValue === 'object' && field in currentValue) {
-                  currentValue = currentValue[field];
+                  // Safe type assertion for object access
+                  const objValue = currentValue as Record<string, unknown>;
+                  currentValue = objValue[field];
                 } else {
                   // Field not found
                   if (context.strict) {
@@ -242,7 +245,7 @@ export class VariableReferenceResolver {
                 `Variable ${baseName} not found`,
                 {
                   code: ResolutionErrorCode.VARIABLE_NOT_FOUND,
-                  severity: ErrorSeverity.Error,
+                  severity: ErrorSeverity.Fatal,
                   details: { variable: baseName }
                 }
               );
@@ -274,7 +277,7 @@ export class VariableReferenceResolver {
               `Variable ${varName} not found`,
               {
                 code: ResolutionErrorCode.VARIABLE_NOT_FOUND,
-                severity: ErrorSeverity.Error,
+                severity: ErrorSeverity.Fatal,
                 details: { variable: varName }
               }
             );
@@ -300,10 +303,12 @@ export class VariableReferenceResolver {
             result += node.value ?? node.content ?? '';
           } else if (isVariableReferenceNode(node)) {
             // Variable reference - resolve it
-            const varName = node.identifier;
+            // Use type assertion with 'as' to handle the type checking
+            const varRef = node as unknown as VariableReferenceNode;
+            const varName = varRef.identifier;
             
             // Check if this is a field access
-            if (node.fields && node.fields.length > 0) {
+            if (varRef.fields && varRef.fields.length > 0) {
               // Get the base variable
               const value = await this.getVariable(varName, context);
               if (value === undefined) {
@@ -317,7 +322,7 @@ export class VariableReferenceResolver {
               
               // Access fields
               try {
-                const fieldValue = await this.accessFields(value, node.fields, context, varName);
+                const fieldValue = await this.accessFields(value, varRef.fields, context, varName);
                 result += fieldValue;
               } catch (error) {
                 // Field access error
@@ -414,7 +419,7 @@ export class VariableReferenceResolver {
           `Variable ${varName} not found`,
           {
             code: ResolutionErrorCode.VARIABLE_NOT_FOUND,
-            severity: ErrorSeverity.Error,
+            severity: ErrorSeverity.Fatal,
             details: { variable: varName }
           }
         );
@@ -453,8 +458,8 @@ export class VariableReferenceResolver {
                 `Array index ${field.value} out of bounds for array of length ${current.length}`,
                 {
                   code: ResolutionErrorCode.INVALID_ACCESS,
-                  severity: ErrorSeverity.Error,
-                  details: { path: `${varName}.${fieldPath}`, index: field.value, length: current.length }
+                  severity: ErrorSeverity.Fatal,
+                  details: { path: `${varName}.${fieldPath}`, index: Number(field.value), length: current.length }
                 }
               );
             }
@@ -463,7 +468,7 @@ export class VariableReferenceResolver {
               `Cannot access array index in non-array value`,
               {
                 code: ResolutionErrorCode.INVALID_ACCESS,
-                severity: ErrorSeverity.Error,
+                severity: ErrorSeverity.Fatal,
                 details: { path: `${varName}.${fieldPath}`, type: typeof current }
               }
             );
@@ -478,8 +483,8 @@ export class VariableReferenceResolver {
                 `Field ${field.value} not found in object`,
                 {
                   code: ResolutionErrorCode.FIELD_NOT_FOUND,
-                  severity: ErrorSeverity.Error,
-                  details: { path: `${varName}.${fieldPath}`, field: field.value }
+                  severity: ErrorSeverity.Fatal,
+                  details: { path: `${varName}.${fieldPath}`, field: String(field.value) }
                 }
               );
             }
@@ -488,7 +493,7 @@ export class VariableReferenceResolver {
               `Cannot access field in non-object value`,
               {
                 code: ResolutionErrorCode.INVALID_ACCESS,
-                severity: ErrorSeverity.Error,
+                severity: ErrorSeverity.Fatal,
                 details: { path: `${varName}.${fieldPath}`, type: typeof current }
               }
             );
@@ -594,7 +599,7 @@ export class VariableReferenceResolver {
       // Unexpected error
       return {
         success: false,
-        error: error.message,
+        error: error instanceof Error ? error.message : String(error),
         path: path.join('.'),
         result: undefined
       };
@@ -680,16 +685,18 @@ export class VariableReferenceResolver {
         });
         
         nodes.push({
-          type: 'VariableReference',
+          type: 'VariableReference' as any,
           identifier: baseName,
-          fields
-        } as VariableReferenceNode);
+          fields,
+          location: { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } }
+        } as unknown as MeldNode);
       } else {
         // Simple variable reference
         nodes.push({
-          type: 'VariableReference',
-          identifier: varName
-        } as VariableReferenceNode);
+          type: 'VariableReference' as any,
+          identifier: varName,
+          location: { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } }
+        } as unknown as MeldNode);
       }
       
       // Update last index
@@ -882,9 +889,10 @@ export class VariableReferenceResolver {
     const references = new Set<string>();
     
     for (const node of nodes) {
-      if (node.type === 'VariableReference') {
-        // Variable reference
-        references.add((node as TextVarNode | DataVarNode).identifier);
+      if (node.type === 'VariableReference' as any) {
+        // Variable reference - use safe type assertion
+        const varRef = node as unknown as VariableReferenceNode;
+        references.add(varRef.identifier);
       } else if (node.type === 'Directive') {
         const directive = (node as DirectiveNode).directive;
         if (directive?.kind === 'text' || directive?.kind === 'data') {
@@ -909,11 +917,11 @@ export class VariableReferenceResolver {
         // Check if this is a numeric index
         const numIndex = parseInt(field, 10);
         if (!isNaN(numIndex)) {
-          return { type: 'index', value: numIndex };
+          return { type: 'index' as const, value: numIndex };
         }
         // Otherwise it's a field name
-        return { type: 'field', value: field };
-      });
+        return { type: 'field' as const, value: field };
+      }) as Field[];
       
       return { baseName, fields };
     }
@@ -1126,7 +1134,11 @@ export class VariableReferenceResolver {
       // Try to use the resolution client
       if (this.resolutionClient) {
         try {
-          return await this.resolutionClient.resolveInContext(reference, context);
+          if (this.resolutionClient.resolveInContext) {
+            return await this.resolutionClient.resolveInContext(reference, context);
+          }
+          // Fallback to regular resolveVariables
+          return await this.resolutionClient.resolveVariables(reference, context);
         } catch (error) {
           // Check if this is already a MeldResolutionError (like circular reference detection)
           if (error instanceof MeldResolutionError) {
@@ -1145,7 +1157,7 @@ export class VariableReferenceResolver {
         `Unable to resolve nested variable reference: ${reference}`,
         {
           code: ResolutionErrorCode.RESOLUTION_FAILED,
-          severity: ErrorSeverity.Error,
+          severity: ErrorSeverity.Fatal,
           details: {
             value: reference,
             context: 'nested-variable-resolution'
@@ -1163,7 +1175,7 @@ export class VariableReferenceResolver {
         `Failed to resolve nested variable reference: ${error instanceof Error ? error.message : String(error)}`,
         {
           code: ResolutionErrorCode.RESOLUTION_FAILED,
-          severity: ErrorSeverity.Error,
+          severity: ErrorSeverity.Fatal,
           details: {
             value: reference,
             error: error instanceof Error ? error.message : String(error)

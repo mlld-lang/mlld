@@ -263,4 +263,16 @@ export interface IPathService {
    * This is a low-level utility and does not enforce Meld path rules.
    */
   basename(filePath: string): string;
+  
+  /**
+   * Normalize a path, resolving '..' and '.' segments.
+   * 
+   * @param filePath - The path to normalize
+   * @returns The normalized path
+   * 
+   * @remarks
+   * This is a low-level utility and does not enforce Meld path rules.
+   * It's primarily used for internal path manipulation.
+   */
+  normalizePath?(filePath: string): string;
 } 

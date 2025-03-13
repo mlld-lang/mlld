@@ -54,7 +54,7 @@ export class MeldLLMXMLError extends Error {
     { token: 'IPathService', name: 'pathService' },
     { token: 'IFileSystemService', name: 'fileSystemService' },
     { token: 'IParserService', name: 'parserService' },
-    { token: 'InterpreterServiceClientFactory', name: 'interpreterServiceClientFactory' },
+    { token: 'InterpreterServiceClientFactory', name: 'interpreterClientFactory' },
     { token: 'ICircularityService', name: 'circularityService' },
     { token: 'IResolutionService', name: 'resolutionService' }
   ]
@@ -296,7 +296,7 @@ export class DirectiveService implements IDirectiveService {
         this.circularityService!,
         this.fileSystemService!,
         this.parserService!,
-        this.interpreterServiceClientFactory!,
+        this.interpreterClientFactory!,
         this.logger
       )
     );
@@ -308,7 +308,7 @@ export class DirectiveService implements IDirectiveService {
         this.stateService!,
         this.fileSystemService!,
         this.parserService!,
-        this.interpreterServiceClientFactory!,
+        this.interpreterClientFactory!,
         this.circularityService!
       )
     );

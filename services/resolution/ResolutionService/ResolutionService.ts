@@ -25,7 +25,7 @@ import { IDirectiveServiceClient } from '@services/pipeline/DirectiveService/int
 import { DirectiveServiceClientFactory } from '@services/pipeline/DirectiveService/factories/DirectiveServiceClientFactory.js';
 import { IFileSystemServiceClient } from '@services/fs/FileSystemService/interfaces/IFileSystemServiceClient.js';
 import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/factories/FileSystemServiceClientFactory.js';
-import { IParserService } from '@services/pipeline/ParserService/interfaces/IParserService.js';
+import { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 
 /**
  * Interface matching the StructuredPath expected from meld-spec
