@@ -1,6 +1,6 @@
 {
   "name": "meld",
-  "version": "10.3.0",
+  "version": "11.0.0",
   "description": "Meld: A template language for LLM prompts",
   "type": "commonjs",
   "main": "dist/index.cjs",
