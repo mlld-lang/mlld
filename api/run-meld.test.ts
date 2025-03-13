@@ -58,7 +58,7 @@ This is a template with {{greeting}} and {{name}}!`;
     // With transformation disabled, we still expect variable substitution to happen
     // since that's part of the basic meld processing
     const normalizedResult = result.replace(/\s+/g, ' ').trim();
-    expect(normalizedResult).toBe('This is a template with Hello and World !');
+    expect(normalizedResult).toBe('This is a template with Hello and World!');
   });
 
   it('should handle data variables correctly', async () => {
