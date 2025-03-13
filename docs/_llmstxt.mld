@@ -1,0 +1,29 @@
+@path d = "$./docs/directives"
+
+@embed [introduction.md]
+
+@embed [syntax-reference.md]
+
+@embed [cli-usage.md]
+
+@embed [sdk-usage.md]
+
+@embed [error-handling.md]
+
+@embed [variables.md]
+
+@embed [$d/README.md]
+
+@embed [$d/text.md]
+
+@embed [$d/embed.md]
+
+@embed [$d/data.md]
+
+@embed [$d/import.md]
+
+@embed [$d/run.md]
+
+@embed [$d/path.md]
+
+@embed [$d/define.md]
