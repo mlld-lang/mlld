@@ -129,6 +129,7 @@ export class InterpreterService implements IInterpreterService {
       throw new MeldInterpreterError(
         'InterpreterService must be initialized before use',
         'initialization',
+        undefined, // No location information
         { severity: ErrorSeverity.Fatal }
       );
     }
@@ -156,6 +157,7 @@ export class InterpreterService implements IInterpreterService {
     throw new MeldInterpreterError(
       'No directive service available to handle directive',
       'directive_handling',
+      undefined, // No location information
       { severity: ErrorSeverity.Fatal }
     );
   }
