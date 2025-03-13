@@ -7,14 +7,14 @@
  */
 
 import { mock } from 'vitest-mock-extended';
-import { IValidationService } from '../../../services/validation/ValidationService/interface';
-import { IStateService } from '../../../services/state/StateService/interface';
-import { IResolutionService } from '../../../services/resolution/ResolutionService/interface';
-import { DirectiveError } from '../../../services/pipeline/DirectiveService/errors/DirectiveError';
-import { PathValidationError } from '../../../services/validation/ValidationService/errors/PathValidationError';
-import { IFileSystemService } from '../../../services/fs/FileSystemService/interface';
-import { IPathService } from '../../../services/fs/PathService/interface';
-import { ClonedState } from '../../../services/state/StateService/types';
+import { IValidationService } from '@services/resolution/ValidationService/IValidationService';
+import { IStateService } from '@services/state/StateService/IStateService';
+import { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
+import { DirectiveError } from '@services/pipeline/DirectiveService/errors/DirectiveError';
+import { PathValidationError } from '@core/errors/PathValidationError';
+import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
+import { IPathService } from '@services/fs/PathService/IPathService';
+import type { IStateService as ClonedState } from '@services/state/StateService/IStateService';
 
 /**
  * Creates a mock ValidationService with default behavior
@@ -35,6 +35,8 @@ export function createStateServiceMock() {
   const service = mock<IStateService>();
   // Default behaviors
   service.clone.mockReturnValue({} as ClonedState);
+  // Ensure getPathVar is defined with default behavior
+  service.getPathVar.mockImplementation((name) => undefined);
   return service;
 }
 

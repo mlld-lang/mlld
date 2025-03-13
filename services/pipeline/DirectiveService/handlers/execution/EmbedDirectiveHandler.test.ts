@@ -163,7 +163,11 @@ describe('EmbedDirectiveHandler', () => {
       getAllTextVars: vi.fn().mockReturnValue({}),
       getAllDataVars: vi.fn().mockReturnValue({}),
       getAllPathVars: vi.fn().mockReturnValue({}),
-      getAllCommands: vi.fn().mockReturnValue({})
+      getAllCommands: vi.fn().mockReturnValue({}),
+      getPathVar: vi.fn().mockImplementation((name) => {
+        if (name === 'docs') return '/path/to/docs';
+        return undefined;
+      })
     };
 
     clonedState = {
@@ -176,7 +180,11 @@ describe('EmbedDirectiveHandler', () => {
       clone: vi.fn(),
       isTransformationEnabled: vi.fn().mockReturnValue(false),
       getStateId: vi.fn().mockReturnValue('cloned-state-id'),
-      transformNode: vi.fn()
+      transformNode: vi.fn(),
+      getPathVar: vi.fn().mockImplementation((name) => {
+        if (name === 'docs') return '/path/to/docs';
+        return undefined;
+      })
     };
 
     // Create mocks using standardized factories
@@ -189,6 +197,10 @@ describe('EmbedDirectiveHandler', () => {
     stateService.clone.mockReturnValue(clonedState);
     stateService.createChildState.mockReturnValue(childState);
     stateService.isTransformationEnabled.mockReturnValue(false);
+    stateService.getPathVar = vi.fn().mockImplementation((name) => {
+      if (name === 'docs') return '/path/to/docs';
+      return undefined;
+    });
 
     // Create parser service mock
     parserService = createRealParserService();

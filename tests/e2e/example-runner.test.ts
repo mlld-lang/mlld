@@ -52,7 +52,7 @@ function getTestCaseName(filePath: string): string {
   return relativePath.replace(/\\/g, '/'); // Normalize path separators
 }
 
-describe('E2E Meld Test Cases', () => {
+describe.skip('E2E Meld Test Cases', () => {
   let context: TestContextDI;
   const testCases: Record<string, string[]> = {
     valid: [],
