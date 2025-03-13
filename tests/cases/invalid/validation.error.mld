@@ -1,0 +1,16 @@
+@text greeting = "Hello"
+
+// This will cause a parse error - invalid variable name
+@text 123invalid = "Invalid variable name"
+
+// This will cause a resolution error - undefined variable
+The message is: {{undefined_variable}}
+
+// This will cause a directive error - invalid path
+@path badpath = "/absolute/path/not/allowed"
+
+// This will cause another directive error - invalid data JSON
+@data bad_json = { "key": "value", missing: quotes, }
+
+// This will cause a run directive error
+@run [non_existent_command with arguments] 

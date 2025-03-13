@@ -1,0 +1,9 @@
+# Invalid Directive Test
+
+This test demonstrates an error case where a directive doesn't exist.
+
+@nonexistent directive = "This directive doesn't exist"
+
+## Output
+
+This should fail during parsing. 

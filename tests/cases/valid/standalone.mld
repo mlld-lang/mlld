@@ -1,0 +1,18 @@
+@text greeting = "Hello"
+@text name = "World"
+@text message = `{{greeting}}, {{name}}!`
+
+# Standalone Example
+
+This is a self-contained example without any imports.
+
+{{message}}
+
+@data config = {
+  "version": "1.0.0",
+  "environment": "test"
+}
+
+## Configuration
+- Version: {{config.version}}
+- Environment: {{config.environment}} 

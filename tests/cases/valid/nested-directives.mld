@@ -1,0 +1,63 @@
+# Complex Data Structure Test
+
+This test demonstrates the usage of complex data structures in Meld.
+
+@data departments = [
+  {
+    "name": "Engineering",
+    "manager": "Alice Smith",
+    "employees": [
+      { "name": "Bob Johnson", "role": "Developer", "projects": ["Alpha", "Beta"] },
+      { "name": "Carol Williams", "role": "QA Engineer", "projects": ["Alpha"] },
+      { "name": "Dave Brown", "role": "DevOps", "projects": ["Beta", "Gamma"] }
+    ]
+  },
+  {
+    "name": "Marketing",
+    "manager": "Eve Davis",
+    "employees": [
+      { "name": "Frank Miller", "role": "Content Writer", "projects": ["Delta"] },
+      { "name": "Grace Wilson", "role": "Designer", "projects": ["Delta", "Epsilon"] }
+    ]
+  },
+  {
+    "name": "Sales",
+    "manager": "Henry Moore",
+    "employees": []
+  }
+]
+
+## Company Structure
+
+### {{departments.0.name}} Department
+Manager: {{departments.0.manager}}
+
+Employees:
+- {{departments.0.employees.0.name}} ({{departments.0.employees.0.role}})
+  Projects:
+    * {{departments.0.employees.0.projects.0}}
+    * {{departments.0.employees.0.projects.1}}
+- {{departments.0.employees.1.name}} ({{departments.0.employees.1.role}})
+  Projects:
+    * {{departments.0.employees.1.projects.0}}
+- {{departments.0.employees.2.name}} ({{departments.0.employees.2.role}})
+  Projects:
+    * {{departments.0.employees.2.projects.0}}
+    * {{departments.0.employees.2.projects.1}}
+
+### {{departments.1.name}} Department
+Manager: {{departments.1.manager}}
+
+Employees:
+- {{departments.1.employees.0.name}} ({{departments.1.employees.0.role}})
+  Projects:
+    * {{departments.1.employees.0.projects.0}}
+- {{departments.1.employees.1.name}} ({{departments.1.employees.1.role}})
+  Projects:
+    * {{departments.1.employees.1.projects.0}}
+    * {{departments.1.employees.1.projects.1}}
+
+### {{departments.2.name}} Department
+Manager: {{departments.2.manager}}
+
+No employees in this department. 

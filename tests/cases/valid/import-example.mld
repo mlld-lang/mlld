@@ -1,0 +1,13 @@
+# Import Test
+
+This test demonstrates the usage of imports in Meld.
+
+@text local_variable = "This is from the main file"
+
+@import [$PROJECTPATH/tests/cases/valid/import-utils.mld]
+
+## Import Results
+
+Main file variable: {{local_variable}}
+Imported variable: {{imported_variable}}
+Combined message: {{local_variable}} and {{imported_variable}} 

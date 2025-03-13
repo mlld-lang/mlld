@@ -1,0 +1,29 @@
+# Nested Variable Test
+
+This test demonstrates the usage of nested variables and objects in Meld.
+
+@data person = {
+  "name": "John Doe",
+  "age": 32,
+  "contact": {
+    "email": "john@example.com",
+    "phone": "555-1234"
+  },
+  "skills": ["JavaScript", "Python", "Go"]
+}
+
+## Person Details
+
+Name: {{person.name}}
+Age: {{person.age}}
+
+### Contact Information
+
+Email: {{person.contact.email}}
+Phone: {{person.contact.phone}}
+
+### Skills
+
+- {{person.skills.0}}
+- {{person.skills.1}}
+- {{person.skills.2}} 

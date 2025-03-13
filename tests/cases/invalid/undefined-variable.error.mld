@@ -1,0 +1,11 @@
+# Invalid Variable Reference Test
+
+This test demonstrates an error case where a variable reference has invalid syntax.
+
+@text greeting = "Hello, World!"
+
+## Output
+
+The greeting is: {{greeting
+
+The closing curly braces are missing from the variable reference. 

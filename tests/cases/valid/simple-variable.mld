@@ -1,0 +1,15 @@
+# Simple Variable Test
+
+This test demonstrates the basic usage of variables in Meld.
+
+@text greeting = "Hello, World!"
+@text value = "42"
+@text isActive = "true"
+
+## Output
+
+The greeting is: {{greeting}}
+
+The value is: {{value}}
+
+Is active: {{isActive}} 

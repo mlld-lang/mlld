@@ -1,0 +1,15 @@
+# Selective Import Test
+
+This test demonstrates importing specific variables from another Meld file.
+
+@text local_greeting = "Hello from main file"
+
+@import [imported_variable] from ["$PROJECTPATH/tests/cases/valid/import-utils.mld"]
+
+## Selective Import Results
+
+Local greeting: {{local_greeting}}
+Imported variable: {{imported_variable}}
+
+// The following would cause an error since we didn't import config
+// Config version: {{config.version}} 

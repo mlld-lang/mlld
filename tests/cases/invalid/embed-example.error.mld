@@ -1,0 +1,12 @@
+# Data variables example
+
+# This file is INTENTIONALLY INVALID and should cause test failures!
+
+@embed [data-variables.mld]
+
+# Circular import error
+
+@embed [$.ests/cases/invalid/circular-import.error.mld]
+
+# Another invalid embed that should definitely fail
+@embed [THIS_FILE_DOES_NOT_EXIST.mld]

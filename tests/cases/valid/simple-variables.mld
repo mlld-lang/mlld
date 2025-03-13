@@ -1,0 +1,19 @@
+@text greeting = "Hello"
+@text name = "World"
+@text message = `{{greeting}}, {{name}}!`
+
+This is a simple example with variables:
+
+{{message}}
+
+@data user = {
+  "name": "Alice",
+  "role": "Developer",
+  "skills": ["JavaScript", "TypeScript", "Meld"]
+}
+
+User Information:
+- Name: {{user.name}}
+- Role: {{user.role}}
+- Skills: {{user.skills}}
+- First skill: {{user.skills.0}} 

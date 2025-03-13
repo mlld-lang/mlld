@@ -1,0 +1,17 @@
+# Path Variable Test
+
+This test demonstrates the usage of path variables in Meld.
+
+@path project_docs = "$PROJECTPATH/docs"
+@path home_dir = "$HOMEPATH/meld"
+@path test_dir = "$PROJECTPATH/tests"
+
+## Path Variables
+
+Project docs path: $project_docs
+Home directory path: $home_dir
+Test directory path: $test_dir
+
+## Nested Paths
+
+Specific file in tests: $test_dir/cases/valid/path-example.mld 
