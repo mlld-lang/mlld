@@ -274,23 +274,126 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
       newState
     );
 
+    // Handle custom path variables - process the path before resolution
+    let processedPath = path;
+    
+    // Check if this is a string path that might contain user-defined path variables
+    if (typeof path === 'string' && path.includes('$')) {
+      // Check for user-defined path variables ($varname)
+      const userPathVarRegex = /\$([a-zA-Z_][a-zA-Z0-9_]*)/g;
+      const userVarMatches = [...path.matchAll(userPathVarRegex)];
+      
+      if (userVarMatches && userVarMatches.length > 0) {
+        this.logger.debug(`Found user-defined path variables in embed directive: ${path}`, {
+          matches: userVarMatches.map(m => m[0]),
+          location: node.location
+        });
+
+        // Process all user-defined path variables
+        let modifiedPath = path;
+        for (const match of userVarMatches) {
+          const varName = match[1]; // Extract variable name without $
+          const varFullName = match[0]; // The full variable reference with $
+          
+          // Skip special variables which are handled by ResolutionService
+          if (['PROJECTPATH', 'HOMEPATH', '~', '.'].includes(varName)) {
+            continue;
+          }
+          
+          // Get the path variable value
+          const varValue = newState.getPathVar(varName);
+          if (varValue) {
+            this.logger.debug(`Replacing path variable $${varName} with value: ${JSON.stringify(varValue)}`);
+            
+            // Replace all occurrences of the variable in the path
+            if (typeof varValue === 'string') {
+              modifiedPath = modifiedPath.replace(new RegExp('\\$' + varName, 'g'), varValue);
+            } else if (typeof varValue === 'object' && varValue !== null && 'raw' in varValue) {
+              // Handle structured path objects - ensure TypeScript recognizes this as having a 'raw' property
+              const structuredPathValue = varValue as StructuredPath;
+              modifiedPath = modifiedPath.replace(new RegExp('\\$' + varName, 'g'), structuredPathValue.raw);
+            }
+          } else {
+            this.logger.warn(`Path variable $${varName} not found in state`, {
+              varName,
+              availableVars: Array.from(newState.getAllPathVars().keys())
+            });
+          }
+        }
+        
+        processedPath = modifiedPath;
+        this.logger.debug(`Processed path after variable substitution: ${processedPath}`);
+      }
+    } 
+    // Handle structured path objects that might contain user-defined path variables
+    else if (typeof path === 'object' && path !== null && 'raw' in path && !path.isVariableReference) {
+      const rawPath = path.raw;
+      if (rawPath && rawPath.includes('$')) {
+        // Check for user-defined path variables in the raw path
+        const userPathVarRegex = /\$([a-zA-Z_][a-zA-Z0-9_]*)/g;
+        const userVarMatches = [...rawPath.matchAll(userPathVarRegex)];
+        
+        if (userVarMatches && userVarMatches.length > 0) {
+          this.logger.debug(`Found user-defined path variables in structured path: ${rawPath}`, {
+            matches: userVarMatches.map(m => m[0]),
+            location: node.location
+          });
+          
+          // Process all user-defined path variables
+          let modifiedRawPath = rawPath;
+          for (const match of userVarMatches) {
+            const varName = match[1]; // Extract variable name without $
+            
+            // Skip special variables which are handled by ResolutionService
+            if (['PROJECTPATH', 'HOMEPATH', '~', '.'].includes(varName)) {
+              continue;
+            }
+            
+            // Get the path variable value
+            const varValue = newState.getPathVar(varName);
+            if (varValue) {
+              this.logger.debug(`Replacing path variable $${varName} in structured path with value: ${JSON.stringify(varValue)}`);
+              
+              // Replace all occurrences of the variable in the path
+              if (typeof varValue === 'string') {
+                modifiedRawPath = modifiedRawPath.replace(new RegExp('\\$' + varName, 'g'), varValue);
+              } else if (typeof varValue === 'object' && varValue !== null && 'raw' in varValue) {
+                // Handle structured path objects - ensure TypeScript recognizes this as having a 'raw' property
+                const structuredPathValue = varValue as StructuredPath;
+                modifiedRawPath = modifiedRawPath.replace(new RegExp('\\$' + varName, 'g'), structuredPathValue.raw);
+              }
+            }
+          }
+          
+          // Create a new structured path with the modified raw value - add type assertion for TypeScript
+          processedPath = {
+            ...path,
+            raw: modifiedRawPath
+          } as StructuredPath;
+          
+          this.logger.debug(`Processed structured path after variable substitution: ${JSON.stringify(processedPath)}`);
+        }
+      }
+    }
+
     // Track path resolution for finally block
     let resolvedPath: string | undefined;
     let content: string;
 
     try {
       // Check if this is a variable reference embed
-      const isVariableReference = typeof path === 'object' && 
-                                path.isVariableReference === true;
+      const isVariableReference = typeof processedPath === 'object' && 
+                                processedPath.isVariableReference === true;
 
       this.logger.debug(`Processing embed directive with ${isVariableReference ? 'variable reference' : 'file path'}`, {
         isVariableReference,
-        path: typeof path === 'object' ? JSON.stringify(path) : path
+        path: typeof processedPath === 'object' ? JSON.stringify(processedPath) : processedPath,
+        originalPath: typeof path === 'object' ? JSON.stringify(path) : path
       });
 
       // Resolve variables in the path
       resolvedPath = await this.resolutionService.resolveInContext(
-        path,
+        processedPath,
         resolutionContext
       );
 
