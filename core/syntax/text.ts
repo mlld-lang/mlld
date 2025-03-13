@@ -69,6 +69,50 @@ export const atomic = {
   withRunValueAndVariables: createExample(
     'Text directive with run value and variables',
     `@text result = @run [oneshot "What's broken here? {{tests}}"]`
+  ),
+  
+  multilineText: createExample(
+    'Multi-line text with various formatting',
+    `@text formatted = \`# Heading
+
+This is a paragraph with **bold** and *italic* text.
+
+- List item 1
+- List item 2
+- List item 3
+
+> This is a blockquote
+\``
+  ),
+  
+  textWithNewlines: createExample(
+    'Text with explicit newlines',
+    `@text newlines = "First line\\nSecond line\\nThird line"`
+  ),
+  
+  markdownText: createExample(
+    'Text with markdown formatting',
+    `@text markdown = "# Heading\\n\\n**Bold text** and *italic text*\\n\\n- List item"`
+  ),
+  
+  inlineFormatting: createExample(
+    'Text with inline formatting',
+    `@text inline = "This text has **bold**, *italic*, and \`code\` formatting"`
+  ),
+  
+  blockFormatting: createExample(
+    'Text with block-level formatting',
+    `@text blocks = \`
+# Heading
+
+Paragraph with text.
+
+\`\`\`
+Code block
+\`\`\`
+
+> Blockquote text
+\``
   )
 };
 
@@ -140,6 +184,127 @@ export const combinations = {
 @text homeText = "Home is at $home"
 @text dataText = "Data is at $data"`
     )
+  ),
+  
+  variableSubstitutionInlineFormatting: combineExamples(
+    'Variable substitution with inline formatting',
+    atomic.simpleString,
+    atomic.subject,
+    createExample(
+      'Inline formatting with variable substitution',
+      `@text formatted = \`The {{greeting}} is for {{subject}}. This is **bold** with {{greeting}} inside.\``
+    )
+  ),
+  
+  variableSubstitutionBlockFormatting: combineExamples(
+    'Variable substitution with block formatting',
+    atomic.simpleString,
+    atomic.subject,
+    createExample(
+      'Block formatting with variable substitution',
+      `@text formatted = \`# {{greeting}} {{subject}}
+
+This is a paragraph about {{subject}}.
+
+- List item with {{greeting}}
+- Another item
+
+> Blockquote with {{subject}} mentioned
+\``
+    )
+  ),
+  
+  lineEdgeCases: combineExamples(
+    'Variable substitution at line edges',
+    atomic.simpleString,
+    atomic.subject,
+    createExample(
+      'Variables at start, middle, and end of lines',
+      `@text edges = \`{{greeting}} is at the beginning of the line
+This line has {{greeting}} in the middle
+This line ends with {{greeting}}
+{{greeting}}
+Just text without variables
+{{greeting}} {{subject}} consecutive variables
+\``
+    )
+  ),
+  
+  multilineVariables: combineExamples(
+    'Complex multiline with variable substitution',
+    createExample(
+      'Multi-line text with variable values',
+      `@data multiline = {
+  title: "Multi-line Example",
+  content: "Line 1\\nLine 2\\nLine 3",
+  items: [
+    "First item",
+    "Second item with\\nnewline",
+    "Third item"
+  ]
+}`
+    ),
+    createExample(
+      'Text with multiline variables',
+      `@text document = \`# {{multiline.title}}
+
+{{multiline.content}}
+
+Items:
+{{multiline.items}}
+\``
+    )
+  ),
+  
+  newlineHandling: combineExamples(
+    'Newline handling in different contexts',
+    createExample(
+      'Text with explicit and implicit newlines',
+      `@text combined = \`First line
+Second line
+Third line with explicit\\nnewline
+Fourth line\``
+    ),
+    createExample(
+      'Text with variable containing newlines',
+      `@data content = "Line 1\\nLine 2\\nLine 3"
+@text withVar = \`Before
+{{content}}
+After\``
+    )
+  ),
+  
+  complexDynamicFormatting: combineExamples(
+    'Complex dynamic formatting with variables',
+    createExample(
+      'Data for dynamic formatting',
+      `@data dynamic = {
+  title: "Dynamic Document",
+  sections: [
+    { heading: "Section 1", content: "Content for section 1" },
+    { heading: "Section 2", content: "Content with\\nmultiple\\nlines" },
+    { heading: "Section 3", content: "Final content section" }
+  ],
+  footer: "© 2023"
+}`
+    ),
+    createExample(
+      'Dynamic document with formatting',
+      `@text document = \`# {{dynamic.title}}
+
+{{dynamic.sections.0.heading}}
+{{dynamic.sections.0.content}}
+
+{{dynamic.sections.1.heading}}
+{{dynamic.sections.1.content}}
+
+{{dynamic.sections.2.heading}}
+{{dynamic.sections.2.content}}
+
+---
+{{dynamic.footer}}
+\``
+    )
   )
 };
 
@@ -201,6 +366,28 @@ export const invalid = {
       severity: ErrorSeverity.Fatal,
       code: 'SYNTAX_ERROR', 
       message: 'Invalid run format'
+    }
+  ),
+  
+  invalidVariableFormatting: createInvalidExample(
+    'Invalid variable substitution in formatting',
+    `@text brokenFormat = \`# Heading with **{{unclosed_bold}}\``,
+    {
+      type: MeldResolutionError,
+      severity: ErrorSeverity.Recoverable,
+      code: 'UNDEFINED_VARIABLE',
+      message: 'Variable "unclosed_bold" is not defined'
+    }
+  ),
+  
+  malformedNewline: createInvalidExample(
+    'Malformed newline escape',
+    `@text broken = "Line 1\\Line 2"`,
+    {
+      type: MeldParseError,
+      severity: ErrorSeverity.Fatal,
+      code: 'SYNTAX_ERROR',
+      message: 'Invalid escape sequence'
     }
   )
 };
