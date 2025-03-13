@@ -394,6 +394,13 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
         processedPath,
         resolutionContext
       );
+      
+      // Special handling for when the resolved path might be an object from a data variable
+      if (resolvedPath !== null && typeof resolvedPath === 'object') {
+        // Convert object to string to ensure consistent handling
+        this.logger.debug('Converting object path to string:', resolvedPath);
+        resolvedPath = JSON.stringify(resolvedPath);
+      }
 
       /**
        * variableEmbed:
@@ -401,31 +408,55 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
        * No file system operations are performed, and content is treated as literal text.
        */
       if (isVariableReference) {
-        content = resolvedPath;
-        
-        this.logger.debug(`Using variable reference directly as content`, {
-          content
-        });
-        
-        // Fix for variable reference path prefixing issue
-        // If content has the format "examples/..." (or any folder prefix), we need to extract just the value
-        if (content && typeof content === 'string' && content.includes('/')) {
-          const splitParts = content.split('/');
-          if (splitParts.length > 1) {
-            this.logger.debug('Detected possible file path prefix in variable content', {
-              original: content,
-              splitParts
+        // Ensure we have a string value for the content
+        if (resolvedPath === undefined || resolvedPath === null) {
+          content = '';
+          this.logger.warn('Variable reference resolved to undefined or null', {
+            processedPath,
+            originalPath: path
+          });
+        } else if (typeof resolvedPath === 'string') {
+          content = resolvedPath;
+        } else {
+          // For non-string values (objects, arrays, etc.), convert to string
+          try {
+            // Use JSON.stringify for objects and arrays
+            if (typeof resolvedPath === 'object') {
+              content = JSON.stringify(resolvedPath, null, 2);
+            } else {
+              // For other types (numbers, booleans), use String()
+              content = String(resolvedPath);
+            }
+            this.logger.debug('Converted non-string variable reference to string', {
+              originalType: typeof resolvedPath,
+              convertedContent: content
             });
-            
-            // Take only the last part which should be the actual content
-            content = splitParts[splitParts.length - 1];
-            
-            this.logger.debug('Removed file path prefix from variable content', {
-              original: resolvedPath,
-              fixed: content
+          } catch (error) {
+            this.logger.error('Failed to convert variable reference to string', {
+              error: error instanceof Error ? error.message : String(error),
+              resolvedPath
             });
+            content = String(resolvedPath);
           }
         }
+        
+        this.logger.debug(`Using variable reference directly as content`, {
+          content,
+          resolvedPath,
+          processedPath,
+          originalPath: path,
+          contentType: typeof content
+        });
+        
+        // IMPORTANT: Do not perform path extraction for variable content
+        // The earlier code was removing parts of the content that happened to contain slashes
+        // This was causing the embed directive to fail when embedding variable content containing slashes
+        
+        // Instead, make sure the content is properly preserved without modification
+        this.logger.debug('Preserving full variable reference content without path modifications', {
+          content,
+          resolvedPath
+        });
         
         // We never parse variable references in the actual implementation
         this.logger.debug('Not parsing variable reference content (standard behavior)');
@@ -676,9 +707,25 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
         this.logger.debug('EmbedDirectiveHandler - registering transformation:', {
           nodeLocation: node.location,
           transformEnabled: newState.isTransformationEnabled(),
-          replacementContent: content.substring(0, 50) + (content.length > 50 ? '...' : '')
+          replacementContentLength: content.length,
+          replacementContentPreview: content.substring(0, 50) + (content.length > 50 ? '...' : ''),
+          nodeId: node.id || 'undefined'
         });
-        newState.transformNode(node, replacement);
+        
+        // Create replacement node with directive ID for tracking
+        const enhancedReplacement: TextNode = {
+          ...replacement,
+          id: node.id || `embed_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+          directiveId: node.id || 'embed_directive'
+        };
+        
+        // Log transformation to help debug
+        console.log(
+          `EmbedDirectiveHandler transformed node (${enhancedReplacement.id}): ` +
+          `${content.substring(0, 60)}${content.length > 60 ? '...' : ''}`
+        );
+        
+        newState.transformNode(node, enhancedReplacement);
       }
 
       return {

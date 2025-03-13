@@ -145,44 +145,52 @@ Once you have confirmed all tests pass and the build runs without errors, create
 
 Once you have confirmed all tests pass and the build runs without errors, create a commit for this phase.
 
-## Phase 4: OutputService DI Refactoring
+## Phase 4: OutputService DI Refactoring with Direct Container Resolution
 
-**Goal:** Refactor the OutputService to correctly use the enhanced resolver client and standardized formatting.
+**Goal:** Refactor the OutputService to correctly use the enhanced resolver client and standardized formatting while addressing circular dependencies.
 
 **Tasks:**
-1. Update OutputService to use VariableReferenceResolverClient:
-   - Inject the factory following DI best practices
-   - Create a dedicated client instance
-   - Use the client for all variable resolution operations
+1. Update OutputService to use VariableReferenceResolverClient with direct container resolution:
+   - Add VariableReferenceResolverClient as a private member in OutputService
+   - Implement a getVariableResolver() method using direct container resolution and lazy loading
+   - Add robust error handling and fallbacks when resolution fails
+   - Only resolve the client when actually needed (lazy loading pattern)
 
-2. Fix the transformation mode handling:
+2. Enhance field access functionality:
+   - Modify field access handling to use the client when available 
+   - Implement fallbacks for when the client is unavailable
+   - Use the client's convertToString method for consistent string formatting
+   - Ensure proper type preservation during field access operations
+
+3. Fix the transformation mode handling:
    - Create a clear handling path for transformed nodes
    - Preserve data types during transformation
    - Implement clean object access for variables
    - Ensure consistent newline handling in transformation mode
 
-3. Update the nodeToMarkdown method:
+4. Update the nodeToMarkdown method:
    - Improve detection and handling of field access patterns
    - Add proper context tracking for resolution
    - Fix convertToString handling for objects and arrays
    - Implement standardized newline handling
 
-4. Create unified handling for different output formats:
+5. Create unified handling for different output formats:
    - Standardize behavior between markdown and XML output
    - Create common formatting utilities for all output formats
    - Ensure consistent handling of special cases
 
-5. Implement proper error handling:
+6. Implement proper error handling:
    - Add specific error types for field access and formatting issues
    - Implement graceful fallbacks for certain error cases
    - Add detailed error information for debugging
 
 **Exit Criteria:**
 - OutputService passes all tests without workarounds
-- Clean integration with the resolver client
+- Clean integration with the resolver client using direct container resolution
 - Consistent formatting across all output modes
 - Proper error handling for field access and formatting issues
 - No regression in existing functionality
+- Successful handling of circular dependencies
 
 Once you have confirmed all tests pass and the build runs without errors, create a commit for this phase.
 

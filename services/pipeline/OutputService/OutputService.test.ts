@@ -509,7 +509,95 @@ describe('OutputService', () => {
     });
   });
 
-  describe('Regression Tests', () => {
+  describe('Direct Container Resolution and Field Access', () => {
+    it('should handle field access with direct field access fallback', async () => {
+      // Set up state with test data
+      const mockState = mockDeep<IStateService>();
+      vi.mocked(mockState.getDataVar).mockImplementation((name) => {
+        if (name === 'user') {
+          return {
+            name: 'Claude',
+            details: {
+              role: 'AI Assistant',
+              capabilities: ['code', 'conversation']
+            },
+            metrics: [10, 20, 30]
+          };
+        }
+        return undefined;
+      });
+      
+      // Create a test mock for resolutionService
+      const mockResolutionService = mockDeep<IResolutionService>();
+      
+      // Create a custom OutputService with our mocks
+      const outputService = new OutputService(mockState, mockResolutionService);
+      
+      // Use a simple TextNode for testing
+      const textNode = createTextNode(
+        'User: {{user.name}}, Role: {{user.details.role}}, Capability: {{user.metrics.0}}',
+        createLocation(1, 1)
+      );
+      
+      // Set up for transformation mode
+      vi.mocked(mockState.isTransformationEnabled).mockReturnValue(true);
+      vi.mocked(mockState.getTransformedNodes).mockReturnValue([textNode]);
+      
+      // Mock the behavior of resolveText for variable resolution
+      mockResolutionService.resolveText.mockImplementation(async (text) => {
+        return text
+          .replace('{{user.name}}', 'Claude')
+          .replace('{{user.details.role}}', 'AI Assistant')
+          .replace('{{user.metrics.0}}', '10');
+      });
+      
+      // Convert the node to markdown
+      const output = await outputService.convert([textNode], mockState, 'markdown');
+      
+      // Clean the output for comparison
+      const cleanOutput = output.trim().replace(/\s+/g, ' ');
+      
+      // We expect the output to contain the properly resolved field values
+      // Using more flexible matching because the specific whitespace format may vary
+      expect(cleanOutput).toContain('User: Claude');
+      expect(cleanOutput).toContain('Role: AI Assistant');
+      expect(cleanOutput).toContain('Capability: 10');
+    });
+    
+    it('should gracefully handle errors in field access', async () => {
+      // Set up state with test data that will cause field access errors
+      const mockState = mockDeep<IStateService>();
+      vi.mocked(mockState.getDataVar).mockImplementation((name) => {
+        if (name === 'user') {
+          return null; // Will cause field access errors
+        }
+        return undefined;
+      });
+      
+      // Create a test mock for resolutionService that will also fail
+      const mockResolutionService = mockDeep<IResolutionService>();
+      mockResolutionService.resolveText.mockRejectedValue(new Error('Resolution error'));
+      
+      // Create a custom OutputService with our mocks
+      const outputService = new OutputService(mockState, mockResolutionService);
+      
+      // Use a simple TextNode for testing with invalid field access
+      const textNode = createTextNode(
+        'User: {{user.name}}, Role: {{user.details.role}}, Capability: {{user.metrics.0}}',
+        createLocation(1, 1)
+      );
+      
+      // Set up for transformation mode
+      vi.mocked(mockState.isTransformationEnabled).mockReturnValue(true);
+      vi.mocked(mockState.getTransformedNodes).mockReturnValue([textNode]);
+      
+      // This should work even with the field access errors
+      const output = await outputService.convert([textNode], mockState, 'markdown');
+      
+      // Verify basic functionality still works
+      expect(output).toContain('User:'); // Will contain empty values but not crash
+    });
+  
     it('should not duplicate code fence markers in markdown output (regression #10.2.4)', async () => {
       // This tests the fix for the codefence duplication bug in version 10.2.4
       // Arrange: Set up a code fence node with content that already includes the fence markers

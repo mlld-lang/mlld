@@ -55,7 +55,14 @@ describe('Embed Directive Transformation E2E', () => {
 
   it('should replace variable embed with content in transformation mode', async () => {
     // Create file with variable and embed
-    await context.services.filesystem.writeFile('test.meld', '@data role = { "architect": "Senior architect" }\n@embed {{role.architect}}');
+    const testContent = '@data role = { "architect": "Senior architect" }\n@embed {{role.architect}}';
+    console.log('Test file content:', testContent);
+    
+    await context.services.filesystem.writeFile('test.meld', testContent);
+
+    // Get the data from state directly before transformation
+    const roleData = context.services.state.getDataVar('role');
+    console.log('Role data in state before main():', roleData);
 
     // Test embed replacement with transformation enabled
     const result = await main('test.meld', {
@@ -64,6 +71,11 @@ describe('Embed Directive Transformation E2E', () => {
       transformation: true,
       format: 'md'
     });
+
+    // Log the result for debugging
+    console.log('Result from main():', result);
+    console.log('Result length:', result.length);
+    console.log('Result as hex:', Buffer.from(result).toString('hex'));
 
     // Expected behavior: embed directive should be replaced with variable content
     expect(result.trim()).toBe('Senior architect');

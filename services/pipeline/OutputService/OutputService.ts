@@ -6,10 +6,12 @@ import { outputLogger as logger } from '@core/utils/logger.js';
 import { MeldOutputError } from '@core/errors/MeldOutputError.js';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
 import { MeldError } from '@core/errors/MeldError.js';
-import { inject, injectable } from 'tsyringe';
+import { inject, injectable, container } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
 import { IResolutionServiceClient } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClient.js';
 import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientFactory.js';
+import { IVariableReferenceResolverClient, FieldAccessOptions } from '@services/resolution/ResolutionService/interfaces/IVariableReferenceResolverClient.js';
+import { VariableReferenceResolverClientFactory } from '@services/resolution/ResolutionService/factories/VariableReferenceResolverClientFactory.js';
 
 /**
  * Tracking context for variable formatting to preserve formatting during substitution
@@ -35,18 +37,117 @@ interface FormattingContext {
 
 /**
  * Helper class to handle field access consistently
+ * This enhanced version can use the VariableReferenceResolverClient when available
  */
 class FieldAccessHandler {
-  constructor(private client?: IResolutionServiceClient) {}
+  constructor(
+    private resolutionClient?: IResolutionServiceClient,
+    private getVariableResolver?: () => IVariableReferenceResolverClient | undefined
+  ) {}
 
   /**
    * Access a field in an object with proper error handling
+   * Uses the VariableReferenceResolverClient when available for consistent field access
+   * 
    * @param obj Object to access field from
    * @param fieldPath Path to the field (a.b.c or a.0.b)
+   * @param context Optional resolution context for client-based resolution
    * @param options Options for field access
    * @returns The field value or undefined if not found
    */
-  accessField(obj: any, fieldPath: string, options: {
+  async accessField(
+    obj: any, 
+    fieldPath: string, 
+    context?: ResolutionContext,
+    options: {
+      strict?: boolean;
+      defaultValue?: any;
+      variableName?: string;
+      preserveType?: boolean;
+    } = {}
+  ): Promise<any> {
+    // Handle null or empty cases
+    if (!obj || !fieldPath) {
+      return options.defaultValue;
+    }
+
+    // Try to use the VariableReferenceResolverClient if available
+    if (this.getVariableResolver && context) {
+      const resolver = this.getVariableResolver();
+      if (resolver) {
+        try {
+          // Create field access options from our parameters
+          const fieldOptions: FieldAccessOptions = {
+            preserveType: options.preserveType ?? false,
+            variableName: options.variableName
+          };
+
+          // Use the client to access fields
+          const result = await resolver.accessFields(obj, fieldPath, context, fieldOptions);
+          logger.debug('Field access using variable resolver client', {
+            fieldPath,
+            result: typeof result === 'object' ? 'Object' : result,
+            preserveType: options.preserveType
+          });
+          return result;
+        } catch (clientError) {
+          logger.warn('Error using variable resolver client for field access, falling back to direct access', {
+            error: clientError instanceof Error ? clientError.message : String(clientError)
+          });
+          // Fall through to direct access if client fails
+        }
+      }
+    }
+
+    // Fall back to direct field access if client is not available or fails
+    try {
+      const fields = fieldPath.split('.');
+      let current = obj;
+
+      for (const field of fields) {
+        // Handle array indices
+        if (/^\d+$/.test(field) && Array.isArray(current)) {
+          const index = parseInt(field, 10);
+          if (index >= 0 && index < current.length) {
+            current = current[index];
+          } else if (options.strict) {
+            throw new Error(`Array index out of bounds: ${index}`);
+          } else {
+            return options.defaultValue;
+          }
+        } 
+        // Handle object properties
+        else if (typeof current === 'object' && current !== null) {
+          if (field in current) {
+            current = current[field];
+          } else if (options.strict) {
+            throw new Error(`Field not found: ${field}`);
+          } else {
+            return options.defaultValue;
+          }
+        } 
+        // Handle accessing fields on non-objects
+        else if (options.strict) {
+          throw new Error(`Cannot access field ${field} on ${typeof current}`);
+        } else {
+          return options.defaultValue;
+        }
+      }
+      return current;
+    } catch (error) {
+      logger.debug('Error in direct field access', { fieldPath, error, obj });
+      if (options.strict) {
+        throw error;
+      }
+      return options.defaultValue;
+    }
+  }
+
+  /**
+   * Synchronous version of accessField for backward compatibility
+   * Does not use the VariableReferenceResolverClient
+   */
+  accessFieldSync(obj: any, fieldPath: string, options: {
     strict?: boolean;
     defaultValue?: any;
   } = {}): any {
@@ -96,6 +197,115 @@ class FieldAccessHandler {
       return options.defaultValue;
     }
   }
+
+  /**
+   * Convert a value to string with appropriate formatting
+   * Uses the VariableReferenceResolverClient if available
+   */
+  convertToString(value: any, options?: {
+    pretty?: boolean,
+    preserveType?: boolean,
+    context?: 'inline' | 'block'
+  }): string {
+    // Try to use the VariableReferenceResolverClient if available
+    if (this.getVariableResolver) {
+      const resolver = this.getVariableResolver();
+      if (resolver) {
+        try {
+          // Map our options to the client's expected format
+          const fieldOptions: FieldAccessOptions = {
+            preserveType: options?.preserveType ?? false,
+            formattingContext: {
+              isBlock: options?.context === 'block',
+              nodeType: 'Text',
+              linePosition: 'middle',
+              isTransformation: false
+            }
+          };
+
+          // Use the client for string conversion
+          return resolver.convertToString(value, fieldOptions);
+        } catch (clientError) {
+          logger.warn('Error using variable resolver client for string conversion, falling back', {
+            error: clientError instanceof Error ? clientError.message : String(clientError)
+          });
+          // Fall through to default handling if client fails
+        }
+      }
+    }
+
+    // Fall back to direct string conversion
+
+    // Extract options with defaults
+    const {
+      pretty = false,
+      preserveType = false,
+      context = 'inline'
+    } = options || {};
+    
+    // Handle undefined or null
+    if (value === undefined || value === null) {
+      return '';
+    }
+    
+    // Return strings directly
+    if (typeof value === 'string') {
+      return value;
+    }
+    
+    // Convert basic primitives
+    if (typeof value === 'number' || typeof value === 'boolean') {
+      return String(value);
+    }
+    
+    // Handle arrays with consistent formatting
+    if (Array.isArray(value)) {
+      // Empty array
+      if (value.length === 0) {
+        return preserveType ? '[]' : '';
+      }
+      
+      // Convert each item
+      const items = value.map(item => this.convertToString(item, { 
+        pretty: false,  // Don't prettify nested items in arrays
+        preserveType,
+        context: 'inline' // Use inline context for array items
+      }));
+      
+      // Format differently based on context
+      if (context === 'block' && items.length > 3) {
+        // For block context with many items, use a list format
+        return items.map(item => `- ${item}`).join('\n');
+      }
+      
+      // Default array formatting (comma-separated)
+      return items.join(', ');
+    }
+    
+    // Handle objects
+    if (typeof value === 'object') {
+      try {
+        // Empty object
+        if (Object.keys(value).length === 0) {
+          return preserveType ? '{}' : '';
+        }
+        
+        // Use pretty printing for block context
+        if (pretty || context === 'block') {
+          return JSON.stringify(value, null, 2);
+        }
+        
+        // Default object formatting
+        return JSON.stringify(value);
+      } catch (error) {
+        logger.error('Error stringifying object', { value, error });
+        return '[Object]';
+      }
+    }
+    
+    // Default fallback
+    return String(value);
+  }
 }
 
 type FormatConverter = (
@@ -124,8 +334,31 @@ export class OutputService implements IOutputService {
   private state: IStateService | undefined;
   private resolutionService: IResolutionService | undefined;
   private resolutionClient?: IResolutionServiceClient;
+  private variableResolver?: IVariableReferenceResolverClient;
   private fieldAccessHandler: FieldAccessHandler;
   private contextStack: FormattingContext[] = [];
+
+  /**
+   * Gets (or creates) the variable reference resolver client using direct container resolution
+   * This method uses lazy loading to avoid circular dependencies during initialization
+   * @returns The variable reference resolver client or undefined if resolution fails
+   */
+  getVariableResolver(): IVariableReferenceResolverClient | undefined {
+    if (!this.variableResolver) {
+      try {
+        // Resolve the factory directly from the container to avoid circular dependencies
+        const factory = container.resolve(VariableReferenceResolverClientFactory);
+        this.variableResolver = factory.createClient();
+        logger.debug('Created variable resolver client using direct container resolution');
+      } catch (error) {
+        logger.warn('Failed to create variable resolver client', { 
+          error: error instanceof Error ? error.message : String(error) 
+        });
+        return undefined;
+      }
+    }
+    return this.variableResolver;
+  }
 
   public canAccessTransformedNodes(): boolean {
     return true;
@@ -146,8 +379,12 @@ export class OutputService implements IOutputService {
   ) {
     this.initializeFromParams(state, resolutionService, resolutionServiceClientFactory);
     
-    // Initialize field access handler
-    this.fieldAccessHandler = new FieldAccessHandler(this.resolutionClient);
+    // Initialize field access handler with access to the variable resolver method
+    // This allows the handler to use the resolver when needed without creating circular dependencies
+    this.fieldAccessHandler = new FieldAccessHandler(
+      this.resolutionClient,
+      this.getVariableResolver.bind(this)
+    );
   }
 
   /**
@@ -361,6 +598,8 @@ export class OutputService implements IOutputService {
 
   /**
    * Process a variable reference with context-aware formatting
+   * Uses the VariableReferenceResolverClient when available for enhanced field access
+   * 
    * @param reference The variable reference to process (e.g., "user.name")
    * @param context The formatting context
    * @param state The state service
@@ -379,6 +618,59 @@ export class OutputService implements IOutputService {
       const parts = reference.split('.');
       const varName = parts[0];
       const fieldPath = parts.length > 1 ? parts.slice(1).join('.') : '';
+
+      // Try to use the VariableReferenceResolverClient if available and we have a field path
+      if (fieldPath) {
+        const resolver = this.getVariableResolver();
+        if (resolver) {
+          try {
+            // Create a resolution context for field access
+            const resolutionContext: ResolutionContext = ResolutionContextFactory.create(
+              undefined, // current file path not needed for this operation
+              state
+            );
+            
+            // Field access options with proper formatting context
+            const fieldOptions: FieldAccessOptions = {
+              preserveType: false,
+              variableName: varName,
+              formattingContext: {
+                isBlock: context.contextType === 'block',
+                nodeType: context.nodeType,
+                linePosition: context.atLineStart ? 'start' : (context.atLineEnd ? 'end' : 'middle'),
+                isTransformation: context.transformationMode
+              }
+            };
+            
+            // Try to resolve the field access directly
+            // This combined approach handles all variable types in one operation
+            const result = await resolver.resolveFieldAccess(varName, fieldPath, resolutionContext, fieldOptions);
+            
+            logger.debug('Field access resolved using variable resolver client', {
+              varName,
+              fieldPath,
+              resultType: result !== undefined ? typeof result : 'undefined',
+              success: result !== undefined
+            });
+            
+            // If we got a result, convert it to string with the resolver's formatter
+            if (result !== undefined) {
+              return resolver.convertToString(result, fieldOptions);
+            }
+            
+            // Fall through to standard resolution if resolver didn't find the variable
+          } catch (resolverError) {
+            logger.warn('Error using variable resolver client for field access, falling back', {
+              varName,
+              fieldPath,
+              error: resolverError instanceof Error ? resolverError.message : String(resolverError)
+            });
+            // Continue with standard resolution
+          }
+        }
+      }
+      
+      // Standard variable resolution approach if client is not available or fails
       
       // Try to get the variable value
       let value;
@@ -421,10 +713,18 @@ export class OutputService implements IOutputService {
       // Process field access
       if (fieldPath) {
         try {
+          // Create a resolution context for field access
+          const resolutionContext: ResolutionContext = ResolutionContextFactory.create(
+            undefined, // current file path not needed for this operation
+            state
+          );
+          
           // Use field access handler to get the field value
-          value = this.fieldAccessHandler.accessField(value, fieldPath, {
+          value = await this.fieldAccessHandler.accessField(value, fieldPath, resolutionContext, {
             strict: false,
-            defaultValue: ''
+            defaultValue: '',
+            variableName: varName,
+            preserveType: false
           });
           
           logger.debug('Field access result', {
@@ -451,7 +751,7 @@ export class OutputService implements IOutputService {
         context: context.contextType
       };
       
-      return this.convertToString(value, formatOptions);
+      return this.fieldAccessHandler.convertToString(value, formatOptions);
     } catch (error) {
       logger.error('Error processing variable reference', {
         reference,
@@ -463,6 +763,8 @@ export class OutputService implements IOutputService {
 
   /**
    * Convert a value to string representation with context-aware formatting
+   * Uses the VariableReferenceResolverClient when available for enhanced formatting
+   * 
    * @param value The value to convert
    * @param formatOptions Formatting options
    * @returns The string representation of the value
@@ -472,75 +774,9 @@ export class OutputService implements IOutputService {
     preserveType?: boolean,
     context?: 'inline' | 'block'
   }): string {
-    // Extract options with defaults
-    const {
-      pretty = false,
-      preserveType = false,
-      context = 'inline'
-    } = formatOptions || {};
-    
-    // Handle undefined or null
-    if (value === undefined || value === null) {
-      return '';
-    }
-    
-    // Return strings directly
-    if (typeof value === 'string') {
-      return value;
-    }
-    
-    // Convert basic primitives
-    if (typeof value === 'number' || typeof value === 'boolean') {
-      return String(value);
-    }
-    
-    // Handle arrays with consistent formatting
-    if (Array.isArray(value)) {
-      // Empty array
-      if (value.length === 0) {
-        return preserveType ? '[]' : '';
-      }
-      
-      // Convert each item
-      const items = value.map(item => this.convertToString(item, { 
-        pretty: false,  // Don't prettify nested items in arrays
-        preserveType,
-        context: 'inline' // Use inline context for array items
-      }));
-      
-      // Format differently based on context
-      if (context === 'block' && items.length > 3) {
-        // For block context with many items, use a list format
-        return items.map(item => `- ${item}`).join('\n');
-      }
-      
-      // Default array formatting (comma-separated)
-      return items.join(', ');
-    }
-    
-    // Handle objects
-    if (typeof value === 'object') {
-      try {
-        // Empty object
-        if (Object.keys(value).length === 0) {
-          return preserveType ? '{}' : '';
-        }
-        
-        // Use pretty printing for block context
-        if (pretty || context === 'block') {
-          return JSON.stringify(value, null, 2);
-        }
-        
-        // Default object formatting
-        return JSON.stringify(value);
-      } catch (error) {
-        logger.error('Error stringifying object', { value, error });
-        return '[Object]';
-      }
-    }
-    
-    // Default fallback
-    return String(value);
+    // Use the field access handler's convertToString method
+    // It will try to use the variable resolver client when available
+    return this.fieldAccessHandler.convertToString(value, formatOptions);
   }
 
   /**
@@ -989,11 +1225,19 @@ export class OutputService implements IOutputService {
                   .filter(Boolean)
                   .join('.');
                 
-                // Use our field accessor to get the specific field value
-                const fieldValue = this.fieldAccessHandler.accessField(dataValue, fieldPath, {
-                  strict: false,
-                  defaultValue: ''
-                });
+                // Create a resolution context for field access
+          const resolutionContext: ResolutionContext = ResolutionContextFactory.create(
+            undefined, // current file path not needed for this operation
+            state
+          );
+          
+          // Use our field accessor to get the specific field value
+          const fieldValue = await this.fieldAccessHandler.accessField(dataValue, fieldPath, resolutionContext, {
+            strict: false,
+            defaultValue: '',
+            variableName: fieldPath,
+            preserveType: false
+          });
                 
                 logger.debug('Resolved field access in TextVar node', {
                   variableIdentifier,
@@ -1144,10 +1388,18 @@ export class OutputService implements IOutputService {
               });
               
               try {
-                // Extract the specific field value using our handler
-                const fieldValue = this.fieldAccessHandler.accessField(dataValue, fieldPath, {
+                // Create a resolution context for field access
+                const resolutionContext: ResolutionContext = ResolutionContextFactory.create(
+                  undefined, // current file path not needed for this operation
+                  state
+                );
+
+                // Extract the specific field value using our handler (with await!)
+                const fieldValue = await this.fieldAccessHandler.accessField(dataValue, fieldPath, resolutionContext, {
                   strict: false,
-                  defaultValue: undefined
+                  defaultValue: undefined,
+                  variableName: variableIdentifier,
+                  preserveType: false
                 });
                 
                 // Determine context based on value type
@@ -1462,33 +1714,69 @@ export class OutputService implements IOutputService {
           
           // In transformation mode, return the embedded content
           const transformedNodes = state.getTransformedNodes();
+          
+          // Log all directive details for debugging
+          logger.debug('Detailed embed directive information:', {
+            node: JSON.stringify(node, null, 2),
+            directiveOptions: JSON.stringify(directive.directive, null, 2),
+            pathType: typeof directive.directive.path,
+            path: directive.directive.path,
+            transformedNodesCount: transformedNodes?.length || 0,
+            transformedNodeLines: transformedNodes?.map(n => n.location?.start?.line || 'unknown')
+          });
+          
           if (transformedNodes && transformedNodes.length > 0) {
             // First try exact line match (original behavior)
             const exactMatch = transformedNodes.find(n => 
-              n.location?.start.line === node.location?.start.line
+              n.location?.start?.line === node.location?.start?.line
             );
             
             logger.debug('Looking for transformed embed node', {
-              directiveLine: node.location?.start.line,
+              directiveLine: node.location?.start?.line || 'unknown',
               transformedNodeCount: transformedNodes.length,
               foundExactMatch: !!exactMatch,
-              transformedNodeLines: transformedNodes.map(n => n.location?.start.line)
+              exactMatchContent: exactMatch?.type === 'Text' ? (exactMatch as TextNode).content : 'not text node',
+              transformedNodeLines: transformedNodes.map(n => n.location?.start?.line || 'unknown')
             });
             
             if (exactMatch && exactMatch.type === 'Text') {
               const content = (exactMatch as TextNode).content;
+              logger.debug('Found exact match for embed transformation:', {
+                content: content.substring(0, 100),
+                contentLength: content.length,
+                line: exactMatch.location?.start?.line
+              });
               return content.endsWith('\n') ? content : content + '\n';
             }
             
-            // If exact match not found, try to find the closest matching node
+            // If exact match not found, try to find by transformation ID
+            // The StateService gives each directive a unique ID for transformation tracking
+            const embedId = node.id || (node as any).directiveId;
+            if (embedId) {
+              // Find the node with matching ID in transformed nodes
+              const idMatch = transformedNodes.find(n => n.id === embedId || (n as any).directiveId === embedId);
+              
+              if (idMatch && idMatch.type === 'Text') {
+                const content = (idMatch as TextNode).content;
+                logger.debug('Found id match for embed transformation:', {
+                  id: embedId,
+                  content: content.substring(0, 100),
+                  contentLength: content.length,
+                  line: idMatch.location?.start?.line
+                });
+                return content.endsWith('\n') ? content : content + '\n';
+              }
+            }
+            
+            // If no ID match, try to find the closest matching node by line number
             // This handles cases where line numbers have shifted during transformation
             let closestNode: MeldNode | null = null;
             let smallestLineDiff = Number.MAX_SAFE_INTEGER;
             
             for (const transformedNode of transformedNodes) {
               if (transformedNode.type === 'Text' && 
-                  node.location?.start.line && 
-                  transformedNode.location?.start.line) {
+                  node.location?.start?.line && 
+                  transformedNode.location?.start?.line) {
                 
                 const lineDiff = Math.abs(
                   transformedNode.location.start.line - node.location.start.line
@@ -1505,22 +1793,125 @@ export class OutputService implements IOutputService {
             // Use the closest node if it's within a reasonable range (5 lines)
             if (closestNode && smallestLineDiff <= 5) {
               logger.debug('Found closest transformed node for embed directive', {
-                originalLine: node.location?.start.line,
-                closestNodeLine: closestNode.location?.start.line,
+                originalLine: node.location?.start?.line || 'unknown',
+                closestNodeLine: closestNode.location?.start?.line || 'unknown',
                 lineDifference: smallestLineDiff,
-                nodeType: closestNode.type
+                nodeType: closestNode.type,
+                content: closestNode.type === 'Text' ? 
+                  ((closestNode as TextNode).content?.substring(0, 100) + '...') : 
+                  'not text node'
               });
               
               const content = (closestNode as TextNode).content;
               return content.endsWith('\n') ? content : content + '\n';
             }
+            
+            // If still no match, look for content with specific embed directive markers
+            const embedPath = directive.directive.path;
+            if (embedPath) {
+              let embedPathStr = '';
+              try {
+                // Convert path to string for comparison
+                if (typeof embedPath === 'string') {
+                  embedPathStr = embedPath;
+                } else if (typeof embedPath === 'object' && embedPath !== null) {
+                  if ('raw' in embedPath) {
+                    embedPathStr = embedPath.raw as string;
+                  } else if ('value' in embedPath) {
+                    embedPathStr = embedPath.value as string;
+                  } else {
+                    embedPathStr = JSON.stringify(embedPath);
+                  }
+                }
+                
+                // Look for text nodes with content matching this embed path
+                for (const transformedNode of transformedNodes) {
+                  if (transformedNode.type === 'Text') {
+                    const textContent = (transformedNode as TextNode).content;
+                    // Skip empty or very short content nodes
+                    if (!textContent || textContent.length < 2) continue;
+                    
+                    // Check if this node looks like it might be our embed content
+                    const isLikelyVariableContent = 
+                      embedPathStr.includes('{{') && 
+                      !textContent.includes('@embed') &&
+                      !textContent.includes('[directive');
+                      
+                    if (isLikelyVariableContent) {
+                      logger.debug('Found potential variable embed content match', {
+                        embedPath: embedPathStr,
+                        content: textContent.substring(0, 100),
+                        contentLength: textContent.length,
+                        line: transformedNode.location?.start?.line
+                      });
+                      return textContent.endsWith('\n') ? textContent : textContent + '\n';
+                    }
+                  }
+                }
+              } catch (error) {
+                logger.warn('Error in content matching for embed directive', {
+                  error: error instanceof Error ? error.message : String(error),
+                  embedPath
+                });
+              }
+            }
           }
           
-          // If no transformed node found, return placeholder
+          // If we reached here, we couldn't find a transformed node for this embed directive
           logger.warn('No transformed node found for embed directive', {
-            directiveLine: node.location?.start.line,
-            directivePath: directive.directive.path
+            directiveLine: node.location?.start?.line || 'unknown',
+            directivePath: directive.directive.path,
+            transformedNodesAvailable: transformedNodes?.length || 0
           });
+          
+          // Special handling for variable reference embeds as a last resort
+          // This ensures variables are embedded even if transformation tracking fails
+          if (directive.directive.path && 
+              typeof directive.directive.path === 'object' && 
+              directive.directive.path.isVariableReference) {
+            try {
+              // Try to resolve the variable reference directly
+              const variablePath = directive.directive.path;
+              const resolutionContext = ResolutionContextFactory.create(undefined, state);
+              
+              if (this.resolutionService) {
+                const directContent = await this.resolutionService.resolveInContext(
+                  variablePath, 
+                  resolutionContext
+                );
+                
+                if (directContent !== undefined) {
+                  logger.debug('Resolved variable embed content directly as fallback', {
+                    content: typeof directContent === 'string' ? 
+                      directContent.substring(0, 100) : 
+                      JSON.stringify(directContent).substring(0, 100),
+                    directiveOptions: directive.directive,
+                    variablePath
+                  });
+                  
+                  // Format the content properly
+                  let finalContent = '';
+                  if (typeof directContent === 'string') {
+                    finalContent = directContent;
+                  } else if (directContent === null || directContent === undefined) {
+                    finalContent = '';
+                  } else {
+                    // Format objects, arrays, and other types
+                    finalContent = JSON.stringify(directContent, null, 2);
+                  }
+                  
+                  return finalContent.endsWith('\n') ? finalContent : finalContent + '\n';
+                }
+              }
+            } catch (fallbackError) {
+              logger.warn('Failed to resolve variable embed content directly', {
+                error: fallbackError instanceof Error ? fallbackError.message : String(fallbackError),
+                directivePath: directive.directive.path
+              });
+            }
+          }
+          
+          // Final fallback: return placeholder
           return '[directive output placeholder]\n';
         }
 
