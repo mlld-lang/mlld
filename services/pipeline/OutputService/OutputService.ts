@@ -1707,11 +1707,235 @@ export class OutputService implements IOutputService {
 
         // Handle other execution directives
         if (['embed'].includes(kind)) {
+          // Debug logging for embed directive - write to debug file
+          const fs = require('fs');
+          const debugContent = `
+EMBED DIRECTIVE DEBUG:
+Node: ${JSON.stringify(node, null, 2)}
+Path type: ${typeof directive.directive.path}
+Path value: ${JSON.stringify(directive.directive.path, null, 2)}
+Is variable reference?: ${typeof directive.directive.path === 'object' && 
+             directive.directive.path !== null && 
+             directive.directive.path.isVariableReference === true}
+Transformation enabled?: ${state.isTransformationEnabled()}
+`;
+          try {
+            fs.appendFileSync('/Users/adam/dev/claude-meld/debug-embed.txt', debugContent);
+          } catch (err) {
+            logger.error('Failed to write debug info:', err);
+          }
+          
           // In non-transformation mode, return placeholder
           if (!state.isTransformationEnabled()) {
             return '[directive output placeholder]\n\n';
           }
           
+          // PHASE 4B FIX: Special handling for variable-based embed directives in transformation mode
+          // This special case handles embed directives with variable references like @embed {{role.architect}}
+          if (directive.directive.path && 
+              typeof directive.directive.path === 'object' && 
+              directive.directive.path.isVariableReference === true &&
+              state.isTransformationEnabled()) {
+          
+            // Debug logging
+            console.log('PHASE 4B SPECIAL HANDLING TRIGGERED for variable-based embed');
+            console.log('Directive path:', JSON.stringify(directive.directive.path));
+            
+            // Log detailed information about the variable-based embed directive to file
+            const fs = require('fs');
+            fs.appendFileSync('/Users/adam/dev/claude-meld/debug-embed.txt', 
+              'PHASE 4B: Handling variable-based embed directive in transformation mode\n' +
+              'Path: ' + JSON.stringify(directive.directive.path, null, 2) + '\n'
+            );
+            
+            // Extract variable name based on AST structure
+            let varName;
+            if (directive.directive.path.identifier) {
+                // Direct identifier
+                varName = directive.directive.path.identifier;
+            } else if (directive.directive.path.variable && directive.directive.path.variable.identifier) {
+                // Variable in nested structure
+                varName = directive.directive.path.variable.identifier;
+            } else {
+                // Fallback: Try to extract from raw text
+                const raw = directive.directive.path.raw;
+                if (raw && typeof raw === 'string' && raw.startsWith('{{') && raw.endsWith('}}')) {
+                    const inner = raw.substring(2, raw.length - 2);
+                    varName = inner.split('.')[0];
+                }
+            }
+            
+            // Extract field path if present - handle different AST structures
+            let fieldPath = '';
+            
+            // Direct fields array
+            if (directive.directive.path.fields && Array.isArray(directive.directive.path.fields)) {
+              fieldPath = directive.directive.path.fields
+                .map(field => {
+                  if (field.type === 'field') {
+                    return field.value;
+                  } else if (field.type === 'index') {
+                    return field.value;
+                  }
+                  return '';
+                })
+                .filter(Boolean)
+                .join('.');
+            } 
+            // Nested variable with fields
+            else if (directive.directive.path.variable && 
+                     directive.directive.path.variable.fields && 
+                     Array.isArray(directive.directive.path.variable.fields)) {
+              
+              fieldPath = directive.directive.path.variable.fields
+                .map(field => {
+                  if (field.type === 'field') {
+                    return field.value;
+                  } else if (field.type === 'index') {
+                    return field.value;
+                  }
+                  return '';
+                })
+                .filter(Boolean)
+                .join('.');
+            }
+            // Fallback: Parse from raw text if available
+            else if (directive.directive.path.raw) {
+              const raw = directive.directive.path.raw;
+              if (typeof raw === 'string' && raw.startsWith('{{') && raw.endsWith('}}') && raw.includes('.')) {
+                const inner = raw.substring(2, raw.length - 2);
+                const parts = inner.split('.');
+                if (parts.length > 1) {
+                  fieldPath = parts.slice(1).join('.');
+                }
+              }
+            }
+            
+            fs.appendFileSync('/Users/adam/dev/claude-meld/debug-embed.txt', 
+              'Variable name: ' + varName + '\n' +
+              'Field path: ' + fieldPath + '\n'
+            );
+            
+            // Resolve the variable value
+            let value;
+            
+            // Try data variable first
+            value = state.getDataVar(varName);
+            fs.appendFileSync('/Users/adam/dev/claude-meld/debug-embed.txt', 
+              'Data variable value: ' + JSON.stringify(value) + '\n'
+            );
+            
+            // If not found as data variable, try text variable
+            if (value === undefined) {
+              value = state.getTextVar(varName);
+              fs.appendFileSync('/Users/adam/dev/claude-meld/debug-embed.txt', 
+                'Text variable value: ' + JSON.stringify(value) + '\n'
+              );
+            }
+            
+            // If not found as text variable, try path variable
+            if (value === undefined && state.getPathVar) {
+              value = state.getPathVar(varName);
+              fs.appendFileSync('/Users/adam/dev/claude-meld/debug-embed.txt', 
+                'Path variable value: ' + JSON.stringify(value) + '\n'
+              );
+            }
+            
+            // Process field access if needed
+            if (value !== undefined && fieldPath) {
+              try {
+                const fields = fieldPath.split('.');
+                let current = value;
+                
+                fs.appendFileSync('/Users/adam/dev/claude-meld/debug-embed.txt', 
+                  'Processing field access with fields: ' + JSON.stringify(fields) + '\n'
+                );
+                
+                for (const field of fields) {
+                  fs.appendFileSync('/Users/adam/dev/claude-meld/debug-embed.txt', 
+                    'Accessing field: ' + field + ' from: ' + typeof current + ' ' + JSON.stringify(current) + '\n'
+                  );
+                  
+                  if (typeof current === 'object' && current !== null) {
+                    if (Array.isArray(current) && !isNaN(Number(field))) {
+                      // Handle array index access
+                      const index = parseInt(field, 10);
+                      if (index >= 0 && index < current.length) {
+                        current = current[index];
+                      } else {
+                        fs.appendFileSync('/Users/adam/dev/claude-meld/debug-embed.txt', 
+                          'Array index out of bounds: ' + index + ' for array length: ' + current.length + '\n'
+                        );
+                        current = undefined;
+                        break;
+                      }
+                    } else if (field in current) {
+                      // Handle object property access
+                      current = current[field];
+                    } else {
+                      // Field not found
+                      fs.appendFileSync('/Users/adam/dev/claude-meld/debug-embed.txt', 
+                        'Field not found in object: ' + field + '\n'
+                      );
+                      current = undefined;
+                      break;
+                    }
+                  } else {
+                    // Cannot access field on non-object
+                    fs.appendFileSync('/Users/adam/dev/claude-meld/debug-embed.txt', 
+                      'Cannot access field on non-object: ' + field + ' value type: ' + typeof current + '\n'
+                    );
+                    current = undefined;
+                    break;
+                  }
+                }
+                
+                if (current !== undefined) {
+                  // Convert to string with proper type handling
+                  fs.appendFileSync('/Users/adam/dev/claude-meld/debug-embed.txt', 
+                    'Final field value: ' + JSON.stringify(current) + '\n'
+                  );
+                  if (typeof current === 'string') {
+                    return current;
+                  } else if (current === null || current === undefined) {
+                    return '';
+                  } else if (typeof current === 'object') {
+                    return JSON.stringify(current, null, 2);
+                  } else {
+                    return String(current);
+                  }
+                }
+              } catch (error) {
+                fs.appendFileSync('/Users/adam/dev/claude-meld/debug-embed.txt', 
+                  'Error resolving field: ' + error + '\n'
+                );
+                logger.warn(`Error resolving field ${fieldPath} in variable ${varName}:`, error);
+              }
+            } else if (value !== undefined) {
+              // Convert the whole variable to string if no field path
+              fs.appendFileSync('/Users/adam/dev/claude-meld/debug-embed.txt', 
+                'Using whole variable value: ' + JSON.stringify(value) + '\n'
+              );
+              if (typeof value === 'string') {
+                return value;
+              } else if (value === null || value === undefined) {
+                return '';
+              } else if (typeof value === 'object') {
+                return JSON.stringify(value, null, 2);
+              } else {
+                return String(value);
+              }
+            }
+            
+            // If we couldn't resolve the variable, log a warning and continue with normal processing
+            fs.appendFileSync('/Users/adam/dev/claude-meld/debug-embed.txt', 
+              'Could not resolve variable reference: ' + varName + '\n'
+            );
+            logger.warn(`Could not resolve variable reference ${varName} in embed directive`);
+          }
+          
+          
+          // For non-variable embeds or if variable resolution failed, continue with normal processing
           // In transformation mode, return the embedded content
           const transformedNodes = state.getTransformedNodes();
           
