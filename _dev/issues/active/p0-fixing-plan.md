@@ -194,6 +194,44 @@ Once you have confirmed all tests pass and the build runs without errors, create
 
 Once you have confirmed all tests pass and the build runs without errors, create a commit for this phase.
 
+## Phase 4B: Variable-based Embed Transformation Pipeline Fix
+
+**Goal:** Fix the underlying issue with variable-based embed directives in the transformation pipeline.
+
+**Tasks:**
+1. Investigation of transformation tracking system:
+   - Analyze how transformations are registered in EmbedDirectiveHandler
+   - Trace how transformations are stored in StateService
+   - Investigate how OutputService retrieves transformed nodes
+   - Document the exact point of failure in the pipeline
+
+2. Implement a proper fix for variable-based embed transformations:
+   - Update transformation registration in EmbedDirectiveHandler if needed
+   - Modify transformation retrieval in OutputService
+   - Fix how variable content is processed during transformation
+   - Ensure consistent node ID tracking across the transformation pipeline
+
+3. Enhance StateService transformation tracking:
+   - Improve how transformations are stored and retrieved
+   - Add better debugging capabilities for transformation tracking
+   - Create clearer node identification mechanisms
+   - Fix any state propagation issues in the pipeline
+
+4. Create comprehensive tests for variable-based transformations:
+   - Create dedicated test file for embed directive transformations
+   - Test multiple variables in embed directives
+   - Test nested objects and arrays in embed directives
+   - Test variable-based paths with different transformation modes
+
+**Exit Criteria:**
+- Variable-based embed directives correctly output their content in transformation mode
+- All embed directive transformation tests pass without workarounds
+- Clean tracking of transformations throughout the pipeline
+- No special case handling or hardcoded fixes needed
+- Proper documentation of the transformation system
+
+Once you have confirmed all tests pass and the build runs without errors, create a commit for this phase.
+
 ## Phase 5: Central Syntax Integration and API Cleanup
 
 **Goal:** Update central syntax examples and clean up workarounds in the API layer.

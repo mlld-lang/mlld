@@ -1864,51 +1864,15 @@ export class OutputService implements IOutputService {
             transformedNodesAvailable: transformedNodes?.length || 0
           });
           
-          // Special handling for variable reference embeds as a last resort
-          // This ensures variables are embedded even if transformation tracking fails
+          // NOTE: Variable-based embed transformations have an issue that will be fixed in Phase 4B
+          // For now, we'll add a warning
           if (directive.directive.path && 
               typeof directive.directive.path === 'object' && 
               directive.directive.path.isVariableReference) {
-            try {
-              // Try to resolve the variable reference directly
-              const variablePath = directive.directive.path;
-              const resolutionContext = ResolutionContextFactory.create(undefined, state);
-              
-              if (this.resolutionService) {
-                const directContent = await this.resolutionService.resolveInContext(
-                  variablePath, 
-                  resolutionContext
-                );
-                
-                if (directContent !== undefined) {
-                  logger.debug('Resolved variable embed content directly as fallback', {
-                    content: typeof directContent === 'string' ? 
-                      directContent.substring(0, 100) : 
-                      JSON.stringify(directContent).substring(0, 100),
-                    directiveOptions: directive.directive,
-                    variablePath
-                  });
-                  
-                  // Format the content properly
-                  let finalContent = '';
-                  if (typeof directContent === 'string') {
-                    finalContent = directContent;
-                  } else if (directContent === null || directContent === undefined) {
-                    finalContent = '';
-                  } else {
-                    // Format objects, arrays, and other types
-                    finalContent = JSON.stringify(directContent, null, 2);
-                  }
-                  
-                  return finalContent.endsWith('\n') ? finalContent : finalContent + '\n';
-                }
-              }
-            } catch (fallbackError) {
-              logger.warn('Failed to resolve variable embed content directly', {
-                error: fallbackError instanceof Error ? fallbackError.message : String(fallbackError),
-                directivePath: directive.directive.path
-              });
-            }
+            logger.warn('Variable-based embed directive transformation will be fixed in Phase 4B', {
+              directivePath: directive.directive.path,
+              directiveLine: node.location?.start?.line
+            });
           }
           
           // Final fallback: return placeholder

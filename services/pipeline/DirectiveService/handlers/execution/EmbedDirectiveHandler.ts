@@ -703,29 +703,23 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
       };
 
       // In transformation mode, register the replacement
+      // NOTE: Variable-based embed transformation has an issue that will be fixed in Phase 4B
       if (newState.isTransformationEnabled()) {
         this.logger.debug('EmbedDirectiveHandler - registering transformation:', {
           nodeLocation: node.location,
           transformEnabled: newState.isTransformationEnabled(),
-          replacementContentLength: content.length,
-          replacementContentPreview: content.substring(0, 50) + (content.length > 50 ? '...' : ''),
-          nodeId: node.id || 'undefined'
+          replacementContent: content.substring(0, 50) + (content.length > 50 ? '...' : '')
         });
         
-        // Create replacement node with directive ID for tracking
-        const enhancedReplacement: TextNode = {
-          ...replacement,
-          id: node.id || `embed_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-          directiveId: node.id || 'embed_directive'
-        };
+        // Log a warning if this is a variable-based embed
+        if (typeof path === 'object' && path.isVariableReference) {
+          console.log(
+            'NOTE: Variable-based embed transformation will be properly fixed in Phase 4B. ' +
+            'See _dev/issues/inbox/p1-variable-embed-transformation-issue.md'
+          );
+        }
         
-        // Log transformation to help debug
-        console.log(
-          `EmbedDirectiveHandler transformed node (${enhancedReplacement.id}): ` +
-          `${content.substring(0, 60)}${content.length > 60 ? '...' : ''}`
-        );
-        
-        newState.transformNode(node, enhancedReplacement);
+        newState.transformNode(node, replacement);
       }
 
       return {
