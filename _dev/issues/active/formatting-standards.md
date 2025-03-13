@@ -50,6 +50,53 @@ This document defines the formatting standards for handling text formatting, var
 - Arrays should support numeric indices
 - Nested objects should support multiple levels of property access
 
+### Context-Aware Type Formatting
+
+#### String Values
+- In all contexts: Rendered as-is without modification
+- Special handling: If string contains newlines, preserved in block context but converted to spaces in inline context
+
+#### Numeric and Boolean Values
+- In all contexts: Rendered as simple string conversion (`String(value)`)
+
+#### Array Values
+- In block context: 
+  - Rendered as a Markdown bullet list with each item on a new line
+  - Format: `\n- item1\n- item2\n- item3`
+  - A leading newline is added if not at the start of a line
+
+- In inline context: 
+  - Rendered as comma-separated values
+  - Format: `item1, item2, item3`
+
+- In code fence context: 
+  - Rendered as pretty-printed JSON
+
+- Empty arrays:
+  - In all contexts: `[]`
+
+#### Object Values
+- In block context (not in code fence):
+  - Rendered as a fenced code block with pretty-printed JSON
+  - Format: ````json\n{\n  "prop": "value"\n}\n````
+  - A leading newline is added if not at the start of a line
+
+- In code fence context:
+  - Rendered as pretty-printed JSON without the code fence
+  - Format: `{\n  "prop": "value"\n}`
+
+- In inline context:
+  - Rendered as compact JSON
+  - Format: `{"prop":"value"}`
+
+#### Null and Undefined Values
+- In all contexts: Rendered as empty string `''`
+
+### Line Position Awareness
+- The formatting system tracks the line position of each variable:
+  - Start of line: No leading newline needed
+  - Middle/End of line: Leading newline added for multi-line formats in block context
+
 ### Inline vs Block Variable Usage
 - Inline variables (within a paragraph) should not introduce paragraph breaks
 - Block variables (entire paragraph) should preserve paragraph structure
@@ -100,3 +147,95 @@ This document defines the formatting standards for handling text formatting, var
 3. Modify variable substitution to preserve line structure and context
 4. Create standard helpers for newline handling that are consistent across node types
 5. Apply consistent rules for transformation mode vs standard mode
+
+## 5. Variable Resolution Client Interface
+
+The enhanced variable resolution client interface provides type-preserving field access and context-aware formatting:
+
+### Interface Definitions
+
+```typescript
+interface IVariableReferenceResolverClient {
+  // Resolves all variable references in text
+  resolve(text: string, context: ResolutionContext): Promise<string>;
+
+  // Resolves a field access expression with type preservation option
+  resolveFieldAccess(
+    varName: string, 
+    fieldPath: string, 
+    context: ResolutionContext,
+    options?: FieldAccessOptions
+  ): Promise<any>;
+
+  // Access fields directly in an object with type preservation
+  accessFields(
+    baseValue: any,
+    fieldPath: string,
+    context: ResolutionContext,
+    options?: FieldAccessOptions
+  ): Promise<any>;
+
+  // Format a value as string with context awareness
+  convertToString(
+    value: any,
+    options?: FieldAccessOptions
+  ): string;
+
+  // Extract variable reference names from text
+  extractReferences(text: string): Promise<string[]>;
+
+  // Set resolution tracker for debugging
+  setResolutionTracker(tracker: VariableResolutionTracker): void;
+}
+
+interface FieldAccessOptions {
+  // Whether to preserve original type (vs string conversion)
+  preserveType?: boolean;
+  
+  // Formatting context
+  formattingContext?: {
+    isBlock?: boolean;
+    nodeType?: string;
+    linePosition?: 'start' | 'middle' | 'end';
+    isTransformation?: boolean;
+  };
+}
+```
+
+### Type Preservation
+
+The `preserveType` option enables preserving the original data type when accessing fields:
+
+```typescript
+// Get the skills array as an actual array (not string)
+const skills = await client.resolveFieldAccess(
+  'user', 'profile.skills', context, { preserveType: true }
+);
+
+// Now we can work with it as a real array
+skills.forEach(skill => console.log(skill));
+```
+
+### Context-Aware Formatting
+
+The `formattingContext` option enables rendering values differently based on their context:
+
+```typescript
+// Format an array as a bullet list in block context
+client.convertToString(arrayValue, {
+  formattingContext: {
+    isBlock: true,
+    nodeType: 'TextVar',
+    linePosition: 'start'
+  }
+});
+
+// Format the same array as comma-separated values in inline context
+client.convertToString(arrayValue, {
+  formattingContext: {
+    isBlock: false,
+    nodeType: 'TextVar',
+    linePosition: 'middle'
+  }
+});
+```

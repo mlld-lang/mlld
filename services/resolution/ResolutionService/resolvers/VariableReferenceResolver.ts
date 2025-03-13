@@ -408,25 +408,33 @@ export class VariableReferenceResolver {
 
   /**
    * Resolve a field access expression like varName.field1.field2
-   * This is used for direct field access in tests
+   * Enhanced version with type preservation options
+   * 
+   * @param varName Base variable name
+   * @param fieldPath Dot-notation field path (e.g., "field1.field2")
+   * @param context Resolution context
+   * @param preserveType Whether to preserve the type of the result (vs. string conversion)
+   * @returns Resolved field value (type preserved if preserveType is true)
    */
-  async resolveFieldAccess(varName: string, fieldPath: string, context: ResolutionContext): Promise<any> {
+  async resolveFieldAccess(
+    varName: string, 
+    fieldPath: string, 
+    context: ResolutionContext,
+    preserveType: boolean = false
+  ): Promise<any> {
     try {
       // Get the base variable
       const value = await this.getVariable(varName, context);
       if (value === undefined) {
-        throw new MeldResolutionError(
-          `Variable ${varName} not found`,
-          {
-            code: ResolutionErrorCode.VARIABLE_NOT_FOUND,
-            severity: ErrorSeverity.Fatal,
-            details: { variable: varName }
-          }
-        );
+        throw VariableResolutionErrorFactory.variableNotFound(varName);
       }
       
-      // No fields to access
+      // No fields to access - return base variable
       if (!fieldPath) {
+        // If preserveType is false, convert to string
+        if (!preserveType) {
+          return this.convertToString(value);
+        }
         return value;
       }
       
@@ -435,80 +443,55 @@ export class VariableReferenceResolver {
         // Check if this is a numeric index
         const numIndex = parseInt(field, 10);
         if (!isNaN(numIndex)) {
-          return { type: 'index', value: numIndex };
+          return { type: 'index' as const, value: numIndex };
         }
         // Otherwise it's a field name
-        return { type: 'field', value: field };
+        return { type: 'field' as const, value: field };
       });
       
       // Access the fields
-      let current = value;
-      for (const field of fields) {
-        if (current === undefined || current === null) {
-          throw VariableResolutionErrorFactory.fieldNotFound(`${varName}.${fieldPath}`, String(field.value));
-        }
-        
-        if (field.type === 'index') {
-          // Array access
-          if (Array.isArray(current)) {
-            if (typeof field.value === 'number' && field.value >= 0 && field.value < current.length) {
-              current = current[field.value];
-            } else {
-              throw new MeldResolutionError(
-                `Array index ${field.value} out of bounds for array of length ${current.length}`,
-                {
-                  code: ResolutionErrorCode.INVALID_ACCESS,
-                  severity: ErrorSeverity.Fatal,
-                  details: { path: `${varName}.${fieldPath}`, index: Number(field.value), length: current.length }
-                }
-              );
-            }
-          } else {
-            throw new MeldResolutionError(
-              `Cannot access array index in non-array value`,
-              {
-                code: ResolutionErrorCode.INVALID_ACCESS,
-                severity: ErrorSeverity.Fatal,
-                details: { path: `${varName}.${fieldPath}`, type: typeof current }
-              }
-            );
-          }
-        } else {
-          // Field access
-          if (typeof current === 'object' && current !== null) {
-            if (field.value in current) {
-              current = current[field.value as string];
-            } else {
-              throw new MeldResolutionError(
-                `Field ${field.value} not found in object`,
-                {
-                  code: ResolutionErrorCode.FIELD_NOT_FOUND,
-                  severity: ErrorSeverity.Fatal,
-                  details: { path: `${varName}.${fieldPath}`, field: String(field.value) }
-                }
-              );
-            }
-          } else {
-            throw new MeldResolutionError(
-              `Cannot access field in non-object value`,
-              {
-                code: ResolutionErrorCode.INVALID_ACCESS,
-                severity: ErrorSeverity.Fatal,
-                details: { path: `${varName}.${fieldPath}`, type: typeof current }
-              }
-            );
-          }
+      // Use the internal accessFields method with proper error handling
+      const result = await this.accessFields(value, fields, context, varName);
+      
+      // If preserveType is false, convert to string
+      if (!preserveType) {
+        return this.convertToString(result);
+      }
+      
+      // Otherwise return the raw value with deep cloning to preserve type
+      if (result !== null && result !== undefined) {
+        if (Array.isArray(result)) {
+          return [...result]; // Return a copy of the array
+        } else if (typeof result === 'object') {
+          return {...result}; // Return a copy of the object
         }
       }
       
-      return current;
+      return result;
     } catch (error) {
       // Log the error for diagnostic purposes
       logger.error('Error in resolveFieldAccess', {
         varName,
         fieldPath,
+        preserveType,
         error: error instanceof Error ? error.message : String(error)
       });
+      
+      // Track resolution error if tracking is enabled
+      if (this.resolutionTracker) {
+        this.resolutionTracker.trackResolutionAttempt(
+          'field-access-error',
+          JSON.stringify({
+            varName,
+            fieldPath,
+            preserveType,
+            context: JSON.stringify(context)
+          }),
+          false,
+          undefined,
+          error instanceof Error ? error.message : String(error)
+        );
+      }
       
       // Rethrow to maintain behavior
       throw error;
@@ -767,13 +750,28 @@ export class VariableReferenceResolver {
   }
 
   /**
-   * Convert a value to string representation
+   * Convert a value to string representation with context-aware formatting
+   * Public to allow use by client interfaces
+   * 
+   * @param value The value to convert to string
+   * @param formattingContext Optional formatting context to control output format
+   * @returns Formatted string representation
    */
-  private convertToString(value: any): string {
+  convertToString(
+    value: any, 
+    formattingContext?: { 
+      isBlock?: boolean; 
+      nodeType?: string; 
+      linePosition?: 'start' | 'middle' | 'end';
+      isTransformation?: boolean;
+    }
+  ): string {
+    // Handle undefined or null
     if (value === undefined || value === null) {
       return '';
     }
     
+    // Handle primitive types directly
     if (typeof value === 'string') {
       return value;
     }
@@ -782,19 +780,67 @@ export class VariableReferenceResolver {
       return String(value);
     }
     
+    // Handle arrays with context-awareness
     if (Array.isArray(value)) {
-      return value.map(item => this.convertToString(item)).join(', ');
+      // Empty array
+      if (value.length === 0) {
+        return '[]';
+      }
+      
+      // In block context, format as multi-line list
+      if (formattingContext?.isBlock) {
+        const items = value.map(item => `- ${this.convertToString(item, { 
+          isBlock: false, 
+          nodeType: formattingContext.nodeType,
+          linePosition: 'start'
+        })}`);
+        
+        // Add newline at start if not at beginning of line
+        const needsLeadingNewline = formattingContext.linePosition !== 'start';
+        
+        // Format as multiline block
+        return (needsLeadingNewline ? '\n' : '') + items.join('\n');
+      }
+      
+      // In inline context or transformation, format as comma-separated list
+      return value.map(item => this.convertToString(item, { 
+        isBlock: false,
+        nodeType: formattingContext?.nodeType,
+        linePosition: 'middle'
+      })).join(', ');
     }
     
+    // Handle objects with context-awareness
     if (typeof value === 'object') {
       try {
+        // In block context, format with indentation for readability
+        if (formattingContext?.isBlock) {
+          // Use pretty JSON in block context
+          const prettyJson = JSON.stringify(value, null, 2);
+          
+          // Add newline at start if not at beginning of line
+          const needsLeadingNewline = formattingContext.linePosition !== 'start';
+          
+          // Format with code fence for Markdown blocks
+          if (formattingContext.nodeType === 'CodeFence' || 
+              formattingContext.nodeType === 'TextVar' || 
+              formattingContext.isTransformation) {
+            return prettyJson;
+          }
+          
+          // For other block contexts, use code fence
+          return (needsLeadingNewline ? '\n' : '') + '```json\n' + prettyJson + '\n```';
+        }
+        
+        // In inline context, use compact JSON
         return JSON.stringify(value);
-    } catch (error) {
+      } catch (error) {
         logger.error('Error stringifying object', { value, error });
         return '[Object]';
       }
     }
     
+    // Default fallback
     return String(value);
   }
   
