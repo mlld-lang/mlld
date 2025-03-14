@@ -5,7 +5,7 @@ import {
   MeldResolutionError,
   ErrorSeverity,
   DirectiveErrorCode
-} from '@core/errors.js';
+} from '@core/errors/index.js';
 
 /**
  * Represents a syntax example with code and description

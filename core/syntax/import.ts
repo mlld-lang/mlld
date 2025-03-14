@@ -2,13 +2,13 @@ import {
   DirectiveError,
   DirectiveErrorCode
 } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
-import { ErrorSeverity } from '@core/errors.js';
+import { ErrorSeverity } from '@core/errors/index.js';
 import { 
   createExample, 
   createInvalidExample, 
   combineExamples,
   SyntaxExampleGroup 
-} from '@core/syntax/helpers.js';
+} from '@core/syntax/helpers/index.js';
 
 /**
  * Collection of atomic @import directive examples

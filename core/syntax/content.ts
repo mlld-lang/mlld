@@ -3,11 +3,11 @@ import {
   createInvalidExample,
   combineExamples,
   SyntaxExampleGroup 
-} from '@core/syntax/helpers.js';
+} from '@core/syntax/helpers/index.js';
 import { 
   MeldParseError, 
   ErrorSeverity 
-} from '@core/errors.js';
+} from '@core/errors/index.js';
 
 /**
  * Collection of atomic content examples
