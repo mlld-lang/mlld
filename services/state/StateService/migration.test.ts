@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { StateService } from './StateService.js';
-import { migrateState, validateMigration } from './migration.js';
-import type { MeldNode } from '@core/syntax/types';
-import type { StateNode } from './types.js';
+import { StateService } from '@services/state/StateService/StateService.js';
+import { migrateState, validateMigration } from '@services/state/StateService/migration.js';
+import type { MeldNode } from '@core/syntax/types.js';
+import type { StateNode } from '@services/state/StateService/types.js';
 
 describe('State Migration', () => {
   let oldState: StateService;

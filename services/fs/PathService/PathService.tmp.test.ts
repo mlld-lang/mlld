@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
-import { PathService } from './PathService.js';
-import { PathValidationError, PathErrorCode } from './errors/PathValidationError.js';
+import { PathService } from '@services/fs/PathService/PathService.js';
+import { PathValidationError, PathErrorCode } from '@services/fs/PathService/errors/PathValidationError.js';
 import type { Location } from '@core/types/index.js';
-import type { StructuredPath } from '@core/syntax/types';
+import type { StructuredPath } from '@core/syntax/types.js';
 import { PathErrorMessages } from '@core/errors/messages/paths.js';
 
 describe('PathService Temporary Path Rules', () => {

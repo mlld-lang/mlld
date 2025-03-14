@@ -1,7 +1,7 @@
 import { injectable, inject } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
-import { IResolutionService, ResolutionContext, StructuredPath } from '../IResolutionService.js';
-import { IResolutionServiceClient } from '../interfaces/IResolutionServiceClient.js';
+import { IResolutionService, ResolutionContext, StructuredPath } from '@services/resolution/ResolutionService/IResolutionService.js';
+import { IResolutionServiceClient } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClient.js';
 import { resolutionLogger as logger } from '@core/utils/logger.js';
 
 /**

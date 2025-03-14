@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { TextResolver } from './TextResolver.js';
+import { TextResolver } from '@services/resolution/ResolutionService/resolvers/TextResolver.js';
 import { IStateService } from '@services/state/StateService/IStateService.js';
 import { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { ResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError.js';
-import { MeldNode } from '@core/syntax/types';
+import { MeldNode } from '@core/syntax/types.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
 import { 

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import type { DirectiveNode } from '@core/syntax/types';
-import { ImportDirectiveHandler } from './ImportDirectiveHandler.js';
+import type { DirectiveNode } from '@core/syntax/types.js';
+import { ImportDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/ImportDirectiveHandler.js';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
@@ -11,7 +11,7 @@ import type { ICircularityService } from '@services/resolution/CircularityServic
 import { createLocation } from '@tests/utils/testFactories.js';
 // Import centralized syntax examples and helpers
 import { importDirectiveExamples } from '@core/syntax/index.js';
-import { createNodeFromExample } from '@core/syntax/helpers';
+import { createNodeFromExample } from '@core/syntax/helpers.js';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { mockDeep, mockReset } from 'vitest-mock-extended';
 import {
@@ -20,7 +20,7 @@ import {
   createResolutionServiceMock,
   createFileSystemServiceMock,
   createDirectiveErrorMock
-} from '@tests/utils/mocks/serviceMocks';
+} from '@tests/utils/mocks/serviceMocks.js';
 
 /**
  * ImportDirectiveHandler Transformation Test Status

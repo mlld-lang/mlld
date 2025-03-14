@@ -1,4 +1,4 @@
-import { MeldNode, DirectiveNode, TextNode } from '@core/syntax/types';
+import { MeldNode, DirectiveNode, TextNode } from '@core/syntax/types.js';
 import { IStateService } from '@services/state/StateService/IStateService.js';
 import { ResolutionContext, ResolutionErrorCode } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { ResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError.js';

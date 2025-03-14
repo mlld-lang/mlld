@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { ResolutionService } from './ResolutionService.js';
+import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService.js';
 import { IStateService } from '@services/state/StateService/IStateService.js';
 import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 import { IPathService } from '@services/fs/PathService/IPathService.js';
-import { ResolutionContext } from './IResolutionService.js';
-import { ResolutionError } from './errors/ResolutionError.js';
-import type { MeldNode, DirectiveNode, TextNode } from '@core/syntax/types';
+import { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
+import { ResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError.js';
+import type { MeldNode, DirectiveNode, TextNode } from '@core/syntax/types.js';
 // Import centralized syntax examples and helpers
 import { 
   textDirectiveExamples, 
@@ -16,16 +16,16 @@ import {
 } from '@core/syntax/index.js';
 // Import run examples directly
 import runDirectiveExamplesModule from '@core/syntax/run.js';
-import { createExample, createInvalidExample, createNodeFromExample } from '@core/syntax/helpers';
+import { createExample, createInvalidExample, createNodeFromExample } from '@core/syntax/helpers.js';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 // Import factory classes
 import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory.js';
-import { VariableReferenceResolverClientFactory } from './factories/VariableReferenceResolverClientFactory.js';
+import { VariableReferenceResolverClientFactory } from '@services/resolution/ResolutionService/factories/VariableReferenceResolverClientFactory.js';
 import { DirectiveServiceClientFactory } from '@services/pipeline/DirectiveService/factories/DirectiveServiceClientFactory.js';
 import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/factories/FileSystemServiceClientFactory.js';
 // Import client interfaces
 import { IParserServiceClient } from '@services/pipeline/ParserService/interfaces/IParserServiceClient.js';
-import { IVariableReferenceResolverClient } from './interfaces/IVariableReferenceResolverClient.js';
+import { IVariableReferenceResolverClient } from '@services/resolution/ResolutionService/interfaces/IVariableReferenceResolverClient.js';
 import { IDirectiveServiceClient } from '@services/pipeline/DirectiveService/interfaces/IDirectiveServiceClient.js';
 import { IFileSystemServiceClient } from '@services/fs/FileSystemService/interfaces/IFileSystemServiceClient.js';
 

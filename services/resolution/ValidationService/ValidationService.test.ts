@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mockDeep, mockReset } from 'vitest-mock-extended';
-import { ValidationService } from './ValidationService.js';
+import { ValidationService } from '@services/resolution/ValidationService/ValidationService.js';
 import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
-import type { DirectiveNode } from '@core/syntax/types';
+import type { DirectiveNode } from '@core/syntax/types.js';
 import {
   createTextDirective,
   createDataDirective,
@@ -25,7 +25,7 @@ import {
 import { textDirectiveExamples } from '@core/syntax/index.js';
 import { getExample, getInvalidExample } from '@tests/utils/syntax-test-helpers.js';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
-import type { IValidationService } from './IValidationService.js';
+import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 
 describe('ValidationService', () => {
   let service: IValidationService;

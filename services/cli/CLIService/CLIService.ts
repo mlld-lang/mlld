@@ -9,7 +9,7 @@ import { main as apiMain } from '@api/index.js';
 import { cliLogger as logger } from '@core/utils/logger.js';
 import { MeldError, ErrorSeverity } from '@core/errors/MeldError.js';
 import { version } from '@core/version.js';
-import { createInterface } from 'readline';
+import { createInterface } from 'readline.js';
 import { dirname, basename, extname } from 'path';
 import { join } from 'path';
 import { IParserService } from '@services/pipeline/ParserService/IParserService.js';
@@ -22,7 +22,7 @@ import { ProcessOptions } from '@api/types.js';
 import readline from 'readline';
 import { inject, injectable, delay } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
-import { CLIOptions, ICLIService, IPromptService } from './ICLIService.js';
+import { CLIOptions, ICLIService, IPromptService } from '@services/cli/CLIService/ICLIService.js';
 
 /**
  * Default prompt service implementation using Node.js readline

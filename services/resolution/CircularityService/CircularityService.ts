@@ -1,7 +1,7 @@
-import { ICircularityService } from './ICircularityService.js';
+import { ICircularityService } from '@services/resolution/CircularityService/ICircularityService.js';
 import { MeldImportError } from '@core/errors/MeldImportError.js';
 import { importLogger as logger } from '@core/utils/logger.js';
-import { Service } from '../../../core/ServiceProvider';
+import { Service } from '@core/ServiceProvider.js';
 import { injectable } from 'tsyringe';
 
 /**

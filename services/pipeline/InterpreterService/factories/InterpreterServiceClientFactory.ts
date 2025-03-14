@@ -1,7 +1,7 @@
 import { injectable, inject, container } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
-import { IInterpreterService } from '../IInterpreterService.js';
-import { IInterpreterServiceClient } from '../interfaces/IInterpreterServiceClient.js';
+import { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
+import { IInterpreterServiceClient } from '@services/pipeline/InterpreterService/interfaces/IInterpreterServiceClient.js';
 import { interpreterLogger as logger } from '@core/utils/logger.js';
 
 /**

@@ -1,4 +1,4 @@
-import { IStateEventService, StateEvent, StateEventType, StateEventHandler, StateEventHandlerOptions } from './IStateEventService.js';
+import { IStateEventService, StateEvent, StateEventType, StateEventHandler, StateEventHandlerOptions } from '@services/state/StateEventService/IStateEventService.js';
 import { stateLogger as logger } from '@core/utils/logger.js';
 import { Service } from '@core/ServiceProvider.js';
 import { injectable } from 'tsyringe';

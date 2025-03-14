@@ -1,4 +1,4 @@
-import { DirectiveNode, DirectiveData } from '@core/syntax/types';
+import { DirectiveNode, DirectiveData } from '@core/syntax/types.js';
 // Define interfaces matching the meld-ast structure for data directives
 interface DataDirective extends DirectiveData {
   kind: 'data';

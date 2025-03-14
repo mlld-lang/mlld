@@ -1,12 +1,12 @@
-import { IParserService } from './IParserService.js';
+import { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 import type { 
   MeldNode, 
   CodeFenceNode, 
   TextNode,
   DirectiveNode,
   VariableReferenceNode 
-} from '@core/syntax/types';
-import { parse } from '@core/ast';  // Import the parse function directly
+} from '@core/syntax/types.js';
+import { parse } from '@core/ast/index.js';  // Import the parse function directly
 import { parserLogger as logger } from '@core/utils/logger.js';
 import { MeldParseError } from '@core/errors/MeldParseError.js';
 import type { Location, Position } from '@core/types/index.js';

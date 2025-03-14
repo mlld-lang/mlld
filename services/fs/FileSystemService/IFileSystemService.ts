@@ -1,5 +1,5 @@
 import type { Stats } from 'fs-extra';
-import type { IFileSystem } from './IFileSystem.js';
+import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
 
 /**
  * Service responsible for file system operations.

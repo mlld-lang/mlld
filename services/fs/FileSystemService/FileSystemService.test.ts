@@ -1,18 +1,18 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
-import { FileSystemService } from './FileSystemService.js';
-import { PathOperationsService } from './PathOperationsService.js';
+import { FileSystemService } from '@services/fs/FileSystemService/FileSystemService.js';
+import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService.js';
 import { MeldError } from '@core/errors/MeldError.js';
 import path from 'path';
 import { PathService } from '@services/fs/PathService/PathService.js';
 import { ProjectPathResolver } from '@services/fs/ProjectPathResolver.js';
-import { IPathService } from '../PathService/IPathService.js';
-import { IFileSystemService } from './IFileSystemService.js';
-import { IFileSystem } from './IFileSystem.js';
-import { IPathOperationsService } from './IPathOperationsService.js';
-import { IPathServiceClient } from '../PathService/interfaces/IPathServiceClient.js';
-import { PathServiceClientFactory } from '../PathService/factories/PathServiceClientFactory.js';
-import { FileSystemServiceClientFactory } from './factories/FileSystemServiceClientFactory.js';
+import { IPathService } from '@services/fs/PathService/IPathService.js';
+import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
+import { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
+import { IPathOperationsService } from '@services/fs/FileSystemService/IPathOperationsService.js';
+import { IPathServiceClient } from '@services/fs/PathService/interfaces/IPathServiceClient.js';
+import { PathServiceClientFactory } from '@services/fs/PathService/factories/PathServiceClientFactory.js';
+import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/factories/FileSystemServiceClientFactory.js';
 
 describe('FileSystemService', () => {
   let context: TestContextDI;

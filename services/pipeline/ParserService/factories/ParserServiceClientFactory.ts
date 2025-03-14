@@ -1,9 +1,9 @@
 import { injectable, inject } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
-import { IParserService } from '../IParserService.js';
-import { IParserServiceClient } from '../interfaces/IParserServiceClient.js';
+import { IParserService } from '@services/pipeline/ParserService/IParserService.js';
+import { IParserServiceClient } from '@services/pipeline/ParserService/interfaces/IParserServiceClient.js';
 import { parserLogger as logger } from '@core/utils/logger.js';
-import type { MeldNode } from '@core/syntax/types';
+import type { MeldNode } from '@core/syntax/types.js';
 
 /**
  * Factory for creating ParserServiceClient instances.

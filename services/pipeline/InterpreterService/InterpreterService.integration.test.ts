@@ -3,9 +3,9 @@ import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { MeldInterpreterError } from '@core/errors/MeldInterpreterError.js';
 import { DirectiveError } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { MeldImportError } from '@core/errors/MeldImportError.js';
-import type { TextNode, MeldNode, DirectiveNode } from '@core/syntax/types';
+import type { TextNode, MeldNode, DirectiveNode } from '@core/syntax/types.js';
 // Import centralized syntax helpers
-import { createNodeFromExample } from '@core/syntax/helpers';
+import { createNodeFromExample } from '@core/syntax/helpers/index.js';
 // Import relevant examples
 import { 
   textDirectiveExamples,
@@ -14,7 +14,7 @@ import {
   importDirectiveExamples,
   defineDirectiveExamples,
   integrationExamples
-} from '@core/syntax';
+} from '@core/syntax/index.js';
 import { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
 import { InterpreterService } from '@services/pipeline/InterpreterService/InterpreterService.js';
 import { StateTrackingService } from '@tests/utils/debug/StateTrackingService/StateTrackingService.js';

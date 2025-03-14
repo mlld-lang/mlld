@@ -1,4 +1,4 @@
-import type { MeldNode } from '@core/syntax/types';
+import type { MeldNode } from '@core/syntax/types.js';
 
 /**
  * Command definition with optional configuration

@@ -1,4 +1,4 @@
-import { DirectiveNode } from '@core/syntax/types';
+import { DirectiveNode } from '@core/syntax/types.js';
 
 /**
  * Client interface for DirectiveService functionality needed by other services

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi, fail } from 'vitest';
-import { VariableReferenceResolver } from './VariableReferenceResolver.js';
+import { VariableReferenceResolver } from '@services/resolution/ResolutionService/resolvers/VariableReferenceResolver.js';
 import { 
   createMockStateService, 
   createMockParserService, 

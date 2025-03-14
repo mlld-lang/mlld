@@ -1,6 +1,6 @@
 import * as path from 'path';
-import { IPathOperationsService } from './IPathOperationsService.js';
-import { Service } from '../../../core/ServiceProvider';
+import { IPathOperationsService } from '@services/fs/FileSystemService/IPathOperationsService.js';
+import { Service } from '@core/ServiceProvider.js';
 import { injectable } from 'tsyringe';
 
 @injectable()

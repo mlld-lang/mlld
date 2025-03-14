@@ -1,4 +1,4 @@
-import { ResolutionContext, StructuredPath } from '../IResolutionService.js';
+import { ResolutionContext, StructuredPath } from '@services/resolution/ResolutionService/IResolutionService.js';
 
 /**
  * Interface for ResolutionService functionality needed by clients.

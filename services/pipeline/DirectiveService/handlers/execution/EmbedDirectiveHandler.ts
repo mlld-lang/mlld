@@ -1,4 +1,4 @@
-import { DirectiveNode, MeldNode, TextNode } from '@core/syntax/types';
+import { DirectiveNode, MeldNode, TextNode } from '@core/syntax/types.js';
 import { IDirectiveHandler, DirectiveContext } from '@services/pipeline/DirectiveService/IDirectiveService.js';
 import { DirectiveResult } from '@services/pipeline/DirectiveService/types.js';
 import { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';

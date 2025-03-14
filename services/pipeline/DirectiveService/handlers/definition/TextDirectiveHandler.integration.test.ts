@@ -1,19 +1,19 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { TextDirectiveHandler } from './TextDirectiveHandler.js';
+import { TextDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler.js';
 import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { ResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError.js';
 import { ResolutionErrorCode } from '@services/resolution/ResolutionService/IResolutionService.js';
-import type { DirectiveNode } from '@core/syntax/types';
+import type { DirectiveNode } from '@core/syntax/types.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import { ErrorCollector } from '@tests/utils/ErrorTestUtils.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
-import { TestContextDI } from '@tests/utils/di/TestContextDI';
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import {
   createValidationServiceMock,
   createStateServiceMock,
   createResolutionServiceMock,
   createDirectiveErrorMock
-} from '@tests/utils/mocks/serviceMocks';
+} from '@tests/utils/mocks/serviceMocks.js';
 
 /**
  * TextDirectiveHandler Integration Test Status

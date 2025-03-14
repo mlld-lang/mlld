@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { CLIService, IPromptService } from './CLIService.js';
+import { CLIService, IPromptService } from '@services/cli/CLIService/CLIService.js';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 import { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';

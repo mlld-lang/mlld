@@ -1,14 +1,14 @@
-import type { MeldNode, TextNode } from '@core/syntax/types';
+import type { MeldNode, TextNode } from '@core/syntax/types.js';
 import { stateLogger as logger } from '@core/utils/logger.js';
-import type { IStateService, TransformationOptions } from './IStateService.js';
-import type { StateNode, CommandDefinition } from './types.js';
-import { StateFactory } from './StateFactory.js';
-import type { IStateEventService, StateEvent } from '../StateEventService/IStateEventService.js';
+import type { IStateService, TransformationOptions } from '@services/state/StateService/IStateService.js';
+import type { StateNode, CommandDefinition } from '@services/state/StateService/types.js';
+import { StateFactory } from '@services/state/StateService/StateFactory.js';
+import type { IStateEventService, StateEvent } from '@services/state/StateEventService/IStateEventService.js';
 import type { IStateTrackingService } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
 import { inject, container, injectable } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
-import { StateTrackingServiceClientFactory } from '../StateTrackingService/factories/StateTrackingServiceClientFactory.js';
-import { IStateTrackingServiceClient } from '../StateTrackingService/interfaces/IStateTrackingServiceClient.js';
+import { StateTrackingServiceClientFactory } from '@services/state/StateTrackingService/factories/StateTrackingServiceClientFactory.js';
+import { IStateTrackingServiceClient } from '@services/state/StateTrackingService/interfaces/IStateTrackingServiceClient.js';
 import { randomUUID } from 'crypto';
 
 // Helper function to get the container

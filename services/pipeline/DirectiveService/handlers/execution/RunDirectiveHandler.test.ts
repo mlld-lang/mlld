@@ -11,8 +11,8 @@ vi.mock('../../../../core/utils/logger', () => ({
 }));
 
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { RunDirectiveHandler } from './RunDirectiveHandler.js';
-import type { DirectiveNode, MeldNode } from '@core/syntax/types';
+import { RunDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler.js';
+import type { DirectiveNode, MeldNode } from '@core/syntax/types.js';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
@@ -22,16 +22,16 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 // Import the centralized syntax examples and helpers but don't use the problematic syntax-test-helpers
 import { runDirectiveExamples } from '@core/syntax/index.js';
-import { parse } from '@core/ast';
-import { ErrorSeverity } from '@core/errors';
-import { TestContextDI } from '@tests/utils/di/TestContextDI';
+import { parse } from '@core/ast/index.js';
+import { ErrorSeverity } from '@core/errors/MeldError.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import {
   createValidationServiceMock,
   createStateServiceMock,
   createResolutionServiceMock,
   createFileSystemServiceMock,
   createDirectiveErrorMock
-} from '@tests/utils/mocks/serviceMocks';
+} from '@tests/utils/mocks/serviceMocks.js';
 
 // Mock child_process
 vi.mock('child_process', () => ({

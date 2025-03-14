@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { StateFactory } from './StateFactory.js';
-import type { StateNode, IStateFactory } from './types.js';
+import { StateFactory } from '@services/state/StateService/StateFactory.js';
+import type { StateNode, IStateFactory } from '@services/state/StateService/types.js';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 
 describe('StateFactory', () => {

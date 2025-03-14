@@ -1,19 +1,19 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import type { DirectiveNode, DirectiveContext } from '@core/syntax/types';
-import { RunDirectiveHandler } from './RunDirectiveHandler.js';
+import type { DirectiveNode, DirectiveContext } from '@core/syntax/types.js';
+import { RunDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler.js';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import { createRunDirective, createLocation } from '@tests/utils/testFactories.js';
-import { TestContextDI } from '@tests/utils/di/TestContextDI';
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import {
   createValidationServiceMock,
   createStateServiceMock,
   createResolutionServiceMock,
   createFileSystemServiceMock,
   createDirectiveErrorMock
-} from '@tests/utils/mocks/serviceMocks';
+} from '@tests/utils/mocks/serviceMocks.js';
 
 /**
  * RunDirectiveHandler Transformation Test Status

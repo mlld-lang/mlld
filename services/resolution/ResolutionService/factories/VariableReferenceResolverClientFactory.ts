@@ -1,12 +1,12 @@
 import { injectable } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
-import { VariableReferenceResolver } from '../resolvers/VariableReferenceResolver.js';
+import { VariableReferenceResolver } from '@services/resolution/ResolutionService/resolvers/VariableReferenceResolver.js';
 import { 
   FieldAccessOptions, 
   IVariableReferenceResolverClient 
-} from '../interfaces/IVariableReferenceResolverClient.js';
+} from '@services/resolution/ResolutionService/interfaces/IVariableReferenceResolverClient.js';
 import { resolutionLogger as logger } from '@core/utils/logger.js';
-import { ResolutionContext } from '../IResolutionService.js';
+import { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
 
 /**
  * Factory for creating variable reference resolver clients

@@ -1,17 +1,17 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { mockDeep, mockReset } from 'vitest-mock-extended';
-import { OutputService } from './OutputService.js';
+import { OutputService } from '@services/pipeline/OutputService/OutputService.js';
 import { MeldOutputError } from '@core/errors/MeldOutputError.js';
-import type { MeldNode } from '@core/syntax/types';
+import type { MeldNode } from '@core/syntax/types.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IResolutionService, ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
-import type { OutputFormat } from './IOutputService.js';
+import type { OutputFormat } from '@services/pipeline/OutputService/IOutputService.js';
 import {
   createTextNode,
   createDirectiveNode,
   createCodeFenceNode,
   createLocation
-} from '../../../tests/utils/testFactories.js';
+} from '@tests/utils/testFactories.js';
 // Import centralized syntax examples
 import { 
   textDirectiveExamples, 
@@ -20,7 +20,7 @@ import {
 } from '@core/syntax/index.js';
 // Import run examples directly
 import runDirectiveExamplesModule from '@core/syntax/run.js';
-import { createNodeFromExample } from '@core/syntax/helpers';
+import { createNodeFromExample } from '@core/syntax/helpers/index.js';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 
 // Use the correctly imported run directive examples

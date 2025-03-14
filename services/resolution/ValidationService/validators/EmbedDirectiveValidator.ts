@@ -1,4 +1,4 @@
-import type { DirectiveNode, EmbedDirectiveData } from '@core/syntax/types';
+import type { DirectiveNode, EmbedDirectiveData } from '@core/syntax/types.js';
 import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
 import { DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';

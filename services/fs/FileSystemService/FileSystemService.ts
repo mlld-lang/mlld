@@ -1,9 +1,9 @@
 import * as fsExtra from 'fs-extra';
 import { filesystemLogger as logger } from '@core/utils/logger.js';
-import { IFileSystemService } from './IFileSystemService.js';
-import { IPathOperationsService } from './IPathOperationsService.js';
-import { IFileSystem } from './IFileSystem.js';
-import { NodeFileSystem } from './NodeFileSystem.js';
+import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
+import { IPathOperationsService } from '@services/fs/FileSystemService/IPathOperationsService.js';
+import { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
+import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
 import { MeldError } from '@core/errors/MeldError.js';
 import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
 import { exec } from 'child_process';
@@ -11,9 +11,9 @@ import { promisify } from 'util';
 import { MeldFileSystemError } from '@core/errors/MeldFileSystemError.js';
 import { injectable, inject } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
-import { IPathService } from '../PathService/IPathService.js';
-import { IPathServiceClient } from '../PathService/interfaces/IPathServiceClient.js';
-import { PathServiceClientFactory } from '../PathService/factories/PathServiceClientFactory.js';
+import { IPathService } from '@services/fs/PathService/IPathService.js';
+import { IPathServiceClient } from '@services/fs/PathService/interfaces/IPathServiceClient.js';
+import { PathServiceClientFactory } from '@services/fs/PathService/factories/PathServiceClientFactory.js';
 
 const execAsync = promisify(exec);
 

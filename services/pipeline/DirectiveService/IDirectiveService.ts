@@ -1,4 +1,4 @@
-import { DirectiveNode } from '@core/syntax/types';
+import { DirectiveNode } from '@core/syntax/types.js';
 import { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import type { IPathService } from '@services/fs/PathService/IPathService.js';
@@ -7,7 +7,7 @@ import type { IParserService } from '@services/pipeline/ParserService/IParserSer
 import type { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
 import type { ICircularityService } from '@services/resolution/CircularityService/ICircularityService.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
-import type { DirectiveResult } from './types.js';
+import type { DirectiveResult } from '@services/pipeline/DirectiveService/types.js';
 
 /**
  * Context for directive execution

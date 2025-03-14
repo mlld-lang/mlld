@@ -1,9 +1,9 @@
 import { injectable, inject } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
-import { IResolutionService, ResolutionContext, StructuredPath } from '../IResolutionService.js';
-import { IResolutionServiceClientForDirective } from '../interfaces/IResolutionServiceClientForDirective.js';
+import { IResolutionService, ResolutionContext, StructuredPath } from '@services/resolution/ResolutionService/IResolutionService.js';
+import { IResolutionServiceClientForDirective } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClientForDirective.js';
 import { resolutionLogger as logger } from '@core/utils/logger.js';
-import { MeldNode } from '@core/syntax/types';
+import { MeldNode } from '@core/syntax/types.js';
 
 /**
  * Factory for creating resolution service clients for DirectiveService

@@ -1,10 +1,10 @@
-import type { DirectiveNode, DirectiveContext, MeldNode, TextNode, StructuredPath } from '@core/syntax/types';
+import type { DirectiveNode, DirectiveContext, MeldNode, TextNode, StructuredPath } from '@core/syntax/types.js';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import { DirectiveError, DirectiveErrorCode, DirectiveErrorSeverity } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
-import { directiveLogger } from '../../../../../core/utils/logger.js';
+import { directiveLogger } from '@core/utils/logger.js';
 import type { DirectiveResult } from '@services/pipeline/DirectiveService/types.js';
 import type { IDirectiveHandler } from '@services/pipeline/DirectiveService/IDirectiveService.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';

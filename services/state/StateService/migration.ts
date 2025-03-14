@@ -1,6 +1,6 @@
-import type { IStateService } from './IStateService.js';
-import type { StateNode } from './types.js';
-import { StateFactory } from './StateFactory.js';
+import type { IStateService } from '@services/state/StateService/IStateService.js';
+import type { StateNode } from '@services/state/StateService/types.js';
+import { StateFactory } from '@services/state/StateService/StateFactory.js';
 import { stateLogger as logger } from '@core/utils/logger.js';
 
 /**

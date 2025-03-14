@@ -1,4 +1,4 @@
-import { VariableReferenceResolver } from '../resolvers/VariableReferenceResolver.js';
+import { VariableReferenceResolver } from '@services/resolution/ResolutionService/resolvers/VariableReferenceResolver.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';

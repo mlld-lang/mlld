@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { VariableReferenceResolver } from './VariableReferenceResolver.js';
+import { VariableReferenceResolver } from '@services/resolution/ResolutionService/resolvers/VariableReferenceResolver.js';
 import { 
   createMockStateService, 
   createMockParserService, 
@@ -8,7 +8,7 @@ import {
 } from '@tests/utils/testFactories.js';
 import { ResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError.js';
 import type { ResolutionContext, ResolutionErrorCode } from '@services/resolution/ResolutionService/IResolutionService.js';
-import type { MeldNode, TextNode } from '@core/syntax/types';
+import type { MeldNode, TextNode } from '@core/syntax/types.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 

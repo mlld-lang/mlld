@@ -1,5 +1,5 @@
 import type { IStateService } from '@services/state/StateService/IStateService.js';
-import { IOutputService, type OutputFormat, type OutputOptions } from './IOutputService.js';
+import { IOutputService, type OutputFormat, type OutputOptions } from '@services/pipeline/OutputService/IOutputService.js';
 import type { IResolutionService, ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
 import type { 
   MeldNode, 
@@ -8,7 +8,7 @@ import type {
   DirectiveNode, 
   VariableReferenceNode, 
   Field 
-} from '@core/syntax/types';
+} from '@core/syntax/types.js';
 import { outputLogger as logger } from '@core/utils/logger.js';
 import { MeldOutputError } from '@core/errors/MeldOutputError.js';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';

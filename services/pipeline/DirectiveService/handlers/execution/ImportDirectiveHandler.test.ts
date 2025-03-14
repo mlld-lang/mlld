@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { ImportDirectiveHandler } from './ImportDirectiveHandler.js';
+import { ImportDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/ImportDirectiveHandler.js';
 import { createImportDirective, createLocation } from '@tests/utils/testFactories.js';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
@@ -8,7 +8,7 @@ import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSys
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 import type { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
 import type { ICircularityService } from '@services/resolution/CircularityService/ICircularityService.js';
-import type { DirectiveNode } from '@core/syntax/types';
+import type { DirectiveNode } from '@core/syntax/types.js';
 import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
 import { MeldResolutionError, ResolutionErrorDetails } from '@core/errors/MeldResolutionError.js';
@@ -18,18 +18,18 @@ import {
   expectThrowsInStrictButWarnsInPermissive,
   expectDirectiveErrorWithCode,
   ErrorCollector
-} from '@tests/utils';
+} from '@tests/utils.js';
 // Import the centralized syntax examples and helpers
 import { importDirectiveExamples } from '@core/syntax/index.js';
-import { createNodeFromExample } from '@core/syntax/helpers';
-import { TestContextDI } from '@tests/utils/di/TestContextDI';
+import { createNodeFromExample } from '@core/syntax/helpers/index.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import {
   createValidationServiceMock,
   createStateServiceMock,
   createResolutionServiceMock,
   createFileSystemServiceMock,
   createDirectiveErrorMock
-} from '@tests/utils/mocks/serviceMocks';
+} from '@tests/utils/mocks/serviceMocks.js';
 import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory.js';
 
 /**

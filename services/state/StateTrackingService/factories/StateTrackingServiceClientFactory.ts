@@ -1,7 +1,7 @@
 import { injectable, inject } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
 import { IStateTrackingService } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
-import { IStateTrackingServiceClient } from '../interfaces/IStateTrackingServiceClient.js';
+import { IStateTrackingServiceClient } from '@services/state/StateTrackingService/interfaces/IStateTrackingServiceClient.js';
 import { stateLogger as logger } from '@core/utils/logger.js';
 
 /**

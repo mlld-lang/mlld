@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { CommandResolver } from './CommandResolver.js';
+import { CommandResolver } from '@services/resolution/ResolutionService/resolvers/CommandResolver.js';
 import { IStateService } from '@services/state/StateService/IStateService.js';
 import { ResolutionContext, ResolutionErrorCode } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { ResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError.js';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
-import { MeldNode, DirectiveNode, TextNode } from '@core/syntax/types';
+import { MeldNode, DirectiveNode, TextNode } from '@core/syntax/types.js';
 import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 import { createMockParserService, createDirectiveNode, createTextNode } from '@tests/utils/testFactories.js';

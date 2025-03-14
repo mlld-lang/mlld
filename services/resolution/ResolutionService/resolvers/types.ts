@@ -1,4 +1,4 @@
-import type { MeldNode } from '@core/syntax/types';
+import type { MeldNode } from '@core/syntax/types.js';
 
 /**
  * Represents a field access in a variable reference

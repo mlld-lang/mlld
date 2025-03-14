@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { CircularityService } from './CircularityService.js';
+import { CircularityService } from '@services/resolution/CircularityService/CircularityService.js';
 import { MeldImportError } from '@core/errors/MeldImportError.js';
-import { ICircularityService } from './ICircularityService.js';
+import { ICircularityService } from '@services/resolution/CircularityService/ICircularityService.js';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 
 describe('CircularityService', () => {

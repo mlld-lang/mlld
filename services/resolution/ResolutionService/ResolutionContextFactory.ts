@@ -1,4 +1,4 @@
-import { ResolutionContext } from './IResolutionService.js';
+import { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { IStateService } from '@services/state/StateService/IStateService.js';
 
 /**

@@ -1,4 +1,4 @@
-import type { StateNode, StateNodeOptions, IStateFactory, StateOperation } from './types.js';
+import type { StateNode, StateNodeOptions, IStateFactory, StateOperation } from '@services/state/StateService/types.js';
 import { stateLogger as logger } from '@core/utils/logger.js';
 import { randomUUID } from 'crypto';
 import { Service } from '@core/ServiceProvider.js';

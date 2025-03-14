@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { StateEventService } from './StateEventService.js';
-import type { StateEvent, StateEventHandler, IStateEventService } from './IStateEventService.js';
-import { TestContextDI } from '@tests/utils/di/TestContextDI';
+import { StateEventService } from '@services/state/StateEventService/StateEventService.js';
+import type { StateEvent, StateEventHandler, IStateEventService } from '@services/state/StateEventService/IStateEventService.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 
 describe('StateEventService', () => {
   // Define tests for both DI modes

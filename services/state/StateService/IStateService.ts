@@ -1,6 +1,6 @@
-import type { MeldNode } from '@core/syntax/types';
-import type { IStateEventService } from '../StateEventService/IStateEventService.js';
-import type { IStateTrackingService } from '../../../tests/utils/debug/StateTrackingService/IStateTrackingService.js';
+import type { MeldNode } from '@core/syntax/types.js';
+import type { IStateEventService } from '@services/state/StateEventService/IStateEventService.js';
+import type { IStateTrackingService } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
 
 /**
  * Options for selective transformation

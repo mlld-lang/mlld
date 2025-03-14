@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { StateService } from './StateService.js';
-import { StateFactory } from './StateFactory.js';
+import { StateService } from '@services/state/StateService/StateService.js';
+import { StateFactory } from '@services/state/StateService/StateFactory.js';
 import { StateTrackingService } from '@tests/utils/debug/StateTrackingService/StateTrackingService.js';
 import { container } from 'tsyringe';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
-import type { MeldNode } from '@core/syntax/types';
+import type { MeldNode } from '@core/syntax/types.js';
 
 describe('StateService node transformation', () => {
   let service: StateService;

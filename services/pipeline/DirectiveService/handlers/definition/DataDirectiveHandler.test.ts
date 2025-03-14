@@ -5,16 +5,16 @@ import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
-import type { DirectiveNode } from '@core/syntax/types';
+import type { DirectiveNode } from '@core/syntax/types.js';
 import type { ResolutionContext, StructuredPath } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { DirectiveError, DirectiveErrorCode, DirectiveErrorSeverity } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
-import { dataDirectiveExamples } from '@core/syntax';
+import { dataDirectiveExamples } from '@core/syntax/index.js';
 import {
   createValidationServiceMock,
   createStateServiceMock,
   createResolutionServiceMock,
   createDirectiveErrorMock
-} from '@tests/utils/mocks/serviceMocks';
+} from '@tests/utils/mocks/serviceMocks.js';
 
 /**
  * DataDirectiveHandler Test Status
@@ -41,7 +41,7 @@ import {
  */
 const createNodeFromExample = async (exampleCode: string): Promise<DirectiveNode> => {
   try {
-    const { parse } = await import('@core/ast');
+    const { parse } = await import('@core/ast/index.js');
     
     const result = await parse(exampleCode, {
       trackLocations: true,

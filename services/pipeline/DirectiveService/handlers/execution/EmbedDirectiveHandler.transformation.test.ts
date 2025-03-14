@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import type { DirectiveNode, DirectiveData, MeldNode } from '@core/syntax/types';
-import { EmbedDirectiveHandler, type ILogger } from './EmbedDirectiveHandler.js';
+import type { DirectiveNode, DirectiveData, MeldNode } from '@core/syntax/types.js';
+import { EmbedDirectiveHandler, type ILogger } from '@services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler.js';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
@@ -14,15 +14,15 @@ import { createLocation, createEmbedDirective } from '@tests/utils/testFactories
 import { 
   embedDirectiveExamples
 } from '@core/syntax/index.js';
-import { createNodeFromExample } from '@core/syntax/helpers';
-import { TestContextDI } from '@tests/utils/di/TestContextDI';
+import { createNodeFromExample } from '@core/syntax/helpers.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import {
   createValidationServiceMock,
   createStateServiceMock,
   createResolutionServiceMock,
   createFileSystemServiceMock,
   createDirectiveErrorMock
-} from '@tests/utils/mocks/serviceMocks';
+} from '@tests/utils/mocks/serviceMocks.js';
 
 /**
  * EmbedDirectiveHandler Transformation Test Status

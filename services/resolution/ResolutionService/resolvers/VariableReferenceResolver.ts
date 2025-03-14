@@ -4,12 +4,12 @@ import { ResolutionErrorCode } from '@services/resolution/ResolutionService/IRes
 import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
-import type { MeldNode, TextNode, DirectiveNode, NodeType } from '@core/syntax/types';
+import type { MeldNode, TextNode, DirectiveNode, NodeType } from '@core/syntax/types.js';
 import { resolutionLogger as logger } from '@core/utils/logger.js';
 import { VariableResolutionTracker } from '@tests/utils/debug/VariableResolutionTracker/index.js';
 import { container } from 'tsyringe';
-import { IResolutionServiceClient } from '../interfaces/IResolutionServiceClient.js';
-import { ResolutionServiceClientFactory } from '../factories/ResolutionServiceClientFactory.js';
+import { IResolutionServiceClient } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClient.js';
+import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientFactory.js';
 import { IParserServiceClient } from '@services/pipeline/ParserService/interfaces/IParserServiceClient.js';
 import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory.js';
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
@@ -19,8 +19,8 @@ import {
   Field,
   isVariableReferenceNode,
   createVariableReferenceNode
-} from '@core/syntax/types/variables';
-import { VariableResolutionErrorFactory } from './error-factory.js';
+} from '@core/syntax/types/variables.js';
+import { VariableResolutionErrorFactory } from '@services/resolution/ResolutionService/resolvers/error-factory.js';
 
 // Define a format context type
 type FormatContext = 'inline' | 'block';

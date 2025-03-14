@@ -1,4 +1,4 @@
-import type { DirectiveNode } from '@core/syntax/types';
+import type { DirectiveNode } from '@core/syntax/types.js';
 import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
 
 /**

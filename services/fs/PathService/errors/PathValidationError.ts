@@ -1,4 +1,4 @@
-import { PathOptions } from '../IPathService.js';
+import { PathOptions } from '@services/fs/PathService/IPathService.js';
 import type { Location } from '@core/types/index.js';
 
 /**

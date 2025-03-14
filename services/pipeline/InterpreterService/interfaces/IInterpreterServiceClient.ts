@@ -1,6 +1,6 @@
-import { MeldNode } from '@core/syntax/types';
+import { MeldNode } from '@core/syntax/types.js';
 import { IStateService } from '@services/state/StateService/IStateService.js';
-import { InterpreterOptions } from '../IInterpreterService.js';
+import { InterpreterOptions } from '@services/pipeline/InterpreterService/IInterpreterService.js';
 
 /**
  * Client interface for InterpreterService functionality needed by DirectiveService

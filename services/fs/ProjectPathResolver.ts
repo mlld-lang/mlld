@@ -1,7 +1,7 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { injectable } from 'tsyringe';
-import { Service } from '../../core/ServiceProvider';
+import { Service } from '@core/ServiceProvider.js';
 
 /**
  * Service for securely resolving project paths

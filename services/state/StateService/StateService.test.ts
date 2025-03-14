@@ -1,18 +1,18 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { StateService } from './StateService.js';
-import { StateFactory } from './StateFactory.js';
-import type { MeldNode } from '@core/syntax/types';
-import type { IStateEventService, StateEvent } from '../StateEventService/IStateEventService.js';
+import { StateService } from '@services/state/StateService/StateService.js';
+import { StateFactory } from '@services/state/StateService/StateFactory.js';
+import type { MeldNode } from '@core/syntax/types.js';
+import type { IStateEventService, StateEvent } from '@services/state/StateEventService/IStateEventService.js';
 import type { IStateTrackingService } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
 import { StateTrackingService } from '@tests/utils/debug/StateTrackingService/StateTrackingService.js';
 import { StateVisualizationService } from '@tests/utils/debug/StateVisualizationService/StateVisualizationService.js';
 import { StateDebuggerService } from '@tests/utils/debug/StateDebuggerService/StateDebuggerService.js';
 import { StateHistoryService } from '@tests/utils/debug/StateHistoryService/StateHistoryService.js';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
-import { StateEventService } from '../StateEventService/StateEventService.js';
+import { StateEventService } from '@services/state/StateEventService/StateEventService.js';
 import { mockDeep, mockReset } from 'vitest-mock-extended';
-import { StateTrackingServiceClientFactory } from '../StateTrackingService/factories/StateTrackingServiceClientFactory.js';
-import { IStateTrackingServiceClient } from '../StateTrackingService/interfaces/IStateTrackingServiceClient.js';
+import { StateTrackingServiceClientFactory } from '@services/state/StateTrackingService/factories/StateTrackingServiceClientFactory.js';
+import { IStateTrackingServiceClient } from '@services/state/StateTrackingService/interfaces/IStateTrackingServiceClient.js';
 
 class MockStateEventService implements IStateEventService {
   private handlers = new Map<string, Array<{

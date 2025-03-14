@@ -1,13 +1,13 @@
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import type { Mocked } from 'vitest';
 import { InterpreterService } from '@services/pipeline/InterpreterService/InterpreterService.js';
-import type { MeldNode, TextNode, DirectiveNode } from '@core/syntax/types';
+import type { MeldNode, TextNode, DirectiveNode } from '@core/syntax/types.js';
 import { MeldInterpreterError } from '@core/errors/MeldInterpreterError.js';
 import { DependencyContainer } from 'tsyringe';
 import { TestContainerHelper } from '@tests/utils/di/TestContainerHelper.js';
 import { DirectiveService } from '@services/pipeline/DirectiveService/DirectiveService.js';
 import { StateService } from '@services/state/StateService/StateService.js';
-import { IInterpreterService } from './IInterpreterService.js';
+import { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IDirectiveService } from '@services/pipeline/DirectiveService/IDirectiveService.js';

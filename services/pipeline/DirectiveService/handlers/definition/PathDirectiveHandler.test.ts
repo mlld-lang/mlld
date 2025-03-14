@@ -1,20 +1,20 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { PathDirectiveHandler } from './PathDirectiveHandler.js';
+import { PathDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/PathDirectiveHandler.js';
 import { createPathDirective, createLocation } from '@tests/utils/testFactories.js';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
-import type { DirectiveNode } from '../../../../node_modules/meld-spec/dist/types.js';
+import type { DirectiveNode } from '@services/node_modules/meld-spec/dist/types.js';
 import { DirectiveError } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { pathDirectiveExamples } from '@core/syntax/index.js';
-import { createNodeFromExample } from '@core/syntax/helpers';
-import { TestContextDI } from '@tests/utils/di/TestContextDI';
+import { createNodeFromExample } from '@core/syntax/helpers/index.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { 
   createValidationServiceMock, 
   createStateServiceMock, 
   createResolutionServiceMock,
   createDirectiveErrorMock
-} from '@tests/utils/mocks/serviceMocks';
+} from '@tests/utils/mocks/serviceMocks.js';
 
 /**
  * PathDirectiveHandler Test Status

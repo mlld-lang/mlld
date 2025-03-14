@@ -1,6 +1,6 @@
-import type { DirectiveNode } from '@core/syntax/types';
+import type { DirectiveNode } from '@core/syntax/types.js';
 import { validationLogger as logger } from '@core/utils/logger.js';
-import { IValidationService } from './IValidationService.js';
+import { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
 import { DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
@@ -8,13 +8,13 @@ import { Service } from '@core/ServiceProvider.js';
 import { injectable } from 'tsyringe';
 
 // Import default validators
-import { validateTextDirective } from './validators/TextDirectiveValidator.js';
-import { validateDataDirective } from './validators/DataDirectiveValidator.js';
-import { validateImportDirective } from './validators/ImportDirectiveValidator.js';
-import { validateEmbedDirective } from './validators/EmbedDirectiveValidator.js';
-import { validatePathDirective } from './validators/PathDirectiveValidator.js';
-import { validateDefineDirective } from './validators/DefineDirectiveValidator.js';
-import { validateRunDirective } from './validators/RunDirectiveValidator.js';
+import { validateTextDirective } from '@services/resolution/ValidationService/validators/TextDirectiveValidator.js';
+import { validateDataDirective } from '@services/resolution/ValidationService/validators/DataDirectiveValidator.js';
+import { validateImportDirective } from '@services/resolution/ValidationService/validators/ImportDirectiveValidator.js';
+import { validateEmbedDirective } from '@services/resolution/ValidationService/validators/EmbedDirectiveValidator.js';
+import { validatePathDirective } from '@services/resolution/ValidationService/validators/PathDirectiveValidator.js';
+import { validateDefineDirective } from '@services/resolution/ValidationService/validators/DefineDirectiveValidator.js';
+import { validateRunDirective } from '@services/resolution/ValidationService/validators/RunDirectiveValidator.js';
 
 /**
  * Map of directive error codes to severity levels

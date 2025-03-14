@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { DataResolver } from './DataResolver.js';
+import { DataResolver } from '@services/resolution/ResolutionService/resolvers/DataResolver.js';
 import { IStateService } from '@services/state/StateService/IStateService.js';
 import { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { ResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError.js';
-import { MeldNode } from '@core/syntax/types';
+import { MeldNode } from '@core/syntax/types.js';
 import { createTestText, createTestDirective } from '@tests/utils/nodeFactories.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';

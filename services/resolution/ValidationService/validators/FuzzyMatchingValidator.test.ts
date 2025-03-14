@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validateFuzzyThreshold } from './FuzzyMatchingValidator.js';
+import { validateFuzzyThreshold } from '@services/resolution/ValidationService/validators/FuzzyMatchingValidator.js';
 import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
 import { createEmbedDirective, createLocation } from '@tests/utils/testFactories.js';
 import { ErrorCollector, expectThrowsInStrictButWarnsInPermissive } from '@tests/utils/ErrorTestUtils.js';

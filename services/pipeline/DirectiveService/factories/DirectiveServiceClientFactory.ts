@@ -1,7 +1,7 @@
 import { injectable, inject, container } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
-import { IDirectiveService } from '../IDirectiveService.js';
-import { IDirectiveServiceClient } from '../interfaces/IDirectiveServiceClient.js';
+import { IDirectiveService } from '@services/pipeline/DirectiveService/IDirectiveService.js';
+import { IDirectiveServiceClient } from '@services/pipeline/DirectiveService/interfaces/IDirectiveServiceClient.js';
 import { directiveLogger as logger } from '@core/utils/logger.js';
 
 /**

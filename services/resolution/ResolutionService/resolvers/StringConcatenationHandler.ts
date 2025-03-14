@@ -1,9 +1,9 @@
 import { ResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError.js';
-import { StringLiteralHandler } from './StringLiteralHandler.js';
+import { StringLiteralHandler } from '@services/resolution/ResolutionService/resolvers/StringLiteralHandler.js';
 import { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
-import type { MeldNode, TextNode } from '@core/syntax/types';
+import type { MeldNode, TextNode } from '@core/syntax/types.js';
 
 /**
  * Handles string concatenation operations using the ++ operator

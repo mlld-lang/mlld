@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { DirectiveService } from './DirectiveService.js';
+import { DirectiveService } from '@services/pipeline/DirectiveService/DirectiveService.js';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
-import { DirectiveError, DirectiveErrorCode } from './errors/DirectiveError.js';
-import type { DirectiveNode } from '@core/syntax/types';
-import { IDirectiveService } from './IDirectiveService.js';
+import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
+import type { DirectiveNode } from '@core/syntax/types.js';
+import { IDirectiveService } from '@services/pipeline/DirectiveService/IDirectiveService.js';
 import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
 import { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
 import { vi } from 'vitest';

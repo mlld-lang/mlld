@@ -1,6 +1,6 @@
-import type { DirectiveNode, DirectiveKind, DirectiveData } from '@core/syntax/types';
-import { directiveLogger } from '../../../core/utils/logger.js';
-import { IDirectiveService, IDirectiveHandler, DirectiveContext } from './IDirectiveService.js';
+import type { DirectiveNode, DirectiveKind, DirectiveData } from '@core/syntax/types.js';
+import { directiveLogger } from '@core/utils/logger.js';
+import { IDirectiveService, IDirectiveHandler, DirectiveContext } from '@services/pipeline/DirectiveService/IDirectiveService.js';
 import { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import { IStateService } from '@services/state/StateService/IStateService.js';
 import { IPathService } from '@services/fs/PathService/IPathService.js';
@@ -10,9 +10,9 @@ import { IInterpreterService } from '@services/pipeline/InterpreterService/IInte
 import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
 import { ICircularityService } from '@services/resolution/CircularityService/ICircularityService.js';
 import { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
-import { DirectiveError, DirectiveErrorCode, DirectiveErrorSeverity } from './errors/DirectiveError.js';
+import { DirectiveError, DirectiveErrorCode, DirectiveErrorSeverity } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
-import type { ILogger } from './handlers/execution/EmbedDirectiveHandler.js';
+import type { ILogger } from '@services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler.js';
 import { Service } from '@core/ServiceProvider.js';
 import { inject, delay, injectable } from 'tsyringe';
 import { container } from 'tsyringe';
@@ -22,13 +22,13 @@ import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterS
 import { IInterpreterServiceClient } from '@services/pipeline/InterpreterService/interfaces/IInterpreterServiceClient.js';
 
 // Import all handlers
-import { TextDirectiveHandler } from './handlers/definition/TextDirectiveHandler.js';
-import { DataDirectiveHandler } from './handlers/definition/DataDirectiveHandler.js';
-import { PathDirectiveHandler } from './handlers/definition/PathDirectiveHandler.js';
-import { DefineDirectiveHandler } from './handlers/definition/DefineDirectiveHandler.js';
-import { RunDirectiveHandler } from './handlers/execution/RunDirectiveHandler.js';
-import { EmbedDirectiveHandler } from './handlers/execution/EmbedDirectiveHandler.js';
-import { ImportDirectiveHandler } from './handlers/execution/ImportDirectiveHandler.js';
+import { TextDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler.js';
+import { DataDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/DataDirectiveHandler.js';
+import { PathDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/PathDirectiveHandler.js';
+import { DefineDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/DefineDirectiveHandler.js';
+import { RunDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler.js';
+import { EmbedDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler.js';
+import { ImportDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/ImportDirectiveHandler.js';
 
 export class MeldLLMXMLError extends Error {
   constructor(

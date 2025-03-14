@@ -1,11 +1,11 @@
 import * as fsExtra from 'fs-extra';
 import { watch } from 'fs/promises';
-import type { IFileSystem } from './IFileSystem.js';
+import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
 import type { Stats } from 'fs';
 import { spawn, exec } from 'child_process';
 import { promisify } from 'util';
 import { injectable } from 'tsyringe';
-import { Service } from '../../../core/ServiceProvider';
+import { Service } from '@core/ServiceProvider.js';
 
 const execAsync = promisify(exec);
 

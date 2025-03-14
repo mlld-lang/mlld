@@ -1,22 +1,26 @@
-import { IPathService, PathOptions, StructuredPath } from './IPathService.js';
+import { IPathService, PathOptions, StructuredPath } from '@services/fs/PathService/IPathService.js';
 import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
-import { PathValidationError, PathErrorCode, PathValidationErrorDetails } from './errors/PathValidationError.js';
-import { ProjectPathResolver } from '../ProjectPathResolver.js';
+import { PathValidationError, PathErrorCode, PathValidationErrorDetails } from '@services/fs/PathService/errors/PathValidationError.js';
+import { ProjectPathResolver } from '@services/fs/ProjectPathResolver.js';
 import type { Location } from '@core/types/index.js';
 import * as path from 'path';
 import * as os from 'os';
-import type { MeldNode } from '@core/syntax/types';
+import type { MeldNode } from '@core/syntax/types.js';
 import { 
-  MeldError, 
-  MeldFileNotFoundError, 
+  MeldError 
+} from '@core/errors/MeldError.js';
+import { 
+  MeldFileNotFoundError 
+} from '@core/errors/MeldFileNotFoundError.js';
+import { 
   PathErrorMessages 
-} from '../../../core/errors';
-import { Service } from '../../../core/ServiceProvider';
+} from '@core/errors/messages/index.js';
+import { Service } from '@core/ServiceProvider.js';
 import { injectable, inject } from 'tsyringe';
 import { container } from 'tsyringe';
 import { pathLogger as logger } from '@core/utils/logger.js';
-import { IFileSystemServiceClient } from '../FileSystemService/interfaces/IFileSystemServiceClient.js';
-import { FileSystemServiceClientFactory } from '../FileSystemService/factories/FileSystemServiceClientFactory.js';
+import { IFileSystemServiceClient } from '@services/fs/FileSystemService/interfaces/IFileSystemServiceClient.js';
+import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/factories/FileSystemServiceClientFactory.js';
 
 /**
  * Service for validating and normalizing paths

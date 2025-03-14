@@ -11,8 +11,8 @@ vi.mock('../../../../core/utils/logger', () => ({
 }));
 
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import type { DirectiveNode, DirectiveData, MeldNode } from '@core/syntax/types';
-import { EmbedDirectiveHandler, type ILogger } from './EmbedDirectiveHandler.js';
+import type { DirectiveNode, DirectiveData, MeldNode } from '@core/syntax/types.js';
+import { EmbedDirectiveHandler, type ILogger } from '@services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler.js';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
@@ -25,7 +25,7 @@ import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/Directive
 import { createLocation } from '@tests/utils/testFactories.js';
 // Import the centralized syntax examples and helpers
 import { embedDirectiveExamples } from '@core/syntax/index.js';
-import { TestContextDI } from '@tests/utils/di/TestContextDI';
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
 import { StateVariableCopier } from '@services/state/utilities/StateVariableCopier.js';
 import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
@@ -36,7 +36,7 @@ import {
   createResolutionServiceMock,
   createFileSystemServiceMock,
   createDirectiveErrorMock
-} from '@tests/utils/mocks/serviceMocks';
+} from '@tests/utils/mocks/serviceMocks.js';
 
 /**
  * EmbedDirectiveHandler Test Status
