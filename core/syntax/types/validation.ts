@@ -1,34 +1,30 @@
 import { DirectiveNode, MeldNode, TextNode, CodeFenceNode } from './nodes';
+import { VariableReferenceNode } from './variables';
 import { Parser } from './parser';
 
 export interface Example {
   input: string;
-  ast: DirectiveNode;
+  ast: DirectiveNode | TextNode | CodeFenceNode | VariableReferenceNode;
   description?: string;
 }
 
 export interface ValidationError {
   message: string;
-  expected?: any;
-  received?: any;
-  location?: {
-    line: number;
-    column: number;
-  };
+  code: string;
+  node?: MeldNode;
+  details?: Record<string, unknown>;
 }
 
 export interface ValidationContext {
   parser: Parser;
-  currentExample?: Example;
-  currentConstraint?: string;
-}
-
-export interface ImplementationValidator {
-  validateSyntax(context: ValidationContext, examples: Example[]): ValidationResult;
-  validateConstraints(context: ValidationContext, constraints: string[]): ValidationResult;
+  strict: boolean;
+  allowUndefinedVariables?: boolean;
+  allowCircularReferences?: boolean;
+  allowUnresolvedPaths?: boolean;
 }
 
 export interface ValidationResult {
   valid: boolean;
-  errors?: ValidationError[];
+  errors: ValidationError[];
+  warnings: ValidationError[];
 } 

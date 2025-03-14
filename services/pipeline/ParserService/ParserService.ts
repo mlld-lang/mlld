@@ -1,5 +1,11 @@
 import { IParserService } from './IParserService.js';
-import type { MeldNode, CodeFenceNode, TextNode } from '@core/syntax/types';
+import type { 
+  MeldNode, 
+  CodeFenceNode, 
+  TextNode,
+  DirectiveNode,
+  VariableReferenceNode 
+} from '@core/syntax/types';
 import { parserLogger as logger } from '@core/utils/logger.js';
 import { MeldParseError } from '@core/errors/MeldParseError.js';
 import type { Location, Position } from '@core/types/index.js';
@@ -31,13 +37,18 @@ interface MeldAstError extends Error {
   toString(): string;
 }
 
+// Updated to recognize both the old MeldAstError and our new core/ast MeldAstError
 function isMeldAstError(error: unknown): error is MeldAstError {
   return (
     typeof error === 'object' &&
     error !== null &&
     'message' in error &&
     'name' in error &&
-    typeof (error as any).toString === 'function'
+    typeof (error as any).toString === 'function' &&
+    (
+      (error as any).name === 'MeldAstError' ||
+      ((error as any).name === 'Error' && 'location' in error && 'code' in error)
+    )
   );
 }
 
@@ -97,9 +108,41 @@ export class ParserService implements IParserService {
     }
   }
 
+  /**
+   * Transform old variable node types into the consolidated VariableReferenceNode type
+   */
+  private transformVariableNode(node: MeldNode): MeldNode {
+    // Using type assertion since we need to access properties not in base MeldNode
+    const anyNode = node as any;
+    if (anyNode.type === 'TextVar' || anyNode.type === 'DataVar') {
+      // Create a variable reference node structure
+      const variableRefNode: any = {
+        type: 'VariableReference',
+        valueType: anyNode.type === 'TextVar' ? 'text' : 'data',
+        fields: anyNode.fields || [],
+        isVariableReference: true,
+        location: anyNode.location
+      };
+      
+      // Copy identifier and format if they exist
+      if (anyNode.identifier) {
+        variableRefNode.identifier = anyNode.identifier;
+      }
+      
+      if (anyNode.format) {
+        variableRefNode.format = anyNode.format;
+      }
+      
+      return variableRefNode as MeldNode;
+    }
+    return node;
+  }
+
   private async parseContent(content: string, filePath?: string): Promise<MeldNode[]> {
     try {
-      const { parse } = await import('meld-ast');
+      // Use require for better build compatibility
+      const coreAst = require('@core/ast');
+      const { parse } = coreAst;
       const options = {
         failFast: true,
         trackLocations: true,
@@ -128,12 +171,15 @@ export class ParserService implements IParserService {
 
       const result = await parse(content, options);
       
+      // Transform old variable node types into consolidated type
+      const transformedAst = (result.ast || []).map((node: MeldNode) => this.transformVariableNode(node));
+      
       // Validate code fence nesting
-      this.validateCodeFences(result.ast || []);
+      this.validateCodeFences(transformedAst);
 
       // Log any non-fatal errors
       if (result.errors && result.errors.length > 0) {
-        result.errors.forEach(error => {
+        result.errors.forEach((error: unknown) => {
           if (isMeldAstError(error)) {
             // Don't log warnings directly - we'll handle them through the error display service
             logger.debug('Parse warning detected', { errorMessage: error.toString() });
@@ -141,7 +187,7 @@ export class ParserService implements IParserService {
         });
       }
 
-      return result.ast || [];
+      return transformedAst;
     } catch (error) {
       if (isMeldAstError(error)) {
         // Create a MeldParseError with the original error information
@@ -356,7 +402,7 @@ export class ParserService implements IParserService {
    * @param context - The resolution context
    * @returns The resolved node
    */
-  async resolveVariableReference(node: any, context: ResolutionContext): Promise<any> {
+  async resolveVariableReference(node: VariableReferenceNode, context: ResolutionContext): Promise<VariableReferenceNode> {
     try {
       // Ensure factory is initialized
       this.ensureFactoryInitialized();

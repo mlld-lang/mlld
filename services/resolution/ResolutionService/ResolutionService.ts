@@ -424,10 +424,11 @@ export class ResolutionService implements IResolutionService {
         }
       }
       
-      // Finally, try direct import
+      // Finally, try using require
       try {
-        const { parse } = await import('meld-ast');
-        const result = await parse(value, { trackLocations: true });
+        // Use require for better build compatibility
+        const coreAst = require('@core/ast');
+        const result = await coreAst.parse(value, { trackLocations: true });
         return result.ast || [];
       } catch (error) {
         // In a test environment, create a fallback text node
@@ -596,7 +597,7 @@ export class ResolutionService implements IResolutionService {
         if (value.includes('$.') || value.includes('$~') || value.includes('$/') || value.includes('$')) {
           const nodes = await this.parseForResolution(value);
           const pathNode = nodes.find(node => 
-            node.type === 'PathVar' || 
+            (node as any).type === 'PathVar' || 
             (node.type === 'Directive' && (node as any).directive?.kind === 'path')
           );
           
@@ -604,7 +605,7 @@ export class ResolutionService implements IResolutionService {
             // Extract the structured path from the node
             let structPath: StructuredPath;
             
-            if (pathNode.type === 'PathVar' && (pathNode as any).value) {
+            if ((pathNode as any).type === 'PathVar' && (pathNode as any).value) {
               structPath = (pathNode as any).value as StructuredPath;
               // Recursive call with the structured path
               return this.resolveStructuredPath(structPath, context);

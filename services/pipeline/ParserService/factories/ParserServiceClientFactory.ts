@@ -3,6 +3,7 @@ import { Service } from '@core/ServiceProvider.js';
 import { IParserService } from '../IParserService.js';
 import { IParserServiceClient } from '../interfaces/IParserServiceClient.js';
 import { parserLogger as logger } from '@core/utils/logger.js';
+import type { MeldNode } from '@core/syntax/types';
 
 /**
  * Factory for creating ParserServiceClient instances.
@@ -29,8 +30,12 @@ export class ParserServiceClientFactory {
     logger.debug('Creating ParserServiceClient');
     
     return {
-      parseString: (content, options) => this.parserService.parseString(content, options),
-      parseFile: (filePath) => this.parserService.parseFile(filePath)
+      parseString: async (content: string, options?: { filePath?: string }): Promise<MeldNode[]> => {
+        return this.parserService.parse(content, options?.filePath);
+      },
+      parseFile: async (filePath: string): Promise<MeldNode[]> => {
+        return this.parserService.parseWithLocations(filePath, filePath);
+      }
     };
   }
 } 

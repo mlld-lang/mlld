@@ -1,12 +1,13 @@
 import { DirectiveKind } from './directives';
 import { MultiLineBlock } from './syntax';
+import { VariableType, Field, VariableReferenceNode } from './variables';
 
 export interface SourceLocation {
   start: { line: number; column: number };
   end: { line: number; column: number };
 }
 
-export type NodeType = 'Directive' | 'Text' | 'CodeFence' | 'Variable' | 'Error' | 'TextVar' | 'DataVar' | 'PathVar' | 'Comment' | 'VariableReference';
+export type NodeType = 'Directive' | 'Text' | 'CodeFence' | 'Variable' | 'Error' | 'Comment' | 'VariableReference';
 
 export interface MeldNode {
   type: NodeType;
@@ -49,22 +50,11 @@ export interface CodeFenceNode extends MeldNode {
 }
 
 /**
- * Field access in a variable reference
+ * AST node for comments
  */
-export interface Field {
-  type: 'field' | 'index';
-  value: string | number;
-}
-
-/**
- * AST node for variables
- */
-export interface VariableNode extends MeldNode {
-  type: 'Variable';
-  varType: 'text' | 'data' | 'path';
-  name: string;
-  fields?: Field[];
-  format?: string;
+export interface CommentNode extends MeldNode {
+  type: 'Comment';
+  content: string;  // The comment text after '>> '
 }
 
 /**
@@ -78,96 +68,50 @@ export interface ErrorNode extends MeldNode {
 }
 
 /**
- * AST node for text variables (${identifier})
- * Supports string concatenation with the ++ operator.
+ * AST node for variables (legacy - use VariableReferenceNode instead)
+ * @deprecated Use VariableReferenceNode from './variables' instead
  */
-export interface TextVarNode extends MeldNode {
-  type: 'TextVar';
-  identifier: string;
-  value: string;
-  /**
-   * For string concatenation operations, contains the individual parts being concatenated.
-   * Each part can be:
-   * - String literal (quoted with ', ", or `)
-   * - Template literal
-   * - Text variable (${text})
-   * - Result of @embed directive
-   * Cannot contain:
-   * - Data variables (#{data})
-   * - Arrays or objects
-   * Example: ["Hello", "${name}", "World"] for "Hello" ++ ${name} ++ "World"
-   */
-  parts?: string[];
-  format?: string;
-  isTemplate?: boolean;
-  isMultiline?: boolean;
-  identifiers?: string[];  // For multiple variables in a string
-  isEnv?: boolean;  // For environment variables
-}
-
-/**
- * AST node for data variables (#{identifier})
- */
-export interface DataVarNode extends MeldNode {
-  type: 'DataVar';
-  identifier: string;
-  value: string;
-  fields?: Field[];  // For field access like #{data.field}
+export interface VariableNode extends MeldNode {
+  type: 'Variable';
+  varType: VariableType;
+  name: string;
+  fields?: Field[];
   format?: string;
 }
 
-/**
- * AST node for path variables ($identifier)
- */
-export interface PathVarNode extends MeldNode {
-  type: 'PathVar';
-  identifier: string;
-  value: string;
-  isSpecial?: boolean;  // For $HOMEPATH/$~ and $PROJECTPATH/$.
-}
+// Re-export the consolidated variable types
+export { VariableType, Field, VariableReferenceNode };
 
 /**
- * Structured representation of paths in the AST
+ * Structured representation of a path with segments and variable information
  */
 export interface StructuredPath {
-  /** Original path string (for backward compatibility) */
+  /** The original raw path string */
   raw: string;
-  /** Optional normalized form of the path (e.g. $~ -> $HOMEPATH) */
-  normalized?: string;
-  /** Parsed path components */
+  /** Parsed structure of the path */
   structured: {
-    /** Base path or special variable (e.g., "$HOMEPATH", ".", etc.) */
-    base: string;
-    /** Individual path segments */
+    /** Path segments split by separators */
     segments: string[];
-    /** Optional metadata about variables used */
+    /** Variables found in the path */
     variables?: {
-      /** Text variables found (e.g., "${file}") */
-      text?: string[];
-      /** Path variables found (e.g., "$mypath") */
-      path?: string[];
-      /** Special path variables found (e.g., "$HOMEPATH", "$PROJECTPATH") */
+      /** Special variables like $PROJECTPATH, $HOMEPATH */
       special?: string[];
+      /** Path variables defined with @path directives */
+      path?: string[];
+      /** Text variables {{var}} */
+      text?: string[];
     };
-    /** Whether this is a path without slashes (in current working directory) */
+    /** Whether the path is relative to current working directory */
     cwd?: boolean;
+    /** Whether the path is a URL */
+    url?: boolean;
+    /** Path base (for special paths) */
+    base?: string;
   };
-}
-
-/**
- * AST node for variable references
- */
-export interface VariableReferenceNode extends MeldNode {
-  type: 'VariableReference';
-  identifier: string;
-  fields?: Field[];
-  isVariableReference: boolean;
-}
-
-/**
- * AST node for comments
- */
-export interface CommentNode extends MeldNode {
-  type: 'Comment';
-  content: string;  // The comment text after '>> '
+  /** Path in normalized form (typically absolute) */
+  normalized?: string;
+  /** Whether this is a variable reference like {{var}} */
+  isVariableReference?: boolean;
+  /** Whether this is a path variable reference like $path_var */
+  isPathVariable?: boolean;
 } 

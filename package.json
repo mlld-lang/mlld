@@ -22,7 +22,8 @@
     "meld": "./bin/meld-wrapper.js"
   },
   "scripts": {
-    "build": "tsup",
+    "build:grammar": "node core/ast/grammar/build-grammar.mjs",
+    "build": "npm run build:grammar && tsup",
     "reinstall": "npm run build && npm uninstall meld && npm install -g .",
     "dev": "tsup --watch",
     "test": "vitest run",
@@ -80,7 +81,6 @@
     "glob": "^11.0.1",
     "llmxml": "^1.4.2",
     "marked": "^4.0.12",
-    "meld-ast": "^3.4.3",
     "minimatch": "^3.0.4",
     "peggy": "^4.2.0",
     "reflect-metadata": "^0.2.2",

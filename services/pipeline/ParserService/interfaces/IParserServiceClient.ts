@@ -10,7 +10,7 @@ export interface IParserServiceClient {
    * @param options - Optional parsing options
    * @returns The parsed Meld AST node
    */
-  parseString(content: string, options?: { filePath?: string }): any;
+  parseString(content: string, options?: { filePath?: string }): Promise<MeldNode[]>;
   
   /**
    * Parse a file into a Meld AST node.
@@ -18,5 +18,5 @@ export interface IParserServiceClient {
    * @param filePath - The path of the file to parse
    * @returns The parsed Meld AST node
    */
-  parseFile(filePath: string): Promise<any>;
+  parseFile(filePath: string): Promise<MeldNode[]>;
 } 

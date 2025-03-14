@@ -1,4 +1,4 @@
-export { parse, MeldAstError } from 'meld-ast';
+export { parse, MeldAstError } from '@core/ast';
 
 export type { 
   MeldNode,

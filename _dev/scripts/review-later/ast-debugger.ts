@@ -18,7 +18,7 @@
  */
 
 import { ParserService } from '../services/pipeline/ParserService/ParserService';
-import type { MeldNode, DirectiveNode, CodeFenceNode, TextNode } from 'meld-spec';
+import type { MeldNode, DirectiveNode, CodeFenceNode, TextNode } from '@core/syntax/types';
 
 interface TextVarNode extends MeldNode {
   type: 'TextVar';

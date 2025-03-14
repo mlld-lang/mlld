@@ -1,7 +1,14 @@
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import { IOutputService, type OutputFormat, type OutputOptions } from './IOutputService.js';
 import type { IResolutionService, ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
-import type { MeldNode, TextNode, CodeFenceNode, DirectiveNode, DataVarNode, Field } from '@core/syntax/types';
+import type { 
+  MeldNode, 
+  TextNode, 
+  CodeFenceNode, 
+  DirectiveNode, 
+  VariableReferenceNode, 
+  Field 
+} from '@core/syntax/types';
 import { outputLogger as logger } from '@core/utils/logger.js';
 import { MeldOutputError } from '@core/errors/MeldOutputError.js';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
@@ -1160,26 +1167,28 @@ export class OutputService implements IOutputService {
         
         // Apply proper newline handling for the original content
         return this.handleNewlines(content, formattingContext);
-      case 'TextVar':
-        // Handle TextVar nodes
+      case 'VariableReference':
+        // Handle VariableReference nodes
         try {
+          const varNode = node as VariableReferenceNode;
+          const nodeType = varNode.valueType === 'text' ? 'TextVar' : 'DataVar';
+          
           // Create a formatting context for this node
           const formattingContext = this.createFormattingContext(
-            'TextVar', 
+            nodeType, 
             state.isTransformationEnabled()
           );
           
-          logger.debug('TextVar node detailed view', {
-            hasId: 'id' in node,
-            idValue: 'id' in node ? node.id : 'undefined',
-            hasIdentifier: 'identifier' in node,
-            identifierValue: 'identifier' in node ? node.identifier : 'undefined',
-            hasText: 'text' in node,
-            textValue: 'text' in node ? node.text : 'undefined',
-            hasValue: 'value' in node,
-            valueValue: 'value' in node ? node.value : 'undefined',
-            hasContent: 'content' in node,
-            contentValue: 'content' in node ? (node as any).content : 'undefined',
+          logger.debug('VariableReference node detailed view', {
+            type: varNode.type,
+            valueType: varNode.valueType,
+            identifier: varNode.identifier,
+            fields: varNode.fields,
+            format: varNode.format,
+            hasValue: 'value' in varNode,
+            valueValue: 'value' in varNode ? varNode.value : 'undefined',
+            hasContent: 'content' in varNode,
+            contentValue: 'content' in varNode ? (varNode as any).content : 'undefined',
             nodeStr: JSON.stringify(node, null, 2)
           });
           
@@ -1327,7 +1336,8 @@ export class OutputService implements IOutputService {
           });
           throw e;
         }
-      case 'DataVar':
+      // Handle legacy DataVar nodes with type casting for backward compatibility
+      case ('DataVar' as any):
         // Handle DataVar nodes
         try {
           // Create a formatting context for this node
@@ -1369,7 +1379,8 @@ export class OutputService implements IOutputService {
             
             if (dataValue !== undefined) {
               // Build the field path from the fields array
-              const fieldPath = node.fields
+              const fieldArray = Array.isArray(node.fields) ? node.fields : [];
+              const fieldPath = fieldArray
                 .map((field: Field) => {
                   if (field.type === 'index') {
                     return String(field.value);
@@ -1424,7 +1435,8 @@ export class OutputService implements IOutputService {
               );
               
               // Build the complete reference with all fields using dot notation
-              const fields = node.fields
+              const fieldArray = Array.isArray(node.fields) ? node.fields : [];
+              const fields = fieldArray
                 .map((field: Field) => {
                   if (field.type === 'index') {
                     return String(field.value);
@@ -2130,6 +2142,8 @@ Transformation enabled?: ${state.isTransformationEnabled()}
   }
 }
 
-function isDataVarNode(node: MeldNode): node is DataVarNode {
-  return node.type === 'DataVar';
+function isDataVarNode(node: MeldNode): node is any {
+  const anyNode = node as any;
+  return anyNode.type === 'DataVar' || 
+         (anyNode.type === 'VariableReference' && anyNode.valueType === 'data');
 }

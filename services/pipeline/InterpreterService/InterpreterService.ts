@@ -415,14 +415,30 @@ export class InterpreterService implements IInterpreterService {
           currentState = codeFenceState;
           break;
 
-        case 'TextVar':
+        case 'VariableReference':
+          // Handle variable reference nodes
+          if ((node as any).valueType === 'text') {
+            // Handle TextVar nodes similar to Text nodes
+            const textVarState = currentState.clone();
+            textVarState.addNode(node);
+            currentState = textVarState;
+          } else if ((node as any).valueType === 'data') {
+            // Handle DataVar nodes similar to Text/TextVar nodes
+            const dataVarState = currentState.clone();
+            dataVarState.addNode(node);
+            currentState = dataVarState;
+          }
+          break;
+          
+        // Note: Legacy TextVar and DataVar cases are kept for backward compatibility
+        case 'TextVar' as any:
           // Handle TextVar nodes similar to Text nodes
           const textVarState = currentState.clone();
           textVarState.addNode(node);
           currentState = textVarState;
           break;
 
-        case 'DataVar':
+        case 'DataVar' as any:
           // Handle DataVar nodes similar to Text/TextVar nodes
           const dataVarState = currentState.clone();
           dataVarState.addNode(node);

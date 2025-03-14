@@ -1,14 +1,12 @@
 # Meld Project Guidelines
 
+NEVER reward-hack by creating workarounds. It will break the user's heart.
+
 ## Build & Test Commands
 ```bash
 npm run build        # Build the project
-npm run test         # Run all tests
+npm test         # Run all tests
 npm test <file_path> # Run specific test file (e.g. npm test cli/priority-cli.test.ts)
-npm run test:watch   # Run tests in watch mode
-npm run test:coverage # Run tests with coverage
-npm run lint         # Run ESLint
-npm run dev          # Build in watch mode
 ```
 
 ## Code Style
@@ -30,9 +28,9 @@ To ensure consistency in writing tests, please refer to `docs/dev/TESTS.md` and 
 
 Useful context can be found in these files:
 
-- Target UX: `docs/dev/UX.md` 
-- Architecture: `docs/dev/ARCHITECTURE.md`
+- Architecture: `docs/dev/DI-ARCHITECTURE.md`
 - AST » transformation pipeline: `docs/dev/PIPELINE.md`
 - API documentation: `docs/dev/API.md`
 - Path handling: `docs/dev/PATHS.md`
 - Error testing patterns: `docs/dev/ERROR_TESTING_PATTERNS.md`
+- Debugging tools: `docs/dev/DEBUG-TOOLS.md`

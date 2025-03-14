@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { ParserService } from './ParserService.js';
 import { MeldParseError } from '@core/errors/MeldParseError.js';
-import type { MeldNode, DirectiveNode, TextNode, CodeFenceNode } from '@core/syntax/types';
+import type { MeldNode, DirectiveNode, TextNode, CodeFenceNode, VariableReferenceNode } from '@core/syntax/types';
 import type { Location, Position } from '@core/types/index.js';
 // Import the centralized syntax examples and helpers
 import { 
@@ -226,6 +226,66 @@ describe('ParserService', () => {
       
       await expect(service.parse(content)).rejects.toThrow(MeldParseError);
       await expect(service.parse(content)).rejects.toThrow(/Parse error/);
+    });
+
+    it('should parse variable references', async () => {
+      const content = `Hello {{greeting}}`;
+      const result = await service.parse(content);
+      
+      expect(result).toHaveLength(2);
+      expect(result[0].type).toBe('Text');
+      expect(result[1].type).toBe('VariableReference');
+      expect((result[1] as VariableReferenceNode).identifier).toBe('greeting');
+      expect((result[1] as VariableReferenceNode).valueType).toBe('text');
+    });
+
+    it('should parse variable references with fields', async () => {
+      const content = `User: {{user.name}}, ID: {{user.id}}`;
+      const result = await service.parse(content);
+      
+      expect(result).toHaveLength(4);
+      expect(result[1].type).toBe('VariableReference');
+      expect((result[1] as VariableReferenceNode).identifier).toBe('user');
+      expect((result[1] as VariableReferenceNode).fields).toEqual([
+        { type: 'field', value: 'name' }
+      ]);
+      expect(result[3].type).toBe('VariableReference');
+      expect((result[3] as VariableReferenceNode).identifier).toBe('user');
+      expect((result[3] as VariableReferenceNode).fields).toEqual([
+        { type: 'field', value: 'id' }
+      ]);
+    });
+
+    it('should parse variable references with array indices', async () => {
+      const content = `First item: {{items[0]}}, Second: {{items[1]}}`;
+      const result = await service.parse(content);
+      
+      expect(result).toHaveLength(4);
+      expect(result[1].type).toBe('VariableReference');
+      expect((result[1] as VariableReferenceNode).identifier).toBe('items');
+      expect((result[1] as VariableReferenceNode).fields).toEqual([
+        { type: 'index', value: 0 }
+      ]);
+      expect(result[3].type).toBe('VariableReference');
+      expect((result[3] as VariableReferenceNode).identifier).toBe('items');
+      expect((result[3] as VariableReferenceNode).fields).toEqual([
+        { type: 'index', value: 1 }
+      ]);
+    });
+
+    it('should parse variable references with nested fields and indices', async () => {
+      const content = `Deep access: {{data.users[0].profile.name}}`;
+      const result = await service.parse(content);
+      
+      expect(result).toHaveLength(2);
+      expect(result[1].type).toBe('VariableReference');
+      expect((result[1] as VariableReferenceNode).identifier).toBe('data');
+      expect((result[1] as VariableReferenceNode).fields).toEqual([
+        { type: 'field', value: 'users' },
+        { type: 'index', value: 0 },
+        { type: 'field', value: 'profile' },
+        { type: 'field', value: 'name' }
+      ]);
     });
   });
 

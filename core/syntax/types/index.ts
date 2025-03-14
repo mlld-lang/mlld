@@ -6,14 +6,10 @@ import {
   CodeFenceNode,
   VariableNode,
   ErrorNode,
-  TextVarNode,
-  DataVarNode,
-  PathVarNode,
   CommentNode,
   NodeType,
   SourceLocation,
-  DirectiveData,
-  Field
+  DirectiveData
 } from './nodes';
 import { DirectiveKind, CommandDefinition, CommandMetadata, RiskLevel } from './directives';
 import { MultiLineBlock } from './syntax';
@@ -24,6 +20,18 @@ import {
   ValidationResult,
   Example
 } from './validation';
+import {
+  VariableType,
+  Field,
+  VariableReferenceNode,
+  FormatOperator,
+  isVariableReferenceNode,
+  isValidFieldArray,
+  createVariableReferenceNode,
+  SPECIAL_PATH_VARS,
+  ENV_VAR_PREFIX,
+  VAR_PATTERNS
+} from './variables';
 
 // Re-export all imported types
 export {
@@ -32,11 +40,8 @@ export {
   DirectiveNode,
   TextNode,
   CodeFenceNode,
-  VariableNode,
+  VariableNode, // Deprecated but kept for backward compatibility
   ErrorNode,
-  TextVarNode,
-  DataVarNode,
-  PathVarNode,
   CommentNode,
   NodeType,
   // Important supporting types
@@ -44,7 +49,18 @@ export {
   DirectiveData,
   DirectiveKind,
   MultiLineBlock,
+  // Variable types
+  VariableType,
   Field,
+  VariableReferenceNode,
+  FormatOperator,
+  // Variable utilities
+  isVariableReferenceNode,
+  isValidFieldArray,
+  createVariableReferenceNode,
+  SPECIAL_PATH_VARS,
+  ENV_VAR_PREFIX,
+  VAR_PATTERNS,
   // Command types
   CommandDefinition,
   CommandMetadata,
@@ -65,4 +81,5 @@ export * from './syntax';
 export * from './schema';
 export * from './variables';
 export * from './parser';
-export * from './validation'; 
+export * from './validation';
+export * from './test-fixtures'; 

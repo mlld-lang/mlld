@@ -5,7 +5,7 @@
  * but the validator is expecting an 'identifier' property.
  */
 
-import { DirectiveNode, PathDirective } from 'meld-spec';
+import { DirectiveNode, PathDirective } from '@core/syntax/types';
 import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
 import { DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 

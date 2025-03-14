@@ -1,4 +1,5 @@
-import { MeldNode, DirectiveNode, TextNode, CodeFenceNode, VariableNode, ErrorNode, TextVarNode, DataVarNode, PathVarNode, CommentNode } from './nodes';
+import { MeldNode, DirectiveNode, TextNode, CodeFenceNode, VariableNode, ErrorNode, CommentNode } from './nodes';
+import { VariableReferenceNode } from './variables';
 
 /**
  * Interface that all Meld parser implementations must implement
@@ -33,6 +34,6 @@ export interface SpecTestResult {
 export interface ParserTestCase {
   name: string;
   input: string;
-  expected: MeldNode | DirectiveNode | TextNode | CodeFenceNode | VariableNode | ErrorNode | TextVarNode | DataVarNode | PathVarNode | CommentNode;
+  expected: MeldNode | DirectiveNode | TextNode | CodeFenceNode | VariableNode | ErrorNode | CommentNode | VariableReferenceNode;
   description?: string;
 } 
