@@ -4,9 +4,7 @@ import { parse } from '@core/ast';
 import type { 
   TextNode, 
   CodeFenceNode, 
-  TextVarNode, 
-  DataVarNode, 
-  PathVarNode,
+  VariableReferenceNode,
   DirectiveNode,
   MeldNode
 } from '@core/ast/ast/astTypes';

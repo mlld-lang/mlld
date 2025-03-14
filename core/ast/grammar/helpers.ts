@@ -22,7 +22,8 @@ import type {
   ValidationError,
   ValidationContext,
   ValidationResult,
-  Example
+  Example,
+  VariableReferenceNode
 } from '@core/syntax/types';
 
 /**

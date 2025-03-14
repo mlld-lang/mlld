@@ -175,17 +175,19 @@ export class VariableReferenceResolver {
     let result = '';
     
     // Provide a new context with depth tracking to prevent circular references
-    const newContext: ResolutionContext = {
+    const newContext: ResolutionContext & { depth?: number } = {
       ...context,
-      depth: context.depth !== undefined ? context.depth + 1 : 1
+      depth: (context as any).depth !== undefined ? (context as any).depth + 1 : 1
     };
     
     // Check for max depth
-    if (newContext.depth > this.MAX_RESOLUTION_DEPTH) {
+    if (newContext.depth && newContext.depth > this.MAX_RESOLUTION_DEPTH) {
       throw new MeldResolutionError(
         'Maximum resolution depth exceeded',
-        ResolutionErrorCode.MAX_DEPTH_EXCEEDED,
-        ErrorSeverity.ERROR
+        {
+          code: ResolutionErrorCode.MAX_DEPTH_EXCEEDED,
+          severity: ErrorSeverity.Fatal
+        }
       );
     }
     

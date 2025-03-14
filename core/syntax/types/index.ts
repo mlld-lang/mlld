@@ -31,11 +31,7 @@ import {
   SPECIAL_PATH_VARS,
   ENV_VAR_PREFIX,
   VAR_PATTERNS,
-  // Legacy variable node types
-  TextVarNode,
-  DataVarNode,
-  PathVarNode,
-  convertLegacyVariableNode
+  // Legacy variable node types have been removed
 } from './variables';
 
 // Re-export all imported types
@@ -59,11 +55,7 @@ export {
   Field,
   VariableReferenceNode,
   FormatOperator,
-  // Legacy variable node types (for compatibility)
-  TextVarNode,
-  DataVarNode,
-  PathVarNode,
-  convertLegacyVariableNode,
+  // Legacy variable node types removed (consolidated into VariableReferenceNode)
   // Variable utilities
   isVariableReferenceNode,
   isValidFieldArray,

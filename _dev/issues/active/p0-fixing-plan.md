@@ -236,6 +236,39 @@ Once you have confirmed all tests pass and the build runs without errors, create
 
 The hard part of this work has been completed (meld-ast is now no longer an external package but in core/ast, it's been fully integrated, tests have been integrated, and all tests across the code base )
 
+## Phase 4D: Resolve Module Resolution Issues
+
+During the implementation of the previous phases, we discovered significant architectural issues related to module resolution. Installing @swc/core revealed over 100 import/export errors across the codebase. These issues are documented in GitHub issue #17 and require a systematic approach to fix.
+
+**Key Issues:**
+1. Interface files export interfaces correctly, but imports cannot resolve them
+2. Import statements use `.js` extensions for TypeScript files
+3. Circular dependencies in type imports need proper architectural solutions
+4. Inconsistent export patterns across the codebase
+
+**Connection to Current Work:**
+The variable consolidation and field access improvements we're implementing directly interact with these module resolution issues since they touch the same core type definitions and export patterns. The architect has advised that fixing these foundational issues should precede completing the variable resolution work to ensure a stable foundation.
+
+**Implementation Plan:**
+Following the detailed approach in issue #17, we will:
+
+1. Focus first on fixing the core type system (`core/syntax/types/`) as it's the foundation of our type system
+2. Implement proper interface segregation to break circular dependencies
+3. Standardize export patterns across the codebase
+4. Update TypeScript module configuration to ensure consistency
+5. Apply the client factory pattern from DI-ARCHITECTURE.md to handle necessary circular dependencies
+
+This phase will be crucial for establishing a stable foundation before proceeding with the remaining phases of the plan. The work will be guided by principles of interface segregation, explicit exports, and progressive migration to ensure we maintain functionality while improving the architecture.
+
+**Exit Criteria:**
+- Build processes complete without module resolution errors
+- Tests continue to pass with the improved module structure
+- Documentation of the standardized module patterns
+- Clear export patterns established for interfaces and types
+- Circular dependencies properly managed through interface segregation
+
+Once this phase is complete, we can proceed with Phase 5 with a more stable architectural foundation.
+
 ## Phase 5: Central Syntax Integration and API Cleanup
 
 **Goal:** Update central syntax examples and clean up workarounds in the API layer.
