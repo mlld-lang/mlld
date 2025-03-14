@@ -1,0 +1,2 @@
+@text greeting = "Hello" ++ " " ++ "World" 
+$greeting

@@ -1,0 +1,5 @@
+@text hello = "Hello"
+@text space = " "
+@text world = "World"
+@text greeting = $hello ++ $space ++ $world
+$greeting

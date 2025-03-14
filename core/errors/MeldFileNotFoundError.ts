@@ -1,5 +1,5 @@
-import { MeldError, ErrorSeverity } from './MeldError.js';
-import { PathErrorMessages } from './messages';
+import { MeldError, ErrorSeverity } from '@core/errors/MeldError.js';
+import { PathErrorMessages } from '@core/errors/messages/index.js';
 
 export interface MeldFileNotFoundErrorOptions {
   cause?: Error;

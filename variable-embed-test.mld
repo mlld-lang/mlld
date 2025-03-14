@@ -1,0 +1,5 @@
+@data role = {
+  "architect": "Senior architect"
+}
+
+@embed {{role.architect}}

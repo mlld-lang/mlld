@@ -1,0 +1,96 @@
+Before
+Line 1
+Line 2
+Line 3
+After
+EMBED DIRECTIVE DEBUG:
+Node: {
+  "type": "Directive",
+  "directive": {
+    "kind": "embed",
+    "path": "file.md"
+  },
+  "location": {
+    "start": {
+      "line": 5,
+      "column": 1
+    },
+    "end": {
+      "line": 5,
+      "column": 20
+    }
+  }
+}
+Path type: string
+Path value: "file.md"
+Is variable reference?: false
+Transformation enabled?: true
+
+EMBED DIRECTIVE DEBUG:
+Node: {
+  "type": "Directive",
+  "directive": {
+    "kind": "embed",
+    "path": "file.md"
+  },
+  "location": {
+    "start": {
+      "line": 5,
+      "column": 1
+    },
+    "end": {
+      "line": 5,
+      "column": 20
+    }
+  }
+}
+Path type: string
+Path value: "file.md"
+Is variable reference?: false
+Transformation enabled?: true
+
+EMBED DIRECTIVE DEBUG:
+Node: {
+  "type": "Directive",
+  "directive": {
+    "kind": "embed",
+    "path": "file.md"
+  },
+  "location": {
+    "start": {
+      "line": 5,
+      "column": 1
+    },
+    "end": {
+      "line": 5,
+      "column": 20
+    }
+  }
+}
+Path type: string
+Path value: "file.md"
+Is variable reference?: false
+Transformation enabled?: true
+
+EMBED DIRECTIVE DEBUG:
+Node: {
+  "type": "Directive",
+  "directive": {
+    "kind": "embed",
+    "path": "file.md"
+  },
+  "location": {
+    "start": {
+      "line": 5,
+      "column": 1
+    },
+    "end": {
+      "line": 5,
+      "column": 20
+    }
+  }
+}
+Path type: string
+Path value: "file.md"
+Is variable reference?: false
+Transformation enabled?: false

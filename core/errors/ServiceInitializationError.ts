@@ -1,4 +1,4 @@
-import { ServiceName } from '../types/dependencies.js';
+import { ServiceName } from '@core/types/dependencies.js';
 
 /**
  * Error codes specific to service initialization failures

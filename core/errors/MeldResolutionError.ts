@@ -1,4 +1,4 @@
-import { MeldError, ErrorSeverity } from './MeldError.js';
+import { MeldError, ErrorSeverity } from '@core/errors/MeldError.js';
 import { Location } from '@core/types/index.js';
 
 export interface ResolutionErrorDetails {

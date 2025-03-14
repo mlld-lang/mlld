@@ -1,4 +1,4 @@
-import { MeldError, ErrorSeverity } from './MeldError.js';
+import { MeldError, ErrorSeverity } from '@core/errors/MeldError.js';
 
 export enum PathErrorCode {
   INVALID_PATH = 'INVALID_PATH',

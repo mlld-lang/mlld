@@ -1,4 +1,4 @@
-import { MeldError, type MeldErrorOptions, ErrorSeverity } from './MeldError.js';
+import { MeldError, type MeldErrorOptions, ErrorSeverity } from '@core/errors/MeldError.js';
 
 export interface MeldFileSystemErrorOptions extends MeldErrorOptions {
   command?: string;

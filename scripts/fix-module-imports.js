@@ -115,7 +115,10 @@ function convertToAliasPath(filePath, importPath) {
     
     for (const { alias, path: aliasPath } of PATH_ALIASES) {
       if (relativeToRoot.startsWith(aliasPath)) {
-        return `${alias}/${relativeToRoot.slice(aliasPath.length)}`;
+        // Make sure we don't have double slashes
+        const remainingPath = relativeToRoot.slice(aliasPath.length);
+        const cleanedPath = remainingPath.startsWith('/') ? remainingPath.substring(1) : remainingPath;
+        return `${alias}/${cleanedPath}`;
       }
     }
   }

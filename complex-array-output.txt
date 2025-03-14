@@ -1,0 +1,10 @@
+[
+  {
+    "name": "Complex Item 1",
+    "value": 42
+  },
+  {
+    "name": "Complex Item 2",
+    "value": 84
+  }
+]
