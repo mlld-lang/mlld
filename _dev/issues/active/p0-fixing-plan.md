@@ -232,6 +232,10 @@ Once you have confirmed all tests pass and the build runs without errors, create
 
 Once you have confirmed all tests pass and the build runs without errors, create a commit for this phase.
 
+## Phase 4C: Merge meld-ast into this codebase
+
+The hard part of this work has been completed (meld-ast is now no longer an external package but in core/ast, it's been fully integrated, tests have been integrated, and all tests across the code base )
+
 ## Phase 5: Central Syntax Integration and API Cleanup
 
 **Goal:** Update central syntax examples and clean up workarounds in the API layer.

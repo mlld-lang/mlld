@@ -248,7 +248,7 @@ export class TextDirectiveHandler implements IDirectiveHandler {
         });
 
         // Check for string concatenation first
-        if (this.stringConcatenationHandler.hasConcatenation(value)) {
+        if (await this.stringConcatenationHandler.hasConcatenation(value)) {
           try {
             resolvedValue = await this.stringConcatenationHandler.resolveConcatenation(value, resolutionContext);
           } catch (error) {
