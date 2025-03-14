@@ -63,7 +63,7 @@ import {
  */
 async function createNodeFromExample(code: string): Promise<DirectiveNode> {
   try {
-    const { parse } = await import('meld-ast');
+    const { parse } = await import('@core/ast');
     const result = await parse(code, {
       trackLocations: true,
       validateNodes: true,
