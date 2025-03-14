@@ -94,6 +94,75 @@ Variables can be converted between types automatically in many contexts:
 @text object = `Config: {{config}}`             # Outputs: Config: {"name":"test","version":1}
 ```
 
+### Object and Array Formatting
+
+When referencing complete objects or arrays (rather than their individual fields), Meld formats them based on the context:
+
+#### Array Formatting
+
+When referencing an entire array:
+
+```meld
+@data fruits = ["apple", "banana", "orange"]
+```
+
+- **Inline context** (within text, template literals):
+  ```meld
+  @text list = `My fruits: {{fruits}}`  # Outputs: My fruits: apple, banana, orange
+  ```
+  Arrays are formatted as comma-separated values with spaces.
+
+- **Block context** (in embed directives, standalone references):
+  ```meld
+  @embed {{fruits}}
+  ```
+  Simple arrays (of strings, numbers) use comma-separated values with spaces.
+  
+  Arrays of objects are formatted as properly indented JSON:
+  ```meld
+  @data people = [{ "name": "Alice", "age": 30 }, { "name": "Bob", "age": 25 }]
+  @embed {{people}}
+  ```
+  This outputs the array as properly indented JSON:
+  ```json
+  [
+    {
+      "name": "Alice",
+      "age": 30
+    },
+    {
+      "name": "Bob",
+      "age": 25
+    }
+  ]
+  ```
+
+#### Object Formatting
+
+When referencing an entire object:
+
+```meld
+@data config = { "host": "localhost", "port": 8080 }
+```
+
+- **Inline context**:
+  ```meld
+  @text settings = `My config: {{config}}`  # Outputs: My config: {"host":"localhost","port":8080}
+  ```
+  Objects are formatted as compact JSON without whitespace.
+
+- **Block context** (in embed directives, standalone references):
+  ```meld
+  @embed {{config}}
+  ```
+  Objects are formatted as properly indented JSON:
+  ```json
+  {
+    "host": "localhost",
+    "port": 8080
+  }
+  ```
+
 ### Text in Data Contexts
 
 - Text variables can be used as values in data structures

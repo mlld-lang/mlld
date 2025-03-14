@@ -169,11 +169,13 @@ describe('Enhanced Field Access', () => {
       // should be comma-space separated without brackets
       expect(inlineResult).toBe('JavaScript, TypeScript, Node.js');
       
-      // Test with a complex array that should be bullet-pointed in block context
+      // Test with a complex array that should be pretty-printed as JSON in block context
       const complexArray = [
         { name: 'Complex Item 1', value: 42 },
         { name: 'Complex Item 2', value: 84 }
       ];
+      
+      console.log('Complex array input:', JSON.stringify(complexArray, null, 2));
       
       const complexBlockResult = client.convertToString(complexArray, {
         formattingContext: {
@@ -184,14 +186,31 @@ describe('Enhanced Field Access', () => {
         }
       });
       
+      // Write the result to a file for inspection
+      const fs = require('fs');
+      fs.writeFileSync('complex-array-output.txt', complexBlockResult);
+      
       console.log('Complex block formatting result:', complexBlockResult);
       
-      // For complex arrays in block context, we expect a bullet list
-      // Each line should start with a bullet point
-      const lines = complexBlockResult.split('\n');
-      expect(lines.length).toBe(2); // Two items, each on its own line
-      expect(lines[0].startsWith('- ')).toBe(true);
-      expect(lines[1].startsWith('- ')).toBe(true);
+      // For arrays of objects in block context, we expect proper JSON pretty-printing
+      // Check for JSON formatting with indentation
+      expect(complexBlockResult).toContain('[\n');
+      expect(complexBlockResult).toContain('  {');
+      expect(complexBlockResult).toContain('    "name":');
+      expect(complexBlockResult).toContain('    "value":');
+      
+      // Verify content is present
+      expect(complexBlockResult).toContain('Complex Item 1');
+      expect(complexBlockResult).toContain('42');
+      expect(complexBlockResult).toContain('Complex Item 2');
+      expect(complexBlockResult).toContain('84');
+      
+      // Verify proper JSON syntax
+      expect(complexBlockResult).toContain('}');
+      expect(complexBlockResult).toContain(']');
+      
+      // Parse the result to make sure it's valid JSON
+      expect(() => JSON.parse(complexBlockResult)).not.toThrow();
     });
     
     it('should format objects differently based on context', async () => {
