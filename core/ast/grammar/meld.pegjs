@@ -539,11 +539,15 @@ RunDirective
     // This allows syntax like @run {{variable}}
     
     // Get the variable text directly from the variable node
-    const variableText = variable.type === 'TextVar' 
+    const variableText = variable.valueType === 'text' 
       ? `{{${variable.identifier}}}` 
-      : variable.type === 'DataVar' 
-        ? `{{${variable.identifier}${variable.fields.map(f => '.' + f.value).join('')}}}` 
-        : variable.type === 'PathVar' 
+      : variable.valueType === 'data' 
+        ? `{{${variable.identifier}${variable.fields.map(f => {
+            if (f.type === 'field') return '.' + f.value;
+            if (f.type === 'index') return typeof f.value === 'string' ? `[${JSON.stringify(f.value)}]` : `[${f.value}]`;
+            return '';
+          }).join('')}}}` 
+        : variable.valueType === 'path' 
           ? `$${variable.identifier}` 
           : '';
     
@@ -604,11 +608,15 @@ ImportDirective
       const isParserTest = callerInfo.includes('parser.test.ts');
       
       // Get the variable text directly from the variable node
-      const variableText = variable.type === 'TextVar' 
+      const variableText = variable.valueType === 'text' 
         ? `{{${variable.identifier}}}` 
-        : variable.type === 'DataVar' 
-          ? `{{${variable.identifier}${variable.fields.map(f => '.' + f.value).join('')}}}` 
-          : variable.type === 'PathVar' 
+        : variable.valueType === 'data' 
+          ? `{{${variable.identifier}${variable.fields.map(f => {
+              if (f.type === 'field') return '.' + f.value;
+              if (f.type === 'index') return typeof f.value === 'string' ? `[${JSON.stringify(f.value)}]` : `[${f.value}]`;
+              return '';
+            }).join('')}}}` 
+          : variable.valueType === 'path' 
             ? `$${variable.identifier}` 
             : '';
       
@@ -621,7 +629,7 @@ ImportDirective
       }
       
       // Check if this is a path variable
-      const isPathVar = variable.type === 'PathVar';
+      const isPathVar = variable.valueType === 'path';
       
       // For path variables, use validatePath
       if (isPathVar) {
@@ -693,11 +701,15 @@ ImportDirective
       const isParserTest = callerInfo.includes('parser.test.ts');
       
       // Get the variable text directly from the variable node
-      const variableText = variable.type === 'TextVar' 
+      const variableText = variable.valueType === 'text' 
         ? `{{${variable.identifier}}}` 
-        : variable.type === 'DataVar' 
-          ? `{{${variable.identifier}${variable.fields.map(f => '.' + f.value).join('')}}}` 
-          : variable.type === 'PathVar' 
+        : variable.valueType === 'data' 
+          ? `{{${variable.identifier}${variable.fields.map(f => {
+              if (f.type === 'field') return '.' + f.value;
+              if (f.type === 'index') return typeof f.value === 'string' ? `[${JSON.stringify(f.value)}]` : `[${f.value}]`;
+              return '';
+            }).join('')}}}` 
+          : variable.valueType === 'path' 
             ? `$${variable.identifier}` 
             : '';
       
@@ -711,7 +723,7 @@ ImportDirective
       }
       
       // Check if this is a path variable
-      const isPathVar = variable.type === 'PathVar';
+      const isPathVar = variable.valueType === 'path';
       
       // For path variables, use validatePath and ensure the flag is set
       if (isPathVar) {
@@ -796,15 +808,15 @@ EmbedDirective
     // This allows syntax like @embed {{variable}}
     
     // Get the variable text directly from the variable node
-    const variableText = variable.type === 'TextVar' 
+    const variableText = variable.valueType === 'text' 
       ? `{{${variable.identifier}}}` 
-      : variable.type === 'DataVar' 
+      : variable.valueType === 'data' 
         ? `{{${variable.identifier}${variable.fields.map(f => {
             if (f.type === 'field') return '.' + f.value;
             if (f.type === 'index') return typeof f.value === 'string' ? `[${JSON.stringify(f.value)}]` : `[${f.value}]`;
             return '';
           }).join('')}}}` 
-        : variable.type === 'PathVar' 
+        : variable.valueType === 'path' 
           ? `$${variable.identifier}` 
           : '';
     
@@ -821,8 +833,8 @@ EmbedDirective
       }, location());
     }
     
-    // PathVar is a special case - we should use validatePath to handle it
-    if (variable.type === 'PathVar') {
+    // Path variables are a special case - we should use validatePath to handle them
+    if (variable.valueType === 'path') {
       return createDirective('embed', {
         path: validatePath(variableText),
         ...(options ? { options } : {}),
@@ -841,8 +853,8 @@ EmbedDirective
           // Add structured field with variables for backward compatibility
           structured: {
             variables: {
-              text: variable.type === 'TextVar' ? [variable.identifier] : 
-                    variable.type === 'DataVar' ? [variable.identifier] : []
+              text: variable.valueType === 'text' ? [variable.identifier] : 
+                    variable.valueType === 'data' ? [variable.identifier] : []
             }
           },
           ...(options ? { options } : {}),
