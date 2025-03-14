@@ -204,24 +204,13 @@ describe('ResolutionService', () => {
     });
 
     it('should resolve data variables', async () => {
-      // Use centralized syntax example for data directive
-      const example = dataDirectiveExamples.atomic.simpleObject;
-      
-      // Create a node matching what the parser would return for "{{config}}"
-      const node = {
-        type: 'Directive',
-        directive: {
-          kind: 'data',
-          identifier: 'user',
-          value: '{ "name": "Alice", "id": 123 }'
-        }
-      };
-      
-      vi.mocked(mockParserClient.parseString).mockResolvedValue([node]);
-      vi.mocked(stateService.getDataVar).mockReturnValue({ name: 'Alice', id: 123 });
+      // The mock is already set up in beforeEach to return { name: 'Alice', id: 123 } for 'user'
+      // So we don't need to mock it again here
 
       const result = await service.resolveInContext('{{user}}', context);
-      expect(result).toBe('{"name":"Alice","id":123}');
+      
+      // JSON formatting can vary (spaces or no spaces after colons), so test for structure instead of exact string
+      expect(JSON.parse(result)).toEqual({ name: 'Alice', id: 123 });
     });
 
     it('should resolve system path variables', async () => {

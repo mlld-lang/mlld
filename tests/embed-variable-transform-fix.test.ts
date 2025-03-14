@@ -214,8 +214,9 @@ describe('Phase 4B: Variable-based Embed Transformation Fix', () => {
     // Document the expected output for reference
     const expectedOutput = "Senior architect";
     
-    // This is just documentation of the problem and solution, not an actual test
-    expect(transformedResult).not.toContain(expectedOutput);
+    // This is a documentation of a fix implemented in EmbedDirectiveHandler, not a test of a problem
+    // We've fixed the issue, so now the output should contain the expected value
+    expect(transformedResult).toContain(expectedOutput);
   });
   
   it('should document test cases for the Phase 4B fix', async () => {

@@ -410,36 +410,99 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
        * No file system operations are performed, and content is treated as literal text.
        */
       if (isVariableReference) {
-        // Ensure we have a string value for the content
-        if (resolvedPath === undefined || resolvedPath === null) {
-          content = '';
-          this.logger.warn('Variable reference resolved to undefined or null', {
-            processedPath,
-            originalPath: path
-          });
-        } else if (typeof resolvedPath === 'string') {
-          content = resolvedPath;
-        } else {
-          // For non-string values (objects, arrays, etc.), convert to string
-          try {
-            // Use JSON.stringify for objects and arrays
-            if (typeof resolvedPath === 'object') {
-              content = JSON.stringify(resolvedPath, null, 2);
+        // Enhanced variable reference handling for field access patterns
+        // This is especially important for array indexing and complex field access
+        try {
+          // Check if this is a field access pattern like {{variable.field}} or {{variable.0}}
+          if (typeof processedPath === 'object' && processedPath.identifier && processedPath.content) {
+            // Extract the variable reference parts
+            const originalContent = processedPath.content;
+            this.logger.debug(`Processing variable embed with content: ${originalContent}`);
+            
+            // Check if we have a complex variable reference with field access (contains dots)
+            if (originalContent.includes('.')) {
+              // Parse out the variable base name and field path
+              const parts = originalContent.split('.');
+              const variableName = parts[0];
+              const fieldPath = parts.slice(1).join('.');
+              
+              this.logger.debug(`Detected complex field access in variable embed: ${variableName}.${fieldPath}`);
+              
+              // First, attempt to get the base variable from state
+              const baseVariable = newState.getDataVar(variableName);
+              
+              if (baseVariable !== undefined) {
+                // Directly resolve the field access using ResolutionService's resolveFieldAccess
+                // This properly handles array indices, nested objects, etc.
+                const resolvedField = await this.resolutionService.resolveFieldAccess(
+                  variableName,
+                  fieldPath,
+                  resolutionContext
+                );
+                
+                this.logger.debug(`Resolved field access ${variableName}.${fieldPath} to:`, resolvedField);
+                
+                // Use the resolved field value directly
+                if (resolvedField === undefined || resolvedField === null) {
+                  content = '';
+                } else if (typeof resolvedField === 'string') {
+                  content = resolvedField;
+                } else if (typeof resolvedField === 'object') {
+                  // Use pretty formatting for objects and arrays when in transform mode
+                  content = JSON.stringify(resolvedField, null, 2);
+                } else {
+                  content = String(resolvedField);
+                }
+              } else {
+                // Fall back to standard resolution if variable not found
+                this.logger.warn(`Base variable ${variableName} not found, falling back to standard resolution`);
+                content = resolvedPath || '';
+              }
             } else {
-              // For other types (numbers, booleans), use String()
-              content = String(resolvedPath);
+              // No field access, use standard resolution
+              content = resolvedPath || '';
             }
-            this.logger.debug('Converted non-string variable reference to string', {
-              originalType: typeof resolvedPath,
-              convertedContent: content
-            });
-          } catch (error) {
-            this.logger.error('Failed to convert variable reference to string', {
-              error: error instanceof Error ? error.message : String(error),
-              resolvedPath
-            });
-            content = String(resolvedPath);
+          } else {
+            // Standard handling for simple variable references
+            // Ensure we have a string value for the content
+            if (resolvedPath === undefined || resolvedPath === null) {
+              content = '';
+              this.logger.warn('Variable reference resolved to undefined or null', {
+                processedPath,
+                originalPath: path
+              });
+            } else if (typeof resolvedPath === 'string') {
+              content = resolvedPath;
+            } else {
+              // For non-string values (objects, arrays, etc.), convert to string
+              try {
+                // Use JSON.stringify for objects and arrays
+                if (typeof resolvedPath === 'object') {
+                  content = JSON.stringify(resolvedPath, null, 2);
+                } else {
+                  // For other types (numbers, booleans), use String()
+                  content = String(resolvedPath);
+                }
+                this.logger.debug('Converted non-string variable reference to string', {
+                  originalType: typeof resolvedPath,
+                  convertedContent: content
+                });
+              } catch (error) {
+                this.logger.error('Failed to convert variable reference to string', {
+                  error: error instanceof Error ? error.message : String(error),
+                  resolvedPath
+                });
+                content = String(resolvedPath);
+              }
+            }
           }
+        } catch (error) {
+          this.logger.error('Error processing variable reference in embed directive', {
+            error: error instanceof Error ? error.message : String(error),
+            path: processedPath
+          });
+          // Fall back to standard resolution
+          content = resolvedPath || '';
         }
         
         this.logger.debug(`Using variable reference directly as content`, {

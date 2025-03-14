@@ -22,6 +22,9 @@ import {
 } from '@core/syntax/types/variables';
 import { VariableResolutionErrorFactory } from './error-factory.js';
 
+// Define a format context type
+type FormatContext = 'inline' | 'block';
+
 // Type guard functions
 function isTextNode(node: MeldNode): node is TextNode {
   return node.type === 'Text' && 'content' in node;
@@ -708,8 +711,7 @@ export class VariableReferenceResolver {
   }
 
   /**
-   * Convert a value to string representation with context-aware formatting
-   * Public to allow use by client interfaces
+   * Convert a value to a string representation
    * 
    * @param value The value to convert to string
    * @param formattingContext Optional formatting context to control output format
@@ -738,28 +740,91 @@ export class VariableReferenceResolver {
     if (isVariableReferenceNode(value)) {
       return value.identifier;
     }
+    
+    // Determine the formatting context
+    const formatContext: FormatContext = formattingContext?.isBlock ? 'block' : 'inline';
+    const formatOutput = formattingContext?.isBlock || 
+                        formattingContext?.nodeType === 'embed' || 
+                        !formattingContext; // Default to formatted output for direct reference
 
-    // Handle arrays
+    // Delegate to the enhanced private method
+    return this.formatValueAsString(value, formatOutput, formatContext);
+  }
+
+  /**
+   * Convert a value to string representation with context-aware formatting
+   * Private helper method used by convertToString
+   * 
+   * @param value The value to convert to string
+   * @param formatOutput Whether to format the output (true for block format, false for inline)
+   * @param formatContext Optional formatting context to control output format
+   * @returns Formatted string representation
+   */
+  private formatValueAsString(value: any, formatOutput = false, formatContext: FormatContext = 'inline'): string {
+    if (value === null || value === undefined) {
+      return String(value);
+    }
+
     if (Array.isArray(value)) {
-      // Special handling for block formatting - pretty print arrays
-      if (formattingContext?.isBlock) {
+      // Determine if this array should be pretty-printed based on content and context
+      const shouldPrettyPrint = formatContext === 'block' || this.shouldArrayBePrettyPrinted(value);
+      
+      if (shouldPrettyPrint && formatOutput) {
+        // Pretty print the array with indentation for better readability
         return JSON.stringify(value, null, 2);
+      } else {
+        // For inline arrays, ensure proper spacing after commas
+        return '[' + value.map(item => this.formatValueAsString(item, formatOutput)).join(', ') + ']';
       }
-      // Default inline formatting - comma-separated with space
-      return value.map(item => this.convertToString(item)).join(', ');
     }
 
-    // Handle objects
     if (typeof value === 'object') {
-      // Special handling for block formatting
-      if (formattingContext?.isBlock) {
-        return JSON.stringify(value, null, 2);
+      try {
+        if (formatContext === 'block' && formatOutput) {
+          // Pretty print objects in block context
+          return JSON.stringify(value, null, 2);
+        } else {
+          // For inline objects, ensure consistent formatting
+          const result = JSON.stringify(value);
+          // If formatOutput is true, we want to make sure the JSON is readable
+          return formatOutput ? this.formatJsonString(result) : result;
+        }
+      } catch (error) {
+        console.error('Error stringifying object:', error);
+        return '[Object]';
       }
-      return JSON.stringify(value);
     }
 
-    // Handle primitives
     return String(value);
+  }
+
+  /**
+   * Helper method to determine if an array should be pretty-printed
+   * based on its contents (e.g., contains complex objects)
+   */
+  private shouldArrayBePrettyPrinted(arr: any[]): boolean {
+    if (arr.length === 0) return false;
+    
+    // Check if array contains complex objects that would benefit from pretty printing
+    return arr.some(item => {
+      if (typeof item === 'object' && item !== null) {
+        return Object.keys(item).length > 1 || 
+               (Object.keys(item).length === 1 && typeof Object.values(item)[0] === 'object');
+      }
+      return false;
+    });
+  }
+
+  /**
+   * Format a JSON string to be more readable in inline context
+   * Ensures spaces after colons and commas
+   */
+  private formatJsonString(jsonStr: string): string {
+    return jsonStr
+      .replace(/,"/g, ', "')  // Add space after commas
+      .replace(/:{/g, ': {')  // Add space after colons followed by object
+      .replace(/:\[/g, ': [') // Add space after colons followed by array
+      .replace(/":"/g, '": "'); // Add space after colon in key-value pairs
   }
   
   /**

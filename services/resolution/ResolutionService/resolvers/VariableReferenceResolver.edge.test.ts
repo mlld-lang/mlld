@@ -550,8 +550,11 @@ describe('VariableReferenceResolver Edge Cases', () => {
       console.log('Error details:', error);
       expect(error).toBeInstanceOf(MeldResolutionError);
       // Check for the actual error message format used by the resolver
-      expect(error.message).toContain('Field email not found in variable data');
-      expect(error.message).toContain('email');
+      // Updated to expect the enhanced error format that includes available keys
+      expect(error.message).toContain('Field email');
+      expect(error.message).toContain('not found in variable data');
+      expect(error.message).toContain('Available keys:');
+      expect(error.message).toContain('name');
     }
   });
 
