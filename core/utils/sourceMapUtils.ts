@@ -4,9 +4,9 @@
  * Utility functions for working with source maps and enhancing errors with source location information.
  */
 
-import { sourceMapService, SourceLocation } from './SourceMapService.js';
+import { sourceMapService, SourceLocation } from '@core/utils/SourceMapService.js';
 import { MeldError, MeldErrorOptions, ErrorSeverity } from '@core/errors/MeldError.js';
-import { logger } from './logger.js';
+import { logger } from '@core/utils/logger.js';
 
 /**
  * Extract line and column numbers from an error message

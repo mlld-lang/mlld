@@ -1,6 +1,6 @@
-import { DirectiveNode, MeldNode, TextNode, CodeFenceNode } from './nodes';
-import { VariableReferenceNode } from './variables';
-import { Parser } from './parser';
+import { DirectiveNode, MeldNode, TextNode, CodeFenceNode } from '@core/syntax/types/nodes.js';
+import { VariableReferenceNode } from '@core/syntax/types/variables.js';
+import { Parser } from '@core/syntax/types/parser.js';
 
 export interface Example {
   input: string;

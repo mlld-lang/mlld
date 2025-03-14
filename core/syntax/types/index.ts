@@ -10,16 +10,16 @@ import {
   NodeType,
   SourceLocation,
   DirectiveData
-} from './nodes';
-import { DirectiveKind, CommandDefinition, CommandMetadata, RiskLevel } from './directives';
-import { MultiLineBlock } from './syntax';
-import { Parser, ParserTestCase } from './parser';
+} from '@core/syntax/types/nodes.js';
+import { DirectiveKind, CommandDefinition, CommandMetadata, RiskLevel } from '@core/syntax/types/directives.js';
+import { MultiLineBlock } from '@core/syntax/types/syntax.js';
+import { Parser, ParserTestCase } from '@core/syntax/types/parser.js';
 import {
   ValidationError,
   ValidationContext,
   ValidationResult,
   Example
-} from './validation';
+} from '@core/syntax/types/validation.js';
 import {
   VariableType,
   Field,
@@ -32,7 +32,7 @@ import {
   ENV_VAR_PREFIX,
   VAR_PATTERNS,
   // Legacy variable node types have been removed
-} from './variables';
+} from '@core/syntax/types/variables.js';
 
 // Re-export all imported types
 export {

@@ -1,13 +1,13 @@
 import { 
   MeldParseError, 
   ErrorSeverity 
-} from '../errors';
+} from '@core/errors.js';
 import { 
   createExample, 
   createInvalidExample, 
   combineExamples,
   SyntaxExampleGroup 
-} from './helpers';
+} from '@core/syntax/helpers.js';
 
 /**
  * Collection of atomic code fence examples

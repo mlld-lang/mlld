@@ -5,7 +5,7 @@
  * enabling better error reporting by mapping error locations back to their original source.
  */
 
-import { logger } from './logger.js';
+import { logger } from '@core/utils/logger.js';
 import { injectable, singleton } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
 

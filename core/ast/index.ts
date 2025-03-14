@@ -1,8 +1,8 @@
-import { parse } from './parser.js';
-import type { MeldNode } from '@core/syntax/types';
-import { MeldAstError, ParseErrorCode } from './types.js';
-import type { ParseResult, ParserOptions } from './types.js';
-import { parse as grammarParse, SyntaxError } from './grammar/index.js';
+import { parse } from '@core/ast/parser.js';
+import type { MeldNode } from '@core/syntax/types.js';
+import { MeldAstError, ParseErrorCode } from '@core/ast/types.js';
+import type { ParseResult, ParserOptions } from '@core/ast/types.js';
+import { parse as grammarParse, SyntaxError } from '@core/ast/grammar/index.js';
 
 // Core functionality
 export { parse };

@@ -1,5 +1,5 @@
-import { meld } from '@core/syntax/helpers/dedent';
-import { SyntaxExample, InvalidSyntaxExample } from '@core/syntax/helpers/types';
+import { meld } from '@core/syntax/helpers/dedent.js';
+import { SyntaxExample, InvalidSyntaxExample } from '@core/syntax/helpers/types.js';
 
 /**
  * Creates a valid syntax example

@@ -1,17 +1,17 @@
 import { 
   MeldParseError
-} from '@core/errors';
+} from '@core/errors.js';
 import { 
   DirectiveError,
   DirectiveErrorCode
 } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
-import { ErrorSeverity } from '@core/errors';
+import { ErrorSeverity } from '@core/errors.js';
 import { 
   createExample, 
   createInvalidExample, 
   combineExamples,
   SyntaxExampleGroup 
-} from '@core/syntax/helpers';
+} from '@core/syntax/helpers.js';
 
 /**
  * Collection of atomic @run directive examples

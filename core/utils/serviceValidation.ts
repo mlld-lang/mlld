@@ -1,5 +1,5 @@
-import { SERVICE_DEPENDENCIES, ServiceName, TransformationCapableService } from '../types/dependencies.js';
-import { ServiceInitializationError, ServiceInitializationErrorCode } from '../errors/ServiceInitializationError.js';
+import { SERVICE_DEPENDENCIES, ServiceName, TransformationCapableService } from '@core/types/dependencies.js';
+import { ServiceInitializationError, ServiceInitializationErrorCode } from '@core/errors/ServiceInitializationError.js';
 import { Services } from '@services/types.js';
 
 /**

@@ -3,7 +3,7 @@ import {
   combineExamples,
   SyntaxExampleGroup,
   createInvalidExample
-} from './helpers';
+} from '@core/syntax/helpers.js';
 import { ErrorSeverity } from '@core/errors/index.js';
 import { DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 

@@ -1,4 +1,4 @@
-import type { MeldNode } from '@core/syntax/types';
+import type { MeldNode } from '@core/syntax/types.js';
 import type {
   DirectiveNode,
   TextNode,
@@ -24,7 +24,7 @@ import type {
   ValidationResult,
   Example,
   VariableReferenceNode
-} from '@core/syntax/types';
+} from '@core/syntax/types.js';
 
 /**
  * Creates a new AST node that conforms to the meld-spec type definitions.

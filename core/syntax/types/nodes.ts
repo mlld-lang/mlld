@@ -1,6 +1,6 @@
-import { DirectiveKind } from './directives';
-import { MultiLineBlock } from './syntax';
-import { VariableType, Field, VariableReferenceNode } from './variables';
+import { DirectiveKind } from '@core/syntax/types/directives.js';
+import { MultiLineBlock } from '@core/syntax/types/syntax.js';
+import { VariableType, Field, VariableReferenceNode } from '@core/syntax/types/variables.js';
 
 export interface SourceLocation {
   start: { line: number; column: number };

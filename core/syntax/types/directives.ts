@@ -1,5 +1,5 @@
-import { DirectiveNode, DirectiveData } from './nodes';
-import { StructuredPath } from './nodes';
+import { DirectiveNode, DirectiveData } from '@core/syntax/types/nodes.js';
+import { StructuredPath } from '@core/syntax/types/nodes.js';
 
 export type DirectiveKind = 
   | 'run'

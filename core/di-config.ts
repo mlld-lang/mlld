@@ -2,35 +2,35 @@ import 'reflect-metadata';
 import { container } from 'tsyringe';
 
 // Import all service classes that need explicit registration
-import { ResolutionService } from '../services/resolution/ResolutionService/ResolutionService.js';
-import { StateService } from '../services/state/StateService/StateService.js';
-import { StateFactory } from '../services/state/StateService/StateFactory.js';
-import { StateEventService } from '../services/state/StateEventService/StateEventService.js';
-import { FileSystemService } from '../services/fs/FileSystemService/FileSystemService.js';
-import { ParserService } from '../services/pipeline/ParserService/ParserService.js';
-import { InterpreterService } from '../services/pipeline/InterpreterService/InterpreterService.js';
-import { DirectiveService } from '../services/pipeline/DirectiveService/DirectiveService.js';
-import { PathService } from '../services/fs/PathService/PathService.js';
-import { ProjectPathResolver } from '../services/fs/ProjectPathResolver.js';
-import { ErrorDisplayService } from '../services/display/ErrorDisplayService/ErrorDisplayService.js';
-import { ValidationService } from '../services/resolution/ValidationService/ValidationService.js';
-import { CircularityService } from '../services/resolution/CircularityService/CircularityService.js';
-import { StateTrackingService } from '../tests/utils/debug/StateTrackingService/StateTrackingService.js';
-import { PathOperationsService } from '../services/fs/FileSystemService/PathOperationsService.js';
-import { NodeFileSystem } from '../services/fs/FileSystemService/NodeFileSystem.js';
-import { SourceMapService, sourceMapService } from '../core/utils/SourceMapService.js';
-import { CLIService, DefaultPromptService } from '../services/cli/CLIService/CLIService.js';
-import { PathServiceClientFactory } from '../services/fs/PathService/factories/PathServiceClientFactory.js';
-import { FileSystemServiceClientFactory } from '../services/fs/FileSystemService/factories/FileSystemServiceClientFactory.js';
-import { ParserServiceClientFactory } from '../services/pipeline/ParserService/factories/ParserServiceClientFactory.js';
-import { ResolutionServiceClientFactory } from '../services/resolution/ResolutionService/factories/ResolutionServiceClientFactory.js';
-import { VariableReferenceResolverClientFactory } from '../services/resolution/ResolutionService/factories/VariableReferenceResolverClientFactory.js';
-import { VariableReferenceResolverFactory } from '../services/resolution/ResolutionService/factories/VariableReferenceResolverFactory.js';
-import { DirectiveServiceClientFactory } from '../services/pipeline/DirectiveService/factories/DirectiveServiceClientFactory.js';
-import { ResolutionServiceClientForDirectiveFactory } from '../services/resolution/ResolutionService/factories/ResolutionServiceClientForDirectiveFactory.js';
-import { StateServiceClientFactory } from '../services/state/StateService/factories/StateServiceClientFactory.js';
-import { StateTrackingServiceClientFactory } from '../services/state/StateTrackingService/factories/StateTrackingServiceClientFactory.js';
-import { InterpreterServiceClientFactory } from '../services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory.js';
+import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService.js';
+import { StateService } from '@services/state/StateService/StateService.js';
+import { StateFactory } from '@services/state/StateService/StateFactory.js';
+import { StateEventService } from '@services/state/StateEventService/StateEventService.js';
+import { FileSystemService } from '@services/fs/FileSystemService/FileSystemService.js';
+import { ParserService } from '@services/pipeline/ParserService/ParserService.js';
+import { InterpreterService } from '@services/pipeline/InterpreterService/InterpreterService.js';
+import { DirectiveService } from '@services/pipeline/DirectiveService/DirectiveService.js';
+import { PathService } from '@services/fs/PathService/PathService.js';
+import { ProjectPathResolver } from '@services/fs/ProjectPathResolver.js';
+import { ErrorDisplayService } from '@services/display/ErrorDisplayService/ErrorDisplayService.js';
+import { ValidationService } from '@services/resolution/ValidationService/ValidationService.js';
+import { CircularityService } from '@services/resolution/CircularityService/CircularityService.js';
+import { StateTrackingService } from '@tests/utils/debug/StateTrackingService/StateTrackingService.js';
+import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService.js';
+import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
+import { SourceMapService, sourceMapService } from '@core/utils/SourceMapService.js';
+import { CLIService, DefaultPromptService } from '@services/cli/CLIService/CLIService.js';
+import { PathServiceClientFactory } from '@services/fs/PathService/factories/PathServiceClientFactory.js';
+import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/factories/FileSystemServiceClientFactory.js';
+import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory.js';
+import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientFactory.js';
+import { VariableReferenceResolverClientFactory } from '@services/resolution/ResolutionService/factories/VariableReferenceResolverClientFactory.js';
+import { VariableReferenceResolverFactory } from '@services/resolution/ResolutionService/factories/VariableReferenceResolverFactory.js';
+import { DirectiveServiceClientFactory } from '@services/pipeline/DirectiveService/factories/DirectiveServiceClientFactory.js';
+import { ResolutionServiceClientForDirectiveFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientForDirectiveFactory.js';
+import { StateServiceClientFactory } from '@services/state/StateService/factories/StateServiceClientFactory.js';
+import { StateTrackingServiceClientFactory } from '@services/state/StateTrackingService/factories/StateTrackingServiceClientFactory.js';
+import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory.js';
 import { 
   LoggerFactory, 
   logger as mainLogger, 
@@ -47,8 +47,8 @@ import {
   importLogger,
   cliLogger,
   embedLogger
-} from '../core/utils/logger.js';
-import { Logger, fsLogger } from '../core/utils/simpleLogger.js';
+} from '@core/utils/logger.js';
+import { Logger, fsLogger } from '@core/utils/simpleLogger.js';
 
 /**
  * This file contains the configuration for dependency injection using tsyringe.

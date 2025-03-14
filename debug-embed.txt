@@ -1,30 +1,12 @@
-Before
-Line 1
-Line 2
-Line 3
-After
-EMBED DIRECTIVE DEBUG:
-Node: {
-  "type": "Directive",
-  "directive": {
-    "kind": "embed",
-    "path": "file.md"
-  },
-  "location": {
-    "start": {
-      "line": 5,
-      "column": 1
-    },
-    "end": {
-      "line": 5,
-      "column": 20
-    }
-  }
-}
-Path type: string
-Path value: "file.md"
-Is variable reference?: false
-Transformation enabled?: true
+========= TEST RUN STARTED =========
+Creating test file with variable embed
+Test file created. Content: @data role = { "architect": "Senior architect" }
+@embed {{role.architect}}
+State service info:
+State service type: object
+Added role variable directly to state
+Role: {"architect":"Senior architect"}
+Running main() with transformation mode enabled
 
 EMBED DIRECTIVE DEBUG:
 Node: {
@@ -71,6 +53,15 @@ Path type: string
 Path value: "file.md"
 Is variable reference?: false
 Transformation enabled?: true
+main() completed successfully
+Result: "
+Senior architect"
+Expected: "Senior architect"
+Actual: "
+Senior architect"
+✅ PASS: result matches expected value
+✅ PASS: result does not contain @embed directive
+========= TEST RUN ENDED =========
 
 EMBED DIRECTIVE DEBUG:
 Node: {

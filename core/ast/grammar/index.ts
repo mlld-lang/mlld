@@ -1,4 +1,4 @@
-import { MeldAstError, ParseErrorCode, ParseResult } from '../types.js';
+import { MeldAstError, ParseErrorCode, ParseResult } from '@core/ast/types.js';
 import parser from './parser.js';
 const { parse: peggyParse, SyntaxError } = parser;
 

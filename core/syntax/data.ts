@@ -2,13 +2,13 @@ import {
   MeldParseError, 
   MeldResolutionError,
   ErrorSeverity 
-} from '@core/errors';
+} from '@core/errors.js';
 import { 
   createExample, 
   createInvalidExample, 
   combineExamples,
   SyntaxExampleGroup 
-} from '@core/syntax/helpers';
+} from '@core/syntax/helpers.js';
 
 /**
  * Collection of atomic @data directive examples

@@ -1,4 +1,4 @@
-import { SchemaDefinition } from './schema';
+import { SchemaDefinition } from '@core/syntax/types/schema.js';
 
 /**
  * HTTP methods supported by API endpoints

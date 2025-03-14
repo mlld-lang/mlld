@@ -2,7 +2,7 @@ import {
   createExample, 
   combineExamples,
   SyntaxExampleGroup 
-} from './helpers';
+} from '@core/syntax/helpers.js';
 
 /**
  * Collection of simple integration examples
