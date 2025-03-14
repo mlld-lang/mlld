@@ -54,14 +54,47 @@ export interface VariableReferenceNode {
  * Type guard to check if a node is a variable reference
  */
 export function isVariableReferenceNode(node: any): node is VariableReferenceNode {
-  return (
+  // Check for new-style VariableReference nodes
+  if (
     node &&
     node.type === 'VariableReference' &&
     typeof node.identifier === 'string' &&
     typeof node.isVariableReference === 'boolean' &&
     node.isVariableReference === true &&
     (node.valueType === 'text' || node.valueType === 'data' || node.valueType === 'path')
-  );
+  ) {
+    return true;
+  }
+  
+  // Check for legacy TextVar nodes
+  if (
+    node &&
+    node.type === 'TextVar' &&
+    typeof node.identifier === 'string'
+  ) {
+    return true;
+  }
+  
+  // Check for legacy DataVar nodes
+  if (
+    node &&
+    node.type === 'DataVar' &&
+    typeof node.identifier === 'string' &&
+    Array.isArray(node.fields)
+  ) {
+    return true;
+  }
+  
+  // Check for legacy PathVar nodes
+  if (
+    node &&
+    node.type === 'PathVar' &&
+    typeof node.identifier === 'string'
+  ) {
+    return true;
+  }
+  
+  return false;
 }
 
 /**

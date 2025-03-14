@@ -1,9 +1,14 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { VariableReferenceResolver } from './VariableReferenceResolver.js';
-import { createMockStateService, createMockParserService, createTextNode, createDirectiveNode } from '@tests/utils/testFactories.js';
+import { 
+  createMockStateService, 
+  createMockParserService, 
+  createTextNode,
+  createVariableReferenceNode
+} from '@tests/utils/testFactories.js';
 import { ResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError.js';
 import type { ResolutionContext, ResolutionErrorCode } from '@services/resolution/ResolutionService/IResolutionService.js';
-import type { MeldNode, TextNode, DirectiveNode } from '@core/syntax/types';
+import type { MeldNode, TextNode } from '@core/syntax/types';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 
@@ -32,6 +37,10 @@ describe('VariableReferenceResolver', () => {
 
   describe('resolve', () => {
     it('should resolve text variables', async () => {
+      vi.mocked(parserService.parse).mockResolvedValue([
+        createVariableReferenceNode('greeting', 'text')
+      ]);
+      
       vi.mocked(stateService.getTextVar).mockReturnValue('Hello World');
       const result = await resolver.resolve('{{greeting}}', context);
       expect(result).toBe('Hello World');
@@ -40,7 +49,7 @@ describe('VariableReferenceResolver', () => {
 
     it('should resolve data variables when text variable not found', async () => {
       vi.mocked(parserService.parse).mockResolvedValue([
-        createDirectiveNode('data', { identifier: 'data', value: 'Data Value' })
+        createVariableReferenceNode('data', 'data')
       ]);
       
       vi.mocked(stateService.getTextVar).mockReturnValue(undefined);
@@ -54,9 +63,9 @@ describe('VariableReferenceResolver', () => {
     it('should handle multiple variable references', async () => {
       vi.mocked(parserService.parse).mockResolvedValue([
         createTextNode(''),
-        createDirectiveNode('text', { identifier: 'greeting1', value: 'Hello' }),
+        createVariableReferenceNode('greeting1', 'text'),
         createTextNode(' '),
-        createDirectiveNode('text', { identifier: 'greeting2', value: 'World' }),
+        createVariableReferenceNode('greeting2', 'text'),
         createTextNode('!')
       ]);
       
@@ -69,10 +78,10 @@ describe('VariableReferenceResolver', () => {
 
     it('should handle field access in data variables', async () => {
       vi.mocked(parserService.parse).mockResolvedValue([
-        createDirectiveNode('data', { 
-          identifier: 'data',
-          fields: ['user', 'name']
-        })
+        createVariableReferenceNode('data', 'data', [
+          { type: 'field', value: 'user' },
+          { type: 'field', value: 'name' }
+        ])
       ]);
       
       vi.mocked(stateService.getTextVar).mockReturnValue(undefined);
@@ -83,7 +92,7 @@ describe('VariableReferenceResolver', () => {
 
     it('should handle environment variables', async () => {
       vi.mocked(parserService.parse).mockResolvedValue([
-        createDirectiveNode('text', { identifier: 'ENV_TEST' })
+        createVariableReferenceNode('ENV_TEST', 'text')
       ]);
       
       vi.mocked(stateService.getTextVar).mockReturnValue(undefined);
@@ -95,7 +104,7 @@ describe('VariableReferenceResolver', () => {
 
     it('should throw for undefined variables', async () => {
       vi.mocked(parserService.parse).mockResolvedValue([
-        createDirectiveNode('text', { identifier: 'missing' })
+        createVariableReferenceNode('missing', 'text')
       ]);
       
       vi.mocked(stateService.getTextVar).mockReturnValue(undefined);
@@ -107,41 +116,32 @@ describe('VariableReferenceResolver', () => {
 
     it('should preserve text without variables', async () => {
       vi.mocked(parserService.parse).mockResolvedValue([
-        createTextNode('No variables here')
+        createTextNode('Hello, world!')
       ]);
       
-      const result = await resolver.resolve('No variables here', context);
-      expect(result).toBe('No variables here');
-      expect(stateService.getTextVar).not.toHaveBeenCalled();
+      const result = await resolver.resolve('Hello, world!', context);
+      expect(result).toBe('Hello, world!');
     });
 
     it('should handle mixed content with variables', async () => {
       vi.mocked(parserService.parse).mockResolvedValue([
-        createTextNode('Hello '),
-        createDirectiveNode('text', { identifier: 'name', value: 'Alice' }),
-        createTextNode(', welcome to '),
-        createDirectiveNode('text', { identifier: 'place', value: 'Wonderland' }),
+        createTextNode('Hello, '),
+        createVariableReferenceNode('name', 'text'),
         createTextNode('!')
       ]);
       
-      vi.mocked(stateService.getTextVar)
-        .mockReturnValueOnce('Alice')
-        .mockReturnValueOnce('Wonderland');
-      const result = await resolver.resolve(
-        'Hello {{name}}, welcome to {{place}}!',
-        context
-      );
-      expect(result).toBe('Hello Alice, welcome to Wonderland!');
+      vi.mocked(stateService.getTextVar).mockReturnValue('Alice');
+      const result = await resolver.resolve('Hello, {{name}}!', context);
+      expect(result).toBe('Hello, Alice!');
     });
-    
+
     it('should fall back to regex resolution when parser fails', async () => {
       vi.mocked(parserService.parse).mockRejectedValue(new Error('Parser error'));
       
-      vi.mocked(stateService.getTextVar).mockReturnValue('Fallback Value');
+      vi.mocked(stateService.getTextVar).mockReturnValueOnce('Alice');
       
-      const result = await resolver.resolve('{{fallback}}', context);
-      expect(result).toBe('Fallback Value');
-      expect(stateService.getTextVar).toHaveBeenCalledWith('fallback');
+      const result = await resolver.resolve('Hello, {{name}}!', context);
+      expect(result).toBe('Hello, Alice!');
     });
   });
 

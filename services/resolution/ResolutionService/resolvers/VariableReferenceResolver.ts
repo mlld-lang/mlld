@@ -197,11 +197,46 @@ export class VariableReferenceResolver {
             // Text node - add content as is
             result += node.content;
           } else if (isVariableReferenceNode(node)) {
-            // Variable reference - resolve it
+            // Get variable information based on node type
             const varName = node.identifier;
+            let varType: string;
+            let fields: any[] | undefined;
+            
+            // Handle both new VariableReference and legacy variable nodes
+            if (node.type === 'VariableReference') {
+              varType = node.valueType;
+              fields = node.fields;
+            } else if (node.type === 'TextVar') {
+              varType = 'text';
+              fields = node.fields;
+            } else if (node.type === 'DataVar') {
+              varType = 'data';
+              fields = node.fields;
+            } else if (node.type === 'PathVar') {
+              varType = 'path';
+              fields = undefined;
+            } else {
+              // Should never happen due to isVariableReferenceNode check
+              logger.warn('Unknown variable node type', { nodeType: node.type });
+              if (context.strict) {
+                throw new MeldResolutionError(
+                  `Unknown variable node type: ${node.type}`,
+                  {
+                    code: ResolutionErrorCode.INVALID_NODE_TYPE,
+                    severity: ErrorSeverity.Fatal,
+                    details: { 
+                      type: node.type,
+                      value: content,
+                      context: JSON.stringify(context)
+                    }
+                  }
+                );
+              }
+              continue;
+            }
             
             // Check if this is a field access
-            if (node.fields && node.fields.length > 0) {
+            if (fields && fields.length > 0) {
               // Get the base variable
               const value = await this.getVariable(varName, context);
               if (value === undefined) {
@@ -215,7 +250,7 @@ export class VariableReferenceResolver {
               
               // Access fields
               try {
-                const fieldValue = await this.accessFields(value, node.fields, context, varName);
+                const fieldValue = await this.accessFields(value, fields, context, varName);
                 result += this.convertToString(fieldValue);
               } catch (error) {
                 if (context.strict) {
@@ -530,9 +565,30 @@ export class VariableReferenceResolver {
 
       // Parse the variable reference
       const { baseName, fields } = this.parseVariableReference(match[1]);
-      nodes.push(createVariableReferenceNode(baseName, 'text', fields));
+      
+      // Determine if this is a data var (has fields) or text var (no fields)
+      const valueType = fields && fields.length > 0 ? 'data' : 'text';
+      nodes.push(createVariableReferenceNode(baseName, valueType, fields));
 
       lastIndex = match.index + match[0].length;
+    }
+
+    // Check for path variables ($var) as well
+    const pathVarRegex = /\$([A-Za-z0-9_~]+)/g;
+    while ((match = pathVarRegex.exec(content.slice(lastIndex))) !== null) {
+      // Add text before the path variable if any
+      const actualIndex = lastIndex + match.index;
+      if (actualIndex > lastIndex) {
+        nodes.push({
+          type: 'Text',
+          content: content.slice(lastIndex, actualIndex)
+        } as TextNode);
+      }
+
+      // Create path variable node
+      nodes.push(createVariableReferenceNode(match[1], 'path', undefined));
+      
+      lastIndex = actualIndex + match[0].length;
     }
 
     // Add remaining text if any
@@ -923,14 +979,34 @@ export class VariableReferenceResolver {
       // If all else fails, try to resolve directly
       const nodes = await this.parseContent(reference);
       if (nodes.length === 1 && isVariableReferenceNode(nodes[0])) {
-        const node = nodes[0];
-        const value = await this.getVariable(node.identifier, context);
+        const node = nodes[0] as any; // Cast to any to avoid type errors
+        const varName = node.identifier;
+        
+        // Get variable value
+        const value = await this.getVariable(varName, context);
         if (value === undefined) {
           if (context.strict) {
-            throw VariableResolutionErrorFactory.variableNotFound(node.identifier);
+            throw VariableResolutionErrorFactory.variableNotFound(varName);
           }
           return '';
         }
+        
+        // Handle fields access for both new and legacy node types
+        if ((node.type === 'VariableReference' && node.fields && node.fields.length > 0) ||
+            (node.type === 'DataVar' && node.fields && node.fields.length > 0) ||
+            (node.type === 'TextVar' && node.fields && node.fields.length > 0)) {
+          const fields = node.fields;
+          try {
+            const fieldValue = await this.accessFields(value, fields, context, varName);
+            return this.convertToString(fieldValue);
+          } catch (error) {
+            if (context.strict) {
+              throw error;
+            }
+            return '';
+          }
+        }
+        
         return this.convertToString(value);
       }
       
@@ -946,7 +1022,7 @@ export class VariableReferenceResolver {
       // Track resolution error if tracking is enabled
       if (this.resolutionTracker) {
         this.resolutionTracker.trackResolutionAttempt(
-          'nested-variable-error',
+          'nested-variable-resolution-error',
           JSON.stringify({
             reference,
             context: JSON.stringify(context)
@@ -957,7 +1033,6 @@ export class VariableReferenceResolver {
         );
       }
       
-      // Rethrow to maintain behavior
       throw error;
     }
   }

@@ -730,4 +730,69 @@ export function createMockPathService(): IPathService {
   mockService.relative.mockImplementation(() => '');
 
   return mockService as unknown as IPathService;
+}
+
+/**
+ * Create a variable reference node for testing
+ */
+export function createVariableReferenceNode(
+  identifier: string,
+  valueType: 'text' | 'data' | 'path',
+  fields?: Array<{ type: 'field' | 'index', value: string | number }>,
+  location: Location = DEFAULT_LOCATION
+) {
+  return {
+    type: 'VariableReference',
+    identifier,
+    valueType,
+    isVariableReference: true,
+    ...(fields ? { fields } : {}),
+    location
+  };
+}
+
+/**
+ * Create a text variable reference node for testing (backward compatibility)
+ */
+export function createTextVarNode(
+  identifier: string,
+  fields?: Array<{ type: 'field' | 'index', value: string | number }>,
+  location: Location = DEFAULT_LOCATION
+) {
+  return {
+    type: 'TextVar',
+    identifier,
+    ...(fields ? { fields } : {}),
+    location
+  };
+}
+
+/**
+ * Create a data variable reference node for testing (backward compatibility)
+ */
+export function createDataVarNode(
+  identifier: string,
+  fields: Array<{ type: 'field' | 'index', value: string | number }> = [],
+  location: Location = DEFAULT_LOCATION
+) {
+  return {
+    type: 'DataVar',
+    identifier,
+    fields,
+    location
+  };
+}
+
+/**
+ * Create a path variable reference node for testing (backward compatibility)
+ */
+export function createPathVarNode(
+  identifier: string,
+  location: Location = DEFAULT_LOCATION
+) {
+  return {
+    type: 'PathVar',
+    identifier,
+    location
+  };
 } 
