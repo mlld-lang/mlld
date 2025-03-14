@@ -2,19 +2,19 @@
   "name": "meld",
   "version": "11.0.0",
   "description": "Meld: A template language for LLM prompts",
-  "type": "commonjs",
+  "type": "module",
   "main": "dist/index.cjs",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
-      "require": {
-        "types": "./dist/index.d.ts",
-        "default": "./dist/index.cjs"
-      },
       "import": {
         "types": "./dist/index.d.ts",
         "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.cjs"
       }
     }
   },
@@ -50,6 +50,9 @@
     "prepare-main": "node scripts/prepare-main.js",
     "sync-dev": "node scripts/sync-dev-branch.js",
     "sync-main-to-dev": "node scripts/sync-main-to-dev.js",
+    "fix:imports": "node scripts/fix-module-imports.js",
+    "fix:imports:dry": "node scripts/fix-module-imports.js --dry-run",
+    "fix:imports:verbose": "node scripts/fix-module-imports.js --verbose",
     "bump": "node scripts/bump-version.js",
     "bump:patch": "node scripts/bump-version.js patch",
     "bump:minor": "node scripts/bump-version.js minor",

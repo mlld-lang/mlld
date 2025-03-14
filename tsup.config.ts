@@ -70,6 +70,11 @@ const getEsbuildOptions = (format: string) => (options: any) => {
   // Optimize for DI-based code
   options.keepNames = true; // Required for reflection-based DI
   
+  // Ensure proper JS extension handling for imports
+  options.resolveExtensions = ['.ts', '.tsx', '.js', '.jsx', '.json'];
+  options.format = format;
+  options.target = 'es2020';
+  
   return options;
 };
 
@@ -92,7 +97,8 @@ export default defineConfig([
     outDir: 'dist',
     outExtension({ format }) {
       return {
-        js: format === 'cjs' ? '.cjs' : '.mjs'
+        js: format === 'cjs' ? '.cjs' : '.mjs',
+        dts: '.d.ts'
       }
     },
     tsconfig: 'tsconfig.build.json',
@@ -104,7 +110,7 @@ export default defineConfig([
       return getEsbuildOptions(format)(options);
     }
   },
-  // CLI build - CJS only
+  // CLI build - CJS only but with ESM compatibility
   {
     entry: {
       cli: 'cli/cli-entry.ts',
@@ -121,7 +127,8 @@ export default defineConfig([
     outDir: 'dist',
     outExtension({ format }) {
       return {
-        js: '.cjs'
+        js: '.cjs',
+        dts: '.d.ts'
       }
     },
     tsconfig: 'tsconfig.build.json',

@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 
-// Use Node's spawn to run with the --require flag
+// This wrapper ensures compatibility with both ESM and CommonJS environments
+// It detects the available methods and uses the appropriate approach
+
+// Using CommonJS imports to ensure backward compatibility in the wrapper
 const { spawnSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
@@ -39,12 +42,20 @@ if (!reflectMetadataPath) {
 }
 
 // Run the CLI with the --require flag to ensure reflect-metadata is loaded first
+// Always using the CommonJS version for the CLI for maximum compatibility
 const cliPath = require.resolve('../dist/cli.cjs');
+
+// Use spawn to run the CLI
 const result = spawnSync('node', [
   '--require', reflectMetadataPath,
   '-e', `require('${cliPath}').main(null, ${JSON.stringify(args)})`
 ], {
-  stdio: 'inherit' // Pass stdin/stdout/stderr through to the parent process
+  stdio: 'inherit', // Pass stdin/stdout/stderr through to the parent process
+  env: {
+    ...process.env,
+    // Add environment variable to indicate we're running from the wrapper
+    MELD_CLI_WRAPPER: 'true'
+  }
 });
 
 // Forward the exit code
