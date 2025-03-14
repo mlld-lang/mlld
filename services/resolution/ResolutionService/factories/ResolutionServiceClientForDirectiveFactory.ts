@@ -1,8 +1,9 @@
 import { injectable, inject } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
-import { IResolutionService } from '../IResolutionService.js';
+import { IResolutionService, ResolutionContext, StructuredPath } from '../IResolutionService.js';
 import { IResolutionServiceClientForDirective } from '../interfaces/IResolutionServiceClientForDirective.js';
 import { resolutionLogger as logger } from '@core/utils/logger.js';
+import { MeldNode } from '@core/syntax/types';
 
 /**
  * Factory for creating resolution service clients for DirectiveService
@@ -27,23 +28,23 @@ export class ResolutionServiceClientForDirectiveFactory {
     logger.debug('Creating ResolutionServiceClientForDirective');
     
     return {
-      resolveText: (text, context) => {
+      resolveText: (text: string, context: ResolutionContext): Promise<string> => {
         return this.resolutionService.resolveText(text, context);
       },
       
-      resolveData: (ref, context) => {
+      resolveData: (ref: string, context: ResolutionContext): Promise<any> => {
         return this.resolutionService.resolveData(ref, context);
       },
       
-      resolvePath: (path, context) => {
+      resolvePath: (path: string, context: ResolutionContext): Promise<string> => {
         return this.resolutionService.resolvePath(path, context);
       },
       
-      resolveContent: (nodes, context) => {
+      resolveContent: (nodes: MeldNode[], context: ResolutionContext): Promise<string> => {
         return this.resolutionService.resolveContent(nodes, context);
       },
       
-      resolveInContext: (value, context) => {
+      resolveInContext: (value: string | StructuredPath, context: ResolutionContext): Promise<string> => {
         return this.resolutionService.resolveInContext(value, context);
       }
     };

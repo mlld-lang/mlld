@@ -1,6 +1,6 @@
 import { injectable, inject } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
-import { IResolutionService } from '../IResolutionService.js';
+import { IResolutionService, ResolutionContext, StructuredPath } from '../IResolutionService.js';
 import { IResolutionServiceClient } from '../interfaces/IResolutionServiceClient.js';
 import { resolutionLogger as logger } from '@core/utils/logger.js';
 
@@ -27,24 +27,28 @@ export class ResolutionServiceClientFactory {
     logger.debug('Creating ResolutionServiceClient');
     
     return {
-      resolveVariables: async (value, context) => {
+      resolveVariables: async (value: string, context: ResolutionContext): Promise<string> => {
         // This is a private method in ResolutionService, but we're exposing it through the client
         // The actual implementation will delegate to the private method
         return this.resolutionService.resolveInContext(value, context);
       },
-      resolveVariableReference: async (reference, options) => {
+      
+      resolveVariableReference: async (reference: string, context: ResolutionContext): Promise<string> => {
         // Use resolveInContext for variable references
-        return this.resolutionService.resolveInContext(reference, options);
+        return this.resolutionService.resolveInContext(reference, context);
       },
-      extractSection: (content, heading, options) => {
+      
+      extractSection: (content: string, heading: string, fuzzyThreshold?: number): Promise<string> => {
         // Use extractSection from the resolution service
-        return this.resolutionService.extractSection(content, heading, options || 0.7);
+        return this.resolutionService.extractSection(content, heading, fuzzyThreshold);
       },
-      resolveText: async (text, context) => {
+      
+      resolveText: async (text: string, context: ResolutionContext): Promise<string> => {
         // Use resolveText from the resolution service
         return this.resolutionService.resolveText(text, context);
       },
-      resolveInContext: async (reference, context) => {
+      
+      resolveInContext: async (reference: string | StructuredPath, context: ResolutionContext): Promise<string> => {
         // Use resolveInContext from the resolution service
         return this.resolutionService.resolveInContext(reference, context);
       }
