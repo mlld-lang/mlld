@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { TestHelpers, TestContextDI } from '@tests/utils/di.js';
+import { TestHelpers, TestContextDI } from '@tests/utils/di/index.js';
 
 // Mock service implementation
 class MockService {
