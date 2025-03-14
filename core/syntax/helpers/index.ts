@@ -75,7 +75,7 @@ export function combineExamples(
  */
 export async function createNodeFromExample(code: string): Promise<any> {
   try {
-    const { parse } = await import('meld-ast');
+    const { parse } = await import('@core/ast');
     const result = await parse(code, {
       trackLocations: true,
       validateNodes: true,

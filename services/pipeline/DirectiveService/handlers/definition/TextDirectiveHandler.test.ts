@@ -31,11 +31,11 @@ import {
  */
 
 /**
- * Helper function to create real AST nodes using meld-ast
+ * Helper function to create real AST nodes using @core/ast
  */
 const createNodeFromExample = async (code: string): Promise<DirectiveNode> => {
   try {
-    const { parse } = await import('meld-ast');
+    const { parse } = await import('@core/ast');
     
     const result = await parse(code, {
       trackLocations: true,
@@ -45,7 +45,7 @@ const createNodeFromExample = async (code: string): Promise<DirectiveNode> => {
     
     return result.ast[0] as DirectiveNode;
   } catch (error) {
-    console.error('Error parsing with meld-ast:', error);
+    console.error('Error parsing with @core/ast:', error);
     throw error;
   }
 };

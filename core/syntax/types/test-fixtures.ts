@@ -199,7 +199,17 @@ export const importTests: ParserTestCase[] = [
       type: 'Directive',
       directive: {
         kind: 'import',
-        path: 'utilities.meld'
+        imports: [{ name: '*', alias: null }],
+        path: {
+          raw: 'utilities.meld',
+          normalized: './utilities.meld',
+          structured: {
+            base: '.',
+            cwd: true,
+            segments: ['utilities.meld'],
+            variables: {}
+          }
+        }
       }
     }
   },
@@ -211,11 +221,18 @@ export const importTests: ParserTestCase[] = [
       type: 'Directive',
       directive: {
         kind: 'import',
+        imports: [{ name: '*', alias: null }],
         path: {
           raw: '$pathvar',
+          normalized: './$pathvar',
+          isPathVariable: true,
           structured: {
-            base: '$pathvar',
-            segments: []
+            base: '.',
+            cwd: false,
+            segments: ['$pathvar'],
+            variables: {
+              path: ['pathvar']
+            }
           }
         }
       }
@@ -229,11 +246,17 @@ export const importTests: ParserTestCase[] = [
       type: 'Directive',
       directive: {
         kind: 'import',
+        imports: [{ name: '*', alias: null }],
         path: {
           raw: '$HOMEPATH/config.meld',
+          normalized: '$HOMEPATH/config.meld',
           structured: {
             base: '$HOMEPATH',
-            segments: ['config.meld']
+            cwd: false,
+            segments: ['config.meld'],
+            variables: {
+              special: ['HOMEPATH']
+            }
           }
         }
       }
@@ -292,6 +315,7 @@ export const textTests: ParserTestCase[] = [
       directive: {
         kind: 'text',
         identifier: 'greeting',
+        source: 'literal',
         value: 'Hello, world!'
       }
     }

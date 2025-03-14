@@ -1,6 +1,6 @@
 /// <reference types="vitest" />
 import { describe, it, expect } from 'vitest';
-import { parse } from '../../src/parser.js';
+import { parse } from '@core/ast/parser';
 
 describe('directives/@import with named imports', () => {
   describe('valid cases', () => {

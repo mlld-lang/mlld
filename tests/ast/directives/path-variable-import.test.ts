@@ -1,5 +1,5 @@
 /// <reference types="vitest" />
-import { parse } from '../../src/index';
+import { parse } from '@core/ast';
 import { expect, describe, it } from 'vitest';
 import { DirectiveNode } from '../../src/types';
 

@@ -1,44 +1,31 @@
-# Meld AST Parser
+# Meld AST
 
-This module provides the core AST parser functionality for Meld.
+This directory contains the Abstract Syntax Tree (AST) implementation for Meld, which was previously a separate package (`meld-ast`). It provides the parser and grammar for Meld syntax.
 
-## Overview
+## Migration Details
 
-The Meld AST parser converts Meld documents into an Abstract Syntax Tree (AST) that can be processed by the interpreter. This module was consolidated from the previously separate `meld-ast` package.
+The code in this directory was migrated from the separate `meld-ast` package and consolidated into the main codebase. This integration simplifies dependency management and makes it easier to maintain and evolve the AST implementation alongside the rest of the Meld project.
+
+Key components:
+- `grammar/` - Contains the Peggy grammar definition and compiled parser
+- `ast/` - Contains AST type definitions
+- `parser.ts` - Main parser implementation
+- `types.ts` - Error and parser type definitions
+
+## Testing
+
+Tests for the AST implementation have been migrated to `/tests/ast/` directory, maintaining the same structure and coverage as the original package.
+
+## Build Process
+
+The grammar is compiled using a build script located at `/scripts/build-grammar.mjs`. This script is executed as part of the build process.
 
 ## Usage
 
 ```typescript
 import { parse } from '@core/ast';
 
-// Parse a Meld document
-const document = `@text greeting = "Hello, world!"`;
-const nodes = await parse(document);
-
-// The nodes variable will contain an array of MeldNode objects
-console.log(nodes);
+const input = '{{ variable }}';
+const result = await parse(input);
+// `result.ast` contains the parsed AST nodes
 ```
-
-## Features
-
-- Fast and flexible PEG.js-based parser
-- Support for all Meld directive types
-- Location tracking for error reporting
-- Configurable validation options
-
-## Architecture
-
-The parser is composed of the following key components:
-
-1. **Grammar Definition**: Uses PEG.js to define the grammar rules (`meld.pegjs`)
-2. **Parser**: Converts raw text into AST nodes
-3. **Type Definitions**: Shares type definitions with the core syntax module
-4. **Error Handling**: Provides detailed error information for syntax issues
-
-## Building
-
-The grammar is compiled using the Peggy parser generator. The build process is handled by the main project build scripts.
-
-## Integration
-
-This module is intended to be used by the ParserService, which provides a higher-level interface for the rest of the application.

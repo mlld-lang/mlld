@@ -6,6 +6,7 @@ import type {
   DirectiveNode,
   VariableReferenceNode 
 } from '@core/syntax/types';
+import { parse } from '@core/ast';  // Import the parse function directly
 import { parserLogger as logger } from '@core/utils/logger.js';
 import { MeldParseError } from '@core/errors/MeldParseError.js';
 import type { Location, Position } from '@core/types/index.js';
@@ -140,9 +141,7 @@ export class ParserService implements IParserService {
 
   private async parseContent(content: string, filePath?: string): Promise<MeldNode[]> {
     try {
-      // Use require for better build compatibility
-      const coreAst = require('@core/ast');
-      const { parse } = coreAst;
+      // parse is already imported at the top of the file
       const options = {
         failFast: true,
         trackLocations: true,
@@ -169,6 +168,7 @@ export class ParserService implements IParserService {
         }
       }
 
+      // Parse the content
       const result = await parse(content, options);
       
       // Transform old variable node types into consolidated type

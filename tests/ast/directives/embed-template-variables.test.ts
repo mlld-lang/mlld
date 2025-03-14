@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parse } from '../../src';
+import { parse } from '@core/ast';
 
 describe('Embed directive with double brackets and variables', () => {
   it('should handle text variables in double bracket content', async () => {

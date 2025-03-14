@@ -41,7 +41,7 @@ import {
  */
 const createNodeFromExample = async (exampleCode: string): Promise<DirectiveNode> => {
   try {
-    const { parse } = await import('meld-ast');
+    const { parse } = await import('@core/ast');
     
     const result = await parse(exampleCode, {
       trackLocations: true,
@@ -50,7 +50,7 @@ const createNodeFromExample = async (exampleCode: string): Promise<DirectiveNode
     
     return result.ast[0] as DirectiveNode;
   } catch (error) {
-    console.error('Error parsing with meld-ast:', error);
+    console.error('Error parsing with @core/ast:', error);
     throw error;
   }
 };

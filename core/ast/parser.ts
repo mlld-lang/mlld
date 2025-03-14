@@ -148,6 +148,27 @@ function validateNodes(nodes: MeldNode[], errors: MeldAstError[]): void {
           }
           break;
 
+        case 'VariableReference':
+          if (typeof (node as any).identifier !== 'string') {
+            throw new Error('VariableReference node missing identifier');
+          }
+          if (typeof (node as any).valueType !== 'string' || 
+              !['text', 'data', 'path'].includes((node as any).valueType)) {
+            throw new Error('VariableReference node has invalid valueType');
+          }
+          if ((node as any).fields && !Array.isArray((node as any).fields)) {
+            throw new Error('VariableReference node fields must be an array');
+          }
+          // If fields are present, check their structure
+          if ((node as any).fields && Array.isArray((node as any).fields)) {
+            for (const field of (node as any).fields) {
+              if (typeof field !== 'object' || (field.type !== 'field' && field.type !== 'index') || !('value' in field)) {
+                throw new Error('VariableReference node has invalid field structure');
+              }
+            }
+          }
+          break;
+
         case 'Directive':
           if (!(node as any).directive || typeof (node as any).directive !== 'object') {
             throw new Error('Directive node missing directive object');

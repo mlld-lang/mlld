@@ -1,5 +1,7 @@
+// Import directly from core/ast
 export { parse, MeldAstError } from '@core/ast';
 
+// Export all the necessary types
 export type { 
   MeldNode,
   DirectiveNode,
