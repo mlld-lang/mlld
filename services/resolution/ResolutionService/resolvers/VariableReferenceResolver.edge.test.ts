@@ -1,6 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { VariableReferenceResolver } from './VariableReferenceResolver.js';
-import { createMockStateService, createMockParserService } from '@tests/utils/testFactories.js';
+import { 
+  createMockStateService, 
+  createMockParserService, 
+  createVariableReferenceNode,
+  createTextNode
+} from '@tests/utils/testFactories.js';
 import type { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
@@ -45,65 +50,88 @@ describe('VariableReferenceResolver Edge Cases', () => {
       ]
     });
     
-    vi.mocked(parserService.parse).mockResolvedValue([{
-      type: 'VariableReference',
-      identifier: 'data',
-      fields: [
+    vi.mocked(parserService.parse).mockResolvedValue([
+      createVariableReferenceNode('data', 'data', [
         { type: 'field', value: 'items' },
         { type: 'index', value: 1 },
         { type: 'field', value: 'name' }
-      ]
-    }]);
+      ])
+    ]);
     
-    const result = await resolver.resolve('{{data.items.1.name}}', context);
+    const result = await resolver.resolve('{{data.items[1].name}}', context);
     expect(result).toBe('item2');
   });
 
-  // Test for parser service fallback
   it('should fall back to parser client when parser service fails', async () => {
-    vi.mocked(parserService.parse).mockRejectedValueOnce(new Error('Parse failed'));
-    vi.mocked(stateService.getTextVar).mockReturnValue('Fallback Success');
+    vi.mocked(parserService.parse).mockRejectedValue(new Error('Parser service failed'));
     
-    const result = await resolver.resolve('{{fallback}}', context);
-    expect(result).toBe('Fallback Success');
+    vi.mocked(stateService.getTextVar).mockReturnValue('Hello');
+    
+    const result = await resolver.resolve('{{greeting}}', context);
+    expect(result).toBe('Hello');
   });
 
-  // Test for data variables with field access
   it('should handle data variables with field access through string concatenation', async () => {
-    vi.mocked(stateService.getDataVar).mockReturnValue({ 
-      key1: 'value1', 
-      key2: 'value2' 
+    // Mock state service to return a data object
+    vi.mocked(stateService.getDataVar).mockReturnValue({
+      key1: 'value1',
+      key2: 'value2'
     });
+    
+    // Mock parser to return a data variable with field access
+    vi.mocked(parserService.parse).mockResolvedValue([
+      createVariableReferenceNode('data', 'data', [
+        { type: 'field', value: 'key2' }
+      ])
+    ]);
     
     const result = await resolver.resolve('{{data.key2}}', context);
     expect(result).toBe('value2');
   });
 
-  // Test for error details in field access errors
   it('should provide detailed error information for field access failures', async () => {
-    vi.mocked(stateService.getDataVar).mockReturnValue({ user: {} });
+    vi.mocked(stateService.getDataVar).mockReturnValue({
+      user: {}
+    });
     
-    await expect(resolver.resolveFieldAccess('data', 'user.name', context))
-      .rejects.toHaveProperty('message');
+    vi.mocked(parserService.parse).mockResolvedValue([
+      createVariableReferenceNode('data', 'data', [
+        { type: 'field', value: 'user' },
+        { type: 'field', value: 'name' }
+      ])
+    ]);
+    
+    try {
+      await resolver.resolve('{{data.user.name}}', { ...context, strict: true });
+      fail('Should have thrown an error');
+    } catch (error) {
+      expect(error).toBeInstanceOf(MeldResolutionError);
+      expect(error.message).toContain('Cannot access field');
+      expect(error.message).toContain('name');
+    }
   });
-  
-  // Test for error handling with strict mode off
+
   it('should return empty string for missing fields when strict mode is off', async () => {
-    const nonStrictContext = { ...context, strict: false };
-    vi.mocked(stateService.getDataVar).mockReturnValue({ user: {} });
+    vi.mocked(stateService.getDataVar).mockReturnValue({
+      user: {}
+    });
     
-    const result = await resolver.resolve('{{data.user.name}}', nonStrictContext);
+    vi.mocked(parserService.parse).mockResolvedValue([
+      createVariableReferenceNode('data', 'data', [
+        { type: 'field', value: 'user' },
+        { type: 'field', value: 'name' }
+      ])
+    ]);
+    
+    const result = await resolver.resolve('{{data.user.name}}', { ...context, strict: false });
     expect(result).toBe('');
   });
-  
-  // Test for error handling in nested variable resolution
+
   it('should handle errors in nested variable resolution', async () => {
-    // Mock a failing resolution service
-    vi.mocked(resolutionService.resolveInContext).mockRejectedValue(
-      new Error('Failed to resolve nested variable')
-    );
+    // Mock resolveInContext to throw
+    vi.mocked(resolutionService.resolveInContext).mockRejectedValue(new Error('Nested error'));
     
-    await expect(resolver.resolveNestedVariableReference('{{var_{{nested}}}}', context))
+    await expect(resolver.resolve('{{var_{{nested}}}}', context))
       .rejects.toThrow();
   });
 });

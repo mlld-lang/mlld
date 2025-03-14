@@ -235,39 +235,44 @@ export class VariableReferenceResolver {
               continue;
             }
             
-            // Check if this is a field access
-            if (fields && fields.length > 0) {
-              // Get the base variable
-              const value = await this.getVariable(varName, context);
-              if (value === undefined) {
-                // Variable not found
-                if (context.strict) {
-                  throw VariableResolutionErrorFactory.variableNotFound(varName);
-                }
-                result += '';
-                continue;
+            // Get variable value
+            const value = await this.getVariable(varName, context);
+            
+            // Handle undefined variables
+            if (value === undefined) {
+              logger.debug(`Variable '${varName}' not found`);
+              
+              // For strict mode, throw an error
+              if (context.strict) {
+                throw VariableResolutionErrorFactory.variableNotFound(varName);
               }
               
-              // Access fields
+              // For non-strict mode, just use empty string
+              result += '';
+              continue;
+            }
+            
+            // Check if this is a field access
+            if (fields && fields.length > 0) {
               try {
                 const fieldValue = await this.accessFields(value, fields, context, varName);
                 result += this.convertToString(fieldValue);
               } catch (error) {
+                // For strict mode, rethrow the error
                 if (context.strict) {
                   throw error;
                 }
+                
+                // For non-strict mode, log and continue with empty string
+                logger.warn('Error accessing fields', {
+                  variable: varName,
+                  fields,
+                  error: error instanceof Error ? error.message : String(error)
+                });
                 result += '';
               }
             } else {
-              // Simple variable reference
-              const value = await this.getVariable(varName, context);
-              if (value === undefined) {
-                if (context.strict) {
-                  throw VariableResolutionErrorFactory.variableNotFound(varName);
-                }
-                result += '';
-                continue;
-              }
+              // Simple variable reference without fields
               result += this.convertToString(value);
             }
           } else {
