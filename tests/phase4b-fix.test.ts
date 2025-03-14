@@ -1,6 +1,6 @@
 import { describe, it } from 'vitest';
 import { outputLogger } from '@core/utils/logger.js';
-import type { TextNode, DirectiveNode } from 'meld-spec';
+import type { TextNode, DirectiveNode } from '@core/syntax/types';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 
 describe('Phase 4B: Implementation Plan for Variable-based Embed Transformations', () => {

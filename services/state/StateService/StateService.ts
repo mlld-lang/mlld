@@ -1,4 +1,4 @@
-import type { MeldNode, TextNode } from 'meld-spec';
+import type { MeldNode, TextNode } from '@core/syntax/types';
 import { stateLogger as logger } from '@core/utils/logger.js';
 import type { IStateService, TransformationOptions } from './IStateService.js';
 import type { StateNode, CommandDefinition } from './types.js';

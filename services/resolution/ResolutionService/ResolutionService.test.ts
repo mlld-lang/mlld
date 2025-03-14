@@ -6,7 +6,7 @@ import { IParserService } from '@services/pipeline/ParserService/IParserService.
 import { IPathService } from '@services/fs/PathService/IPathService.js';
 import { ResolutionContext } from './IResolutionService.js';
 import { ResolutionError } from './errors/ResolutionError.js';
-import type { MeldNode, DirectiveNode, TextNode } from 'meld-spec';
+import type { MeldNode, DirectiveNode, TextNode } from '@core/syntax/types';
 // Import centralized syntax examples and helpers
 import { 
   textDirectiveExamples, 

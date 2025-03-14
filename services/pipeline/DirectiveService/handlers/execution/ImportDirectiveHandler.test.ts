@@ -8,7 +8,7 @@ import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSys
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 import type { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
 import type { ICircularityService } from '@services/resolution/CircularityService/ICircularityService.js';
-import type { DirectiveNode } from 'meld-spec';
+import type { DirectiveNode } from '@core/syntax/types';
 import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
 import { MeldResolutionError, ResolutionErrorDetails } from '@core/errors/MeldResolutionError.js';

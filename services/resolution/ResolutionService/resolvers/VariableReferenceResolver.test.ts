@@ -3,7 +3,7 @@ import { VariableReferenceResolver } from './VariableReferenceResolver.js';
 import { createMockStateService, createMockParserService, createTextNode, createDirectiveNode } from '@tests/utils/testFactories.js';
 import { ResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError.js';
 import type { ResolutionContext, ResolutionErrorCode } from '@services/resolution/ResolutionService/IResolutionService.js';
-import type { MeldNode, TextNode, DirectiveNode } from 'meld-spec';
+import type { MeldNode, TextNode, DirectiveNode } from '@core/syntax/types';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 

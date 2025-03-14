@@ -1,4 +1,4 @@
-import type { DirectiveNode, DirectiveKind, DirectiveData } from 'meld-spec';
+import type { DirectiveNode, DirectiveKind, DirectiveData } from '@core/syntax/types';
 import { directiveLogger } from '../../../core/utils/logger.js';
 import { IDirectiveService, IDirectiveHandler, DirectiveContext } from './IDirectiveService.js';
 import { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';

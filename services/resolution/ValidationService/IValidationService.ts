@@ -1,4 +1,4 @@
-import type { DirectiveNode } from 'meld-spec';
+import type { DirectiveNode } from '@core/syntax/types';
 
 /**
  * Service responsible for validating directive nodes against schemas and constraints.

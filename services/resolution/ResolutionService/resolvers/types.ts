@@ -1,4 +1,4 @@
-import type { MeldNode } from 'meld-spec';
+import type { MeldNode } from '@core/syntax/types';
 
 /**
  * Represents a field access in a variable reference
@@ -25,6 +25,7 @@ export interface VariableReferenceNode extends MeldNode {
   type: 'VariableReference';
   identifier: string;
   fields?: Field[];
+  isVariableReference: boolean;
 }
 
 /**

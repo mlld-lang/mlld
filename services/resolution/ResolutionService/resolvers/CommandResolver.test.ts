@@ -4,7 +4,7 @@ import { IStateService } from '@services/state/StateService/IStateService.js';
 import { ResolutionContext, ResolutionErrorCode } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { ResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError.js';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
-import { MeldNode, DirectiveNode, TextNode } from 'meld-spec';
+import { MeldNode, DirectiveNode, TextNode } from '@core/syntax/types';
 import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 import { createMockParserService, createDirectiveNode, createTextNode } from '@tests/utils/testFactories.js';

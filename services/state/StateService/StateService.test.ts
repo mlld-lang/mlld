@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { StateService } from './StateService.js';
 import { StateFactory } from './StateFactory.js';
-import type { MeldNode } from 'meld-spec';
+import type { MeldNode } from '@core/syntax/types';
 import type { IStateEventService, StateEvent } from '../StateEventService/IStateEventService.js';
 import type { IStateTrackingService } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
 import { StateTrackingService } from '@tests/utils/debug/StateTrackingService/StateTrackingService.js';

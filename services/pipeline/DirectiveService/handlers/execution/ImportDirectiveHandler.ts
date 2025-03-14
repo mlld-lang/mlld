@@ -1,4 +1,4 @@
-import { DirectiveNode, MeldNode, TextNode } from 'meld-spec';
+import { DirectiveNode, MeldNode, TextNode } from '@core/syntax/types';
 import type { DirectiveContext, IDirectiveHandler } from '@services/pipeline/DirectiveService/IDirectiveService.js';
 import type { DirectiveResult } from '@services/pipeline/DirectiveService/types.js';
 import { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';

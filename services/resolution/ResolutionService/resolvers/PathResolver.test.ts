@@ -3,7 +3,7 @@ import { PathResolver } from './PathResolver.js';
 import { IStateService } from '@services/state/StateService/IStateService.js';
 import { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { ResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError.js';
-import type { MeldNode, DirectiveNode, TextNode, StructuredPath } from 'meld-spec';
+import type { MeldNode, DirectiveNode, TextNode, StructuredPath } from '@core/syntax/types';
 import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
 
 describe('PathResolver', () => {

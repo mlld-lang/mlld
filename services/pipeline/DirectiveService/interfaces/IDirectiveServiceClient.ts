@@ -1,4 +1,4 @@
-import { DirectiveNode } from 'meld-spec';
+import { DirectiveNode } from '@core/syntax/types';
 
 /**
  * Client interface for DirectiveService functionality needed by other services

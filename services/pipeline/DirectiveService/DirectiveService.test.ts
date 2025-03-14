@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { DirectiveService } from './DirectiveService.js';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { DirectiveError, DirectiveErrorCode } from './errors/DirectiveError.js';
-import type { DirectiveNode } from 'meld-spec';
+import type { DirectiveNode } from '@core/syntax/types';
 import { IDirectiveService } from './IDirectiveService.js';
 import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
 import { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';

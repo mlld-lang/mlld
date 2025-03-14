@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import type { DirectiveNode, DirectiveContext } from 'meld-spec';
+import type { DirectiveNode, DirectiveContext } from '@core/syntax/types';
 import { RunDirectiveHandler } from './RunDirectiveHandler.js';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';

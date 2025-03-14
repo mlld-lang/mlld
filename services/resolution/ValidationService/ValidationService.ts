@@ -1,4 +1,4 @@
-import type { DirectiveNode } from 'meld-spec';
+import type { DirectiveNode } from '@core/syntax/types';
 import { validationLogger as logger } from '@core/utils/logger.js';
 import { IValidationService } from './IValidationService.js';
 import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';

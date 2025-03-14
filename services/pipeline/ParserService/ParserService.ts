@@ -1,5 +1,5 @@
 import { IParserService } from './IParserService.js';
-import type { MeldNode, CodeFenceNode, TextNode } from 'meld-spec';
+import type { MeldNode, CodeFenceNode, TextNode } from '@core/syntax/types';
 import { parserLogger as logger } from '@core/utils/logger.js';
 import { MeldParseError } from '@core/errors/MeldParseError.js';
 import type { Location, Position } from '@core/types/index.js';

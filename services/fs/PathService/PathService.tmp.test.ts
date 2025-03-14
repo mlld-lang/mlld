@@ -3,7 +3,7 @@ import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { PathService } from './PathService.js';
 import { PathValidationError, PathErrorCode } from './errors/PathValidationError.js';
 import type { Location } from '@core/types/index.js';
-import type { StructuredPath } from 'meld-spec';
+import type { StructuredPath } from '@core/syntax/types';
 import { PathErrorMessages } from '@core/errors/messages/paths.js';
 
 describe('PathService Temporary Path Rules', () => {

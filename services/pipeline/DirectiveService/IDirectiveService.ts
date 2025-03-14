@@ -1,4 +1,4 @@
-import { DirectiveNode } from 'meld-spec';
+import { DirectiveNode } from '@core/syntax/types';
 import { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import type { IPathService } from '@services/fs/PathService/IPathService.js';

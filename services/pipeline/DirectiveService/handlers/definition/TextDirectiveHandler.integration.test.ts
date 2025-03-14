@@ -3,7 +3,7 @@ import { TextDirectiveHandler } from './TextDirectiveHandler.js';
 import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { ResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError.js';
 import { ResolutionErrorCode } from '@services/resolution/ResolutionService/IResolutionService.js';
-import type { DirectiveNode } from 'meld-spec';
+import type { DirectiveNode } from '@core/syntax/types';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import { ErrorCollector } from '@tests/utils/ErrorTestUtils.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';

@@ -3,7 +3,7 @@ import { DataResolver } from './DataResolver.js';
 import { IStateService } from '@services/state/StateService/IStateService.js';
 import { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { ResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError.js';
-import { MeldNode } from 'meld-spec';
+import { MeldNode } from '@core/syntax/types';
 import { createTestText, createTestDirective } from '@tests/utils/nodeFactories.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';

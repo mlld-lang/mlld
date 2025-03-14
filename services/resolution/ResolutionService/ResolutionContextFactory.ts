@@ -9,6 +9,24 @@ export class ResolutionContextFactory {
   private static readonly SPECIAL_PATH_VARS = ['HOMEPATH', 'PROJECTPATH'];
 
   /**
+   * Create a generic resolution context
+   * Allows all variable types and nested interpolation by default
+   */
+  static create(filePath?: string, state?: IStateService): ResolutionContext {
+    return {
+      currentFilePath: filePath,
+      allowedVariableTypes: {
+        text: true,
+        data: true,
+        path: true,
+        command: true
+      },
+      allowNested: true,
+      ...(state && { state })
+    };
+  }
+
+  /**
    * Create context for @text directives
    * Allows all variable types and nested interpolation
    */

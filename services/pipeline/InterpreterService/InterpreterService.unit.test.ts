@@ -1,7 +1,7 @@
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import type { Mocked } from 'vitest';
 import { InterpreterService } from '@services/pipeline/InterpreterService/InterpreterService.js';
-import type { MeldNode, TextNode, DirectiveNode } from 'meld-spec';
+import type { MeldNode, TextNode, DirectiveNode } from '@core/syntax/types';
 import { MeldInterpreterError } from '@core/errors/MeldInterpreterError.js';
 import { DependencyContainer } from 'tsyringe';
 import { TestContainerHelper } from '@tests/utils/di/TestContainerHelper.js';

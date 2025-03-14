@@ -1,4 +1,4 @@
-import type { MeldNode } from 'meld-spec';
+import type { MeldNode } from '@core/syntax/types';
 import { injectable } from 'tsyringe';
 import { Service } from '@core/ServiceProvider';
 

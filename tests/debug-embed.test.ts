@@ -3,7 +3,7 @@ import { main } from '@api/index.js';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import type { Services } from '@core/types/index.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { MeldNode, DirectiveNode, TextNode } from 'meld-spec';
+import type { MeldNode, DirectiveNode, TextNode } from '@core/syntax/types';
 import { EmbedDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler.js';
 import { OutputService } from '@services/pipeline/OutputService/OutputService.js';
 

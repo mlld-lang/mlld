@@ -3,7 +3,7 @@ import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { MeldInterpreterError } from '@core/errors/MeldInterpreterError.js';
 import { DirectiveError } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { MeldImportError } from '@core/errors/MeldImportError.js';
-import type { TextNode, MeldNode, DirectiveNode } from 'meld-spec';
+import type { TextNode, MeldNode, DirectiveNode } from '@core/syntax/types';
 // Import centralized syntax helpers
 import { createNodeFromExample } from '@core/syntax/helpers';
 // Import relevant examples

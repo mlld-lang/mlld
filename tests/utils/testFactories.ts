@@ -4,7 +4,7 @@ import type {
   TextNode, 
   CodeFenceNode,
   DirectiveKindString
-} from 'meld-spec';
+} from '@core/syntax/types';
 import type { Location, Position } from '@core/types.js';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';

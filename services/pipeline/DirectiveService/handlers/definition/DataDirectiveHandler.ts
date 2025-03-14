@@ -1,4 +1,4 @@
-import { DirectiveNode, DirectiveData } from 'meld-spec';
+import { DirectiveNode, DirectiveData } from '@core/syntax/types';
 // Define interfaces matching the meld-ast structure for data directives
 interface DataDirective extends DirectiveData {
   kind: 'data';

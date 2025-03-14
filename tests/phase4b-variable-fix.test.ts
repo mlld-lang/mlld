@@ -3,7 +3,7 @@ import { main } from '@api/index.js';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import type { Services } from '@core/types/index.js';
 import * as fs from 'fs';
-import type { DirectiveNode } from 'meld-spec';
+import type { DirectiveNode } from '@core/syntax/types';
 import { outputLogger as logger } from '@core/utils/logger.js';
 
 describe('Phase 4B: Variable-based Embed Transform Fix', () => {

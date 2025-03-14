@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { StateService } from './StateService.js';
 import { migrateState, validateMigration } from './migration.js';
-import type { MeldNode } from 'meld-spec';
+import type { MeldNode } from '@core/syntax/types';
 import type { StateNode } from './types.js';
 
 describe('State Migration', () => {

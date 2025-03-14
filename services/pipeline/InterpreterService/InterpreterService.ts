@@ -1,4 +1,4 @@
-import type { MeldNode, SourceLocation, DirectiveNode } from 'meld-spec';
+import type { MeldNode, SourceLocation, DirectiveNode } from '@core/syntax/types';
 import { interpreterLogger as logger } from '@core/utils/logger.js';
 import { IInterpreterService, type InterpreterOptions } from './IInterpreterService.js';
 import type { IDirectiveService } from '@services/pipeline/DirectiveService/IDirectiveService.js';

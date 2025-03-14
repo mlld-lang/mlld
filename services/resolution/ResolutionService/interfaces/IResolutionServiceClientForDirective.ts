@@ -1,4 +1,4 @@
-import { MeldNode } from 'meld-spec';
+import { MeldNode } from '@core/syntax/types';
 
 /**
  * Client interface for ResolutionService functionality needed by DirectiveService

@@ -5,7 +5,7 @@ import { OutputService } from '@services/pipeline/OutputService/OutputService.js
 import { VariableReferenceResolverClientFactory } from '@services/resolution/ResolutionService/factories/VariableReferenceResolverClientFactory.js';
 import { mockDeep } from 'vitest-mock-extended';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { TextNode } from 'meld-spec';
+import type { TextNode } from '@core/syntax/types';
 import { createLocation } from '@tests/utils/testFactories.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 

@@ -2,7 +2,7 @@ import { IDirectiveHandler, DirectiveContext } from '../../IDirectiveService.js'
 import { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import { IStateService } from '@services/state/StateService/IStateService.js';
 import { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
-import { DirectiveNode, DefineDirectiveData } from 'meld-spec';
+import { DirectiveNode, DefineDirectiveData } from '@core/syntax/types';
 import { DirectiveError, DirectiveErrorCode, DirectiveErrorSeverity } from '../../errors/DirectiveError.js';
 import { directiveLogger as logger } from '@core/utils/logger.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';

@@ -4,7 +4,7 @@ import { StateFactory } from './StateFactory.js';
 import { StateTrackingService } from '@tests/utils/debug/StateTrackingService/StateTrackingService.js';
 import { container } from 'tsyringe';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
-import type { MeldNode } from 'meld-spec';
+import type { MeldNode } from '@core/syntax/types';
 
 describe('StateService node transformation', () => {
   let service: StateService;

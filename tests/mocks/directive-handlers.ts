@@ -1,10 +1,10 @@
-import type { DirectiveNode } from 'meld-spec';
+import type { DirectiveNode } from '@core/syntax/types';
 import { injectable } from 'tsyringe';
 import { Service } from '@core/ServiceProvider';
 import { InterpreterState } from './state';
 import { MeldDirectiveError } from '@core/errors/MeldDirectiveError';
 import { vi } from 'vitest';
-import type { MeldNode } from 'meld-spec';
+import type { MeldNode } from '@core/syntax/types';
 
 /**
  * Mock handler for embed directives

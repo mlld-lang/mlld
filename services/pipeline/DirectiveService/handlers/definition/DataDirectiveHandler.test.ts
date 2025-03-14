@@ -5,7 +5,7 @@ import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
-import type { DirectiveNode } from 'meld-spec';
+import type { DirectiveNode } from '@core/syntax/types';
 import type { ResolutionContext, StructuredPath } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { DirectiveError, DirectiveErrorCode, DirectiveErrorSeverity } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { dataDirectiveExamples } from '@core/syntax';

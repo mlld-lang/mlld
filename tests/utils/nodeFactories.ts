@@ -6,7 +6,7 @@ import type {
   SourceLocation,
   DirectiveKind,
   Position
-} from 'meld-spec';
+} from '@core/syntax/types';
 
 // Default position for convenience
 const DEFAULT_POSITION: Position = { 

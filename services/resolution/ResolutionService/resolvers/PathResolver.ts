@@ -1,7 +1,7 @@
 import { IStateService } from '@services/state/StateService/IStateService.js';
 import { ResolutionContext, ResolutionErrorCode } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { ResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError.js';
-import type { MeldNode, DirectiveNode, TextNode, PathVarNode, StructuredPath } from 'meld-spec';
+import type { MeldNode, DirectiveNode, TextNode, PathVarNode, StructuredPath } from '@core/syntax/types';
 import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 

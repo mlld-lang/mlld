@@ -14,4 +14,4 @@ export type {
   NodeType,
   DirectiveKind,
   DirectiveData
-} from 'meld-spec';
+} from '@core/syntax/types';

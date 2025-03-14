@@ -3,7 +3,7 @@ import { StringLiteralHandler } from './StringLiteralHandler.js';
 import { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
-import type { MeldNode, TextNode } from 'meld-spec';
+import type { MeldNode, TextNode } from '@core/syntax/types';
 
 /**
  * Handles string concatenation operations using the ++ operator

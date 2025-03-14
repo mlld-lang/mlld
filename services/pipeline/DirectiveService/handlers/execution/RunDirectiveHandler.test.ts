@@ -12,7 +12,7 @@ vi.mock('../../../../core/utils/logger', () => ({
 
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { RunDirectiveHandler } from './RunDirectiveHandler.js';
-import type { DirectiveNode, MeldNode } from 'meld-spec';
+import type { DirectiveNode, MeldNode } from '@core/syntax/types';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';

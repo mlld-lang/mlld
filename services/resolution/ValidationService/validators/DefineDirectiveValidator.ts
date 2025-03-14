@@ -1,4 +1,4 @@
-import { DirectiveNode } from 'meld-spec';
+import { DirectiveNode } from '@core/syntax/types';
 import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
 import { DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ContentResolver } from './ContentResolver.js';
-import type { MeldNode, TextNode, CodeFenceNode, CommentNode, DirectiveNode } from 'meld-spec';
+import type { MeldNode, TextNode, CodeFenceNode, CommentNode, DirectiveNode } from '@core/syntax/types';
 import { createMockStateService } from '@tests/utils/testFactories.js';
 import { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
 

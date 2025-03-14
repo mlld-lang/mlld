@@ -1,4 +1,4 @@
-import { MeldNode } from 'meld-spec';
+import { MeldNode } from '@core/syntax/types';
 import { IStateService } from '@services/state/StateService/IStateService.js';
 import { InterpreterOptions } from '../IInterpreterService.js';
 

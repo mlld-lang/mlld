@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { mockDeep, mockReset } from 'vitest-mock-extended';
 import { OutputService } from './OutputService.js';
 import { MeldOutputError } from '@core/errors/MeldOutputError.js';
-import type { MeldNode } from 'meld-spec';
+import type { MeldNode } from '@core/syntax/types';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IResolutionService, ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
 import type { OutputFormat } from './IOutputService.js';

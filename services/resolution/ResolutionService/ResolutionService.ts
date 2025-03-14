@@ -9,7 +9,7 @@ import { ContentResolver } from './resolvers/ContentResolver.js';
 import { VariableReferenceResolver } from './resolvers/VariableReferenceResolver.js';
 import { resolutionLogger as logger } from '@core/utils/logger.js';
 import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
-import type { MeldNode, DirectiveNode, TextNode, DirectiveKind, CodeFenceNode } from 'meld-spec';
+import type { MeldNode, DirectiveNode, TextNode, DirectiveKind, CodeFenceNode } from '@core/syntax/types';
 import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
 import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';

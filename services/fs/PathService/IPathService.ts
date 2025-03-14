@@ -1,7 +1,7 @@
 import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import type { Location } from '@core/types/index.js';
 // Define StructuredPath locally instead of importing
-// import type { StructuredPath } from 'meld-spec';
+// import type { StructuredPath } from '@core/syntax/types';
 import { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 
 /**

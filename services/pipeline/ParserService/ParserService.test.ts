@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { ParserService } from './ParserService.js';
 import { MeldParseError } from '@core/errors/MeldParseError.js';
-import type { MeldNode, DirectiveNode, TextNode, CodeFenceNode } from 'meld-spec';
+import type { MeldNode, DirectiveNode, TextNode, CodeFenceNode } from '@core/syntax/types';
 import type { Location, Position } from '@core/types/index.js';
 // Import the centralized syntax examples and helpers
 import { 

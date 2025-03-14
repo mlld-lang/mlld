@@ -7,7 +7,7 @@
 import { injectable } from 'tsyringe';
 import { Service } from '@core/ServiceProvider';
 import { vi } from 'vitest';
-import type { MeldNode } from 'meld-spec';
+import type { MeldNode } from '@core/syntax/types';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
 import type { IStateService } from '@services/state/StateService/IStateService';

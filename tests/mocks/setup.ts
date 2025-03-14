@@ -1,5 +1,5 @@
 import { vi, beforeEach } from 'vitest';
-import type { DirectiveNode, MeldNode } from 'meld-spec';
+import type { DirectiveNode, MeldNode } from '@core/syntax/types';
 import { injectable } from 'tsyringe';
 import { Service } from '@core/ServiceProvider';
 import { InterpreterState } from './state';

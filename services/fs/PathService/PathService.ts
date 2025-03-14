@@ -5,7 +5,7 @@ import { ProjectPathResolver } from '../ProjectPathResolver.js';
 import type { Location } from '@core/types/index.js';
 import * as path from 'path';
 import * as os from 'os';
-import type { MeldNode } from 'meld-spec';
+import type { MeldNode } from '@core/syntax/types';
 import { 
   MeldError, 
   MeldFileNotFoundError, 
