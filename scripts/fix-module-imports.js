@@ -50,6 +50,7 @@ const EXTERNAL_MODULES = [
   'fs',
   'path',
   'util',
+  'url',
   'winston',
   'yargs',
   'memfs',
