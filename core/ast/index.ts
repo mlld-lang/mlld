@@ -35,7 +35,7 @@ export type {
   ValidationContext,
   ValidationResult,
   Example
-} from '@core/syntax/types';
+} from '@core/syntax/types/index.js';
 
 // Additional types
 export type {

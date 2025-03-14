@@ -7,52 +7,6 @@ State service type: object
 Added role variable directly to state
 Role: {"architect":"Senior architect"}
 Running main() with transformation mode enabled
-
-EMBED DIRECTIVE DEBUG:
-Node: {
-  "type": "Directive",
-  "directive": {
-    "kind": "embed",
-    "path": "file.md"
-  },
-  "location": {
-    "start": {
-      "line": 5,
-      "column": 1
-    },
-    "end": {
-      "line": 5,
-      "column": 20
-    }
-  }
-}
-Path type: string
-Path value: "file.md"
-Is variable reference?: false
-Transformation enabled?: true
-
-EMBED DIRECTIVE DEBUG:
-Node: {
-  "type": "Directive",
-  "directive": {
-    "kind": "embed",
-    "path": "file.md"
-  },
-  "location": {
-    "start": {
-      "line": 5,
-      "column": 1
-    },
-    "end": {
-      "line": 5,
-      "column": 20
-    }
-  }
-}
-Path type: string
-Path value: "file.md"
-Is variable reference?: false
-Transformation enabled?: true
 main() completed successfully
 Result: "
 Senior architect"
@@ -62,26 +16,3 @@ Senior architect"
 ✅ PASS: result matches expected value
 ✅ PASS: result does not contain @embed directive
 ========= TEST RUN ENDED =========
-
-EMBED DIRECTIVE DEBUG:
-Node: {
-  "type": "Directive",
-  "directive": {
-    "kind": "embed",
-    "path": "file.md"
-  },
-  "location": {
-    "start": {
-      "line": 5,
-      "column": 1
-    },
-    "end": {
-      "line": 5,
-      "column": 20
-    }
-  }
-}
-Path type: string
-Path value: "file.md"
-Is variable reference?: false
-Transformation enabled?: false
