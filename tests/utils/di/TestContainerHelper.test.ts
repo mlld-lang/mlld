@@ -1,6 +1,6 @@
 import { expect, describe, it, beforeEach, afterEach, vi } from 'vitest';
-import { TestContainerHelper } from './TestContainerHelper';
-import { Service } from '../../../core/ServiceProvider';
+import { TestContainerHelper } from '@tests/utils/di/TestContainerHelper.js';
+import { Service } from '@core/ServiceProvider.js';
 
 // Test classes for dependency injection
 @Service()

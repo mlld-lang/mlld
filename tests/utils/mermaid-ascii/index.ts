@@ -6,7 +6,7 @@
  */
 
 import * as fs from 'fs';
-import * as os from 'os';
+import * as os.js from 'os';
 import * as path from 'path';
 import { execSync } from 'child_process';
 import { 
@@ -14,7 +14,7 @@ import {
   isBinaryAvailable, 
   getBinaryVersion, 
   ensureBinaryAvailable 
-} from './binary';
+} from '@tests/utils/mermaid-ascii/binary.js';
 
 /**
  * Options for mermaid-ascii conversion

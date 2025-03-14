@@ -3,9 +3,9 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { TestOutputFilterService } from './TestOutputFilterService';
-import { TestOutputVerbosity } from '../StateVisualizationService/TestVisualizationManager';
-import { LogLevel, TestOutputOptions } from './ITestOutputFilterService';
+import { TestOutputFilterService } from '@tests/utils/debug/TestOutputFilterService/TestOutputFilterService.js';
+import { TestOutputVerbosity } from '@tests/utils/debug/StateVisualizationService/TestVisualizationManager.js';
+import { LogLevel, TestOutputOptions } from '@tests/utils/debug/TestOutputFilterService/ITestOutputFilterService.js';
 
 describe('TestOutputFilterService', () => {
   let originalEnv: NodeJS.ProcessEnv;

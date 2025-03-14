@@ -10,7 +10,7 @@ import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
 import path from 'path';
 import chalk from 'chalk';
 import fs from 'fs/promises';
-import { initializeContextDebugger, StateVisualizationService } from '../../tests/utils/debug/index.js';
+import { initializeContextDebugger, StateVisualizationService } from '@tests/utils/debug/index.js';
 import { IPathService } from '@services/fs/PathService/IPathService.js';
 
 // Import concrete classes for direct instantiation

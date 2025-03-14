@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { main } from './index.js';
+import { main } from '@cli/index.js';
 
 // Export the main function for programmatic use
 export { main };

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { TestContextDI } from './TestContextDI';
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { 
   getService, 
   getServiceSync,
@@ -8,8 +8,8 @@ import {
   createServiceSync,
   createDiagnosticReport, 
   createTestSetup
-} from './TestServiceUtilities';
-import { MockValidationService } from './MockServices';
+} from '@tests/utils/di/TestServiceUtilities.js';
+import { MockValidationService } from '@tests/utils/di/MockServices.js';
 
 describe('TestServiceUtilities', () => {
   let context: TestContextDI;

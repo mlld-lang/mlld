@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { MemoryFileSystem } from '../MemoryFileSystem.js';
+import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem.js';
 
 describe('MemoryFileSystem', () => {
   let fs: MemoryFileSystem;

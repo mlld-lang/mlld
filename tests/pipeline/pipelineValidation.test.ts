@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { TestContextDI } from '@tests/utils/di/TestContextDI';
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { ServiceInitializationError, ServiceInitializationErrorCode } from '@core/errors/ServiceInitializationError.js';
 import { validateServicePipeline } from '@core/utils/serviceValidation.js';
 import { Services } from '@services/types.js';

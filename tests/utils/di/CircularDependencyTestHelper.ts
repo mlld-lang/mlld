@@ -1,6 +1,6 @@
 import { DependencyContainer, injectable, injectAll, inject, container } from 'tsyringe';
 import TestContainerHelper from './TestContainerHelper';
-import { ICircularityService } from '../../../services/resolution/CircularityService/ICircularityService';
+import { ICircularityService } from '@services/resolution/CircularityService/ICircularityService.js';
 
 /**
  * Creates a container with circular dependencies configured for testing

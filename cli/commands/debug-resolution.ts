@@ -9,7 +9,7 @@ import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemSe
 import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
 import path from 'path';
 import chalk from 'chalk';
-import { VariableResolutionTracker, ResolutionTrackingConfig } from '../../tests/utils/debug/index.js';
+import { VariableResolutionTracker, ResolutionTrackingConfig } from '@tests/utils/debug/index.js';
 import { IPathService } from '@services/fs/PathService/IPathService.js';
 
 // Import concrete classes for direct instantiation

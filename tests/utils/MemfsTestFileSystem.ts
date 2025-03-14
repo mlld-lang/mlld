@@ -2,7 +2,7 @@ import { Volume } from 'memfs';
 import * as path from 'path';
 import type { Stats } from 'fs';
 import { filesystemLogger as logger } from '@core/utils/logger.js';
-import { EventEmitter } from 'events';
+import { EventEmitter } from 'events.js';
 import { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
 
 /**

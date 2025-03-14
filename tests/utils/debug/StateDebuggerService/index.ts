@@ -1,10 +1,10 @@
 import { container } from 'tsyringe';
-import { StateDebuggerService } from './StateDebuggerService.js';
-import { StateVisualizationService } from '../StateVisualizationService/StateVisualizationService.js';
-import { StateHistoryService } from '../StateHistoryService/StateHistoryService.js';
-import { StateTrackingService } from '../StateTrackingService/StateTrackingService.js';
+import { StateDebuggerService } from '@tests/utils/debug/StateDebuggerService/StateDebuggerService.js';
+import { StateVisualizationService } from '@tests/utils/debug/StateVisualizationService/StateVisualizationService.js';
+import { StateHistoryService } from '@tests/utils/debug/StateHistoryService/StateHistoryService.js';
+import { StateTrackingService } from '@tests/utils/debug/StateTrackingService/StateTrackingService.js';
 import { IStateEventService } from '@services/state/StateEventService/IStateEventService.js';
-import { ContextDebuggerService } from './ContextDebuggerService.js';
+import { ContextDebuggerService } from '@tests/utils/debug/StateDebuggerService/ContextDebuggerService.js';
 
 /**
  * Initialize the context debugger with all required services

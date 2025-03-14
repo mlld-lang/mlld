@@ -3,7 +3,7 @@ import * as path from 'path';
 import type { Stats } from 'fs';
 import { filesystemLogger as logger } from '@core/utils/logger.js';
 import { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
-import { MockCommandExecutor, CommandResponse, createCommonCommandMappings } from './MockCommandExecutor.js';
+import { MockCommandExecutor, CommandResponse, createCommonCommandMappings } from '@tests/utils/fs/MockCommandExecutor.js';
 
 /**
  * File system implementation that combines memfs with mock command execution

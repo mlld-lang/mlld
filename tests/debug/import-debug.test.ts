@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { main } from '@api/index.js';
-import { TestContextDI } from '@tests/utils/di/TestContextDI';
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { StateHistoryService } from '@tests/utils/debug/StateHistoryService/StateHistoryService.js';
 import { StateTrackingService } from '@tests/utils/debug/StateTrackingService/StateTrackingService.js';
 import { StateVisualizationService } from '@tests/utils/debug/StateVisualizationService/StateVisualizationService.js';

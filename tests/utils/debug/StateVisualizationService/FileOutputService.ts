@@ -9,7 +9,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import { serviceLogger } from '@core/utils/logger';
+import { serviceLogger } from '@core/utils/logger.js';
 
 /**
  * Configuration for file output service

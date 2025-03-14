@@ -1,10 +1,10 @@
-import type { DirectiveNode } from '@core/syntax/types';
+import type { DirectiveNode } from '@core/syntax/types.js';
 import { injectable } from 'tsyringe';
-import { Service } from '@core/ServiceProvider';
-import { InterpreterState } from './state';
-import { MeldDirectiveError } from '@core/errors/MeldDirectiveError';
+import { Service } from '@core/ServiceProvider.js';
+import { InterpreterState } from '@tests/mocks/state.js';
+import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
 import { vi } from 'vitest';
-import type { MeldNode } from '@core/syntax/types';
+import type { MeldNode } from '@core/syntax/types.js';
 
 /**
  * Mock handler for embed directives

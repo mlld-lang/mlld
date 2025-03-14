@@ -8,11 +8,11 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, beforeAll } from 'vitest';
-import { TestContextDI } from '@tests/utils/di/TestContextDI';
-import { main } from '@api/index';
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
+import { main } from '@api/index.js';
 import path from 'path';
 import { promises as realFs } from 'fs';
-import type { Services } from '@core/types';
+import type { Services } from '@core/types.js';
 
 // Configuration
 const TEST_CASES_DIR = 'tests/cases';

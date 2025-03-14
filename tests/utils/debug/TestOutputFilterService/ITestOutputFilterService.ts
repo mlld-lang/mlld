@@ -6,7 +6,7 @@
  * and filtering based on test requirements.
  */
 
-import { TestOutputVerbosity } from '../StateVisualizationService/TestVisualizationManager';
+import { TestOutputVerbosity } from '@tests/utils/debug/StateVisualizationService/TestVisualizationManager.js';
 
 /**
  * Log levels for filtering operations

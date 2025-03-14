@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { TestContextDI } from './utils/di/TestContextDI.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IOutputService } from '@services/pipeline/OutputService/IOutputService.js';
 import type { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';

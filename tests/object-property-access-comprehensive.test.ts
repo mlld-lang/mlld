@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { TestContextDI } from './utils/di/TestContextDI.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import { VariableReferenceResolver } from '@services/resolution/ResolutionService/resolvers/VariableReferenceResolver.js';
 import { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';

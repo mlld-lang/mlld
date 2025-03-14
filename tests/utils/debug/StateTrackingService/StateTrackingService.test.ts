@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { StateTrackingService } from './StateTrackingService.js';
-import type { StateMetadata } from './IStateTrackingService.js';
-import { StateVisualizationService } from '../StateVisualizationService/StateVisualizationService.js';
-import { StateDebuggerService } from '../StateDebuggerService/StateDebuggerService.js';
-import { StateHistoryService } from '../StateHistoryService/StateHistoryService.js';
-import type { IStateHistoryService } from '../StateHistoryService/IStateHistoryService.js';
+import { StateTrackingService } from '@tests/utils/debug/StateTrackingService/StateTrackingService.js';
+import type { StateMetadata } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
+import { StateVisualizationService } from '@tests/utils/debug/StateVisualizationService/StateVisualizationService.js';
+import { StateDebuggerService } from '@tests/utils/debug/StateDebuggerService/StateDebuggerService.js';
+import { StateHistoryService } from '@tests/utils/debug/StateHistoryService/StateHistoryService.js';
+import type { IStateHistoryService } from '@tests/utils/debug/StateHistoryService/IStateHistoryService.js';
 import type { IStateEventService } from '@services/state/StateEventService/IStateEventService.js';
 
 class MockStateEventService implements IStateEventService {

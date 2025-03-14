@@ -4,7 +4,7 @@
  */
 
 import { InjectionToken } from 'tsyringe';
-import { TestContextDI } from './TestContextDI';
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 
 /**
  * Gets a service from the test context

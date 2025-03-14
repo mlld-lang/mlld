@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { runMeld } from './run-meld.js';
+import { runMeld } from '@api/run-meld.js';
 
 describe('runMeld API', () => {
   it('should process basic meld content correctly', async () => {

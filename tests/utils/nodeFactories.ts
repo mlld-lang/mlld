@@ -6,7 +6,7 @@ import type {
   SourceLocation,
   DirectiveKind,
   Position
-} from '@core/syntax/types';
+} from '@core/syntax/types.js';
 
 // Default position for convenience
 const DEFAULT_POSITION: Position = { 

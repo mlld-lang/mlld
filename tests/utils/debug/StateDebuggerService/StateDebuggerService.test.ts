@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { StateDebuggerService } from './StateDebuggerService';
-import { IStateVisualizationService } from '../StateVisualizationService/IStateVisualizationService';
-import { IStateHistoryService } from '../StateHistoryService/IStateHistoryService';
-import { IStateTrackingService } from '../StateTrackingService/IStateTrackingService';
-import { StateDiagnostic, DebugSessionConfig } from './IStateDebuggerService';
+import { StateDebuggerService } from '@tests/utils/debug/StateDebuggerService/StateDebuggerService.js';
+import { IStateVisualizationService } from '@tests/utils/debug/StateVisualizationService/IStateVisualizationService.js';
+import { IStateHistoryService } from '@tests/utils/debug/StateHistoryService/IStateHistoryService.js';
+import { IStateTrackingService } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
+import { StateDiagnostic, DebugSessionConfig } from '@tests/utils/debug/StateDebuggerService/IStateDebuggerService.js';
 
 describe('StateDebuggerService', () => {
   // Mock data

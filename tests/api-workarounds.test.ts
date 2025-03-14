@@ -5,11 +5,11 @@
  * that handle variable resolution and formatting issues.
  */
 
-import { TestContextDI } from '@tests/utils/di';
+import { TestContextDI } from '@tests/utils/di.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mockDeep } from 'vitest-mock-extended';
-import { IStateService } from '@services/state/StateService/IStateService';
-import { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
+import { IStateService } from '@services/state/StateService/IStateService.js';
+import { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 
 describe('API Workarounds', () => {
   describe('Documentation', () => {

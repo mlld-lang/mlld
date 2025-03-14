@@ -4,7 +4,7 @@ import type {
   TextNode, 
   CodeFenceNode,
   DirectiveKindString
-} from '@core/syntax/types';
+} from '@core/syntax/types.js';
 import type { Location, Position } from '@core/types.js';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
@@ -21,7 +21,7 @@ import {
   createTestDirective,
   createTestText,
   createTestCodeFence
-} from './nodeFactories.js';
+} from '@tests/utils/nodeFactories.js';
 
 const DEFAULT_POSITION: Position = { line: 1, column: 1 };
 const DEFAULT_LOCATION: Location = {

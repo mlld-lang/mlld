@@ -1,7 +1,7 @@
 import { vi } from 'vitest';
 import type { PlatformPath } from 'path';
 import { injectable } from 'tsyringe';
-import { Service } from '@core/ServiceProvider';
+import { Service } from '@core/ServiceProvider.js';
 
 /**
  * Path mock configuration options

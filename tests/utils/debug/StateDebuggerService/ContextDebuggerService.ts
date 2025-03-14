@@ -7,10 +7,10 @@
  * variable propagation, and other context-specific debugging features.
  */
 
-import { StateDebuggerService } from './StateDebuggerService.js';
-import { IStateVisualizationService } from '../StateVisualizationService/IStateVisualizationService.js';
-import { IStateHistoryService } from '../StateHistoryService/IStateHistoryService.js';
-import { IStateTrackingService } from '../StateTrackingService/IStateTrackingService.js';
+import { StateDebuggerService } from '@tests/utils/debug/StateDebuggerService/StateDebuggerService.js';
+import { IStateVisualizationService } from '@tests/utils/debug/StateVisualizationService/IStateVisualizationService.js';
+import { IStateHistoryService } from '@tests/utils/debug/StateHistoryService/IStateHistoryService.js';
+import { IStateTrackingService } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
 
 /**
  * Configuration for enabling the context debugger

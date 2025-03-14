@@ -6,12 +6,12 @@
  * with support for different verbosity levels based on test configuration.
  */
 
-import type { IStateVisualizationService, VisualizationConfig, ContextVisualizationConfig } from './IStateVisualizationService';
-import type { IStateHistoryService } from '../StateHistoryService/IStateHistoryService';
-import type { IStateTrackingService } from '../StateTrackingService/IStateTrackingService';
-import { StateVisualizationFileOutput, FileOutputConfig } from './FileOutputService';
-import { CompactStateVisualization } from './CompactStateVisualization';
-import { serviceLogger } from '@core/utils/logger';
+import type { IStateVisualizationService, VisualizationConfig, ContextVisualizationConfig } from '@tests/utils/debug/StateVisualizationService/IStateVisualizationService.js';
+import type { IStateHistoryService } from '@tests/utils/debug/StateHistoryService/IStateHistoryService.js';
+import type { IStateTrackingService } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
+import { StateVisualizationFileOutput, FileOutputConfig } from '@tests/utils/debug/StateVisualizationService/FileOutputService.js';
+import { CompactStateVisualization } from '@tests/utils/debug/StateVisualizationService/CompactStateVisualization.js';
+import { serviceLogger } from '@core/utils/logger.js';
 
 /**
  * Verbosity levels for test output

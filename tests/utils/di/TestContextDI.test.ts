@@ -1,5 +1,5 @@
 import { describe, beforeEach, afterEach, it, expect, vi } from 'vitest';
-import { TestContextDI } from './TestContextDI';
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 
 // Mock class for testing
 class MockParser {

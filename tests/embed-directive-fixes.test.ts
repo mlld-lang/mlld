@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { DirectiveNode, MeldNode } from '@core/syntax/types';
+import { DirectiveNode, MeldNode } from '@core/syntax/types.js';
 import { EmbedDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler.js';
 import { DirectiveError } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';

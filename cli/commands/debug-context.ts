@@ -7,10 +7,10 @@ import { IParserService } from '@services/pipeline/ParserService/IParserService.
 import { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
 import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
-import path from 'path';
+import * as path from 'path';
 import chalk from 'chalk';
-import fs from 'fs/promises';
-import { initializeContextDebugger, VariableResolutionTracker } from '../../tests/utils/debug/index.js';
+import * as fs from 'fs/promises';
+import { initializeContextDebugger, VariableResolutionTracker } from '@tests/utils/debug/index.js';
 import { IPathService } from '@services/fs/PathService/IPathService.js';
 
 // Import concrete classes for direct instantiation

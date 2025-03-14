@@ -14,7 +14,7 @@ import {
   createStrictModeOptions,
   createPermissiveModeOptions,
   ErrorModeTestOptions
-} from '../ErrorTestUtils.js';
+} from '@tests/utils/ErrorTestUtils.js';
 
 describe('ErrorTestUtils', () => {
   describe('ErrorCollector', () => {

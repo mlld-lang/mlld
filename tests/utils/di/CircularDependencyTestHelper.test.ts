@@ -1,14 +1,14 @@
 import { expect, describe, it, beforeEach, afterEach, vi } from 'vitest';
-import { createTestContainerWithCircularDeps } from './CircularDependencyTestHelper';
+import { createTestContainerWithCircularDeps } from '@tests/utils/di/CircularDependencyTestHelper.js';
 import { injectable, container } from 'tsyringe';
-import { PathService } from '@services/fs/PathService/PathService';
-import { FileSystemService } from '@services/fs/FileSystemService/FileSystemService';
-import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/factories/FileSystemServiceClientFactory';
-import { PathServiceClientFactory } from '@services/fs/PathService/factories/PathServiceClientFactory';
-import { TestContextDI } from './TestContextDI';
-import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem';
-import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService';
-import { ProjectPathResolver } from '@services/fs/ProjectPathResolver';
+import { PathService } from '@services/fs/PathService/PathService.js';
+import { FileSystemService } from '@services/fs/FileSystemService/FileSystemService.js';
+import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/factories/FileSystemServiceClientFactory.js';
+import { PathServiceClientFactory } from '@services/fs/PathService/factories/PathServiceClientFactory.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
+import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
+import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService.js';
+import { ProjectPathResolver } from '@services/fs/ProjectPathResolver.js';
 
 // Test interfaces and classes for circular dependency testing
 interface IServiceD {

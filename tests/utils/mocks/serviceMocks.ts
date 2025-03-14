@@ -7,14 +7,14 @@
  */
 
 import { mock } from 'vitest-mock-extended';
-import { IValidationService } from '@services/resolution/ValidationService/IValidationService';
-import { IStateService } from '@services/state/StateService/IStateService';
-import { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
-import { DirectiveError } from '@services/pipeline/DirectiveService/errors/DirectiveError';
-import { PathValidationError } from '@core/errors/PathValidationError';
-import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
-import { IPathService } from '@services/fs/PathService/IPathService';
-import type { IStateService as ClonedState } from '@services/state/StateService/IStateService';
+import { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
+import { IStateService } from '@services/state/StateService/IStateService.js';
+import { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
+import { DirectiveError } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
+import { PathValidationError } from '@core/errors/PathValidationError.js';
+import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
+import { IPathService } from '@services/fs/PathService/IPathService.js';
+import type { IStateService as ClonedState } from '@services/state/StateService/IStateService.js';
 
 /**
  * Creates a mock ValidationService with default behavior

@@ -1,4 +1,4 @@
-import { TestContextDI } from '@tests/utils/di/TestContextDI';
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import path from 'path';
 import { promises as realFs } from 'fs';
 

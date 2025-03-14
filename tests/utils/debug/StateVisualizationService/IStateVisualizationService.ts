@@ -8,8 +8,8 @@
  * output formats for different use cases (e.g., debug, analysis).
  */
 
-import { StateOperation, StateTransformation } from '../StateHistoryService/IStateHistoryService.js';
-import { StateMetadata, StateRelationship, ContextBoundary, VariableCrossing } from '../StateTrackingService/IStateTrackingService.js';
+import { StateOperation, StateTransformation } from '@tests/utils/debug/StateHistoryService/IStateHistoryService.js';
+import { StateMetadata, StateRelationship, ContextBoundary, VariableCrossing } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
 
 /**
  * Supported visualization formats

@@ -1,6 +1,6 @@
 import '@core/di-config.js';
 import * as path from 'path';
-import { resolveService, registerServiceInstance } from '@core/ServiceProvider';
+import { resolveService, registerServiceInstance } from '@core/ServiceProvider.js';
 
 // Core services
 export * from '@services/pipeline/InterpreterService/InterpreterService.js';
@@ -23,7 +23,7 @@ export * from '@core/errors/MeldParseError.js';
 import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
 
 // Import simple API helpers
-import { runMeld as runMeldImpl, MemoryFileSystem } from './run-meld.js';
+import { runMeld as runMeldImpl, MemoryFileSystem } from '@api/run-meld.js';
 
 // Re-export runMeld as both named and default export for ease of use
 export { runMeld } from './run-meld.js';

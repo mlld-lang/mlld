@@ -1,5 +1,5 @@
-import { IStateEventService, StateEvent } from '@services/state/StateEventService/IStateEventService';
-import { IStateHistoryService, StateOperation, StateTransformation, HistoryFilter } from './IStateHistoryService';
+import { IStateEventService, StateEvent } from '@services/state/StateEventService/IStateEventService.js';
+import { IStateHistoryService, StateOperation, StateTransformation, HistoryFilter } from '@tests/utils/debug/StateHistoryService/IStateHistoryService.js';
 
 /**
  * @package

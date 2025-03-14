@@ -1,6 +1,6 @@
-import type { MeldNode } from '@core/syntax/types';
+import type { MeldNode } from '@core/syntax/types.js';
 import { injectable } from 'tsyringe';
-import { Service } from '@core/ServiceProvider';
+import { Service } from '@core/ServiceProvider.js';
 
 /**
  * Mock implementation of a state object for testing interpreters

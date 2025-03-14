@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { main } from './index.js';
+import { main } from '@api/index.js';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import type { ProcessOptions } from '@core/types/index.js';
 import { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
 import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
 import { DirectiveService } from '@services/pipeline/DirectiveService/DirectiveService.js';
-import fs from 'fs';
+import * as fs from 'fs';
 import { TestDebuggerService } from '@tests/utils/debug/TestDebuggerService.js';
 
 // Define the type for main function options

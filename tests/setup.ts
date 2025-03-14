@@ -2,7 +2,7 @@ import 'reflect-metadata';
 import { beforeEach, afterEach, afterAll, vi } from 'vitest';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { container } from 'tsyringe';
-import { EventEmitter } from 'events';
+import { EventEmitter } from 'events.js';
 
 // Increase the default max listeners to prevent warnings
 EventEmitter.defaultMaxListeners = 20;

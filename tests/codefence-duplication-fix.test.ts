@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { TestContextDI } from './utils/di/TestContextDI';
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import path from 'path';
 import fs from 'fs/promises';
-import { MemfsTestFileSystemAdapter } from './utils/MemfsTestFileSystemAdapter.js';
+import { MemfsTestFileSystemAdapter } from '@tests/utils/MemfsTestFileSystemAdapter.js';
 
 /**
  * End-to-end test for the codefence duplication bug fix.

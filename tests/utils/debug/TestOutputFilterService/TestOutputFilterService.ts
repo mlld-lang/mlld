@@ -6,9 +6,9 @@
  * test requirements and configuration.
  */
 
-import { serviceLogger } from '@core/utils/logger';
-import { TestOutputVerbosity } from '../StateVisualizationService/TestVisualizationManager';
-import { ITestOutputFilterService, LogLevel, TestOutputOptions } from './ITestOutputFilterService';
+import { serviceLogger } from '@core/utils/logger.js';
+import { TestOutputVerbosity } from '@tests/utils/debug/StateVisualizationService/TestVisualizationManager.js';
+import { ITestOutputFilterService, LogLevel, TestOutputOptions } from '@tests/utils/debug/TestOutputFilterService/ITestOutputFilterService.js';
 
 /**
  * Maps verbosity levels to log levels

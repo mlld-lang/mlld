@@ -26,7 +26,7 @@ vi.mock('@services/fs/PathService/PathService.js');
 vi.mock('@services/state/StateEventService/StateEventService.js');
 
 // Mock debug utilities
-vi.mock('../../src/debug/index.js', () => ({
+vi.mock('@tests/utils/debug/index.js', () => ({
   initializeContextDebugger: vi.fn().mockReturnValue({
     enable: vi.fn(),
     visualizeContextHierarchy: vi.fn().mockReturnValue('graph TD;\n  A-->B;'),

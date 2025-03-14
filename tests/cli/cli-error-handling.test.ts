@@ -12,7 +12,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { CLIService } from '@services/cli/CLIService/CLIService.js';
 import { MemfsTestFileSystemAdapter as FileSystemAdapter } from '@tests/utils/MemfsTestFileSystemAdapter.js';
 import { mockArgv } from '@tests/utils/cli/mockArgv.js';
-import { TestContextDI } from '@tests/utils/di/TestContextDI';
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { mockConsole as getMockConsole } from '@tests/utils/cli/mockConsole.js';
 import fs from 'fs';
 import path from 'path';

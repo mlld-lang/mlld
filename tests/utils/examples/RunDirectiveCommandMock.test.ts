@@ -3,7 +3,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { RunDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler.js';
-import { setupCommandMocking } from '../fs/commandMockingHelper.js';
+import { setupCommandMocking } from '@tests/utils/fs/commandMockingHelper.js';
 import { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import { IStateService } from '@services/state/StateService/IStateService.js';
 import { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';

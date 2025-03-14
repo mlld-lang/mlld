@@ -5,8 +5,8 @@
  * to services during the transition from dual-mode DI to DI-only mode.
  */
 
-import { TestContextDI } from './di/TestContextDI.js';
-import { MemfsTestFileSystemAdapter } from './MemfsTestFileSystemAdapter.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
+import { MemfsTestFileSystemAdapter } from '@tests/utils/MemfsTestFileSystemAdapter.js';
 import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import { IPathService } from '@services/fs/PathService/IPathService.js';
 import { CLIService } from '@services/cli/CLIService/CLIService.js';

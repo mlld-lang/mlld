@@ -3,10 +3,10 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { main } from '@api/index';
-import { findFiles, getTestCaseName, setupTestContext, VALID_CASES_DIR, EXPECTED_EXTENSION } from './example-runner-setup';
+import { main } from '@api/index.js';
+import { findFiles, getTestCaseName, setupTestContext, VALID_CASES_DIR, EXPECTED_EXTENSION } from '@tests/e2e/example-runner-setup.js';
 import { promises as realFs } from 'fs';
-import type { Services } from '@core/types';
+import type { Services } from '@core/types.js';
 
 describe.skip('Valid Meld Test Cases', async () => {
   const validTestCases = await findFiles(VALID_CASES_DIR, '.mld');

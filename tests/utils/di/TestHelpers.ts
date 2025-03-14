@@ -5,7 +5,7 @@
  */
 
 import { vi } from 'vitest';
-import { TestContextDI, TestContextDIOptions } from './TestContextDI';
+import { TestContextDI, TestContextDIOptions } from '@tests/utils/di/TestContextDI.js';
 
 /**
  * Helper methods for setting up common test scenarios

@@ -7,7 +7,7 @@ import { ImportDirectiveHandler } from '@services/pipeline/DirectiveService/hand
 import { EmbedDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler.js';
 import { RunDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler.js';
 import { IDirectiveService } from '@services/pipeline/DirectiveService/IDirectiveService.js';
-import { TestContextDI } from './TestContextDI.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory.js';
 
 /**

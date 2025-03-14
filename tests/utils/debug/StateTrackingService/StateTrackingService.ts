@@ -1,5 +1,5 @@
 import { stateLogger as logger } from '@core/utils/logger.js';
-import type { IStateTrackingService, StateMetadata, StateRelationship } from './IStateTrackingService.js';
+import type { IStateTrackingService, StateMetadata, StateRelationship } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
 import { v4 as uuidv4 } from 'uuid';
 import { Service } from '@core/ServiceProvider.js';
 

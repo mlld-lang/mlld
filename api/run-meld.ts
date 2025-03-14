@@ -1,12 +1,12 @@
 /**
  * Simple API for processing meld content directly
  */
-import { createDefaultServices } from './index.js';
+import { createDefaultServices } from '@api/index.js';
 import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
 import { ProcessOptions } from '@core/types/index.js';
 import { validateServicePipeline } from '@core/utils/serviceValidation.js';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem.js';
-import { resolveService } from '@core/ServiceProvider';
+import { resolveService } from '@core/ServiceProvider.js';
 
 // Import service factory types
 import { PathServiceClientFactory } from '@services/fs/PathService/factories/PathServiceClientFactory.js';
@@ -29,7 +29,7 @@ export { MemoryFileSystem };
  *
  * @example
  * ```typescript
- * import { runMeld } from 'meld';
+ * import { runMeld } from 'meld.js';
  *
  * const meldContent = `
  *   @text greeting = "Hello"

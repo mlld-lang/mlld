@@ -3,10 +3,10 @@
  * Implementation of state debugging service.
  */
 
-import type { IStateDebuggerService, DebugSessionConfig, DebugSessionResult, StateDiagnostic } from './IStateDebuggerService.js';
-import type { IStateVisualizationService } from '../StateVisualizationService/IStateVisualizationService.js';
-import type { IStateHistoryService } from '../StateHistoryService/IStateHistoryService.js';
-import type { IStateTrackingService, StateMetadata } from '../StateTrackingService/IStateTrackingService.js';
+import type { IStateDebuggerService, DebugSessionConfig, DebugSessionResult, StateDiagnostic } from '@tests/utils/debug/StateDebuggerService/IStateDebuggerService.js';
+import type { IStateVisualizationService } from '@tests/utils/debug/StateVisualizationService/IStateVisualizationService.js';
+import type { IStateHistoryService } from '@tests/utils/debug/StateHistoryService/IStateHistoryService.js';
+import type { IStateTrackingService, StateMetadata } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
 import { v4 as uuidv4 } from 'uuid';
 
 /**

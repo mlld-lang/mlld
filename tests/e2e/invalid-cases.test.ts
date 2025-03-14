@@ -3,10 +3,10 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { main } from '@api/index';
-import { findFiles, getTestCaseName, setupTestContext, INVALID_CASES_DIR, ERROR_EXTENSION } from './example-runner-setup';
+import { main } from '@api/index.js';
+import { findFiles, getTestCaseName, setupTestContext, INVALID_CASES_DIR, ERROR_EXTENSION } from '@tests/e2e/example-runner-setup.js';
 import { promises as realFs } from 'fs';
-import type { Services } from '@core/types';
+import type { Services } from '@core/types.js';
 
 describe.skip('Invalid Meld Test Cases', async () => {
   const allInvalidFiles = await findFiles(INVALID_CASES_DIR, '.mld');

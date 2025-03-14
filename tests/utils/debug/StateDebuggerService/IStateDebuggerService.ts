@@ -8,9 +8,9 @@
  * for failing tests and CLI-based state analysis.
  */
 
-import { VisualizationConfig } from '../StateVisualizationService/IStateVisualizationService';
-import { StateOperation } from '../StateHistoryService/IStateHistoryService';
-import { StateMetadata } from '../StateTrackingService/IStateTrackingService';
+import { VisualizationConfig } from '@tests/utils/debug/StateVisualizationService/IStateVisualizationService.js';
+import { StateOperation } from '@tests/utils/debug/StateHistoryService/IStateHistoryService.js';
+import { StateMetadata } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
 
 /**
  * Configuration for state capture points

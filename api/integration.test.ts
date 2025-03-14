@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { main } from './index.js';
+import { main } from '@api/index.js';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import type { ProcessOptions, Services } from '@core/types/index.js';
 import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
 import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
-import path from 'path';
-import { TestDebuggerService } from '../tests/utils/debug/TestDebuggerService.js';
+import * as path from 'path';
+import { TestDebuggerService } from '@tests/utils/debug/TestDebuggerService.js';
 import type { OutputFormat } from '@services/pipeline/OutputService/IOutputService.js';
 import { SyntaxExample } from '@core/syntax/helpers/index.js';
 import { 
