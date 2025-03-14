@@ -360,22 +360,20 @@ function peg$parse(input, options) {
     };
   var peg$f7 = function(char) { return char; };
   var peg$f8 = function(id, format) {
-    return createNode(NodeType.TextVar, {
+    return createVariableReferenceNode('text', {
       identifier: id,
-      varType: 'text',
       ...(format ? { format } : {})
     }, location());
   };
   var peg$f9 = function(id, accessElements, format) {
-    return createNode(NodeType.DataVar, {
+    return createVariableReferenceNode('data', {
       identifier: id,
-      varType: 'data',
       fields: accessElements || [],
       ...(format ? { format } : {})
     }, location());
   };
   var peg$f10 = function(id) {
-    return createNode(NodeType.PathVar, {
+    return createVariableReferenceNode('path', {
       identifier: normalizePathVar(id),
       isSpecial: true
     }, location());
@@ -5992,6 +5990,14 @@ function peg$parse(input, options) {
     return createNode('Directive', { kind, ...data }, loc);
   }
 
+  function createVariableReferenceNode(valueType, data, loc) {
+    return createNode(NodeType.VariableReference, {
+      valueType,
+      isVariableReference: true,
+      ...data
+    }, loc);
+  }
+
   function normalizePathVar(id) {
     return id;
   }
@@ -6274,6 +6280,7 @@ function peg$parse(input, options) {
     Text: 'Text',
     Comment: 'Comment',
     CodeFence: 'CodeFence',
+    VariableReference: 'VariableReference',
     TextVar: 'TextVar',
     DataVar: 'DataVar',
     PathVar: 'PathVar',

@@ -13,7 +13,7 @@ export default defineConfig({
     },
     globals: true,
     include: ['**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
-    exclude: ['**/node_modules/**', '**/dist/**', '**/.{idea,git,cache,output,temp}/**'],
+    exclude: ['**/node_modules/**', '**/dist/**', '**/.{idea,git,cache,output,temp}/**', '**/meld-ast/**'],
     alias: {
       '@core': resolve(__dirname, './core'),
       '@services': resolve(__dirname, './services'),

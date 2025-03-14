@@ -111,15 +111,37 @@ export class ParserService implements IParserService {
 
   /**
    * Transform old variable node types into the consolidated VariableReferenceNode type
+   * Also recursively processes nested nodes
    */
   private transformVariableNode(node: MeldNode): MeldNode {
+    if (!node || typeof node !== 'object') {
+      return node;
+    }
+    
     // Using type assertion since we need to access properties not in base MeldNode
     const anyNode = node as any;
-    if (anyNode.type === 'TextVar' || anyNode.type === 'DataVar') {
+    
+    // First transform arrays recursively
+    if (Array.isArray(anyNode)) {
+      return anyNode.map(item => this.transformVariableNode(item)) as any;
+    }
+    
+    // Handle variable node types
+    if (anyNode.type === 'TextVar' || anyNode.type === 'DataVar' || anyNode.type === 'PathVar') {
+      // Determine the valueType based on the original node type
+      let valueType: 'text' | 'data' | 'path';
+      if (anyNode.type === 'TextVar') {
+        valueType = 'text';
+      } else if (anyNode.type === 'DataVar') {
+        valueType = 'data';
+      } else { // PathVar
+        valueType = 'path';
+      }
+      
       // Create a variable reference node structure
       const variableRefNode: any = {
         type: 'VariableReference',
-        valueType: anyNode.type === 'TextVar' ? 'text' : 'data',
+        valueType,
         fields: anyNode.fields || [],
         isVariableReference: true,
         location: anyNode.location
@@ -136,7 +158,25 @@ export class ParserService implements IParserService {
       
       return variableRefNode as MeldNode;
     }
-    return node;
+    
+    // Process other node types that might contain variable nodes in their properties
+    // For example, a Directive node might contain variable references in its values
+    if (anyNode.type === 'Directive' && anyNode.directive) {
+      // Clone the directive data and recursively transform any variables it contains
+      const transformedDirective = { ...anyNode.directive };
+      
+      // Check for specific properties that might contain variable references
+      if (transformedDirective.value && typeof transformedDirective.value === 'object') {
+        transformedDirective.value = this.transformVariableNode(transformedDirective.value);
+      }
+      
+      return {
+        ...anyNode,
+        directive: transformedDirective
+      };
+    }
+    
+    return anyNode;
   }
 
   private async parseContent(content: string, filePath?: string): Promise<MeldNode[]> {

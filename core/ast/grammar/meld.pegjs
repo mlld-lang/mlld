@@ -79,6 +79,14 @@
     return createNode('Directive', { kind, ...data }, loc);
   }
 
+  function createVariableReferenceNode(valueType, data, loc) {
+    return createNode(NodeType.VariableReference, {
+      valueType,
+      isVariableReference: true,
+      ...data
+    }, loc);
+  }
+
   function normalizePathVar(id) {
     return id;
   }
@@ -361,6 +369,7 @@
     Text: 'Text',
     Comment: 'Comment',
     CodeFence: 'CodeFence',
+    VariableReference: 'VariableReference',
     TextVar: 'TextVar',
     DataVar: 'DataVar',
     PathVar: 'PathVar',
@@ -443,18 +452,16 @@ Variable
 
 TextVar
   = "{{" _ id:Identifier format:VarFormat? _ "}}" !FieldAccess {
-    return createNode(NodeType.TextVar, {
+    return createVariableReferenceNode('text', {
       identifier: id,
-      varType: 'text',
       ...(format ? { format } : {})
     }, location());
   }
 
 DataVar
   = "{{" _ id:Identifier accessElements:(FieldAccess / NumericFieldAccess / ArrayAccess)* format:VarFormat? _ "}}" {
-    return createNode(NodeType.DataVar, {
+    return createVariableReferenceNode('data', {
       identifier: id,
-      varType: 'data',
       fields: accessElements || [],
       ...(format ? { format } : {})
     }, location());
@@ -462,7 +469,7 @@ DataVar
 
 PathVar
   = "$" id:PathIdentifier {
-    return createNode(NodeType.PathVar, {
+    return createVariableReferenceNode('path', {
       identifier: normalizePathVar(id),
       isSpecial: true
     }, location());
