@@ -108,13 +108,15 @@ describe('Newline Handling', () => {
           newlineHandling: 'Preserves newlines as-is, subject to transformation rules'
         },
         {
-          type: 'TextVar',
+          type: 'VariableReference',
           description: 'Text variable reference',
+          valueType: 'text',
           newlineHandling: 'Preserves newlines from the variable value, subject to transformation rules'
         },
         {
-          type: 'DataVar',
+          type: 'VariableReference',
           description: 'Data variable reference',
+          valueType: 'data',
           newlineHandling: 'When serialized, may serialize newlines as string literals; when accessed as properties, follows text rules'
         },
         {

@@ -138,7 +138,8 @@ describe('Enhanced Field Access', () => {
       const blockResult = client.convertToString(skills, {
         formattingContext: {
           isBlock: true,
-          nodeType: 'TextVar',
+          nodeType: 'VariableReference',
+          valueType: 'text',
           linePosition: 'middle'
         }
       });
@@ -155,7 +156,8 @@ describe('Enhanced Field Access', () => {
       const inlineResult = client.convertToString(skills, {
         formattingContext: {
           isBlock: false,
-          nodeType: 'TextVar',
+          nodeType: 'VariableReference',
+          valueType: 'text',
           linePosition: 'middle'
         }
       });
@@ -178,7 +180,8 @@ describe('Enhanced Field Access', () => {
       const blockResult = client.convertToString(config, {
         formattingContext: {
           isBlock: true,
-          nodeType: 'DataVar',
+          nodeType: 'VariableReference',
+          valueType: 'data',
           linePosition: 'start'
         }
       });
@@ -207,7 +210,8 @@ describe('Enhanced Field Access', () => {
       const inlineResult = client.convertToString(config, {
         formattingContext: {
           isBlock: false,
-          nodeType: 'DataVar',
+          nodeType: 'VariableReference',
+          valueType: 'data',
           linePosition: 'middle'
         }
       });

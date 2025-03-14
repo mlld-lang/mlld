@@ -4,6 +4,7 @@ import { ResolutionError } from '@services/resolution/ResolutionService/errors/R
 import type { MeldNode, DirectiveNode, TextNode, PathVarNode, StructuredPath } from '@core/syntax/types';
 import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
+import { VariableReferenceNode } from '@core/syntax/types';
 
 /**
  * Handles resolution of path variables ($path)
@@ -264,32 +265,22 @@ export class PathResolver {
   /**
    * Helper to extract PathVarNode from a node
    */
-  private getPathVarFromNode(node: MeldNode): PathVarNode | null {
-    if (node.type !== 'Directive' || (node as DirectiveNode).directive.kind !== 'path') {
-      return null;
-    }
-
-    // For structured paths, create a synthetic PathVarNode
-    if ((node as DirectiveNode).directive.value && 
-        typeof (node as DirectiveNode).directive.value === 'object' &&
+  private getPathVarFromNode(node: MeldNode): VariableReferenceNode | null {
+    if (node.type === 'Directive' && 
+        (node as DirectiveNode).directive.kind === 'path' &&
         'structured' in (node as DirectiveNode).directive.value) {
       
       const identifier = (node as DirectiveNode).directive.identifier;
       if (!identifier) return null;
       
-      // Create a synthetic PathVarNode
+      // Create a synthetic VariableReferenceNode
       return {
-        type: 'PathVar',
+        type: 'VariableReference',
         identifier,
-        isSpecial: false
+        valueType: 'path',
+        isVariableReference: true
       };
     }
-
-    const pathVar = (node as DirectiveNode).directive.value as PathVarNode;
-    if (!pathVar || pathVar.type !== 'PathVar') {
-      return null;
-    }
-
-    return pathVar;
+    return null;
   }
 } 

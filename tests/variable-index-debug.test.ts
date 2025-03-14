@@ -182,8 +182,10 @@ describe('VariableReferenceResolver Array Index Debug', () => {
       if (text === '{{items.0}}') {
         return [
           {
-            type: 'DataVar',
+            type: 'VariableReference',
             identifier: 'items',
+            valueType: 'data',
+            isVariableReference: true,
             fields: [
               { type: 'index', value: 0 }
             ]
@@ -192,8 +194,10 @@ describe('VariableReferenceResolver Array Index Debug', () => {
       } else if (text === '{{users.0.name}}') {
         return [
           {
-            type: 'DataVar',
+            type: 'VariableReference',
             identifier: 'users',
+            valueType: 'data',
+            isVariableReference: true,
             fields: [
               { type: 'index', value: 0 },
               { type: 'identifier', value: 'name' }

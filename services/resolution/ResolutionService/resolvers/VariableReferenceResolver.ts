@@ -273,13 +273,19 @@ export class VariableReferenceResolver {
               }
             } else {
               // Simple variable reference without fields
-              // Check if this is a direct reference to a data object
-              const isDataObject = varType === 'data' && typeof value === 'object' && value !== null && !Array.isArray(value);
+              // Determine if this is a reference to an object or array that should be pretty-printed
+              const isComplexValue = (
+                (varType === 'data' && typeof value === 'object' && value !== null) ||
+                Array.isArray(value)
+              );
               
-              // Use pretty-print for objects by default (no field access)
-              if (isDataObject) {
-                result += this.convertToString(value, { isBlock: true });
+              // Use pretty-print for all complex values by default (no field access)
+              if (isComplexValue) {
+                // Always use block formatting for complex values
+                const blockFormattingContext = { isBlock: true };
+                result += this.convertToString(value, blockFormattingContext);
               } else {
+                // Simple value, use regular toString
                 result += this.convertToString(value);
               }
             }
@@ -637,7 +643,12 @@ export class VariableReferenceResolver {
 
     // Handle arrays
     if (Array.isArray(value)) {
-      return value.map(item => this.convertToString(item, formattingContext)).join('\n');
+      // Special handling for block formatting - pretty print arrays
+      if (formattingContext?.isBlock) {
+        return JSON.stringify(value, null, 2);
+      }
+      // Default inline formatting - comma-separated
+      return value.map(item => this.convertToString(item)).join(', ');
     }
 
     // Handle objects

@@ -594,8 +594,10 @@ describe('EmbedDirectiveHandler', () => {
         raw: '{{role.architect}}',
         isVariableReference: true,
         variable: {
-          type: 'DataVar',
+          type: 'VariableReference',
           identifier: 'role',
+          valueType: 'data',
+          isVariableReference: true,
           fields: [{
             type: 'field',
             value: 'architect'
@@ -652,8 +654,10 @@ describe('EmbedDirectiveHandler', () => {
         raw: '{{content}}',
         isVariableReference: true,
         variable: {
-          type: 'TextVar',
-          identifier: 'content'
+          type: 'VariableReference',
+          identifier: 'content',
+          valueType: 'text',
+          isVariableReference: true
         }
       };
       
@@ -695,8 +699,10 @@ describe('EmbedDirectiveHandler', () => {
         raw: '{{content}}',
         isVariableReference: true,
         variable: {
-          type: 'TextVar',
-          identifier: 'content'
+          type: 'VariableReference',
+          identifier: 'content',
+          valueType: 'text',
+          isVariableReference: true
         }
       };
       
@@ -740,8 +746,10 @@ describe('EmbedDirectiveHandler', () => {
         raw: '{{config.settings.theme}}',
         isVariableReference: true,
         variable: {
-          type: 'DataVar',
+          type: 'VariableReference',
           identifier: 'config',
+          valueType: 'data',
+          isVariableReference: true,
           fields: [
             { type: 'field', value: 'settings' },
             { type: 'field', value: 'theme' }
