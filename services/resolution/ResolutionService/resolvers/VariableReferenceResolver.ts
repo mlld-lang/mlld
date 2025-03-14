@@ -848,6 +848,25 @@ export class VariableReferenceResolver {
   private async accessFields(obj: any, fields: any[], context: ResolutionContext, variableName: string): Promise<any> {
     let current = obj;
     
+    // Try to parse stringified JSON if needed
+    if (typeof current === 'string' && (current.startsWith('{') || current.startsWith('['))) {
+      try {
+        const parsed = JSON.parse(current);
+        logger.debug(`Successfully parsed stringified JSON for variable '${variableName}'`, {
+          originalType: 'string',
+          parsedType: typeof parsed,
+          isArray: Array.isArray(parsed)
+        });
+        current = parsed;
+      } catch (error) {
+        // Not valid JSON, continue with the string value
+        logger.debug(`Failed to parse string as JSON for variable '${variableName}'`, {
+          error: error instanceof Error ? error.message : String(error),
+          value: current
+        });
+      }
+    }
+    
     // Log debug information to help with troubleshooting
     logger.debug(`Accessing fields for variable '${variableName}'`, {
       initialObjectType: typeof current,
@@ -875,11 +894,15 @@ export class VariableReferenceResolver {
       const field = fields[i];
       const fieldValue = field.value !== undefined ? field.value : field;
       const fieldType = field.type || 'field';
+      const fieldPath = fields.slice(0, i + 1).map(f => 
+        f.type === 'index' ? `[${f.value}]` : `.${f.value}`
+      ).join('').replace(/^\./, '');
       
       // Make sure we have a valid object to access fields on
       if (current === null || current === undefined) {
         const errorMessage = `Cannot access field '${fieldValue}' of ${current} for variable '${variableName}'`;
-        logger.error(errorMessage);
+        const detailedMessage = `Cannot access field '${fieldValue}' at path '${fieldPath}' because the parent value is ${current}`;
+        logger.error(errorMessage, { fieldPath, parentValue: current });
         
         // Track the failed field access if tracking is enabled
         if (this.resolutionTracker) {
@@ -888,13 +911,13 @@ export class VariableReferenceResolver {
             'field-access-null-undefined',
             false,
             undefined,
-            errorMessage
+            detailedMessage
           );
         }
         
         throw VariableResolutionErrorFactory.invalidAccess(
           variableName,
-          errorMessage
+          detailedMessage
         );
       }
       
@@ -910,7 +933,12 @@ export class VariableReferenceResolver {
       // If current is not an object or array and we're trying to access a property, throw error
       if (typeof current !== 'object' && !Array.isArray(current)) {
         const errorMessage = `Cannot access field '${fieldValue}' of non-object value (type: ${typeof current}) for variable '${variableName}'`;
-        logger.error(errorMessage, { current });
+        const detailedMessage = `Cannot access field '${fieldValue}' at path '${fieldPath}' because the parent value is of type '${typeof current}' (${String(current).substring(0, 50)}${String(current).length > 50 ? '...' : ''})`;
+        logger.error(errorMessage, { 
+          fieldPath, 
+          parentType: typeof current, 
+          parentValue: current 
+        });
         
         // Track the failed field access if tracking is enabled
         if (this.resolutionTracker) {
@@ -919,13 +947,13 @@ export class VariableReferenceResolver {
             'field-access-non-object',
             false,
             undefined,
-            errorMessage
+            detailedMessage
           );
         }
         
         throw VariableResolutionErrorFactory.invalidAccess(
           variableName,
-          errorMessage
+          detailedMessage
         );
       }
       
@@ -935,7 +963,8 @@ export class VariableReferenceResolver {
         const index = typeof fieldValue === 'number' ? fieldValue : parseInt(fieldValue as string, 10);
         if (isNaN(index)) {
           const errorMessage = `Invalid array index: '${fieldValue}' is not a number for variable '${variableName}'`;
-          logger.error(errorMessage);
+          const detailedMessage = `Invalid array index: '${fieldValue}' at path '${fieldPath}' is not a valid number`;
+          logger.error(errorMessage, { fieldPath, fieldValue });
           
           // Track the failed field access if tracking is enabled
           if (this.resolutionTracker) {
@@ -944,19 +973,20 @@ export class VariableReferenceResolver {
               'field-access-invalid-index',
               false,
               undefined,
-              errorMessage
+              detailedMessage
             );
           }
           
           throw VariableResolutionErrorFactory.invalidAccess(
             variableName,
-            errorMessage
+            detailedMessage
           );
         }
         
         if (index < 0 || index >= current.length) {
           const errorMessage = `Array index ${index} out of bounds [0-${current.length-1}] for variable '${variableName}'`;
-          logger.error(errorMessage);
+          const detailedMessage = `Array index ${index} at path '${fieldPath}' is out of bounds [0-${current.length-1}]`;
+          logger.error(errorMessage, { fieldPath, index, arrayLength: current.length });
           
           // Track the failed field access if tracking is enabled
           if (this.resolutionTracker) {
@@ -965,7 +995,7 @@ export class VariableReferenceResolver {
               'field-access-index-out-of-bounds',
               false,
               undefined,
-              errorMessage
+              detailedMessage
             );
           }
           
@@ -987,8 +1017,38 @@ export class VariableReferenceResolver {
         const propName = String(fieldValue);
         
         if (!(propName in current)) {
+          // Check if we have a stringified JSON object that needs parsing
+          if (typeof current === 'string' && (current.startsWith('{') || current.startsWith('['))) {
+            try {
+              const parsed = JSON.parse(current);
+              if (propName in parsed) {
+                logger.debug(`Found property '${propName}' in parsed JSON string`, {
+                  parsedType: typeof parsed,
+                  isArray: Array.isArray(parsed)
+                });
+                current = parsed;
+                current = current[propName];
+                continue;
+              }
+            } catch (error) {
+              // Not valid JSON, continue with normal error handling
+              logger.debug(`Failed to parse string as JSON for property access`, {
+                error: error instanceof Error ? error.message : String(error)
+              });
+            }
+          }
+          
           const errorMessage = `Field '${propName}' not found in variable '${variableName}'`;
-          logger.error(errorMessage, { current });
+          const detailedMessage = `Field '${propName}' at path '${fieldPath}' not found in variable '${variableName}'`;
+          const availableKeys = typeof current === 'object' && current !== null ? 
+            Object.keys(current) : [];
+          
+          logger.error(errorMessage, { 
+            fieldPath, 
+            availableKeys,
+            parentType: typeof current,
+            parentValue: current
+          });
           
           if (context.strict) {
             // Track the failed field access if tracking is enabled
@@ -998,13 +1058,18 @@ export class VariableReferenceResolver {
                 'field-access-not-found',
                 false,
                 undefined,
-                errorMessage
+                detailedMessage
               );
             }
             
+            // Create a more detailed error message that includes available keys
+            const keysInfo = availableKeys.length > 0 
+              ? `Available keys: ${availableKeys.join(', ')}` 
+              : 'No keys available';
+            
             throw VariableResolutionErrorFactory.fieldNotFound(
               variableName,
-              propName
+              `${propName} (${keysInfo})`
             );
           } else {
             logger.warn(`Field '${propName}' not found in variable '${variableName}', returning empty string (strict mode off)`);
@@ -1016,7 +1081,7 @@ export class VariableReferenceResolver {
                 'field-access-not-found-non-strict',
                 false,
                 '',
-                errorMessage
+                detailedMessage
               );
             }
             

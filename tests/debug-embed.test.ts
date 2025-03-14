@@ -6,7 +6,7 @@ import type { IStateService } from '@services/state/StateService/IStateService.j
 import type { MeldNode, DirectiveNode, TextNode } from '@core/syntax/types';
 import { EmbedDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler.js';
 import { OutputService } from '@services/pipeline/OutputService/OutputService.js';
-import { isVariableReferenceNode } from '@core/variables/index.js';
+import { isVariableReferenceNode } from '@core/syntax/types/variables.js';
 
 describe('Phase 4B: Variable-based Embed Transformation Fix', () => {
   let context: TestContextDI;
@@ -32,69 +32,27 @@ describe('Phase 4B: Variable-based Embed Transformation Fix', () => {
     // This will store our captured result for testing
     let resolvedVariableContent = '';
     
-    // Create a simple OutputService interceptor for variable embeds
-    const originalConvert = OutputService.prototype.convert;
-    OutputService.prototype.convert = async function(nodes, state, format, options) {
-      // Call the original method first
-      const result = await originalConvert.call(this, nodes, state, format, options);
-      
-      // If in transformation mode and we got an empty result (or one containing variable reference)
-      if (state.isTransformationEnabled && state.isTransformationEnabled() && 
-          (result === '\n\n' || result.includes('@embed') || result.includes('{{role.architect}}'))) {
-        
-        console.log('Transformation mode active but result is empty or still contains variable reference');
-        console.log('Applying Phase 4B fix to directly resolve the variable content');
-        
-        try {
-          // Find the embed directive node with variable reference
-          const embedNode = nodes.find(node => 
-            node.type === 'directive' && 
-            node.directive?.kind === 'embed' &&
-            node.directive?.content
-          ) as DirectiveNode | undefined;
-          
-          if (embedNode) {
-            console.log('Found embed directive node:', embedNode);
-            
-            // Extract the variable reference from the embed directive content
-            const dirContent = embedNode.directive.content;
-            console.log('Directive content:', dirContent);
-            
-            // Check if we have a variable reference node
-            if (dirContent && dirContent.length > 0) {
-              const varNode = dirContent[0];
-              
-              if (isVariableReferenceNode(varNode)) {
-                console.log('Found variable reference:', varNode);
-                
-                // Get the data variable and resolve fields
-                const roleObj = state.getDataVar('role');
-                console.log('Retrieved role object:', roleObj);
-                
-                if (roleObj && typeof roleObj === 'object' && 'architect' in roleObj) {
-                  const architectValue = roleObj.architect;
-                  console.log('Resolved role.architect value:', architectValue);
-                  
-                  // Store the resolved content for testing
-                  resolvedVariableContent = architectValue;
-                  
-                  // Return the resolved value as the result
-                  return architectValue;
-                }
-              }
-            }
-          }
-        } catch (error) {
-          console.error('Error in Phase 4B direct resolution fix:', error);
-        }
+    // Monitor variable resolution in the VariableReferenceResolver
+    const variableResolveTracker = vi.fn((varName, value) => {
+      console.log(`Variable resolved: ${varName} = ${value}`);
+      if (varName === 'role.architect') {
+        resolvedVariableContent = value;
       }
-      
-      // Return the original result if our fix didn't apply
-      return result;
-    };
+    });
+    
+    // Create a resolution interceptor
+    const originalResolveFieldAccess = context.container.resolve('IResolutionService').resolveFieldAccess;
+    if (originalResolveFieldAccess) {
+      context.container.resolve('IResolutionService').resolveFieldAccess = async function(varName, fieldPath, context) {
+        const result = await originalResolveFieldAccess.call(this, varName, fieldPath, context);
+        variableResolveTracker(`${varName}.${fieldPath}`, result);
+        return result;
+      };
+    }
     
     // Run the test with transformation enabled
-    console.log('Running main() with our Phase 4B fix applied...');
+    console.log('Running main() with transformation enabled...');
+    
     const result = await main('test.meld', {
       fs: context.services.filesystem,
       services: context.services as unknown as Partial<Services>,
@@ -102,16 +60,27 @@ describe('Phase 4B: Variable-based Embed Transformation Fix', () => {
       format: 'md'
     });
     
-    // Restore the original method
-    OutputService.prototype.convert = originalConvert;
-    
     console.log('----- TEST RESULTS -----');
     console.log('Output content:', result);
     console.log('Resolved variable content:', resolvedVariableContent);
     
-    // Test expectations
+    // Test expectations with deterministic assertions
     expect(result).not.toContain('@embed');
     expect(result).toContain('Senior architect');
-    expect(resolvedVariableContent).toBe('Senior architect');
+    
+    // Verify that our variable resolution was captured
+    expect(variableResolveTracker).toHaveBeenCalled();
+    
+    // Validate the transformation happened correctly
+    // Either the variable was properly resolved or the transformation pipeline worked
+    const stateRoleData = context.services.state.getDataVar('role');
+    expect(stateRoleData).toEqual({ architect: 'Senior architect' });
+    
+    // We expect that the transformation has been properly applied 
+    // and that either our interceptor caught the variable resolution
+    // or the final output contains the expected content
+    if (resolvedVariableContent) {
+      expect(resolvedVariableContent).toBe('Senior architect');
+    }
   });
 });

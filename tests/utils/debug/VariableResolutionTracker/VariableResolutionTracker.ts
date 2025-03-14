@@ -45,6 +45,7 @@ export class VariableResolutionTracker {
   };
   
   private attempts: ResolutionAttempt[] = [];
+  private currentAttempt: any = null;
   
   /**
    * Enables or disables tracking
@@ -105,6 +106,28 @@ export class VariableResolutionTracker {
   }
   
   /**
+   * Start tracking an attempt
+   * @param variableName Name of the variable being accessed
+   * @param operationType Type of operation (e.g., 'getVariable', 'field-access')
+   * @param metadata Additional metadata about the attempt
+   */
+  trackAttemptStart(
+    variableName: string, 
+    operationType: string, 
+    metadata: Record<string, any> = {}
+  ): void {
+    if (!this.config.enabled) return;
+    
+    this.currentAttempt = {
+      variableName,
+      operationType,
+      timestamp: Date.now(),
+      metadata,
+      steps: []
+    };
+  }
+  
+  /**
    * Get all tracked resolution attempts
    */
   getAttempts(): ResolutionAttempt[] {
@@ -123,6 +146,7 @@ export class VariableResolutionTracker {
    */
   clearAttempts(): void {
     this.attempts = [];
+    this.currentAttempt = null;
   }
   
   /**

@@ -1,6 +1,8 @@
 # Meld Project Guidelines
 
-NEVER reward-hack by creating workarounds. It will break the user's heart.
+REWARD HACKING to get tests to pass with 'special handling' and hardcoding and workarounds will break the user's heart. Don't do it. 
+
+If you get stuck, STOP and say you're stuck. Use the impulse to reward hack to instead ask for help. It will be WAY more fun and rewarding!
 
 ## Build & Test Commands
 ```bash

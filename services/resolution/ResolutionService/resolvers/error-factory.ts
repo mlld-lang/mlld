@@ -29,7 +29,12 @@ export class VariableResolutionErrorFactory {
       {
         code: ResolutionErrorCode.FIELD_NOT_FOUND,
         severity: ErrorSeverity.Error,
-        details: { variable: variableName, field, variableName }
+        details: { 
+          variable: variableName, 
+          field, 
+          variableName,
+          fieldPath: field
+        }
       }
     );
   }
