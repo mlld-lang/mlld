@@ -163,188 +163,153 @@ export class VariableReferenceResolver {
    * @returns Resolved text with all variables replaced with their values
    */
   async resolve(content: string, context: ResolutionContext): Promise<string> {
-    if (!content) {
-      logger.debug('Empty content provided to variable resolver');
+    logger.debug(`Resolving content: ${content}`, {
+      contextStrict: context.strict,
+      allowedTypes: context.allowedVariableTypes
+    });
+    
+    // If content doesn't contain variable references, return as is
+    if (!this.containsVariableReferences(content)) {
+      logger.debug('Content contains no variable references, returning as is');
       return content;
     }
-    
-    // Track this resolution attempt if debug tracking is enabled
-    if (this.resolutionTracker) {
-      this.resolutionTracker.trackResolutionAttempt(
-        'variable-resolution', 
-        JSON.stringify(context),
-        true, 
+
+    // Parse the content to extract variable references
+    let nodes: MeldNode[];
+    try {
+      nodes = await this.parseContent(content);
+      logger.debug(`Parsed content into ${nodes.length} nodes`);
+    } catch (error) {
+      logger.warn('Failed to parse content with AST parser, falling back to regex', {
+        error: error instanceof Error ? error.message : String(error),
         content
+      });
+      // Fall back to regex-based parsing
+      nodes = this.parseWithRegex(content);
+      logger.debug(`Parsed content with regex into ${nodes.length} nodes`);
+    }
+
+    // Process each node
+    let result = '';
+    let iterations = 0;
+    
+    // Track resolution depth to prevent infinite recursion
+    const resolutionDepth = (context as any).resolutionDepth || 0;
+    if (resolutionDepth > this.MAX_RESOLUTION_DEPTH) {
+      throw new MeldResolutionError(
+        `Maximum resolution depth exceeded (${this.MAX_RESOLUTION_DEPTH})`,
+        {
+          code: ResolutionErrorCode.MAX_DEPTH_EXCEEDED,
+          severity: ErrorSeverity.Fatal,
+          details: { context: JSON.stringify(context) }
+        }
       );
     }
     
-    try {
-      // Check if the content contains variable references before proceeding
-      if (!this.containsVariableReferences(content)) {
-        return content;
-      }
-      
-      // Parse the content into nodes
-      const nodes = await this.parseContent(content);
-      
-      // Process each node
-      let result = '';
-      
-      // Process all nodes sequentially
-      for (const node of nodes) {
-        try {
-          if (isTextNode(node)) {
-            // Text node - add content as is
-            result += node.content;
-          } else if (isVariableReferenceNode(node)) {
-            // Get variable information based on node type
-            const varName = node.identifier;
-            let varType: string;
-            let fields: any[] | undefined;
-            
-            // Handle both new VariableReference and legacy variable nodes
-            if (node.type === 'VariableReference') {
-              varType = node.valueType;
-              fields = node.fields;
-            } else if (node.type === 'TextVar') {
-              varType = 'text';
-              fields = node.fields;
-            } else if (node.type === 'DataVar') {
-              varType = 'data';
-              fields = node.fields;
-            } else if (node.type === 'PathVar') {
-              varType = 'path';
-              fields = undefined;
-            } else {
-              // Should never happen due to isVariableReferenceNode check
-              logger.warn('Unknown variable node type', { nodeType: node.type });
-              if (context.strict) {
-                throw new MeldResolutionError(
-                  `Unknown variable node type: ${node.type}`,
-                  {
-                    code: ResolutionErrorCode.INVALID_NODE_TYPE,
-                    severity: ErrorSeverity.Fatal,
-                    details: { 
-                      type: node.type,
-                      value: content,
-                      context: JSON.stringify(context)
-                    }
-                  }
-                );
-              }
-              continue;
-            }
-            
-            // Get variable value
-            const value = await this.getVariable(varName, context);
-            
-            // Handle undefined variables
-            if (value === undefined) {
-              logger.debug(`Variable '${varName}' not found`);
-              
-              // For strict mode, throw an error
-              if (context.strict) {
-                throw VariableResolutionErrorFactory.variableNotFound(varName);
-              }
-              
-              // For non-strict mode, just use empty string
-              result += '';
-              continue;
-            }
-            
-            // Check if this is a field access
-            if (fields && fields.length > 0) {
-              try {
-                const fieldValue = await this.accessFields(value, fields, context, varName);
-                result += this.convertToString(fieldValue);
-              } catch (error) {
-                // For strict mode, rethrow the error
-                if (context.strict) {
-                  throw error;
-                }
-                
-                // For non-strict mode, log and continue with empty string
-                logger.warn('Error accessing fields', {
-                  variable: varName,
-                  fields,
-                  error: error instanceof Error ? error.message : String(error)
-                });
-                result += '';
-              }
-            } else {
-              // Simple variable reference without fields
-              // Determine if this is a reference to an object or array that should be pretty-printed
-              const isComplexValue = (
-                (varType === 'data' && typeof value === 'object' && value !== null) ||
-                Array.isArray(value)
-              );
-              
-              // Use pretty-print for all complex values by default (no field access)
-              if (isComplexValue) {
-                // Always use block formatting for complex values
-                const blockFormattingContext = { isBlock: true };
-                result += this.convertToString(value, blockFormattingContext);
-              } else {
-                // Simple value, use regular toString
-                result += this.convertToString(value);
-              }
-            }
-          } else {
-            // Unknown node type - skip
-            logger.warn('Unknown node type in variable resolution', { node });
-            if (context.strict) {
-              throw new MeldResolutionError(
-                `Unknown node type: ${node.type}`,
-                {
-                  code: ResolutionErrorCode.INVALID_NODE_TYPE,
-                  severity: ErrorSeverity.Fatal,
-                  details: { 
-                    type: node.type,
-                    value: content,
-                    context: JSON.stringify(context)
-                  }
-                }
-              );
-            }
+    // Create a new context with incremented depth
+    const newContext: ResolutionContext = {
+      ...context,
+      resolutionDepth: resolutionDepth + 1
+    } as ResolutionContext & { resolutionDepth: number };
+
+    // Process each node
+    for (const node of nodes) {
+      // Prevent infinite loops
+      if (iterations++ > this.MAX_ITERATIONS) {
+        throw new MeldResolutionError(
+          `Maximum iterations exceeded (${this.MAX_ITERATIONS})`,
+          {
+            code: ResolutionErrorCode.MAX_ITERATIONS_EXCEEDED,
+            severity: ErrorSeverity.Fatal,
+            details: { context: JSON.stringify(context) }
           }
-        } catch (error) {
-          // Handle errors for individual nodes
-          if (context.strict) {
-            throw error;
-          }
-          logger.warn('Error processing node in variable resolution', { 
-            node, 
-            error: error instanceof Error ? error.message : String(error)
-          });
-          result += '';
-        }
-      }
-      
-      return result;
-    } catch (error) {
-      // Log the error for diagnostic purposes
-      logger.error('Error in variable resolution', {
-        content,
-        error: error instanceof Error ? error.message : String(error)
-      });
-      
-      // Track resolution error if tracking is enabled
-      if (this.resolutionTracker) {
-        this.resolutionTracker.trackResolutionAttempt(
-          'variable-resolution-error',
-          JSON.stringify({
-            content,
-            context: JSON.stringify(context)
-          }),
-          false,
-          undefined,
-          error instanceof Error ? error.message : String(error)
         );
       }
-      
-      // Rethrow to maintain behavior
-      throw error;
+
+      // Process text nodes directly
+      if (isTextNode(node)) {
+        result += node.content;
+        continue;
+      }
+
+      // Process variable reference nodes
+      if (isVariableReferenceNode(node)) {
+        logger.debug(`Processing variable reference node: ${node.identifier}`, {
+          valueType: node.valueType,
+          hasFields: !!node.fields,
+          fields: node.fields ? JSON.stringify(node.fields) : 'none'
+        });
+        
+        try {
+          // Get the variable value
+          let value = await this.getVariable(node.identifier, newContext);
+          
+          // If the variable has fields, access them
+          if (node.fields && node.fields.length > 0) {
+            logger.debug(`Accessing fields for variable ${node.identifier}`, {
+              fields: JSON.stringify(node.fields)
+            });
+            
+            try {
+              value = await this.accessFields(value, node.fields, newContext, node.identifier);
+              logger.debug(`Field access result for ${node.identifier}:`, {
+                valueType: typeof value,
+                isArray: Array.isArray(value),
+                value: typeof value === 'object' ? JSON.stringify(value).substring(0, 100) : String(value)
+              });
+            } catch (fieldError: any) {
+              // In non-strict mode, return empty string for field access errors
+              if (!newContext.strict) {
+                logger.warn(`Field access error in non-strict mode, returning empty string: ${fieldError.message}`);
+                value = '';
+              } else {
+                // In strict mode, rethrow the error
+                throw fieldError;
+              }
+            }
+          }
+          
+          // Convert the value to string
+          const stringValue = this.convertToString(value);
+          logger.debug(`Converted ${node.identifier} to string: ${stringValue}`);
+          
+          // Add to result
+          result += stringValue;
+        } catch (error) {
+          // In non-strict mode, replace with empty string
+          if (!newContext.strict) {
+            logger.warn(`Error resolving variable ${node.identifier} in non-strict mode, using empty string`, {
+              error: error instanceof Error ? error.message : String(error)
+            });
+            result += '';
+          } else {
+            // In strict mode, rethrow the error
+            throw error;
+          }
+        }
+        
+        continue;
+      }
+
+      // Handle directive nodes (should not happen in normal operation)
+      if (isDirectiveNode(node)) {
+        logger.warn(`Unexpected directive node in variable resolution: ${node.directive.kind}`);
+        // Skip directive nodes
+        continue;
+      }
+
+      // Unknown node type
+      logger.warn(`Unknown node type in variable resolution: ${node.type}`);
     }
+
+    // If the result still contains variable references, resolve them recursively
+    if (this.containsVariableReferences(result)) {
+      logger.debug(`Result still contains variable references, resolving recursively: ${result}`);
+      return this.resolve(result, newContext);
+    }
+
+    logger.debug(`Final resolved result: ${result}`);
+    return result;
   }
 
   /**
@@ -567,14 +532,55 @@ export class VariableReferenceResolver {
    * Get a variable value by name
    */
   private async getVariable(name: string, context: ResolutionContext): Promise<any> {
+    logger.debug(`Getting variable '${name}'`, {
+      variableName: name,
+      contextStrict: context.strict,
+      allowedTypes: context.allowedVariableTypes
+    });
+    
+    // Track resolution attempt if tracking is enabled
+    if (this.resolutionTracker) {
+      this.resolutionTracker.trackAttemptStart(name, 'getVariable');
+    }
+    
     // Check if this is a nested variable reference
     if (name.includes('{{')) {
-      return this.resolveNestedVariableReference('{{' + name + '}}', context);
+      logger.debug(`Resolving nested variable reference: ${name}`);
+      const result = await this.resolveNestedVariableReference('{{' + name + '}}', context);
+      
+      // Track the resolution result if tracking is enabled
+      if (this.resolutionTracker) {
+        this.resolutionTracker.trackResolutionAttempt(
+          name,
+          'nested-variable-reference',
+          result !== undefined,
+          result,
+          result === undefined ? 'Nested variable not found' : undefined
+        );
+      }
+      
+      return result;
     }
 
     // First try as text variable
     const textValue = context.state.getTextVar(name);
     if (textValue !== undefined) {
+      logger.debug(`Found text variable '${name}'`, {
+        value: typeof textValue === 'string' ? textValue : JSON.stringify(textValue),
+        type: typeof textValue
+      });
+      
+      // Track the resolution result if tracking is enabled
+      if (this.resolutionTracker) {
+        this.resolutionTracker.trackResolutionAttempt(
+          name,
+          'text-variable',
+          true,
+          textValue,
+          undefined
+        );
+      }
+      
       return textValue;
     }
 
@@ -582,30 +588,122 @@ export class VariableReferenceResolver {
     // or a stringified object which can happen in some test cases
     let dataValue = context.state.getDataVar(name);
     if (dataValue !== undefined) {
+      logger.debug(`Found data variable '${name}'`, {
+        valueType: typeof dataValue,
+        isArray: Array.isArray(dataValue),
+        preview: typeof dataValue === 'object' ? JSON.stringify(dataValue).substring(0, 100) : String(dataValue),
+        rawValue: dataValue
+      });
+      
       // If dataValue is a string but looks like JSON, try to parse it
       if (typeof dataValue === 'string' && 
           (dataValue.startsWith('{') || dataValue.startsWith('['))) {
         try {
           const parsedData = JSON.parse(dataValue);
+          logger.debug(`Parsed JSON string data variable '${name}'`, {
+            parsedType: typeof parsedData,
+            isArray: Array.isArray(parsedData),
+            parsedPreview: JSON.stringify(parsedData).substring(0, 100)
+          });
+          
+          // Track the resolution result if tracking is enabled
+          if (this.resolutionTracker) {
+            this.resolutionTracker.trackResolutionAttempt(
+              name,
+              'data-variable-parsed-from-string',
+              true,
+              parsedData,
+              undefined
+            );
+          }
+          
           return parsedData;
         } catch (e) {
           // If parsing fails, just use the string value
-          return dataValue;
+          logger.debug(`Failed to parse data variable '${name}' as JSON, using as string`, {
+            error: e instanceof Error ? e.message : String(e)
+          });
+          
+          // Track the failed parsing if tracking is enabled
+          if (this.resolutionTracker) {
+            this.resolutionTracker.trackResolutionAttempt(
+              name,
+              'data-variable-parse-failed',
+              true,
+              dataValue,
+              e instanceof Error ? e.message : String(e)
+            );
+          }
         }
       }
+      
+      // Track the resolution result if tracking is enabled
+      if (this.resolutionTracker) {
+        this.resolutionTracker.trackResolutionAttempt(
+          name,
+          'data-variable',
+          true,
+          dataValue,
+          undefined
+        );
+      }
+      
       return dataValue;
     }
 
     // Finally try as path variable
     const pathValue = context.state.getPathVar(name);
     if (pathValue !== undefined) {
+      logger.debug(`Found path variable '${name}'`, {
+        value: typeof pathValue === 'string' ? pathValue : JSON.stringify(pathValue),
+        type: typeof pathValue
+      });
+      
+      // Track the resolution result if tracking is enabled
+      if (this.resolutionTracker) {
+        this.resolutionTracker.trackResolutionAttempt(
+          name,
+          'path-variable',
+          true,
+          pathValue,
+          undefined
+        );
+      }
+      
       return pathValue;
     }
 
     // Variable not found - always throw in strict mode
     if (context.strict) {
+      logger.warn(`Variable '${name}' not found and strict mode is enabled, throwing error`);
+      
+      // Track the failed resolution if tracking is enabled
+      if (this.resolutionTracker) {
+        this.resolutionTracker.trackResolutionAttempt(
+          name,
+          'variable-not-found',
+          false,
+          undefined,
+          `Variable '${name}' not found`
+        );
+      }
+      
       throw VariableResolutionErrorFactory.variableNotFound(name);
     }
+    
+    logger.warn(`Variable '${name}' not found but strict mode is disabled, returning undefined`);
+    
+    // Track the missing variable in non-strict mode if tracking is enabled
+    if (this.resolutionTracker) {
+      this.resolutionTracker.trackResolutionAttempt(
+        name,
+        'variable-not-found-non-strict',
+        false,
+        undefined,
+        `Variable '${name}' not found`
+      );
+    }
+    
     return undefined;  // Return undefined instead of '' to signal missing variable
   }
 
@@ -647,7 +745,7 @@ export class VariableReferenceResolver {
       if (formattingContext?.isBlock) {
         return JSON.stringify(value, null, 2);
       }
-      // Default inline formatting - comma-separated
+      // Default inline formatting - comma-separated with space
       return value.map(item => this.convertToString(item)).join(', ');
     }
 
@@ -750,6 +848,28 @@ export class VariableReferenceResolver {
   private async accessFields(obj: any, fields: any[], context: ResolutionContext, variableName: string): Promise<any> {
     let current = obj;
     
+    // Log debug information to help with troubleshooting
+    logger.debug(`Accessing fields for variable '${variableName}'`, {
+      initialObjectType: typeof current,
+      isArray: Array.isArray(current),
+      rawValue: current,
+      numFields: fields?.length,
+      fields: JSON.stringify(fields)
+    });
+    
+    // Track field access attempt if tracking is enabled
+    if (this.resolutionTracker) {
+      this.resolutionTracker.trackAttemptStart(
+        `${variableName}.fields`,
+        'field-access',
+        { 
+          initialType: typeof current,
+          isArray: Array.isArray(current),
+          fields: JSON.stringify(fields)
+        }
+      );
+    }
+    
     // Process fields in order
     for (let i = 0; i < fields.length; i++) {
       const field = fields[i];
@@ -758,17 +878,54 @@ export class VariableReferenceResolver {
       
       // Make sure we have a valid object to access fields on
       if (current === null || current === undefined) {
+        const errorMessage = `Cannot access field '${fieldValue}' of ${current} for variable '${variableName}'`;
+        logger.error(errorMessage);
+        
+        // Track the failed field access if tracking is enabled
+        if (this.resolutionTracker) {
+          this.resolutionTracker.trackResolutionAttempt(
+            `${variableName}.${fieldValue}`,
+            'field-access-null-undefined',
+            false,
+            undefined,
+            errorMessage
+          );
+        }
+        
         throw VariableResolutionErrorFactory.invalidAccess(
           variableName,
-          `Cannot access field '${fieldValue}' of ${current} for variable '${variableName}'`
+          errorMessage
         );
       }
       
+      // Log debug information about the current field access
+      logger.debug(`Processing field ${i}`, { 
+        fieldType, 
+        fieldValue,
+        currentType: typeof current,
+        isArray: Array.isArray(current),
+        currentValue: current
+      });
+      
       // If current is not an object or array and we're trying to access a property, throw error
       if (typeof current !== 'object' && !Array.isArray(current)) {
+        const errorMessage = `Cannot access field '${fieldValue}' of non-object value (type: ${typeof current}) for variable '${variableName}'`;
+        logger.error(errorMessage, { current });
+        
+        // Track the failed field access if tracking is enabled
+        if (this.resolutionTracker) {
+          this.resolutionTracker.trackResolutionAttempt(
+            `${variableName}.${fieldValue}`,
+            'field-access-non-object',
+            false,
+            undefined,
+            errorMessage
+          );
+        }
+        
         throw VariableResolutionErrorFactory.invalidAccess(
           variableName,
-          `Cannot access field '${fieldValue}' of non-object value (type: ${typeof current}) for variable '${variableName}'`
+          errorMessage
         );
       }
       
@@ -777,13 +934,41 @@ export class VariableReferenceResolver {
         // Array index access
         const index = typeof fieldValue === 'number' ? fieldValue : parseInt(fieldValue as string, 10);
         if (isNaN(index)) {
+          const errorMessage = `Invalid array index: '${fieldValue}' is not a number for variable '${variableName}'`;
+          logger.error(errorMessage);
+          
+          // Track the failed field access if tracking is enabled
+          if (this.resolutionTracker) {
+            this.resolutionTracker.trackResolutionAttempt(
+              `${variableName}[${fieldValue}]`,
+              'field-access-invalid-index',
+              false,
+              undefined,
+              errorMessage
+            );
+          }
+          
           throw VariableResolutionErrorFactory.invalidAccess(
             variableName,
-            `Invalid array index: '${fieldValue}' is not a number for variable '${variableName}'`
+            errorMessage
           );
         }
         
         if (index < 0 || index >= current.length) {
+          const errorMessage = `Array index ${index} out of bounds [0-${current.length-1}] for variable '${variableName}'`;
+          logger.error(errorMessage);
+          
+          // Track the failed field access if tracking is enabled
+          if (this.resolutionTracker) {
+            this.resolutionTracker.trackResolutionAttempt(
+              `${variableName}[${index}]`,
+              'field-access-index-out-of-bounds',
+              false,
+              undefined,
+              errorMessage
+            );
+          }
+          
           throw VariableResolutionErrorFactory.indexOutOfBounds(
             variableName,
             index,
@@ -792,19 +977,71 @@ export class VariableReferenceResolver {
         }
         
         current = current[index];
+        logger.debug(`Accessed array index ${index}`, { 
+          resultType: typeof current,
+          isResultArray: Array.isArray(current),
+          value: current
+        });
       } else {
         // Regular property access
         const propName = String(fieldValue);
         
         if (!(propName in current)) {
-          throw VariableResolutionErrorFactory.fieldNotFound(
-            variableName,
-            propName
-          );
+          const errorMessage = `Field '${propName}' not found in variable '${variableName}'`;
+          logger.error(errorMessage, { current });
+          
+          if (context.strict) {
+            // Track the failed field access if tracking is enabled
+            if (this.resolutionTracker) {
+              this.resolutionTracker.trackResolutionAttempt(
+                `${variableName}.${propName}`,
+                'field-access-not-found',
+                false,
+                undefined,
+                errorMessage
+              );
+            }
+            
+            throw VariableResolutionErrorFactory.fieldNotFound(
+              variableName,
+              propName
+            );
+          } else {
+            logger.warn(`Field '${propName}' not found in variable '${variableName}', returning empty string (strict mode off)`);
+            
+            // Track the failed field access in non-strict mode if tracking is enabled
+            if (this.resolutionTracker) {
+              this.resolutionTracker.trackResolutionAttempt(
+                `${variableName}.${propName}`,
+                'field-access-not-found-non-strict',
+                false,
+                '',
+                errorMessage
+              );
+            }
+            
+            return '';
+          }
         }
         
         current = current[propName];
+        logger.debug(`Accessed property ${propName}`, { 
+          resultType: typeof current,
+          isResultArray: Array.isArray(current),
+          value: current
+        });
       }
+    }
+    
+    // Track successful field access if tracking is enabled
+    if (this.resolutionTracker) {
+      this.resolutionTracker.trackResolutionAttempt(
+        `${variableName}.fields`,
+        'field-access-success',
+        true,
+        current,
+        undefined
+      );
     }
     
     return current;

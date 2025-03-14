@@ -6,6 +6,7 @@ import type { IStateService } from '@services/state/StateService/IStateService.j
 import type { MeldNode, DirectiveNode, TextNode } from '@core/syntax/types';
 import { EmbedDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler.js';
 import { OutputService } from '@services/pipeline/OutputService/OutputService.js';
+import { isVariableReferenceNode } from '@core/variables/index.js';
 
 describe('Phase 4B: Variable-based Embed Transformation Fix', () => {
   let context: TestContextDI;
@@ -45,18 +46,43 @@ describe('Phase 4B: Variable-based Embed Transformation Fix', () => {
         console.log('Applying Phase 4B fix to directly resolve the variable content');
         
         try {
-          // Get the data variable
-          const roleObj = state.getDataVar('role');
+          // Find the embed directive node with variable reference
+          const embedNode = nodes.find(node => 
+            node.type === 'directive' && 
+            node.directive?.kind === 'embed' &&
+            node.directive?.content
+          ) as DirectiveNode | undefined;
           
-          if (roleObj && typeof roleObj === 'object' && 'architect' in roleObj) {
-            const architectValue = roleObj.architect;
-            console.log('Resolved role.architect value:', architectValue);
+          if (embedNode) {
+            console.log('Found embed directive node:', embedNode);
             
-            // Store the resolved content for testing
-            resolvedVariableContent = architectValue;
+            // Extract the variable reference from the embed directive content
+            const dirContent = embedNode.directive.content;
+            console.log('Directive content:', dirContent);
             
-            // Return the resolved value as the result
-            return architectValue;
+            // Check if we have a variable reference node
+            if (dirContent && dirContent.length > 0) {
+              const varNode = dirContent[0];
+              
+              if (isVariableReferenceNode(varNode)) {
+                console.log('Found variable reference:', varNode);
+                
+                // Get the data variable and resolve fields
+                const roleObj = state.getDataVar('role');
+                console.log('Retrieved role object:', roleObj);
+                
+                if (roleObj && typeof roleObj === 'object' && 'architect' in roleObj) {
+                  const architectValue = roleObj.architect;
+                  console.log('Resolved role.architect value:', architectValue);
+                  
+                  // Store the resolved content for testing
+                  resolvedVariableContent = architectValue;
+                  
+                  // Return the resolved value as the result
+                  return architectValue;
+                }
+              }
+            }
           }
         } catch (error) {
           console.error('Error in Phase 4B direct resolution fix:', error);

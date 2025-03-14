@@ -2144,6 +2144,13 @@ Transformation enabled?: ${state.isTransformationEnabled()}
 
 function isDataVarNode(node: MeldNode): node is any {
   const anyNode = node as any;
-  return anyNode.type === 'DataVar' || 
-         (anyNode.type === 'VariableReference' && anyNode.valueType === 'data');
+  // Check for new-style VariableReference node with valueType 'data'
+  if (anyNode.type === 'VariableReference' && anyNode.valueType === 'data') {
+    return true;
+  }
+  // Check for legacy DataVar node type
+  if (anyNode.type === 'DataVar') {
+    return true;
+  }
+  return false;
 }
