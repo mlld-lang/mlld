@@ -273,7 +273,15 @@ export class VariableReferenceResolver {
               }
             } else {
               // Simple variable reference without fields
-              result += this.convertToString(value);
+              // Check if this is a direct reference to a data object
+              const isDataObject = varType === 'data' && typeof value === 'object' && value !== null && !Array.isArray(value);
+              
+              // Use pretty-print for objects by default (no field access)
+              if (isDataObject) {
+                result += this.convertToString(value, { isBlock: true });
+              } else {
+                result += this.convertToString(value);
+              }
             }
           } else {
             // Unknown node type - skip
@@ -550,76 +558,35 @@ export class VariableReferenceResolver {
   }
   
   /**
-   * Parse content using regex-based approach as a fallback
-   * This is used when AST-based parsing fails
-   */
-  private parseWithRegex(content: string): MeldNode[] {
-    const nodes: MeldNode[] = [];
-    let lastIndex = 0;
-    const variableRegex = /\{\{([^}]+)\}\}/g;
-    let match;
-
-    while ((match = variableRegex.exec(content)) !== null) {
-      // Add text before the variable if any
-      if (match.index > lastIndex) {
-        nodes.push({
-          type: 'Text',
-          content: content.slice(lastIndex, match.index)
-        } as TextNode);
-      }
-
-      // Parse the variable reference
-      const { baseName, fields } = this.parseVariableReference(match[1]);
-      
-      // Determine if this is a data var (has fields) or text var (no fields)
-      const valueType = fields && fields.length > 0 ? 'data' : 'text';
-      nodes.push(createVariableReferenceNode(baseName, valueType, fields));
-
-      lastIndex = match.index + match[0].length;
-    }
-
-    // Check for path variables ($var) as well
-    const pathVarRegex = /\$([A-Za-z0-9_~]+)/g;
-    while ((match = pathVarRegex.exec(content.slice(lastIndex))) !== null) {
-      // Add text before the path variable if any
-      const actualIndex = lastIndex + match.index;
-      if (actualIndex > lastIndex) {
-        nodes.push({
-          type: 'Text',
-          content: content.slice(lastIndex, actualIndex)
-        } as TextNode);
-      }
-
-      // Create path variable node
-      nodes.push(createVariableReferenceNode(match[1], 'path', undefined));
-      
-      lastIndex = actualIndex + match[0].length;
-    }
-
-    // Add remaining text if any
-    if (lastIndex < content.length) {
-      nodes.push({
-        type: 'Text',
-        content: content.slice(lastIndex)
-      } as TextNode);
-    }
-
-    return nodes;
-  }
-
-  /**
    * Get a variable value by name
    */
   private async getVariable(name: string, context: ResolutionContext): Promise<any> {
+    // Check if this is a nested variable reference
+    if (name.includes('{{')) {
+      return this.resolveNestedVariableReference('{{' + name + '}}', context);
+    }
+
     // First try as text variable
     const textValue = context.state.getTextVar(name);
     if (textValue !== undefined) {
       return textValue;
     }
 
-    // Then try as data variable
-    const dataValue = context.state.getDataVar(name);
+    // Then try as data variable - check if we're getting an actual object 
+    // or a stringified object which can happen in some test cases
+    let dataValue = context.state.getDataVar(name);
     if (dataValue !== undefined) {
+      // If dataValue is a string but looks like JSON, try to parse it
+      if (typeof dataValue === 'string' && 
+          (dataValue.startsWith('{') || dataValue.startsWith('['))) {
+        try {
+          const parsedData = JSON.parse(dataValue);
+          return parsedData;
+        } catch (e) {
+          // If parsing fails, just use the string value
+          return dataValue;
+        }
+      }
       return dataValue;
     }
 
@@ -629,11 +596,11 @@ export class VariableReferenceResolver {
       return pathValue;
     }
 
-    // Variable not found
+    // Variable not found - always throw in strict mode
     if (context.strict) {
       throw VariableResolutionErrorFactory.variableNotFound(name);
     }
-    return '';
+    return undefined;  // Return undefined instead of '' to signal missing variable
   }
 
   /**
@@ -767,148 +734,69 @@ export class VariableReferenceResolver {
   }
   
   /**
-   * Access fields in an object using field path
-   * @param baseValue The base value to access fields from
-   * @param fields Array of fields to access
-   * @param context Resolution context
-   * @param originalPath Original path expression for error reporting
-   * @returns String representation of the accessed value
+   * Access fields in a nested object
    */
-  private async accessFields(
-    baseValue: any, 
-    fields: Field[], 
-    context: ResolutionContext,
-    originalPath: string
-  ): Promise<string> {
-    let currentValue = baseValue;
-    let currentPath = originalPath;
+  private async accessFields(obj: any, fields: any[], context: ResolutionContext, variableName: string): Promise<any> {
+    let current = obj;
     
-    // No fields to access
-    if (!fields || fields.length === 0) {
-      return this.convertToString(currentValue);
-    }
-    
-    for (const field of fields) {
-      // Handle undefined or null values
-      if (currentValue === undefined || currentValue === null) {
-        if (context.strict) {
-          throw VariableResolutionErrorFactory.fieldAccessError(
-            `Cannot access field of ${currentValue} value`,
-            originalPath
-          );
-        }
-        return '';
+    // Process fields in order
+    for (let i = 0; i < fields.length; i++) {
+      const field = fields[i];
+      const fieldValue = field.value !== undefined ? field.value : field;
+      const fieldType = field.type || 'field';
+      
+      // Make sure we have a valid object to access fields on
+      if (current === null || current === undefined) {
+        throw VariableResolutionErrorFactory.invalidAccess(
+          variableName,
+          `Cannot access field '${fieldValue}' of ${current} for variable '${variableName}'`
+        );
       }
       
-      // Get the field name or index
-      let fieldNameOrIndex = field.value;
+      // If current is not an object or array and we're trying to access a property, throw error
+      if (typeof current !== 'object' && !Array.isArray(current)) {
+        throw VariableResolutionErrorFactory.invalidAccess(
+          variableName,
+          `Cannot access field '${fieldValue}' of non-object value (type: ${typeof current}) for variable '${variableName}'`
+        );
+      }
       
-      // Update the path for error reporting
-      if (typeof fieldNameOrIndex === 'string') {
-        currentPath += '.' + fieldNameOrIndex;
+      // Field access (regular property or array index)
+      if (fieldType === 'index' && Array.isArray(current)) {
+        // Array index access
+        const index = typeof fieldValue === 'number' ? fieldValue : parseInt(fieldValue as string, 10);
+        if (isNaN(index)) {
+          throw VariableResolutionErrorFactory.invalidAccess(
+            variableName,
+            `Invalid array index: '${fieldValue}' is not a number for variable '${variableName}'`
+          );
+        }
+        
+        if (index < 0 || index >= current.length) {
+          throw VariableResolutionErrorFactory.indexOutOfBounds(
+            variableName,
+            index,
+            current.length
+          );
+        }
+        
+        current = current[index];
       } else {
-        currentPath += `[${fieldNameOrIndex}]`;
-      }
-      
-      // Check if the field name is a variable reference
-      if (typeof fieldNameOrIndex === 'string' && 
-          fieldNameOrIndex.startsWith('{{') && 
-          fieldNameOrIndex.endsWith('}}')) {
-        try {
-          // Resolve the variable reference
-          fieldNameOrIndex = await this.resolveVariableInFieldName(fieldNameOrIndex, context);
-          logger.debug('Resolved variable in field name', { 
-            original: field.value, 
-            resolved: fieldNameOrIndex
-          });
-        } catch (error) {
-          if (context.strict) {
-            throw error;
-          }
-          return '';
-        }
-      }
-      
-      // Access the field
-      try {
-        if (Array.isArray(currentValue) && field.type === 'index') {
-          // Validate index is in bounds
-          const index = typeof fieldNameOrIndex === 'number' ? 
-            fieldNameOrIndex : parseInt(fieldNameOrIndex as string, 10);
-          
-          if (isNaN(index)) {
-            if (context.strict) {
-              throw VariableResolutionErrorFactory.invalidAccess(
-                originalPath,
-                `Invalid array index: '${fieldNameOrIndex}' is not a number`
-              );
-            }
-            return '';
-          }
-          
-          if (index < 0 || index >= currentValue.length) {
-            if (context.strict) {
-              throw VariableResolutionErrorFactory.indexOutOfBounds(
-                originalPath,
-                index,
-                currentValue.length
-              );
-            }
-            return '';
-          }
-          
-          currentValue = currentValue[index];
-        } else if (typeof currentValue === 'object' && currentValue !== null) {
-          // Using fieldNameOrIndex as a property name
-          const propName = String(fieldNameOrIndex);
-          
-          if (!(propName in currentValue)) {
-            if (context.strict) {
-              throw VariableResolutionErrorFactory.fieldNotFound(
-                originalPath,
-                propName
-              );
-            }
-            return '';
-          }
-          
-          currentValue = currentValue[propName];
-        } else {
-          // Can't access fields on primitive values
-          if (context.strict) {
-            throw VariableResolutionErrorFactory.invalidAccess(
-              originalPath,
-              `Cannot access field '${fieldNameOrIndex}' of non-object value (type: ${typeof currentValue})`
-            );
-          }
-          return '';
-        }
-      } catch (error) {
-        // Handle errors during property access
-        if (error instanceof MeldResolutionError) {
-          // Just rethrow existing resolution errors
-          throw error;
-        }
+        // Regular property access
+        const propName = String(fieldValue);
         
-        // Create a new resolution error for other types of errors
-        if (context.strict) {
-          throw VariableResolutionErrorFactory.fieldAccessError(
-            `Error accessing field '${fieldNameOrIndex}': ${(error as Error).message}`,
-            originalPath
+        if (!(propName in current)) {
+          throw VariableResolutionErrorFactory.fieldNotFound(
+            variableName,
+            propName
           );
         }
         
-        logger.debug('Non-critical error during field access in non-strict mode', {
-          path: currentPath,
-          error: error instanceof Error ? error.message : String(error)
-        });
-        
-        return '';
+        current = current[propName];
       }
     }
     
-    // Return the final value
-    return this.convertToString(currentValue);
+    return current;
   }
 
   /**
@@ -953,7 +841,11 @@ export class VariableReferenceResolver {
             error: error instanceof Error ? error.message : String(error),
             reference
           });
-          // If this fails, we'll try the client approach as a fallback
+          // If this fails and strict mode is on, rethrow
+          if (context.strict) {
+            throw error;
+          }
+          // Otherwise continue with fallback approaches
         }
       }
       
@@ -971,13 +863,23 @@ export class VariableReferenceResolver {
         } catch (error) {
           // Check if this is already a MeldResolutionError (like circular reference detection)
           if (error instanceof MeldResolutionError) {
-            throw error;
+            if (context.strict) {
+              throw error;
+            }
           }
           
           logger.debug('Error using resolutionClient.resolveInContext', { 
             error: error instanceof Error ? error.message : String(error),
             reference 
           });
+          
+          // If strict mode is on, rethrow
+          if (context.strict) {
+            if (error instanceof Error) {
+              throw error;
+            }
+            throw new Error(String(error));
+          }
         }
       }
       
@@ -1038,7 +940,75 @@ export class VariableReferenceResolver {
         );
       }
       
-      throw error;
+      // Always propagate errors if strict mode is enabled
+      if (context.strict) {
+        throw error;
+      }
+      
+      // In non-strict mode, return empty string for errors
+      return '';
     }
+  }
+
+  /**
+   * Parse content using regex-based approach as a fallback
+   * This is used when AST-based parsing fails
+   */
+  private parseWithRegex(content: string): MeldNode[] {
+    const result: MeldNode[] = [];
+    
+    // Simple implementation to avoid edge cases in the regex approach
+    let remaining = content;
+    let startIndex = remaining.indexOf('{{');
+    
+    while (startIndex !== -1) {
+      // Add text before the variable
+      if (startIndex > 0) {
+        result.push({
+          type: 'Text',
+          content: remaining.substring(0, startIndex)
+        } as TextNode);
+      }
+      
+      const endIndex = remaining.indexOf('}}', startIndex);
+      if (endIndex === -1) {
+        // No closing braces - treat the rest as text
+        result.push({
+          type: 'Text',
+          content: remaining
+        } as TextNode);
+        break;
+      }
+      
+      const varContent = remaining.substring(startIndex + 2, endIndex);
+      
+      // Check if the variable reference contains another variable reference
+      if (varContent.includes('{{')) {
+        // This is a nested reference - keep it as text for later processing
+        result.push({
+          type: 'Text',
+          content: remaining.substring(startIndex, endIndex + 2)
+        } as TextNode);
+      } else {
+        // Parse as a regular variable reference
+        const { baseName, fields } = this.parseVariableReference(varContent);
+        const valueType = fields && fields.length > 0 ? 'data' : 'text';
+        result.push(createVariableReferenceNode(baseName, valueType, fields));
+      }
+      
+      // Move to the next position
+      remaining = remaining.substring(endIndex + 2);
+      startIndex = remaining.indexOf('{{');
+    }
+    
+    // Add any remaining text
+    if (remaining.length > 0) {
+      result.push({
+        type: 'Text',
+        content: remaining
+      } as TextNode);
+    }
+    
+    return result;
   }
 }

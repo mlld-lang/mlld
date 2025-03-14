@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi, fail } from 'vitest';
 import { VariableReferenceResolver } from './VariableReferenceResolver.js';
 import { 
   createMockStateService, 
@@ -43,13 +43,18 @@ describe('VariableReferenceResolver Edge Cases', () => {
 
   // Test for nested object access with arrays
   it('should access nested array elements correctly', async () => {
-    vi.mocked(stateService.getDataVar).mockReturnValue({
+    // Mock data object with items array
+    const mockData = {
       items: [
         { name: 'item1' },
         { name: 'item2' }
       ]
-    });
+    };
     
+    // Mock the state service to return our data object
+    vi.mocked(stateService.getDataVar).mockReturnValue(mockData);
+    
+    // Mock the parser to return a data variable with field access
     vi.mocked(parserService.parse).mockResolvedValue([
       createVariableReferenceNode('data', 'data', [
         { type: 'field', value: 'items' },
@@ -72,11 +77,14 @@ describe('VariableReferenceResolver Edge Cases', () => {
   });
 
   it('should handle data variables with field access through string concatenation', async () => {
-    // Mock state service to return a data object
-    vi.mocked(stateService.getDataVar).mockReturnValue({
+    // Mock data object with key-value pairs
+    const mockData = {
       key1: 'value1',
       key2: 'value2'
-    });
+    };
+    
+    // Mock state service to return our data object
+    vi.mocked(stateService.getDataVar).mockReturnValue(mockData);
     
     // Mock parser to return a data variable with field access
     vi.mocked(parserService.parse).mockResolvedValue([
@@ -90,10 +98,15 @@ describe('VariableReferenceResolver Edge Cases', () => {
   });
 
   it('should provide detailed error information for field access failures', async () => {
-    vi.mocked(stateService.getDataVar).mockReturnValue({
+    // Mock data object with empty user object
+    const mockData = {
       user: {}
-    });
+    };
     
+    // Mock state service to return our data object
+    vi.mocked(stateService.getDataVar).mockReturnValue(mockData);
+    
+    // Mock parser to return a data variable with field access to missing field
     vi.mocked(parserService.parse).mockResolvedValue([
       createVariableReferenceNode('data', 'data', [
         { type: 'field', value: 'user' },
@@ -112,10 +125,15 @@ describe('VariableReferenceResolver Edge Cases', () => {
   });
 
   it('should return empty string for missing fields when strict mode is off', async () => {
-    vi.mocked(stateService.getDataVar).mockReturnValue({
+    // Mock data object with empty user object
+    const mockData = {
       user: {}
-    });
+    };
     
+    // Mock state service to return our data object
+    vi.mocked(stateService.getDataVar).mockReturnValue(mockData);
+    
+    // Mock parser to return a data variable with field access to missing field
     vi.mocked(parserService.parse).mockResolvedValue([
       createVariableReferenceNode('data', 'data', [
         { type: 'field', value: 'user' },
@@ -131,6 +149,7 @@ describe('VariableReferenceResolver Edge Cases', () => {
     // Mock resolveInContext to throw
     vi.mocked(resolutionService.resolveInContext).mockRejectedValue(new Error('Nested error'));
     
+    // Test should expect this to reject with an error (strict mode)
     await expect(resolver.resolve('{{var_{{nested}}}}', context))
       .rejects.toThrow();
   });

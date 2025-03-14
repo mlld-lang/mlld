@@ -1,3 +1,5 @@
+import type { MeldNode } from './index.js';
+
 /**
  * Types of variables supported in Meld
  */
@@ -51,50 +53,46 @@ export interface VariableReferenceNode {
 }
 
 /**
- * Type guard to check if a node is a variable reference
+ * Check if a node is a variable reference node
+ * This includes both the new VariableReference type and legacy variable types
  */
-export function isVariableReferenceNode(node: any): node is VariableReferenceNode {
-  // Check for new-style VariableReference nodes
-  if (
-    node &&
-    node.type === 'VariableReference' &&
-    typeof node.identifier === 'string' &&
-    typeof node.isVariableReference === 'boolean' &&
-    node.isVariableReference === true &&
-    (node.valueType === 'text' || node.valueType === 'data' || node.valueType === 'path')
-  ) {
-    return true;
-  }
-  
-  // Check for legacy TextVar nodes
-  if (
-    node &&
-    node.type === 'TextVar' &&
-    typeof node.identifier === 'string'
-  ) {
-    return true;
-  }
-  
-  // Check for legacy DataVar nodes
-  if (
-    node &&
-    node.type === 'DataVar' &&
-    typeof node.identifier === 'string' &&
-    Array.isArray(node.fields)
-  ) {
-    return true;
-  }
-  
-  // Check for legacy PathVar nodes
-  if (
-    node &&
-    node.type === 'PathVar' &&
-    typeof node.identifier === 'string'
-  ) {
-    return true;
-  }
-  
-  return false;
+export function isVariableReferenceNode(node: MeldNode): node is VariableReferenceNode {
+  // Only check for new VariableReference type
+  const n = node as any;
+  return (
+    n.type === 'VariableReference' &&
+    typeof n.identifier === 'string' &&
+    typeof n.valueType === 'string'
+  );
+
+  // // Check for legacy TextVar nodes
+  // if (
+  //   node.type === 'TextVar' &&
+  //   'value' in node &&
+  //   typeof node.value === 'string'
+  // ) {
+  //   return true;
+  // }
+
+  // // Check for legacy DataVar nodes
+  // if (
+  //   node.type === 'DataVar' &&
+  //   'value' in node &&
+  //   typeof node.value === 'string'
+  // ) {
+  //   return true;
+  // }
+
+  // // Check for legacy PathVar nodes
+  // if (
+  //   node.type === 'PathVar' &&
+  //   'value' in node &&
+  //   typeof node.value === 'string'
+  // ) {
+  //   return true;
+  // }
+
+  // return false;
 }
 
 /**
@@ -147,74 +145,60 @@ export interface VariableReference {
 
 /**
  * Legacy TextVarNode type for compatibility with meld-ast.
- * @deprecated Use VariableReferenceNode instead.
+ * @deprecated Use VariableReferenceNode with valueType: 'text' instead
  */
-export interface TextVarNode {
-  type: 'TextVar';
-  identifier: string;
-  fields?: Field[];
-  format?: string;
-  location?: {
-    start: { line: number; column: number };
-    end: { line: number; column: number };
-  };
-}
+// export interface TextVarNode {
+//   type: 'TextVar';
+//   value: string;
+//   fields?: Field[];
+//   location?: Location;
+// }
 
 /**
  * Legacy DataVarNode type for compatibility with meld-ast.
- * @deprecated Use VariableReferenceNode instead.
+ * @deprecated Use VariableReferenceNode with valueType: 'data' instead
  */
-export interface DataVarNode {
-  type: 'DataVar';
-  identifier: string;
-  fields: Field[];
-  format?: string;
-  location?: {
-    start: { line: number; column: number };
-    end: { line: number; column: number };
-  };
-}
+// export interface DataVarNode {
+//   type: 'DataVar';
+//   value: string;
+//   fields?: Field[];
+//   location?: Location;
+// }
 
 /**
  * Legacy PathVarNode type for compatibility with meld-ast.
- * @deprecated Use VariableReferenceNode instead.
+ * @deprecated Use VariableReferenceNode with valueType: 'path' instead
  */
-export interface PathVarNode {
-  type: 'PathVar';
-  identifier: string;
-  format?: string;
-  location?: {
-    start: { line: number; column: number };
-    end: { line: number; column: number };
-  };
-}
+// export interface PathVarNode {
+//   type: 'PathVar';
+//   value: string;
+//   location?: Location;
+// }
 
 /**
- * Convert a legacy variable node to the new VariableReferenceNode format
+ * Convert a legacy variable node to the new VariableReferenceNode type
+ * @deprecated Remove once all code is updated to use VariableReferenceNode
  */
-export function convertLegacyVariableNode(node: TextVarNode | DataVarNode | PathVarNode): VariableReferenceNode {
-  const variableType: VariableType = 
-    node.type === 'TextVar' ? 'text' :
-    node.type === 'DataVar' ? 'data' : 'path';
-    
-  // Handle fields differently based on node type since not all types have fields
-  let fields: Field[] = [];
-  if (node.type === 'DataVar') {
-    fields = node.fields;
-  } else if (node.type === 'TextVar' && node.fields) {
-    fields = node.fields;
-  }
-    
-  return {
-    type: 'VariableReference',
-    identifier: node.identifier,
-    valueType: variableType,
-    fields,
-    isVariableReference: true,
-    format: node.format,
-    location: node.location
-  };
-}
+// export function convertLegacyVariableNode(node: TextVarNode | DataVarNode | PathVarNode): VariableReferenceNode {
+//   const valueType = 
+//     node.type === 'TextVar' ? 'text' :
+//     node.type === 'DataVar' ? 'data' : 'path';
+
+//   const fields = [];
+//   if (node.type === 'DataVar') {
+//     fields.push(...(node.fields || []));
+//   } else if (node.type === 'TextVar' && node.fields) {
+//     fields.push(...node.fields);
+//   }
+
+//   return {
+//     type: 'VariableReference',
+//     identifier: node.value,
+//     valueType,
+//     fields,
+//     location: node.location
+//   };
+// }
 
 /**
  * Special path variables

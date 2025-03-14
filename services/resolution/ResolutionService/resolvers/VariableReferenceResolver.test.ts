@@ -77,6 +77,9 @@ describe('VariableReferenceResolver', () => {
     });
 
     it('should handle field access in data variables', async () => {
+      // Mock a data object with user structure
+      const mockData = { user: { name: 'Alice' } };
+      
       vi.mocked(parserService.parse).mockResolvedValue([
         createVariableReferenceNode('data', 'data', [
           { type: 'field', value: 'user' },
@@ -85,9 +88,10 @@ describe('VariableReferenceResolver', () => {
       ]);
       
       vi.mocked(stateService.getTextVar).mockReturnValue(undefined);
-      vi.mocked(stateService.getDataVar).mockReturnValue({ user: { name: 'Alice' } });
+      vi.mocked(stateService.getDataVar).mockReturnValue(mockData);
       const result = await resolver.resolve('{{data.user.name}}', context);
       expect(result).toBe('Alice');
+      expect(stateService.getDataVar).toHaveBeenCalledWith('data');
     });
 
     it('should handle environment variables', async () => {
@@ -97,6 +101,8 @@ describe('VariableReferenceResolver', () => {
       
       vi.mocked(stateService.getTextVar).mockReturnValue(undefined);
       vi.mocked(stateService.getDataVar).mockReturnValue(undefined);
+      vi.mocked(stateService.getPathVar).mockReturnValue(undefined);
+      
       await expect(resolver.resolve('{{ENV_TEST}}', context))
         .rejects
         .toThrow('Variable ENV_TEST not found');
@@ -109,6 +115,8 @@ describe('VariableReferenceResolver', () => {
       
       vi.mocked(stateService.getTextVar).mockReturnValue(undefined);
       vi.mocked(stateService.getDataVar).mockReturnValue(undefined);
+      vi.mocked(stateService.getPathVar).mockReturnValue(undefined);
+      
       await expect(resolver.resolve('{{missing}}', context))
         .rejects
         .toThrow('Variable missing not found');
