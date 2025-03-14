@@ -761,57 +761,82 @@ export class VariableReferenceResolver {
    * @returns Formatted string representation
    */
   private formatValueAsString(value: any, formatOutput = false, formatContext: FormatContext = 'inline'): string {
-    if (value === null || value === undefined) {
+    if (value === undefined || value === null) {
+      return '';
+    }
+
+    if (typeof value === 'string') {
+      return value;
+    }
+
+    if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
       return String(value);
     }
 
+    // Handle array values with standardized formatting
     if (Array.isArray(value)) {
-      // Determine if this array should be pretty-printed based on content and context
-      const shouldPrettyPrint = formatContext === 'block' || this.shouldArrayBePrettyPrinted(value);
-      
-      if (shouldPrettyPrint && formatOutput) {
-        // Pretty print the array with indentation for better readability
-        return JSON.stringify(value, null, 2);
-      } else {
-        // For inline arrays, ensure proper spacing after commas
-        return '[' + value.map(item => this.formatValueAsString(item, formatOutput)).join(', ') + ']';
+      // Block context formatting (for multiline output)
+      if (formatContext === 'block') {
+        // For complex arrays that need pretty formatting
+        if (this.shouldArrayBePrettyPrinted(value)) {
+          return value.map(item => {
+            const itemStr = this.formatValueAsString(item, formatOutput, 'inline');
+            // Format each item as a bullet point
+            return `- ${itemStr}`;
+          }).join('\n');
+        }
+        
+        // Simple arrays in block context get comma-space formatting
+        return value.map(item => this.formatValueAsString(item, formatOutput, 'inline')).join(', ');
       }
+      
+      // Inline context - always use comma-space formatting
+      return value.map(item => this.formatValueAsString(item, formatOutput, 'inline')).join(', ');
     }
 
+    // Handle object values with standardized formatting
     if (typeof value === 'object') {
       try {
-        if (formatContext === 'block' && formatOutput) {
-          // Pretty print objects in block context
+        // Block context formatting (for multiline output)
+        if (formatContext === 'block') {
+          // Use 2-space indentation for pretty printing
           return JSON.stringify(value, null, 2);
-        } else {
-          // For inline objects, ensure consistent formatting
-          const result = JSON.stringify(value);
-          // If formatOutput is true, we want to make sure the JSON is readable
-          return formatOutput ? this.formatJsonString(result) : result;
         }
+        
+        // Inline context - compact JSON without whitespace
+        return JSON.stringify(value);
       } catch (error) {
-        console.error('Error stringifying object:', error);
+        // Just in case JSON.stringify fails
         return '[Object]';
       }
     }
 
+    // Default fallback for other types
     return String(value);
   }
 
-  /**
-   * Helper method to determine if an array should be pretty-printed
-   * based on its contents (e.g., contains complex objects)
-   */
   private shouldArrayBePrettyPrinted(arr: any[]): boolean {
-    if (arr.length === 0) return false;
+    // Arrays should be pretty-printed if:
+    // 1. They contain objects 
+    // 2. They contain nested arrays
+    // 3. They are longer than 5 items
+    // 4. Any item is longer than 20 characters when stringified
     
-    // Check if array contains complex objects that would benefit from pretty printing
+    if (arr.length > 5) {
+      return true;
+    }
+    
     return arr.some(item => {
       if (typeof item === 'object' && item !== null) {
-        return Object.keys(item).length > 1 || 
-               (Object.keys(item).length === 1 && typeof Object.values(item)[0] === 'object');
+        return true;
       }
-      return false;
+      
+      if (Array.isArray(item)) {
+        return true;
+      }
+      
+      const stringified = String(item);
+      return stringified.length > 20;
     });
   }
 

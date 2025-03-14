@@ -101,29 +101,21 @@ describe('Enhanced Field Access', () => {
       console.log('Is array?', Array.isArray(result));
       console.log('Actual result:', result);
       
-      // Create a test array to compare - this helps diagnose type issues
-      const expected = ['JavaScript', 'TypeScript', 'Node.js'];
-      console.log('Expected type:', typeof expected);
-      console.log('Expected is array?', Array.isArray(expected));
-      
       // Check if we got the actual array back
       if (Array.isArray(result)) {
+        const expected = ['JavaScript', 'TypeScript', 'Node.js'];
         expect(result).toEqual(expected);
       } else {
-        // For string representation, accept both comma formats
-        const resultStr = String(result);
-        const isExpectedFormat = 
-          resultStr === 'JavaScript, TypeScript, Node.js' || 
-          resultStr === 'JavaScript,TypeScript,Node.js';
-        
-        expect(isExpectedFormat).toBe(true);
+        fail('Expected result to be an array when preserveType is enabled');
       }
       
       // Without type preservation (default)
       const stringResult = await client.resolveFieldAccess('user', 'profile.skills', context);
-      const hasProperSpacing = stringResult === 'JavaScript, TypeScript, Node.js';
-      const hasNoSpacing = stringResult === 'JavaScript,TypeScript,Node.js';
-      expect(hasProperSpacing || hasNoSpacing).toBe(true);
+      console.log('String result:', stringResult);
+      
+      // According to our new standardized formatting, arrays in inline context 
+      // should be comma-space separated without brackets
+      expect(stringResult).toBe('JavaScript, TypeScript, Node.js');
     });
     
     it('should access fields in objects', async () => {
@@ -145,7 +137,7 @@ describe('Enhanced Field Access', () => {
       // Create a test array directly for testing formatting
       const skills = ['JavaScript', 'TypeScript', 'Node.js'];
       
-      // In block context (should be bullet list)
+      // In block context (should be bullet list or comma-separated based on complexity)
       const blockResult = client.convertToString(skills, {
         formattingContext: {
           isBlock: true,
@@ -157,11 +149,9 @@ describe('Enhanced Field Access', () => {
       
       console.log('Block formatting result:', blockResult);
       
-      // For now, verify it contains the basic comma-separated values
-      // In the full implementation, this would be a bulleted list
-      expect(blockResult).toContain('JavaScript');
-      expect(blockResult).toContain('TypeScript');
-      expect(blockResult).toContain('Node.js');
+      // According to our new standardized formatting, simple arrays in block context 
+      // should be comma-space separated
+      expect(blockResult).toBe('JavaScript, TypeScript, Node.js');
       
       // In inline context (should be comma-separated)
       const inlineResult = client.convertToString(skills, {
@@ -173,10 +163,35 @@ describe('Enhanced Field Access', () => {
         }
       });
       
-      // Accept both comma format styles
-      const hasProperSpacing = inlineResult === 'JavaScript, TypeScript, Node.js';
-      const hasNoSpacing = inlineResult === '[JavaScript, TypeScript, Node.js]';
-      expect(hasProperSpacing || hasNoSpacing).toBe(true);
+      console.log('Inline formatting result:', inlineResult);
+      
+      // According to our new standardized formatting, arrays in inline context 
+      // should be comma-space separated without brackets
+      expect(inlineResult).toBe('JavaScript, TypeScript, Node.js');
+      
+      // Test with a complex array that should be bullet-pointed in block context
+      const complexArray = [
+        { name: 'Complex Item 1', value: 42 },
+        { name: 'Complex Item 2', value: 84 }
+      ];
+      
+      const complexBlockResult = client.convertToString(complexArray, {
+        formattingContext: {
+          isBlock: true,
+          nodeType: 'VariableReference',
+          valueType: 'data',
+          linePosition: 'middle'
+        }
+      });
+      
+      console.log('Complex block formatting result:', complexBlockResult);
+      
+      // For complex arrays in block context, we expect a bullet list
+      // Each line should start with a bullet point
+      const lines = complexBlockResult.split('\n');
+      expect(lines.length).toBe(2); // Two items, each on its own line
+      expect(lines[0].startsWith('- ')).toBe(true);
+      expect(lines[1].startsWith('- ')).toBe(true);
     });
     
     it('should format objects differently based on context', async () => {
@@ -190,7 +205,7 @@ describe('Enhanced Field Access', () => {
         }
       };
       
-      // In block context (should use code fence)
+      // In block context (should use pretty JSON)
       const blockResult = client.convertToString(config, {
         formattingContext: {
           isBlock: true,
@@ -202,23 +217,8 @@ describe('Enhanced Field Access', () => {
       
       console.log('Block formatting result for object:', blockResult);
       
-      // Just verify it contains the object data in some form
-      expect(blockResult).toContain('debug');
-      expect(blockResult).toContain('true');
-      
-      // In code fence context (should be raw JSON)
-      const codeFenceResult = client.convertToString(config, {
-        formattingContext: {
-          isBlock: true,
-          nodeType: 'CodeFence',
-          linePosition: 'middle'
-        }
-      });
-      
-      console.log('Code fence formatting result:', codeFenceResult);
-      
-      // Just verify it contains the object data
-      expect(codeFenceResult).toContain('debug');
+      // For objects in block context, we expect pretty-printed JSON with 2-space indentation
+      expect(blockResult).toBe(JSON.stringify(config, null, 2));
       
       // In inline context (should be compact JSON)
       const inlineResult = client.convertToString(config, {
@@ -230,6 +230,7 @@ describe('Enhanced Field Access', () => {
         }
       });
       
+      // For objects in inline context, we expect compact JSON without whitespace
       expect(inlineResult).toBe(JSON.stringify(config));
     });
     
