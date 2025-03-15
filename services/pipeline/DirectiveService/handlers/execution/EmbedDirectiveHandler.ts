@@ -444,19 +444,19 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
                 // This properly handles array indices, nested objects, etc.
                 // Create a properly typed context to avoid TypeScript declaration issues
                 const typedContext: ResolutionContext = {
-                  currentFilePath: resolutionContext.currentFilePath || undefined,
-                  allowedVariableTypes: resolutionContext.allowedVariableTypes || {
+                  currentFilePath: resolutionContext?.currentFilePath || undefined,
+                  allowedVariableTypes: {
                     text: true,
                     data: true,
                     path: true,
                     command: true
                   },
-                  allowNested: resolutionContext.allowNested !== false,
-                  pathValidation: resolutionContext.pathValidation || {
+                  allowNested: true,
+                  pathValidation: {
                     requireAbsolute: false,
                     allowedRoots: []
                   },
-                  state: resolutionContext.state || newState
+                  state: resolutionContext?.state || newState
                 };
                 
                 const resolvedField = await this.resolutionService.resolveFieldAccess(
@@ -639,23 +639,26 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
       if (section) {
         // Create a properly typed context to avoid TypeScript declaration issues
         const typedContextForSection: ResolutionContext = {
-          currentFilePath: resolutionContext.currentFilePath || undefined,
-          allowedVariableTypes: resolutionContext.allowedVariableTypes || {
+          currentFilePath: resolutionContext?.currentFilePath || undefined,
+          allowedVariableTypes: {
             text: true,
             data: true,
             path: true,
             command: true
           },
-          allowNested: resolutionContext.allowNested !== false,
-          pathValidation: resolutionContext.pathValidation || {
+          allowNested: true,
+          pathValidation: {
             requireAbsolute: false,
             allowedRoots: []
           },
-          state: resolutionContext.state || newState
+          state: resolutionContext?.state || newState
         };
         
+        // Ensure section is a string before passing to resolveInContext
+        const sectionStr = typeof section === 'string' ? section : '';
+        
         const sectionName = await this.resolutionService.resolveInContext(
-          section,
+          sectionStr,
           typedContextForSection
         );
         
@@ -705,23 +708,26 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
         try {
           // Create a properly typed context to avoid TypeScript declaration issues
           const typedContextForHeader: ResolutionContext = {
-            currentFilePath: resolutionContext.currentFilePath || undefined,
-            allowedVariableTypes: resolutionContext.allowedVariableTypes || {
+            currentFilePath: resolutionContext?.currentFilePath || undefined,
+            allowedVariableTypes: {
               text: true,
               data: true,
               path: true,
               command: true
             },
-            allowNested: resolutionContext.allowNested !== false,
-            pathValidation: resolutionContext.pathValidation || {
+            allowNested: true,
+            pathValidation: {
               requireAbsolute: false,
               allowedRoots: []
             },
-            state: resolutionContext.state || newState
+            state: resolutionContext?.state || newState
           };
           
+          // Ensure underHeader is a string before passing to resolveInContext
+          const headerStr = typeof underHeader === 'string' ? underHeader : '';
+          
           const resolvedHeader = await this.resolutionService.resolveInContext(
-            underHeader,
+            headerStr,
             typedContextForHeader
           );
           content = this.wrapUnderHeader(content, resolvedHeader);

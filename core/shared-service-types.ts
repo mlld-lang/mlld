@@ -224,9 +224,9 @@ export interface ResolutionServiceLike {
   /** Resolve raw content nodes, preserving formatting but skipping comments */
   resolveContent(nodes: MeldNode[], context: ResolutionContextBase): Promise<string>;
   /** Resolve any value based on the provided context rules */
-  resolveInContext(value: string | StructuredPath, context: ResolutionContextBase): Promise<string>;
-  /** Validate that resolution is allowed in the given context */
-  validateResolution(value: string | StructuredPath, context: ResolutionContextBase): Promise<void>;
+  resolveInContext(value: string | StructuredPath, context?: ResolutionContextBase): Promise<string>;
+  /** Validate that a value can be resolved with the given context */
+  validateResolution(value: string | StructuredPath, context?: ResolutionContextBase): Promise<void>;
   /** Extract a section from content by its heading */
   extractSection(content: string, section: string, fuzzy?: number): Promise<string>;
   /** Check for circular variable references */

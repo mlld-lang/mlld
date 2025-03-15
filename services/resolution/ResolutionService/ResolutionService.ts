@@ -553,7 +553,9 @@ export class ResolutionService implements IResolutionService {
       pathValidation: {
         requireAbsolute: false,
         allowedRoots: []
-      }
+      },
+      currentFilePath: undefined,
+      state: this.stateService
     };
     
     // Add debug logging for debugging path handling issues
@@ -694,7 +696,9 @@ export class ResolutionService implements IResolutionService {
       pathValidation: {
         requireAbsolute: false,
         allowedRoots: []
-      }
+      },
+      currentFilePath: undefined,
+      state: this.stateService
     };
     
     // Convert StructuredPath to string if needed
@@ -1163,7 +1167,9 @@ export class ResolutionService implements IResolutionService {
       pathValidation: {
         requireAbsolute: false,
         allowedRoots: []
-      }
+      },
+      currentFilePath: undefined,
+      state: this.stateService
     };
     
     const { structured, raw } = path;
