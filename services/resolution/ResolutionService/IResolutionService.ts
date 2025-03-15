@@ -210,7 +210,7 @@ interface IResolutionService {
    * @returns The resolved value as a string
    * @throws {MeldResolutionError} If resolution fails and strict mode is enabled
    */
-  resolveInContext(value: string | StructuredPath, context: ResolutionContext): Promise<string>;
+  resolveInContext(value: string | StructuredPath, context?: ResolutionContext): Promise<string>;
 
   /**
    * Resolves a field access on a variable (e.g., variable.field.subfield)
@@ -224,14 +224,10 @@ interface IResolutionService {
   resolveFieldAccess(variableName: string, fieldPath: string, context?: ResolutionContext): Promise<any>;
 
   /**
-   * Validate that resolution is allowed in the given context.
-   * Checks for allowed variable types and other context constraints without performing actual resolution.
-   * 
-   * @param value - The string or structured path to validate
-   * @param context - The resolution context with state and allowed variable types
+   * Validate that a value can be resolved with the given context
    * @throws {MeldResolutionError} If validation fails
    */
-  validateResolution(value: string | StructuredPath, context: ResolutionContext): Promise<void>;
+  validateResolution(value: string | StructuredPath, context?: ResolutionContext): Promise<void>;
 
   /**
    * Extract a section from content by its heading.

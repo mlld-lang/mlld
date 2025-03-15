@@ -541,34 +541,48 @@ export class ResolutionService implements IResolutionService {
   /**
    * Resolve any value based on the provided context rules
    */
-  async resolveInContext(value: string | StructuredPath, context: ResolutionContext): Promise<string> {
+  async resolveInContext(value: string | StructuredPath, context?: ResolutionContext): Promise<string> {
+    // If no context is provided, create a default one
+    const resolveContext = context || {
+      allowedVariableTypes: {
+        text: true,
+        data: true,
+        path: true,
+        command: true
+      },
+      pathValidation: {
+        requireAbsolute: false,
+        allowedRoots: []
+      }
+    };
+    
     // Add debug logging for debugging path handling issues
     logger.debug('ResolutionService.resolveInContext', {
       value: typeof value === 'string' ? value : value.raw,
-      allowedVariableTypes: context.allowedVariableTypes,
-      pathValidation: context.pathValidation,
-      stateExists: !!context.state,
-      specialPathVars: context.state ? {
-        PROJECTPATH: context.state.getPathVar('PROJECTPATH'),
-        HOMEPATH: context.state.getPathVar('HOMEPATH')
+      allowedVariableTypes: resolveContext.allowedVariableTypes,
+      pathValidation: resolveContext.pathValidation,
+      stateExists: !!resolveContext.state,
+      specialPathVars: resolveContext.state ? {
+        PROJECTPATH: resolveContext.state.getPathVar('PROJECTPATH'),
+        HOMEPATH: resolveContext.state.getPathVar('HOMEPATH')
       } : 'state not available'
     });
 
     // Handle structured path objects by delegating to the dedicated method
     if (typeof value === 'object' && value !== null && 'raw' in value) {
-      return this.resolveStructuredPath(value, context);
+      return this.resolveStructuredPath(value, resolveContext);
     }
 
     // Handle string values
     if (typeof value === 'string') {
       // Check for special direct path variable references
       if (value === '$HOMEPATH' || value === '$~') {
-        const homePath = context.state?.getPathVar('HOMEPATH') || this.stateService.getPathVar('HOMEPATH');
+        const homePath = resolveContext.state?.getPathVar('HOMEPATH') || this.stateService.getPathVar('HOMEPATH');
         return homePath || '';
       }
       
       if (value === '$PROJECTPATH' || value === '$.') {
-        const projectPath = context.state?.getPathVar('PROJECTPATH') || this.stateService.getPathVar('PROJECTPATH');
+        const projectPath = resolveContext.state?.getPathVar('PROJECTPATH') || this.stateService.getPathVar('PROJECTPATH');
         return projectPath || '';
       }
       
@@ -583,7 +597,7 @@ export class ResolutionService implements IResolutionService {
         
         try {
           logger.debug('Resolving command reference', { cmdName, args });
-          const result = await this.resolveCommand(cmdName, args, context);
+          const result = await this.resolveCommand(cmdName, args, resolveContext);
           return result;
         } catch (error) {
           logger.warn('Command execution failed', { cmdName, args, error });
@@ -609,7 +623,7 @@ export class ResolutionService implements IResolutionService {
             if ((pathNode as any).type === 'PathVar' && (pathNode as any).value) {
               structPath = (pathNode as any).value as StructuredPath;
               // Recursive call with the structured path
-              return this.resolveStructuredPath(structPath, context);
+              return this.resolveStructuredPath(structPath, resolveContext);
             } else if (pathNode.type === 'Directive') {
               const directiveNode = pathNode as any;
               if (directiveNode.directive.value && 
@@ -617,7 +631,7 @@ export class ResolutionService implements IResolutionService {
                   'raw' in directiveNode.directive.value) {
                 structPath = directiveNode.directive.value as StructuredPath;
                 // Recursive call with the structured path
-                return this.resolveStructuredPath(structPath, context);
+                return this.resolveStructuredPath(structPath, resolveContext);
               }
             }
           }
@@ -631,7 +645,7 @@ export class ResolutionService implements IResolutionService {
     }
 
     // Handle string values
-    return this.resolveVariables(value as string, context);
+    return this.resolveVariables(value as string, resolveContext);
   }
   
   /**
@@ -668,7 +682,21 @@ export class ResolutionService implements IResolutionService {
   /**
    * Validate that resolution is allowed in the given context
    */
-  async validateResolution(value: string | StructuredPath, context: ResolutionContext): Promise<void> {
+  async validateResolution(value: string | StructuredPath, context?: ResolutionContext): Promise<void> {
+    // If no context is provided, create a default one
+    const resolveContext = context || {
+      allowedVariableTypes: {
+        text: true,
+        data: true,
+        path: true,
+        command: true
+      },
+      pathValidation: {
+        requireAbsolute: false,
+        allowedRoots: []
+      }
+    };
+    
     // Convert StructuredPath to string if needed
     const stringValue = typeof value === 'string' ? value : value.raw;
     
@@ -683,7 +711,7 @@ export class ResolutionService implements IResolutionService {
       // Check if the directive type is allowed
       switch (directiveNode.directive.kind) {
         case 'text':
-          if (!context.allowedVariableTypes.text) {
+          if (!resolveContext.allowedVariableTypes.text) {
             const errorMessage = 'Text variables are not allowed in this context';
             const errorDetails = { 
               value: typeof value === 'string' ? value : value.raw, 
@@ -703,7 +731,7 @@ export class ResolutionService implements IResolutionService {
           break;
 
         case 'data':
-          if (!context.allowedVariableTypes.data) {
+          if (!resolveContext.allowedVariableTypes.data) {
             const errorMessage = 'Data variables are not allowed in this context';
             const errorDetails = { 
               value: typeof value === 'string' ? value : value.raw, 
@@ -723,7 +751,7 @@ export class ResolutionService implements IResolutionService {
           break;
 
         case 'path':
-          if (!context.allowedVariableTypes.path) {
+          if (!resolveContext.allowedVariableTypes.path) {
             const errorMessage = 'Path variables are not allowed in this context';
             const errorDetails = { 
               value: typeof value === 'string' ? value : value.raw, 
@@ -743,7 +771,7 @@ export class ResolutionService implements IResolutionService {
           break;
 
         case 'run':
-          if (!context.allowedVariableTypes.command) {
+          if (!resolveContext.allowedVariableTypes.command) {
             const errorMessage = 'Command references are not allowed in this context';
             const errorDetails = { 
               value: typeof value === 'string' ? value : value.raw, 
@@ -1123,18 +1151,32 @@ export class ResolutionService implements IResolutionService {
    * Resolve a structured path to an absolute path
    * @private
    */
-  private async resolveStructuredPath(path: StructuredPath, context: ResolutionContext): Promise<string> {
+  private async resolveStructuredPath(path: StructuredPath, context?: ResolutionContext): Promise<string> {
+    // If no context is provided, create a default one
+    const resolveContext = context || {
+      allowedVariableTypes: {
+        text: true,
+        data: true,
+        path: true,
+        command: true
+      },
+      pathValidation: {
+        requireAbsolute: false,
+        allowedRoots: []
+      }
+    };
+    
     const { structured, raw } = path;
     
     // Get base directory from context if available (use currentFilePath if available)
-    const baseDir = context.currentFilePath ? this.pathService.dirname(context.currentFilePath) : process.cwd();
+    const baseDir = resolveContext.currentFilePath ? this.pathService.dirname(resolveContext.currentFilePath) : process.cwd();
     
     // Add detailed debug logging for path resolution
     logger.debug('Resolving structured path', {
       raw: path.raw,
       structured: path.structured,
       baseDir,
-      currentFilePath: context.currentFilePath,
+      currentFilePath: resolveContext.currentFilePath,
       home: process.env.HOME,
       cwd: process.cwd()
     });

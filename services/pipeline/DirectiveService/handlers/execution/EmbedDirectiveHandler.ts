@@ -444,11 +444,19 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
                 // This properly handles array indices, nested objects, etc.
                 // Create a properly typed context to avoid TypeScript declaration issues
                 const typedContext: ResolutionContext = {
-                  currentFilePath: resolutionContext.currentFilePath,
-                  allowedVariableTypes: resolutionContext.allowedVariableTypes,
-                  allowNested: resolutionContext.allowNested,
-                  pathValidation: resolutionContext.pathValidation,
-                  state: resolutionContext.state
+                  currentFilePath: resolutionContext.currentFilePath || undefined,
+                  allowedVariableTypes: resolutionContext.allowedVariableTypes || {
+                    text: true,
+                    data: true,
+                    path: true,
+                    command: true
+                  },
+                  allowNested: resolutionContext.allowNested !== false,
+                  pathValidation: resolutionContext.pathValidation || {
+                    requireAbsolute: false,
+                    allowedRoots: []
+                  },
+                  state: resolutionContext.state || newState
                 };
                 
                 const resolvedField = await this.resolutionService.resolveFieldAccess(
@@ -631,11 +639,19 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
       if (section) {
         // Create a properly typed context to avoid TypeScript declaration issues
         const typedContextForSection: ResolutionContext = {
-          currentFilePath: resolutionContext.currentFilePath,
-          allowedVariableTypes: resolutionContext.allowedVariableTypes,
-          allowNested: resolutionContext.allowNested,
-          pathValidation: resolutionContext.pathValidation,
-          state: resolutionContext.state
+          currentFilePath: resolutionContext.currentFilePath || undefined,
+          allowedVariableTypes: resolutionContext.allowedVariableTypes || {
+            text: true,
+            data: true,
+            path: true,
+            command: true
+          },
+          allowNested: resolutionContext.allowNested !== false,
+          pathValidation: resolutionContext.pathValidation || {
+            requireAbsolute: false,
+            allowedRoots: []
+          },
+          state: resolutionContext.state || newState
         };
         
         const sectionName = await this.resolutionService.resolveInContext(
@@ -689,11 +705,19 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
         try {
           // Create a properly typed context to avoid TypeScript declaration issues
           const typedContextForHeader: ResolutionContext = {
-            currentFilePath: resolutionContext.currentFilePath,
-            allowedVariableTypes: resolutionContext.allowedVariableTypes,
-            allowNested: resolutionContext.allowNested,
-            pathValidation: resolutionContext.pathValidation,
-            state: resolutionContext.state
+            currentFilePath: resolutionContext.currentFilePath || undefined,
+            allowedVariableTypes: resolutionContext.allowedVariableTypes || {
+              text: true,
+              data: true,
+              path: true,
+              command: true
+            },
+            allowNested: resolutionContext.allowNested !== false,
+            pathValidation: resolutionContext.pathValidation || {
+              requireAbsolute: false,
+              allowedRoots: []
+            },
+            state: resolutionContext.state || newState
           };
           
           const resolvedHeader = await this.resolutionService.resolveInContext(
