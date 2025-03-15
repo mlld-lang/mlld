@@ -42,6 +42,7 @@ export class VariableNodeFactory {
     
     return {
       ...baseNode,
+      type: 'VariableReference',
       identifier,
       valueType,
       fields,

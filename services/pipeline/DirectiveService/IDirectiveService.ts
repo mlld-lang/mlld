@@ -1,6 +1,6 @@
-import type { DirectiveNode } from '@core/syntax/types.js';
+import type { DirectiveNode } from '@core/syntax/types/index.js';
+import type { DirectiveContextBase } from '@core/shared/types.js';
 import type { 
-  DirectiveContextBase, 
   StateServiceLike, 
   ValidationServiceLike,
   PathServiceLike,

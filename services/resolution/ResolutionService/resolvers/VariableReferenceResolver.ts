@@ -4,7 +4,7 @@ import { ResolutionErrorCode } from '@services/resolution/ResolutionService/IRes
 import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
-import type { MeldNode, TextNode, DirectiveNode, NodeType } from '@core/syntax/types.js';
+import type { MeldNode, TextNode, DirectiveNode, NodeType } from '@core/syntax/types/index.js';
 import { resolutionLogger as logger } from '@core/utils/logger.js';
 import { VariableResolutionTracker } from '@tests/utils/debug/VariableResolutionTracker/index.js';
 import { container, inject, injectable } from 'tsyringe';

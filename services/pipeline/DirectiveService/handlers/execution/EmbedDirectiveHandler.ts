@@ -1,8 +1,9 @@
-import { DirectiveNode, MeldNode, TextNode } from '@core/syntax/types.js';
+import { DirectiveNode, MeldNode, TextNode } from '@core/syntax/types/index.js';
 import { IDirectiveHandler, DirectiveContext } from '@services/pipeline/DirectiveService/IDirectiveService.js';
 import { DirectiveResult } from '@services/pipeline/DirectiveService/types.js';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
-import type { IResolutionService, StructuredPath, ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
+import type { IResolutionService, ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
+import type { StructuredPath } from '@core/shared-service-types.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { ICircularityService } from '@services/resolution/CircularityService/ICircularityService.js';
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';

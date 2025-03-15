@@ -1,4 +1,4 @@
-import type { DirectiveNode } from '@core/syntax/types.js';
+import type { DirectiveNode } from '@core/syntax/types/index.js';
 import type { ValidationServiceLike } from '@core/shared-service-types.js';
 
 /**
