@@ -33,6 +33,7 @@ export class ErrorNodeFactory {
     
     return {
       ...baseNode,
+      type: 'Error',
       message,
       ...(stack && { stack })
     };
