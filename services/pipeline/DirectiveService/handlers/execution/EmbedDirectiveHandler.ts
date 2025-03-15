@@ -1,24 +1,26 @@
-import { DirectiveNode, MeldNode, TextNode } from '@core/syntax/types/index.js';
-import { IDirectiveHandler, DirectiveContext } from '@services/pipeline/DirectiveService/IDirectiveService.js';
-import { DirectiveResult } from '@services/pipeline/DirectiveService/types.js';
+import { DirectiveNode, MeldNode, StructuredPath, TextNode } from '@core/syntax/types.js';
+import { IDirectiveHandler, DirectiveContext, DirectiveResult } from '@services/pipeline/DirectiveService/IDirectiveService.js';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import type { IResolutionService, ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
-import type { StructuredPath } from '@core/shared-service-types.js';
+import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { ICircularityService } from '@services/resolution/CircularityService/ICircularityService.js';
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
-import type { IInterpreterServiceClient } from '@services/pipeline/InterpreterService/interfaces/IInterpreterServiceClient.js';
-import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory.js';
-import { DirectiveError, DirectiveErrorCode, DirectiveErrorSeverity } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
-import { embedLogger } from '@core/utils/logger.js';
-import { ErrorSeverity } from '@core/errors/MeldError.js';
-import type { IStateTrackingService } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
+import { MeldFileSystemError } from '@core/errors/MeldFileSystemError.js';
+import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
+import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
-import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
+import { ErrorSeverity } from '@core/errors/MeldError.js';
+import { embedLogger } from '@core/utils/logger.js';
 import { StateVariableCopier } from '@services/state/utilities/StateVariableCopier.js';
+import type { IInterpreterServiceClient } from '@services/pipeline/InterpreterService/interfaces/IInterpreterServiceClient.js'; 
+import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory.js';
+import type { IStateTrackingService } from '@services/state/StateTrackingService/IStateTrackingService.js';
 import { inject, injectable } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
+import { InterpreterOptionsBase } from '@core/shared-service-types.js';
+import { StateServiceLike } from '@core/shared-service-types.js';
 
 // Define the embed directive parameters interface
 interface EmbedDirectiveParams {
@@ -103,11 +105,11 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
     if (!this.interpreterServiceClient && process.env.NODE_ENV === 'test') {
       this.logger.debug('Creating test mock for interpreter service client');
       this.interpreterServiceClient = {
-        interpret: async (nodes: MeldNode[], options?: { initialState?: IStateService }) => {
+        interpret: async (nodes: MeldNode[], options?: InterpreterOptionsBase) => {
           // Return the initial state if provided, otherwise create a mock state
           this.logger.debug('Using test mock for interpreter service');
-          if (options?.initialState) {
-            return options.initialState;
+          if (options && 'initialState' in options) {
+            return options.initialState as StateServiceLike;
           }
           
           // Create a basic mock state if needed - this is just for tests
@@ -327,7 +329,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
       }
     } 
     // Handle structured path objects that might contain user-defined path variables
-    else if (typeof path === 'object' && path !== null && 'raw' in path && !path.isVariableReference) {
+    else if (typeof path === 'object' && path !== null && 'raw' in path && !('isVariableReference' in path && path.isVariableReference === true)) {
       const rawPath = path.raw;
       if (rawPath && rawPath.includes('$')) {
         // Check for user-defined path variables in the raw path
@@ -384,6 +386,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
     try {
       // Check if this is a variable reference embed
       const isVariableReference = typeof processedPath === 'object' && 
+                                'isVariableReference' in processedPath && 
                                 processedPath.isVariableReference === true;
 
       this.logger.debug(`Processing embed directive with ${isVariableReference ? 'variable reference' : 'file path'}`, {
@@ -415,8 +418,13 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
         // This is especially important for array indexing and complex field access
         try {
           // Check if this is a field access pattern like {{variable.field}} or {{variable.0}}
-          if (typeof processedPath === 'object' && processedPath.identifier && processedPath.content) {
+          if (typeof processedPath === 'object' && 
+              'identifier' in processedPath && 
+              'content' in processedPath && 
+              processedPath.identifier && 
+              processedPath.content) {
             // Extract the variable reference parts
+            const variableName = processedPath.identifier;
             const originalContent = processedPath.content;
             this.logger.debug(`Processing variable embed with content: ${originalContent}`);
             
@@ -424,7 +432,6 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
             if (originalContent.includes('.')) {
               // Parse out the variable base name and field path
               const parts = originalContent.split('.');
-              const variableName = parts[0];
               const fieldPath = parts.slice(1).join('.');
               
               this.logger.debug(`Detected complex field access in variable embed: ${variableName}.${fieldPath}`);
@@ -778,7 +785,10 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
         });
         
         // Log a warning if this is a variable-based embed
-        if (typeof path === 'object' && path !== null && path.isVariableReference === true) {
+        if (typeof path === 'object' && 
+            path !== null && 
+            'isVariableReference' in path && 
+            path.isVariableReference === true) {
           console.log(
             'NOTE: Variable-based embed transformation will be properly fixed in Phase 4B. ' +
             'See _dev/issues/inbox/p1-variable-embed-transformation-issue.md'
@@ -819,7 +829,9 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
       // Only do this for file paths, not variable references
       try {
         // Check if this was a variable reference (in which case we didn't call beginImport)
-        const isVariableReference = typeof path === 'object' && path.isVariableReference === true;
+        const isVariableReference = typeof path === 'object' && 
+                                 'isVariableReference' in path && 
+                                 path.isVariableReference === true;
         
         if (resolvedPath && !isVariableReference) {
           this.circularityService.endImport(resolvedPath);

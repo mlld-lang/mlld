@@ -27,6 +27,7 @@ import { DirectiveServiceClientFactory } from '@services/pipeline/DirectiveServi
 import type { IFileSystemServiceClient } from '@services/fs/FileSystemService/interfaces/IFileSystemServiceClient.js';
 import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/factories/FileSystemServiceClientFactory.js';
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
+import { VariableResolutionErrorFactory } from '@services/resolution/ResolutionService/resolvers/error-factory.js';
 
 /**
  * Interface matching the StructuredPath expected from meld-spec
@@ -1248,6 +1249,73 @@ export class ResolutionService implements IResolutionService {
         error: (error as Error).message 
       });
       return false;
+    }
+  }
+
+  /**
+   * Resolves a field access on a variable (e.g., variable.field.subfield)
+   * 
+   * @param variableName - The base variable name
+   * @param fieldPath - The path to the specific field
+   * @param context - The resolution context with state and allowed variable types
+   * @returns The resolved field value
+   * @throws {MeldResolutionError} If field access fails
+   */
+  async resolveFieldAccess(variableName: string, fieldPath: string, context: ResolutionContext): Promise<any> {
+    logger.debug(`Resolving field access: ${variableName}.${fieldPath}`);
+    
+    if (!context || !context.state) {
+      throw new MeldResolutionError(
+        `Cannot resolve field access without state context`,
+        {
+          code: ResolutionErrorCode.INVALID_CONTEXT,
+          severity: ErrorSeverity.Fatal
+        }
+      );
+    }
+    
+    // Get the base variable value
+    const baseValue = context.state.getDataVar(variableName);
+    
+    if (baseValue === undefined) {
+      throw VariableResolutionErrorFactory.variableNotFound(variableName);
+    }
+    
+    // Parse the field path into segments
+    const fields = fieldPath.split('.').map(field => {
+      // Check if this is a numeric index for array access
+      const numIndex = parseInt(field, 10);
+      if (!isNaN(numIndex)) {
+        return { type: 'index' as const, value: numIndex };
+      }
+      // Otherwise it's a field name
+      return { type: 'field' as const, value: field };
+    });
+    
+    try {
+      // Use the variableReferenceResolver's private method to access fields
+      // This is a bit of a hack, but it's the cleanest solution for now
+      // We're casting here because the method is private but we need to use it
+      // @ts-ignore - accessing private method
+      const result = await this.variableReferenceResolver.accessFields(
+        baseValue,
+        fields as any,
+        context,
+        variableName
+      );
+      
+      logger.debug(`Successfully resolved field access ${variableName}.${fieldPath}`, {
+        resultType: typeof result,
+        isArray: Array.isArray(result)
+      });
+      
+      return result;
+    } catch (error) {
+      logger.error(`Error resolving field access ${variableName}.${fieldPath}`, { error });
+      throw VariableResolutionErrorFactory.fieldAccessError(
+        `Error accessing field "${fieldPath}" of variable "${variableName}": ${error instanceof Error ? error.message : String(error)}`,
+        variableName
+      );
     }
   }
 } 

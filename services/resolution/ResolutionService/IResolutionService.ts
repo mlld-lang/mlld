@@ -210,6 +210,17 @@ interface IResolutionService {
   resolveInContext(value: string | StructuredPath, context: ResolutionContext): Promise<string>;
 
   /**
+   * Resolves a field access on a variable (e.g., variable.field.subfield)
+   * 
+   * @param variableName - The base variable name
+   * @param fieldPath - The path to the specific field
+   * @param context - The resolution context with state and allowed variable types
+   * @returns The resolved field value
+   * @throws {MeldResolutionError} If field access fails
+   */
+  resolveFieldAccess(variableName: string, fieldPath: string, context: ResolutionContext): Promise<any>;
+
+  /**
    * Validate that resolution is allowed in the given context.
    * Checks for allowed variable types and other context constraints without performing actual resolution.
    * 
