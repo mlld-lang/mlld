@@ -6,7 +6,8 @@ import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js
 import { ProcessOptions } from '@core/types/index.js';
 import { validateServicePipeline } from '@core/utils/serviceValidation.js';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem.js';
-import { resolveService } from '@core/ServiceProvider.js';
+import { resolveService, registerServiceInstance } from '@core/ServiceProvider.js';
+import { directiveLogger } from '@core/utils/logger.js';
 
 // Import service factory types
 import { PathServiceClientFactory } from '@services/fs/PathService/factories/PathServiceClientFactory.js';
@@ -51,6 +52,9 @@ export async function runMeld(
 
   // Create an in-memory file system
   const memoryFS = new MemoryFileSystem();
+  
+  // Ensure DirectiveLogger is registered
+  registerServiceInstance('DirectiveLogger', directiveLogger);
   
   // Store the content in the virtual file
   await memoryFS.writeFile(virtualFilePath, content);

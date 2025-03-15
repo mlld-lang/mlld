@@ -6,6 +6,7 @@ import type { StateServiceLike, ResolutionServiceLike } from '@core/shared-servi
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import { FileSystemService } from '@services/fs/FileSystemService/FileSystemService.js';
 import { PathService } from '@services/fs/PathService/PathService.js';
+import { directiveLogger } from '@core/utils/logger.js';
 
 // Core services (implementation classes - keep as regular exports)
 export * from '@services/pipeline/InterpreterService/InterpreterService.js';
@@ -99,6 +100,9 @@ export function createDefaultServices(options: ProcessOptions): Services & Requi
     registerServiceInstance('IFileSystem', options.fs);
     registerServiceInstance('NodeFileSystem', options.fs);
   }
+  
+  // Ensure DirectiveLogger is registered in case it wasn't in this container
+  registerServiceInstance('DirectiveLogger', directiveLogger);
   
   // Resolve services from the container with proper type assertions
   const filesystem = resolveService<FileSystemService>('FileSystemService');

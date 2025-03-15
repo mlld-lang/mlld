@@ -9,6 +9,7 @@ import { RunDirectiveHandler } from '@services/pipeline/DirectiveService/handler
 import { IDirectiveService } from '@services/pipeline/DirectiveService/IDirectiveService.js';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory.js';
+import { vi } from 'vitest';
 
 /**
  * Helper class for setting up directive handlers in tests
@@ -20,6 +21,17 @@ export class TestDirectiveHandlerHelper {
    * @returns The initialized DirectiveService
    */
   public static async initializeDirectiveService(context: TestContextDI): Promise<IDirectiveService> {
+    // Register a mock DirectiveLogger if not already registered
+    if (!context.container.isRegistered('DirectiveLogger')) {
+      const mockDirectiveLogger = {
+        debug: vi.fn(),
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn()
+      };
+      context.registerMock('DirectiveLogger', mockDirectiveLogger);
+    }
+    
     // Create the service using DI container
     const directiveService = context.container.resolve(DirectiveService) as DirectiveService;
     

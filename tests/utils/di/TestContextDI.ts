@@ -608,7 +608,16 @@ export class TestContextDI extends TestContext {
       getHandler: vi.fn()
     };
     
+    // Create a mock logger for directive service
+    const mockDirectiveLogger = {
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn()
+    };
+    
     this.container.registerMock('IDirectiveService', mockDirectiveService);
+    this.container.registerMock('DirectiveLogger', mockDirectiveLogger);
   }
 
   /**

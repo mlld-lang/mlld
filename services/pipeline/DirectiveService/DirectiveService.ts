@@ -105,19 +105,28 @@ export class DirectiveService implements IDirectiveService, DirectiveServiceLike
     @inject('InterpreterServiceClientFactory') interpreterServiceClientFactory?: InterpreterServiceClientFactory,
     @inject('ICircularityService') circularityService?: CircularityServiceLike,
     @inject('IResolutionService') resolutionService?: ResolutionServiceLike,
-    logger?: ILogger
+    @inject('DirectiveLogger') logger?: ILogger
   ) {
+    // Always ensure we have a logger (both in DI and non-DI modes)
     this.logger = logger || directiveLogger;
-    this.initializeFromParams(
-      validationService,
-      stateService,
-      pathService,
-      fileSystemService,
-      parserService,
-      undefined, // Replaced by interpreterServiceClientFactory
-      circularityService,
-      resolutionService
-    );
+    
+    // Skip initialization if we're in DI mode and not all required services are provided
+    if (validationService && stateService && pathService && fileSystemService && 
+        parserService && circularityService && resolutionService) {
+      this.initializeFromParams(
+        validationService,
+        stateService,
+        pathService,
+        fileSystemService,
+        parserService,
+        undefined, // Replaced by interpreterServiceClientFactory
+        circularityService,
+        resolutionService
+      );
+    } else {
+      // In non-DI mode or when not fully initialized, just set up the logger
+      this.logger.debug('DirectiveService constructed but not fully initialized, call initialize() manually');
+    }
     
     // Initialize interpreter client factory
     this.interpreterClientFactory = interpreterServiceClientFactory;
