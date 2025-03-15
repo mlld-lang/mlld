@@ -80,7 +80,7 @@ export interface VariableNode extends MeldNode {
 }
 
 // Re-export the consolidated variable types
-export { VariableType, Field, VariableReferenceNode };
+export type { VariableType, Field, VariableReferenceNode };
 
 /**
  * Structured representation of a path with segments and variable information

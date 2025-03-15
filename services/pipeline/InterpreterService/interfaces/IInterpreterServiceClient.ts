@@ -1,4 +1,4 @@
-import type { MeldNode } from '@core/syntax/types.js';
+import type { MeldNode } from '@core/syntax/types/index.js';
 import type { StateServiceLike, InterpreterOptionsBase } from '@core/shared-service-types.js';
 
 /**

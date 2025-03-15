@@ -4,7 +4,7 @@ export * from '../shared-types.js';
 // Then export interfaces with proper type-only exports to avoid circular references
 export type { NodeType, Position, SourceLocation } from './common.js';
 export type { INode } from './INode.js';
-export type { IDirectiveNode, DirectiveData, DirectiveKind } from './IDirectiveNode.js';
+export type { IDirectiveNode, DirectiveData, DirectiveKind, DirectiveKindString } from './IDirectiveNode.js';
 export type { 
   IVariableReference, 
   VariableType, 
