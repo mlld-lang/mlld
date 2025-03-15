@@ -1,10 +1,11 @@
-import { describe, it, expect, beforeEach, vi, fail } from 'vitest';
+import { describe, it, expect, beforeEach, vi, fail, afterEach } from 'vitest';
 import { VariableReferenceResolver } from '@services/resolution/ResolutionService/resolvers/VariableReferenceResolver.js';
 import { 
   createMockStateService, 
   createMockParserService, 
-  createVariableReferenceNode,
-  createTextNode
+  createTextNode,
+  // Legacy helper function still available during transition
+  createVariableReferenceNode
 } from '@tests/utils/testFactories.js';
 import type { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
@@ -16,6 +17,8 @@ import type { MeldNode } from '@core/syntax/types/index.js';
 import type { IStateEventService } from '@services/state/StateEventService/IStateEventService.js';
 import type { IStateTrackingService } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
 import type { TransformationOptions } from '@services/state/StateService/IStateService.js';
+import { VariableNodeFactory } from '@core/syntax/types/factories/index.js';
+import { container } from 'tsyringe';
 
 /**
  * Enhanced implementation of IStateService for testing variable resolution
@@ -419,6 +422,7 @@ describe('VariableReferenceResolver Edge Cases', () => {
   let resolutionService: IResolutionService;
   let context: ResolutionContext;
   let resolutionTracker: VariableResolutionTracker;
+  let mockVariableNodeFactory: VariableNodeFactory;
 
   beforeEach(() => {
     // Create an enhanced test state service instead of a simple mock
@@ -432,8 +436,52 @@ describe('VariableReferenceResolver Edge Cases', () => {
     resolutionTracker = new VariableResolutionTracker();
     resolutionTracker.configure({ enabled: true });
     
+    // Create a mock VariableNodeFactory
+    mockVariableNodeFactory = {
+      createVariableReferenceNode: vi.fn().mockImplementation((identifier, valueType, fields, format, location) => {
+        // This matches the legacy function behavior
+        return {
+          type: 'VariableReference',
+          identifier,
+          valueType,
+          fields,
+          isVariableReference: true,
+          ...(format && { format }),
+          ...(location && { location })
+        };
+      }),
+      isValidFieldArray: vi.fn().mockImplementation((fields) => {
+        return fields.every(
+          field =>
+            field &&
+            (field.type === 'field' || field.type === 'index') &&
+            (typeof field.value === 'string' || typeof field.value === 'number')
+        );
+      }),
+      isVariableReferenceNode: vi.fn().mockImplementation((node) => {
+        return (
+          node.type === 'VariableReference' &&
+          typeof node.identifier === 'string' &&
+          typeof node.valueType === 'string'
+        );
+      })
+    } as any;
+    
+    // Mock container.resolve to return our mock factory
+    vi.spyOn(container, 'resolve').mockImplementation((token) => {
+      if (token === VariableNodeFactory) {
+        return mockVariableNodeFactory;
+      }
+      throw new Error(`Unexpected token: ${String(token)}`);
+    });
+    
     // Create resolver with the tracker
-    resolver = new VariableReferenceResolver(stateService, resolutionService, parserService);
+    resolver = new VariableReferenceResolver(
+      stateService, 
+      resolutionService, 
+      parserService,
+      mockVariableNodeFactory
+    );
     resolver.setResolutionTracker(resolutionTracker);
     
     context = {
@@ -447,6 +495,10 @@ describe('VariableReferenceResolver Edge Cases', () => {
       state: stateService,
       strict: true
     };
+  });
+  
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   // Test for nested object access with arrays

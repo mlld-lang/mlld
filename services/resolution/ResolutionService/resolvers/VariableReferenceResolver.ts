@@ -7,18 +7,25 @@ import type { IResolutionService } from '@services/resolution/ResolutionService/
 import type { MeldNode, TextNode, DirectiveNode, NodeType } from '@core/syntax/types.js';
 import { resolutionLogger as logger } from '@core/utils/logger.js';
 import { VariableResolutionTracker } from '@tests/utils/debug/VariableResolutionTracker/index.js';
-import { container } from 'tsyringe';
+import { container, inject, injectable } from 'tsyringe';
 import { IResolutionServiceClient } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClient.js';
 import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientFactory.js';
 import { IParserServiceClient } from '@services/pipeline/ParserService/interfaces/IParserServiceClient.js';
 import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory.js';
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 import { 
-  VariableReferenceNode,
   VariableType,
   Field,
-  isVariableReferenceNode,
-  createVariableReferenceNode
+  IVariableReference
+} from '@core/syntax/types/interfaces/index.js';
+import { 
+  VariableNodeFactory 
+} from '@core/syntax/types/factories/index.js';
+// Keep legacy imports for backward compatibility during transition
+import {
+  SPECIAL_PATH_VARS,
+  ENV_VAR_PREFIX,
+  VAR_PATTERNS
 } from '@core/syntax/types/variables.js';
 import { VariableResolutionErrorFactory } from '@services/resolution/ResolutionService/resolvers/error-factory.js';
 
@@ -32,6 +39,26 @@ function isTextNode(node: MeldNode): node is TextNode {
 
 function isDirectiveNode(node: MeldNode): node is DirectiveNode {
   return node.type === 'Directive' && 'directive' in node;
+}
+
+/**
+ * Local type guard function that uses the factory pattern internally
+ * @param node Node to check
+ * @returns True if the node is a variable reference node
+ */
+function isVariableReferenceNode(node: any): node is IVariableReference {
+  // Try to use factory pattern first if available in the container
+  try {
+    const factory = container.resolve(VariableNodeFactory);
+    return factory.isVariableReferenceNode(node);
+  } catch (error) {
+    // Fallback to direct type checking (same logic as legacy function)
+    return (
+      node.type === 'VariableReference' &&
+      typeof node.identifier === 'string' &&
+      typeof node.valueType === 'string'
+    );
+  }
 }
 
 /**
@@ -57,8 +84,22 @@ export class VariableReferenceResolver {
   constructor(
     private readonly stateService: IStateService,
     private readonly resolutionService?: IResolutionService,
-    private readonly parserService?: IParserService
-  ) {}
+    private readonly parserService?: IParserService,
+    @inject(VariableNodeFactory) private readonly variableNodeFactory?: VariableNodeFactory
+  ) {
+    // Initialize the factory if it wasn't injected (for backward compatibility)
+    if (!this.variableNodeFactory) {
+      logger.debug('VariableNodeFactory not injected, resolving from container');
+      try {
+        this.variableNodeFactory = container.resolve(VariableNodeFactory);
+      } catch (error) {
+        logger.warn('Failed to resolve VariableNodeFactory from container', {
+          error: error instanceof Error ? error.message : String(error)
+        });
+        // We'll fall back to legacy functions if needed
+      }
+    }
+  }
 
   /**
    * Lazily initialize the service client factories
@@ -1394,7 +1435,18 @@ export class VariableReferenceResolver {
         // Parse as a regular variable reference
         const { baseName, fields } = this.parseVariableReference(varContent);
         const valueType = fields && fields.length > 0 ? 'data' : 'text';
-        result.push(createVariableReferenceNode(baseName, valueType, fields));
+        
+        // Create variable reference node using factory if available
+        if (this.variableNodeFactory) {
+          // Use factory pattern
+          result.push(this.variableNodeFactory.createVariableReferenceNode(baseName, valueType, fields));
+        } else {
+          // Legacy fallback - import is maintained at the top during transition
+          logger.warn('VariableNodeFactory not available, using legacy function');
+          // We kept the legacy import as fallback
+          const legacyCreateNode = require('@core/syntax/types/variables.js').createVariableReferenceNode;
+          result.push(legacyCreateNode(baseName, valueType, fields));
+        }
       }
       
       // Move to the next position

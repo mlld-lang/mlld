@@ -4,6 +4,9 @@ import { VariableReferenceResolver } from '@services/resolution/ResolutionServic
 import { VariableReferenceResolverClientFactory } from '@services/resolution/ResolutionService/factories/VariableReferenceResolverClientFactory.js';
 import { IVariableReferenceResolverClient } from '@services/resolution/ResolutionService/interfaces/IVariableReferenceResolverClient.js';
 import { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
+import { container } from 'tsyringe';
+import { VariableNodeFactory } from '@core/syntax/types/factories/index.js';
+// Keep legacy import during transition
 import { createVariableReferenceNode } from '@tests/utils/testFactories.js';
 
 /**
@@ -20,6 +23,7 @@ describe('Parent Object Reference', () => {
   let client: IVariableReferenceResolverClient;
   let mockStateService: any;
   let context: ResolutionContext;
+  let mockVariableNodeFactory: VariableNodeFactory;
   
   beforeEach(() => {
     // Create a test context with isolated container
@@ -62,8 +66,47 @@ describe('Parent Object Reference', () => {
       return dataVars[name];
     });
     
-    // Create resolver and client
-    resolver = new VariableReferenceResolver(mockStateService);
+    // Create a mock VariableNodeFactory
+    mockVariableNodeFactory = {
+      createVariableReferenceNode: vi.fn().mockImplementation((identifier, valueType, fields, format, location) => {
+        // This matches the legacy function behavior
+        return {
+          type: 'VariableReference',
+          identifier,
+          valueType,
+          fields,
+          isVariableReference: true,
+          ...(format && { format }),
+          ...(location && { location })
+        };
+      }),
+      isValidFieldArray: vi.fn().mockImplementation((fields) => {
+        return fields.every(
+          field =>
+            field &&
+            (field.type === 'field' || field.type === 'index') &&
+            (typeof field.value === 'string' || typeof field.value === 'number')
+        );
+      }),
+      isVariableReferenceNode: vi.fn().mockImplementation((node) => {
+        return (
+          node.type === 'VariableReference' &&
+          typeof node.identifier === 'string' &&
+          typeof node.valueType === 'string'
+        );
+      })
+    } as any;
+    
+    // Mock container.resolve to return our mock factory
+    vi.spyOn(container, 'resolve').mockImplementation((token) => {
+      if (token === VariableNodeFactory) {
+        return mockVariableNodeFactory;
+      }
+      throw new Error(`Unexpected token in test: ${String(token)}`);
+    });
+    
+    // Create resolver and client with factory pattern
+    resolver = new VariableReferenceResolver(mockStateService, undefined, undefined, mockVariableNodeFactory);
     factory = new VariableReferenceResolverClientFactory(resolver);
     client = factory.createClient();
     

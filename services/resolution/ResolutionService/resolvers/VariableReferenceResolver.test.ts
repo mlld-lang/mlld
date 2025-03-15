@@ -1,9 +1,10 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { VariableReferenceResolver } from '@services/resolution/ResolutionService/resolvers/VariableReferenceResolver.js';
 import { 
   createMockStateService, 
   createMockParserService, 
   createTextNode,
+  // Legacy helper function still available during transition
   createVariableReferenceNode
 } from '@tests/utils/testFactories.js';
 import { ResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError.js';
@@ -11,6 +12,8 @@ import type { ResolutionContext, ResolutionErrorCode } from '@services/resolutio
 import type { MeldNode, TextNode } from '@core/syntax/types.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
+import { VariableNodeFactory } from '@core/syntax/types/factories/index.js';
+import { container } from 'tsyringe';
 
 describe('VariableReferenceResolver', () => {
   let resolver: VariableReferenceResolver;
@@ -18,10 +21,59 @@ describe('VariableReferenceResolver', () => {
   let parserService: ReturnType<typeof createMockParserService>;
   let context: ResolutionContext;
 
+  let mockVariableNodeFactory: VariableNodeFactory;
+  
   beforeEach(() => {
     stateService = createMockStateService();
     parserService = createMockParserService();
-    resolver = new VariableReferenceResolver(stateService, undefined, parserService);
+    
+    // Create a mock VariableNodeFactory
+    mockVariableNodeFactory = {
+      createVariableReferenceNode: vi.fn().mockImplementation((identifier, valueType, fields, format, location) => {
+        // This matches the legacy function behavior
+        return {
+          type: 'VariableReference',
+          identifier,
+          valueType,
+          fields,
+          isVariableReference: true,
+          ...(format && { format }),
+          ...(location && { location })
+        };
+      }),
+      isValidFieldArray: vi.fn().mockImplementation((fields) => {
+        return fields.every(
+          field =>
+            field &&
+            (field.type === 'field' || field.type === 'index') &&
+            (typeof field.value === 'string' || typeof field.value === 'number')
+        );
+      }),
+      isVariableReferenceNode: vi.fn().mockImplementation((node) => {
+        return (
+          node.type === 'VariableReference' &&
+          typeof node.identifier === 'string' &&
+          typeof node.valueType === 'string'
+        );
+      })
+    } as any;
+    
+    // Mock container.resolve to return our mock factory
+    vi.spyOn(container, 'resolve').mockImplementation((token) => {
+      if (token === VariableNodeFactory) {
+        return mockVariableNodeFactory;
+      }
+      throw new Error(`Unexpected token: ${String(token)}`);
+    });
+    
+    // Create resolver with the mock factory
+    resolver = new VariableReferenceResolver(
+      stateService, 
+      undefined, 
+      parserService,
+      mockVariableNodeFactory
+    );
+    
     context = {
       allowedVariableTypes: {
         text: true,
@@ -33,6 +85,10 @@ describe('VariableReferenceResolver', () => {
       state: stateService,
       strict: true
     };
+  });
+  
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   describe('resolve', () => {
@@ -189,6 +245,56 @@ describe('VariableReferenceResolver', () => {
       
       const refs = await resolver.extractReferencesAsync('{{var1}} and {{var2}}');
       expect(refs).toEqual(['var1', 'var2']);
+    });
+  });
+  
+  describe('Factory Pattern Usage', () => {
+    it('should use VariableNodeFactory when available', async () => {
+      // Set up a test string with variable reference
+      const testContent = '{{testVar}}';
+      
+      // Create a simple text node for return
+      const textVarNode = {
+        type: 'VariableReference',
+        identifier: 'testVar',
+        valueType: 'text',
+        isVariableReference: true
+      };
+      
+      // Mock the parser to return our test node
+      vi.mocked(parserService.parse).mockResolvedValue([textVarNode]);
+      
+      // Mock the variable value
+      vi.mocked(stateService.getTextVar).mockReturnValue('Hello Factory!');
+      
+      // Resolve the variable
+      const result = await resolver.resolve(testContent, context);
+      
+      // Verify factory method for type check was called
+      expect(mockVariableNodeFactory.isVariableReferenceNode).toHaveBeenCalledWith(textVarNode);
+      
+      // Verify the variable was resolved
+      expect(result).toBe('Hello Factory!');
+    });
+    
+    it('should use factory for variable creation in regex fallback', async () => {
+      // Set up content that will trigger regex fallback
+      const content = '{{testVar}}';
+      
+      // Force parser failure to trigger regex fallback
+      vi.mocked(parserService.parse).mockRejectedValue(new Error('Parser failed'));
+      
+      // Mock variable value
+      vi.mocked(stateService.getTextVar).mockReturnValue('Regex Fallback Value');
+      
+      // Resolve the variable
+      const result = await resolver.resolve(content, context);
+      
+      // Verify factory was used for node creation
+      expect(mockVariableNodeFactory.createVariableReferenceNode).toHaveBeenCalled();
+      
+      // Verify the result is correct
+      expect(result).toBe('Regex Fallback Value');
     });
   });
 }); 
