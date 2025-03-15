@@ -899,7 +899,7 @@ export class PathService implements IPathService {
    * @param paths The path segments to join
    * @returns The joined path
    */
-  join(...paths: string[]): string {
+  joinPaths(...paths: string[]): string {
     return path.join(...paths);
   }
   

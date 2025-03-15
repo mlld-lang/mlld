@@ -1,20 +1,15 @@
 import type { MeldNode } from '@core/syntax/types.js';
+import type { 
+  StateServiceBase, 
+  StateTransformationOptions 
+} from '@core/shared/types.js';
 import type { IStateEventService } from '@services/state/StateEventService/IStateEventService.js';
 import type { IStateTrackingService } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
 
 /**
  * Options for selective transformation
  */
-export interface TransformationOptions {
-  /** Whether to transform variable references */
-  variables?: boolean;    
-  /** Whether to transform directive content */
-  directives?: boolean;   
-  /** Whether to execute commands */
-  commands?: boolean;     
-  /** Whether to process imports */
-  imports?: boolean;      
-}
+export interface TransformationOptions extends StateTransformationOptions {}
 
 /**
  * Service responsible for managing state in Meld documents.
@@ -30,7 +25,7 @@ export interface TransformationOptions {
  * - IStateEventService: For state change event notifications
  * - IStateTrackingService: For debugging and tracking state operations
  */
-export interface IStateService {
+export interface IStateService extends StateServiceBase {
   /**
    * Sets the event service for state change notifications.
    * 

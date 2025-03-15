@@ -1,3 +1,12 @@
+import type { 
+  StateEventType, 
+  StateEventBase, 
+  StateEventHandlerBase, 
+  StateEventFilterBase,
+  StateEventHandlerOptionsBase,
+  StateEventServiceBase
+} from '@core/shared/types.js';
+
 /**
  * Core event system for state tracking and instrumentation.
  * Provides event emission and handling for state operations.
@@ -18,38 +27,10 @@
  */
 
 /**
- * Core state event types representing different state lifecycle operations.
- * 
- * - 'create': A new state is created
- * - 'clone': A state is cloned from another state
- * - 'transform': A state transformation occurs (e.g., node transformation)
- * - 'merge': A child state is merged into its parent
- * - 'error': An error occurs during state operations
- */
-export type StateEventType = 'create' | 'clone' | 'transform' | 'merge' | 'error';
-
-/**
  * Base state event interface providing context for state operations.
  * Contains core information about what happened, where, and when.
  */
-export interface StateEvent {
-  /** The type of state event */
-  type: StateEventType;
-  /** Unique identifier of the state that triggered the event */
-  stateId: string;
-  /** Source of the event (usually a service or operation name) */
-  source: string;
-  /** Timestamp when the event occurred (milliseconds since epoch) */
-  timestamp: number;
-  /** Optional location information for debugging */
-  location?: {
-    /** File where the event occurred */
-    file?: string;
-    /** Line number in the file */
-    line?: number;
-    /** Column number in the file */
-    column?: number;
-  };
+export interface StateEvent extends StateEventBase {
 }
 
 /**
@@ -58,7 +39,7 @@ export interface StateEvent {
  * 
  * @param event - The state event to handle
  */
-export type StateEventHandler = (event: StateEvent) => void | Promise<void>;
+export type StateEventHandler = StateEventHandlerBase;
 
 /**
  * Event filter predicate for selective event handling.
@@ -67,21 +48,19 @@ export type StateEventHandler = (event: StateEvent) => void | Promise<void>;
  * @param event - The event to evaluate
  * @returns true if the event should be handled, false otherwise
  */
-export type StateEventFilter = (event: StateEvent) => boolean;
+export type StateEventFilter = StateEventFilterBase;
 
 /**
  * Handler registration options for configuring event subscription.
  */
-export interface StateEventHandlerOptions {
-  /** Optional filter to selectively process events */
-  filter?: StateEventFilter;
+export interface StateEventHandlerOptions extends StateEventHandlerOptionsBase {
 }
 
 /**
  * Service responsible for state event management and distribution.
  * Implements the observer pattern for state change notifications.
  */
-export interface IStateEventService {
+export interface IStateEventService extends StateEventServiceBase {
   /**
    * Register an event handler with optional filtering.
    * 

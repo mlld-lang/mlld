@@ -1,8 +1,14 @@
+import type {
+  StateMetadataBase,
+  StateRelationshipBase,
+  StateTrackingServiceBase
+} from '@core/shared/types.js';
+
 /**
  * @package
  * Interface for state tracking service.
  */
-export interface IStateTrackingService {
+export interface IStateTrackingService extends StateTrackingServiceBase {
   /**
    * Register a state with the tracking service.
    * @param metadata - The state metadata to register
@@ -112,25 +118,14 @@ export interface IStateTrackingService {
 /**
  * Metadata for a state instance.
  */
-export interface StateMetadata {
-  id: string;
-  parentId?: string;
-  source: 'new' | 'clone' | 'child' | 'merge' | 'implicit';
-  filePath?: string;
-  transformationEnabled: boolean;
-  createdAt: number;
-  lastModified?: number;
+export interface StateMetadata extends StateMetadataBase {
   childStates?: string[];
 }
 
 /**
  * Represents a relationship between states.
  */
-export interface StateRelationship {
-  sourceId?: string;
-  targetId: string;
-  type: 'parent-child' | 'merge-source' | 'merge-target';
-}
+export interface StateRelationship extends StateRelationshipBase {}
 
 /**
  * Represents a context boundary between states.

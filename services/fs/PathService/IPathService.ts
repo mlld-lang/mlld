@@ -1,7 +1,7 @@
 import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import type { Location } from '@core/types/index.js';
-// Define StructuredPath locally instead of importing
-// import type { StructuredPath } from '@core/syntax/types.js';
+// Import shared types
+import { PathServiceBase } from '@core/shared/types.js';
 import { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 
 /**
@@ -102,7 +102,7 @@ export interface PathOptions {
  * - IFileSystemService: For file and directory existence checks
  * - IParserService: Optional, for AST-based path handling
  */
-export interface IPathService {
+export interface IPathService extends PathServiceBase {
   /**
    * Initialize the path service with required dependencies.
    * Must be called before using any other methods.
@@ -240,7 +240,7 @@ export interface IPathService {
    * This is a low-level utility and does not enforce Meld path rules.
    * It's primarily used for internal path manipulation.
    */
-  join(...paths: string[]): string;
+  joinPaths(...paths: string[]): string;
 
   /**
    * Get the directory name of a path.

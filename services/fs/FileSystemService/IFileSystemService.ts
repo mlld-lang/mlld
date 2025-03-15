@@ -1,5 +1,6 @@
 import type { Stats } from 'fs-extra';
 import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
+import { FileSystemBase } from '@core/shared/types.js';
 
 /**
  * Service responsible for file system operations.
@@ -15,7 +16,7 @@ import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js'
  * - IFileSystem: For low-level filesystem operations
  * - IPathService: For path validation and resolution
  */
-export interface IFileSystemService {
+export interface IFileSystemService extends FileSystemBase {
   /**
    * Reads the content of a file as a string.
    * 
