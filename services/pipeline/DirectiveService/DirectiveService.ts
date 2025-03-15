@@ -380,14 +380,29 @@ export class DirectiveService implements IDirectiveService, DirectiveServiceLike
    * Create execution context for a directive
    */
   private createContext(node: DirectiveNode, parentContext?: DirectiveContext): DirectiveContext {
-    if (!this.stateService) {
-      throw new Error('DirectiveService must be initialized before use');
-    }
-    const state = parentContext?.state?.clone() || this.stateService.createChildState();
+    // If we have a parent context, create a child state
+    const state = parentContext 
+      ? parentContext.state.createChildState() 
+      : this.stateService;
+    
+    // Get the current file path from the parent context or the state
+    const currentFilePath = parentContext?.currentFilePath || state.getCurrentFilePath() || undefined;
+    
+    // Create a resolution context for variable resolution
+    const resolutionContext = {
+      currentFilePath,
+      workingDirectory: parentContext?.workingDirectory,
+      transformationMode: state.isTransformationEnabled(),
+      validatePaths: true
+    };
+    
+    // Create the directive context
     return {
-      currentFilePath: parentContext?.currentFilePath || '',
+      state,
       parentState: parentContext?.state,
-      state
+      currentFilePath,
+      workingDirectory: parentContext?.workingDirectory,
+      resolutionContext
     };
   }
 
@@ -437,10 +452,23 @@ export class DirectiveService implements IDirectiveService, DirectiveServiceLike
    * Create a child context for nested directives
    */
   public createChildContext(parentContext: DirectiveContext, filePath: string): DirectiveContext {
-    return {
+    const childState = parentContext.state.createChildState();
+    childState.setCurrentFilePath(filePath);
+    
+    // Create a resolution context for variable resolution
+    const resolutionContext = {
       currentFilePath: filePath,
-      state: parentContext.state.createChildState(),
-      parentState: parentContext.state
+      workingDirectory: parentContext.workingDirectory,
+      transformationMode: childState.isTransformationEnabled(),
+      validatePaths: true
+    };
+    
+    return {
+      parentState: parentContext.state,
+      state: childState,
+      currentFilePath: filePath,
+      workingDirectory: parentContext.workingDirectory,
+      resolutionContext
     };
   }
 
@@ -923,23 +951,24 @@ export class DirectiveService implements IDirectiveService, DirectiveServiceLike
    * @private
    */
   private async resolveText(text: string, context: DirectiveContext): Promise<string> {
-    // Ensure factory is initialized before trying to use it
     this.ensureFactoryInitialized();
     
-    // Try new approach first (factory pattern)
     if (this.resolutionClient) {
       try {
-        return await this.resolutionClient.resolveText(text, context.resolutionContext);
-      } catch (error) {
-        this.logger.warn('Error using resolutionClient.resolveText, falling back to direct reference', { 
-          error, 
-          text 
+        return await this.resolutionClient.resolveText(text, context.resolutionContext || {
+          currentFilePath: context.currentFilePath,
+          workingDirectory: context.workingDirectory
         });
+      } catch (error) {
+        directiveLogger.warn('Error using resolutionClient.resolveText', { error });
       }
     }
     
-    // Fall back to direct reference
-    return this.resolutionService.resolveText(text, context.resolutionContext);
+    // Fallback to direct resolution service
+    return this.resolutionService.resolveText(text, {
+      currentFilePath: context.currentFilePath,
+      workingDirectory: context.workingDirectory
+    });
   }
 
   /**
@@ -947,23 +976,24 @@ export class DirectiveService implements IDirectiveService, DirectiveServiceLike
    * @private
    */
   private async resolveData(ref: string, context: DirectiveContext): Promise<any> {
-    // Ensure factory is initialized before trying to use it
     this.ensureFactoryInitialized();
     
-    // Try new approach first (factory pattern)
     if (this.resolutionClient) {
       try {
-        return await this.resolutionClient.resolveData(ref, context.resolutionContext);
-      } catch (error) {
-        this.logger.warn('Error using resolutionClient.resolveData, falling back to direct reference', { 
-          error, 
-          ref 
+        return await this.resolutionClient.resolveData(ref, context.resolutionContext || {
+          currentFilePath: context.currentFilePath,
+          workingDirectory: context.workingDirectory
         });
+      } catch (error) {
+        directiveLogger.warn('Error using resolutionClient.resolveData', { error });
       }
     }
     
-    // Fall back to direct reference
-    return this.resolutionService.resolveData(ref, context.resolutionContext);
+    // Fallback to direct resolution service
+    return this.resolutionService.resolveData(ref, {
+      currentFilePath: context.currentFilePath,
+      workingDirectory: context.workingDirectory
+    });
   }
 
   /**
@@ -971,23 +1001,24 @@ export class DirectiveService implements IDirectiveService, DirectiveServiceLike
    * @private
    */
   private async resolvePath(path: string, context: DirectiveContext): Promise<string> {
-    // Ensure factory is initialized before trying to use it
     this.ensureFactoryInitialized();
     
-    // Try new approach first (factory pattern)
     if (this.resolutionClient) {
       try {
-        return await this.resolutionClient.resolvePath(path, context.resolutionContext);
-      } catch (error) {
-        this.logger.warn('Error using resolutionClient.resolvePath, falling back to direct reference', { 
-          error, 
-          path 
+        return await this.resolutionClient.resolvePath(path, context.resolutionContext || {
+          currentFilePath: context.currentFilePath,
+          workingDirectory: context.workingDirectory
         });
+      } catch (error) {
+        directiveLogger.warn('Error using resolutionClient.resolvePath', { error });
       }
     }
     
-    // Fall back to direct reference
-    return this.resolutionService.resolvePath(path, context.resolutionContext);
+    // Fallback to direct resolution service
+    return this.resolutionService.resolvePath(path, {
+      currentFilePath: context.currentFilePath,
+      workingDirectory: context.workingDirectory
+    });
   }
 
   /**
