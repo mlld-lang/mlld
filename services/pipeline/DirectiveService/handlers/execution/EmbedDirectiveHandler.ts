@@ -425,7 +425,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
               processedPath.content) {
             // Extract the variable reference parts
             const variableName = processedPath.identifier;
-            const originalContent = processedPath.content;
+            const originalContent = processedPath.content as string;
             this.logger.debug(`Processing variable embed with content: ${originalContent}`);
             
             // Check if we have a complex variable reference with field access (contains dots)
@@ -445,7 +445,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
                 const resolvedField = await this.resolutionService.resolveFieldAccess(
                   variableName,
                   fieldPath,
-                  resolutionContext
+                  resolutionContext as ResolutionContext
                 );
                 
                 this.logger.debug(`Resolved field access ${variableName}.${fieldPath} to:`, resolvedField);
