@@ -6,9 +6,9 @@ import type {
   TextNode, 
   CodeFenceNode, 
   DirectiveNode, 
-  VariableReferenceNode, 
   Field 
-} from '@core/syntax/types.js';
+} from '@core/syntax/types/index.js';
+import type { IVariableReference } from '@core/syntax/types/interfaces/IVariableReference.js';
 import { outputLogger as logger } from '@core/utils/logger.js';
 import { MeldOutputError } from '@core/errors/MeldOutputError.js';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
@@ -1285,7 +1285,7 @@ export class OutputService implements IOutputService {
           
           logger.debug('Found variable references in Text node', {
             content,
-            matches: matches.map(m => m[0]),
+            matches: (matches as RegExpMatchArray[]).map(m => m[0]),
             transformationEnabled: state.isTransformationEnabled(),
             transformationOptions: state.getTransformationOptions ? state.getTransformationOptions() : 'N/A',
             shouldTransformVariables: state.shouldTransform ? state.shouldTransform('variables') : 'N/A'
@@ -1300,7 +1300,7 @@ export class OutputService implements IOutputService {
           // Only proceed with transformation if we're supposed to transform variables
           if (!state.shouldTransform || state.shouldTransform('variables')) {
             // Process each variable reference
-            for (const match of matches) {
+            for (const match of matches as RegExpMatchArray[]) {
               const fullMatch = match[0]; // The entire match, e.g., {{variable}}
               const reference = match[1].trim(); // The variable reference, e.g., variable
               
@@ -1379,7 +1379,7 @@ export class OutputService implements IOutputService {
             let processedContent = content;
             const matches = Array.from(content.matchAll(variableRegex));
             
-            for (const match of matches) {
+            for (const match of matches as RegExpMatchArray[]) {
               const fullMatch = match[0]; // The entire match, e.g., {{variable}}
               const reference = match[1].trim(); // The variable reference, e.g., variable
               
@@ -1411,7 +1411,7 @@ export class OutputService implements IOutputService {
             throw new Error('Invalid VariableReference node');
           }
           
-          const varNode = node as VariableReferenceNode;
+          const varNode = node as IVariableReference;
           const nodeType = varNode.valueType === 'text' ? 'TextVar' : 'DataVar';
           
           // Create a formatting context for this node
@@ -1464,7 +1464,7 @@ export class OutputService implements IOutputService {
               if (dataValue !== undefined) {
                 // Build the field path
                 const fieldPath = node.fields
-                  .map(field => {
+                  .map((field: Field) => {
                     if (field.type === 'index') {
                       return String(field.value);
                     } else if (field.type === 'field') {

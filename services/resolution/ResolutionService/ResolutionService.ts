@@ -10,7 +10,7 @@ import { ContentResolver } from '@services/resolution/ResolutionService/resolver
 import { VariableReferenceResolver } from '@services/resolution/ResolutionService/resolvers/VariableReferenceResolver.js';
 import { resolutionLogger as logger } from '@core/utils/logger.js';
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
-import type { MeldNode, DirectiveNode, TextNode, DirectiveKind, CodeFenceNode } from '@core/syntax/types.js';
+import type { MeldNode, DirectiveNode, TextNode, DirectiveKind, CodeFenceNode } from '@core/syntax/types/index.js';
 import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
 import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
@@ -1225,15 +1225,16 @@ export class ResolutionService implements IResolutionService {
   }
 
   /**
-   * Check if a path is valid and accessible
+   * Validate a path for security and existence
+   * 
    * @param path - The path to validate
    * @param context - The resolution context with state and allowed variable types
    * @returns A promise that resolves to true if the path is valid, false otherwise
    */
-  async validatePath(path: string, context: ResolutionContextBase): Promise<boolean> {
+  async validatePath(path: string, context: ResolutionContext): Promise<boolean> {
     try {
       // First resolve the path to handle any variables
-      const resolvedPath = await this.resolvePath(path, context as ResolutionContext);
+      const resolvedPath = await this.resolvePath(path, context);
       
       // Then validate the resolved path using the PathService
       await this.pathService.validatePath(resolvedPath, {
