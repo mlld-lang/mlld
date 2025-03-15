@@ -32,6 +32,7 @@ export class TextNodeFactory {
     
     return {
       ...baseNode,
+      type: 'Text',
       content
     };
   }

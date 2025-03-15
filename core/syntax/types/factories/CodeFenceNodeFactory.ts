@@ -33,6 +33,7 @@ export class CodeFenceNodeFactory {
     
     return {
       ...baseNode,
+      type: 'CodeFence',
       content,
       ...(language && { language })
     };

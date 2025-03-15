@@ -32,6 +32,7 @@ export class CommentNodeFactory {
     
     return {
       ...baseNode,
+      type: 'Comment',
       content
     };
   }
