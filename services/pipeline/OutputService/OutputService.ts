@@ -19,6 +19,7 @@ import { IResolutionServiceClient } from '@services/resolution/ResolutionService
 import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientFactory.js';
 import { IVariableReferenceResolverClient, FieldAccessOptions } from '@services/resolution/ResolutionService/interfaces/IVariableReferenceResolverClient.js';
 import { VariableReferenceResolverClientFactory } from '@services/resolution/ResolutionService/factories/VariableReferenceResolverClientFactory.js';
+import { VariableNodeFactory } from '@core/syntax/types/factories/VariableNodeFactory.js';
 
 /**
  * Tracking context for variable formatting to preserve formatting during substitution
@@ -500,7 +501,8 @@ export class OutputService implements IOutputService {
   constructor(
     @inject('IStateService') state?: IStateService,
     @inject('IResolutionService') resolutionService?: IResolutionService,
-    @inject('ResolutionServiceClientFactory') resolutionServiceClientFactory?: ResolutionServiceClientFactory
+    @inject('ResolutionServiceClientFactory') resolutionServiceClientFactory?: ResolutionServiceClientFactory,
+    @inject(VariableNodeFactory) private readonly variableNodeFactory?: VariableNodeFactory
   ) {
     this.initializeFromParams(state, resolutionService, resolutionServiceClientFactory);
     
@@ -510,6 +512,17 @@ export class OutputService implements IOutputService {
       this.resolutionClient,
       this.getVariableResolver.bind(this)
     );
+    
+    // Initialize variable node factory with fallback to container resolution
+    if (!this.variableNodeFactory) {
+      try {
+        this.variableNodeFactory = container.resolve(VariableNodeFactory);
+      } catch (error) {
+        logger.warn('Failed to resolve VariableNodeFactory from container', {
+          error: error instanceof Error ? error.message : String(error)
+        });
+      }
+    }
   }
 
   /**
@@ -1393,6 +1406,11 @@ export class OutputService implements IOutputService {
       case 'VariableReference':
         // Handle VariableReference nodes
         try {
+          // Validate the node is a VariableReference using the factory
+          if (this.variableNodeFactory && !this.variableNodeFactory.isVariableReferenceNode(node)) {
+            throw new Error('Invalid VariableReference node');
+          }
+          
           const varNode = node as VariableReferenceNode;
           const nodeType = varNode.valueType === 'text' ? 'TextVar' : 'DataVar';
           

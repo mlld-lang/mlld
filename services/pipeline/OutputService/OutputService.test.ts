@@ -6,6 +6,7 @@ import type { MeldNode } from '@core/syntax/types.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IResolutionService, ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
 import type { OutputFormat } from '@services/pipeline/OutputService/IOutputService.js';
+import { VariableNodeFactory } from '@core/syntax/types/factories/VariableNodeFactory.js';
 import {
   createTextNode,
   createDirectiveNode,
@@ -31,6 +32,7 @@ describe('OutputService', () => {
   let service: OutputService;
   let state: IStateService;
   let resolutionService: IResolutionService;
+  let mockVariableNodeFactory: any;
 
   beforeEach(async () => {
     // Create isolated test context
@@ -40,6 +42,26 @@ describe('OutputService', () => {
     state = mockDeep<IStateService>();
     resolutionService = mockDeep<IResolutionService>();
     
+    // Create mock VariableNodeFactory
+    mockVariableNodeFactory = {
+      createVariableReferenceNode: vi.fn().mockImplementation((identifier, valueType, fields, format, location) => ({
+        type: 'VariableReference',
+        identifier,
+        valueType,
+        fields,
+        isVariableReference: true,
+        ...(format && { format }),
+        ...(location && { location })
+      })),
+      isVariableReferenceNode: vi.fn().mockImplementation((node) => {
+        return (
+          node?.type === 'VariableReference' &&
+          typeof node?.identifier === 'string' &&
+          typeof node?.valueType === 'string'
+        );
+      })
+    };
+    
     // Reset mocks before each test
     mockReset(state);
     mockReset(resolutionService);
@@ -47,6 +69,7 @@ describe('OutputService', () => {
     // Register mocks with the context
     context.registerMock('IStateService', state);
     context.registerMock('IResolutionService', resolutionService);
+    context.registerMock(VariableNodeFactory, mockVariableNodeFactory);
     
     // Initialize context
     await context.initialize();

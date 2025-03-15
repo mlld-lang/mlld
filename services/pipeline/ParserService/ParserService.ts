@@ -18,6 +18,7 @@ import { Service } from '@core/ServiceProvider.js';
 import { container } from 'tsyringe';
 import { IResolutionServiceClient } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClient.js';
 import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientFactory.js';
+import { VariableNodeFactory } from '@core/syntax/types/factories/VariableNodeFactory.js';
 
 // Define our own ParseError type since it's not exported from meld-ast
 interface ParseError {
@@ -61,15 +62,21 @@ export class ParserService implements IParserService {
   private resolutionClient?: IResolutionServiceClient;
   private resolutionClientFactory?: ResolutionServiceClientFactory;
   private factoryInitialized: boolean = false;
+  private variableNodeFactory?: VariableNodeFactory;
 
   /**
    * Creates a new instance of the ParserService
    */
-  constructor() {
+  constructor(
+    @inject(VariableNodeFactory) variableNodeFactory?: VariableNodeFactory
+  ) {
     // We'll initialize the factory lazily to avoid circular dependencies
     if (process.env.DEBUG === 'true') {
       console.log('ParserService: Initialized');
     }
+    
+    // Initialize the variable node factory or fall back to container resolution
+    this.variableNodeFactory = variableNodeFactory || container.resolve(VariableNodeFactory);
   }
 
   /**
@@ -138,25 +145,40 @@ export class ParserService implements IParserService {
         valueType = 'path';
       }
       
-      // Create a variable reference node structure
-      const variableRefNode: any = {
-        type: 'VariableReference',
-        valueType,
-        fields: anyNode.fields || [],
-        isVariableReference: true,
-        location: anyNode.location
-      };
+      // Get identifier from the appropriate property
+      const identifier = anyNode.identifier || anyNode.value || '';
       
-      // Copy identifier and format if they exist
-      if (anyNode.identifier) {
-        variableRefNode.identifier = anyNode.identifier;
+      // Get fields or empty array
+      const fields = anyNode.fields || [];
+      
+      // Get format if it exists
+      const format = anyNode.format;
+      
+      // Get location if it exists
+      const location = anyNode.location;
+      
+      // Use factory to create variable reference node
+      if (this.variableNodeFactory) {
+        return this.variableNodeFactory.createVariableReferenceNode(
+          identifier,
+          valueType,
+          fields,
+          format,
+          location
+        ) as MeldNode;
+      } else {
+        // Fallback to direct creation if factory is unavailable
+        logger.warn('VariableNodeFactory not available, falling back to direct creation');
+        return {
+          type: 'VariableReference',
+          identifier,
+          valueType,
+          fields,
+          isVariableReference: true,
+          ...(format && { format }),
+          ...(location && { location })
+        } as MeldNode;
       }
-      
-      if (anyNode.format) {
-        variableRefNode.format = anyNode.format;
-      }
-      
-      return variableRefNode as MeldNode;
     }
     
     // Process other node types that might contain variable nodes in their properties
@@ -364,6 +386,22 @@ export class ParserService implements IParserService {
       error.location !== null &&
       'start' in error.location &&
       'end' in error.location
+    );
+  }
+  
+  /**
+   * Check if a node is a variable reference node using the factory
+   */
+  private isVariableReferenceNode(node: any): node is VariableReferenceNode {
+    if (this.variableNodeFactory) {
+      return this.variableNodeFactory.isVariableReferenceNode(node);
+    }
+    
+    // Fallback to direct checking
+    return (
+      node?.type === 'VariableReference' &&
+      typeof node?.identifier === 'string' &&
+      typeof node?.valueType === 'string'
     );
   }
 

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { ParserService } from '@services/pipeline/ParserService/ParserService.js';
 import { MeldParseError } from '@core/errors/MeldParseError.js';
 import type { MeldNode, DirectiveNode, TextNode, CodeFenceNode, VariableReferenceNode } from '@core/syntax/types.js';
@@ -11,6 +11,8 @@ import {
 } from '@core/syntax/index.js';
 import { getExample, getInvalidExample } from '@tests/utils/syntax-test-helpers.js';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
+import { VariableNodeFactory } from '@core/syntax/types/factories/VariableNodeFactory.js';
+import { NodeFactory } from '@core/syntax/types/factories/NodeFactory.js';
 
 // Define a type that combines the meld-spec Location with our filePath
 type LocationWithFilePath = {
@@ -61,14 +63,46 @@ const mockResolutionService = {
 describe('ParserService', () => {
   let service: ParserService;
   let testContext: TestContextDI;
+  let mockNodeFactory: any;
+  let mockVariableNodeFactory: any;
 
   beforeEach(async () => {
     // Create test context with isolated container
     testContext = TestContextDI.createIsolated();
     await testContext.initialize();
     
+    // Create mock NodeFactory
+    mockNodeFactory = {
+      createNode: vi.fn().mockImplementation((type, location) => ({
+        type,
+        ...(location && { location })
+      }))
+    };
+    
+    // Create mock VariableNodeFactory
+    mockVariableNodeFactory = {
+      createVariableReferenceNode: vi.fn().mockImplementation((identifier, valueType, fields, format, location) => ({
+        type: 'VariableReference',
+        identifier,
+        valueType,
+        fields,
+        isVariableReference: true,
+        ...(format && { format }),
+        ...(location && { location })
+      })),
+      isVariableReferenceNode: vi.fn().mockImplementation((node) => {
+        return (
+          node?.type === 'VariableReference' &&
+          typeof node?.identifier === 'string' &&
+          typeof node?.valueType === 'string'
+        );
+      })
+    };
+    
     // Register mock services in the container
     testContext.registerMock('IResolutionService', mockResolutionService);
+    testContext.registerMock(NodeFactory, mockNodeFactory);
+    testContext.registerMock(VariableNodeFactory, mockVariableNodeFactory);
     
     // Resolve service from container
     service = testContext.container.resolve(ParserService);
@@ -286,6 +320,50 @@ describe('ParserService', () => {
         { type: 'field', value: 'profile' },
         { type: 'field', value: 'name' }
       ]);
+    });
+    
+    it('should validate that factory is properly initialized', async () => {
+      // Test that the service has initialized the factory
+      expect(service['variableNodeFactory']).toBe(mockVariableNodeFactory);
+      
+      // Verify that we can transform a node using the service's private method
+      const legacyNode = {
+        type: 'TextVar',
+        value: 'greeting',
+        location: {
+          start: { line: 1, column: 7 },
+          end: { line: 1, column: 20 }
+        }
+      };
+      
+      // Use service's private method directly through the service instance
+      // @ts-ignore - accessing private method for testing
+      const transformed = service['transformVariableNode'](legacyNode);
+      
+      // Verify the factory was called
+      expect(mockVariableNodeFactory.createVariableReferenceNode).toHaveBeenCalledWith(
+        'greeting',
+        'text',
+        [],
+        undefined,
+        expect.objectContaining({
+          start: { line: 1, column: 7 },
+          end: { line: 1, column: 20 }
+        })
+      );
+      
+      // Verify the result
+      expect(transformed).toEqual({
+        type: 'VariableReference',
+        identifier: 'greeting',
+        valueType: 'text',
+        fields: [],
+        isVariableReference: true,
+        location: {
+          start: { line: 1, column: 7 },
+          end: { line: 1, column: 20 }
+        }
+      });
     });
   });
 
