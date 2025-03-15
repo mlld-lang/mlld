@@ -1,22 +1,27 @@
-import { INode } from './INode.js';
+import type { INode } from './INode.js';
+import { 
+  VariableType as BaseVariableType, 
+  Field as BaseField,
+  FormatOperator as BaseFormatOperator,
+  SPECIAL_PATH_VARS as BASE_SPECIAL_PATH_VARS,
+  ENV_VAR_PREFIX as BASE_ENV_VAR_PREFIX,
+  VAR_PATTERNS as BASE_VAR_PATTERNS
+} from '../shared-types.js';
+
+// Re-export core types from shared-types
+export type { Field } from '../shared-types.js';
+export type { FormatOperator } from '../shared-types.js';
 
 /**
- * Types of variables supported in Meld
+ * Extended variable types specific to Meld syntax
+ * Overrides the more general types from shared-types with specific Meld types
  */
 export type VariableType = 'text' | 'data' | 'path';
 
 /**
- * Field access in a variable reference
- */
-export interface Field {
-  type: 'field' | 'index';
-  value: string | number;
-}
-
-/**
  * Format operator specification
  */
-export interface FormatOperator {
+export interface ExtendedFormatOperator {
   /** The format operator token '>>' */
   operator: '>>';
   /** The format specification */
@@ -36,28 +41,33 @@ export interface IVariableReference extends INode {
   type: 'VariableReference';
   identifier: string;
   valueType: VariableType;
-  fields?: Field[];
+  fields?: BaseField[];
   isVariableReference: true;
   format?: string;
 }
 
 /**
  * Special path variables
+ * For legacy compatibility, re-export the base constants with local extensions
  */
 export const SPECIAL_PATH_VARS = {
+  ...BASE_SPECIAL_PATH_VARS,
   HOME: ['$HOMEPATH', '$~'],
   PROJECT: ['$PROJECTPATH', '$.']
 } as const;
 
 /**
  * Environment variable prefix
+ * Re-export from shared-types for consistency
  */
-export const ENV_VAR_PREFIX = 'ENV_';
+export const ENV_VAR_PREFIX = BASE_ENV_VAR_PREFIX;
 
 /**
  * Variable reference patterns
+ * Extended patterns specific to Meld syntax
  */
 export const VAR_PATTERNS = {
+  ...BASE_VAR_PATTERNS,
   TEXT: /\${([^}]+)}/,
   DATA: /#{([^}]+)}/,
   PATH: /\$([A-Za-z0-9_~]+)/,

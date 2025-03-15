@@ -1,5 +1,5 @@
-import { DirectiveNode } from '@core/syntax/types.js';
-import { DirectiveContext } from '@services/pipeline/DirectiveService/IDirectiveService.js';
+import type { DirectiveNode } from '@core/syntax/types.js';
+import type { DirectiveContext } from '@services/pipeline/DirectiveService/IDirectiveService.js';
 import type { Location } from '@core/types/index.js';
 import { MeldDirectiveError, DirectiveLocation, MeldDirectiveErrorOptions } from '@core/errors/MeldDirectiveError.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';

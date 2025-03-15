@@ -1,5 +1,5 @@
-import { DirectiveNode } from '@core/syntax/types.js';
-import { IStateService } from '@services/state/StateService/IStateService.js';
+import type { DirectiveNode } from '@core/syntax/types.js';
+import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import type { IPathService } from '@services/fs/PathService/IPathService.js';
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';

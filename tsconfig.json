@@ -9,8 +9,12 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "declaration": true,
+    "declarationMap": true,
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
+    "isolatedModules": true,
+    "noEmitOnError": false,
+    "verbatimModuleSyntax": false,
     "baseUrl": ".",
     "paths": {
       "@core/*": ["core/*"],
@@ -34,8 +38,9 @@
     "cli/**/*",
     "api/**/*",
     "tests/**/*",
-    "*.ts"
-, "_dev/issues/active/audit/test-audit-script.ts"  ],
+    "*.ts",
+    "_dev/issues/active/audit/test-audit-script.ts"
+  ],
   "exclude": [
     "node_modules",
     "dist",

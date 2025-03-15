@@ -1,6 +1,6 @@
-/**
- * Node types supported in the AST
- */
+import { BaseNode } from '../shared-types.js';
+
+// Define the node types
 export type NodeType = 
   | 'Directive'
   | 'Text'

@@ -84,11 +84,11 @@ export default defineConfig([
     entry: {
       index: 'api/index.ts',
     },
-    format: ['cjs', 'esm'],
+    format: ['esm'], // Remove CJS format to eliminate splitting error - we'll build CJS separately
     dts: true,
     clean: true,
     sourcemap: true,
-    splitting: true,
+    splitting: true, // Splitting works with ESM only
     treeshake: {
       // Optimize tree shaking for DI-based code
       preset: 'recommended',
@@ -97,7 +97,7 @@ export default defineConfig([
     outDir: 'dist',
     outExtension({ format }) {
       return {
-        js: format === 'cjs' ? '.cjs' : '.mjs',
+        js: '.mjs',
         dts: '.d.ts'
       }
     },
@@ -106,6 +106,32 @@ export default defineConfig([
     noExternal: [
       // If there are any dependencies that should be bundled, list them here
     ],
+    esbuildOptions(options, { format }) {
+      return getEsbuildOptions(format)(options);
+    }
+  },
+  // API build for CommonJS
+  {
+    entry: {
+      index: 'api/index.ts',
+    },
+    format: ['cjs'],
+    dts: false, // Only generate dts files once (in the ESM build)
+    clean: false, // Don't clean here, we'll clean in the ESM build
+    sourcemap: true,
+    splitting: false, // Don't use splitting for CJS
+    treeshake: {
+      preset: 'recommended',
+      moduleSideEffects: ['reflect-metadata', 'tsyringe']
+    },
+    outDir: 'dist',
+    outExtension({ format }) {
+      return {
+        js: '.cjs',
+      }
+    },
+    tsconfig: 'tsconfig.build.json',
+    external: externalDependencies,
     esbuildOptions(options, { format }) {
       return getEsbuildOptions(format)(options);
     }
