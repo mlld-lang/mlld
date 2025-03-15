@@ -164,7 +164,7 @@ interface FileSystemBase {
  */
 interface PathServiceBase {
   /** Validate a path */
-  validatePath(path: string): Promise<boolean>;
+  validatePath(path: string): Promise<string>;
   /** Resolve a path */
   resolvePath(path: string): string;
   /** Join path segments */
@@ -193,6 +193,8 @@ interface DirectiveContextBase {
   currentFilePath?: string;
   /** Working directory for command execution */
   workingDirectory?: string;
+  /** Resolution context for variable resolution */
+  resolutionContext?: ResolutionContextBase;
 }
 
 /**

@@ -81,6 +81,50 @@ export interface StateServiceLike {
   getNodes(): any[];
   /** Add a node to the current document */
   addNode(node: any): void;
+  /** Sets a text variable */
+  setTextVar(name: string, value: string): void;
+  /** Sets a data variable */
+  setDataVar(name: string, value: unknown): void;
+  /** Sets a path variable */
+  setPathVar(name: string, value: string): void;
+  /** Gets local text variables */
+  getLocalTextVars(): Map<string, string>;
+  /** Gets local data variables */
+  getLocalDataVars(): Map<string, unknown>;
+  /** Gets a command by name */
+  getCommand(name: string): { command: string; options?: Record<string, unknown> } | undefined;
+  /** Sets a command with optional options */
+  setCommand(name: string, command: string | { command: string; options?: Record<string, unknown> }): void;
+  /** Appends raw content to the document */
+  appendContent(content: string): void;
+  /** Checks if a specific transformation type is enabled */
+  shouldTransform(type: string): boolean;
+  /** Gets the output of a previously executed command */
+  getCommandOutput(command: string): string | undefined;
+  /** Checks if the state implementation supports transformation */
+  hasTransformationSupport(): boolean;
+  /** Gets the unique identifier for this state instance */
+  getStateId(): string | undefined;
+  /** Registers an imported file path */
+  addImport(path: string): void;
+  /** Removes an imported file path */
+  removeImport(path: string): void;
+  /** Checks if a file has been imported */
+  hasImport(path: string): boolean;
+  /** Gets all imported file paths */
+  getImports(): Set<string>;
+  /** Checks if the state has local changes that haven't been merged */
+  hasLocalChanges(): boolean;
+  /** Gets a list of local changes */
+  getLocalChanges(): string[];
+  /** Makes the state immutable, preventing further changes */
+  setImmutable(): void;
+  /** Whether the state is immutable */
+  readonly isImmutable: boolean;
+  /** Sets the event service for state change notifications */
+  setEventService(eventService: any): void;
+  /** Sets the tracking service for state debugging and analysis */
+  setTrackingService(trackingService: any): void;
 }
 
 /**
@@ -93,6 +137,34 @@ export interface FileSystemLike {
   readFile(path: string): Promise<string>;
   /** Resolve a path */
   resolvePath(path: string): string;
+  /** Check if a path exists */
+  exists(path: string): Promise<boolean>;
+  /** Write content to a file */
+  writeFile(filePath: string, content: string): Promise<void>;
+  /** Get information about a file or directory */
+  stat(filePath: string): Promise<any>;
+  /** Check if a path points to a file */
+  isFile(filePath: string): Promise<boolean>;
+  /** List the contents of a directory */
+  readDir(dirPath: string): Promise<string[]>;
+  /** Create a directory and any necessary parent directories */
+  ensureDir(dirPath: string): Promise<void>;
+  /** Check if a path points to a directory */
+  isDirectory(filePath: string): Promise<boolean>;
+  /** Get the current working directory */
+  getCwd(): string;
+  /** Get the directory name of a path */
+  dirname(filePath: string): string;
+  /** Execute a shell command */
+  executeCommand(command: string, options?: { cwd?: string }): Promise<{ stdout: string; stderr: string }>;
+  /** Create a directory and any necessary parent directories (deprecated) */
+  mkdir(dirPath: string, options?: { recursive?: boolean }): Promise<void>;
+  /** Watch a file or directory for changes */
+  watch(path: string, options?: { recursive?: boolean }): AsyncIterableIterator<{ filename: string; eventType: string }>;
+  /** Sets the file system implementation to use */
+  setFileSystem(fileSystem: any): void;
+  /** Gets the current file system implementation */
+  getFileSystem(): any;
 }
 
 /**
@@ -144,6 +216,24 @@ export interface ResolutionServiceLike {
   resolvePath(path: string, context: ResolutionContextBase): Promise<string>;
   /** Check if a path is valid and accessible */
   validatePath(path: string, context: ResolutionContextBase): Promise<boolean>;
+  /** Resolve command references to their results */
+  resolveCommand(cmd: string, args: string[], context: ResolutionContextBase): Promise<string>;
+  /** Resolve content from a file path */
+  resolveFile(path: string): Promise<string>;
+  /** Resolve raw content nodes, preserving formatting but skipping comments */
+  resolveContent(nodes: MeldNode[], context: ResolutionContextBase): Promise<string>;
+  /** Resolve any value based on the provided context rules */
+  resolveInContext(value: string | StructuredPath, context: ResolutionContextBase): Promise<string>;
+  /** Validate that resolution is allowed in the given context */
+  validateResolution(value: string | StructuredPath, context: ResolutionContextBase): Promise<void>;
+  /** Extract a section from content by its heading */
+  extractSection(content: string, section: string, fuzzy?: number): Promise<string>;
+  /** Check for circular variable references */
+  detectCircularReferences(value: string): Promise<void>;
+  /** Enable tracking of variable resolution attempts */
+  enableResolutionTracking(config: any): void;
+  /** Get the resolution tracker for debugging */
+  getResolutionTracker(): any | undefined;
 }
 
 /**
@@ -159,6 +249,8 @@ export interface CircularityServiceLike {
   isInStack(filePath: string): boolean;
   /** Get the current import stack for debugging */
   getImportStack(): string[];
+  /** Clear the import stack, typically used in testing or to recover from errors */
+  reset(): void;
 }
 
 /**
@@ -170,6 +262,10 @@ export interface ParserServiceLike {
   parseString(content: string, options?: { filePath?: string }): Promise<MeldNode[]>;
   /** Parse a file into AST nodes */
   parseFile(filePath: string): Promise<MeldNode[]>;
+  /** Parse a string into AST nodes (legacy method) */
+  parse(content: string, filePath?: string): Promise<MeldNode[]>;
+  /** Parse a string into AST nodes with location information */
+  parseWithLocations(content: string, filePath?: string): Promise<MeldNode[]>;
 }
 
 /**
@@ -181,6 +277,12 @@ export interface ValidationServiceLike {
   validate(node: DirectiveNode): Promise<void>;
   /** Check if a validator exists for a directive kind */
   hasValidator(kind: string): boolean;
+  /** Register a validator for a directive kind */
+  registerValidator(kind: string, validator: (node: DirectiveNode) => Promise<void>): void;
+  /** Remove a validator for a directive kind */
+  removeValidator(kind: string): void;
+  /** Get all registered directive kinds */
+  getRegisteredDirectiveKinds(): string[];
 }
 
 /**
