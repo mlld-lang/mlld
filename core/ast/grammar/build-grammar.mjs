@@ -45,7 +45,7 @@ const tsSource = peggy.generate(grammar, {
 
 // Add imports at the top and export only what we need
 const tsWrapped = `// Generated TypeScript parser
-import type { MeldNode } from '@core/syntax/types';
+import type { MeldNode } from '@core/syntax/types.js';
 
 // Define return type for the parser
 type ParseFunction = (input: string, options?: any) => MeldNode[];
@@ -102,9 +102,9 @@ const cjsSource = peggy.generate(grammar, {
 
 // Write ESM parser to dist
 fs.writeFileSync(DIST_PARSER_ESM, `// Generated ESM parser
-import type { MeldNode } from '@core/syntax/types.js';
 
 // Define return type for the parser
+/** @typedef {import('@core/syntax/types.js').MeldNode} MeldNode */
 /** @type {(input: string, options?: any) => MeldNode[]} */
 
 // Define SyntaxError type
@@ -131,7 +131,7 @@ fs.writeFileSync(DIST_PARSER_CJS, `// Generated CJS parser
 "use strict";
 
 // Define return type for the parser
-/** @typedef {import('@core/syntax/types').MeldNode} MeldNode */
+/** @typedef {import('@core/syntax/types.js').MeldNode} MeldNode */
 /** @typedef {(input: string, options?: any) => MeldNode[]} ParseFunction */
 
 // Define SyntaxError type

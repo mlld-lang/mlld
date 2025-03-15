@@ -1,7 +1,7 @@
 // Generated ESM parser
-import { MeldNode } from '@core/syntax/types';
 
 // Define return type for the parser
+/** @typedef {import('@core/syntax/types.js').MeldNode} MeldNode */
 /** @type {(input: string, options?: any) => MeldNode[]} */
 
 // Define SyntaxError type

@@ -2,7 +2,7 @@
 "use strict";
 
 // Define return type for the parser
-/** @typedef {import('@core/syntax/types').MeldNode} MeldNode */
+/** @typedef {import('@core/syntax/types.js').MeldNode} MeldNode */
 /** @typedef {(input: string, options?: any) => MeldNode[]} ParseFunction */
 
 // Define SyntaxError type
