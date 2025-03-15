@@ -235,6 +235,8 @@ export interface ResolutionServiceLike {
   enableResolutionTracking(config: any): void;
   /** Get the resolution tracker for debugging */
   getResolutionTracker(): any | undefined;
+  /** Resolves a field access on a variable (e.g., variable.field.subfield) */
+  resolveFieldAccess(variableName: string, fieldPath: string, context: ResolutionContextBase): Promise<any>;
 }
 
 /**

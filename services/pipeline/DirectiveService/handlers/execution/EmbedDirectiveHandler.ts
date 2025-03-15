@@ -1,5 +1,6 @@
-import { DirectiveNode, MeldNode, StructuredPath, TextNode } from '@core/syntax/types.js';
-import { IDirectiveHandler, DirectiveContext, DirectiveResult } from '@services/pipeline/DirectiveService/IDirectiveService.js';
+import { DirectiveNode, MeldNode, StructuredPath, TextNode } from '@core/syntax/types/index.js';
+import { IDirectiveHandler, DirectiveContext } from '@services/pipeline/DirectiveService/IDirectiveService.js';
+import type { DirectiveResult } from '@services/pipeline/DirectiveService/types.js';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import type { IResolutionService, ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
@@ -16,7 +17,7 @@ import { embedLogger } from '@core/utils/logger.js';
 import { StateVariableCopier } from '@services/state/utilities/StateVariableCopier.js';
 import type { IInterpreterServiceClient } from '@services/pipeline/InterpreterService/interfaces/IInterpreterServiceClient.js'; 
 import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory.js';
-import type { IStateTrackingService } from '@services/state/StateTrackingService/IStateTrackingService.js';
+import type { IStateTrackingService } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
 import { inject, injectable } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
 import { InterpreterOptionsBase } from '@core/shared-service-types.js';
