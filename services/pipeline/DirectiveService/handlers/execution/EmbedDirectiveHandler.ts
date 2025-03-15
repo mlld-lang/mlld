@@ -1,4 +1,4 @@
-import { DirectiveNode, MeldNode, StructuredPath, TextNode } from '@core/syntax/types/index.js';
+import { DirectiveNode, MeldNode, TextNode } from '@core/syntax/types/index.js';
 import { IDirectiveHandler, DirectiveContext } from '@services/pipeline/DirectiveService/IDirectiveService.js';
 import type { DirectiveResult } from '@services/pipeline/DirectiveService/types.js';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
@@ -20,8 +20,7 @@ import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterS
 import type { IStateTrackingService } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
 import { inject, injectable } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
-import { InterpreterOptionsBase } from '@core/shared-service-types.js';
-import { StateServiceLike } from '@core/shared-service-types.js';
+import { InterpreterOptionsBase, StructuredPath, StateServiceLike } from '@core/shared-service-types.js';
 
 // Define the embed directive parameters interface
 interface EmbedDirectiveParams {
