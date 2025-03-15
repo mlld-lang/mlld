@@ -1,15 +1,18 @@
 import type { DirectiveNode, DirectiveKind, DirectiveData } from '@core/syntax/types.js';
 import { directiveLogger } from '@core/utils/logger.js';
 import { IDirectiveService, IDirectiveHandler, DirectiveContext } from '@services/pipeline/DirectiveService/IDirectiveService.js';
-import { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
-import { IStateService } from '@services/state/StateService/IStateService.js';
-import { IPathService } from '@services/fs/PathService/IPathService.js';
-import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
-import { IParserService } from '@services/pipeline/ParserService/IParserService.js';
-import { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
+import type { 
+  ValidationServiceLike, 
+  StateServiceLike, 
+  PathServiceLike, 
+  FileSystemLike, 
+  ParserServiceLike, 
+  InterpreterServiceLike,
+  CircularityServiceLike, 
+  ResolutionServiceLike,
+  DirectiveServiceLike
+} from '@core/shared-service-types.js';
 import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
-import { ICircularityService } from '@services/resolution/CircularityService/ICircularityService.js';
-import { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { DirectiveError, DirectiveErrorCode, DirectiveErrorSeverity } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 import type { ILogger } from '@services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler.js';
@@ -54,22 +57,22 @@ export class MeldLLMXMLError extends Error {
     { token: 'IPathService', name: 'pathService' },
     { token: 'IFileSystemService', name: 'fileSystemService' },
     { token: 'IParserService', name: 'parserService' },
-    { token: 'InterpreterServiceClientFactory', name: 'interpreterClientFactory' },
+    { token: 'InterpreterServiceClientFactory', name: 'interpreterServiceClientFactory' },
     { token: 'ICircularityService', name: 'circularityService' },
     { token: 'IResolutionService', name: 'resolutionService' }
   ]
 })
-export class DirectiveService implements IDirectiveService {
-  private validationService!: IValidationService;
-  private stateService!: IStateService;
-  private pathService!: IPathService;
-  private fileSystemService!: IFileSystemService;
-  private parserService!: IParserService;
-  private interpreterService?: IInterpreterService; // Legacy reference
+export class DirectiveService implements IDirectiveService, DirectiveServiceLike {
+  private validationService!: ValidationServiceLike;
+  private stateService!: StateServiceLike;
+  private pathService!: PathServiceLike;
+  private fileSystemService!: FileSystemLike;
+  private parserService!: ParserServiceLike;
+  private interpreterService?: InterpreterServiceLike; // Legacy reference
   private interpreterClient?: IInterpreterServiceClient; // Client from factory pattern
   private interpreterClientFactory?: InterpreterServiceClientFactory;
-  private circularityService!: ICircularityService;
-  private resolutionService!: IResolutionService;
+  private circularityService!: CircularityServiceLike;
+  private resolutionService!: ResolutionServiceLike;
   private resolutionClient?: IResolutionServiceClientForDirective;
   private resolutionClientFactory?: ResolutionServiceClientForDirectiveFactory;
   private factoryInitialized: boolean = false;
@@ -94,14 +97,14 @@ export class DirectiveService implements IDirectiveService {
    * @param logger Logger for directive operations (optional)
    */
   constructor(
-    @inject('IValidationService') validationService?: IValidationService,
-    @inject('IStateService') stateService?: IStateService,
-    @inject('IPathService') pathService?: IPathService,
-    @inject('IFileSystemService') fileSystemService?: IFileSystemService,
-    @inject('IParserService') parserService?: IParserService,
+    @inject('IValidationService') validationService?: ValidationServiceLike,
+    @inject('IStateService') stateService?: StateServiceLike,
+    @inject('IPathService') pathService?: PathServiceLike,
+    @inject('IFileSystemService') fileSystemService?: FileSystemLike,
+    @inject('IParserService') parserService?: ParserServiceLike,
     @inject('InterpreterServiceClientFactory') interpreterServiceClientFactory?: InterpreterServiceClientFactory,
-    @inject('ICircularityService') circularityService?: ICircularityService,
-    @inject('IResolutionService') resolutionService?: IResolutionService,
+    @inject('ICircularityService') circularityService?: CircularityServiceLike,
+    @inject('IResolutionService') resolutionService?: ResolutionServiceLike,
     logger?: ILogger
   ) {
     this.logger = logger || directiveLogger;
@@ -135,14 +138,14 @@ export class DirectiveService implements IDirectiveService {
    * Uses DI-only mode for initialization.
    */
   private initializeFromParams(
-    validationService?: IValidationService,
-    stateService?: IStateService,
-    pathService?: IPathService,
-    fileSystemService?: IFileSystemService,
-    parserService?: IParserService,
+    validationService?: ValidationServiceLike,
+    stateService?: StateServiceLike,
+    pathService?: PathServiceLike,
+    fileSystemService?: FileSystemLike,
+    parserService?: ParserServiceLike,
     interpreterServiceClientFactory?: InterpreterServiceClientFactory,
-    circularityService?: ICircularityService,
-    resolutionService?: IResolutionService
+    circularityService?: CircularityServiceLike,
+    resolutionService?: ResolutionServiceLike
   ): void {
     // Verify that required services are provided
     if (!validationService || !stateService || !pathService || 
@@ -184,14 +187,14 @@ export class DirectiveService implements IDirectiveService {
    * The service is automatically initialized via dependency injection.
    */
   initialize(
-    validationService: IValidationService,
-    stateService: IStateService,
-    pathService: IPathService,
-    fileSystemService: IFileSystemService,
-    parserService: IParserService,
+    validationService: ValidationServiceLike,
+    stateService: StateServiceLike,
+    pathService: PathServiceLike,
+    fileSystemService: FileSystemLike,
+    parserService: ParserServiceLike,
     interpreterServiceClientFactory: InterpreterServiceClientFactory,
-    circularityService: ICircularityService,
-    resolutionService: IResolutionService
+    circularityService: CircularityServiceLike,
+    resolutionService: ResolutionServiceLike
   ): void {
     this.validationService = validationService;
     this.stateService = stateService;
@@ -333,14 +336,14 @@ export class DirectiveService implements IDirectiveService {
   /**
    * Handle a directive node
    */
-  public async handleDirective(node: DirectiveNode, context: DirectiveContext): Promise<IStateService> {
+  public async handleDirective(node: DirectiveNode, context: DirectiveContext): Promise<StateServiceLike> {
     return this.processDirective(node, context);
   }
 
   /**
    * Process multiple directives in sequence
    */
-  async processDirectives(nodes: DirectiveNode[], parentContext?: DirectiveContext): Promise<IStateService> {
+  async processDirectives(nodes: DirectiveNode[], parentContext?: DirectiveContext): Promise<StateServiceLike> {
     let currentState = parentContext?.state?.clone() || this.stateService!.createChildState();
 
     for (const node of nodes) {
@@ -391,7 +394,7 @@ export class DirectiveService implements IDirectiveService {
   /**
    * Update the interpreter service reference
    */
-  updateInterpreterService(interpreterService: IInterpreterService): void {
+  updateInterpreterService(interpreterService: InterpreterServiceLike): void {
     this.interpreterService = interpreterService;
     this.logger.debug('Updated interpreter service reference');
   }
@@ -799,7 +802,7 @@ export class DirectiveService implements IDirectiveService {
    * @returns The updated state after directive execution
    * @throws {MeldDirectiveError} If directive processing fails
    */
-  public async processDirective(node: DirectiveNode, context: DirectiveContext): Promise<IStateService> {
+  public async processDirective(node: DirectiveNode, context: DirectiveContext): Promise<StateServiceLike> {
     // Add initialization check before any other processing
     if (!this.initialized) {
       throw new MeldDirectiveError(
@@ -1028,7 +1031,7 @@ export class DirectiveService implements IDirectiveService {
    * Calls the interpret method on the interpreter service
    * Uses the client if available, falls back to direct service reference
    */
-  private async callInterpreterInterpret(nodes: any[], options?: any): Promise<IStateService> {
+  private async callInterpreterInterpret(nodes: any[], options?: any): Promise<StateServiceLike> {
     // Ensure factory is initialized
     this.ensureInterpreterFactoryInitialized();
     
@@ -1053,7 +1056,7 @@ export class DirectiveService implements IDirectiveService {
    * Calls the createChildContext method on the interpreter service
    * Uses the client if available, falls back to direct service reference
    */
-  private async callInterpreterCreateChildContext(parentState: IStateService, filePath?: string, options?: any): Promise<IStateService> {
+  private async callInterpreterCreateChildContext(parentState: StateServiceLike, filePath?: string, options?: any): Promise<StateServiceLike> {
     // Ensure factory is initialized
     this.ensureInterpreterFactoryInitialized();
     

@@ -197,3 +197,74 @@ export interface ServiceErrorOptions {
     filePath?: string;
   };
 }
+
+/**
+ * Base options for interpreter configuration
+ */
+export interface InterpreterOptionsBase {
+  /** Current file path for error reporting and path resolution */
+  filePath?: string;
+  /** Whether to merge the final state back to the parent */
+  mergeState?: boolean;
+  /** List of variables to import (undefined = all, empty = none) */
+  importFilter?: string[];
+  /** Whether to run in strict mode (throw on all errors) */
+  strict?: boolean;
+}
+
+/**
+ * Core interpreter service interface without implementation details
+ * This is a minimal version to avoid circular dependencies
+ */
+export interface InterpreterServiceLike {
+  /** Check if this service can handle transformations */
+  canHandleTransformations(): boolean;
+  
+  /** 
+   * Interpret a sequence of Meld nodes
+   * @param nodes Nodes to interpret
+   * @param options Interpretation options
+   * @returns Resulting state after interpretation
+   */
+  interpret(nodes: MeldNode[], options?: InterpreterOptionsBase): Promise<StateServiceLike>;
+  
+  /**
+   * Create a new interpreter context with a child state
+   * @param parentState Parent state to inherit from
+   * @param filePath Optional file path for the child context
+   * @param options Optional configuration options
+   * @returns Child state initialized for interpretation
+   */
+  createChildContext(
+    parentState: StateServiceLike,
+    filePath?: string,
+    options?: InterpreterOptionsBase
+  ): Promise<StateServiceLike>;
+}
+
+/**
+ * Core directive service interface without implementation details
+ * This is a minimal version to avoid circular dependencies
+ */
+export interface DirectiveServiceLike {
+  /** 
+   * Check if a handler exists for a directive kind
+   * @param kind The directive kind to check
+   * @returns Whether the directive kind is supported
+   */
+  supportsDirective(kind: string): boolean;
+  
+  /**
+   * Handle a directive node
+   * @param node The directive node to handle
+   * @param context The execution context 
+   * @returns The resulting state after handling the directive
+   */
+  handleDirective(node: DirectiveNode, context: any): Promise<StateServiceLike>;
+  
+  /**
+   * Validate a directive node
+   * @param node The directive node to validate
+   */
+  validateDirective(node: DirectiveNode): Promise<void>;
+}

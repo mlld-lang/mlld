@@ -2,6 +2,7 @@ import { injectable, inject, container } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
 import { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
 import { IInterpreterServiceClient } from '@services/pipeline/InterpreterService/interfaces/IInterpreterServiceClient.js';
+import { InterpreterServiceLike, ClientFactory } from '@core/shared-service-types.js';
 import { interpreterLogger as logger } from '@core/utils/logger.js';
 
 /**
@@ -12,8 +13,8 @@ import { interpreterLogger as logger } from '@core/utils/logger.js';
 @Service({
   description: 'Factory for creating interpreter service clients'
 })
-export class InterpreterServiceClientFactory {
-  private interpreterService?: IInterpreterService;
+export class InterpreterServiceClientFactory implements ClientFactory<IInterpreterServiceClient> {
+  private interpreterService?: InterpreterServiceLike;
 
   /**
    * Creates a new InterpreterServiceClientFactory
@@ -29,7 +30,7 @@ export class InterpreterServiceClientFactory {
    * inject a mock or test implementation of the interpreter service
    * @param service The interpreter service implementation to use
    */
-  setInterpreterServiceForTests(service: IInterpreterService): void {
+  setInterpreterServiceForTests(service: InterpreterServiceLike): void {
     logger.debug('Setting interpreter service directly for tests');
     this.interpreterService = service;
   }
@@ -38,7 +39,7 @@ export class InterpreterServiceClientFactory {
    * Lazily initializes the interpreter service when needed
    * This breaks the circular dependency by deferring the resolution
    */
-  private getInterpreterService(): IInterpreterService {
+  private getInterpreterService(): InterpreterServiceLike {
     if (!this.interpreterService) {
       logger.debug('Lazily initializing IInterpreterService');
       this.interpreterService = container.resolve<IInterpreterService>('IInterpreterService');

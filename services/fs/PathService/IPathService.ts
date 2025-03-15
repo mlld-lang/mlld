@@ -2,32 +2,8 @@ import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemSe
 import type { Location } from '@core/types/index.js';
 // Import shared types
 import { PathServiceBase } from '@core/shared/types.js';
+import { StructuredPath } from '@core/shared-service-types.js';
 import { IParserService } from '@services/pipeline/ParserService/IParserService.js';
-
-/**
- * Represents a structured path with raw, parsed, and normalized representations.
- * Used for advanced path handling and security enforcement.
- */
-export interface StructuredPath {
-  /** The original raw path string */
-  raw: string;
-  /** Parsed structure of the path */
-  structured: {
-    /** Path segments split by separators */
-    segments: string[];
-    /** Variables found in the path */
-    variables?: {
-      /** Special variables like $PROJECTPATH, $HOMEPATH */
-      special?: string[];
-      /** Path variables defined with @path directives */
-      path?: string[];
-    };
-    /** Whether the path is relative to current working directory */
-    cwd?: boolean;
-  };
-  /** Path in normalized form (typically absolute) */
-  normalized?: string;
-}
 
 /**
  * Options for path validation and operations

@@ -1,6 +1,5 @@
 import type { MeldNode } from '@core/syntax/types.js';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { InterpreterOptions } from '@services/pipeline/InterpreterService/IInterpreterService.js';
+import type { StateServiceLike, InterpreterOptionsBase } from '@core/shared-service-types.js';
 
 /**
  * Client interface for InterpreterService functionality needed by DirectiveService
@@ -21,10 +20,10 @@ export interface IInterpreterServiceClient {
    * @returns A child state initialized for interpretation
    */
   createChildContext(
-    parentState: IStateService,
+    parentState: StateServiceLike,
     filePath?: string,
-    options?: InterpreterOptions
-  ): Promise<IStateService>;
+    options?: InterpreterOptionsBase
+  ): Promise<StateServiceLike>;
 
   /**
    * Interpret a sequence of Meld nodes.
@@ -36,6 +35,6 @@ export interface IInterpreterServiceClient {
    */
   interpret(
     nodes: MeldNode[],
-    options?: InterpreterOptions
-  ): Promise<IStateService>;
+    options?: InterpreterOptionsBase
+  ): Promise<StateServiceLike>;
 }

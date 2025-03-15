@@ -1,13 +1,15 @@
 import type { DirectiveNode } from '@core/syntax/types.js';
-import type { DirectiveContextBase, StateServiceLike } from '@core/shared-service-types.js';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
-import type { IPathService } from '@services/fs/PathService/IPathService.js';
-import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
-import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
-import type { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
-import type { ICircularityService } from '@services/resolution/CircularityService/ICircularityService.js';
-import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
+import type { 
+  DirectiveContextBase, 
+  StateServiceLike, 
+  ValidationServiceLike,
+  PathServiceLike,
+  FileSystemLike,
+  ParserServiceLike,
+  CircularityServiceLike,
+  ResolutionServiceLike,
+  DirectiveServiceLike
+} from '@core/shared-service-types.js';
 import type { DirectiveResult } from '@services/pipeline/DirectiveService/types.js';
 
 /**
@@ -39,7 +41,7 @@ export interface IDirectiveHandler {
   execute(
     node: DirectiveNode,
     context: DirectiveContext
-  ): Promise<DirectiveResult | IStateService>;
+  ): Promise<DirectiveResult | StateServiceLike>;
 }
 
 /**
@@ -55,16 +57,16 @@ export interface IDirectiveHandler {
  * other services to process directives effectively.
  * 
  * Dependencies:
- * - IValidationService: For directive syntax and semantic validation
- * - IStateService: For maintaining state during directive execution
- * - IPathService: For path resolution in file-related directives
- * - IFileSystemService: For file operations in import and other directives
- * - IParserService: For parsing content in imports and fragments
- * - IInterpreterService: For nested interpretation in imports
- * - ICircularityService: For detecting circular imports and references
- * - IResolutionService: For variable resolution in directive content
+ * - ValidationServiceLike: For directive syntax and semantic validation
+ * - StateServiceLike: For maintaining state during directive execution
+ * - PathServiceLike: For path resolution in file-related directives
+ * - FileSystemLike: For file operations in import and other directives
+ * - ParserServiceLike: For parsing content in imports and fragments
+ * - InterpreterServiceClientFactory: For nested interpretation in imports
+ * - CircularityServiceLike: For detecting circular imports and references
+ * - ResolutionServiceLike: For variable resolution in directive content
  */
-export interface IDirectiveService {
+export interface IDirectiveService extends DirectiveServiceLike {
   /**
    * Initialize the DirectiveService with required dependencies
    * 
@@ -78,14 +80,14 @@ export interface IDirectiveService {
    * @param resolutionService - Service for variable resolution
    */
   initialize(
-    validationService: IValidationService,
-    stateService: IStateService,
-    pathService: IPathService,
-    fileSystemService: IFileSystemService,
-    parserService: IParserService,
+    validationService: ValidationServiceLike,
+    stateService: StateServiceLike,
+    pathService: PathServiceLike,
+    fileSystemService: FileSystemLike,
+    parserService: ParserServiceLike,
     interpreterServiceClientFactory: any, // Use 'any' to allow both IInterpreterService and InterpreterServiceClientFactory
-    circularityService: ICircularityService,
-    resolutionService: IResolutionService
+    circularityService: CircularityServiceLike,
+    resolutionService: ResolutionServiceLike
   ): void;
 
   /**
@@ -93,8 +95,9 @@ export interface IDirectiveService {
    * This is needed to handle circular dependencies in initialization
    * 
    * @param interpreterService - The interpreter service to use
+   * @deprecated Use interpreterServiceClientFactory instead
    */
-  updateInterpreterService(interpreterService: IInterpreterService): void;
+  updateInterpreterService(interpreterService: any): void;
 
   /**
    * Handle a directive node
@@ -107,7 +110,7 @@ export interface IDirectiveService {
   handleDirective(
     node: DirectiveNode,
     context: DirectiveContext
-  ): Promise<IStateService>;
+  ): Promise<StateServiceLike>;
 
   /**
    * Register a new directive handler
@@ -166,7 +169,7 @@ export interface IDirectiveService {
    * const state = await directiveService.processDirective(node);
    * ```
    */
-  processDirective(node: DirectiveNode, parentContext?: DirectiveContext): Promise<IStateService>;
+  processDirective(node: DirectiveNode, parentContext?: DirectiveContext): Promise<StateServiceLike>;
 
   /**
    * Process multiple directive nodes in sequence
@@ -176,7 +179,7 @@ export interface IDirectiveService {
    * @returns The final state after processing all directives
    * @throws {MeldDirectiveError} If any directive processing fails
    */
-  processDirectives(nodes: DirectiveNode[], parentContext?: DirectiveContext): Promise<IStateService>;
+  processDirectives(nodes: DirectiveNode[], parentContext?: DirectiveContext): Promise<StateServiceLike>;
 
   /**
    * Check if a directive kind is supported

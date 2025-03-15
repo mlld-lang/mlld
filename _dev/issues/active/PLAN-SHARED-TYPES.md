@@ -25,6 +25,31 @@ The shared types pattern has been partially implemented to address circular depe
      - Check `IParserService` implementations
      - Review `ICircularityService` dependencies
    - Ensure consistent extension from shared types
+   - Specific files that need updating:
+     - **State Services:**
+       - `services/state/StateService/IStateService.ts` - Verify extension from StateServiceBase
+       - `services/state/StateEventService/IStateEventService.ts` - Ensure extension from StateEventServiceBase
+       - `services/state/StateTrackingService/interfaces/IStateTrackingServiceClient.ts` - Ensure shared types consistency
+     - **Interpreter Service:**
+       - `services/pipeline/InterpreterService/IInterpreterService.ts` - Update to use ServiceLike interfaces
+       - `services/pipeline/InterpreterService/interfaces/IInterpreterServiceClient.ts` - Refine with shared types
+     - **Directive Service:**
+       - `services/pipeline/DirectiveService/interfaces/IDirectiveServiceClient.ts` - Use DirectiveNode from shared types
+     - **FileSystem Services:**
+       - `services/fs/FileSystemService/IFileSystemService.ts` - Verify FileSystemLike extension
+       - `services/fs/FileSystemService/interfaces/IFileSystemServiceClient.ts` - Update for shared types consistency
+       - `services/fs/FileSystemService/IPathOperationsService.ts` - Update parameter/return types
+       - `services/fs/PathService/interfaces/IPathServiceClient.ts` - Align with PathServiceLike
+     - **Display Services:**
+       - `services/display/ErrorDisplayService/IErrorDisplayService.ts` - Update parameter types
+       - `services/pipeline/OutputService/IOutputService.ts` - Use ServiceLike interfaces
+     - **CLI Services:**
+       - `services/cli/CLIService/ICLIService.ts` - Update dependencies to ServiceLike interfaces
+     - **Resolution Services:**
+       - `services/resolution/ResolutionService/interfaces/IResolutionServiceClient.ts` - Use ResolutionContextBase
+       - `services/resolution/ResolutionService/interfaces/IResolutionServiceClientForDirective.ts` - Use shared types
+     - **Parser Service:**
+       - `services/pipeline/ParserService/interfaces/IParserServiceClient.ts` - Verify alignment with ParserServiceLike
 
 ### Phase 2: Implementation Updates
 

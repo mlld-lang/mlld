@@ -1,8 +1,7 @@
 import type { MeldNode, SourceLocation, DirectiveNode } from '@core/syntax/types.js';
 import { interpreterLogger as logger } from '@core/utils/logger.js';
 import { IInterpreterService, type InterpreterOptions } from '@services/pipeline/InterpreterService/IInterpreterService.js';
-import type { IDirectiveService } from '@services/pipeline/DirectiveService/IDirectiveService.js';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
+import type { DirectiveServiceLike, StateServiceLike, InterpreterServiceLike } from '@core/shared-service-types.js';
 import { MeldInterpreterError, type InterpreterLocation } from '@core/errors/MeldInterpreterError.js';
 import { MeldError, ErrorSeverity } from '@core/errors/MeldError.js';
 import { StateVariableCopier } from '@services/state/utilities/StateVariableCopier.js';
@@ -43,41 +42,39 @@ function getErrorMessage(error: unknown): string {
     { token: 'IStateService', name: 'stateService' }
   ]
 })
-export class InterpreterService implements IInterpreterService {
-  private directiveService?: IDirectiveService; // Legacy reference
+export class InterpreterService implements IInterpreterService, InterpreterServiceLike {
+  private directiveService?: DirectiveServiceLike; // Legacy reference
   private directiveClient?: IDirectiveServiceClient; // Client from factory pattern
   private directiveClientFactory?: DirectiveServiceClientFactory;
-  private stateService?: IStateService;
+  private stateService?: StateServiceLike;
   private initialized = false;
   private stateVariableCopier = new StateVariableCopier();
   private initializationPromise: Promise<void> | null = null;
   private factoryInitialized: boolean = false;
 
   /**
-   * Creates a new InterpreterService instance
+   * Creates a new InterpreterService
    * 
-   * @param directiveServiceClientFactory - Factory for creating directive service clients (injected)
-   * @param stateService - Service for managing and accessing state
+   * @param directiveServiceClientFactory - Factory for creating directive service clients
+   * @param stateService - Service for state management
    */
   constructor(
     @inject('DirectiveServiceClientFactory') directiveServiceClientFactory?: DirectiveServiceClientFactory,
-    @inject('IStateService') stateService?: IStateService
+    @inject('IStateService') stateService?: StateServiceLike
   ) {
-    // Handle DI constructor injection
-    if (directiveServiceClientFactory && stateService) {
+    this.directiveClientFactory = directiveServiceClientFactory;
+    this.stateService = stateService;
+    
+    logger.debug('InterpreterService constructor', {
+      hasDirectiveFactory: !!this.directiveClientFactory,
+      hasStateService: !!this.stateService
+    });
+    
+    // If we have dependencies, initialize
+    if (this.directiveClientFactory && this.stateService) {
       // Create a promise that resolves when initialization completes
       this.initializationPromise = new Promise<void>((resolve) => {
-        // Initialize the factory and client
-        this.directiveClientFactory = directiveServiceClientFactory;
-        this.stateService = stateService;
-        
-        // Initialize the client immediately
-        if (this.directiveClientFactory) {
-          this.factoryInitialized = true;
-          this.initializeDirectiveClient();
-        }
-        
-        // Mark as initialized
+        this.initializeDirectiveClient();
         this.initialized = true;
         logger.debug('InterpreterService initialized via DI');
         resolve();
@@ -198,8 +195,8 @@ export class InterpreterService implements IInterpreterService {
    * The service is automatically initialized via dependency injection.
    */
   initialize(
-    directiveService: IDirectiveService,
-    stateService: IStateService
+    directiveService: DirectiveServiceLike,
+    stateService: StateServiceLike
   ): void {
     // Store the direct reference for backward compatibility
     this.directiveService = directiveService;
@@ -242,7 +239,7 @@ export class InterpreterService implements IInterpreterService {
   async interpret(
     nodes: MeldNode[],
     options?: InterpreterOptions
-  ): Promise<IStateService> {
+  ): Promise<StateServiceLike> {
     // Ensure we're initialized before processing
     this.ensureInitialized();
 
@@ -265,7 +262,7 @@ export class InterpreterService implements IInterpreterService {
     }
 
     const opts = { ...DEFAULT_OPTIONS, ...options };
-    let currentState: IStateService;
+    let currentState: StateServiceLike;
 
     try {
       // Initialize state
@@ -359,9 +356,9 @@ export class InterpreterService implements IInterpreterService {
 
   async interpretNode(
     node: MeldNode,
-    state: IStateService,
+    state: StateServiceLike,
     options?: InterpreterOptions
-  ): Promise<IStateService> {
+  ): Promise<StateServiceLike> {
     this.ensureInitialized();
 
     if (!node) {
@@ -484,7 +481,7 @@ export class InterpreterService implements IInterpreterService {
             // We need to extract the replacement node and state from the result
             const result = directiveResult as unknown as { 
               replacement: MeldNode;
-              state: IStateService;
+              state: StateServiceLike;
             };
 
             const replacement = result.replacement;
@@ -583,10 +580,10 @@ export class InterpreterService implements IInterpreterService {
   }
 
   async createChildContext(
-    parentState: IStateService,
+    parentState: StateServiceLike,
     filePath?: string,
     options?: InterpreterOptions
-  ): Promise<IStateService> {
+  ): Promise<StateServiceLike> {
     this.ensureInitialized();
 
     if (!parentState) {

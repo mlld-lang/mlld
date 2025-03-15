@@ -1,22 +1,22 @@
 // First export the shared-types which have no dependencies
 export * from './shared-types.js';
 
-// Then export interfaces and factories with explicit annotations
-export { INode } from './interfaces/INode.js';
-export { IDirectiveNode, DirectiveData as IDirectiveData, DirectiveKind } from './interfaces/IDirectiveNode.js';
-export { ITextNode } from './interfaces/ITextNode.js';
-export { ICodeFenceNode } from './interfaces/ICodeFenceNode.js';
-export { ICommentNode } from './interfaces/ICommentNode.js';
-export { IErrorNode } from './interfaces/IErrorNode.js';
-export { 
+// Then export interfaces with type-only exports
+export type { INode } from './interfaces/INode.js';
+export type { IDirectiveNode, DirectiveData as IDirectiveData, DirectiveKind } from './interfaces/IDirectiveNode.js';
+export type { ITextNode } from './interfaces/ITextNode.js';
+export type { ICodeFenceNode } from './interfaces/ICodeFenceNode.js';
+export type { ICommentNode } from './interfaces/ICommentNode.js';
+export type { IErrorNode } from './interfaces/IErrorNode.js';
+export type { 
   IVariableReference, 
   VariableType,
   Field,
   ExtendedFormatOperator as FormatOperator
 } from './interfaces/IVariableReference.js';
-export { NodeType, SourceLocation, Position } from './interfaces/common.js';
+export type { NodeType, SourceLocation, Position } from './interfaces/common.js';
 
-// Export factories using explicit type annotations
+// Export factories using regular exports (these are values)
 export { NodeFactory } from './factories/NodeFactory.js';
 export { VariableNodeFactory } from './factories/VariableNodeFactory.js';
 export { DirectiveNodeFactory } from './factories/DirectiveNodeFactory.js';

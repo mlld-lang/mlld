@@ -2,6 +2,7 @@ import { injectable, inject, container } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
 import { IDirectiveService } from '@services/pipeline/DirectiveService/IDirectiveService.js';
 import { IDirectiveServiceClient } from '@services/pipeline/DirectiveService/interfaces/IDirectiveServiceClient.js';
+import { DirectiveServiceLike, ClientFactory } from '@core/shared-service-types.js';
 import { directiveLogger as logger } from '@core/utils/logger.js';
 
 /**
@@ -12,8 +13,8 @@ import { directiveLogger as logger } from '@core/utils/logger.js';
 @Service({
   description: 'Factory for creating directive service clients'
 })
-export class DirectiveServiceClientFactory {
-  private directiveService?: IDirectiveService;
+export class DirectiveServiceClientFactory implements ClientFactory<IDirectiveServiceClient> {
+  private directiveService?: DirectiveServiceLike;
 
   /**
    * Creates a new DirectiveServiceClientFactory
@@ -27,7 +28,7 @@ export class DirectiveServiceClientFactory {
    * Lazily initializes the directive service when needed
    * This breaks the circular dependency by deferring the resolution
    */
-  private getDirectiveService(): IDirectiveService {
+  private getDirectiveService(): DirectiveServiceLike {
     if (!this.directiveService) {
       logger.debug('Lazily initializing IDirectiveService');
       this.directiveService = container.resolve<IDirectiveService>('IDirectiveService');

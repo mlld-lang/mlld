@@ -1,6 +1,5 @@
 import type { MeldNode } from '@core/syntax/types.js';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { IDirectiveService } from '@services/pipeline/DirectiveService/IDirectiveService.js';
+import type { DirectiveServiceLike, StateServiceLike } from '@core/shared-service-types.js';
 import type { MeldError } from '@core/errors/MeldError.js';
 
 /**
@@ -20,7 +19,7 @@ export interface InterpreterOptions {
    * Initial state to use for interpretation.
    * If not provided, a new state will be created.
    */
-  initialState?: IStateService;
+  initialState?: StateServiceLike;
 
   /**
    * Current file path for error reporting and path resolution.
@@ -67,8 +66,8 @@ export interface InterpreterOptions {
  * state transitions, and transformation tracking.
  * 
  * Dependencies:
- * - IDirectiveService: For processing directive nodes
- * - IStateService: For maintaining state during interpretation
+ * - DirectiveServiceLike: For processing directive nodes
+ * - StateServiceLike: For maintaining state during interpretation
  */
 export interface IInterpreterService {
   /**
@@ -85,8 +84,8 @@ export interface IInterpreterService {
    * @param stateService - Service for maintaining state
    */
   initialize(
-    directiveService: IDirectiveService,
-    stateService: IStateService
+    directiveService: DirectiveServiceLike,
+    stateService: StateServiceLike
   ): void;
 
   /**
@@ -111,7 +110,7 @@ export interface IInterpreterService {
   interpret(
     nodes: MeldNode[],
     options?: InterpreterOptions
-  ): Promise<IStateService>;
+  ): Promise<StateServiceLike>;
 
   /**
    * Interpret a single Meld node.
@@ -124,9 +123,9 @@ export interface IInterpreterService {
    */
   interpretNode(
     node: MeldNode,
-    state: IStateService,
+    state: StateServiceLike,
     options?: InterpreterOptions
-  ): Promise<IStateService>;
+  ): Promise<StateServiceLike>;
 
   /**
    * Create a new interpreter context with a child state.
@@ -148,8 +147,8 @@ export interface IInterpreterService {
    * ```
    */
   createChildContext(
-    parentState: IStateService,
+    parentState: StateServiceLike,
     filePath?: string,
     options?: InterpreterOptions
-  ): Promise<IStateService>;
+  ): Promise<StateServiceLike>;
 } 
