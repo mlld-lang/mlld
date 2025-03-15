@@ -1,8 +1,9 @@
 import { injectable, inject } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
-import type { IResolutionService, ResolutionContext, StructuredPath } from '@services/resolution/ResolutionService/IResolutionService.js';
+import type { IResolutionService, ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
 import type { IResolutionServiceClient } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClient.js';
 import { resolutionLogger as logger } from '@core/utils/logger.js';
+import type { StructuredPath } from '@core/shared-service-types.js';
 
 /**
  * Factory for creating resolution service clients for VariableReferenceResolver
@@ -51,6 +52,11 @@ export class ResolutionServiceClientFactory {
       resolveInContext: async (reference: string | StructuredPath, context: ResolutionContext): Promise<string> => {
         // Use resolveInContext from the resolution service
         return this.resolutionService.resolveInContext(reference, context);
+      },
+      
+      resolveFile: async (path: string): Promise<string> => {
+        // Use resolveFile from the resolution service
+        return this.resolutionService.resolveFile(path);
       }
     };
   }

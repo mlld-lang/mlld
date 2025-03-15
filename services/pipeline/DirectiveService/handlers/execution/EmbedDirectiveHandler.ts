@@ -432,12 +432,13 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
             if (originalContent.includes('.')) {
               // Parse out the variable base name and field path
               const parts = originalContent.split('.');
+              const variableNameStr = typeof variableName === 'string' ? variableName : String(variableName);
               const fieldPath = parts.slice(1).join('.');
               
-              this.logger.debug(`Detected complex field access in variable embed: ${variableName}.${fieldPath}`);
+              this.logger.debug(`Detected complex field access in variable embed: ${variableNameStr}.${fieldPath}`);
               
               // First, attempt to get the base variable from state
-              const baseVariable = newState.getDataVar(variableName);
+              const baseVariable = newState.getDataVar(variableNameStr);
               
               if (baseVariable !== undefined) {
                 // Directly resolve the field access using ResolutionService's resolveFieldAccess
@@ -460,12 +461,12 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
                 };
                 
                 const resolvedField = await this.resolutionService.resolveFieldAccess(
-                  variableName,
+                  variableNameStr,
                   fieldPath,
                   typedContext
                 );
                 
-                this.logger.debug(`Resolved field access ${variableName}.${fieldPath} to:`, resolvedField);
+                this.logger.debug(`Resolved field access ${variableNameStr}.${fieldPath} to:`, resolvedField);
                 
                 // Use the resolved field value directly
                 if (resolvedField === undefined || resolvedField === null) {
@@ -480,7 +481,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
                 }
               } else {
                 // Fall back to standard resolution if variable not found
-                this.logger.warn(`Base variable ${variableName} not found, falling back to standard resolution`);
+                this.logger.warn(`Base variable ${variableNameStr} not found, falling back to standard resolution`);
                 content = resolvedPath || '';
               }
             } else {

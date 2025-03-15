@@ -4,7 +4,7 @@ import {
   SourceLocation, 
   IDirectiveNode,
   DirectiveData,
-  DirectiveKindString
+  DirectiveKind
 } from '@core/syntax/types/interfaces/index.js';
 import { NodeFactory } from './NodeFactory.js';
 
@@ -24,32 +24,30 @@ export class DirectiveNodeFactory {
   ) {}
 
   /**
-   * Create a directive node
+   * Creates a directive node with the specified kind and data
    */
   createDirectiveNode(
-    kind: DirectiveKindString,
+    kind: DirectiveKind,
     data: Partial<DirectiveData>,
     location?: SourceLocation
   ): IDirectiveNode {
-    const baseNode = this.nodeFactory.createNode('Directive', location);
-    
     return {
-      ...baseNode,
+      type: 'Directive',
       directive: {
         kind,
         ...data
-      }
+      },
+      location
     };
   }
 
   /**
-   * Check if a node is a directive node
+   * Checks if a node is a directive node
    */
   isDirectiveNode(node: any): node is IDirectiveNode {
-    return (
-      node.type === 'Directive' &&
-      node.directive &&
-      typeof node.directive.kind === 'string'
-    );
+    return node && 
+      node.type === 'Directive' && 
+      node.directive && 
+      typeof node.directive.kind === 'string';
   }
 }

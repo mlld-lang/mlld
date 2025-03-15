@@ -4,8 +4,8 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os.js from 'os';
-import * as https.js from 'https';
+import * as os from 'os';
+import * as https from 'https';
 import { execSync } from 'child_process';
 
 // Binary configuration
