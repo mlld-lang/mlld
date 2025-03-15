@@ -7,7 +7,8 @@
  * IMPORTANT: This file must NOT import from any service implementation files to avoid circular dependencies.
  */
 
-import type { MeldNode, DirectiveNode, TextNode, NodeType, BaseNode } from './syntax/types/shared-types.js';
+import type { NodeType, BaseNode } from './syntax/types/shared-types.js';
+import type { MeldNode, DirectiveNode, TextNode } from './syntax/types/index.js';
 import type { ResolutionContextBase, DirectiveContextBase } from './shared/types.js';
 
 /**

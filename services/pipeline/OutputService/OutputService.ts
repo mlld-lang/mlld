@@ -2204,10 +2204,10 @@ Transformation enabled?: ${state.isTransformationEnabled()}
             
             // If exact match not found, try to find by transformation ID
             // The StateService gives each directive a unique ID for transformation tracking
-            const embedId = node.id || (node as any).directiveId;
+            const embedId = (node as any).id || (node as any).directiveId;
             if (embedId) {
               // Find the node with matching ID in transformed nodes
-              const idMatch = transformedNodes.find(n => n.id === embedId || (n as any).directiveId === embedId);
+              const idMatch = transformedNodes.find(n => (n as any).id === embedId || (n as any).directiveId === embedId);
               
               if (idMatch && idMatch.type === 'Text') {
                 const content = (idMatch as TextNode).content;

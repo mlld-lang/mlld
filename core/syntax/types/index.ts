@@ -65,6 +65,15 @@ export * from './parser.js';
 export * from './validation.js';
 export * from './test-fixtures.js';
 
+// Import interfaces for type aliases
+import type { INode } from './interfaces/INode.js';
+import type { IDirectiveNode, DirectiveData as IDirectiveData } from './interfaces/IDirectiveNode.js';
+import type { ITextNode } from './interfaces/ITextNode.js';
+import type { ICodeFenceNode } from './interfaces/ICodeFenceNode.js';
+import type { ICommentNode } from './interfaces/ICommentNode.js';
+import type { IErrorNode } from './interfaces/IErrorNode.js';
+import type { IVariableReference } from './interfaces/IVariableReference.js';
+
 // Define type aliases for backward compatibility
 type MeldNode = INode;
 type DirectiveNode = IDirectiveNode;
