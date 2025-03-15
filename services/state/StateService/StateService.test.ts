@@ -12,7 +12,7 @@ import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { StateEventService } from '@services/state/StateEventService/StateEventService.js';
 import { mockDeep, mockReset } from 'vitest-mock-extended';
 import { StateTrackingServiceClientFactory } from '@services/state/StateTrackingService/factories/StateTrackingServiceClientFactory.js';
-import { IStateTrackingServiceClient } from '@services/state/StateTrackingService/interfaces/IStateTrackingServiceClient.js';
+import type { IStateTrackingServiceClient } from '@services/state/StateTrackingService/interfaces/IStateTrackingServiceClient.js';
 
 class MockStateEventService implements IStateEventService {
   private handlers = new Map<string, Array<{

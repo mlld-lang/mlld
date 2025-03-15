@@ -1,5 +1,5 @@
 import { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
-import { IStateService } from '@services/state/StateService/IStateService.js';
+import type { IStateService } from '@services/state/StateService/IStateService.js';
 
 /**
  * Factory for creating resolution contexts appropriate for different directives

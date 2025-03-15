@@ -1,4 +1,4 @@
-import { IParserService } from '@services/pipeline/ParserService/IParserService.js';
+import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 import type { 
   MeldNode, 
   CodeFenceNode, 
@@ -10,13 +10,13 @@ import { parse } from '@core/ast/index.js';  // Import the parse function direct
 import { parserLogger as logger } from '@core/utils/logger.js';
 import { MeldParseError } from '@core/errors/MeldParseError.js';
 import type { Location, Position } from '@core/types/index.js';
-import { IStateService } from '@services/state/StateService/IStateService.js';
-import { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
+import type { IStateService } from '@services/state/StateService/IStateService.js';
+import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import type { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { injectable, inject } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
 import { container } from 'tsyringe';
-import { IResolutionServiceClient } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClient.js';
+import type { IResolutionServiceClient } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClient.js';
 import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientFactory.js';
 import { VariableNodeFactory } from '@core/syntax/types/factories/VariableNodeFactory.js';
 

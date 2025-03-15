@@ -4,7 +4,7 @@ import { StateVisualizationFileOutput } from '@tests/utils/debug/StateVisualizat
 import { CompactStateVisualization } from '@tests/utils/debug/StateVisualizationService/CompactStateVisualization.js';
 import { IStateVisualizationService } from '@tests/utils/debug/StateVisualizationService/IStateVisualizationService.js';
 import { IStateHistoryService } from '@tests/utils/debug/StateHistoryService/IStateHistoryService.js';
-import { IStateTrackingService } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
+import type { IStateTrackingService } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
 import fs from 'fs';
 import path from 'path';
 import { serviceLogger } from '@core/utils/logger.js';

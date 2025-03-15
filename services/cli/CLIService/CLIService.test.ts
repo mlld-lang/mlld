@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { CLIService, IPromptService } from '@services/cli/CLIService/CLIService.js';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
-import { IParserService } from '@services/pipeline/ParserService/IParserService.js';
-import { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
-import { IOutputService } from '@services/pipeline/OutputService/IOutputService.js';
-import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
-import { IPathService } from '@services/fs/PathService/IPathService.js';
-import { IStateService } from '@services/state/StateService/IStateService.js';
+import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
+import type { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
+import type { IOutputService } from '@services/pipeline/OutputService/IOutputService.js';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
+import type { IPathService } from '@services/fs/PathService/IPathService.js';
+import type { IStateService } from '@services/state/StateService/IStateService.js';
 import * as readline from 'readline';
 import { ErrorCollector } from '@tests/utils/ErrorTestUtils.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';

@@ -6,7 +6,7 @@ import { describe, test, expect, beforeEach } from 'vitest';
 import { sourceMapService } from '@core/utils/SourceMapService.js';
 import { registerSource, addMapping, resetSourceMaps, enhanceMeldErrorWithSourceInfo } from '@core/utils/sourceMapUtils.js';
 import { MeldError } from '@core/errors/MeldError.js';
-import { IStateService } from '@services/state/StateService/IStateService.js';
+import type { IStateService } from '@services/state/StateService/IStateService.js';
 import { MemfsTestFileSystem } from '@tests/utils/MemfsTestFileSystem.js';
 // Import the main function from the API
 import { main as processFile } from '@api/index.js';

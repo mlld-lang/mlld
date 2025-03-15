@@ -1,6 +1,6 @@
 import { Stats } from 'fs-extra';
 
-export interface IFileSystem {
+interface IFileSystem {
   // File operations
   readFile(path: string): Promise<string>;
   writeFile(path: string, content: string): Promise<void>;
@@ -21,4 +21,6 @@ export interface IFileSystem {
   
   // Optional testing property
   isTestEnvironment?: boolean;
-} 
+}
+
+export type { IFileSystem }; 

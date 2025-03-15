@@ -1,8 +1,8 @@
 import { DirectiveNode } from '@core/syntax/types.js';
 import { IDirectiveHandler, DirectiveContext } from '@services/pipeline/DirectiveService/IDirectiveService.js';
-import { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
-import { IStateService } from '@services/state/StateService/IStateService.js';
-import { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
+import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
+import type { IStateService } from '@services/state/StateService/IStateService.js';
+import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
 import { directiveLogger as logger } from '@core/utils/logger.js';
 import { DirectiveError, DirectiveErrorCode, DirectiveErrorSeverity } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
@@ -11,7 +11,7 @@ import { StringConcatenationHandler } from '@services/resolution/ResolutionServi
 import { VariableReferenceResolver } from '@services/resolution/ResolutionService/resolvers/VariableReferenceResolver.js';
 import { ResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
-import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import { inject, injectable } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
 

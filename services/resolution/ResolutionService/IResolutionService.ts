@@ -6,7 +6,7 @@ import { VariableResolutionTracker, ResolutionTrackingConfig } from '@tests/util
  * Context for variable resolution, specifying what types of variables and operations are allowed.
  * Controls the behavior of resolution operations for security and validation.
  */
-export interface ResolutionContext {
+interface ResolutionContext {
   /** Current file being processed, for error reporting */
   currentFilePath?: string;
   
@@ -43,7 +43,7 @@ export interface ResolutionContext {
 /**
  * Error codes for resolution failures to enable precise error handling
  */
-export enum ResolutionErrorCode {
+enum ResolutionErrorCode {
   /** Variable is undefined in the current context */
   UNDEFINED_VARIABLE = 'UNDEFINED_VARIABLE',
   /** Circular reference detected in variable resolution */
@@ -101,7 +101,7 @@ export enum ResolutionErrorCode {
  * - IFileSystemService: For file access
  * - ICircularityService: For detecting circular references
  */
-export interface IResolutionService {
+interface IResolutionService {
   /**
    * Resolve text variables ({{var}}) in a string.
    * 
@@ -262,4 +262,7 @@ export interface IResolutionService {
    * @returns The current resolution tracker or undefined if not enabled
    */
   getResolutionTracker(): VariableResolutionTracker | undefined;
-} 
+}
+
+export type { ResolutionContext, IResolutionService };
+export { ResolutionErrorCode }; 

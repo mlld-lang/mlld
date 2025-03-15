@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { PathResolver } from '@services/resolution/ResolutionService/resolvers/PathResolver.js';
-import { IStateService } from '@services/state/StateService/IStateService.js';
+import type { IStateService } from '@services/state/StateService/IStateService.js';
 import { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { ResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError.js';
 import type { MeldNode, DirectiveNode, TextNode, StructuredPath } from '@core/syntax/types.js';

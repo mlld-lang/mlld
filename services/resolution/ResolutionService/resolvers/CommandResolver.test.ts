@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { CommandResolver } from '@services/resolution/ResolutionService/resolvers/CommandResolver.js';
-import { IStateService } from '@services/state/StateService/IStateService.js';
+import type { IStateService } from '@services/state/StateService/IStateService.js';
 import { ResolutionContext, ResolutionErrorCode } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { ResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError.js';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';

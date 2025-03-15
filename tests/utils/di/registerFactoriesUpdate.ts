@@ -1,12 +1,12 @@
 import { vi } from 'vitest';
-import { IPathServiceClient } from '@services/fs/PathService/interfaces/IPathServiceClient.js';
-import { IFileSystemServiceClient } from '@services/fs/FileSystemService/interfaces/IFileSystemServiceClient.js';
+import type { IPathServiceClient } from '@services/fs/PathService/interfaces/IPathServiceClient.js';
+import type { IFileSystemServiceClient } from '@services/fs/FileSystemService/interfaces/IFileSystemServiceClient.js';
 import { IVariableReferenceResolverClient } from '@services/resolution/ResolutionService/interfaces/IVariableReferenceResolverClient.js';
 import { IDirectiveServiceClient } from '@services/pipeline/DirectiveService/interfaces/IDirectiveServiceClient.js';
-import { IResolutionServiceClientForDirective } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClientForDirective.js';
-import { IStateServiceClient } from '@services/state/StateService/interfaces/IStateServiceClient.js';
-import { IStateTrackingServiceClient } from '@services/state/StateTrackingService/interfaces/IStateTrackingServiceClient.js';
-import { IInterpreterServiceClient } from '@services/pipeline/InterpreterService/interfaces/IInterpreterServiceClient.js';
+import type { IResolutionServiceClientForDirective } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClientForDirective.js';
+import type { IStateServiceClient } from '@services/state/StateService/interfaces/IStateServiceClient.js';
+import type { IStateTrackingServiceClient } from '@services/state/StateTrackingService/interfaces/IStateTrackingServiceClient.js';
+import type { IInterpreterServiceClient } from '@services/pipeline/InterpreterService/interfaces/IInterpreterServiceClient.js';
 
 /**
  * Updated registerFactories method for TestContextDI

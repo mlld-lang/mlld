@@ -8,8 +8,8 @@
 import { TestContextDI } from '@tests/utils/di.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mockDeep } from 'vitest-mock-extended';
-import { IStateService } from '@services/state/StateService/IStateService.js';
-import { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
+import type { IStateService } from '@services/state/StateService/IStateService.js';
+import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 
 describe('API Workarounds', () => {
   describe('Documentation', () => {

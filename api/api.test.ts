@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { main } from '@api/index.js';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import type { ProcessOptions } from '@core/types/index.js';
-import { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
+import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
 import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
 import { DirectiveService } from '@services/pipeline/DirectiveService/DirectiveService.js';
 import * as fs from 'fs';

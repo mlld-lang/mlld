@@ -15,7 +15,7 @@ import {
   defineDirectiveExamples,
   integrationExamples
 } from '@core/syntax/index.js';
-import { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
+import type { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
 import { InterpreterService } from '@services/pipeline/InterpreterService/InterpreterService.js';
 import { StateTrackingService } from '@tests/utils/debug/StateTrackingService/StateTrackingService.js';
 

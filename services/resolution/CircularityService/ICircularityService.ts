@@ -15,7 +15,7 @@ import type { CircularityServiceLike } from '@core/shared-service-types.js';
  * Dependencies:
  * - None directly, though it interacts closely with import and resolution operations
  */
-export interface ICircularityService extends CircularityServiceLike {
+interface ICircularityService extends CircularityServiceLike {
   /**
    * Called at the start of an import operation to track the import chain.
    * 
@@ -71,3 +71,5 @@ export interface ICircularityService extends CircularityServiceLike {
    */
   reset(): void;
 } 
+
+export type { ICircularityService }; 

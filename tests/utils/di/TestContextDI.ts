@@ -26,11 +26,11 @@ import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 import { DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { createPathValidationError } from '@tests/utils/errorFactories.js';
-import { IPathServiceClient } from '@services/fs/PathService/interfaces/IPathServiceClient.js';
-import { IFileSystemServiceClient } from '@services/fs/FileSystemService/interfaces/IFileSystemServiceClient.js';
+import type { IPathServiceClient } from '@services/fs/PathService/interfaces/IPathServiceClient.js';
+import type { IFileSystemServiceClient } from '@services/fs/FileSystemService/interfaces/IFileSystemServiceClient.js';
 import { IVariableReferenceResolverClient } from '@services/resolution/ResolutionService/interfaces/IVariableReferenceResolverClient.js';
 import { IDirectiveServiceClient } from '@services/pipeline/DirectiveService/interfaces/IDirectiveServiceClient.js';
-import { IResolutionServiceClientForDirective } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClientForDirective.js';
+import type { IResolutionServiceClientForDirective } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClientForDirective.js';
 
 import type { IOutputService } from '@services/pipeline/OutputService/IOutputService.js';
 import type { IDirectiveService } from '@services/pipeline/DirectiveService/IDirectiveService.js';

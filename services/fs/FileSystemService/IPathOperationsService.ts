@@ -15,7 +15,7 @@ import * as path from 'path';
  * Dependencies:
  * - Node.js path module
  */
-export interface IPathOperationsService {
+interface IPathOperationsService {
   /**
    * Join all arguments together and normalize the resulting path.
    * 
@@ -129,4 +129,6 @@ export interface IPathOperationsService {
    * ```
    */
   parse(filePath: string): path.ParsedPath;
-} 
+}
+
+export type { IPathOperationsService }; 

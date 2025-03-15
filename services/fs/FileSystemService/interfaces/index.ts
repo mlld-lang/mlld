@@ -1,1 +1,1 @@
-export * from './IFileSystemServiceClient.js'; 
+export type { IFileSystemServiceClient } from './IFileSystemServiceClient.js'; 

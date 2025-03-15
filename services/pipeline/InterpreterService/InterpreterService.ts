@@ -1,6 +1,6 @@
 import type { MeldNode, SourceLocation, DirectiveNode } from '@core/syntax/types.js';
 import { interpreterLogger as logger } from '@core/utils/logger.js';
-import { IInterpreterService, type InterpreterOptions } from '@services/pipeline/InterpreterService/IInterpreterService.js';
+import type { IInterpreterService, InterpreterOptions } from '@services/pipeline/InterpreterService/IInterpreterService.js';
 import type { DirectiveServiceLike, StateServiceLike, InterpreterServiceLike } from '@core/shared-service-types.js';
 import { MeldInterpreterError, type InterpreterLocation } from '@core/errors/MeldInterpreterError.js';
 import { MeldError, ErrorSeverity } from '@core/errors/MeldError.js';

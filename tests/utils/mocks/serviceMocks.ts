@@ -7,13 +7,13 @@
  */
 
 import { mock } from 'vitest-mock-extended';
-import { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
-import { IStateService } from '@services/state/StateService/IStateService.js';
-import { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
+import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
+import type { IStateService } from '@services/state/StateService/IStateService.js';
+import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { DirectiveError } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { PathValidationError } from '@core/errors/PathValidationError.js';
-import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
-import { IPathService } from '@services/fs/PathService/IPathService.js';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
+import type { IPathService } from '@services/fs/PathService/IPathService.js';
 import type { IStateService as ClonedState } from '@services/state/StateService/IStateService.js';
 
 /**

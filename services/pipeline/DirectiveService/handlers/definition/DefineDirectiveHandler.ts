@@ -1,7 +1,7 @@
 import { IDirectiveHandler, DirectiveContext } from '@services/pipeline/DirectiveService/IDirectiveService.js';
-import { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
-import { IStateService } from '@services/state/StateService/IStateService.js';
-import { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
+import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
+import type { IStateService } from '@services/state/StateService/IStateService.js';
+import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { DirectiveNode, DefineDirectiveData } from '@core/syntax/types.js';
 import { DirectiveError, DirectiveErrorCode, DirectiveErrorSeverity } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { directiveLogger as logger } from '@core/utils/logger.js';

@@ -1,6 +1,6 @@
 import { IStateVisualizationService, VisualizationConfig, StateMetrics, NodeStyle, EdgeStyle } from '@tests/utils/debug/StateVisualizationService/IStateVisualizationService.js';
 import { IStateHistoryService } from '@tests/utils/debug/StateHistoryService/IStateHistoryService.js';
-import { IStateTrackingService, StateMetadata, StateRelationship } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
+import type { IStateTrackingService, StateMetadata, StateRelationship } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
 
 /**
  * @package

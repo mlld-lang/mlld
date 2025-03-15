@@ -6,7 +6,7 @@
  * This client interface exposes only the methods that StateTrackingService needs from StateService.
  * It is implemented by a factory to avoid circular dependencies.
  */
-export interface IStateServiceClient {
+interface IStateServiceClient {
   /**
    * Gets the unique identifier for this state instance.
    * 
@@ -56,3 +56,5 @@ export interface IStateServiceClient {
    */
   isTransformationEnabled(): boolean;
 } 
+
+export type { IStateServiceClient }; 

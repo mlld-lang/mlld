@@ -1,4 +1,4 @@
-import { IStateService } from '@services/state/StateService/IStateService.js';
+import type { IStateService } from '@services/state/StateService/IStateService.js';
 import { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
 import type { MeldNode, TextNode, CodeFenceNode, CommentNode } from '@core/syntax/types.js';
 

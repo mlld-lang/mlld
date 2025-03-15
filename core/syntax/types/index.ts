@@ -66,12 +66,25 @@ export * from './validation.js';
 export * from './test-fixtures.js';
 
 // Define type aliases for backward compatibility
-export type MeldNode = INode;
-export type DirectiveNode = IDirectiveNode;
-export type TextNode = ITextNode;
-export type CodeFenceNode = ICodeFenceNode;
-export type CommentNode = ICommentNode;
-export type ErrorNode = IErrorNode;
-export type VariableReferenceNode = IVariableReference;
-export type VariableNode = IVariableReference; // Legacy alias for backward compatibility
-export type DirectiveData = IDirectiveData;
+type MeldNode = INode;
+type DirectiveNode = IDirectiveNode;
+type TextNode = ITextNode;
+type CodeFenceNode = ICodeFenceNode;
+type CommentNode = ICommentNode;
+type ErrorNode = IErrorNode;
+type VariableReferenceNode = IVariableReference;
+type VariableNode = IVariableReference; // Legacy alias for backward compatibility
+type DirectiveData = IDirectiveData;
+
+// Export type aliases
+export type {
+  MeldNode,
+  DirectiveNode,
+  TextNode,
+  CodeFenceNode,
+  CommentNode,
+  ErrorNode,
+  VariableReferenceNode,
+  VariableNode,
+  DirectiveData
+};

@@ -7,8 +7,8 @@
 
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { MemfsTestFileSystemAdapter } from '@tests/utils/MemfsTestFileSystemAdapter.js';
-import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
-import { IPathService } from '@services/fs/PathService/IPathService.js';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
+import type { IPathService } from '@services/fs/PathService/IPathService.js';
 import { mockProcessExit } from '@tests/utils/cli/mockProcessExit.js';
 import { mockConsole } from '@tests/utils/cli/mockConsole.js';
 import { vi } from 'vitest';

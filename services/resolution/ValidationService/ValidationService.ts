@@ -1,6 +1,6 @@
 import type { DirectiveNode } from '@core/syntax/types.js';
 import { validationLogger as logger } from '@core/utils/logger.js';
-import { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
+import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import { MeldDirectiveError } from '@core/errors/MeldDirectiveError.js';
 import { DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';

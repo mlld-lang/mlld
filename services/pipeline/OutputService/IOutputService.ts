@@ -6,12 +6,12 @@ import type { IStateService } from '@services/state/StateService/IStateService.j
  * - 'markdown': Standard Markdown output
  * - 'xml': LLM-friendly XML format
  */
-export type OutputFormat = 'markdown' | 'xml';
+type OutputFormat = 'markdown' | 'xml';
 
 /**
  * Configuration options for output generation.
  */
-export interface OutputOptions {
+interface OutputOptions {
   /**
    * Whether to include state variables in the output.
    * When true, variable definitions are included as comments or metadata.
@@ -54,7 +54,7 @@ export interface OutputOptions {
  * Dependencies:
  * - IStateService: For accessing state and transformed nodes
  */
-export interface IOutputService {
+interface IOutputService {
   /**
    * Check if this service can access transformed nodes.
    * Used to determine if transformation mode is available.
@@ -149,3 +149,5 @@ export interface IOutputService {
    */
   getSupportedFormats(): string[];
 } 
+
+export type { OutputFormat, OutputOptions, IOutputService }; 

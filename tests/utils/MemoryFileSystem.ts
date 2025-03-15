@@ -1,4 +1,4 @@
-import { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
+import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
 import * as path from 'path';
 import { Stats } from 'fs-extra';
 

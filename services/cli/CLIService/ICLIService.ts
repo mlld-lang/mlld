@@ -2,7 +2,7 @@
  * Command line interface options for Meld processing.
  * Represents the parsed command line arguments.
  */
-export interface CLIOptions {
+interface CLIOptions {
   /** Input file or directory path to process */
   input?: string;
   
@@ -38,7 +38,7 @@ export interface CLIOptions {
  * Interface for a service that handles user prompts and interactive input.
  * Used by CLI for interacting with users in the terminal.
  */
-export interface IPromptService {
+interface IPromptService {
   /**
    * Gets text input from the user.
    * 
@@ -72,7 +72,7 @@ export interface IPromptService {
  * - IOutputService: For output formatting
  * - IPromptService: For interactive user input
  */
-export interface ICLIService {
+interface ICLIService {
   /**
    * Run the CLI with the given arguments.
    * Main entry point for executing the CLI.
@@ -101,3 +101,5 @@ export interface ICLIService {
    */
   parseArguments(args: string[]): CLIOptions;
 } 
+
+export type { CLIOptions, IPromptService, ICLIService }; 

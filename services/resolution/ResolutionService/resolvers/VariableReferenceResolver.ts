@@ -8,9 +8,9 @@ import type { MeldNode, TextNode, DirectiveNode, NodeType } from '@core/syntax/t
 import { resolutionLogger as logger } from '@core/utils/logger.js';
 import { VariableResolutionTracker } from '@tests/utils/debug/VariableResolutionTracker/index.js';
 import { container, inject, injectable } from 'tsyringe';
-import { IResolutionServiceClient } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClient.js';
+import type { IResolutionServiceClient } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClient.js';
 import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientFactory.js';
-import { IParserServiceClient } from '@services/pipeline/ParserService/interfaces/IParserServiceClient.js';
+import type { IParserServiceClient } from '@services/pipeline/ParserService/interfaces/IParserServiceClient.js';
 import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory.js';
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 import { 

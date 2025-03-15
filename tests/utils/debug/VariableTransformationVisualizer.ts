@@ -5,8 +5,8 @@
  * making it easier to debug issues related to object property access and text formatting.
  */
 
-import { IStateService } from '@services/state/StateService/IStateService.js';
-import { IOutputService } from '@services/pipeline/OutputService/IOutputService.js';
+import type { IStateService } from '@services/state/StateService/IStateService.js';
+import type { IOutputService } from '@services/pipeline/OutputService/IOutputService.js';
 import { VariableReferenceResolver } from '@services/resolution/ResolutionService/resolvers/VariableReferenceResolver.js';
 import { Text, Root, DataVar, TextVar } from '@core/types.js';
 import { StateFactory } from '@services/state/StateService/StateFactory.js';

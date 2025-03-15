@@ -17,7 +17,7 @@ import type { ParserServiceLike } from '@core/shared-service-types.js';
  * Dependencies:
  * - meld-ast: For the underlying parsing functionality
  */
-export interface IParserService extends ParserServiceLike {
+interface IParserService extends ParserServiceLike {
   /**
    * Parse Meld content into an AST using meld-ast.
    * 
@@ -52,3 +52,5 @@ export interface IParserService extends ParserServiceLike {
    */
   parseWithLocations(content: string, filePath?: string): Promise<MeldNode[]>;
 } 
+
+export type { IParserService }; 

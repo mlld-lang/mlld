@@ -2,7 +2,7 @@ import '@core/di-config.js';
 import * as path from 'path';
 import { resolveService, registerServiceInstance } from '@core/ServiceProvider.js';
 
-// Core services
+// Core services (implementation classes - keep as regular exports)
 export * from '@services/pipeline/InterpreterService/InterpreterService.js';
 export * from '@services/pipeline/ParserService/ParserService.js';
 export * from '@services/state/StateService/StateService.js';
@@ -15,7 +15,7 @@ export * from '@services/fs/FileSystemService/PathOperationsService.js';
 export * from '@services/pipeline/OutputService/OutputService.js';
 export * from '@services/resolution/CircularityService/CircularityService.js';
 
-// Core types and errors
+// Core types and errors - use type-only exports for types
 export * from '@core/types/index.js';
 export * from '@core/errors/MeldDirectiveError.js';
 export * from '@core/errors/MeldInterpreterError.js';
@@ -45,7 +45,7 @@ import { PathOperationsService } from '@services/fs/FileSystemService/PathOperat
 import { OutputService } from '@services/pipeline/OutputService/OutputService.js';
 import { CircularityService } from '@services/resolution/CircularityService/CircularityService.js';
 import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
-import { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
+import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
 import { StateDebuggerService } from '@tests/utils/debug/StateDebuggerService/StateDebuggerService.js';
 import { ProcessOptions, Services } from '@core/types/index.js';
 import type { IStateDebuggerService } from '@tests/utils/debug/StateDebuggerService/IStateDebuggerService.js';

@@ -1,7 +1,7 @@
 import { injectable, inject } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
-import { IPathService } from '@services/fs/PathService/IPathService.js';
-import { IPathServiceClient } from '@services/fs/PathService/interfaces/IPathServiceClient.js';
+import type { IPathService } from '@services/fs/PathService/IPathService.js';
+import type { IPathServiceClient } from '@services/fs/PathService/interfaces/IPathServiceClient.js';
 
 /**
  * Factory for creating PathServiceClient instances.

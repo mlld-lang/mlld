@@ -102,7 +102,7 @@ const cjsSource = peggy.generate(grammar, {
 
 // Write ESM parser to dist
 fs.writeFileSync(DIST_PARSER_ESM, `// Generated ESM parser
-import { MeldNode } from '@core/syntax/types';
+import type { MeldNode } from '@core/syntax/types.js';
 
 // Define return type for the parser
 /** @type {(input: string, options?: any) => MeldNode[]} */

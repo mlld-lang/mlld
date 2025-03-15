@@ -17,7 +17,7 @@ import type { ValidationServiceLike } from '@core/shared-service-types.js';
  * Dependencies:
  * - None directly, though validators may depend on other services
  */
-export interface IValidationService extends ValidationServiceLike {
+interface IValidationService extends ValidationServiceLike {
   /**
    * Register a validator function for a specific directive kind.
    * 
@@ -56,3 +56,5 @@ export interface IValidationService extends ValidationServiceLike {
    */
   getRegisteredDirectiveKinds(): string[];
 } 
+
+export type { IValidationService }; 

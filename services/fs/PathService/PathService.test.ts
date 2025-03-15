@@ -3,7 +3,7 @@ import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { PathService } from '@services/fs/PathService/PathService.js';
 import { PathValidationError, PathErrorCode } from '@services/fs/PathService/errors/PathValidationError.js';
 import { ProjectPathResolver } from '@services/fs/ProjectPathResolver.js';
-import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/factories/FileSystemServiceClientFactory.js';
 import { StructuredPath } from '@services/fs/PathService/IPathService.js';
 

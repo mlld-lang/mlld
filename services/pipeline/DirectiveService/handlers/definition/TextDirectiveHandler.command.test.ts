@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { TextDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler.js';
 import type { DirectiveNode } from '@core/syntax/types.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
-import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import {
   createValidationServiceMock,

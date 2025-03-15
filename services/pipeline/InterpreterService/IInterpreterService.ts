@@ -7,14 +7,14 @@ import type { MeldError } from '@core/errors/MeldError.js';
  * 
  * @param error - The error to handle
  */
-export interface ErrorHandler {
+interface ErrorHandler {
   (error: MeldError): void;
 }
 
 /**
  * Options for configuring the interpreter behavior.
  */
-export interface InterpreterOptions {
+interface InterpreterOptions {
   /**
    * Initial state to use for interpretation.
    * If not provided, a new state will be created.
@@ -69,7 +69,7 @@ export interface InterpreterOptions {
  * - DirectiveServiceLike: For processing directive nodes
  * - StateServiceLike: For maintaining state during interpretation
  */
-export interface IInterpreterService {
+interface IInterpreterService {
   /**
    * Check if this service can handle transformations.
    * 
@@ -152,3 +152,5 @@ export interface IInterpreterService {
     options?: InterpreterOptions
   ): Promise<StateServiceLike>;
 } 
+
+export type { ErrorHandler, InterpreterOptions, IInterpreterService }; 

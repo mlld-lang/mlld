@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { StringConcatenationHandler } from '@services/resolution/ResolutionService/resolvers/StringConcatenationHandler.js';
 import { ResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError.js';
-import { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
+import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { ResolutionContext, ResolutionErrorCode } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { createMockParserService, createDirectiveNode, createTextNode } from '@tests/utils/testFactories.js';
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';

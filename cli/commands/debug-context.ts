@@ -1,17 +1,17 @@
 #!/usr/bin/env node
 
 import { container } from 'tsyringe';
-import { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
-import { IStateService } from '@services/state/StateService/IStateService.js';
-import { IParserService } from '@services/pipeline/ParserService/IParserService.js';
-import { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
-import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
+import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
+import type { IStateService } from '@services/state/StateService/IStateService.js';
+import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
+import type { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
 import * as path from 'path';
 import chalk from 'chalk';
 import * as fs from 'fs/promises';
 import { initializeContextDebugger, VariableResolutionTracker } from '@tests/utils/debug/index.js';
-import { IPathService } from '@services/fs/PathService/IPathService.js';
+import type { IPathService } from '@services/fs/PathService/IPathService.js';
 
 // Import concrete classes for direct instantiation
 import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService.js';

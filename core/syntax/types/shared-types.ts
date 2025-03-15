@@ -8,7 +8,7 @@
  */
 
 // Core node types that everything depends on
-export type NodeType = 
+type NodeType = 
   | 'Directive'
   | 'Text'
   | 'CodeFence'
@@ -17,25 +17,25 @@ export type NodeType =
   | 'VariableReference';
 
 // Position in a source file
-export interface Position {
+interface Position {
   line: number;
   column: number;
 }
 
 // Location range in a source file
-export interface SourceLocation {
+interface SourceLocation {
   start: Position;
   end: Position;
 }
 
 // Base node properties that all AST nodes share
-export interface BaseNode {
+interface BaseNode {
   type: NodeType;
   location?: SourceLocation;
 }
 
 // Directive kinds
-export type DirectiveKind = 
+type DirectiveKind = 
   | 'text'
   | 'data'
   | 'define'
@@ -45,16 +45,16 @@ export type DirectiveKind =
   | 'run';
 
 // Variable reference field types  
-export type FieldType = 'field' | 'index';
+type FieldType = 'field' | 'index';
 
 // Variable reference field
-export interface Field {
+interface Field {
   type: FieldType;
   value: string | number;
 }
 
 // Variable value types
-export type VariableType = 
+type VariableType = 
   | 'string'
   | 'number'
   | 'boolean'
@@ -67,7 +67,7 @@ export type VariableType =
   | 'bigint';
 
 // Format operators for variable formatting
-export type FormatOperator = 'json' | 'raw' | 'stringify';
+type FormatOperator = 'json' | 'raw' | 'stringify';
 
 // Special path variable constants
 export const SPECIAL_PATH_VARS = {
@@ -89,4 +89,17 @@ export const VAR_PATTERNS = {
   INDEX_ACCESS_START: '[',
   INDEX_ACCESS_END: ']',
   FORMAT_OPERATOR: '|'
+};
+
+// Type-only exports for all types and interfaces
+export type {
+  NodeType,
+  Position,
+  SourceLocation,
+  BaseNode,
+  DirectiveKind,
+  FieldType,
+  Field,
+  VariableType,
+  FormatOperator
 };

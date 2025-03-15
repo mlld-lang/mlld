@@ -1,5 +1,5 @@
 import type { IStateService } from '@services/state/StateService/IStateService.js';
-import { IOutputService, type OutputFormat, type OutputOptions } from '@services/pipeline/OutputService/IOutputService.js';
+import type { IOutputService, OutputFormat, OutputOptions } from '@services/pipeline/OutputService/IOutputService.js';
 import type { IResolutionService, ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
 import type { 
   MeldNode, 
@@ -15,7 +15,7 @@ import { ResolutionContextFactory } from '@services/resolution/ResolutionService
 import { MeldError } from '@core/errors/MeldError.js';
 import { inject, injectable, container } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
-import { IResolutionServiceClient } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClient.js';
+import type { IResolutionServiceClient } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClient.js';
 import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientFactory.js';
 import { IVariableReferenceResolverClient, FieldAccessOptions } from '@services/resolution/ResolutionService/interfaces/IVariableReferenceResolverClient.js';
 import { VariableReferenceResolverClientFactory } from '@services/resolution/ResolutionService/factories/VariableReferenceResolverClientFactory.js';

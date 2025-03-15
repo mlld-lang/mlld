@@ -12,7 +12,7 @@
 /**
  * Options for selective state transformation
  */
-export interface StateTransformationOptions {
+interface StateTransformationOptions {
   /** Whether to transform variable references */
   variables?: boolean;    
   /** Whether to transform directive content */
@@ -26,12 +26,12 @@ export interface StateTransformationOptions {
 /**
  * Core state event types for lifecycle operations
  */
-export type StateEventType = 'create' | 'clone' | 'transform' | 'merge' | 'error';
+type StateEventType = 'create' | 'clone' | 'transform' | 'merge' | 'error';
 
 /**
  * Base state event interface
  */
-export interface StateEventBase {
+interface StateEventBase {
   /** The type of state event */
   type: StateEventType;
   /** Unique identifier of the state that triggered the event */
@@ -54,17 +54,17 @@ export interface StateEventBase {
 /**
  * Event handler function type for processing state events
  */
-export type StateEventHandlerBase = (event: StateEventBase) => void | Promise<void>;
+type StateEventHandlerBase = (event: StateEventBase) => void | Promise<void>;
 
 /**
  * Event filter predicate for selective event handling
  */
-export type StateEventFilterBase = (event: StateEventBase) => boolean;
+type StateEventFilterBase = (event: StateEventBase) => boolean;
 
 /**
  * Handler registration options for configuring event subscription
  */
-export interface StateEventHandlerOptionsBase {
+interface StateEventHandlerOptionsBase {
   /** Optional filter to selectively process events */
   filter?: StateEventFilterBase;
 }
@@ -72,7 +72,7 @@ export interface StateEventHandlerOptionsBase {
 /**
  * Core state event service interface
  */
-export interface StateEventServiceBase {
+interface StateEventServiceBase {
   /** Register an event handler */
   on(type: StateEventType, handler: StateEventHandlerBase, options?: StateEventHandlerOptionsBase): void;
   /** Remove an event handler */
@@ -84,7 +84,7 @@ export interface StateEventServiceBase {
 /**
  * Basic state metadata for tracking
  */
-export interface StateMetadataBase {
+interface StateMetadataBase {
   /** Unique state identifier */
   id: string;
   /** Parent state identifier if any */
@@ -104,7 +104,7 @@ export interface StateMetadataBase {
 /**
  * Basic relationship between states
  */
-export interface StateRelationshipBase {
+interface StateRelationshipBase {
   /** Source state identifier (optional for root states) */
   sourceId?: string;
   /** Target state identifier */
@@ -116,7 +116,7 @@ export interface StateRelationshipBase {
 /**
  * Basic state tracking service interface
  */
-export interface StateTrackingServiceBase {
+interface StateTrackingServiceBase {
   /** Register a state with the tracking service */
   registerState(metadata: Partial<StateMetadataBase>): void;
   
@@ -130,7 +130,7 @@ export interface StateTrackingServiceBase {
 /**
  * Core state service interface without implementation details
  */
-export interface StateServiceBase {
+interface StateServiceBase {
   /** Get a data variable by name */
   getDataVar(name: string): unknown;
   /** Get a text variable by name */
@@ -150,7 +150,7 @@ export interface StateServiceBase {
 /**
  * Core file system operations without implementation details
  */
-export interface FileSystemBase {
+interface FileSystemBase {
   /** Check if a file exists */
   fileExists(path: string): Promise<boolean>;
   /** Read a file as text */
@@ -162,7 +162,7 @@ export interface FileSystemBase {
 /**
  * Basic path service operations without dependencies
  */
-export interface PathServiceBase {
+interface PathServiceBase {
   /** Validate a path */
   validatePath(path: string): Promise<boolean>;
   /** Resolve a path */
@@ -174,7 +174,7 @@ export interface PathServiceBase {
 /**
  * Resolution context base information
  */
-export interface ResolutionContextBase {
+interface ResolutionContextBase {
   /** Current file path for resolution */
   currentFilePath?: string;
   /** Working directory for resolution */
@@ -188,7 +188,7 @@ export interface ResolutionContextBase {
 /**
  * Base directive context
  */
-export interface DirectiveContextBase {
+interface DirectiveContextBase {
   /** Current file being processed */
   currentFilePath?: string;
   /** Working directory for command execution */
@@ -198,7 +198,7 @@ export interface DirectiveContextBase {
 /**
  * AST node position
  */
-export interface Position {
+interface Position {
   /** Line number (1-based) */
   line: number; 
   /** Column number (1-based) */
@@ -208,7 +208,7 @@ export interface Position {
 /**
  * Source location in a file
  */
-export interface SourceLocation {
+interface SourceLocation {
   /** Start position */
   start: Position;
   /** End position */
@@ -230,9 +230,31 @@ export enum NodeType {
 /**
  * Base node interface for all AST nodes
  */
-export interface BaseNode {
+interface BaseNode {
   /** Type of node */
   type: NodeType;
   /** Source location */
   location?: SourceLocation;
 }
+
+// Type-only exports for all interfaces and types
+export type {
+  StateTransformationOptions,
+  StateEventType,
+  StateEventBase,
+  StateEventHandlerBase,
+  StateEventFilterBase,
+  StateEventHandlerOptionsBase,
+  StateEventServiceBase,
+  StateMetadataBase,
+  StateRelationshipBase,
+  StateTrackingServiceBase,
+  StateServiceBase,
+  FileSystemBase,
+  PathServiceBase,
+  ResolutionContextBase,
+  DirectiveContextBase,
+  Position,
+  SourceLocation,
+  BaseNode
+};

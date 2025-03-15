@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { DefineDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/DefineDirectiveHandler.js';
-import { IValidationService } from '@services/validation/ValidationService/interface.js';
-import { IResolutionService } from '@services/resolution/ResolutionService/interface.js';
-import { IStateService } from '@services/state/StateService/interface.js';
+import type { IValidationService } from '@services/validation/ValidationService/interface.js';
+import type { IResolutionService } from '@services/resolution/ResolutionService/interface.js';
+import type { IStateService } from '@services/state/StateService/interface.js';
 import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { defineDirectiveExamples } from '@core/syntax/index.js';
 import { createDefineDirective, createLocation } from '@tests/utils/testFactories.js';

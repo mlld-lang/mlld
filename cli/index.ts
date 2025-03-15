@@ -7,7 +7,7 @@ import { main as apiMain } from '@api/index.js';
 import { version } from '@core/version.js';
 import { cliLogger as logger } from '@core/utils/logger.js';
 import { loggingConfig } from '@core/config/logging.js';
-import { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
+import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
 import { createInterface } from 'readline';
 import { initCommand } from './commands/init.js';
 import { ProcessOptions } from '@core/types/index.js';

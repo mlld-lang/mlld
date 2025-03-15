@@ -1,14 +1,14 @@
-import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import type { Location } from '@core/types/index.js';
 // Import shared types
 import { PathServiceBase } from '@core/shared/types.js';
 import { StructuredPath } from '@core/shared-service-types.js';
-import { IParserService } from '@services/pipeline/ParserService/IParserService.js';
+import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 
 /**
  * Options for path validation and operations
  */
-export interface PathOptions {
+interface PathOptions {
   /**
    * Base directory to resolve relative paths against.
    * For paths without slashes, this is used as the base directory.
@@ -78,7 +78,7 @@ export interface PathOptions {
  * - IFileSystemService: For file and directory existence checks
  * - IParserService: Optional, for AST-based path handling
  */
-export interface IPathService extends PathServiceBase {
+interface IPathService extends PathServiceBase {
   /**
    * Initialize the path service with required dependencies.
    * Must be called before using any other methods.
@@ -251,4 +251,6 @@ export interface IPathService extends PathServiceBase {
    * It's primarily used for internal path manipulation.
    */
   normalizePath?(filePath: string): string;
-} 
+}
+
+export type { PathOptions, IPathService }; 

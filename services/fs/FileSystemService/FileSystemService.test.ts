@@ -6,11 +6,11 @@ import { MeldError } from '@core/errors/MeldError.js';
 import path from 'path';
 import { PathService } from '@services/fs/PathService/PathService.js';
 import { ProjectPathResolver } from '@services/fs/ProjectPathResolver.js';
-import { IPathService } from '@services/fs/PathService/IPathService.js';
-import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
-import { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
-import { IPathOperationsService } from '@services/fs/FileSystemService/IPathOperationsService.js';
-import { IPathServiceClient } from '@services/fs/PathService/interfaces/IPathServiceClient.js';
+import type { IPathService } from '@services/fs/PathService/IPathService.js';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
+import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
+import type { IPathOperationsService } from '@services/fs/FileSystemService/IPathOperationsService.js';
+import type { IPathServiceClient } from '@services/fs/PathService/interfaces/IPathServiceClient.js';
 import { PathServiceClientFactory } from '@services/fs/PathService/factories/PathServiceClientFactory.js';
 import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/factories/FileSystemServiceClientFactory.js';
 

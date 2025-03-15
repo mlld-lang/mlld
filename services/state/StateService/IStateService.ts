@@ -9,7 +9,7 @@ import type { IStateTrackingService } from '@tests/utils/debug/StateTrackingServ
 /**
  * Options for selective transformation
  */
-export interface TransformationOptions extends StateTransformationOptions {}
+interface TransformationOptions extends StateTransformationOptions {}
 
 /**
  * Service responsible for managing state in Meld documents.
@@ -25,7 +25,7 @@ export interface TransformationOptions extends StateTransformationOptions {}
  * - IStateEventService: For state change event notifications
  * - IStateTrackingService: For debugging and tracking state operations
  */
-export interface IStateService extends StateServiceBase {
+interface IStateService extends StateServiceBase {
   /**
    * Sets the event service for state change notifications.
    * 
@@ -338,4 +338,6 @@ export interface IStateService extends StateServiceBase {
    * @returns A new state with the same values
    */
   clone(): IStateService;
-} 
+}
+
+export type { TransformationOptions, IStateService }; 

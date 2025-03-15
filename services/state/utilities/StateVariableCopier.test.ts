@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { IStateService } from '@services/state/StateService/IStateService.js';
-import { IStateTrackingService } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
+import type { IStateService } from '@services/state/StateService/IStateService.js';
+import type { IStateTrackingService } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
 import { StateVariableCopier } from '@services/state/utilities/StateVariableCopier.js';
 
 describe('StateVariableCopier', () => {

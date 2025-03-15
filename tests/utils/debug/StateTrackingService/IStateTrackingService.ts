@@ -8,7 +8,7 @@ import type {
  * @package
  * Interface for state tracking service.
  */
-export interface IStateTrackingService extends StateTrackingServiceBase {
+interface IStateTrackingService extends StateTrackingServiceBase {
   /**
    * Register a state with the tracking service.
    * @param metadata - The state metadata to register
@@ -118,19 +118,19 @@ export interface IStateTrackingService extends StateTrackingServiceBase {
 /**
  * Metadata for a state instance.
  */
-export interface StateMetadata extends StateMetadataBase {
+interface StateMetadata extends StateMetadataBase {
   childStates?: string[];
 }
 
 /**
  * Represents a relationship between states.
  */
-export interface StateRelationship extends StateRelationshipBase {}
+interface StateRelationship extends StateRelationshipBase {}
 
 /**
  * Represents a context boundary between states.
  */
-export interface ContextBoundary {
+interface ContextBoundary {
   sourceStateId: string;
   targetStateId: string;
   boundaryType: 'import' | 'embed';
@@ -141,7 +141,7 @@ export interface ContextBoundary {
 /**
  * Represents a variable crossing between states.
  */
-export interface VariableCrossing {
+interface VariableCrossing {
   sourceStateId: string;
   targetStateId: string;
   variableName: string;
@@ -153,8 +153,17 @@ export interface VariableCrossing {
 /**
  * Information about the context hierarchy.
  */
-export interface ContextHierarchyInfo {
+interface ContextHierarchyInfo {
   states: StateMetadata[];
   boundaries: ContextBoundary[];
   variableCrossings: VariableCrossing[];
-} 
+}
+
+export type { 
+  IStateTrackingService, 
+  StateMetadata, 
+  StateRelationship, 
+  ContextBoundary, 
+  VariableCrossing, 
+  ContextHierarchyInfo 
+}; 

@@ -3,4 +3,4 @@
  */
 
 export * from './ErrorDisplayService.js';
-export * from './IErrorDisplayService.js';
+export type { IErrorDisplayService } from './IErrorDisplayService.js';

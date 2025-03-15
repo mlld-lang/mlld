@@ -5,11 +5,11 @@ import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/Directive
 import type { DirectiveNode } from '@core/syntax/types.js';
 import { IDirectiveService } from '@services/pipeline/DirectiveService/IDirectiveService.js';
 import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
-import { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
+import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
 import { vi } from 'vitest';
 import { StateTrackingService } from '@tests/utils/debug/StateTrackingService/StateTrackingService.js';
 import { TestDirectiveHandlerHelper } from '@tests/utils/di/TestDirectiveHandlerHelper.js';
-import { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
+import type { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
 
 // Main test suite for DirectiveService
 describe('DirectiveService', () => {

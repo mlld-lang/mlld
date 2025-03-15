@@ -1,20 +1,20 @@
 // First, include shared types for direct access
 export * from '../shared-types.js';
 
-// Then export interfaces with proper annotations to avoid circular references
-export { NodeType, Position, SourceLocation } from './common.js';
-export { INode } from './INode.js';
-export { IDirectiveNode, DirectiveData, DirectiveKind } from './IDirectiveNode.js';
-export { 
+// Then export interfaces with proper type-only exports to avoid circular references
+export type { NodeType, Position, SourceLocation } from './common.js';
+export type { INode } from './INode.js';
+export type { IDirectiveNode, DirectiveData, DirectiveKind } from './IDirectiveNode.js';
+export type { 
   IVariableReference, 
   VariableType, 
   Field, 
   ExtendedFormatOperator as FormatOperator 
 } from './IVariableReference.js';
-export { ITextNode } from './ITextNode.js';
-export { ICodeFenceNode } from './ICodeFenceNode.js';
-export { ICommentNode } from './ICommentNode.js';
-export { IErrorNode } from './IErrorNode.js';
+export type { ITextNode } from './ITextNode.js';
+export type { ICodeFenceNode } from './ICodeFenceNode.js';
+export type { ICommentNode } from './ICommentNode.js';
+export type { IErrorNode } from './IErrorNode.js';
 
 // Export constants (these are values, not types)
 export { 

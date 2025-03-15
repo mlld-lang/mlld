@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { container, injectable } from 'tsyringe';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
-import { IStateService } from '@services/state/StateService/IStateService.js';
+import type { IStateService } from '@services/state/StateService/IStateService.js';
 import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientFactory.js';
 import { ResolutionServiceClientForDirectiveFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientForDirectiveFactory.js';
-import { IResolutionServiceClient } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClient.js';
-import { IResolutionServiceClientForDirective } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClientForDirective.js';
-import { IResolutionService, ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
+import type { IResolutionServiceClient } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClient.js';
+import type { IResolutionServiceClientForDirective } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClientForDirective.js';
+import type { IResolutionService, ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { mockDeep } from 'vitest-mock-extended';
 import { Service } from '@core/ServiceProvider.js';
 

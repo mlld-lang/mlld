@@ -3,7 +3,7 @@ import * as path from 'path';
 import type { Stats } from 'fs';
 import { filesystemLogger as logger } from '@core/utils/logger.js';
 import { EventEmitter } from 'events';
-import { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
+import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
 
 /**
  * In-memory filesystem for testing using memfs.

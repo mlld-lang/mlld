@@ -79,12 +79,12 @@ const getEsbuildOptions = (format: string) => (options: any) => {
 };
 
 export default defineConfig([
-  // API build - both CJS and ESM
+  // API build - ESM only with splitting
   {
     entry: {
       index: 'api/index.ts',
     },
-    format: ['esm'], // Remove CJS format to eliminate splitting error - we'll build CJS separately
+    format: ['esm'], // ESM format supports splitting
     dts: true,
     clean: true,
     sourcemap: true,
@@ -110,7 +110,7 @@ export default defineConfig([
       return getEsbuildOptions(format)(options);
     }
   },
-  // API build for CommonJS
+  // API build for CommonJS - no splitting
   {
     entry: {
       index: 'api/index.ts',

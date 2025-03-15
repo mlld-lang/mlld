@@ -1,4 +1,4 @@
-import { StateMetadata } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
+import type { StateMetadata } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
 
 /**
  * Client interface for StateTrackingService functionality needed by StateService
@@ -8,7 +8,7 @@ import { StateMetadata } from '@tests/utils/debug/StateTrackingService/IStateTra
  * This client interface exposes only the methods that StateService needs from StateTrackingService.
  * It is implemented by a factory to avoid circular dependencies.
  */
-export interface IStateTrackingServiceClient {
+interface IStateTrackingServiceClient {
   /**
    * Register a state with the tracking service.
    * @param metadata - The state metadata to register
@@ -92,3 +92,5 @@ export interface IStateTrackingServiceClient {
    */
   getStateDescendants?(stateId: string): string[];
 } 
+
+export type { IStateTrackingServiceClient }; 

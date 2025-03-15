@@ -1,1 +1,1 @@
-export * from './IParserServiceClient.js'; 
+export type { IParserServiceClient } from './IParserServiceClient.js'; 

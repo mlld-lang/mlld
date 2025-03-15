@@ -1,6 +1,7 @@
 import * as path from 'path';
-import { IStateService } from '@services/state/StateService/IStateService.js';
-import { IResolutionService, ResolutionContext, ResolutionErrorCode } from '@services/resolution/ResolutionService/IResolutionService.js';
+import type { IStateService } from '@services/state/StateService/IStateService.js';
+import type { IResolutionService, ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
+import { ResolutionErrorCode } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { TextResolver } from '@services/resolution/ResolutionService/resolvers/TextResolver.js';
 import { DataResolver } from '@services/resolution/ResolutionService/resolvers/DataResolver.js';
 import { PathResolver } from '@services/resolution/ResolutionService/resolvers/PathResolver.js';
@@ -8,24 +9,24 @@ import { CommandResolver } from '@services/resolution/ResolutionService/resolver
 import { ContentResolver } from '@services/resolution/ResolutionService/resolvers/ContentResolver.js';
 import { VariableReferenceResolver } from '@services/resolution/ResolutionService/resolvers/VariableReferenceResolver.js';
 import { resolutionLogger as logger } from '@core/utils/logger.js';
-import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import type { MeldNode, DirectiveNode, TextNode, DirectiveKind, CodeFenceNode } from '@core/syntax/types.js';
 import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
 import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 import { inject, singleton, container } from 'tsyringe';
-import { IPathService } from '@services/fs/PathService/IPathService.js';
+import type { IPathService } from '@services/fs/PathService/IPathService.js';
 import { VariableResolutionTracker, ResolutionTrackingConfig } from '@tests/utils/debug/VariableResolutionTracker/index.js';
 import { Service } from '@core/ServiceProvider.js';
-import { IParserServiceClient } from '@services/pipeline/ParserService/interfaces/IParserServiceClient.js';
+import type { IParserServiceClient } from '@services/pipeline/ParserService/interfaces/IParserServiceClient.js';
 import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory.js';
 import { IVariableReferenceResolverClient } from '@services/resolution/ResolutionService/interfaces/IVariableReferenceResolverClient.js';
 import { VariableReferenceResolverClientFactory } from '@services/resolution/ResolutionService/factories/VariableReferenceResolverClientFactory.js';
 import { IDirectiveServiceClient } from '@services/pipeline/DirectiveService/interfaces/IDirectiveServiceClient.js';
 import { DirectiveServiceClientFactory } from '@services/pipeline/DirectiveService/factories/DirectiveServiceClientFactory.js';
-import { IFileSystemServiceClient } from '@services/fs/FileSystemService/interfaces/IFileSystemServiceClient.js';
+import type { IFileSystemServiceClient } from '@services/fs/FileSystemService/interfaces/IFileSystemServiceClient.js';
 import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/factories/FileSystemServiceClientFactory.js';
-import { IParserService } from '@services/pipeline/ParserService/IParserService.js';
+import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 
 /**
  * Interface matching the StructuredPath expected from meld-spec

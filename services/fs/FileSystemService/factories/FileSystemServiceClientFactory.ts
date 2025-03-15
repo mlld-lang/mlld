@@ -1,7 +1,7 @@
 import { injectable, inject } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
-import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
-import { IFileSystemServiceClient } from '@services/fs/FileSystemService/interfaces/IFileSystemServiceClient.js';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
+import type { IFileSystemServiceClient } from '@services/fs/FileSystemService/interfaces/IFileSystemServiceClient.js';
 
 /**
  * Factory for creating FileSystemServiceClient instances.

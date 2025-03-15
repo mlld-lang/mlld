@@ -12,17 +12,17 @@ import { version } from '@core/version.js';
 import { createInterface } from 'readline.js';
 import { dirname, basename, extname } from 'path';
 import { join } from 'path';
-import { IParserService } from '@services/pipeline/ParserService/IParserService.js';
-import { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
-import { IOutputService } from '@services/pipeline/OutputService/IOutputService.js';
-import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
-import { IPathService } from '@services/fs/PathService/IPathService.js';
-import { IStateService } from '@services/state/StateService/IStateService.js';
+import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
+import type { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
+import type { IOutputService } from '@services/pipeline/OutputService/IOutputService.js';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
+import type { IPathService } from '@services/fs/PathService/IPathService.js';
+import type { IStateService } from '@services/state/StateService/IStateService.js';
 import { ProcessOptions } from '@api/types.js';
 import readline from 'readline';
 import { inject, injectable, delay } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
-import { CLIOptions, ICLIService, IPromptService } from '@services/cli/CLIService/ICLIService.js';
+import type { CLIOptions, ICLIService, IPromptService } from '@services/cli/CLIService/ICLIService.js';
 
 /**
  * Default prompt service implementation using Node.js readline

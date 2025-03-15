@@ -8,9 +8,9 @@ interface DataDirective extends DirectiveData {
 }
 
 import { IDirectiveHandler, DirectiveContext } from '@services/pipeline/DirectiveService/IDirectiveService.js';
-import { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
-import { IStateService } from '@services/state/StateService/IStateService.js';
-import { IResolutionService, ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
+import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
+import type { IStateService } from '@services/state/StateService/IStateService.js';
+import type { IResolutionService, ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
 import { directiveLogger as logger } from '@core/utils/logger.js';
 import { DirectiveError, DirectiveErrorCode, DirectiveErrorSeverity } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';

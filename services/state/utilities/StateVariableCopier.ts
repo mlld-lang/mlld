@@ -1,5 +1,5 @@
-import { IStateService } from '@services/state/StateService/IStateService.js';
-import { IStateTrackingService } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
+import type { IStateService } from '@services/state/StateService/IStateService.js';
+import type { IStateTrackingService } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
 import { stateLogger as logger } from '@core/utils/logger.js';
 
 /**

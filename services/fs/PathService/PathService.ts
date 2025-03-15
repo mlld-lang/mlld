@@ -1,5 +1,5 @@
-import { IPathService, PathOptions, StructuredPath } from '@services/fs/PathService/IPathService.js';
-import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
+import type { IPathService, PathOptions, StructuredPath } from '@services/fs/PathService/IPathService.js';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import { PathValidationError, PathErrorCode, PathValidationErrorDetails } from '@services/fs/PathService/errors/PathValidationError.js';
 import { ProjectPathResolver } from '@services/fs/ProjectPathResolver.js';
 import type { Location } from '@core/types/index.js';
@@ -19,7 +19,7 @@ import { Service } from '@core/ServiceProvider.js';
 import { injectable, inject } from 'tsyringe';
 import { container } from 'tsyringe';
 import { pathLogger as logger } from '@core/utils/logger.js';
-import { IFileSystemServiceClient } from '@services/fs/FileSystemService/interfaces/IFileSystemServiceClient.js';
+import type { IFileSystemServiceClient } from '@services/fs/FileSystemService/interfaces/IFileSystemServiceClient.js';
 import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/factories/FileSystemServiceClientFactory.js';
 
 /**

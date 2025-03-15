@@ -16,7 +16,7 @@ import { FileSystemBase } from '@core/shared/types.js';
  * - IFileSystem: For low-level filesystem operations
  * - IPathService: For path validation and resolution
  */
-export interface IFileSystemService extends FileSystemBase {
+interface IFileSystemService extends FileSystemBase {
   /**
    * Reads the content of a file as a string.
    * 
@@ -175,4 +175,6 @@ export interface IFileSystemService extends FileSystemBase {
    * @throws {MeldFileSystemError} If the directory cannot be created
    */
   mkdir(dirPath: string, options?: { recursive?: boolean }): Promise<void>;
-} 
+}
+
+export type { IFileSystemService }; 

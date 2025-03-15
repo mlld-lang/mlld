@@ -30,7 +30,7 @@ import type {
  * Base state event interface providing context for state operations.
  * Contains core information about what happened, where, and when.
  */
-export interface StateEvent extends StateEventBase {
+interface StateEvent extends StateEventBase {
 }
 
 /**
@@ -39,7 +39,7 @@ export interface StateEvent extends StateEventBase {
  * 
  * @param event - The state event to handle
  */
-export type StateEventHandler = StateEventHandlerBase;
+type StateEventHandler = StateEventHandlerBase;
 
 /**
  * Event filter predicate for selective event handling.
@@ -48,19 +48,19 @@ export type StateEventHandler = StateEventHandlerBase;
  * @param event - The event to evaluate
  * @returns true if the event should be handled, false otherwise
  */
-export type StateEventFilter = StateEventFilterBase;
+type StateEventFilter = StateEventFilterBase;
 
 /**
  * Handler registration options for configuring event subscription.
  */
-export interface StateEventHandlerOptions extends StateEventHandlerOptionsBase {
+interface StateEventHandlerOptions extends StateEventHandlerOptionsBase {
 }
 
 /**
  * Service responsible for state event management and distribution.
  * Implements the observer pattern for state change notifications.
  */
-export interface IStateEventService extends StateEventServiceBase {
+interface IStateEventService extends StateEventServiceBase {
   /**
    * Register an event handler with optional filtering.
    * 
@@ -117,4 +117,12 @@ export interface IStateEventService extends StateEventServiceBase {
     handler: StateEventHandler;
     options?: StateEventHandlerOptions;
   }>;
-} 
+}
+
+export type {
+  StateEvent,
+  StateEventHandler,
+  StateEventFilter,
+  StateEventHandlerOptions,
+  IStateEventService
+}; 

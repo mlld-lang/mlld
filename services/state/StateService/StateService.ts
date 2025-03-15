@@ -8,7 +8,7 @@ import type { IStateTrackingService } from '@tests/utils/debug/StateTrackingServ
 import { inject, container, injectable } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
 import { StateTrackingServiceClientFactory } from '@services/state/StateTrackingService/factories/StateTrackingServiceClientFactory.js';
-import { IStateTrackingServiceClient } from '@services/state/StateTrackingService/interfaces/IStateTrackingServiceClient.js';
+import type { IStateTrackingServiceClient } from '@services/state/StateTrackingService/interfaces/IStateTrackingServiceClient.js';
 import { randomUUID } from 'crypto';
 
 // Helper function to get the container
@@ -972,6 +972,26 @@ export class StateService implements IStateService {
       } catch (error) {
         logger.warn('Failed to register existing state with tracking service', { error, stateId: this.currentState.stateId });
       }
+    }
+  }
+
+  /**
+   * Checks if a variable with the given name and type exists
+   * 
+   * @param type - The type of variable ('text', 'data', or 'path')
+   * @param name - The name of the variable to check
+   * @returns true if the variable exists, false otherwise
+   */
+  hasVariable(type: string, name: string): boolean {
+    switch (type.toLowerCase()) {
+      case 'text':
+        return this.getTextVar(name) !== undefined;
+      case 'data':
+        return this.getDataVar(name) !== undefined;
+      case 'path':
+        return this.getPathVar(name) !== undefined;
+      default:
+        return false;
     }
   }
 } 
