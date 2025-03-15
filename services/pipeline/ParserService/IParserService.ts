@@ -1,4 +1,5 @@
 import type { MeldNode } from '@core/syntax/types.js';
+import type { ParserServiceLike } from '@core/shared-service-types.js';
 
 /**
  * Service responsible for parsing Meld content into an Abstract Syntax Tree (AST).
@@ -16,7 +17,7 @@ import type { MeldNode } from '@core/syntax/types.js';
  * Dependencies:
  * - meld-ast: For the underlying parsing functionality
  */
-export interface IParserService {
+export interface IParserService extends ParserServiceLike {
   /**
    * Parse Meld content into an AST using meld-ast.
    * 

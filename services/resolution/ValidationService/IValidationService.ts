@@ -1,4 +1,5 @@
 import type { DirectiveNode } from '@core/syntax/types.js';
+import type { ValidationServiceLike } from '@core/shared-service-types.js';
 
 /**
  * Service responsible for validating directive nodes against schemas and constraints.
@@ -16,30 +17,7 @@ import type { DirectiveNode } from '@core/syntax/types.js';
  * Dependencies:
  * - None directly, though validators may depend on other services
  */
-export interface IValidationService {
-  /**
-   * Validate a directive node against its schema and constraints.
-   * 
-   * @param node - The directive node to validate
-   * @throws {MeldDirectiveError} If validation fails with specific validation errors
-   * 
-   * @example
-   * ```ts
-   * try {
-   *   await validationService.validate({
-   *     type: 'Directive',
-   *     kind: 'text',
-   *     name: 'greeting',
-   *     value: 'Hello, world!'
-   *   });
-   *   console.log('Directive is valid');
-   * } catch (error) {
-   *   console.error(`Validation error: ${error.message}`);
-   * }
-   * ```
-   */
-  validate(node: DirectiveNode): Promise<void>;
-  
+export interface IValidationService extends ValidationServiceLike {
   /**
    * Register a validator function for a specific directive kind.
    * 
@@ -64,14 +42,6 @@ export interface IValidationService {
    * @param kind - The directive kind to remove the validator for
    */
   removeValidator(kind: string): void;
-  
-  /**
-   * Check if a validator exists for a specific directive kind.
-   * 
-   * @param kind - The directive kind to check for a validator
-   * @returns true if a validator exists for the specified kind, false otherwise
-   */
-  hasValidator(kind: string): boolean;
   
   /**
    * Get all registered directive kinds that can be validated.

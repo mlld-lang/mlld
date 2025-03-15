@@ -1,3 +1,5 @@
+import type { CircularityServiceLike } from '@core/shared-service-types.js';
+
 /**
  * Service responsible for detecting and preventing circular imports and references.
  * Maintains stacks and dependency graphs to track relationships between files and variables.
@@ -13,7 +15,7 @@
  * Dependencies:
  * - None directly, though it interacts closely with import and resolution operations
  */
-export interface ICircularityService {
+export interface ICircularityService extends CircularityServiceLike {
   /**
    * Called at the start of an import operation to track the import chain.
    * 

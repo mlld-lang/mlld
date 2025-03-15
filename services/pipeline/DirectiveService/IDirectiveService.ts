@@ -1,4 +1,5 @@
 import type { DirectiveNode } from '@core/syntax/types.js';
+import type { DirectiveContextBase, StateServiceLike } from '@core/shared-service-types.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import type { IPathService } from '@services/fs/PathService/IPathService.js';
@@ -11,18 +12,13 @@ import type { DirectiveResult } from '@services/pipeline/DirectiveService/types.
 
 /**
  * Context for directive execution
+ * Extends the base context with state-specific fields
  */
-export interface DirectiveContext {
-  /** Current file being processed */
-  currentFilePath?: string;
+export interface DirectiveContext extends DirectiveContextBase {
   /** Parent state for nested contexts */
-  parentState?: IStateService;
+  parentState?: StateServiceLike;
   /** Current state for this directive */
-  state: IStateService;
-  /** Working directory for command execution */
-  workingDirectory?: string;
-  /** Resolution context for variable resolution */
-  resolutionContext?: any;
+  state: StateServiceLike;
 }
 
 /**

@@ -1,33 +1,6 @@
 import type { MeldNode } from '@core/syntax/types.js';
-import { IStateService } from '@services/state/StateService/IStateService.js';
+import type { StateServiceLike, StructuredPath } from '@core/shared-service-types.js';
 import { VariableResolutionTracker, ResolutionTrackingConfig } from '@tests/utils/debug/VariableResolutionTracker/index.js';
-
-/**
- * Structured representation of a path with variable parsing information.
- * Used for advanced path resolution and validation.
- */
-export interface StructuredPath {
-  /** The original raw path string */
-  raw: string;
-  /** Parsed structure of the path */
-  structured: {
-    /** Path segments split by separators */
-    segments: string[];
-    /** Variables found in the path */
-    variables?: {
-      /** Special variables like $PROJECTPATH, $HOMEPATH */
-      special?: string[];
-      /** Path variables defined with @path directives */
-      path?: string[];
-    };
-    /** Whether the path is relative to current working directory */
-    cwd?: boolean;
-  };
-  /** Path in normalized form (typically absolute) */
-  normalized?: string;
-  /** Whether this is a variable reference like {{var}} */
-  isVariableReference?: boolean;
-}
 
 /**
  * Context for variable resolution, specifying what types of variables and operations are allowed.
@@ -64,7 +37,7 @@ export interface ResolutionContext {
   strict?: boolean;
 
   /** The state service to use for variable resolution */
-  state: IStateService;
+  state: StateServiceLike;
 }
 
 /**
