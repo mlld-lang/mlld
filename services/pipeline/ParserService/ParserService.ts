@@ -533,15 +533,16 @@ export class ParserService implements IParserService {
       if (this.resolutionClient) {
         try {
           // Convert the node to string format for the client
-          const nodeStr = `{{${node.valueType}.${node.identifier}${node.fields ? '.' + node.fields.map(f => f.name).join('.') : ''}}}`;
+          const nodeStr = `{{${node.valueType}.${node.identifier}${node.fields ? '.' + node.fields.map(f => f.value).join('.') : ''}}}`;
           // Use resolveVariableReference method which is in the interface
           const resolvedStr = await this.resolutionClient.resolveVariableReference(nodeStr, context);
           
           // Return the original node with updated information
+          // Use type assertion since we're adding a property that's not in the interface
           return {
             ...node,
             resolvedValue: resolvedStr
-          };
+          } as IVariableReference & { resolvedValue: string };
         } catch (error) {
           logger.warn('Error using resolutionClient.resolve', { 
             error, 

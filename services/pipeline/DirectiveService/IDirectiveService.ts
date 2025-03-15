@@ -21,6 +21,12 @@ export interface DirectiveContext extends DirectiveContextBase {
   parentState?: StateServiceLike;
   /** Current state for this directive */
   state: StateServiceLike;
+  /** Current file being processed */
+  currentFilePath?: string;
+  /** Working directory for command execution */
+  workingDirectory?: string;
+  /** Resolution context for variable resolution */
+  resolutionContext?: any;
 }
 
 /**
