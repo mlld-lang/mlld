@@ -1,5 +1,6 @@
 import { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
+import { StateServiceLike } from '@services/state/StateService/IStateService.js';
 
 /**
  * Factory for creating resolution contexts appropriate for different directives
@@ -22,7 +23,7 @@ export class ResolutionContextFactory {
         command: true
       },
       allowNested: true,
-      ...(state && { state })
+      state: state as StateServiceLike
     };
   }
 
@@ -40,7 +41,7 @@ export class ResolutionContextFactory {
         command: true
       },
       allowNested: true,
-      ...(state && { state })
+      state: state as StateServiceLike
     };
   }
 
@@ -58,7 +59,7 @@ export class ResolutionContextFactory {
         command: true
       },
       allowNested: false,
-      ...(state && { state })
+      state: state as StateServiceLike
     };
   }
 
@@ -80,7 +81,7 @@ export class ResolutionContextFactory {
         requireAbsolute: true,
         allowedRoots: ResolutionContextFactory.SPECIAL_PATH_VARS
       },
-      ...(state && { state })
+      state: state as StateServiceLike
     };
   }
 
@@ -98,7 +99,7 @@ export class ResolutionContextFactory {
         command: true
       },
       allowNested: true,
-      ...(state && { state })
+      state: state as StateServiceLike
     };
   }
 
@@ -120,7 +121,7 @@ export class ResolutionContextFactory {
         requireAbsolute: true,
         allowedRoots: ResolutionContextFactory.SPECIAL_PATH_VARS
       },
-      ...(state && { state })
+      state: state as StateServiceLike
     };
   }
 
@@ -138,7 +139,7 @@ export class ResolutionContextFactory {
         command: false
       },
       allowNested: false,
-      ...(state && { state })
+      state: state as StateServiceLike
     };
   }
 
@@ -160,7 +161,7 @@ export class ResolutionContextFactory {
         requireAbsolute: true,
         allowedRoots: ResolutionContextFactory.SPECIAL_PATH_VARS
       },
-      ...(state && { state })
+      state: state as StateServiceLike
     };
   }
 } 

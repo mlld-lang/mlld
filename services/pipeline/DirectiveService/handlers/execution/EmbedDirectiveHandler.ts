@@ -445,7 +445,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
                 const resolvedField = await this.resolutionService.resolveFieldAccess(
                   variableName,
                   fieldPath,
-                  resolutionContext as ResolutionContext
+                  resolutionContext
                 );
                 
                 this.logger.debug(`Resolved field access ${variableName}.${fieldPath} to:`, resolvedField);

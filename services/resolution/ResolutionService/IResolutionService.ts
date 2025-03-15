@@ -36,6 +36,9 @@ interface ResolutionContext {
   /** Whether to throw errors on resolution failures (true) or attempt to recover (false) */
   strict?: boolean;
 
+  /** Whether nested variable references are allowed */
+  allowNested?: boolean;
+
   /** The state service to use for variable resolution */
   state: StateServiceLike;
 }
