@@ -47,4 +47,13 @@ export interface IResolutionServiceClient {
    * @returns A promise that resolves to the resolved text
    */
   resolveText(text: string, context: ResolutionContext): Promise<string>;
+  
+  /**
+   * Resolve content from a file path.
+   * 
+   * @param path - The path to the file to read
+   * @returns The file content as a string
+   * @throws {MeldFileSystemError} If the file cannot be read
+   */
+  resolveFile(path: string): Promise<string>;
 } 

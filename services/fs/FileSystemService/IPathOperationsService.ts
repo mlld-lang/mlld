@@ -129,6 +129,16 @@ interface IPathOperationsService {
    * ```
    */
   parse(filePath: string): path.ParsedPath;
+  
+  /**
+   * Resolves a path to its absolute form.
+   * This is an alias for the resolve method to maintain compatibility with IPathServiceClient.
+   * 
+   * @param filePath - The path to resolve
+   * @param baseDir - Optional base directory for relative paths
+   * @returns The resolved absolute path
+   */
+  resolvePath(filePath: string, baseDir?: string): string;
 }
 
 export type { IPathOperationsService }; 

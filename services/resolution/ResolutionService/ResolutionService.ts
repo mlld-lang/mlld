@@ -462,7 +462,6 @@ export class ResolutionService implements IResolutionService {
    * Resolve path variables
    */
   async resolvePath(path: string, context: ResolutionContext): Promise<string> {
-    logger.debug('Resolving path', { path, context });
     const nodes = await this.parseForResolution(path);
     return this.pathResolver.resolve(nodes[0] as DirectiveNode, context);
   }
@@ -1223,5 +1222,31 @@ export class ResolutionService implements IResolutionService {
    */
   getResolutionTracker(): VariableResolutionTracker | undefined {
     return this.resolutionTracker;
+  }
+
+  /**
+   * Check if a path is valid and accessible
+   * @param path - The path to validate
+   * @param context - The resolution context with state and allowed variable types
+   * @returns A promise that resolves to true if the path is valid, false otherwise
+   */
+  async validatePath(path: string, context: ResolutionContextBase): Promise<boolean> {
+    try {
+      // First resolve the path to handle any variables
+      const resolvedPath = await this.resolvePath(path, context as ResolutionContext);
+      
+      // Then validate the resolved path using the PathService
+      await this.pathService.validatePath(resolvedPath, {
+        mustExist: true
+      });
+      
+      return true;
+    } catch (error) {
+      logger.debug('Path validation failed', { 
+        path, 
+        error: (error as Error).message 
+      });
+      return false;
+    }
   }
 } 

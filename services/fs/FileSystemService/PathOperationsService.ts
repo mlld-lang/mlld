@@ -39,4 +39,19 @@ export class PathOperationsService implements IPathOperationsService {
   parse(filePath: string): path.ParsedPath {
     return path.parse(filePath);
   }
+  
+  /**
+   * Resolves a path to its absolute form.
+   * This is an alias for the resolve method to maintain compatibility with IPathServiceClient.
+   * 
+   * @param filePath - The path to resolve
+   * @param baseDir - Optional base directory for relative paths
+   * @returns The resolved absolute path
+   */
+  resolvePath(filePath: string, baseDir?: string): string {
+    if (baseDir) {
+      return this.resolve(baseDir, filePath);
+    }
+    return this.resolve(filePath);
+  }
 } 

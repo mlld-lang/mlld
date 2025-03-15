@@ -44,6 +44,43 @@ export interface StateServiceLike {
   getPathVar(name: string): string | undefined;
   /** Check if a variable with the given name and type exists */
   hasVariable(type: string, name: string): boolean;
+  
+  /** Get all text variables */
+  getAllTextVars(): Map<string, string>;
+  /** Get all data variables */
+  getAllDataVars(): Map<string, unknown>;
+  /** Get all path variables */
+  getAllPathVars(): Map<string, string>;
+  /** Get all commands */
+  getAllCommands(): Map<string, { command: string; options?: Record<string, unknown> }>;
+  
+  /** Enable transformation mode */
+  enableTransformation(options?: boolean | any): void;
+  /** Check if transformation is enabled */
+  isTransformationEnabled(): boolean;
+  /** Get transformation options */
+  getTransformationOptions(): any;
+  /** Get transformed nodes */
+  getTransformedNodes(): any[];
+  /** Set transformed nodes */
+  setTransformedNodes(nodes: any[]): void;
+  /** Transform a node */
+  transformNode(original: any, transformed: any): void;
+  
+  /** Creates a child state that inherits from this state */
+  createChildState(): StateServiceLike;
+  /** Merges changes from a child state into this state */
+  mergeChildState(childState: StateServiceLike): void;
+  /** Creates a deep clone of this state */
+  clone(): StateServiceLike;
+  /** Gets the path of the current file being processed */
+  getCurrentFilePath(): string | null;
+  /** Sets the path of the current file being processed */
+  setCurrentFilePath(path: string): void;
+  /** Gets the AST nodes for the current document */
+  getNodes(): any[];
+  /** Add a node to the current document */
+  addNode(node: any): void;
 }
 
 /**
@@ -63,9 +100,9 @@ export interface FileSystemLike {
  */
 export interface PathServiceLike {
   /** Validate a path */
-  validatePath(path: string): Promise<boolean>;
+  validatePath(path: string | StructuredPath): Promise<string | StructuredPath>;
   /** Resolve a path */
-  resolvePath(path: string): string;
+  resolvePath(path: string | StructuredPath, baseDir?: string): string;
   /** Join path segments */
   joinPaths(...paths: string[]): string;
 }

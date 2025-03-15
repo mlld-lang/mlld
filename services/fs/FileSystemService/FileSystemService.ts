@@ -113,36 +113,36 @@ export class FileSystemService implements IFileSystemService {
   }
 
   /**
-   * Resolves a path using the path service
-   * @private
-   * @param filePath - The path to resolve
-   * @returns The resolved path
+   * Resolves a path to an absolute path
+   * 
+   * @param filePath - Path to resolve
+   * @returns The resolved absolute path
    */
-  private resolvePath(filePath: string): string {
-    // Ensure factory is initialized
-    this.ensureFactoryInitialized();
-    
-    // Use the path client
-    if (this.pathClient) {
-      try {
-        // Only send one parameter since that's what the interface expects
-        return this.pathClient.resolvePath(filePath);
-      } catch (error) {
-        logger.error('Error using pathClient.resolvePath', { 
-          error, 
-          path: filePath 
-        });
-        
-        // For test environments, don't throw to allow tests to work
-        if (process.env.NODE_ENV !== 'test') {
-          throw new MeldError(`Error resolving path: ${filePath}`, { cause: error as Error });
+  resolvePath(filePath: string): string {
+    try {
+      // Use the path client if available
+      if (this.pathClient) {
+        try {
+          return this.pathClient.resolvePath(filePath);
+        } catch (error) {
+          logger.warn('Error using pathClient.resolvePath, falling back to pathOps', { 
+            error: error instanceof Error ? error.message : String(error), 
+            filePath 
+          });
         }
       }
+      
+      // Fall back to path operations service
+      return this.pathOps.resolvePath(filePath);
+    } catch (error) {
+      logger.warn('Error resolving path', {
+        path: filePath,
+        error: error instanceof Error ? error.message : String(error)
+      });
+      
+      // Last resort fallback
+      return filePath;
     }
-    
-    // If we reached here in a test environment, return the path as-is as a fallback
-    logger.warn('No path resolution service available, returning unresolved path', { path: filePath });
-    return filePath;
   }
 
   // File operations
@@ -202,26 +202,53 @@ export class FileSystemService implements IFileSystemService {
   }
 
   async exists(filePath: string): Promise<boolean> {
-    const resolvedPath = this.resolvePath(filePath);
-    
-    const context: FileOperationContext = {
-      operation: 'exists',
-      path: filePath,
-      resolvedPath
-    };
-
     try {
+      const resolvedPath = this.resolvePath(filePath);
+      const context: FileOperationContext = {
+        operation: 'exists',
+        path: resolvedPath
+      };
+      
       logger.debug('Checking if path exists', context);
-      const exists = await this.fs.exists(resolvedPath);
-      logger.debug('Path existence check complete', { ...context, exists });
-      return exists;
+      
+      return await this.fs.exists(resolvedPath);
     } catch (error) {
-      const err = error as Error;
-      logger.error('Failed to check path existence', { ...context, error: err });
-      throw new MeldError(`Failed to check if path exists: ${filePath}`, {
-        cause: err,
-        filePath
+      logger.warn('Error checking if path exists', {
+        path: filePath,
+        error: error instanceof Error ? error.message : String(error)
       });
+      return false;
+    }
+  }
+
+  /**
+   * Checks if a file exists (combines exists and isFile checks)
+   * 
+   * @param filePath - Path to check
+   * @returns A promise that resolves with true if the path exists and is a file, false otherwise
+   */
+  async fileExists(filePath: string): Promise<boolean> {
+    try {
+      const resolvedPath = this.resolvePath(filePath);
+      const context: FileOperationContext = {
+        operation: 'fileExists',
+        path: resolvedPath
+      };
+      
+      logger.debug('Checking if file exists', context);
+      
+      const exists = await this.exists(resolvedPath);
+      if (!exists) {
+        return false;
+      }
+      
+      return await this.isFile(resolvedPath);
+    } catch (error) {
+      logger.warn('Error checking if file exists', {
+        path: filePath,
+        error: error instanceof Error ? error.message : String(error)
+      });
+      return false;
     }
   }
 

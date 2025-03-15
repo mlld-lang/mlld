@@ -1,10 +1,11 @@
-import type { MeldNode, SourceLocation, DirectiveNode } from '@core/syntax/types.js';
+import type { MeldNode, SourceLocation, DirectiveNode } from '@core/syntax/types/index.js';
 import { interpreterLogger as logger } from '@core/utils/logger.js';
 import type { IInterpreterService, InterpreterOptions } from '@services/pipeline/InterpreterService/IInterpreterService.js';
 import type { DirectiveServiceLike, StateServiceLike, InterpreterServiceLike } from '@core/shared-service-types.js';
 import { MeldInterpreterError, type InterpreterLocation } from '@core/errors/MeldInterpreterError.js';
 import { MeldError, ErrorSeverity } from '@core/errors/MeldError.js';
 import { StateVariableCopier } from '@services/state/utilities/StateVariableCopier.js';
+import type { IStateService } from '@services/state/StateService/IStateService.js';
 import { Service } from '@core/ServiceProvider.js';
 import { inject, injectable, delay, container } from 'tsyringe';
 import { DirectiveServiceClientFactory } from '@services/pipeline/DirectiveService/factories/DirectiveServiceClientFactory.js';
@@ -499,11 +500,15 @@ export class InterpreterService implements IInterpreterService, InterpreterServi
                 logger.debug('Import directive in transformation mode, copying variables to original state');
                 
                 // Use the state variable copier utility to copy all variables
-                this.stateVariableCopier.copyAllVariables(currentState, originalState, {
-                  skipExisting: false,
-                  trackContextBoundary: false, // No tracking service in the interpreter
-                  trackVariableCrossing: false
-                });
+                this.stateVariableCopier.copyAllVariables(
+                  currentState as unknown as IStateService, 
+                  originalState as unknown as IStateService, 
+                  {
+                    skipExisting: false,
+                    trackContextBoundary: false, // No tracking service in the interpreter
+                    trackVariableCrossing: false
+                  }
+                );
               } catch (e) {
                 logger.debug('Error copying variables from import to original state', { error: e });
               }

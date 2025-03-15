@@ -1,6 +1,11 @@
 import '@core/di-config.js';
 import * as path from 'path';
 import { resolveService, registerServiceInstance } from '@core/ServiceProvider.js';
+import type { MeldNode } from '@core/syntax/types/index.js';
+import type { StateServiceLike, ResolutionServiceLike } from '@core/shared-service-types.js';
+import type { IStateService } from '@services/state/StateService/IStateService.js';
+import { FileSystemService } from '@services/fs/FileSystemService/FileSystemService.js';
+import { PathService } from '@services/fs/PathService/PathService.js';
 
 // Core services (implementation classes - keep as regular exports)
 export * from '@services/pipeline/InterpreterService/InterpreterService.js';
@@ -39,8 +44,6 @@ import { StateService } from '@services/state/StateService/StateService.js';
 import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService.js';
 import { DirectiveService } from '@services/pipeline/DirectiveService/DirectiveService.js';
 import { ValidationService } from '@services/resolution/ValidationService/ValidationService.js';
-import { PathService } from '@services/fs/PathService/PathService.js';
-import { FileSystemService } from '@services/fs/FileSystemService/FileSystemService.js';
 import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService.js';
 import { OutputService } from '@services/pipeline/OutputService/OutputService.js';
 import { CircularityService } from '@services/resolution/CircularityService/CircularityService.js';
@@ -154,6 +157,24 @@ export function createDefaultServices(options: ProcessOptions): Services & Requi
 
   // Validate the service pipeline
   validateServicePipeline(services);
+
+  // Register services with the container
+  registerServiceInstance('IFileSystemService', services.filesystem);
+  registerServiceInstance('IPathService', services.path);
+  registerServiceInstance('IStateService', services.state);
+  registerServiceInstance('IStateEventService', services.eventService);
+  registerServiceInstance('IParserService', services.parser);
+  registerServiceInstance('IInterpreterService', services.interpreter);
+  registerServiceInstance('IDirectiveService', services.directive);
+  registerServiceInstance('IOutputService', services.output);
+  registerServiceInstance('IValidationService', services.validation);
+  registerServiceInstance('ICircularityService', services.circularity);
+  registerServiceInstance('IResolutionService', services.resolution as unknown as ResolutionServiceLike);
+  
+  if (services.debug) {
+    // Register debug service with the container
+    registerServiceInstance('IStateDebuggerService', services.debug);
+  }
 
   return services;
 }
@@ -395,7 +416,8 @@ export async function main(filePath: string, options: ProcessOptions = {}): Prom
       : ast;
     
     // Convert to desired format using the updated state
-    let converted = await services.output.convert(nodesToProcess, resultState, options.format || 'xml');
+    // Cast resultState to IStateService since it has all the required methods but TypeScript doesn't recognize it
+    let converted = await services.output.convert(nodesToProcess, resultState as unknown as IStateService, options.format || 'xml');
     
     // Post-process the output in transformation mode to fix formatting issues
     if (resultState.isTransformationEnabled()) {

@@ -1,23 +1,25 @@
+import { injectable, singleton, container, inject } from 'tsyringe';
+import { Service } from '@core/ServiceProvider.js';
+import { parserLogger as logger } from '@core/utils/logger.js';
+import { MeldParseError } from '@core/errors/MeldParseError.js';
+import { ErrorSeverity } from '@core/errors/MeldError.js';
+import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientFactory.js';
+import type { IResolutionServiceClient } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClient.js';
+import type { MeldNode } from '@core/syntax/types/index.js';
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 import type { 
-  MeldNode, 
   CodeFenceNode, 
   TextNode,
   DirectiveNode,
-  VariableReferenceNode 
-} from '@core/syntax/types.js';
+  DirectiveKind,
+  SourceLocation,
+  Position
+} from '@core/syntax/types/index.js';
 import { parse } from '@core/ast/index.js';  // Import the parse function directly
-import { parserLogger as logger } from '@core/utils/logger.js';
-import { MeldParseError } from '@core/errors/MeldParseError.js';
-import type { Location, Position } from '@core/types/index.js';
+import type { Location } from '@core/types/index.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import type { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
-import { injectable, inject } from 'tsyringe';
-import { Service } from '@core/ServiceProvider.js';
-import { container } from 'tsyringe';
-import type { IResolutionServiceClient } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClient.js';
-import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientFactory.js';
 import { VariableNodeFactory } from '@core/syntax/types/factories/VariableNodeFactory.js';
 
 // Define our own ParseError type since it's not exported from meld-ast
@@ -353,6 +355,45 @@ export class ParserService implements IParserService {
 
   public async parse(content: string, filePath?: string): Promise<MeldNode[]> {
     return this.parseContent(content, filePath);
+  }
+
+  /**
+   * Parse a string into AST nodes (alias for parse to match ParserServiceLike interface)
+   * 
+   * @param content - The content to parse
+   * @param options - Optional parsing options
+   * @returns A promise that resolves with the parsed AST nodes
+   */
+  public async parseString(content: string, options?: { filePath?: string }): Promise<MeldNode[]> {
+    return this.parse(content, options?.filePath);
+  }
+
+  /**
+   * Parse a file into AST nodes
+   * 
+   * @param filePath - The path to the file to parse
+   * @returns A promise that resolves with the parsed AST nodes
+   */
+  public async parseFile(filePath: string): Promise<MeldNode[]> {
+    try {
+      // Use the resolution client to read the file
+      this.ensureFactoryInitialized();
+      
+      if (this.resolutionClient) {
+        const content = await this.resolutionClient.resolveFile(filePath);
+        return this.parse(content, filePath);
+      }
+      
+      // If no resolution client, throw an error
+      throw new MeldParseError(`Cannot parse file: ${filePath} - No file resolution service available`);
+    } catch (error) {
+      throw new MeldParseError(
+        `Failed to parse file: ${filePath}`, 
+        {
+          details: { error: error instanceof Error ? error.message : String(error) }
+        }
+      );
+    }
   }
 
   public async parseWithLocations(content: string, filePath?: string): Promise<MeldNode[]> {

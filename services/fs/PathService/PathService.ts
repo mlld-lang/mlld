@@ -1,11 +1,12 @@
-import type { IPathService, PathOptions, StructuredPath } from '@services/fs/PathService/IPathService.js';
+import type { IPathService, PathOptions } from '@services/fs/PathService/IPathService.js';
+import type { StructuredPath } from '@core/shared-service-types.js';
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import { PathValidationError, PathErrorCode, PathValidationErrorDetails } from '@services/fs/PathService/errors/PathValidationError.js';
 import { ProjectPathResolver } from '@services/fs/ProjectPathResolver.js';
 import type { Location } from '@core/types/index.js';
 import * as path from 'path';
 import * as os from 'os';
-import type { MeldNode } from '@core/syntax/types.js';
+import type { MeldNode } from '@core/syntax/types/index.js';
 import { 
   MeldError 
 } from '@core/errors/MeldError.js';
