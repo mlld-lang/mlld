@@ -1,4 +1,4 @@
-import type { DirectiveNode, DirectiveKind, DirectiveData } from '@core/syntax/types.js';
+import type { DirectiveNode, DirectiveKind, DirectiveData } from '@core/syntax/types/index.js';
 import { directiveLogger } from '@core/utils/logger.js';
 import { IDirectiveService, IDirectiveHandler, DirectiveContext } from '@services/pipeline/DirectiveService/IDirectiveService.js';
 import type { 

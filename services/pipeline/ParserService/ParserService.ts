@@ -15,6 +15,7 @@ import type {
   SourceLocation,
   Position
 } from '@core/syntax/types/index.js';
+import type { IVariableReference } from '@core/syntax/types/interfaces/IVariableReference.js';
 import { parse } from '@core/ast/index.js';  // Import the parse function directly
 import type { Location } from '@core/types/index.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
@@ -389,8 +390,10 @@ export class ParserService implements IParserService {
     } catch (error) {
       throw new MeldParseError(
         `Failed to parse file: ${filePath}`, 
+        undefined,
         {
-          details: { error: error instanceof Error ? error.message : String(error) }
+          cause: error instanceof Error ? error : new Error(String(error)),
+          context: { error: error instanceof Error ? error.message : String(error) }
         }
       );
     }
@@ -433,7 +436,7 @@ export class ParserService implements IParserService {
   /**
    * Check if a node is a variable reference node using the factory
    */
-  private isVariableReferenceNode(node: any): node is VariableReferenceNode {
+  private isVariableReferenceNode(node: any): node is IVariableReference {
     if (this.variableNodeFactory) {
       return this.variableNodeFactory.isVariableReferenceNode(node);
     }
@@ -516,12 +519,12 @@ export class ParserService implements IParserService {
   }
 
   /**
-   * Resolves a variable reference node using the resolution service
+   * Resolve a variable reference node
    * @param node - The variable reference node to resolve
    * @param context - The resolution context
    * @returns The resolved node
    */
-  async resolveVariableReference(node: VariableReferenceNode, context: ResolutionContext): Promise<VariableReferenceNode> {
+  async resolveVariableReference(node: IVariableReference, context: ResolutionContext): Promise<IVariableReference> {
     try {
       // Ensure factory is initialized
       this.ensureFactoryInitialized();
@@ -529,8 +532,16 @@ export class ParserService implements IParserService {
       // Try to use the resolution client
       if (this.resolutionClient) {
         try {
+          // Convert the node to string format for the client
+          const nodeStr = `{{${node.valueType}.${node.identifier}${node.fields ? '.' + node.fields.map(f => f.name).join('.') : ''}}}`;
           // Use resolveVariableReference method which is in the interface
-          return await this.resolutionClient.resolveVariableReference(node, context);
+          const resolvedStr = await this.resolutionClient.resolveVariableReference(nodeStr, context);
+          
+          // Return the original node with updated information
+          return {
+            ...node,
+            resolvedValue: resolvedStr
+          };
         } catch (error) {
           logger.warn('Error using resolutionClient.resolve', { 
             error, 
