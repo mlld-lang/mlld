@@ -1,87 +1,112 @@
-// Import types from their source files
-import {
-  MeldNode,
-  DirectiveNode,
-  TextNode,
-  CodeFenceNode,
-  VariableNode,
-  ErrorNode,
-  CommentNode,
-  NodeType,
-  SourceLocation,
-  DirectiveData
-} from '@core/syntax/types/nodes.js';
-import { DirectiveKind, CommandDefinition, CommandMetadata, RiskLevel } from '@core/syntax/types/directives.js';
-import { MultiLineBlock } from '@core/syntax/types/syntax.js';
-import { Parser, ParserTestCase } from '@core/syntax/types/parser.js';
-import {
-  ValidationError,
-  ValidationContext,
-  ValidationResult,
-  Example
-} from '@core/syntax/types/validation.js';
-import {
+// First, export our new interfaces and factories
+export * from './interfaces/index.js';
+export * from './factories/index.js';
+
+// Then export legacy functions and backward compatibility types
+export * from './legacy/index.js';
+
+// Temporary re-export of existing types for backward compatibility
+export * from './directives.js';
+export * from './syntax.js';
+export * from './schema.js';
+export * from './parser.js';
+export * from './validation.js';
+export * from './test-fixtures.js';
+
+// Import interfaces for type aliases
+import { INode } from './interfaces/INode.js';
+import { IDirectiveNode, DirectiveData as IDirectiveData, DirectiveKind } from './interfaces/IDirectiveNode.js';
+import { ITextNode } from './interfaces/ITextNode.js';
+import { ICodeFenceNode } from './interfaces/ICodeFenceNode.js';
+import { ICommentNode } from './interfaces/ICommentNode.js';
+import { IErrorNode } from './interfaces/IErrorNode.js';
+import { 
+  IVariableReference, 
   VariableType,
   Field,
-  VariableReferenceNode,
   FormatOperator,
-  isVariableReferenceNode,
-  isValidFieldArray,
-  createVariableReferenceNode,
   SPECIAL_PATH_VARS,
   ENV_VAR_PREFIX,
-  VAR_PATTERNS,
-  // Legacy variable node types have been removed
-} from '@core/syntax/types/variables.js';
+  VAR_PATTERNS
+} from './interfaces/IVariableReference.js';
+import { NodeType, SourceLocation, Position } from './interfaces/common.js';
 
-// Re-export all imported types
+// Import legacy functions for re-export
+import { 
+  createVariableReferenceNode,
+  isVariableReferenceNode,
+  isValidFieldArray
+} from './legacy/variables.js';
+import {
+  createDirectiveNode,
+  isDirectiveNode,
+  createTextNode,
+  isTextNode,
+  createCodeFenceNode,
+  isCodeFenceNode,
+  createCommentNode,
+  isCommentNode,
+  createErrorNode,
+  isErrorNode,
+  createNode,
+  isDirective,
+  isText,
+  isCodeFence,
+  isComment,
+  isError
+} from './legacy/nodes.js';
+
+// Define type aliases for backward compatibility
+export type MeldNode = INode;
+export type DirectiveNode = IDirectiveNode;
+export type TextNode = ITextNode;
+export type CodeFenceNode = ICodeFenceNode;
+export type CommentNode = ICommentNode;
+export type ErrorNode = IErrorNode;
+export type VariableReferenceNode = IVariableReference;
+export type VariableNode = IVariableReference; // Legacy alias for backward compatibility
+export type DirectiveData = IDirectiveData;
+
+// Re-export core types
 export {
   // Core node types
-  MeldNode,
-  DirectiveNode,
-  TextNode,
-  CodeFenceNode,
-  VariableNode, // Deprecated but kept for backward compatibility
-  ErrorNode,
-  CommentNode,
   NodeType,
-  // Important supporting types
   SourceLocation,
-  DirectiveData,
+  Position,
   DirectiveKind,
-  MultiLineBlock,
+  
   // Variable types
   VariableType,
   Field,
-  VariableReferenceNode,
   FormatOperator,
-  // Legacy variable node types removed (consolidated into VariableReferenceNode)
-  // Variable utilities
-  isVariableReferenceNode,
-  isValidFieldArray,
-  createVariableReferenceNode,
+  
+  // Variable constants
   SPECIAL_PATH_VARS,
   ENV_VAR_PREFIX,
   VAR_PATTERNS,
-  // Command types
-  CommandDefinition,
-  CommandMetadata,
-  RiskLevel,
-  // Parser types
-  Parser,
-  ParserTestCase,
-  // Validation types
-  ValidationError,
-  ValidationContext,
-  ValidationResult,
-  Example
-};
-
-// Export other types
-export * from './directives';
-export * from './syntax';
-export * from './schema';
-export * from './variables';
-export * from './parser';
-export * from './validation';
-export * from './test-fixtures'; 
+  
+  // Legacy node creation functions
+  createNode,
+  createDirectiveNode,
+  createTextNode,
+  createCodeFenceNode,
+  createCommentNode,
+  createErrorNode,
+  createVariableReferenceNode,
+  
+  // Legacy type guards
+  isDirectiveNode,
+  isTextNode,
+  isCodeFenceNode,
+  isCommentNode,
+  isErrorNode,
+  isVariableReferenceNode,
+  isValidFieldArray,
+  
+  // Simple type guards
+  isDirective,
+  isText,
+  isCodeFence,
+  isComment,
+  isError
+}; 

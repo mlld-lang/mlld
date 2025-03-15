@@ -48,6 +48,15 @@ import {
   cliLogger,
   embedLogger
 } from '@core/utils/logger.js';
+
+// Import AST factory classes
+import { NodeFactory } from '@core/syntax/types/factories/NodeFactory.js';
+import { VariableNodeFactory } from '@core/syntax/types/factories/VariableNodeFactory.js';
+import { DirectiveNodeFactory } from '@core/syntax/types/factories/DirectiveNodeFactory.js';
+import { TextNodeFactory } from '@core/syntax/types/factories/TextNodeFactory.js';
+import { CodeFenceNodeFactory } from '@core/syntax/types/factories/CodeFenceNodeFactory.js';
+import { CommentNodeFactory } from '@core/syntax/types/factories/CommentNodeFactory.js';
+import { ErrorNodeFactory } from '@core/syntax/types/factories/ErrorNodeFactory.js';
 import { Logger, fsLogger } from '@core/utils/simpleLogger.js';
 
 /**
@@ -126,6 +135,15 @@ container.register('ParserServiceClientFactory', { useClass: ParserServiceClient
 container.register('ResolutionServiceClientFactory', { useClass: ResolutionServiceClientFactory });
 container.register('VariableReferenceResolverClientFactory', { useClass: VariableReferenceResolverClientFactory });
 container.register('VariableReferenceResolverFactory', { useClass: VariableReferenceResolverFactory });
+
+// Register AST factory classes
+container.register(NodeFactory, { useClass: NodeFactory });
+container.register(VariableNodeFactory, { useClass: VariableNodeFactory });
+container.register(DirectiveNodeFactory, { useClass: DirectiveNodeFactory });
+container.register(TextNodeFactory, { useClass: TextNodeFactory });
+container.register(CodeFenceNodeFactory, { useClass: CodeFenceNodeFactory });
+container.register(CommentNodeFactory, { useClass: CommentNodeFactory });
+container.register(ErrorNodeFactory, { useClass: ErrorNodeFactory });
 container.register('DirectiveServiceClientFactory', { useClass: DirectiveServiceClientFactory });
 container.register('ResolutionServiceClientForDirectiveFactory', { useClass: ResolutionServiceClientForDirectiveFactory });
 container.register('StateServiceClientFactory', { useClass: StateServiceClientFactory });
