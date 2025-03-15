@@ -1,4 +1,4 @@
-import type { MeldNode } from '@core/syntax/types.js';
+import type { MeldNode } from '@core/syntax/types/index.js';
 import type { DirectiveServiceLike, StateServiceLike } from '@core/shared-service-types.js';
 import type { MeldError } from '@core/errors/MeldError.js';
 

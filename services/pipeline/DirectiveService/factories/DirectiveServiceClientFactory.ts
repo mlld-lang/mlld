@@ -49,7 +49,14 @@ export class DirectiveServiceClientFactory implements ClientFactory<IDirectiveSe
       },
       
       getSupportedDirectives: () => {
-        return this.getDirectiveService().getSupportedDirectives();
+        // Cast to IDirectiveService to access the getSupportedDirectives method
+        // which is not part of the DirectiveServiceLike interface
+        const service = this.getDirectiveService() as IDirectiveService;
+        if (typeof service.getSupportedDirectives === 'function') {
+          return service.getSupportedDirectives();
+        }
+        // Fallback to empty array if method doesn't exist
+        return [];
       },
       
       handleDirective: (node, context) => {
