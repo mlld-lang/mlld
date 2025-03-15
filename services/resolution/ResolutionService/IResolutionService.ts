@@ -221,7 +221,7 @@ interface IResolutionService {
    * @returns The resolved field value
    * @throws {MeldResolutionError} If field access fails
    */
-  resolveFieldAccess(variableName: string, fieldPath: string, context: ResolutionContext): Promise<any>;
+  resolveFieldAccess(variableName: string, fieldPath: string, context?: ResolutionContext): Promise<any>;
 
   /**
    * Validate that resolution is allowed in the given context.

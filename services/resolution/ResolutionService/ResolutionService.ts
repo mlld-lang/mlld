@@ -1261,7 +1261,7 @@ export class ResolutionService implements IResolutionService {
    * @returns The resolved field value
    * @throws {MeldResolutionError} If field access fails
    */
-  async resolveFieldAccess(variableName: string, fieldPath: string, context: ResolutionContext): Promise<any> {
+  async resolveFieldAccess(variableName: string, fieldPath: string, context?: ResolutionContext): Promise<any> {
     logger.debug(`Resolving field access: ${variableName}.${fieldPath}`);
     
     if (!context || !context.state) {

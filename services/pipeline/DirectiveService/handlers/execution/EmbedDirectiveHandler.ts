@@ -442,10 +442,19 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
               if (baseVariable !== undefined) {
                 // Directly resolve the field access using ResolutionService's resolveFieldAccess
                 // This properly handles array indices, nested objects, etc.
+                // Create a properly typed context to avoid TypeScript declaration issues
+                const typedContext: ResolutionContext = {
+                  currentFilePath: resolutionContext.currentFilePath,
+                  allowedVariableTypes: resolutionContext.allowedVariableTypes,
+                  allowNested: resolutionContext.allowNested,
+                  pathValidation: resolutionContext.pathValidation,
+                  state: resolutionContext.state
+                };
+                
                 const resolvedField = await this.resolutionService.resolveFieldAccess(
                   variableName,
                   fieldPath,
-                  resolutionContext
+                  typedContext
                 );
                 
                 this.logger.debug(`Resolved field access ${variableName}.${fieldPath} to:`, resolvedField);
@@ -620,9 +629,18 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
        * If a section parameter is provided, extract only that section from the content.
        */
       if (section) {
+        // Create a properly typed context to avoid TypeScript declaration issues
+        const typedContextForSection: ResolutionContext = {
+          currentFilePath: resolutionContext.currentFilePath,
+          allowedVariableTypes: resolutionContext.allowedVariableTypes,
+          allowNested: resolutionContext.allowNested,
+          pathValidation: resolutionContext.pathValidation,
+          state: resolutionContext.state
+        };
+        
         const sectionName = await this.resolutionService.resolveInContext(
           section,
-          resolutionContext
+          typedContextForSection
         );
         
         try {
@@ -669,9 +687,18 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
       // Wrap under header if specified
       if (underHeader) {
         try {
+          // Create a properly typed context to avoid TypeScript declaration issues
+          const typedContextForHeader: ResolutionContext = {
+            currentFilePath: resolutionContext.currentFilePath,
+            allowedVariableTypes: resolutionContext.allowedVariableTypes,
+            allowNested: resolutionContext.allowNested,
+            pathValidation: resolutionContext.pathValidation,
+            state: resolutionContext.state
+          };
+          
           const resolvedHeader = await this.resolutionService.resolveInContext(
             underHeader,
-            resolutionContext
+            typedContextForHeader
           );
           content = this.wrapUnderHeader(content, resolvedHeader);
         } catch (error: unknown) {
