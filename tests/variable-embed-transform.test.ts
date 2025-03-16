@@ -180,9 +180,13 @@ describe('Variable-based Embed Transformation Tests', () => {
       format: 'md'
     });
 
-    // Verify the result contains the resolved value (formatted nicely)
+    // Verify the result contains the resolved value as properly formatted JSON
     expect(result).toContain('## Shopping List');
-    expect(result).toContain('apple, banana, orange');
+    
+    // In output-literal mode, arrays are formatted as JSON rather than comma-separated values
+    expect(result).toContain('"apple"');
+    expect(result).toContain('"banana"');
+    expect(result).toContain('"orange"');
     expect(result).not.toContain('@embed');
     expect(result).not.toContain('{{items}}');
   });

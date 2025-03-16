@@ -48,7 +48,8 @@ describe('Embed Directive Transformation E2E', () => {
     });
 
     // Expected behavior: embed directive should be replaced with the section content only
-    expect(result.trim()).toBe('# Section Two\nContent two');
+    // In output-literal mode, exact formatting is preserved, including blank lines
+    expect(result.trim()).toBe('# Section Two\n\nContent two');
     expect(result).not.toContain('@embed');
     expect(result).not.toContain('[directive output placeholder]');
   });

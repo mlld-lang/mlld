@@ -268,14 +268,20 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
     if (context?.formattingContext) {
       Object.assign(formattingMetadata, {
         contextType: context.formattingContext.contextType,
-        isOutputLiteral: context.formattingContext.isOutputLiteral,
+        isOutputLiteral: context.formattingContext.isOutputLiteral ?? context.formattingContext.transformationMode,
+        transformationMode: context.formattingContext.transformationMode,
+        preserveFormatting: context.formattingContext.preserveFormatting ?? true,
         // Add any other formatting context properties
-        nodeType: context.formattingContext.nodeType || originalNode.type
+        nodeType: context.formattingContext.nodeType || originalNode.type,
+        // Include parent context for proper inheritance
+        parentContext: context.formattingContext
       });
       
       this.logger.debug('Added formatting context to replacement node', {
         contextType: formattingMetadata.contextType,
         isOutputLiteral: formattingMetadata.isOutputLiteral,
+        transformationMode: formattingMetadata.transformationMode,
+        preserveFormatting: formattingMetadata.preserveFormatting,
         nodeType: formattingMetadata.nodeType
       });
     }

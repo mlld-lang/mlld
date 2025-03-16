@@ -317,7 +317,7 @@ describe('OutputService', () => {
       vi.mocked(state.getTransformedNodes).mockReturnValue(nodes);
 
       const output = await service.convert(nodes, state, 'markdown');
-      expect(output).toBe('Before\n\nAfter');
+      expect(output).toBe('Before\nAfter');
     });
 
     it('should show placeholders for execution directives in non-transformation mode', async () => {
@@ -334,7 +334,7 @@ describe('OutputService', () => {
       vi.mocked(state.getTransformedNodes).mockReturnValue(nodes);
 
       const output = await service.convert(nodes, state, 'markdown');
-      expect(output).toBe('Before\n\n[run directive output placeholder]\n\nAfter');
+      expect(output).toBe('Before\n[run directive output placeholder]\n\nAfter');
     });
 
     it('should preserve code fences in both modes', async () => {

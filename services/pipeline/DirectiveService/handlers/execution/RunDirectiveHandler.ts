@@ -77,10 +77,30 @@ export class RunDirectiveHandler implements IDirectiveHandler {
         // In transformation mode, return a replacement node with the command output
         if (clonedState.isTransformationEnabled()) {
           const content = stdout && stderr ? `${stdout}\n${stderr}` : stdout || stderr || '';
+          
+          // Create replacement node with proper formatting metadata
+          const formattingMetadata = {
+            isFromDirective: true,
+            originalNodeType: node.type,
+            preserveFormatting: true,
+            isOutputLiteral: true,
+            transformationMode: true
+          };
+          
+          // If we have formatting context from the original context, incorporate it
+          if (context.formattingContext) {
+            Object.assign(formattingMetadata, {
+              contextType: context.formattingContext.contextType,
+              nodeType: context.formattingContext.nodeType || node.type,
+              parentContext: context.formattingContext
+            });
+          }
+          
           const replacement: TextNode = {
             type: 'Text',
             content,
-            location: node.location
+            location: node.location,
+            formattingMetadata
           };
           
           // Copy variables from cloned state to context state
@@ -98,10 +118,26 @@ export class RunDirectiveHandler implements IDirectiveHandler {
         }
 
         // In normal mode, return a placeholder node
+        // Still include formatting metadata for consistency
+        const formattingMetadata = {
+          isFromDirective: true,
+          originalNodeType: node.type,
+          preserveFormatting: false  // Not preserving in standard mode
+        };
+        
+        // If we have formatting context, include it
+        if (context.formattingContext) {
+          Object.assign(formattingMetadata, {
+            contextType: context.formattingContext.contextType,
+            nodeType: context.formattingContext.nodeType || node.type
+          });
+        }
+        
         const placeholder: TextNode = {
           type: 'Text',
           content: '[run directive output placeholder]',
-          location: node.location
+          location: node.location,
+          formattingMetadata
         };
         return { state: clonedState, replacement: placeholder };
       } catch (error) {

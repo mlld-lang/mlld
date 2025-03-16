@@ -57,6 +57,8 @@ interface FormattingContext {
   specialMarkdown?: 'list' | 'table' | 'code' | 'heading';
   /** Parent context for inheriting properties */
   parentContext?: FormattingContext;
+  /** Whether to preserve exact formatting (including all newlines) */
+  preserveFormatting?: boolean;
 }
 
 /**
@@ -659,7 +661,8 @@ export class OutputService implements IOutputService {
       atLineStart: true,
       atLineEnd: false,
       indentation: '',
-      lastOutputEndedWithNewline: false
+      lastOutputEndedWithNewline: false,
+      preserveFormatting: transformationMode // In output-literal mode, preserve formatting by default
     };
   }
 
@@ -680,7 +683,8 @@ export class OutputService implements IOutputService {
       indentation: parentContext.indentation,
       lastOutputEndedWithNewline: parentContext.lastOutputEndedWithNewline,
       specialMarkdown: parentContext.specialMarkdown,
-      parentContext: parentContext
+      parentContext: parentContext,
+      preserveFormatting: parentContext.preserveFormatting
     };
   }
 
@@ -739,40 +743,48 @@ export class OutputService implements IOutputService {
       lastOutputEndedWithNewline: context.lastOutputEndedWithNewline
     });
     
-    // In output-literal mode (previously called transformation mode), apply consistent newline normalization
-    if (context.transformationMode) {
-      let processedContent = content;
-      
-      // In output-literal mode, we normalize:
-      // 1. Multiple consecutive newlines to a single newline
-      const multipleNewlinesBefore = (processedContent.match(/\n{2,}/g) || []).length;
-      processedContent = processedContent.replace(/\n{2,}/g, '\n');
-      const multipleNewlinesAfter = (processedContent.match(/\n{2,}/g) || []).length;
-      
-      // 2. Colon-newline sequences are normalized to "colon-space"
-      const colonNewlinesBefore = (processedContent.match(/(\w+):\n(\w+)/g) || []).length;
-      processedContent = processedContent.replace(/(\w+):\n(\w+)/g, '$1: $2');
-      const colonNewlinesAfter = (processedContent.match(/(\w+):\n(\w+)/g) || []).length;
-      
-      // 3. Comma-newline sequences are normalized to "comma-space"
-      const commaNewlinesBefore = (processedContent.match(/(\w+),\n(\w+)/g) || []).length;
-      processedContent = processedContent.replace(/(\w+),\n(\w+)/g, '$1, $2');
-      const commaNewlinesAfter = (processedContent.match(/(\w+),\n(\w+)/g) || []).length;
-      
-      // Log transformations
-      logger.debug('Output-literal mode newline transformations', {
-        multipleNewlinesBefore,
-        multipleNewlinesAfter,
-        colonNewlinesBefore,
-        colonNewlinesAfter,
-        commaNewlinesBefore,
-        commaNewlinesAfter,
-        contentLengthBefore: content.length,
-        contentLengthAfter: processedContent.length
+    // In output-literal mode, preserve EXACTLY as is with NO modifications
+    if (context.isOutputLiteral ?? context.transformationMode) {
+      // Return content unchanged for true output-literal behavior
+      logger.debug('Output-literal mode: preserving content exactly as is', {
+        contentLength: content.length
       });
-      
-      return processedContent;
+      return content;
     }
+    
+    // Only apply normalization in output-normalized mode (standard mode)
+    let processedContent = content;
+    
+    // In standard mode, apply normalizations:
+    
+    // 1. Colon-newline sequences are normalized to "colon-space"
+    const colonNewlinesBefore = (processedContent.match(/(\w+):\n(\w+)/g) || []).length;
+    processedContent = processedContent.replace(/(\w+):\n(\w+)/g, '$1: $2');
+    const colonNewlinesAfter = (processedContent.match(/(\w+):\n(\w+)/g) || []).length;
+    
+    // 2. Comma-newline sequences are normalized to "comma-space"
+    const commaNewlinesBefore = (processedContent.match(/(\w+),\n(\w+)/g) || []).length;
+    processedContent = processedContent.replace(/(\w+),\n(\w+)/g, '$1, $2');
+    const commaNewlinesAfter = (processedContent.match(/(\w+),\n(\w+)/g) || []).length;
+    
+    // 3. Multiple consecutive newlines to a maximum of two
+    const multipleNewlinesBefore = (processedContent.match(/\n{3,}/g) || []).length;
+    processedContent = processedContent.replace(/\n{3,}/g, '\n\n');
+    const multipleNewlinesAfter = (processedContent.match(/\n{3,}/g) || []).length;
+    
+    // Log transformations
+    logger.debug('Standard mode newline transformations', {
+      multipleNewlinesBefore,
+      multipleNewlinesAfter,
+      colonNewlinesBefore,
+      colonNewlinesAfter,
+      commaNewlinesBefore,
+      commaNewlinesAfter,
+      contentLengthBefore: content.length,
+      contentLengthAfter: processedContent.length
+    });
+    
+    return processedContent;
     
     // In output-normalized mode (previously called standard mode), normalize newlines based on context
     if (context.contextType === 'block') {
@@ -886,7 +898,9 @@ export class OutputService implements IOutputService {
                 isBlock: context.contextType === 'block',
                 nodeType: context.nodeType,
                 linePosition: context.atLineStart ? 'start' : (context.atLineEnd ? 'end' : 'middle'),
-                isTransformation: context.transformationMode
+                isTransformation: context.transformationMode,
+                isOutputLiteral: context.isOutputLiteral ?? context.transformationMode,
+                preserveFormatting: context.preserveFormatting ?? (context.isOutputLiteral ?? context.transformationMode)
               }
             };
             
@@ -1000,11 +1014,35 @@ export class OutputService implements IOutputService {
       // Enhanced formatting options with complete context awareness
       const formatOptions = {
         pretty: context.contextType === 'block',
-        preserveType: false,
+        preserveType: false, // Convert to string for output
         context: context.contextType,
         // Include special markdown context if applicable
-        specialMarkdown: context.specialMarkdown
+        specialMarkdown: context.specialMarkdown,
+        // Add output-literal mode information
+        isOutputLiteral: context.isOutputLiteral ?? context.transformationMode,
+        preserveFormatting: context.preserveFormatting ?? (context.isOutputLiteral ?? context.transformationMode)
       };
+      
+      // In output-literal mode, handle objects and arrays specially to maintain consistency
+      if ((context.isOutputLiteral ?? context.transformationMode) && typeof value === 'object' && value !== null) {
+        logger.debug('Processing object/array in output-literal mode', {
+          varName,
+          isArray: Array.isArray(value),
+          fieldPath,
+          contextType: context.contextType
+        });
+        
+        // For objects and arrays in output-literal mode, use JSON.stringify with consistent formatting
+        try {
+          return JSON.stringify(value, null, 2);
+        } catch (error) {
+          logger.warn('Error stringifying object in output-literal mode', { 
+            error: error instanceof Error ? error.message : String(error),
+            fallback: 'using fieldAccessHandler'
+          });
+          // Fall back to standard conversion if stringify fails
+        }
+      }
       
       return this.fieldAccessHandler.convertToString(value, formatOptions);
     } catch (error) {
@@ -1049,7 +1087,9 @@ export class OutputService implements IOutputService {
         nodeType: 'Text', // Default to Text node
         linePosition: 'middle', // Default to middle of line
         // Use new isOutputLiteral terminology, but keep backward compatibility with transformationMode
-        isTransformation: currentContext.isOutputLiteral ?? currentContext.transformationMode
+        isTransformation: currentContext.isOutputLiteral ?? currentContext.transformationMode,
+        isOutputLiteral: currentContext.isOutputLiteral ?? currentContext.transformationMode,
+        preserveFormatting: currentContext.preserveFormatting ?? (currentContext.isOutputLiteral ?? currentContext.transformationMode)
       }
     };
     
@@ -1090,7 +1130,8 @@ export class OutputService implements IOutputService {
       atLineEnd: currentContext.atLineEnd,
       indentation: currentContext.indentation,
       lastOutputEndedWithNewline: currentContext.lastOutputEndedWithNewline,
-      specialMarkdown: formatOptions?.specialMarkdown as any
+      specialMarkdown: formatOptions?.specialMarkdown as any,
+      preserveFormatting: currentContext.preserveFormatting ?? (currentContext.isOutputLiteral ?? currentContext.transformationMode)
     };
     
     // Use our specialized formatters based on value type
@@ -1207,10 +1248,10 @@ export class OutputService implements IOutputService {
         }
       }
 
-      // Transformation mode handling 
-      // In transformation mode, we need to preserve the exact layout without adding newlines
+      // Output-literal mode (previously called transformation mode) handling
+      // In output-literal mode, we preserve the exact layout without any modifications
       if (state.isTransformationEnabled()) {
-        // Process nodes with careful handling of newlines
+        // Process nodes with exact preservation of all formatting
         for (const node of nodes) {
           try {
             // Get the node output
@@ -1219,11 +1260,11 @@ export class OutputService implements IOutputService {
             // Skip empty outputs
             if (!nodeOutput) continue;
             
-            // Add to output buffer
+            // Add to output buffer with NO modifications
             output += nodeOutput;
           } catch (nodeError) {
             // Log detailed error for the specific node
-            logger.error('Error converting node to markdown in transformation mode', {
+            logger.error('Error converting node to markdown in output-literal mode', {
               nodeType: node.type,
               location: node.location,
               error: nodeError
@@ -1232,9 +1273,7 @@ export class OutputService implements IOutputService {
           }
         }
         
-        // Cleanup excessive whitespace without losing the basic text layout
-        output = output.replace(/\n{3,}/g, '\n\n');
-        
+        // NO post-processing or cleanup in true output-literal mode
         return output;
       }
       
@@ -1466,6 +1505,7 @@ export class OutputService implements IOutputService {
               // Force output-literal mode for this node to preserve exact formatting
               formattingContext.transformationMode = true;
               formattingContext.isOutputLiteral = true;
+              formattingContext.preserveFormatting = true;
             }
           }
         }
@@ -2636,6 +2676,18 @@ Transformation enabled?: ${state.isTransformationEnabled()}
       return '[]';
     }
     
+    // In output-literal mode, use consistent JSON.stringify for all arrays
+    if ((context.isOutputLiteral ?? context.transformationMode) || context.preserveFormatting) {
+      try {
+        return JSON.stringify(array, null, 2);
+      } catch (error) {
+        logger.warn('Error stringifying array in output-literal mode', { 
+          error: error instanceof Error ? error.message : String(error)
+        });
+        // Fall through to standard formatting if JSON.stringify fails
+      }
+    }
+    
     // Convert array items to strings
     const formattedItems = array.map(item => {
       // Create a child context for each item, but force inline context for array items
@@ -2686,6 +2738,13 @@ Transformation enabled?: ${state.isTransformationEnabled()}
     }
     
     try {
+      // In output-literal mode, use consistent JSON.stringify without code fences
+      if ((context.isOutputLiteral ?? context.transformationMode) || context.preserveFormatting) {
+        return JSON.stringify(obj, null, 2);
+      }
+      
+      // Standard mode processing follows
+      
       // Block context and not already in a code fence
       if (context.contextType === 'block' && context.specialMarkdown !== 'code') {
         // Pretty print with code fence
@@ -2722,8 +2781,8 @@ Transformation enabled?: ${state.isTransformationEnabled()}
     
     const hasNewlines = str.includes('\n');
     
-    // In output-literal mode, preserve all formatting exactly
-    if (context.isOutputLiteral ?? context.transformationMode) {
+    // In output-literal mode or when preserve formatting is enabled, preserve all formatting exactly
+    if ((context.isOutputLiteral ?? context.transformationMode) || context.preserveFormatting) {
       return str;
     }
     

@@ -87,10 +87,17 @@ describe('RunDirectiveHandler Transformation', () => {
       const result = await handler.execute(node, context);
 
       expect(result.replacement).toBeDefined();
-      expect(result.replacement).toEqual({
+      expect(result.replacement).toMatchObject({
         type: 'Text',
         content: 'test output',
-        location: node.location
+        location: node.location,
+        formattingMetadata: {
+          isFromDirective: true,
+          originalNodeType: 'Directive',
+          preserveFormatting: true,
+          isOutputLiteral: true,
+          transformationMode: true
+        }
       });
       expect(result.state).toBe(clonedState);
     });
@@ -109,10 +116,17 @@ describe('RunDirectiveHandler Transformation', () => {
       const result = await handler.execute(node, context);
 
       expect(result.replacement).toBeDefined();
-      expect(result.replacement).toEqual({
+      expect(result.replacement).toMatchObject({
         type: 'Text',
         content: 'Hello World',
-        location: node.location
+        location: node.location,
+        formattingMetadata: {
+          isFromDirective: true,
+          originalNodeType: 'Directive',
+          preserveFormatting: true,
+          isOutputLiteral: true,
+          transformationMode: true
+        }
       });
       expect(result.state).toBe(clonedState);
     });
@@ -131,10 +145,17 @@ describe('RunDirectiveHandler Transformation', () => {
       const result = await handler.execute(node, context);
 
       expect(result.replacement).toBeDefined();
-      expect(result.replacement).toEqual({
+      expect(result.replacement).toMatchObject({
         type: 'Text',
         content: 'error output',
-        location: node.location
+        location: node.location,
+        formattingMetadata: {
+          isFromDirective: true,
+          originalNodeType: 'Directive',
+          preserveFormatting: true,
+          isOutputLiteral: true,
+          transformationMode: true
+        }
       });
       expect(result.state).toBe(clonedState);
     });
@@ -153,10 +174,17 @@ describe('RunDirectiveHandler Transformation', () => {
       const result = await handler.execute(node, context);
 
       expect(result.replacement).toBeDefined();
-      expect(result.replacement).toEqual({
+      expect(result.replacement).toMatchObject({
         type: 'Text',
         content: 'test output\nerror output',
-        location: node.location
+        location: node.location,
+        formattingMetadata: {
+          isFromDirective: true,
+          originalNodeType: 'Directive',
+          preserveFormatting: true,
+          isOutputLiteral: true,
+          transformationMode: true
+        }
       });
       expect(result.state).toBe(clonedState);
     });

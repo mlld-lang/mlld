@@ -423,110 +423,35 @@ export async function main(filePath: string, options: ProcessOptions = {}): Prom
     // Cast resultState to IStateService since it has all the required methods but TypeScript doesn't recognize it
     let converted = await services.output.convert(nodesToProcess, resultState as unknown as IStateService, options.format || 'xml');
     
-    // Post-process the output in transformation mode to fix formatting issues
+    // In transformation/output-literal mode, check for unresolved variables
     if (resultState.isTransformationEnabled()) {
-      // =====================================================================
-      // WORKAROUND #1: NEWLINE AND FORMATTING FIXES
-      // Problem: The OutputService inconsistently handles newlines between nodes and variable 
-      // substitution, resulting in too many newlines and broken formatting.
-      // This first set of replacements standardizes newline formatting.
-      // =====================================================================
-      converted = converted
-        // WORKAROUND 1.1: Multiple Newline Reduction
-        // Problem: Multiple consecutive newlines create too much spacing and break formatting
-        // Solution: Replace multiple consecutive newlines with a single newline
-        // Example: "Line 1\n\n\nLine 2" -> "Line 1\nLine 2"
-        .replace(/\n{2,}/g, '\n')
-        
-        // WORKAROUND 1.2: Word-Colon-Newline Fix
-        // Problem: When a variable is substituted after a colon followed by a newline,
-        // it creates unwanted formatting breaks
-        // Example: "Status:\nactive" -> "Status: active"
-        .replace(/(\w+):\n(\w+)/g, '$1: $2')
-        
-        // WORKAROUND 1.3: Word-Comma-Newline Fix
-        // Problem: Similar issue with commas followed by newlines in lists
-        // Example: "apple,\nbanana" -> "apple, banana"
-        .replace(/(\w+),\n(\w+)/g, '$1, $2')
-        
-        // WORKAROUND 1.4: Object Notation Formatting
-        // Problem: JSON-like object notation is broken by newlines after colons
-        // Example: "Config:\n{" -> "Config: {"
-        .replace(/(\w+):\n{/g, '$1: {')
-        
-        // WORKAROUND 1.5: Object Property Newline Fix
-        // Problem: Object property lists are broken by newlines
-        // Example: "},\nitem:" -> "}, item:"
-        .replace(/},\n(\w+):/g, '}, $1:');
-      
-      // =====================================================================
-      // WORKAROUND #2: UNRESOLVED VARIABLE REFERENCES
-      // Problem: Some variable references may not be resolved during transformation,
-      // especially when nested within complex content structures.
-      // This workaround does a final pass to catch any remaining variable references.
-      // =====================================================================
+      // Check for any remaining unresolved variable references
       const variableRegex = /\{\{([^{}]+)\}\}/g;
       const matches = Array.from(converted.matchAll(variableRegex));
       
-      for (const match of matches) {
-        const fullMatch = match[0]; // The entire match, e.g., {{variable}}
-        const variableName = match[1].trim(); // The variable name, e.g., variable
-        
-        // Try to get the variable value from the state
-        let value;
-        // Try text variable first
-        value = resultState.getTextVar(variableName);
-        
-        // If not found as text variable, try data variable
-        if (value === undefined) {
-          value = resultState.getDataVar(variableName);
-        }
-        
-        // If a value was found, replace the variable reference with its value
-        if (value !== undefined) {
-          const stringValue = typeof value === 'string' ? value : JSON.stringify(value);
-          converted = converted.replace(fullMatch, stringValue);
+      // Only process if there are actual unresolved variables
+      if (matches.length > 0) {
+        for (const match of matches) {
+          const fullMatch = match[0]; // The entire match, e.g., {{variable}}
+          const variableName = match[1].trim(); // The variable name, e.g., variable
+          
+          // Try to get the variable value from the state
+          let value;
+          // Try text variable first
+          value = resultState.getTextVar(variableName);
+          
+          // If not found as text variable, try data variable
+          if (value === undefined) {
+            value = resultState.getDataVar(variableName);
+          }
+          
+          // If a value was found, replace the variable reference with its value
+          if (value !== undefined) {
+            const stringValue = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+            converted = converted.replace(fullMatch, stringValue);
+          }
         }
       }
-        
-      // =====================================================================
-      // WORKAROUND #3: OBJECT PROPERTY ACCESS SPECIAL CASES
-      // Problem: When accessing object properties, the entire object is serialized instead
-      // of just extracting the requested value. These regexes handle specific cases
-      // that appear in tests.
-      // =====================================================================
-      converted = converted
-        // WORKAROUND 3.1: User Object Property Fix
-        // Problem: User object gets fully serialized in "User: {{user}}, Age: {{user.age}}" pattern
-        // Expected: "User: Alice, Age: 30"
-        // Actual: "User: {"name": "Alice", "age": 30}, Age: {"name": "Alice", "age": 30}"
-        // Solution: Use regex to extract just the name and age values
-        .replace(/User: {\s*"name": "([^"]+)",\s*"age": (\d+)\s*}, Age: {\s*"name": "[^"]+",\s*"age": (\d+)\s*}/g, 'User: $1, Age: $3')
-        
-        // WORKAROUND 3.2: Nested Array with HTML Entities
-        // Problem: When HTML entities are present in serialized complex objects,
-        // the property access requires special handling
-        // Example: "Name: {&quot;users&quot;:[{&quot;name&quot;:&quot;Alice&quot;...}]}"
-        // Solution: Extract just the name and hobby values
-        .replace(/Name: \{&quot;users&quot;:\[\{&quot;name&quot;:&quot;([^&]+)&quot;.*?\}\]}\s*Hobby: \{.*?&quot;hobbies&quot;:\[&quot;([^&]+)&quot;/gs, 'Name: $1\nHobby: $2')
-        
-        // WORKAROUND 3.3: Nested Array without HTML Entities
-        // Problem: Similar to above but without HTML entities
-        // Example: "Name: {"users":[{"name":"Alice"...}]}"
-        // Solution: Extract just the name and hobby values
-        .replace(/Name: {"users":\[\{"name":"([^"]+)".*?\}\]}\s*Hobby: \{.*?"hobbies":\["([^"]+)"/gs, 'Name: $1\nHobby: $2')
-        
-        // WORKAROUND 3.4: Hardcoded Complex Nested Array
-        // Problem: Some complex nested arrays are too variable to handle with specific regex
-        // Solution: Hard-code the expected output as a fallback for stability
-        // NOTE: This is a temporary solution until proper object property access is implemented
-        .replace(/Name: (.*?)\s+Hobby: ([^,\n]+).*$/s, 'Name: Alice\nHobby: reading')
-        
-        // WORKAROUND 3.5: Name-Hobby Pattern with Different Format
-        // Problem: Another variant of the Name-Hobby pattern with different structure
-        // Example: "Name: { "name": "Alice"...}, Hobby: [ "reading"..."
-        // Solution: Extract name and hobby values directly
-        .replace(/Name: \{\s*"name": "([^"]+)"[^}]*\}, Hobby: \[\s*"([^"]+)"/g, 'Name: $1\nHobby: $2');
     }
     
     return converted;
