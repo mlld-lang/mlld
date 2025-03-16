@@ -259,7 +259,7 @@ class FieldAccessHandler {
     const isTransformation = formattingContext?.isTransformation || false;
     const specialMarkdown = (formattingContext as any)?.specialMarkdown;
     
-    // Handle undefined or null
+    // Handle undefined or null values - always return empty string per spec
     if (value === undefined || value === null) {
       return '';
     }
@@ -276,9 +276,9 @@ class FieldAccessHandler {
     
     // Handle arrays with consistent, context-aware formatting
     if (Array.isArray(value)) {
-      // Empty array
+      // Empty array - always render as '[]' per spec
       if (value.length === 0) {
-        return preserveType ? '[]' : '';
+        return '[]';
       }
       
       // Convert each item with context inheritance
@@ -294,66 +294,42 @@ class FieldAccessHandler {
       
       // Format based on context and content
       
-      // Special case: arrays in table cells
-      if (specialMarkdown === 'table') {
-        // Compact, comma-separated rendering for arrays in table cells
-        return items.join(', ');
+      // Block context - render as bullet list if not in special markdown
+      if (isBlockContext && !specialMarkdown) {
+        return items.map(item => `- ${item}`).join('\n');
       }
       
-      // Special case: arrays in list items
-      if (specialMarkdown === 'list') {
-        // Compact, comma-separated rendering for arrays in list items
+      // Special case: arrays in table cells or list items
+      if (specialMarkdown === 'table' || specialMarkdown === 'list') {
+        // Compact, comma-separated rendering for arrays in special contexts
         return items.join(', ');
-      }
-      
-      // Block context with many items or complex items
-      if (isBlockContext && (items.length > 3 || this.containsComplexItems(value))) {
-        // Array of simple items (strings, numbers) in block context
-        if (this.isArrayOfSimpleValues(value)) {
-          // For block context with many simple items, use a list format
-          return items.map(item => `- ${item}`).join('\n');
-        }
-        
-        // Array of objects in block context - use JSON with indentation
-        if (this.isArrayOfObjects(value)) {
-          return JSON.stringify(value, null, 2);
-        }
-        
-        // Mixed array types - use pretty JSON
-        return JSON.stringify(value, null, 2);
       }
       
       // Default array formatting (comma-separated) for inline context
-      // and simple arrays in block context
       return items.join(', ');
     }
     
     // Handle objects with context-aware formatting
     if (typeof value === 'object') {
       try {
-        // Empty object
+        // Empty object - return "{}" for consistency with empty arrays
         if (Object.keys(value).length === 0) {
-          return preserveType ? '{}' : '';
+          return '{}';
         }
         
-        // Objects in different contexts
-        
-        // Special case: objects in table cells - use compact format
-        if (specialMarkdown === 'table') {
-          // Compact JSON without unnecessary whitespace
-          return JSON.stringify(value);
+        // Block context (not in code fence) - render as fenced code block with pretty JSON
+        if (isBlockContext && specialMarkdown !== 'code') {
+          // Add appropriate code fence with pretty-printed JSON
+          return '```json\n' + JSON.stringify(value, null, 2) + '\n```';
         }
         
-        // Use pretty printing for block context or when explicitly requested
-        if (pretty || isBlockContext) {
-          // Proper indentation for better readability in block contexts
+        // Code fence context - render as pretty JSON without fences
+        if (specialMarkdown === 'code') {
           return JSON.stringify(value, null, 2);
         }
         
-        // Inline context - use compact JSON with minimal spacing
-        // Format with spaces after colons and commas for better readability
-        const compactJson = JSON.stringify(value);
-        return this.formatJsonString(compactJson);
+        // Inline context - use compact JSON
+        return JSON.stringify(value);
       } catch (error) {
         logger.error('Error stringifying object', { value, error });
         return '[Object]';
@@ -708,9 +684,9 @@ export class OutputService implements IOutputService {
   private handleNewlines(content: string, context: FormattingContext): string {
     if (!content) return content;
     
-    // In transformation mode, apply consistent newline normalization
+    // In output-literal mode (previously called transformation mode), apply consistent newline normalization
     if (context.transformationMode) {
-      // In transformation mode, we normalize:
+      // In output-literal mode, we normalize:
       // 1. Multiple consecutive newlines to a single newline
       content = content.replace(/\n{2,}/g, '\n');
       
@@ -723,7 +699,7 @@ export class OutputService implements IOutputService {
       return content;
     }
     
-    // In standard mode, normalize newlines based on context
+    // In output-normalized mode (previously called standard mode), normalize newlines based on context
     if (context.contextType === 'block') {
       // For block content, ensure proper paragraph spacing
       
@@ -780,90 +756,59 @@ export class OutputService implements IOutputService {
       const varName = parts[0];
       const fieldPath = parts.length > 1 ? parts.slice(1).join('.') : '';
 
-      // Try to use the VariableReferenceResolverClient for all variable resolution
-      // This provides consistent handling with proper context awareness
-      const resolver = this.getVariableResolver();
-      if (resolver) {
-        try {
-          // Create a resolution context for field access
-          const resolutionContext: ResolutionContext = ResolutionContextFactory.create(
-            undefined, // current file path not needed for this operation
-            state
-          );
-          
-          // Enhanced field access options with complete formatting context
-          // This is crucial for context-aware formatting preservation
-          const fieldOptions: FieldAccessOptions = {
-            preserveType: false,
-            variableName: varName,
-            formattingContext: {
-              isBlock: context.contextType === 'block',
-              nodeType: context.nodeType,
-              linePosition: context.atLineStart ? 'start' : (context.atLineEnd ? 'end' : 'middle'),
-              isTransformation: context.transformationMode
+      // Try to use the VariableReferenceResolverClient for field access specifically
+      if (fieldPath) {
+        const resolver = this.getVariableResolver();
+        if (resolver) {
+          try {
+            // Create a resolution context for field access
+            const resolutionContext: ResolutionContext = ResolutionContextFactory.create(
+              undefined, // current file path not needed for this operation
+              state
+            );
+            
+            // Enhanced field access options with complete formatting context
+            const fieldOptions: FieldAccessOptions = {
+              preserveType: true, // Preserve type initially for proper processing
+              variableName: varName,
+              formattingContext: {
+                isBlock: context.contextType === 'block',
+                nodeType: context.nodeType,
+                linePosition: context.atLineStart ? 'start' : (context.atLineEnd ? 'end' : 'middle'),
+                isTransformation: context.transformationMode
+              }
+            };
+            
+            // Add special markdown context if applicable
+            if (context.specialMarkdown) {
+              (fieldOptions.formattingContext as any).specialMarkdown = context.specialMarkdown;
             }
-          };
-          
-          // Add special markdown context if applicable
-          if (context.specialMarkdown) {
-            (fieldOptions.formattingContext as any).specialMarkdown = context.specialMarkdown;
-          }
-          
-          // For field access, use the dedicated method
-          if (fieldPath) {
-            // Try to resolve the field access directly
-            // This combined approach handles all variable types in one operation
+            
+            // Use resolveFieldAccess for consistent field handling
             const result = await resolver.resolveFieldAccess(varName, fieldPath, resolutionContext, fieldOptions);
             
-            logger.debug('Field access resolved using variable resolver client', {
-              varName,
-              fieldPath,
-              resultType: result !== undefined ? typeof result : 'undefined',
-              success: result !== undefined,
-              contextType: context.contextType,
-              transformationMode: context.transformationMode
-            });
-            
-            // If we got a result, convert it to string with the resolver's formatter
-            // which will respect the formatting context
             if (result !== undefined) {
-              return resolver.convertToString(result, fieldOptions);
-            }
-          } else {
-            // For simple variable lookup (no fields), get the variable directly
-            // We're still using the resolver client for consistent handling
-            
-            // Try text variable first through direct resolution
-            let textValue;
-            try {
-              textValue = await resolver.resolveFieldAccess(varName, '', resolutionContext, {
+              // For string conversion, respect the formatting context
+              const stringResult = resolver.convertToString(result, {
                 ...fieldOptions,
-                preserveType: true // preserve type for proper formatting
-              });
-            } catch (textResolveError) {
-              textValue = undefined;
-            }
-            
-            if (textValue !== undefined) {
-              logger.debug('Resolved text variable through resolver client', {
-                varName,
-                valueType: typeof textValue,
-                contextType: context.contextType
+                preserveType: false // Convert to string for final output
               });
               
-              // Format according to context
-              return resolver.convertToString(textValue, fieldOptions);
+              logger.debug('Field access resolved using variable resolver client', {
+                varName,
+                fieldPath,
+                resultType: typeof result,
+                stringResult
+              });
+              
+              return stringResult;
             }
+          } catch (err) {
+            logger.warn('Error using variable resolver for field access, falling back to traditional handlers', {
+              error: err instanceof Error ? err.message : String(err)
+            });
+            // Fall through to traditional handling
           }
-          
-          // Fall through to standard resolution if resolver didn't find the variable
-        } catch (resolverError) {
-          logger.warn('Error using variable resolver client, falling back to standard resolution', {
-            varName,
-            fieldPath,
-            error: resolverError instanceof Error ? resolverError.message : String(resolverError)
-          });
-          // Continue with standard resolution
         }
       }
       
@@ -974,6 +919,11 @@ export class OutputService implements IOutputService {
     context?: 'inline' | 'block',
     specialMarkdown?: string
   }): string {
+    // Handle null or undefined values
+    if (value === null || value === undefined) {
+      return '';
+    }
+    
     // Enhanced formatting with special markdown context awareness
     // This ensures consistent formatting in different markdown contexts
     
