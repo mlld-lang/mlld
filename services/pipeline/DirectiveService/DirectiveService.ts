@@ -23,6 +23,7 @@ import type { IResolutionServiceClientForDirective } from '@services/resolution/
 import { ResolutionServiceClientForDirectiveFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientForDirectiveFactory.js';
 import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory.js';
 import type { IInterpreterServiceClient } from '@services/pipeline/InterpreterService/interfaces/IInterpreterServiceClient.js';
+import { DirectiveResult } from './interfaces/DirectiveTypes.js';
 
 // Import all handlers
 import { TextDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler.js';
@@ -354,6 +355,13 @@ export class DirectiveService implements IDirectiveService, DirectiveServiceLike
    */
   async processDirectives(nodes: DirectiveNode[], parentContext?: DirectiveContext): Promise<StateServiceLike> {
     let currentState = parentContext?.state?.clone() || this.stateService!.createChildState();
+    
+    // Inherit or create initial formatting context
+    let currentFormattingContext = parentContext?.formattingContext ? { ...parentContext.formattingContext } : {
+      isOutputLiteral: currentState.isTransformationEnabled(),
+      contextType: 'block' as 'inline' | 'block',
+      nodeType: 'Text'
+    };
 
     for (const node of nodes) {
       // Create a new context with the current state as both parent and state
@@ -361,11 +369,22 @@ export class DirectiveService implements IDirectiveService, DirectiveServiceLike
       const nodeContext = {
         currentFilePath: parentContext?.currentFilePath || '',
         parentState: currentState,
-        state: currentState.clone()
-      };
+        state: currentState.clone(),
+        formattingContext: {
+          ...currentFormattingContext,
+          nodeType: node.type,
+          parentContext: currentFormattingContext
+        }
+      } as DirectiveContext;
 
       // Process directive and get the updated state
       const result = await this.processDirective(node, nodeContext);
+      
+      // Update formatting context for the next directive
+      // This ensures consistent newline handling between directives
+      if (nodeContext.formattingContext) {
+        currentFormattingContext = nodeContext.formattingContext;
+      }
       
       // If transformation is enabled, we don't merge states since the directive
       // will be replaced with a text node and its state will be handled separately
@@ -389,30 +408,32 @@ export class DirectiveService implements IDirectiveService, DirectiveServiceLike
    * Create execution context for a directive
    */
   private createContext(node: DirectiveNode, parentContext?: DirectiveContext): DirectiveContext {
-    // If we have a parent context, create a child state
-    const state = parentContext 
-      ? parentContext.state.createChildState() 
-      : this.stateService;
+    // Create a new state or clone parent state
+    const state = parentContext?.state?.clone() || this.stateService!.createChildState();
     
-    // Get the current file path from the parent context or the state
-    const currentFilePath = parentContext?.currentFilePath || state.getCurrentFilePath() || undefined;
+    // Create a new resolution context or inherit from parent
+    const resolutionContext = parentContext?.resolutionContext || {};
     
-    // Create a resolution context for variable resolution
-    const resolutionContext = {
-      currentFilePath,
-      workingDirectory: parentContext?.workingDirectory,
-      transformationMode: state.isTransformationEnabled(),
-      validatePaths: true
+    // Set the default formatting context based on node type
+    const formattingContext = {
+      isOutputLiteral: state.isTransformationEnabled?.() || false,
+      contextType: 'block' as 'inline' | 'block',
+      nodeType: node.type,
+      parentContext: parentContext?.formattingContext
     };
     
-    // Create the directive context
+    // Determine working directory - use parent's or default to current directory
+    const workingDirectory = parentContext?.workingDirectory || this.fileSystemService?.getCwd() || process.cwd();
+    
+    // Return the complete context
     return {
       state,
       parentState: parentContext?.state,
-      currentFilePath,
-      workingDirectory: parentContext?.workingDirectory,
-      resolutionContext
-    };
+      currentFilePath: parentContext?.currentFilePath || this.stateService?.getCurrentFilePath() || '',
+      workingDirectory,
+      resolutionContext,
+      formattingContext
+    } as DirectiveContext;
   }
 
   /**
@@ -461,24 +482,40 @@ export class DirectiveService implements IDirectiveService, DirectiveServiceLike
    * Create a child context for nested directives
    */
   public createChildContext(parentContext: DirectiveContext, filePath: string): DirectiveContext {
+    // Create a child state that inherits from parent
     const childState = parentContext.state.createChildState();
-    childState.setCurrentFilePath(filePath);
     
-    // Create a resolution context for variable resolution
+    // Set the file path in the child state
+    if (filePath) {
+      childState.setCurrentFilePath(filePath);
+    }
+    
+    // Create a new resolution context - inherit from parent with updated state
     const resolutionContext = {
-      currentFilePath: filePath,
-      workingDirectory: parentContext.workingDirectory,
-      transformationMode: childState.isTransformationEnabled(),
-      validatePaths: true
+      ...(parentContext.resolutionContext || {}),
+      state: childState,
+      currentFilePath: filePath
     };
     
+    // Inherit or create formatting context
+    const formattingContext = {
+      isOutputLiteral: parentContext.formattingContext?.isOutputLiteral ?? childState.isTransformationEnabled(),
+      parentContext: parentContext.formattingContext,
+      contextType: (parentContext.formattingContext?.contextType || 'block') as 'inline' | 'block',
+      nodeType: parentContext.formattingContext?.nodeType || 'Text',
+      atLineStart: parentContext.formattingContext?.atLineStart,
+      atLineEnd: parentContext.formattingContext?.atLineEnd
+    };
+    
+    // Return the complete child context
     return {
-      parentState: parentContext.state,
       state: childState,
+      parentState: parentContext.state,
       currentFilePath: filePath,
       workingDirectory: parentContext.workingDirectory,
-      resolutionContext
-    };
+      resolutionContext,
+      formattingContext
+    } as DirectiveContext;
   }
 
   supportsDirective(kind: string): boolean {
@@ -869,8 +906,12 @@ export class DirectiveService implements IDirectiveService, DirectiveServiceLike
       // Execute the directive and handle both possible return types
       const result = await handler.execute(node, context);
       
-      // If result is a DirectiveResult, return its state
+      // If result is a DirectiveResult with formatting context, update context for propagation
       if ('state' in result) {
+        // If the directive returned a formatting context, update the context
+        if ((result as DirectiveResult).formattingContext && context.formattingContext) {
+          Object.assign(context.formattingContext, (result as DirectiveResult).formattingContext);
+        }
         return result.state;
       }
       

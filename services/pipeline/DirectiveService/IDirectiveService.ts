@@ -27,6 +27,21 @@ export interface DirectiveContext extends DirectiveContextBase {
   workingDirectory?: string;
   /** Resolution context for variable resolution */
   resolutionContext?: any;
+  /** Formatting context for output generation - propagates formatting preferences across service boundaries */
+  formattingContext?: {
+    /** Whether in output-literal mode (formerly transformation mode) */
+    isOutputLiteral: boolean;
+    /** Whether this is an inline or block context */
+    contextType: 'inline' | 'block';
+    /** Current node type being processed */
+    nodeType: string;
+    /** Whether at start of line */
+    atLineStart?: boolean;
+    /** Whether at end of line */
+    atLineEnd?: boolean;
+    /** Parent formatting context for inheritance */
+    parentContext?: any;
+  };
 }
 
 /**

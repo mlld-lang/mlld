@@ -242,25 +242,50 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
    * 
    * @param content - The content for the replacement node
    * @param originalNode - The original directive node being replaced
+   * @param context - Optional directive context with formatting information
    * @returns A TextNode with the content and location information from the original
    */
-  private createReplacementNode(content: string, originalNode: DirectiveNode): TextNode {
+  private createReplacementNode(
+    content: string, 
+    originalNode: DirectiveNode,
+    context?: DirectiveContext
+  ): TextNode {
     this.logger.debug('Creating replacement node with content preservation', {
       originalNodeType: originalNode.type,
       contentLength: content.length,
-      location: originalNode.location
+      location: originalNode.location,
+      hasFormattingContext: !!context?.formattingContext
     });
+    
+    // Extract formatting information if available from context
+    const formattingMetadata: any = {
+      isFromDirective: true,
+      originalNodeType: originalNode.type,
+      preserveFormatting: true
+    };
+    
+    // If we have formatting context, add more detailed metadata
+    if (context?.formattingContext) {
+      Object.assign(formattingMetadata, {
+        contextType: context.formattingContext.contextType,
+        isOutputLiteral: context.formattingContext.isOutputLiteral,
+        // Add any other formatting context properties
+        nodeType: context.formattingContext.nodeType || originalNode.type
+      });
+      
+      this.logger.debug('Added formatting context to replacement node', {
+        contextType: formattingMetadata.contextType,
+        isOutputLiteral: formattingMetadata.isOutputLiteral,
+        nodeType: formattingMetadata.nodeType
+      });
+    }
     
     return {
       type: 'Text',
       content,
       location: originalNode.location,
-      // Add formatting metadata to help with context preservation
-      formattingMetadata: {
-        isFromDirective: true,
-        originalNodeType: originalNode.type,
-        preserveFormatting: true
-      }
+      // Add enhanced formatting metadata to help with context preservation
+      formattingMetadata
     };
   }
 
@@ -471,7 +496,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
                 // Directly resolve the field access using ResolutionService's resolveFieldAccess
                 // This properly handles array indices, nested objects, etc.
                 // Create a properly typed context to avoid TypeScript declaration issues
-                const typedContext: ResolutionContext = {
+                const typedContext: any = {
                   currentFilePath: resolutionContext?.currentFilePath || undefined,
                   allowedVariableTypes: {
                     text: true,
@@ -484,14 +509,15 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
                     requireAbsolute: false,
                     allowedRoots: []
                   },
-                  state: resolutionContext?.state || newState
+                  state: resolutionContext?.state || newState,
+                  formattingContext: context.formattingContext
                 };
                 
                 // Create field access options for this resolution
                 const fieldAccessOptions = {
                   preserveType: true, // Preserve the original type
                   variableName: variableNameStr, // For error reporting
-                  formattingContext: {
+                  formattingContext: { 
                     isBlock: true, // Treat as block content by default
                     nodeType: 'embed',
                     linePosition: 'start', // Default position
@@ -896,7 +922,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
        * This ensures consistent handling of embedded content regardless of source.
        */
       // This applies to both transformation mode and normal mode
-      const replacement = this.createReplacementNode(content, node);
+      const replacement = this.createReplacementNode(content, node, context);
 
       // In transformation mode, register the replacement
       if (newState.isTransformationEnabled()) {
@@ -904,6 +930,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
           nodeLocation: node.location,
           transformEnabled: newState.isTransformationEnabled(),
           replacementContent: content.substring(0, 50) + (content.length > 50 ? '...' : ''),
+          hasFormattingContext: !!context.formattingContext,
           isVariableReference: typeof path === 'object' && 
                              path !== null && 
                              'isVariableReference' in path && 
@@ -916,8 +943,9 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
 
       return {
         state: newState,
-        replacement
-      };
+        replacement,
+        formattingContext: context.formattingContext
+      } as any;
     } catch (error: any) {
       // Don't log MeldFileNotFoundError since it will be logged by the CLI
       if (!(error instanceof MeldFileNotFoundError)) {

@@ -126,6 +126,20 @@ export interface StateServiceLike {
   setEventService(eventService: any): void;
   /** Sets the tracking service for state debugging and analysis */
   setTrackingService(trackingService: any): void;
+  /** Get formatting context for consistent newline handling */
+  getFormattingContext?(): { 
+    isOutputLiteral?: boolean; 
+    contextType?: 'inline' | 'block';
+    nodeType?: string;
+    [key: string]: any;
+  };
+  /** Set formatting context for consistent newline handling */
+  setFormattingContext?(context: { 
+    isOutputLiteral?: boolean; 
+    contextType?: 'inline' | 'block';
+    nodeType?: string;
+    [key: string]: any;
+  }): void;
 }
 
 /**

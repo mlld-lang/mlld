@@ -465,15 +465,37 @@ export class InterpreterService implements IInterpreterService, InterpreterServi
           const originalState = state;
           const isImportDirective = directiveNode.directive.kind === 'import';
           
+          // Create formatting context for consistent newline handling across service boundaries
+          const formattingContext = {
+            isOutputLiteral: state.isTransformationEnabled?.() || false,
+            contextType: 'block' as 'inline' | 'block', // Default to block context
+            nodeType: node.type,
+            atLineStart: true, // Default assumption
+            atLineEnd: false // Default assumption
+          };
+          
           // Store the directive result to check for replacement nodes
           const directiveResult = await this.callDirectiveHandleDirective(directiveNode, {
             state: directiveState,
             parentState: currentState,
-            currentFilePath: state.getCurrentFilePath() ?? undefined
+            currentFilePath: state.getCurrentFilePath() ?? undefined,
+            formattingContext // Add formatting context for cross-service propagation
           });
           
           // Update current state with the result
           currentState = directiveResult;
+          
+          // Capture any updates to formatting context from the directive handler
+          if (directiveResult.getFormattingContext) {
+            const updatedContext = directiveResult.getFormattingContext();
+            if (updatedContext) {
+              logger.debug('Formatting context updated by directive', {
+                directiveKind: directiveNode.directive.kind,
+                contextType: updatedContext.contextType,
+                isOutputLiteral: updatedContext.isOutputLiteral
+              });
+            }
+          }
           
           // Check if the directive handler returned a replacement node
           // This happens when the handler implements the DirectiveResult interface
