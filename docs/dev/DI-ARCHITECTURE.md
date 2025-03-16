@@ -36,15 +36,15 @@ Meld uses TSyringe for dependency injection, which brings the following benefits
 
 4. **Interface-based Design**: Services follow an interface-first design pattern, where each service implements an interface (e.g., `IFileSystemService`) and dependencies are declared using interface tokens.
 
-5. **Circular Dependency Handling**: Circular dependencies are managed through the ServiceMediator pattern, which acts as an intermediary between services with circular dependencies.
+5. **Circular Dependency Handling**: Circular dependencies are managed through the Client Factory pattern, which creates focused client interfaces for specific service interactions.
 
 ### DI Configuration
 
 The core DI configuration is managed in `core/di-config.ts`, which:
 
 1. Configures the global container
-2. Registers core services with circular dependencies
-3. Connects services via the ServiceMediator
+2. Registers core services and client factories
+3. Connects services via their respective client interfaces
 4. Registers remaining services using class registrations
 
 ## DIRECTORY & FILE STRUCTURE
@@ -95,9 +95,6 @@ project-root/
  │   │   ├─ FileSystemService/ ← File operations  
  │   │   ├─ PathService/      ← Path handling  
  │   │   └─ PathOperationsService/ ← Path utilities  
- │   ├─ mediator/          ← Circular dependency handling
- │   │   ├─ IServiceMediator.ts ← Mediator interface
- │   │   └─ ServiceMediator.ts ← Mediator implementation
  │   └─ cli/               ← Command line interface  
  │       └─ CLIService/    ← CLI entry point  
  ├─ tests/                  ← Test infrastructure   
@@ -128,7 +125,6 @@ Key subfolders:
 • services/state/: State management and event services  
 • services/resolution/: Resolution, validation, and circularity detection services  
 • services/fs/: File system, path handling, and operations services  
-• services/mediator/: Handles circular dependencies between services
 • services/cli/: Command line interface services  
 • core/: Central types, errors, utilities, and DI service provider used throughout the codebase  
 • tests/utils/: Test infrastructure including debug utilities, memfs implementation, fixture management, and test helpers  
@@ -216,7 +212,7 @@ Below are the key "services" in the codebase. Each follows the single responsibi
    - Wraps the meld-ast parse(content) function  
    - Adds location information with file paths (parseWithLocations)  
    - Produces an array of MeldNode objects  
-   - Dependencies: ServiceMediator (for circular dependency with ResolutionService)
+   - Dependencies: ResolutionServiceClient (for resolving variables during parsing)
 
 ### DirectiveService  
    - Routes directives to the correct directive handler  
@@ -250,7 +246,7 @@ Below are the key "services" in the codebase. Each follows the single responsibi
    - Maintains transformation state during cloning
    - Provides child states for nested imports  
    - Supports immutability toggles  
-   - Dependencies: StateFactory, StateEventService, StateTrackingService, ServiceMediator
+   - Dependencies: StateFactory, StateEventService, StateTrackingService
 
 ### ResolutionService  
    - Handles all variable interpolation:
@@ -260,7 +256,7 @@ Below are the key "services" in the codebase. Each follows the single responsibi
    - Context-aware resolution  
    - Circular reference detection  
    - Sub-fragment parsing support  
-   - Dependencies: StateService, FileSystemService, ParserService, PathService, ServiceMediator
+   - Dependencies: StateService, FileSystemService, ParserServiceClient, PathService
 
 ### CircularityService  
    - Prevents infinite import loops  
@@ -273,7 +269,7 @@ Below are the key "services" in the codebase. Each follows the single responsibi
    - Enforces path security constraints  
    - Handles path joining and manipulation  
    - Supports test mode for path operations  
-   - Dependencies: ServiceMediator (for circular dependency with FileSystemService)
+   - Dependencies: FileSystemServiceClient (to check if paths exist)
 
 ### ValidationService  
    - Validates directive syntax and constraints  
@@ -282,27 +278,20 @@ Below are the key "services" in the codebase. Each follows the single responsibi
    - Tracks available directive kinds  
    - Dependencies: ResolutionService
 
-###  FileSystemService  
-    - Abstracts file operations (read, write)  
-    - Supports both real and test filesystems  
-    - Handles path resolution and validation  
-    - Dependencies: PathOperationsService, ServiceMediator (for circular dependency with PathService), IFileSystem
+### FileSystemService  
+   - Abstracts file operations (read, write)  
+   - Supports both real and test filesystems  
+   - Handles path resolution and validation  
+   - Dependencies: PathOperationsService, PathServiceClient, IFileSystem
 
 ### OutputService  
-    - Converts final AST and state to desired format
-    - Uses transformed nodes when available
-    - Supports markdown and LLM XML output  
-    - Integrates with llmxml for LLM-friendly formatting  
-    - Handles format-specific transformations
-    - Provides clean output without directive definitions
-    - Dependencies: StateService, ResolutionService
-
-### ServiceMediator
-    - Breaks circular dependencies between services
-    - Acts as an intermediary for services that need to call each other
-    - Provides proxy methods to access functionality from circular dependencies
-    - Manages references to services with circular dependencies
-    - No direct dependencies, but stores references to services that register with it
+   - Converts final AST and state to desired format
+   - Uses transformed nodes when available
+   - Supports markdown and LLM XML output  
+   - Integrates with llmxml for LLM-friendly formatting  
+   - Handles format-specific transformations
+   - Provides clean output without directive definitions
+   - Dependencies: StateService, ResolutionService, VariableReferenceResolverClient
 
 ## TESTING INFRASTRUCTURE
 
@@ -407,16 +396,16 @@ These debugging services are particularly useful for:
 Services in Meld follow a dependency graph managed through the DI container:
 
 1. Base Services:
-   - FileSystemService (depends on PathOperationsService, ServiceMediator)
-   - PathService (depends on ServiceMediator)
+   - FileSystemService (depends on PathOperationsService, PathServiceClient)
+   - PathService (depends on FileSystemServiceClient)
 
 2. State Management:
    - StateEventService (no dependencies)
-   - StateService (depends on StateFactory, StateEventService, StateTrackingService, ServiceMediator)
+   - StateService (depends on StateFactory, StateEventService, StateTrackingService)
 
 3. Core Pipeline:
-   - ParserService (depends on ServiceMediator)
-   - ResolutionService (depends on StateService, FileSystemService, PathService, ServiceMediator)
+   - ParserService (depends on ResolutionServiceClient)
+   - ResolutionService (depends on StateService, FileSystemService, PathService, ParserServiceClient)
    - ValidationService (depends on ResolutionService)
    - CircularityService (depends on ResolutionService)
 
@@ -425,39 +414,256 @@ Services in Meld follow a dependency graph managed through the DI container:
    - InterpreterService (orchestrates others)
 
 5. Output Generation:
-   - OutputService (depends on StateService, ResolutionService)
+   - OutputService (depends on StateService, ResolutionService, VariableReferenceResolverClient)
 
 6. Debug Support:
    - DebuggerService (optional, depends on all)
 
-### Circular Dependencies
+## Dependency Resolution Patterns
 
-The codebase handles circular dependencies through the ServiceMediator pattern:
+### Circular Dependency Challenges
 
-1. **FileSystemService ↔ PathService**:
-   - FileSystemService needs PathService for path resolution
-   - PathService needs FileSystemService to check if paths exist
+Circular dependencies occur when two or more services depend on each other, creating a dependency cycle:
 
-2. **ParserService ↔ ResolutionService**:
-   - ParserService needs ResolutionService to resolve variables
-   - ResolutionService needs ParserService to parse content with variables
+- **FileSystemService ↔ PathService**: FileSystemService needs PathService for path resolution, while PathService needs FileSystemService to check if paths exist
+- **ParserService ↔ ResolutionService**: ParserService needs ResolutionService to resolve variables, while ResolutionService needs ParserService to parse content
+- **StateService ↔ StateTrackingService**: Complex bidirectional relationship for state tracking and management
 
-3. **StateService ↔ StateTrackingService**:
-   - Complex relationship for state tracking and management
+### Client Factory Pattern (Current Approach)
 
-The ServiceMediator acts as an intermediary, storing references to these services and providing proxy methods to access functionality without direct circular references.
+The primary approach for handling circular dependencies in Meld is the Client Factory pattern:
 
-### Service Initialization
+1. Create minimal client interfaces that expose only the methods needed by the dependent service
+2. Implement factories to create these client interfaces
+3. Inject the factories rather than the actual services
+4. Use the clients to access only the functionality that's actually needed
 
-Services are initialized through the DI container, which handles creating all dependencies. The key initialization steps are:
+This pattern follows the Interface Segregation Principle (the "I" in SOLID), ensuring that services depend only on the methods they actually use.
 
-1. The ServiceMediator is registered first to handle circular dependencies
-2. Services with circular dependencies are created manually and connected through the mediator
-3. These services are registered with the container
-4. Remaining services are registered using class registrations
-5. The DI container handles resolving services as needed during runtime
+#### Example Implementation
 
-This initialization process is centralized in `core/di-config.ts`.
+For the FileSystemService ↔ PathService circular dependency:
+
+```typescript
+// Minimal interface for what FileSystemService needs from PathService
+export interface IPathServiceClient {
+  resolvePath(path: string): string;
+  normalizePath(path: string): string;
+}
+
+// Factory to create a client for PathService functionality
+@injectable()
+@Service({
+  description: 'Factory for creating path service clients'
+})
+export class PathServiceClientFactory {
+  constructor(@inject('IPathService') private pathService: IPathService) {}
+  
+  createClient(): IPathServiceClient {
+    return {
+      resolvePath: (path) => this.pathService.resolvePath(path),
+      normalizePath: (path) => this.pathService.normalizePath(path)
+    };
+  }
+}
+
+// Updated FileSystemService that depends on the factory
+@injectable()
+@Service({
+  description: 'Service for file system operations'
+})
+export class FileSystemService implements IFileSystemService {
+  private pathClient: IPathServiceClient;
+  
+  constructor(
+    @inject('IPathOperationsService') private readonly pathOps: IPathOperationsService,
+    @inject('PathServiceClientFactory') pathClientFactory: PathServiceClientFactory,
+    @inject('IFileSystem') fileSystem: IFileSystem | null = null
+  ) {
+    this.fs = fileSystem || new NodeFileSystem();
+    this.pathClient = pathClientFactory.createClient();
+  }
+  
+  // Use the client interface directly
+  private resolvePath(filePath: string): string {
+    return this.pathClient.resolvePath(filePath);
+  }
+}
+```
+
+Similarly, implement the reverse direction with a `FileSystemServiceClient` and `FileSystemServiceClientFactory`.
+
+### Direct Container Resolution (Alternative Approach)
+
+For cases where the Client Factory pattern isn't feasible, direct container resolution with lazy loading can be used:
+
+```typescript
+import { resolveService } from '@core/ServiceProvider';
+
+@injectable()
+@Service({
+  description: 'Service with lazy dependency resolution'
+})
+export class OutputService implements IOutputService {
+  private resolverClient?: IVariableReferenceResolverClient;
+  
+  constructor(
+    @inject('IStateService') private readonly stateService: IStateService,
+    @inject('IResolutionService') private readonly resolutionService: IResolutionService
+  ) {}
+  
+  /**
+   * Get a resolver client using direct container resolution
+   * This breaks circular dependencies by deferring resolution until needed
+   */
+  private getVariableResolver(): IVariableReferenceResolverClient | undefined {
+    // Lazy-load the client only when needed
+    if (!this.resolverClient) {
+      try {
+        // Get the factory from the container using ServiceProvider helper
+        const factory = resolveService<VariableReferenceResolverClientFactory>(
+          'VariableReferenceResolverClientFactory'
+        );
+        
+        // Create the client
+        this.resolverClient = factory.createClient();
+        logger.debug('Successfully created VariableReferenceResolverClient');
+      } catch (error) {
+        logger.warn('Failed to create VariableReferenceResolverClient', { error });
+      }
+    }
+    
+    return this.resolverClient;
+  }
+  
+  // Using the lazy-loaded client
+  async convert(nodes: MeldNode[], state: IStateService, format: string = 'markdown'): Promise<string> {
+    // Get the resolver only when needed
+    const resolver = this.getVariableResolver();
+    
+    if (resolver && format === 'markdown') {
+      // Process nodes using the resolver for field access
+      return this.nodeToMarkdown(nodes, state, resolver);
+    }
+    
+    // Fallback implementation if resolver isn't available
+    return this.legacyConvert(nodes, state, format);
+  }
+}
+```
+
+This approach:
+1. Avoids creating circular dependencies at initialization time
+2. Loads dependencies only when they're actually needed
+3. Provides fallback mechanisms when resolution fails
+4. Uses the ServiceProvider helper `resolveService()` rather than direct container access
+
+Key considerations when using direct container resolution:
+1. Always include fallback mechanisms
+2. Log resolution failures for debugging
+3. Cache resolved instances for performance
+4. Only resolve what you need, when you need it
+
+#### Benefits of Client Factory Pattern
+
+1. **Clear Dependencies**: Services explicitly state what they need through focused interfaces
+2. **Interface Segregation**: Services only get access to the specific methods they need
+3. **No Null Checks**: Factory creates clients at initialization time, eliminating null checks
+4. **Simpler Testing**: Small, focused interfaces are easier to mock
+5. **Reduced Tight Coupling**: Services are coupled only to minimal interfaces
+6. **Improved Code Readability**: Code intent becomes clearer when using direct method calls
+7. **Better Maintainability**: Changes to service interfaces won't affect all dependent services
+
+#### Naming Conventions
+
+For consistency across the codebase, we follow these naming conventions:
+
+- Client Interfaces: `I[ServiceName]Client` (e.g., `IPathServiceClient`)
+- Factory Classes: `[ServiceName]ClientFactory` (e.g., `PathServiceClientFactory`)
+- Factory Methods: `createClient()` for consistent API
+
+#### Testing with Client Factories
+
+Testing becomes more straightforward with the client factory pattern:
+
+```typescript
+describe('FileSystemService', () => {
+  let context: TestContextDI;
+  let service: IFileSystemService;
+  
+  beforeEach(() => {
+    context = TestContextDI.create();
+    
+    // Create a mock client
+    const mockPathClient = {
+      resolvePath: vi.fn().mockReturnValue('/resolved/path'),
+      normalizePath: vi.fn().mockReturnValue('normalized/path')
+    };
+    
+    // Create a mock factory that returns our mock client
+    const mockPathClientFactory = {
+      createClient: vi.fn().mockReturnValue(mockPathClient)
+    };
+    
+    // Register the mock factory
+    context.registerMock('PathServiceClientFactory', mockPathClientFactory);
+    
+    // Resolve the service
+    service = context.resolveSync('IFileSystemService');
+  });
+  
+  afterEach(async () => {
+    await context.cleanup();
+  });
+  
+  it('should resolve paths using the path client', async () => {
+    // Test that calling methods on the service uses the client correctly
+    await service.readFile('some/path');
+    
+    // Verify the path client was used
+    expect(mockPathClient.resolvePath).toHaveBeenCalledWith('some/path');
+  });
+});
+```
+
+For testing services that use direct container resolution, we register mocks directly with the container:
+
+```typescript
+describe('OutputService', () => {
+  let context: TestContextDI;
+  let service: IOutputService;
+  
+  beforeEach(() => {
+    context = TestContextDI.create();
+    
+    // Create a mock resolver client
+    const mockResolverClient = {
+      accessFields: vi.fn().mockReturnValue('resolved value'),
+      convertToString: vi.fn().mockReturnValue('formatted string')
+    };
+    
+    // Create a mock factory that returns our mock client
+    const mockFactory = {
+      createClient: vi.fn().mockReturnValue(mockResolverClient)
+    };
+    
+    // Register the mock factory with the container
+    context.registerMock('VariableReferenceResolverClientFactory', mockFactory);
+    
+    // Resolve the service
+    service = context.resolveSync('IOutputService');
+  });
+  
+  afterEach(async () => {
+    await context.cleanup();
+  });
+  
+  it('should convert nodes to markdown with field access', async () => {
+    const result = await service.convert(mockNodes, mockState, 'markdown');
+    expect(result).toContain('formatted string');
+  });
+});
+```
 
 ## EXAMPLE USAGE SCENARIO
 
@@ -496,7 +702,7 @@ This codebase implements the entire Meld language pipeline:
 • Resolving references (text, data, paths, commands).  
 • (Optionally) generating final formatted output.  
 
-The codebase uses TSyringe for dependency injection, which helps manage the complex relationships between services. The ServiceMediator pattern is used to handle circular dependencies between core services.
+The codebase uses TSyringe for dependency injection, which helps manage the complex relationships between services. The Client Factory pattern is used to handle circular dependencies between core services, with direct container resolution as an alternative for specific cases.
 
 The test environment includes robust DI support with TestContextDI, allowing for isolated container testing, mock registration, and service resolution. The system adheres to SOLID design principles with interface-first design and clear separation of concerns.
 
@@ -761,218 +967,6 @@ import { container } from 'tsyringe';
 container.register('FileSystemService', { useClass: FileSystemService });
 container.register('IFileSystemService', { useToken: 'FileSystemService' });
 ```
-
-## Dependency Resolution Patterns
-
-### Circular Dependency Challenges
-
-Circular dependencies occur when two or more services depend on each other, creating a dependency cycle:
-
-- **FileSystemService ↔ PathService**: FileSystemService needs PathService for path resolution, while PathService needs FileSystemService to check if paths exist
-- **ParserService ↔ ResolutionService**: ParserService needs ResolutionService to resolve variables, while ResolutionService needs ParserService to parse content
-- **StateService ↔ StateTrackingService**: Complex bidirectional relationship for state tracking and management
-
-### Service Mediator Pattern (Transitional Approach)
-
-Initially, Meld used a ServiceMediator pattern to handle circular dependencies:
-
-```typescript
-@Service()
-export class ServiceMediator implements IServiceMediator {
-  private fileSystemService?: IFileSystemService;
-  private pathService?: IPathService;
-  
-  // Registration methods
-  setFileSystemService(service: IFileSystemService): void {
-    this.fileSystemService = service;
-  }
-  
-  setPathService(service: IPathService): void {
-    this.pathService = service;
-  }
-  
-  // Proxy methods for FileSystem → Path
-  resolvePath(path: string): string {
-    if (!this.pathService) {
-      throw new Error("PathService not initialized");
-    }
-    return this.pathService.resolvePath(path);
-  }
-  
-  // Proxy methods for Path → FileSystem
-  async isDirectory(path: string): Promise<boolean> {
-    if (!this.fileSystemService) {
-      throw new Error("FileSystemService not initialized");
-    }
-    return this.fileSystemService.isDirectory(path);
-  }
-}
-```
-
-Services would inject the mediator and register themselves:
-
-```typescript
-@Service()
-export class FileSystemService implements IFileSystemService {
-  constructor(
-    @inject('IPathOperationsService') private readonly pathOps: IPathOperationsService,
-    @inject('ServiceMediator') private serviceMediator?: IServiceMediator
-  ) {
-    if (this.serviceMediator) {
-      this.serviceMediator.setFileSystemService(this);
-    }
-  }
-  
-  private resolvePath(filePath: string): string {
-    if (this.serviceMediator) {
-      return this.serviceMediator.resolvePath(filePath);
-    }
-    return filePath;
-  }
-}
-```
-
-While this approach works, it has several drawbacks:
-- **Tight Coupling**: All services with circular dependencies become coupled to the mediator
-- **Hidden Dependencies**: Not clear which specific services a service actually needs
-- **Null Checks Everywhere**: Services must check if the mediator exists and if requested services are registered
-- **Testing Complexity**: Need to mock the entire mediator with all its methods
-- **Maintenance Burden**: The mediator needs updating for every new circular dependency
-
-### Client Factory Pattern (Recommended Approach)
-
-The recommended pattern for handling circular dependencies is the Client Factory pattern:
-
-1. Create minimal client interfaces that expose only the methods needed by the dependent service
-2. Use factories to create these client interfaces
-3. Inject the factories rather than the actual services
-
-#### Example Implementation
-
-For the FileSystemService ↔ PathService circular dependency:
-
-```typescript
-// Minimal interface for what FileSystemService needs from PathService
-export interface IPathServiceClient {
-  resolvePath(path: string): string;
-  normalizePath(path: string): string;
-}
-
-// Factory to create a client for PathService functionality
-@injectable()
-@Service({
-  description: 'Factory for creating path service clients'
-})
-export class PathServiceClientFactory {
-  constructor(@inject('IPathService') private pathService: IPathService) {}
-  
-  createClient(): IPathServiceClient {
-    return {
-      resolvePath: (path) => this.pathService.resolvePath(path),
-      normalizePath: (path) => this.pathService.normalizePath(path)
-    };
-  }
-}
-
-// Updated FileSystemService that depends on the factory
-@injectable()
-@Service({
-  description: 'Service for file system operations'
-})
-export class FileSystemService implements IFileSystemService {
-  private pathClient: IPathServiceClient;
-  
-  constructor(
-    @inject('IPathOperationsService') private readonly pathOps: IPathOperationsService,
-    @inject('PathServiceClientFactory') pathClientFactory: PathServiceClientFactory,
-    @inject('IFileSystem') fileSystem: IFileSystem | null = null
-  ) {
-    this.fs = fileSystem || new NodeFileSystem();
-    this.pathClient = pathClientFactory.createClient();
-  }
-  
-  // Use the client interface directly
-  private resolvePath(filePath: string): string {
-    return this.pathClient.resolvePath(filePath);
-  }
-}
-```
-
-Similarly, implement the reverse direction with a `FileSystemServiceClient` and `FileSystemServiceClientFactory`.
-
-#### Benefits of Client Factory Pattern
-
-1. **Clear Dependencies**: Services explicitly state what they need through focused interfaces
-2. **Interface Segregation**: Services only get access to the specific methods they need
-3. **No Null Checks**: Factory creates clients at initialization time, eliminating null checks
-4. **Simpler Testing**: Small, focused interfaces are easier to mock
-5. **Reduced Tight Coupling**: Services are coupled only to minimal interfaces, not to a central mediator
-6. **Improved Code Readability**: Code intent becomes clearer when using direct method calls
-7. **Better Maintainability**: Changes to service interfaces won't affect all dependent services
-
-#### Naming Conventions
-
-For consistency across the codebase, we follow these naming conventions:
-
-- Client Interfaces: `I[ServiceName]Client` (e.g., `IPathServiceClient`)
-- Factory Classes: `[ServiceName]ClientFactory` (e.g., `PathServiceClientFactory`)
-- Factory Methods: `createClient()` for consistent API
-
-#### Testing with Client Factories
-
-Testing becomes more straightforward with the client factory pattern:
-
-```typescript
-describe('FileSystemService', () => {
-  let context: TestContextDI;
-  let service: IFileSystemService;
-  
-  beforeEach(() => {
-    context = TestContextDI.create();
-    
-    // Create a mock client
-    const mockPathClient = {
-      resolvePath: vi.fn().mockReturnValue('/resolved/path'),
-      normalizePath: vi.fn().mockReturnValue('normalized/path')
-    };
-    
-    // Create a mock factory that returns our mock client
-    const mockPathClientFactory = {
-      createClient: vi.fn().mockReturnValue(mockPathClient)
-    };
-    
-    // Register the mock factory
-    context.registerMock('PathServiceClientFactory', mockPathClientFactory);
-    
-    // Resolve the service
-    service = context.resolveSync('IFileSystemService');
-  });
-  
-  afterEach(async () => {
-    await context.cleanup();
-  });
-  
-  it('should resolve paths using the path client', async () => {
-    // Test that calling methods on the service uses the client correctly
-    await service.readFile('some/path');
-    
-    // Verify the path client was used
-    expect(mockPathClient.resolvePath).toHaveBeenCalledWith('some/path');
-  });
-});
-```
-
-#### Implementation Strategy
-
-The client factory pattern is being implemented incrementally to maintain backward compatibility:
-
-1. First, create and register client interfaces and factories
-2. Update services to use factories while maintaining mediator compatibility
-3. Run tests to ensure functionality is preserved
-4. Gradually remove ServiceMediator usage once all services use factories
-5. Finally, remove the ServiceMediator class and interface completely
-
-This approach allows for a smooth transition without breaking existing functionality.
 
 ## Troubleshooting
 
