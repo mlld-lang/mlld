@@ -520,7 +520,11 @@ export class InterpreterService implements IInterpreterService, InterpreterServi
               logger.debug('Applying replacement node from directive handler', {
                 originalType: node.type,
                 replacementType: replacement.type,
-                directiveKind: directiveNode.directive.kind
+                directiveKind: directiveNode.directive.kind,
+                isVarReference: directiveNode.directive.kind === 'embed' && 
+                               typeof directiveNode.directive.path === 'object' &&
+                               directiveNode.directive.path !== null &&
+                               'isVariableReference' in directiveNode.directive.path
               });
               
               // Apply the transformation by replacing the directive node with the replacement
@@ -534,6 +538,32 @@ export class InterpreterService implements IInterpreterService, InterpreterServi
                     logger.debug('Initialized transformed nodes array', {
                       nodesCount: originalNodes.length
                     });
+                  }
+                }
+                
+                // Special handling for variable-based embed directives
+                if (directiveNode.directive.kind === 'embed' && 
+                    typeof directiveNode.directive.path === 'object' &&
+                    directiveNode.directive.path !== null &&
+                    'isVariableReference' in directiveNode.directive.path) {
+                  logger.debug('Processing variable-based embed transformation', {
+                    path: directiveNode.directive.path,
+                    hasReplacement: !!replacement
+                  });
+                  
+                  // Make sure all variables are copied properly
+                  try {
+                    this.stateVariableCopier.copyAllVariables(
+                      currentState as unknown as IStateService, 
+                      originalState as unknown as IStateService, 
+                      {
+                        skipExisting: false,
+                        trackContextBoundary: false,
+                        trackVariableCrossing: false
+                      }
+                    );
+                  } catch (e) {
+                    logger.debug('Error copying variables from variable-based embed to original state', { error: e });
                   }
                 }
                 

@@ -259,6 +259,30 @@ interface IResolutionService {
   detectCircularReferences(value: string): Promise<void>;
   
   /**
+   * Convert a value to a formatted string based on the provided formatting context.
+   * This is particularly useful for handling data variables in different output contexts.
+   * 
+   * @param value - The value to convert to a string
+   * @param options - Formatting options including context information
+   * @returns The formatted string representation of the value
+   * 
+   * @example
+   * ```ts
+   * const formatted = await resolutionService.convertToFormattedString(
+   *   dataValue,
+   *   { 
+   *     formattingContext: { 
+   *       isBlock: true, 
+   *       nodeType: 'embed',
+   *       isTransformation: true 
+   *     }
+   *   }
+   * );
+   * ```
+   */
+  convertToFormattedString(value: any, options?: any): Promise<string>;
+  
+  /**
    * Enable tracking of variable resolution attempts.
    * This is primarily used for debugging and visualization.
    * 

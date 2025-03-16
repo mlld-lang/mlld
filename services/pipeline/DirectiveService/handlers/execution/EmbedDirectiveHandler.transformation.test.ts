@@ -421,5 +421,122 @@ describe('EmbedDirectiveHandler Transformation', () => {
 
       await expect(handler.execute(node, context)).rejects.toThrow(DirectiveError);
     });
+
+    it('should properly transform variable-based embed directive with field access', async () => {
+      // Create a complex data object
+      const userData = {
+        user: {
+          name: 'Test User',
+          profile: {
+            bio: 'This is a test bio.',
+            contact: {
+              email: 'test@example.com',
+              phone: '555-1234'
+            }
+          },
+          settings: {
+            theme: 'dark',
+            notifications: true
+          }
+        }
+      };
+
+      // Mock the state service to return the data object
+      stateService.getDataVar.mockImplementation((name) => {
+        if (name === 'userData') {
+          return userData;
+        }
+        return undefined;
+      });
+      stateService.isTransformationEnabled.mockReturnValue(true);
+
+      // Create a variable reference embed directive with field access
+      const varReference = {
+        identifier: 'userData',
+        content: 'userData.user.profile.bio',
+        isVariableReference: true
+      };
+
+      const node = createEmbedDirective(varReference, undefined, createLocation(1, 1));
+      const context = { currentFilePath: 'test.meld', state: stateService };
+
+      // Mock the resolution service to return the field value
+      resolutionService.resolveInContext.mockResolvedValue('This is a test bio.');
+      resolutionService.resolveFieldAccess.mockResolvedValue('This is a test bio.');
+      resolutionService.convertToFormattedString.mockResolvedValue('This is a test bio.');
+
+      // Execute the handler
+      const result = await handler.execute(node, context);
+
+      // Verify the result
+      expect(result.replacement).toBeDefined();
+      expect(result.replacement).toEqual({
+        type: 'Text',
+        content: 'This is a test bio.',
+        location: node.location
+      });
+
+      // Verify transformation was registered correctly on the cloned state
+      // Not on the original stateService
+      expect(clonedState.transformNode).toHaveBeenCalledWith(node, result.replacement);
+    });
+
+    it('should properly transform variable-based embed directive with object field access', async () => {
+      // Create a complex data object
+      const userData = {
+        user: {
+          name: 'Test User',
+          profile: {
+            bio: 'This is a test bio.',
+            contact: {
+              email: 'test@example.com',
+              phone: '555-1234'
+            }
+          }
+        }
+      };
+
+      // Mock the state service to return the data object
+      stateService.getDataVar.mockImplementation((name) => {
+        if (name === 'userData') {
+          return userData;
+        }
+        return undefined;
+      });
+      stateService.isTransformationEnabled.mockReturnValue(true);
+
+      // Create a variable reference embed directive with field access to an object
+      const varReference = {
+        identifier: 'userData',
+        content: 'userData.user.profile.contact',
+        isVariableReference: true
+      };
+
+      const node = createEmbedDirective(varReference, undefined, createLocation(1, 1));
+      const context = { currentFilePath: 'test.meld', state: stateService };
+
+      // Mock the resolution service to return the field value (an object)
+      const contactObject = { email: 'test@example.com', phone: '555-1234' };
+      resolutionService.resolveInContext.mockResolvedValue(JSON.stringify(contactObject, null, 2));
+      resolutionService.resolveFieldAccess.mockResolvedValue(contactObject);
+      resolutionService.convertToFormattedString.mockResolvedValue(
+        JSON.stringify(contactObject, null, 2)
+      );
+
+      // Execute the handler
+      const result = await handler.execute(node, context);
+
+      // Verify the result
+      expect(result.replacement).toBeDefined();
+      expect(result.replacement).toEqual({
+        type: 'Text',
+        content: JSON.stringify(contactObject, null, 2),
+        location: node.location
+      });
+
+      // Verify transformation was registered correctly on the cloned state
+      // Not on the original stateService
+      expect(clonedState.transformNode).toHaveBeenCalledWith(node, result.replacement);
+    });
   });
 }); 

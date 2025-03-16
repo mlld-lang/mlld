@@ -460,10 +460,23 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
                   state: resolutionContext?.state || newState
                 };
                 
+                // Create field access options with formatting context
+                const fieldAccessOptions: any = {
+                  preserveType: true, // Preserve the original type
+                  variableName: variableNameStr, // For error reporting
+                  formattingContext: {
+                    isBlock: true, // Treat as block content by default
+                    nodeType: 'embed',
+                    linePosition: 'start', // Default position
+                    isTransformation: newState.isTransformationEnabled() // Pass transformation status
+                  }
+                };
+                
                 const resolvedField = await this.resolutionService.resolveFieldAccess(
                   variableNameStr,
                   fieldPath,
-                  typedContext
+                  typedContext,
+                  fieldAccessOptions
                 );
                 
                 this.logger.debug(`Resolved field access ${variableNameStr}.${fieldPath} to:`, resolvedField);
@@ -475,7 +488,23 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
                   content = resolvedField;
                 } else if (typeof resolvedField === 'object') {
                   // Use pretty formatting for objects and arrays when in transform mode
-                  content = JSON.stringify(resolvedField, null, 2);
+                  if (newState.isTransformationEnabled() && fieldAccessOptions.preserveType) {
+                    try {
+                      // Use formatting context for consistent output
+                      content = await this.resolutionService.convertToFormattedString(
+                        resolvedField,
+                        fieldAccessOptions
+                      );
+                    } catch (error) {
+                      // Fall back to JSON.stringify if formatting fails
+                      this.logger.warn('Failed to format object with formatting context, using JSON.stringify', {
+                        error: error instanceof Error ? error.message : String(error)
+                      });
+                      content = JSON.stringify(resolvedField, null, 2);
+                    }
+                  } else {
+                    content = JSON.stringify(resolvedField, null, 2);
+                  }
                 } else {
                   content = String(resolvedField);
                 }
@@ -834,31 +863,23 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
       };
 
       // In transformation mode, register the replacement
-      // NOTE: Variable-based embed transformation has an issue that will be fixed in Phase 4B
       if (newState.isTransformationEnabled()) {
         this.logger.debug('EmbedDirectiveHandler - registering transformation:', {
           nodeLocation: node.location,
           transformEnabled: newState.isTransformationEnabled(),
-          replacementContent: content.substring(0, 50) + (content.length > 50 ? '...' : '')
+          replacementContent: content.substring(0, 50) + (content.length > 50 ? '...' : ''),
+          isVariableReference: typeof path === 'object' && 
+                             path !== null && 
+                             'isVariableReference' in path && 
+                             path.isVariableReference === true
         });
         
-        // Log a warning if this is a variable-based embed
-        if (typeof path === 'object' && 
-            path !== null && 
-            'isVariableReference' in path && 
-            path.isVariableReference === true) {
-          console.log(
-            'NOTE: Variable-based embed transformation will be properly fixed in Phase 4B. ' +
-            'See _dev/issues/inbox/p1-variable-embed-transformation-issue.md'
-          );
-        }
-        
-        // Register the transformation (this part will be enhanced in Phase 4B)
+        // Register the transformation regardless of path type (file or variable)
         newState.transformNode(node, replacement);
       }
 
       return {
-        state: newState, // Return newState to maintain compatibility with existing tests
+        state: newState,
         replacement
       };
     } catch (error: any) {

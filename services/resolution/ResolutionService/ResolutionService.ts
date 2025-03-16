@@ -1366,4 +1366,58 @@ export class ResolutionService implements IResolutionService {
       );
     }
   }
+
+  /**
+   * Convert a value to a formatted string based on the provided formatting context.
+   * Delegates to the VariableReferenceResolverClient when available.
+   * 
+   * @param value - The value to convert to a string
+   * @param options - Formatting options including context information
+   * @returns The formatted string representation of the value
+   */
+  async convertToFormattedString(value: any, options?: any): Promise<string> {
+    // First try to use the client for proper formatting
+    if (!this.variableResolverClient) {
+      this.initializeVariableResolverClient();
+    }
+    
+    if (this.variableResolverClient) {
+      try {
+        return this.variableResolverClient.convertToString(value, options);
+      } catch (error) {
+        logger.warn('Error using variableResolverClient.convertToString, falling back to basic formatting', { 
+          error: error instanceof Error ? error.message : String(error) 
+        });
+      }
+    }
+    
+    // Fall back to basic formatting
+    if (value === undefined || value === null) {
+      return '';
+    } else if (typeof value === 'string') {
+      return value;
+    } else if (typeof value === 'object') {
+      try {
+        // Check if this is a block context from options
+        const isBlock = options?.formattingContext?.isBlock === true;
+        const isTransformation = options?.formattingContext?.isTransformation === true;
+        
+        // For objects in block context or transformation mode, use pretty printing
+        if ((isBlock || isTransformation) && (Array.isArray(value) || Object.keys(value).length > 0)) {
+          return JSON.stringify(value, null, 2);
+        }
+        
+        // For inline contexts, use compact representation
+        return JSON.stringify(value);
+      } catch (error) {
+        logger.warn('Error formatting object to string', { 
+          error: error instanceof Error ? error.message : String(error) 
+        });
+        return String(value);
+      }
+    } else {
+      // For primitive values, just use String()
+      return String(value);
+    }
+  }
 } 
