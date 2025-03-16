@@ -71,4 +71,6 @@ export interface ProcessOptions {
   fs?: NodeFileSystem;
   /** Optional service overrides */
   services?: Partial<Services>;
+  /** Controls whether to apply Prettier formatting to the output */
+  pretty?: boolean;
 } 

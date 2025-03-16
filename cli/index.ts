@@ -50,6 +50,7 @@ export interface CLIOptions {
   includeContent?: boolean;
   debugSourceMaps?: boolean; // Flag to display source mapping information
   detailedSourceMaps?: boolean; // Flag to display detailed source mapping information
+  pretty?: boolean; // Flag to enable Prettier formatting
   // No transform options - transformation is always enabled
 }
 
@@ -219,6 +220,9 @@ function parseArgs(args: string[]): CLIOptions {
       case '--include-content':
         options.includeContent = true;
         break;
+      case '--pretty':
+        options.pretty = true;
+        break;
       // Transformation is always enabled by default
       // No transform flags needed
       default:
@@ -290,6 +294,7 @@ Options:
   --stdout                Print to stdout instead of file
   --strict                Enable strict mode (fail on all errors)
   --permissive            Enable permissive mode (ignore recoverable errors) [default]
+  --pretty                Format the output with Prettier
   --home-path <path>      Custom home path for ~/ substitution
   -v, --verbose           Enable verbose output (some additional info)
   -d, --debug             Enable debug output (full verbose logging)
@@ -449,7 +454,8 @@ function cliToApiOptions(cliOptions: CLIOptions): ProcessOptions {
     debug: cliOptions.debug,
     // Always transform by default
     transformation: true,
-    fs: cliOptions.custom ? undefined : new NodeFileSystem() // Allow custom filesystem in test mode
+    fs: cliOptions.custom ? undefined : new NodeFileSystem(), // Allow custom filesystem in test mode
+    pretty: cliOptions.pretty
   };
   
   // Add strict property to options for backward compatibility with tests

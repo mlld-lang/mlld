@@ -1,6 +1,7 @@
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IOutputService, OutputFormat, OutputOptions } from '@services/pipeline/OutputService/IOutputService.js';
 import type { IResolutionService, ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
+import { formatWithPrettier } from '@core/utils/prettierUtils.js';
 
 /**
  * TODO: Terminology Standardization (Phase 3.1 of p0-newlines)
@@ -581,7 +582,8 @@ export class OutputService implements IOutputService {
       format,
       nodeCount: nodes.length,
       options: opts,
-      transformationEnabled: state.isTransformationEnabled()
+      transformationEnabled: state.isTransformationEnabled(),
+      pretty: opts.pretty
     });
 
     // Use transformed nodes if transformation is enabled
@@ -595,20 +597,36 @@ export class OutputService implements IOutputService {
     }
 
     try {
-      const result = await formatter(nodesToProcess, state, opts);
+      // Get the raw output from the formatter
+      let result = await formatter(nodesToProcess, state, opts);
+      
+      // Apply Prettier formatting if requested
+      if (opts.pretty) {
+        // Use the correct parser based on the format
+        const parser = format === 'xml' ? 'html' : 'markdown';
+        result = await formatWithPrettier(result, parser as 'markdown' | 'json' | 'html');
+        
+        logger.debug('Applied Prettier formatting', {
+          format,
+          parser,
+          resultLength: result.length
+        });
+      }
       
       logger.debug('Successfully converted output', {
         format,
         resultLength: result.length,
         transformationEnabled: state.isTransformationEnabled(),
-        transformedNodesCount: state.isTransformationEnabled() ? state.getTransformedNodes().length : 0
+        transformedNodesCount: state.isTransformationEnabled() ? state.getTransformedNodes().length : 0,
+        pretty: opts.pretty
       });
 
       return result;
     } catch (error) {
       logger.error('Failed to convert output', {
         format,
-        error
+        error,
+        pretty: opts.pretty
       });
 
       if (error instanceof MeldOutputError) {

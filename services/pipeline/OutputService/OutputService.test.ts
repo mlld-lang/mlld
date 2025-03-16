@@ -71,6 +71,9 @@ describe('OutputService', () => {
     context.registerMock('IResolutionService', resolutionService);
     context.registerMock(VariableNodeFactory, mockVariableNodeFactory);
     
+    // We're using spies in individual tests
+    // No need for a global mock here
+    
     // Initialize context
     await context.initialize();
     
@@ -814,6 +817,89 @@ describe('OutputService', () => {
       
       // No additional newlines should be added at boundaries in output-literal mode
       expect(result).not.toContain('\n\n\n');
+    });
+  });
+
+  describe('Prettier Integration', () => {
+    it('should call formatWithPrettier when pretty option is true', async () => {
+      // Create simple nodes
+      const nodes = [
+        createTextNode('# Simple content', createLocation(1, 1))
+      ];
+      
+      // Set up mocks
+      vi.mocked(state.getTransformedNodes).mockReturnValue(nodes);
+      vi.mocked(state.isTransformationEnabled).mockReturnValue(true);
+      
+      // Create a spy on the formatWithPrettier import
+      const prettierUtils = await import('@core/utils/prettierUtils.js');
+      const formatSpy = vi.spyOn(prettierUtils, 'formatWithPrettier');
+      formatSpy.mockResolvedValue('# Formatted content');
+      
+      // Call with pretty option
+      await service.convert(nodes, state, 'markdown', {
+        pretty: true
+      });
+      
+      // Verify the spy was called
+      expect(formatSpy).toHaveBeenCalled();
+      expect(formatSpy).toHaveBeenCalledWith(expect.any(String), 'markdown');
+      
+      // Clean up the spy
+      formatSpy.mockRestore();
+    });
+    
+    it('should use the correct parser for XML format', async () => {
+      // Create simple XML nodes
+      const nodes = [
+        createTextNode('<tag>content</tag>', createLocation(1, 1))
+      ];
+      
+      // Set up mocks
+      vi.mocked(state.getTransformedNodes).mockReturnValue(nodes);
+      vi.mocked(state.isTransformationEnabled).mockReturnValue(true);
+      
+      // Create a spy on the formatWithPrettier import
+      const prettierUtils = await import('@core/utils/prettierUtils.js');
+      const formatSpy = vi.spyOn(prettierUtils, 'formatWithPrettier');
+      formatSpy.mockResolvedValue('<tag>\n  content\n</tag>');
+      
+      // Call with pretty option and XML format
+      await service.convert(nodes, state, 'xml', {
+        pretty: true
+      });
+      
+      // Verify the spy was called with HTML parser for XML content
+      expect(formatSpy).toHaveBeenCalledWith(expect.any(String), 'html');
+      
+      // Clean up the spy
+      formatSpy.mockRestore();
+    });
+    
+    it('should not call formatWithPrettier when pretty option is false', async () => {
+      // Create simple nodes
+      const nodes = [
+        createTextNode('# Simple content', createLocation(1, 1))
+      ];
+      
+      // Set up mocks
+      vi.mocked(state.getTransformedNodes).mockReturnValue(nodes);
+      vi.mocked(state.isTransformationEnabled).mockReturnValue(true);
+      
+      // Create a spy on the formatWithPrettier import
+      const prettierUtils = await import('@core/utils/prettierUtils.js');
+      const formatSpy = vi.spyOn(prettierUtils, 'formatWithPrettier');
+      
+      // Call without pretty option
+      await service.convert(nodes, state, 'markdown', {
+        pretty: false
+      });
+      
+      // Verify the spy was not called
+      expect(formatSpy).not.toHaveBeenCalled();
+      
+      // Clean up the spy
+      formatSpy.mockRestore();
     });
   });
 }); 

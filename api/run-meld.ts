@@ -63,7 +63,9 @@ export async function runMeld(
   const defaultOptions: ProcessOptions = {
     format: 'markdown',
     transformation: true,
-    fs: memoryFS
+    fs: memoryFS,
+    // Default to no pretty formatting
+    pretty: false
   };
   
   // Merge options
@@ -203,10 +205,14 @@ export async function runMeld(
     const outputFormat = normalizeFormat(mergedOptions.format || 'markdown');
     
     // Convert to desired format
-    let converted = await services.output.convert(nodesToProcess, resultState, outputFormat);
+    let converted = await services.output.convert(nodesToProcess, resultState, outputFormat, {
+      // Pass the pretty option to the output service
+      pretty: mergedOptions.pretty
+    });
     
-    // Post-process the output in transformation mode
-    if (resultState.isTransformationEnabled()) {
+    // Phase 1: Keep legacy post-processing for backward compatibility when not using Prettier
+    // Phase 2: These workarounds will be completely removed
+    if (resultState.isTransformationEnabled() && !mergedOptions.pretty) {
       // Fix newlines in variable output
       converted = converted
         // Replace multiple newlines with a single newline
@@ -217,6 +223,7 @@ export async function runMeld(
         .replace(/(\w+):\n{/g, '$1: {')
         .replace(/},\n(\w+):/g, '}, $1:');
     }
+    // When Prettier is enabled, we don't need these workarounds as Prettier handles formatting
     
     return converted;
   } catch (error) {

@@ -27,6 +27,13 @@ interface OutputOptions {
   preserveFormatting?: boolean;
 
   /**
+   * Whether to apply Prettier formatting to the output.
+   * When true, the output is formatted according to Prettier rules.
+   * @default false
+   */
+  pretty?: boolean;
+
+  /**
    * Custom format-specific options.
    * Additional options passed to specific format converters.
    */
