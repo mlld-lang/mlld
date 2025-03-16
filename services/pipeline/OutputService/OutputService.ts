@@ -1211,22 +1211,48 @@ export class OutputService implements IOutputService {
       // Log the markdown for debugging
       logger.debug('Converting markdown to XML', { markdown });
 
-      // Use llmxml directly with version 1.3.0+
+      // Use enhanced llmxml 1.5.0 features
       const { createLLMXML } = await import('llmxml');
+      
+      // Extract XML format options from the options parameter
+      const xmlOptions = options?.formatOptions?.xml || {};
+      
+      // Create LLMXML instance with more granular configuration
       const llmxml = createLLMXML({
-        defaultFuzzyThreshold: 0.7,
+        warningLevel: 'none'
+      });
+      
+      // Convert markdown to XML using llmxml with per-call configuration
+      const xmlResult = await llmxml.toXML(markdown, {
+        // Apply defaults, then override with any provided options
         includeHlevel: false,
         includeTitle: false,
         tagFormat: 'PascalCase',
-        verbose: false,
-        warningLevel: 'all'
+        ...xmlOptions
       });
       
-      // Convert markdown to XML using llmxml
-      const xmlResult = await llmxml.toXML(markdown);
       logger.debug('Successfully converted to XML', { xmlLength: xmlResult.length });
       return xmlResult;
     } catch (error) {
+      // Use enhanced error handling from llmxml 1.5.0
+      if (error && typeof error === 'object' && 'code' in error) {
+        const llmError = error as any;
+        logger.error('LLMXML conversion error', {
+          code: llmError.code,
+          details: llmError.details
+        });
+        
+        throw new MeldOutputError(
+          `XML conversion error: ${llmError.message || 'Unknown error'}`,
+          'xml',
+          { 
+            cause: error,
+            details: llmError.details
+          }
+        );
+      }
+      
+      // Standard error handling for non-llmxml errors
       logger.error('Error in convertToXML', {
         error: error instanceof Error ? error.message : String(error)
       });

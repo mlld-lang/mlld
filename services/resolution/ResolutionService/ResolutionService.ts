@@ -889,15 +889,6 @@ export class ResolutionService implements IResolutionService {
    * @param content The content to extract the section from
    * @param heading The heading text to search for
    * @param fuzzy Optional fuzzy matching threshold (0-1, where 1 is exact match, defaults to 0.7)
-   * 
-   * NOTE: This implementation contains workarounds for limitations in the llmxml library.
-   * See dev/LLMXML-IMPROVEMENTS.md for details about planned improvements to the library
-   * instead of maintaining these workarounds.
-   * 
-   * Current workarounds include:
-   * 1. Manual section extraction when llmxml fails
-   * 2. Error reporting with available headings
-   * 3. Configurable fuzzy matching threshold
    */
   async extractSection(content: string, heading: string, fuzzy?: number): Promise<string> {
     logger.debug('Extracting section from content', {
@@ -907,55 +898,17 @@ export class ResolutionService implements IResolutionService {
     });
     
     try {
-      // Use llmxml for section extraction
-      // TODO: Once llmxml is enhanced with better error reporting and per-call
-      // configuration, simplify this implementation
+      // Use llmxml for section extraction with new improved API
       const { createLLMXML } = await import('llmxml');
       const llmxml = createLLMXML({
-        defaultFuzzyThreshold: fuzzy !== undefined ? fuzzy : 0.7,
         warningLevel: 'none'
       });
       
-      // Extract the section directly from markdown
+      // Extract the section directly from markdown using per-call configuration
       const section = await llmxml.getSection(content, heading, {
-        exact: fuzzy === 1 || fuzzy === undefined ? false : true,
         includeNested: true,
-        fuzzyThreshold: fuzzy
+        fuzzyThreshold: fuzzy !== undefined ? fuzzy : 0.7
       });
-      
-      if (!section) {
-        // If section not found with llmxml, fall back to manual extraction
-        // TODO: Remove this fallback once llmxml reliability is improved
-        const manualSection = this.manualSectionExtraction(content, heading, fuzzy);
-        
-        if (manualSection) {
-          logger.debug('Found section using manual extraction', {
-            heading,
-            sectionLength: manualSection.length
-          });
-          return manualSection;
-        }
-        
-        // If still not found, throw error with enhanced diagnostic information
-        // TODO: Once llmxml provides this information, use it directly
-        logger.warn('Section not found', {
-          heading,
-          contentFirstLines: content.split('\n').slice(0, 5).join('\n')
-        });
-        
-        throw new MeldResolutionError(
-          'Section not found: ' + heading,
-          {
-            code: ResolutionErrorCode.SECTION_NOT_FOUND,
-            details: { 
-              value: heading,
-              contentPreview: content.substring(0, 100) + '...',
-              availableHeadings: this.extractHeadings(content).join(', ')
-            },
-            severity: ErrorSeverity.Recoverable
-          }
-        );
-      }
       
       logger.debug('Found section using llmxml', {
         heading,
@@ -968,31 +921,51 @@ export class ResolutionService implements IResolutionService {
         throw error;
       }
       
-      // Log the actual error for debugging
+      // Handle error from llmxml, which now provides detailed diagnostic information
+      if (error && typeof error === 'object' && 'code' in error) {
+        const llmError = error as any;
+        
+        if (llmError.code === 'SECTION_NOT_FOUND') {
+          // Get available headings and closest matches from the error details
+          const availableHeadings = llmError.details?.availableHeadings?.map((h: any) => h.title) || [];
+          const closestMatches = llmError.details?.closestMatches?.map((m: any) => 
+            `${m.title} (${Math.round(m.similarity * 100)}%)`
+          ) || [];
+          
+          logger.warn('Section not found', {
+            heading,
+            availableHeadings,
+            closestMatches
+          });
+          
+          throw new MeldResolutionError(
+            'Section not found: ' + heading,
+            {
+              code: ResolutionErrorCode.SECTION_NOT_FOUND,
+              details: { 
+                value: heading,
+                contentPreview: content.substring(0, 100) + '...',
+                availableHeadings: availableHeadings.join(', '),
+                suggestions: closestMatches.join(', ')
+              },
+              severity: ErrorSeverity.Recoverable
+            }
+          );
+        }
+      }
+      
+      // For other errors, log and rethrow with additional context
       logger.error('Error extracting section', {
         heading,
         error: error instanceof Error ? error.message : String(error)
       });
       
-      // Try manual extraction as fallback after llmxml error
-      // TODO: Remove once llmxml error handling is improved
-      const manualSection = this.manualSectionExtraction(content, heading, fuzzy);
-      if (manualSection) {
-        logger.debug('Found section using manual extraction after llmxml error', {
-          heading,
-          sectionLength: manualSection.length
-        });
-        return manualSection;
-      }
-      
       throw new MeldResolutionError(
-        'Section not found: ' + heading,
+        `Failed to extract section: ${error instanceof Error ? error.message : String(error)}`,
         {
-          code: ResolutionErrorCode.SECTION_NOT_FOUND,
+          code: ResolutionErrorCode.SECTION_EXTRACTION_FAILED,
           details: { 
-            value: heading,
-            error: error instanceof Error ? error.message : String(error),
-            availableHeadings: this.extractHeadings(content).join(', ')
+            value: heading
           },
           severity: ErrorSeverity.Recoverable
         }
@@ -1001,137 +974,26 @@ export class ResolutionService implements IResolutionService {
   }
   
   /**
-   * Extract all headings from content for error reporting
-   * This functionality should ideally be provided by the llmxml library
+   * Extract all headings from content using llmxml.getHeadings
+   * This uses the new API from llmxml 1.5.0
    * @private
-   * @todo Move this functionality into llmxml
    */
-  private extractHeadings(content: string): string[] {
-    const headings: string[] = [];
-    const lines = content.split('\n');
-    
-    for (const line of lines) {
-      const match = line.match(/^(#{1,6})\s+(.+)$/);
-      if (match) {
-        headings.push(match[2].trim());
-      }
-    }
-    
-    return headings;
-  }
-  
-  /**
-   * Manual section extraction as a fallback when llmxml fails
-   * This is a workaround for limitations in the llmxml library
-   * @private
-   * @todo Remove once llmxml reliability is improved
-   */
-  private manualSectionExtraction(content: string, heading: string, fuzzy?: number): string | null {
+  private async extractHeadingsFromContent(content: string): Promise<{ title: string; level: number; path: string[] }[]> {
     try {
-      const lines = content.split('\n');
-      const threshold = fuzzy !== undefined ? fuzzy : 0.7;
+      const { createLLMXML } = await import('llmxml');
+      const llmxml = createLLMXML({
+        warningLevel: 'none'
+      });
       
-      // Find all headings with their levels
-      const headings: { text: string; level: number; index: number }[] = [];
-      
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        const match = line.match(/^(#{1,6})\s+(.+)$/);
-        if (match) {
-          headings.push({
-            text: match[2].trim(),
-            level: match[1].length,
-            index: i
-          });
-        }
-      }
-      
-      if (headings.length === 0) {
-        return null;
-      }
-      
-      // Find the best matching heading
-      let bestMatch: { text: string; level: number; index: number; similarity: number } | null = null;
-      
-      for (const h of headings) {
-        const similarity = this.calculateSimilarity(h.text, heading);
-        if (similarity >= threshold && (!bestMatch || similarity > bestMatch.similarity)) {
-          bestMatch = { ...h, similarity };
-        }
-      }
-      
-      if (!bestMatch) {
-        return null;
-      }
-      
-      // Find the end of the section (next heading of same or higher level)
-      let endIndex = lines.length;
-      
-      for (let i = bestMatch.index + 1; i < headings.length; i++) {
-        const nextHeading = headings[i];
-        if (nextHeading.level <= bestMatch.level) {
-          endIndex = nextHeading.index;
-          break;
-        }
-      }
-      
-      // Extract the section content
-      const sectionLines = lines.slice(bestMatch.index, endIndex);
-      return sectionLines.join('\n');
+      // Use the new getHeadings method
+      const headings = await llmxml.getHeadings(content);
+      return headings;
     } catch (error) {
-      logger.warn('Manual section extraction failed', {
-        heading,
+      logger.warn('Error extracting headings', {
         error: error instanceof Error ? error.message : String(error)
       });
-      return null;
+      return [];
     }
-  }
-
-  // TODO: This isn't really necessary as llmxml has built-in 
-  private calculateSimilarity(str1: string, str2: string): number {
-    // Convert strings to lowercase for case-insensitive comparison
-    const s1 = str1.toLowerCase();
-    const s2 = str2.toLowerCase();
-
-    // If either string is empty, return 0
-    if (!s1 || !s2) {
-      return 0;
-    }
-
-    // If strings are equal, return 1
-    if (s1 === s2) {
-      return 1;
-    }
-
-    // Calculate Levenshtein distance
-    const m = s1.length;
-    const n = s2.length;
-    const d: number[][] = Array(m + 1).fill(0).map(() => Array(n + 1).fill(0));
-
-    // Initialize first row and column
-    for (let i = 0; i <= m; i++) {
-      d[i][0] = i;
-    }
-    for (let j = 0; j <= n; j++) {
-      d[0][j] = j;
-    }
-
-    // Fill in the rest of the matrix
-    for (let i = 1; i <= m; i++) {
-      for (let j = 1; j <= n; j++) {
-        const cost = s1[i - 1] === s2[j - 1] ? 0 : 1;
-        d[i][j] = Math.min(
-          d[i - 1][j] + 1,      // deletion
-          d[i][j - 1] + 1,      // insertion
-          d[i - 1][j - 1] + cost // substitution
-        );
-      }
-    }
-
-    // Convert distance to similarity score between 0 and 1
-    const maxLength = Math.max(m, n);
-    const distance = d[m][n];
-    return 1 - (distance / maxLength);
   }
 
   private nodesToString(nodes: MeldNode[]): string {
