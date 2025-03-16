@@ -157,9 +157,9 @@ Our spec for how newlines should be handled can be viewed by running `gh view is
 
 Our spec for how newlines should be handled can be viewed by running `gh view issue 19`
 
-**Goal**: Create consistent text formatting and newline handling across the codebase.
+**Goal**: Create consistent text formatting and newline handling across the codebase, with particular focus on directives and their transformations.
 
-**Tasks**:
+#### *Original Tasks*:
 1. Document formatting standards:
    - Define clear rules for newlines between different node types
    - Specify formatting rules for variable substitution
@@ -175,22 +175,93 @@ Our spec for how newlines should be handled can be viewed by running `gh view is
    - Improve detection of line boundaries
    - Add context-aware indentation handling
 
-4. Create specialized tests:
-   - Add tests for newline handling between different node types
-   - Test formatting preservation during variable substitution
+4. **Fix directive transformation content preservation**:
+   - CRITICAL: Update directiveToMarkdown method to preserve transformed content instead of generating placeholders in transformation mode
+   - Implement logic to distinguish between transformation mode and normal mode in directive processing
+   - For execution directives (run, import, embed), verify the OutputService checks if a directive has been transformed rather than returning placeholders
+   - Add explicit checks in OutputService.convertToMarkdown to use the transformed content from DirectiveHandler replacements
+
+5. **Fix EmbedDirectiveHandler transformation output**:
+   - Ensure that when EmbedDirectiveHandler creates a replacement TextNode in transformation mode, that content is properly preserved
+   - Add explicit handling for newlines in directive replacements to comply with the newline specification
+   - Fix variable-based path handling in embed transformations to correctly resolve and preserve content
+   - Add debugging logs to track the flow of content through the transformation pipeline
+
+6. **Add proper directive boundary handling**:
+   - Implement consistent newline handling between directives and surrounding content
+   - Add awareness of previous node type when processing consecutive nodes to maintain proper spacing
+   - Fix the specific case where directive content followed by normal content loses its newlines
+
+7. Create specialized tests:
+   - Add tests for directive transformation content preservation
+   - Create tests that specifically verify variable-based embed transformations maintain content
+   - Test newline handling between different node types, especially directives and surrounding content
    - Test boundary cases (beginning/end of line, nested structures)
 
-5. Ensure architectural consistency:
+8. Ensure architectural consistency:
    - Review FormattingContext implementation for proper encapsulation
    - Verify appropriate dependency patterns for formatting components
    - Ensure formatting logic doesn't create new circular dependencies
    - Apply interface segregation for any formatting-related interfaces
+
+#### *Additional Critical Guidance*:
+
+9. **Preserve Test Compatibility**:
+   - IMPORTANT: When modifying placeholder text or output formats, verify against existing test expectations first
+   - If the test expects `[directive output placeholder]` but your new code would produce `[embed directive output placeholder]`, the original format must be preserved
+   - Direct tests against the actual placeholder values should be updated, but all other dependent tests should maintain backward compatibility
+
+10. **Prevent Variable Reference Duplication**:
+    - CRITICAL: When updating the variable reference resolution process, be careful not to introduce duplication
+    - Common issue: The same content appears twice because both the original text and the replacement are included (e.g., "First item: First item: apple")
+    - This typically happens when variable references are processed multiple times or when the replacement text already includes the output template
+    - Always check surrounding context when replacing variable references to ensure you're not duplicating content
+
+11. **Staged Implementation Approach**:
+    - Make changes in a specific order to maintain stability throughout the process:
+       1. First update and test the directiveToMarkdown method with the required state parameter
+       2. Then fix any call sites to pass the proper state
+       3. Test after each set of changes to isolate any failures
+       4. Focus on making the most minimal changes possible to fix each issue
+       5. Add comprehensive unit tests before making wide-ranging changes to variable resolution
+
+12. **Context-Aware Variable Processing**:
+    - The FormattingContext implementation must correctly distinguish between inline and block contexts
+    - When processing variables in inline contexts, ensure no extra newlines are introduced
+    - Tests expect transformed content to maintain the original surrounding text's formatting
+    - The processVariableReference method is particularly sensitive to context changes - any modifications here affect many tests
+
+13. **Changes that Will Impact Multiple Tests**:
+    - Modifying directiveToMarkdown affects both direct output and transformed output
+    - Changing the text of placeholders impacts tests that verify placeholder content
+    - Modifying newline handling affects the formatting of variable replacements and can break many tests
+    - Always run a full test suite before committing to catch unexpected impacts
+
+14. **Fix the Variable Substitution Logic First**:
+    - The most critical and fragile part of the system is the variable substitution logic
+    - Any changes here will impact directives, content preservation, and transformation
+    - If you must choose, prioritize fixing variable substitution bugs over placeholder text issues
+    - The standard pattern that works best: resolve values first, then apply appropriate formatting context, then handle newlines
+
+15. **Line Number Mismatch Strategy**:
+    - The implementation should have a fallback when line numbers don't exactly match
+    - For tests to pass, you need 3 levels of matching in directiveToMarkdown:
+       1. Exact line number match (first priority)
+       2. Closest line number match within threshold (second priority)
+       3. Transformation ID-based match (third priority)
+    - Add proper logging for each match attempt to aid debugging
 
 **Exit Criteria**:
 - Consistent newline handling across all node types
 - Formatting is preserved during variable substitution
 - All formatting tests pass without workarounds
 - Documentation of formatting standards is complete
+- **CRITICAL**: Variable-based embed transformations correctly preserve their content in the output
+- **CRITICAL**: The OutputService's directiveToMarkdown method properly handles transformed directives, returning their content instead of placeholders
+- **CRITICAL**: Proper spacing is maintained between different node types, especially between directives and surrounding content
+- **NEW**: No duplication of content in variable replacements (no "First item: First item: apple")
+- **NEW**: All original test expectations are preserved, or tests are explicitly updated
+- **NEW**: All placeholder text maintains backward compatibility with existing tests
 
 **Additional Exit Criteria for Architectural Compliance:**
 - All new dependencies use the client factory pattern
