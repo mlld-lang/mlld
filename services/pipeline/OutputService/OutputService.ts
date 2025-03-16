@@ -4,14 +4,15 @@ import type { IResolutionService, ResolutionContext } from '@services/resolution
 import { formatWithPrettier } from '@core/utils/prettierUtils.js';
 
 /**
- * TODO: Terminology Standardization (Phase 3.1 of p0-newlines)
+ * This file uses "transformation mode" terminology throughout.
+ * Transformation mode means that:
+ * - Directives are replaced with their transformed results
+ * - Original document formatting is preserved exactly as is
+ * - No additional formatting is applied unless explicitly requested with the `pretty` option
  * 
- * This file uses the following terms which are in the process of being standardized:
- * - "output-literal mode" (previously known as "transformation mode") - When content is preserved exactly as is
- * - "output-normalized mode" (previously known as "standard mode") - When content is formatted/normalized
- * 
- * For backward compatibility, we maintain the old property names (transformationMode) alongside 
- * the new ones (isOutputLiteral). New code should use the new terminology.
+ * Note: Previously, there was also "output-normalized"/"standard" mode that applied custom 
+ * markdown formatting rules. This mode has been removed, and transformation is now always enabled.
+ * Optional formatting is now handled by Prettier with the `pretty` option.
  */
 
 import type { 
@@ -40,10 +41,16 @@ import { VariableNodeFactory } from '@core/syntax/types/factories/VariableNodeFa
 interface FormattingContext {
   /** Current node type being processed */
   nodeType: string;
-  /** Whether we're in transformation mode (deprecated: use isOutputLiteral instead) */
+  /** 
+   * Whether transformation mode is enabled (always true now)
+   * @deprecated This is always true now and maintained only for backward compatibility
+   */
   transformationMode: boolean;
-  /** Whether output should preserve content exactly as is (true) or normalize it (false) */
-  isOutputLiteral?: boolean;
+  /** 
+   * Whether exact document formatting is preserved (always true now)
+   * @deprecated This is always true now and maintained only for backward compatibility
+   */
+  isOutputLiteral: boolean;
   /** Whether this is an inline or block context */
   contextType: 'inline' | 'block';
   /** Whether text is at the start of a line */
@@ -58,8 +65,11 @@ interface FormattingContext {
   specialMarkdown?: 'list' | 'table' | 'code' | 'heading';
   /** Parent context for inheriting properties */
   parentContext?: FormattingContext;
-  /** Whether to preserve exact formatting (including all newlines) */
-  preserveFormatting?: boolean;
+  /** 
+   * Whether to preserve exact formatting from the source (always true now)
+   * @deprecated This is always true now and maintained only for backward compatibility
+   */
+  preserveFormatting: boolean;
 }
 
 /**
@@ -248,7 +258,7 @@ class FieldAccessHandler {
               isBlock: options?.context === 'block',
               nodeType: 'Text',
               linePosition: 'middle',
-              isTransformation: false
+              isTransformation: true // Always true now
             }
           };
 
@@ -275,7 +285,7 @@ class FieldAccessHandler {
     
     // Get context type from either source
     const isBlockContext = formattingContext?.isBlock || context === 'block';
-    const isTransformation = formattingContext?.isTransformation || false;
+    const isTransformation = true; // Always true now
     const specialMarkdown = (formattingContext as any)?.specialMarkdown;
     
     // Handle undefined or null values - always return empty string per spec
@@ -582,14 +592,11 @@ export class OutputService implements IOutputService {
       format,
       nodeCount: nodes.length,
       options: opts,
-      transformationEnabled: state.isTransformationEnabled(),
       pretty: opts.pretty
     });
 
-    // Use transformed nodes if transformation is enabled
-    const nodesToProcess = state.isTransformationEnabled() 
-      ? state.getTransformedNodes() 
-      : nodes;
+    // We always use transformed nodes now (transformation is always enabled)
+    const nodesToProcess = state.getTransformedNodes();
 
     const formatter = this.formatters.get(format);
     if (!formatter) {
@@ -616,8 +623,7 @@ export class OutputService implements IOutputService {
       logger.debug('Successfully converted output', {
         format,
         resultLength: result.length,
-        transformationEnabled: state.isTransformationEnabled(),
-        transformedNodesCount: state.isTransformationEnabled() ? state.getTransformedNodes().length : 0,
+        transformedNodesCount: nodesToProcess.length,
         pretty: opts.pretty
       });
 
@@ -667,20 +673,20 @@ export class OutputService implements IOutputService {
   /**
    * Create a new formatting context for the current node
    * @param nodeType The type of node being processed
-   * @param transformationMode Whether in transformation mode (deprecated: use isOutputLiteral instead)
+   * @param transformationMode Deprecated: Always true now as we only use output-literal mode
    * @returns A new formatting context object
    */
   private createFormattingContext(nodeType: string, transformationMode: boolean): FormattingContext {
     return {
       nodeType,
-      transformationMode,
-      isOutputLiteral: transformationMode, // Add alias for clarity
+      transformationMode: true, // Always true now
+      isOutputLiteral: true, // Always true now
       contextType: 'block', // Default to block context
       atLineStart: true,
       atLineEnd: false,
       indentation: '',
       lastOutputEndedWithNewline: false,
-      preserveFormatting: transformationMode // In output-literal mode, preserve formatting by default
+      preserveFormatting: true // Always preserve formatting
     };
   }
 
@@ -693,8 +699,8 @@ export class OutputService implements IOutputService {
   private createChildContext(parentContext: FormattingContext, childNodeType: string): FormattingContext {
     return {
       nodeType: childNodeType,
-      transformationMode: parentContext.transformationMode,
-      isOutputLiteral: parentContext.isOutputLiteral,
+      transformationMode: true, // Always true now
+      isOutputLiteral: true, // Always true now
       contextType: parentContext.contextType,
       atLineStart: parentContext.atLineStart,
       atLineEnd: parentContext.atLineEnd,
@@ -702,7 +708,7 @@ export class OutputService implements IOutputService {
       lastOutputEndedWithNewline: parentContext.lastOutputEndedWithNewline,
       specialMarkdown: parentContext.specialMarkdown,
       parentContext: parentContext,
-      preserveFormatting: parentContext.preserveFormatting
+      preserveFormatting: true // Always preserve formatting
     };
   }
 
@@ -721,7 +727,7 @@ export class OutputService implements IOutputService {
   private getCurrentFormattingContext(): FormattingContext {
     if (this.contextStack.length === 0) {
       // Default context if none exists
-      const defaultContext = this.createFormattingContext('Text', false);
+      const defaultContext = this.createFormattingContext('Text', true);
       this.contextStack.push(defaultContext);
     }
     return this.contextStack[this.contextStack.length - 1];
@@ -752,7 +758,7 @@ export class OutputService implements IOutputService {
     logger.debug('Processing newlines in content', {
       nodeType: context.nodeType,
       contextType: context.contextType,
-      isOutputLiteral: context.isOutputLiteral ?? context.transformationMode,
+      isOutputLiteral: true, // Always true now
       inputLength,
       hasInputNewlines,
       endsWithNewline,
@@ -761,117 +767,12 @@ export class OutputService implements IOutputService {
       lastOutputEndedWithNewline: context.lastOutputEndedWithNewline
     });
     
-    // In output-literal mode, preserve EXACTLY as is with NO modifications
-    if (context.isOutputLiteral ?? context.transformationMode) {
-      // Return content unchanged for true output-literal behavior
-      logger.debug('Output-literal mode: preserving content exactly as is', {
-        contentLength: content.length
-      });
-      return content;
-    }
-    
-    // Only apply normalization in output-normalized mode (standard mode)
-    let processedContent = content;
-    
-    // In standard mode, apply normalizations:
-    
-    // 1. Colon-newline sequences are normalized to "colon-space"
-    const colonNewlinesBefore = (processedContent.match(/(\w+):\n(\w+)/g) || []).length;
-    processedContent = processedContent.replace(/(\w+):\n(\w+)/g, '$1: $2');
-    const colonNewlinesAfter = (processedContent.match(/(\w+):\n(\w+)/g) || []).length;
-    
-    // 2. Comma-newline sequences are normalized to "comma-space"
-    const commaNewlinesBefore = (processedContent.match(/(\w+),\n(\w+)/g) || []).length;
-    processedContent = processedContent.replace(/(\w+),\n(\w+)/g, '$1, $2');
-    const commaNewlinesAfter = (processedContent.match(/(\w+),\n(\w+)/g) || []).length;
-    
-    // 3. Multiple consecutive newlines to a maximum of two
-    const multipleNewlinesBefore = (processedContent.match(/\n{3,}/g) || []).length;
-    processedContent = processedContent.replace(/\n{3,}/g, '\n\n');
-    const multipleNewlinesAfter = (processedContent.match(/\n{3,}/g) || []).length;
-    
-    // Log transformations
-    logger.debug('Standard mode newline transformations', {
-      multipleNewlinesBefore,
-      multipleNewlinesAfter,
-      colonNewlinesBefore,
-      colonNewlinesAfter,
-      commaNewlinesBefore,
-      commaNewlinesAfter,
-      contentLengthBefore: content.length,
-      contentLengthAfter: processedContent.length
+    // Always preserve content EXACTLY as is with NO modifications
+    // This is now the only mode - always output-literal
+    logger.debug('Output-literal mode: preserving content exactly as is', {
+      contentLength: content.length
     });
-    
-    return processedContent;
-    
-    // In output-normalized mode (previously called standard mode), normalize newlines based on context
-    if (context.contextType === 'block') {
-      let processedContent = content;
-      const modifications = [];
-      
-      // For block content, ensure proper paragraph spacing
-      
-      // 1. Content in block context should end with a newline
-      if (!processedContent.endsWith('\n')) {
-        processedContent += '\n';
-        modifications.push('added trailing newline');
-      }
-      
-      // 2. Content should have enough spacing when separated from other content
-      // If the previous output didn't end with a newline, add one more
-      if (!processedContent.endsWith('\n\n') && !context.lastOutputEndedWithNewline) {
-        processedContent += '\n';
-        modifications.push('added separator newline');
-      }
-      
-      // 3. Normalize multiple consecutive newlines to double newlines
-      // This keeps paragraphs properly separated
-      const excessNewlinesBefore = (processedContent.match(/\n{3,}/g) || []).length;
-      processedContent = processedContent.replace(/\n{3,}/g, '\n\n');
-      const excessNewlinesAfter = (processedContent.match(/\n{3,}/g) || []).length;
-      
-      if (excessNewlinesBefore > excessNewlinesAfter) {
-        modifications.push('normalized excess newlines');
-      }
-      
-      // Log block context modifications
-      logger.debug('Output-normalized mode (block context) newline handling', {
-        modifications,
-        contentLengthBefore: content.length,
-        contentLengthAfter: processedContent.length
-      });
-      
-      return processedContent;
-    } else {
-      // For inline content:
-      let processedContent = content;
-      const modifications = [];
-      
-      // 1. Preserve internal newlines but remove trailing ones
-      if (processedContent.match(/\n+$/)) {
-        processedContent = processedContent.replace(/\n+$/g, '');
-        modifications.push('removed trailing newlines');
-      }
-      
-      // 2. For inline content inside special markdown context, preserve its formatting
-      if (context.specialMarkdown) {
-        // In table cells and list items, preserve exact formatting
-        logger.debug('Preserving exact formatting for special markdown context', {
-          specialMarkdown: context.specialMarkdown
-        });
-        return processedContent;
-      }
-      
-      // Log inline context modifications
-      logger.debug('Output-normalized mode (inline context) newline handling', {
-        modifications,
-        contentLengthBefore: content.length,
-        contentLengthAfter: processedContent.length,
-        specialMarkdown: context.specialMarkdown
-      });
-      
-      return processedContent;
-    }
+    return content;
   }
 
   /**
@@ -1247,16 +1148,8 @@ export class OutputService implements IOutputService {
       logger.debug('Converting nodes to markdown', {
         nodeCount: nodes.length,
         nodeTypes: nodes.map(n => n.type),
-        transformationEnabled: state.isTransformationEnabled()
+        isOutputLiteral: true // Always true now
       });
-
-      // Special case for run directives in tests
-      if (nodes.length === 1 && 
-          nodes[0].type === 'Directive' && 
-          (nodes[0] as any).name === 'run' &&
-          !state.isTransformationEnabled()) {
-        return '[run directive output placeholder]\n\n';
-      }
 
       // Add state variables if requested
       if (opts.includeState) {
@@ -1266,43 +1159,17 @@ export class OutputService implements IOutputService {
         }
       }
 
-      // Output-literal mode (previously called transformation mode) handling
-      // In output-literal mode, we preserve the exact layout without any modifications
-      if (state.isTransformationEnabled()) {
-        // Process nodes with exact preservation of all formatting
-        for (const node of nodes) {
-          try {
-            // Get the node output
-            const nodeOutput = await this.nodeToMarkdown(node, state);
-            
-            // Skip empty outputs
-            if (!nodeOutput) continue;
-            
-            // Add to output buffer with NO modifications
-            output += nodeOutput;
-          } catch (nodeError) {
-            // Log detailed error for the specific node
-            logger.error('Error converting node to markdown in output-literal mode', {
-              nodeType: node.type,
-              location: node.location,
-              error: nodeError
-            });
-            throw nodeError;
-          }
-        }
-        
-        // NO post-processing or cleanup in true output-literal mode
-        return output;
-      }
-      
-      // Standard mode processing (non-transformation)
-      // Process nodes
+      // Process nodes with exact preservation of all formatting
       for (const node of nodes) {
         try {
+          // Get the node output
           const nodeOutput = await this.nodeToMarkdown(node, state);
-          if (nodeOutput) {
-            output += nodeOutput;
-          }
+          
+          // Skip empty outputs
+          if (!nodeOutput) continue;
+          
+          // Add to output buffer with NO modifications
+          output += nodeOutput;
         } catch (nodeError) {
           // Log detailed error for the specific node
           logger.error('Error converting node to markdown', {
@@ -1313,68 +1180,7 @@ export class OutputService implements IOutputService {
           throw nodeError;
         }
       }
-
-      // Clean up extra newlines if not preserving formatting
-      if (!opts.preserveFormatting) {
-        output = output.replace(/\n{3,}/g, '\n\n').trim();
-        
-        // Special case for the preserveFormatting test
-        // When the test explicitly sets preserveFormatting: false
-        if (nodes.length === 1 && 
-            nodes[0].type === 'Text' && 
-            (nodes[0] as TextNode).content.includes('Hello') && 
-            (nodes[0] as TextNode).content.includes('World')) {
-          output += '\n\n';
-        }
-      } else {
-        // When preserving formatting, we need to handle specific test cases
-        // The test expects no trailing newlines for this case
-        output = output.replace(/\n+$/g, '');
-      }
       
-      // Special case handling for specific test scenarios
-      // This is based on the test expectations we've observed
-      
-      // 1. Run directive should always have trailing newlines
-      if (nodes.length === 1 && 
-          nodes[0].type === 'Directive' && 
-          (nodes[0] as any).name === 'run') {
-        // Ensure it ends with exactly two newlines
-        output = output.replace(/\n*$/, '') + '\n\n';
-      }
-      
-      // 2. Definition directives should be empty with no newlines
-      if (nodes.length === 1 && 
-          nodes[0].type === 'Directive' && 
-          ['text', 'data', 'define'].includes((nodes[0] as any).name)) {
-        output = '';
-      }
-      
-      // 3. Simple text node should not have trailing newlines
-      if (nodes.length === 1 && 
-          nodes[0].type === 'Text' && 
-          !opts.preserveFormatting &&
-          !(nodes[0] as TextNode).content.includes('Hello') && 
-          !(nodes[0] as TextNode).content.includes('World')) {
-        output = output.replace(/\n+$/g, '');
-      }
-      
-      // 4. Handle specific test cases for mixed content
-      if (nodes.length > 1) {
-        const nodeTypes = nodes.map(n => n.type);
-        const directiveNames = nodes
-          .filter(n => n.type === 'Directive')
-          .map(n => (n as any).name);
-        
-        // Text-Directive-Text pattern with definition directive
-        if (nodeTypes[0] === 'Text' && 
-            nodeTypes[1] === 'Directive' && 
-            nodeTypes[2] === 'Text' && 
-            ['text', 'data', 'define'].includes(directiveNames[0])) {
-          output = output.replace(/\n+$/g, '');
-        }
-      }
-
       return output;
     } catch (error) {
       throw new MeldOutputError(

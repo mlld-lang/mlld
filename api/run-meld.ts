@@ -62,9 +62,9 @@ export async function runMeld(
   // Default options
   const defaultOptions: ProcessOptions = {
     format: 'markdown',
-    transformation: true,
+    transformation: true, // This is always true now, but kept for backward compatibility
     fs: memoryFS,
-    // Default to no pretty formatting
+    // Default to no pretty formatting (use Prettier only when explicitly requested)
     pretty: false
   };
   
@@ -197,33 +197,20 @@ export async function runMeld(
     });
     
     // Get nodes to process (transformed if transformation is enabled)
-    const nodesToProcess = resultState.isTransformationEnabled() && resultState.getTransformedNodes()
-      ? resultState.getTransformedNodes()
-      : ast;
+    // We always use transformed nodes now
+    const nodesToProcess = resultState.getTransformedNodes();
     
     // Make sure format is properly set (normalize 'md' to 'markdown', etc.)
     const outputFormat = normalizeFormat(mergedOptions.format || 'markdown');
     
     // Convert to desired format
-    let converted = await services.output.convert(nodesToProcess, resultState, outputFormat, {
+    const converted = await services.output.convert(nodesToProcess, resultState, outputFormat, {
       // Pass the pretty option to the output service
       pretty: mergedOptions.pretty
     });
     
-    // Phase 1: Keep legacy post-processing for backward compatibility when not using Prettier
-    // Phase 2: These workarounds will be completely removed
-    if (resultState.isTransformationEnabled() && !mergedOptions.pretty) {
-      // Fix newlines in variable output
-      converted = converted
-        // Replace multiple newlines with a single newline
-        .replace(/\n{2,}/g, '\n')
-        // Common pattern fixes from the main function
-        .replace(/(\w+):\n(\w+)/g, '$1: $2')
-        .replace(/(\w+),\n(\w+)/g, '$1, $2')
-        .replace(/(\w+):\n{/g, '$1: {')
-        .replace(/},\n(\w+):/g, '}, $1:');
-    }
-    // When Prettier is enabled, we don't need these workarounds as Prettier handles formatting
+    // All post-processing has been removed
+    // Prettier handles formatting when requested
     
     return converted;
   } catch (error) {

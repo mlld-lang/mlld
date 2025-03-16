@@ -60,7 +60,8 @@ export interface Services {
 export interface ProcessOptions {
   /** 
    * Controls whether directives should be transformed 
-   * Can be a boolean for all-or-nothing transformation, or an object with selective options
+   * @deprecated This option is maintained for backward compatibility but has no effect.
+   * Transformation is always enabled regardless of this setting.
    */
   transformation?: boolean | TransformationOptions;
   /** Controls output format */

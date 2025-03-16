@@ -123,7 +123,7 @@ describe('SDK Integration Tests', () => {
       await context.services.filesystem.writeFile(testFilePath, '@run [echo test]');
       
       context.enableDebug();
-      context.disableTransformation(); // Explicitly disable transformation
+      // Transformation is always enabled now, we can't disable it
       
       const result = await main(testFilePath, {
         fs: context.services.filesystem,
@@ -132,8 +132,9 @@ describe('SDK Integration Tests', () => {
         debug: true
       });
 
-      // Verify result
-      expect(result).toContain('[run directive output placeholder]');
+      // Verify result - transformation is always enabled, so we should get the output
+      expect(result).toContain('test');
+      expect(result).not.toContain('[run directive output placeholder]');
     });
 
     it('should handle complex meld content with mixed directives', async () => {
@@ -144,7 +145,7 @@ Some text content
 @run [echo test]
 More text`;
       await context.services.filesystem.writeFile(testFilePath, content);
-      context.disableTransformation(); // Explicitly disable transformation
+      // Transformation is always enabled now, we can't disable it
       const result = await main(testFilePath, { 
         fs: context.services.filesystem,
         services: context.services as any
@@ -159,8 +160,9 @@ More text`;
       expect(result).toContain('Some text content');
       expect(result).toContain('More text');
       
-      // Execution directives should show placeholder
-      expect(result).toContain('[run directive output placeholder]');
+      // Execution directives should be transformed (not showing placeholders)
+      expect(result).toContain('test');
+      expect(result).not.toContain('[run directive output placeholder]');
     });
   });
 
@@ -196,7 +198,7 @@ More text`;
       await context.services.filesystem.writeFile(testFilePath, '@run [echo test]');
       
       context.enableDebug();
-      context.disableTransformation(); // Explicitly disable transformation
+      // Transformation is always enabled now, we can't disable it
       
       const result = await main(testFilePath, {
         fs: context.services.filesystem,
@@ -205,8 +207,9 @@ More text`;
         debug: true
       });
 
-      // Verify result
-      expect(result).toContain('[run directive output placeholder]');
+      // Verify result - transformation is always enabled, so we should get the output
+      expect(result).toContain('test');
+      expect(result).not.toContain('[run directive output placeholder]');
     });
 
     it('should handle complex meld content with mixed directives', async () => {
@@ -217,7 +220,7 @@ Some text content
 @run [echo test]
 More text`;
       await context.services.filesystem.writeFile(testFilePath, content);
-      context.disableTransformation(); // Explicitly disable transformation
+      // Transformation is always enabled now, we can't disable it
       const result = await main(testFilePath, { 
         fs: context.services.filesystem,
         services: context.services as any
@@ -232,8 +235,9 @@ More text`;
       expect(result).toContain('Some text content');
       expect(result).toContain('More text');
       
-      // Execution directives should show placeholder
-      expect(result).toContain('[run directive output placeholder]');
+      // Execution directives should be transformed (not showing placeholders)
+      expect(result).toContain('test');
+      expect(result).not.toContain('[run directive output placeholder]');
     });
   });
 

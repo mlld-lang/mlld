@@ -207,7 +207,8 @@ interface IStateService extends StateServiceBase {
   /**
    * Checks if transformation is enabled.
    * 
-   * @returns true if transformation is enabled, false otherwise
+   * @returns Always returns true as transformation is now always enabled
+   * @deprecated Maintained for backward compatibility; transformation is always enabled
    */
   isTransformationEnabled(): boolean;
   
@@ -215,6 +216,7 @@ interface IStateService extends StateServiceBase {
    * Enables transformation with optional settings.
    * 
    * @param options - Transformation options or boolean to enable/disable all
+   * @deprecated Maintained for backward compatibility; transformation is always enabled
    */
   enableTransformation(options?: TransformationOptions | boolean): void;
   
@@ -222,14 +224,16 @@ interface IStateService extends StateServiceBase {
    * Checks if a specific transformation type is enabled.
    * 
    * @param type - The transformation type to check
-   * @returns true if the transformation type is enabled, false otherwise
+   * @returns Always returns true as all transformation types are now enabled
+   * @deprecated Maintained for backward compatibility; all transformations are always enabled
    */
   shouldTransform(type: keyof TransformationOptions): boolean;
   
   /**
    * Gets the current transformation options.
    * 
-   * @returns Current transformation options
+   * @returns Current transformation options (all enabled)
+   * @deprecated Maintained for backward compatibility; all transformations are always enabled
    */
   getTransformationOptions(): TransformationOptions;
   

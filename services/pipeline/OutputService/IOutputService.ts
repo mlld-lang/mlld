@@ -21,8 +21,10 @@ interface OutputOptions {
 
   /**
    * Whether to preserve original formatting (whitespace, newlines).
-   * When true, maintains document structure; when false, may compact output.
    * @default true
+   * @deprecated This option is maintained for backward compatibility but has no effect.
+   * Formatting is always preserved exactly as in the source document.
+   * For formatted output, use the `pretty` option instead.
    */
   preserveFormatting?: boolean;
 
@@ -42,18 +44,17 @@ interface OutputOptions {
 
 /**
  * Service responsible for converting Meld AST nodes into different output formats.
- * Handles transformation and formatting of Meld content for final output.
+ * Handles transformation of Meld content for final output.
  * 
  * @remarks
  * The OutputService is the final stage in the Meld processing pipeline. It takes
  * the processed AST nodes and state, and converts them into a specific output format
- * like Markdown or XML. It handles two main modes:
+ * like Markdown or XML.
  * 
- * 1. **Non-transformation mode**: Definition directives are omitted, execution directives
- *    show placeholders, and content is preserved.
- * 
- * 2. **Transformation mode**: Directives are replaced with their transformed results,
- *    making the output "clean" of Meld syntax.
+ * In transformation mode (the only mode):
+ * - Directives are replaced with their transformed results
+ * - Original document formatting is preserved exactly
+ * - Optional Prettier formatting can be applied with the `pretty` option
  * 
  * This service supports pluggable format converters and configuration options to
  * control the output generation process.
@@ -81,26 +82,31 @@ interface IOutputService {
    * @throws {MeldOutputError} If conversion fails
    * 
    * @remarks
-   * If state.isTransformationEnabled() is true and state.getTransformedNodes() is available,
-   * the transformed nodes will be used instead of the input nodes.
+   * Transformed nodes from state.getTransformedNodes() are always used for output.
    * 
-   * In non-transformation mode:
-   * - Definition directives (@text, @data, @path, @import, @define) are omitted
-   * - Execution directives (@run, @embed) show placeholders
-   * 
-   * In transformation mode:
+   * Transformation behavior:
    * - All directives are replaced with their transformed results
-   * - Plain text and code fences are preserved as-is
+   * - Plain text and code fences are preserved exactly as-is
+   * - Whitespace and newlines are maintained from the source document
+   * - Optional Prettier formatting can be applied with the `pretty` option
    * 
    * @example
    * ```ts
+   * // Standard output (preserves exact formatting)
    * const output = await outputService.convert(
    *   nodes,
    *   state,
    *   'markdown',
-   *   { preserveFormatting: true, includeState: false }
+   *   { includeState: false }
    * );
-   * console.log(output);
+   * 
+   * // Output with Prettier formatting
+   * const prettyOutput = await outputService.convert(
+   *   nodes,
+   *   state,
+   *   'markdown',
+   *   { includeState: false, pretty: true }
+   * );
    * ```
    */
   convert(

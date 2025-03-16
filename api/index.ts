@@ -296,19 +296,18 @@ export async function main(filePath: string, options: ProcessOptions = {}): Prom
     // Parse the content
     const ast = await services.parser.parse(content);
     
-    // Enable transformation if requested (do this before interpretation)
+    // Transformation is always enabled now, but we still handle the options parameter for backward compatibility
     if (options.transformation) {
-      // If transformation is a boolean, use the legacy all-or-nothing approach
-      // If it's an object with options, use selective transformation
+      // This call has no effect (transformation is always true), but we keep it for backward compatibility
       if (typeof options.transformation === 'boolean') {
-        services.state.enableTransformation(options.transformation);
+        services.state.enableTransformation(true);
       } else {
-        services.state.enableTransformation(options.transformation);
+        services.state.enableTransformation(true);
       }
       
       // Add debugging for transformation settings
-      logger.debug('Transformation enabled with options', {
-        isEnabled: services.state.isTransformationEnabled(),
+      logger.debug('Transformation enabled (always true now)', {
+        isEnabled: true, // Always true
         options: services.state.getTransformationOptions?.()
       });
     }
@@ -359,18 +358,15 @@ export async function main(filePath: string, options: ProcessOptions = {}): Prom
       }
     }
     
-    // Ensure transformation state is preserved from original state service
-    if (services.state.isTransformationEnabled()) {
-      // Pass the complete transformation options to preserve selective settings
-      const transformOpts = typeof options.transformation === 'boolean' 
-        ? options.transformation 
-        : options.transformation;
-      
-      resultState.enableTransformation(transformOpts);
+    // Transformation is always enabled
+    // This is maintained for backward compatibility, but transformation is now always enabled
+    {
+      // Ensure transformation is always enabled, regardless of what was passed in options
+      resultState.enableTransformation(true);
       
       // Add debugging for resultState transformation settings
-      logger.debug('ResultState transformation settings', {
-        isEnabled: resultState.isTransformationEnabled(),
+      logger.debug('ResultState transformation settings (always enabled)', {
+        isEnabled: true, // Always true
         options: resultState.getTransformationOptions?.()
       });
 
@@ -414,42 +410,38 @@ export async function main(filePath: string, options: ProcessOptions = {}): Prom
       }
     }
     
-    // Get transformed nodes if available
-    const nodesToProcess = resultState.isTransformationEnabled() && resultState.getTransformedNodes()
-      ? resultState.getTransformedNodes()
-      : ast;
+    // Always use transformed nodes now
+    const nodesToProcess = resultState.getTransformedNodes();
     
     // Convert to desired format using the updated state
     // Cast resultState to IStateService since it has all the required methods but TypeScript doesn't recognize it
     let converted = await services.output.convert(nodesToProcess, resultState as unknown as IStateService, options.format || 'xml');
     
-    // In transformation/output-literal mode, check for unresolved variables
-    if (resultState.isTransformationEnabled()) {
-      // Check for any remaining unresolved variable references
-      const variableRegex = /\{\{([^{}]+)\}\}/g;
-      const matches = Array.from(converted.matchAll(variableRegex));
-      
-      // Only process if there are actual unresolved variables
-      if (matches.length > 0) {
-        for (const match of matches) {
-          const fullMatch = match[0]; // The entire match, e.g., {{variable}}
-          const variableName = match[1].trim(); // The variable name, e.g., variable
-          
-          // Try to get the variable value from the state
-          let value;
-          // Try text variable first
-          value = resultState.getTextVar(variableName);
-          
-          // If not found as text variable, try data variable
-          if (value === undefined) {
-            value = resultState.getDataVar(variableName);
-          }
-          
-          // If a value was found, replace the variable reference with its value
-          if (value !== undefined) {
-            const stringValue = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
-            converted = converted.replace(fullMatch, stringValue);
-          }
+    // Always check for unresolved variables (transformation is always enabled)
+    // Check for any remaining unresolved variable references
+    const variableRegex = /\{\{([^{}]+)\}\}/g;
+    const matches = Array.from(converted.matchAll(variableRegex));
+    
+    // Only process if there are actual unresolved variables
+    if (matches.length > 0) {
+      for (const match of matches) {
+        const fullMatch = match[0]; // The entire match, e.g., {{variable}}
+        const variableName = match[1].trim(); // The variable name, e.g., variable
+        
+        // Try to get the variable value from the state
+        let value;
+        // Try text variable first
+        value = resultState.getTextVar(variableName);
+        
+        // If not found as text variable, try data variable
+        if (value === undefined) {
+          value = resultState.getDataVar(variableName);
+        }
+        
+        // If a value was found, replace the variable reference with its value
+        if (value !== undefined) {
+          const stringValue = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+          converted = converted.replace(fullMatch, stringValue);
         }
       }
     }
