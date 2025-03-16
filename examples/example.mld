@@ -20,12 +20,12 @@
 
 ## Documentation
 ### Architecture
-@embed [$./docs/dev/ARCHITECTURE.md] 
+@embed [$./docs/dev/ARCHITECTURE.md # TESTING INFRASTRUCTURE] 
 ### Meld Processing Pipeline
 @embed [$./docs/dev/PIPELINE.md]
 
 ## Test Results
-@run [npm test]
+@run [npm test core/syntax]
 
 ## Your task
 @embed {{task.code_review}}
