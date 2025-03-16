@@ -460,8 +460,8 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
                   state: resolutionContext?.state || newState
                 };
                 
-                // Create field access options with formatting context
-                const fieldAccessOptions: any = {
+                // Create field access options for this resolution
+                const fieldAccessOptions = {
                   preserveType: true, // Preserve the original type
                   variableName: variableNameStr, // For error reporting
                   formattingContext: {
@@ -472,11 +472,16 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
                   }
                 };
                 
+                // Merge context and options in a way compatible with the interface
+                const resolvedContext = {
+                  ...typedContext,
+                  fieldAccessOptions // Add fieldAccessOptions to the context object
+                };
+                
                 const resolvedField = await this.resolutionService.resolveFieldAccess(
                   variableNameStr,
                   fieldPath,
-                  typedContext,
-                  fieldAccessOptions
+                  resolvedContext
                 );
                 
                 this.logger.debug(`Resolved field access ${variableNameStr}.${fieldPath} to:`, resolvedField);

@@ -237,6 +237,8 @@ export interface ResolutionServiceLike {
   getResolutionTracker(): any | undefined;
   /** Resolves a field access on a variable (e.g., variable.field.subfield) */
   resolveFieldAccess(variableName: string, fieldPath: string, context?: ResolutionContextBase): Promise<any>;
+  /** Convert a value to a formatted string based on the provided formatting context */
+  convertToFormattedString(value: any, options?: any): Promise<string>;
 }
 
 /**
