@@ -347,7 +347,12 @@ describe('EmbedDirectiveHandler', () => {
       expect(result.replacement).toEqual({
         type: 'Text',
         content: 'Test content',
-        location: node.location
+        location: node.location,
+        formattingMetadata: {
+          isFromDirective: true,
+          originalNodeType: 'Directive',
+          preserveFormatting: true
+        }
       });
     });
 
@@ -385,7 +390,12 @@ describe('EmbedDirectiveHandler', () => {
       expect(result.replacement).toEqual({
         type: 'Text',
         content: '# Section Two\nContent',
-        location: node.location
+        location: node.location,
+        formattingMetadata: {
+          isFromDirective: true,
+          originalNodeType: 'Directive',
+          preserveFormatting: true
+        }
       });
     });
 
@@ -415,7 +425,12 @@ describe('EmbedDirectiveHandler', () => {
       expect(result.replacement).toEqual({
         type: 'Text',
         content: 'Test content',
-        location: node.location
+        location: node.location,
+        formattingMetadata: {
+          isFromDirective: true,
+          originalNodeType: 'Directive',
+          preserveFormatting: true
+        }
       });
     });
 
@@ -444,7 +459,12 @@ describe('EmbedDirectiveHandler', () => {
       expect(result.replacement).toEqual({
         type: 'Text',
         content: 'Test content',
-        location: node.location
+        location: node.location,
+        formattingMetadata: {
+          isFromDirective: true,
+          originalNodeType: 'Directive',
+          preserveFormatting: true
+        }
       });
     });
   });
@@ -490,7 +510,12 @@ describe('EmbedDirectiveHandler', () => {
       expect(result.replacement).toEqual({
         type: 'Text',
         content: 'Test content', // Unmodified content since level 9 is invalid
-        location: node.location
+        location: node.location,
+        formattingMetadata: {
+          isFromDirective: true,
+          originalNodeType: 'Directive',
+          preserveFormatting: true
+        }
       });
       
       // Restore the original method
@@ -519,7 +544,12 @@ describe('EmbedDirectiveHandler', () => {
       expect(result.replacement).toEqual({
         type: 'Text',
         content: '# Content',
-        location: node.location
+        location: node.location,
+        formattingMetadata: {
+          isFromDirective: true,
+          originalNodeType: 'Directive',
+          preserveFormatting: true
+        }
       });
       
       // No error is thrown
@@ -642,7 +672,12 @@ describe('EmbedDirectiveHandler', () => {
       expect(result.replacement).toEqual({
         type: 'Text',
         content: 'You are a senior architect skilled in assessing TypeScript codebases.',
-        location: node.location
+        location: node.location,
+        formattingMetadata: {
+          isFromDirective: true,
+          originalNodeType: 'Directive',
+          preserveFormatting: true
+        }
       });
       
       // We don't need to verify logger calls, as the functionality is what matters
@@ -689,7 +724,12 @@ describe('EmbedDirectiveHandler', () => {
       expect(result.replacement).toEqual({
         type: 'Text',
         content: '# Sample Content',
-        location: node.location
+        location: node.location,
+        formattingMetadata: {
+          isFromDirective: true,
+          originalNodeType: 'Directive',
+          preserveFormatting: true
+        }
       });
     });
     
@@ -732,7 +772,12 @@ describe('EmbedDirectiveHandler', () => {
       expect(result.replacement).toEqual({
         type: 'Text',
         content: 'Variable Content',
-        location: node.location
+        location: node.location,
+        formattingMetadata: {
+          isFromDirective: true,
+          originalNodeType: 'Directive',
+          preserveFormatting: true
+        }
       });
       
       // The file system should never be checked
@@ -780,7 +825,12 @@ describe('EmbedDirectiveHandler', () => {
       expect(result.replacement).toEqual({
         type: 'Text',
         content: 'dark',
-        location: node.location
+        location: node.location,
+        formattingMetadata: {
+          isFromDirective: true,
+          originalNodeType: 'Directive',
+          preserveFormatting: true
+        }
       });
       
       // The file system should never be checked

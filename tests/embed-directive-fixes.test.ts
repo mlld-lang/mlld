@@ -228,7 +228,12 @@ describe('EmbedDirectiveHandler Fixes', () => {
         expect(result.replacement).toEqual({
           type: 'Text',
           content: 'You are a senior architect skilled in assessing TypeScript codebases.',
-          location: variableNode.location
+          location: variableNode.location,
+          formattingMetadata: {
+            isFromDirective: true,
+            originalNodeType: 'Directive',
+            preserveFormatting: true
+          }
         });
       }
     });
@@ -292,13 +297,23 @@ describe('EmbedDirectiveHandler Fixes', () => {
       expect(fileResult.replacement).toEqual({
         type: 'Text',
         content: 'File Content',
-        location: fileNode.location
+        location: fileNode.location,
+        formattingMetadata: {
+          isFromDirective: true,
+          originalNodeType: 'Directive',
+          preserveFormatting: true
+        }
       });
       
       expect(varResult.replacement).toEqual({
         type: 'Text',
         content: 'Variable Content',
-        location: variableNode.location
+        location: variableNode.location,
+        formattingMetadata: {
+          isFromDirective: true,
+          originalNodeType: 'Directive',
+          preserveFormatting: true
+        }
       });
     });
   });

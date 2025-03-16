@@ -238,6 +238,33 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
   }
 
   /**
+   * Creates a replacement text node with proper formatting context preservation
+   * 
+   * @param content - The content for the replacement node
+   * @param originalNode - The original directive node being replaced
+   * @returns A TextNode with the content and location information from the original
+   */
+  private createReplacementNode(content: string, originalNode: DirectiveNode): TextNode {
+    this.logger.debug('Creating replacement node with content preservation', {
+      originalNodeType: originalNode.type,
+      contentLength: content.length,
+      location: originalNode.location
+    });
+    
+    return {
+      type: 'Text',
+      content,
+      location: originalNode.location,
+      // Add formatting metadata to help with context preservation
+      formattingMetadata: {
+        isFromDirective: true,
+        originalNodeType: originalNode.type,
+        preserveFormatting: true
+      }
+    };
+  }
+
+  /**
    * Executes the @embed directive
    * 
    * @param node - The directive node to execute
@@ -468,7 +495,9 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
                     isBlock: true, // Treat as block content by default
                     nodeType: 'embed',
                     linePosition: 'start', // Default position
-                    isTransformation: newState.isTransformationEnabled() // Pass transformation status
+                    isOutputLiteral: newState.isTransformationEnabled(), // Use new terminology
+                    preserveFormatting: true, // Explicitly request format preservation
+                    originalNodeType: node.type // Pass the original node type for context
                   }
                 };
                 
@@ -500,6 +529,12 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
                         resolvedField,
                         fieldAccessOptions
                       );
+                      
+                      this.logger.debug('Using context-aware formatting for variable content', {
+                        fieldPath,
+                        formattingContext: fieldAccessOptions.formattingContext,
+                        contentType: typeof resolvedField
+                      });
                     } catch (error) {
                       // Fall back to JSON.stringify if formatting fails
                       this.logger.warn('Failed to format object with formatting context, using JSON.stringify', {
@@ -861,11 +896,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
        * This ensures consistent handling of embedded content regardless of source.
        */
       // This applies to both transformation mode and normal mode
-      const replacement: TextNode = {
-        type: 'Text',
-        content,
-        location: node.location
-      };
+      const replacement = this.createReplacementNode(content, node);
 
       // In transformation mode, register the replacement
       if (newState.isTransformationEnabled()) {

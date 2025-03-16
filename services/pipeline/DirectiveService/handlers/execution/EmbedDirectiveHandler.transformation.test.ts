@@ -194,7 +194,12 @@ describe('EmbedDirectiveHandler Transformation', () => {
       expect(result.replacement).toEqual({
         type: 'Text',
         content: 'Test content',
-        location: node.location
+        location: node.location,
+        formattingMetadata: {
+          isFromDirective: true,
+          originalNodeType: 'Directive',
+          preserveFormatting: true
+        }
       });
       expect(result.state).toBe(clonedState);
     });
@@ -218,7 +223,12 @@ describe('EmbedDirectiveHandler Transformation', () => {
       expect(result.replacement).toEqual({
         type: 'Text',
         content: '# Introduction\nContent',
-        location: node.location
+        location: node.location,
+        formattingMetadata: {
+          isFromDirective: true,
+          originalNodeType: 'Directive',
+          preserveFormatting: true
+        }
       });
     });
 
@@ -241,7 +251,12 @@ describe('EmbedDirectiveHandler Transformation', () => {
       expect(result.replacement).toEqual({
         type: 'Text',
         content: '## Test content',
-        location: node.location
+        location: node.location,
+        formattingMetadata: {
+          isFromDirective: true,
+          originalNodeType: 'Directive',
+          preserveFormatting: true
+        }
       });
     });
 
@@ -273,7 +288,12 @@ describe('EmbedDirectiveHandler Transformation', () => {
       expect(result.replacement).toEqual({
         type: 'Text',
         content: 'Test content',
-        location: node.location
+        location: node.location,
+        formattingMetadata: {
+          isFromDirective: true,
+          originalNodeType: 'Directive',
+          preserveFormatting: true
+        }
       });
     });
 
@@ -294,7 +314,12 @@ describe('EmbedDirectiveHandler Transformation', () => {
       expect(result.replacement).toEqual({
         type: 'Text',
         content: 'Variable content',
-        location: node.location
+        location: node.location,
+        formattingMetadata: {
+          isFromDirective: true,
+          originalNodeType: 'Directive',
+          preserveFormatting: true
+        }
       });
       expect(resolutionService.resolveInContext).toHaveBeenCalledWith(
         '{{filename}}.md',
@@ -337,7 +362,12 @@ describe('EmbedDirectiveHandler Transformation', () => {
       expect(result.replacement).toEqual({
         type: 'Text',
         content: 'Variable Content',
-        location: node.location
+        location: node.location,
+        formattingMetadata: {
+          isFromDirective: true,
+          originalNodeType: 'Directive',
+          preserveFormatting: true
+        }
       });
       
       // No file operations should happen
@@ -386,7 +416,12 @@ describe('EmbedDirectiveHandler Transformation', () => {
       expect(result.replacement).toEqual({
         type: 'Text',
         content: 'You are a senior architect skilled in TypeScript.',
-        location: embedNode.location
+        location: embedNode.location,
+        formattingMetadata: {
+          isFromDirective: true,
+          originalNodeType: 'Directive',
+          preserveFormatting: true
+        }
       });
       
       // No file operations should happen
@@ -473,7 +508,12 @@ describe('EmbedDirectiveHandler Transformation', () => {
       expect(result.replacement).toEqual({
         type: 'Text',
         content: 'This is a test bio.',
-        location: node.location
+        location: node.location,
+        formattingMetadata: {
+          isFromDirective: true,
+          originalNodeType: 'Directive',
+          preserveFormatting: true
+        }
       });
 
       // Verify transformation was registered correctly on the cloned state
@@ -531,7 +571,12 @@ describe('EmbedDirectiveHandler Transformation', () => {
       expect(result.replacement).toEqual({
         type: 'Text',
         content: JSON.stringify(contactObject, null, 2),
-        location: node.location
+        location: node.location,
+        formattingMetadata: {
+          isFromDirective: true,
+          originalNodeType: 'Directive',
+          preserveFormatting: true
+        }
       });
 
       // Verify transformation was registered correctly on the cloned state
