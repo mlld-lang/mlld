@@ -43,9 +43,71 @@ export class RunDirectiveHandler implements IDirectiveHandler {
         ? directive.command 
         : directive.command.raw;
 
-      // Resolve the command
+      // Check if this is a command reference (starts with $)
+      let commandToExecute = rawCommand;
+      if (rawCommand.startsWith('$')) {
+        const commandMatch = rawCommand.match(/\$([a-zA-Z0-9_]+)(?:\((.*)\))?/);
+        if (commandMatch) {
+          const commandName = commandMatch[1];
+          const commandArgs = commandMatch[2] || '';
+          
+          // Look up the command in state
+          const commandTemplate = state.getCommand(commandName);
+          if (commandTemplate) {
+            directiveLogger.debug(`Expanding command reference $${commandName} to template: ${commandTemplate}`);
+            
+            // Parse arguments if present
+            let args: Record<string, string> = {};
+            if (commandArgs) {
+              // Simple comma-separated arg parsing
+              const argParts = commandArgs.split(',').map(a => a.trim());
+              
+              // Extract parameter names from command definition if available
+              const commandDefMatch = commandTemplate.match(/\(([^)]+)\)/);
+              const paramNames = commandDefMatch 
+                ? commandDefMatch[1].split(',').map(p => p.trim()) 
+                : [];
+              
+              // Match args to names if we have param names defined
+              if (paramNames.length > 0) {
+                // Map provided args to named parameters
+                paramNames.forEach((name, i) => {
+                  if (i < argParts.length) {
+                    args[name] = argParts[i];
+                  }
+                });
+              } else {
+                // For simpler command templates without explicit param names,
+                // use positional args as $1, $2, etc.
+                argParts.forEach((arg, index) => {
+                  args[`$${index + 1}`] = arg;
+                });
+              }
+            }
+            
+            // Replace parameter placeholders in command template
+            let expandedCommand = commandTemplate;
+            for (const [name, value] of Object.entries(args)) {
+              expandedCommand = expandedCommand.replace(new RegExp(`{{${name}}}`, 'g'), value);
+            }
+            
+            // Use the expanded command instead
+            commandToExecute = expandedCommand;
+            directiveLogger.debug(`Expanded command: ${commandToExecute}`);
+          } else {
+            throw new DirectiveError(
+              `Command '${commandName}' not found`,
+              this.kind,
+              DirectiveErrorCode.EXECUTION_FAILED,
+              { severity: ErrorSeverity.Error }
+            );
+          }
+        }
+      }
+
+      // Resolve variables in the command
       const resolvedCommand = await this.resolutionService.resolveInContext(
-        rawCommand,
+        commandToExecute,
         context
       );
 

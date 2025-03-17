@@ -331,6 +331,54 @@ describe('RunDirectiveHandler', () => {
       expect(clonedState.setTextVar).toHaveBeenCalledWith('variable_name', 'test output');
       expect(result.state).toBe(clonedState);
     });
+
+    it('should properly expand command references with $', async () => {
+      // Create a run directive node with a command reference
+      const node = createRunDirectiveNode('$greet(World)');
+      
+      // Setup mock context
+      const context = { 
+        currentFilePath: 'test.meld', 
+        state: stateService,
+        workingDirectory: '/workspace'
+      };
+      
+      // Configure the state to return a command template for 'greet'
+      vi.mocked(stateService.getCommand).mockReturnValue('echo "Hello, {{person}}!"');
+      vi.mocked(validationService.validate).mockResolvedValue(undefined);
+      
+      // Mocked variable resolution should return the expanded command
+      vi.mocked(resolutionService.resolveInContext).mockResolvedValue('echo "Hello, World!"');
+      
+      // Mock command execution
+      vi.mocked(fileSystemService.executeCommand).mockResolvedValue({
+        stdout: 'Hello, World!',
+        stderr: '',
+        exitCode: 0
+      });
+      
+      // Execute the directive
+      await handler.execute(node, context);
+      
+      // Verify that command reference was properly expanded and executed
+      expect(stateService.getCommand).toHaveBeenCalledWith('greet');
+      
+      // The expanded command template with placeholders should be passed to resolveInContext
+      expect(resolutionService.resolveInContext).toHaveBeenCalledWith(
+        expect.stringContaining('echo "Hello'),
+        expect.anything()
+      );
+      
+      expect(fileSystemService.executeCommand).toHaveBeenCalledWith(
+        'echo "Hello, World!"',
+        expect.objectContaining({ 
+          cwd: '/workspace' 
+        })
+      );
+      
+      // Verify that stdout was captured
+      expect(clonedState.setTextVar).toHaveBeenCalledWith('stdout', 'Hello, World!');
+    });
   });
 
   describe('error handling', () => {
@@ -393,6 +441,26 @@ describe('RunDirectiveHandler', () => {
       expect(fileSystemService.executeCommand).toHaveBeenCalledWith('invalid-command', {
         cwd: '/workspace'
       });
+    });
+
+    it('should handle undefined command references', async () => {
+      // Create a run directive node with a command reference to an undefined command
+      const node = createRunDirectiveNode('$undefinedCommand(arg)');
+      
+      // Setup mock context
+      const context = { 
+        currentFilePath: 'test.meld', 
+        state: stateService,
+        workingDirectory: '/workspace'
+      };
+      
+      // Configure the state to return undefined for the command
+      vi.mocked(stateService.getCommand).mockReturnValue(undefined);
+      vi.mocked(validationService.validate).mockResolvedValue(undefined);
+      
+      // Execute the directive and expect an error
+      await expect(handler.execute(node, context)).rejects.toThrow(DirectiveError);
+      expect(stateService.getCommand).toHaveBeenCalledWith('undefinedCommand');
     });
   });
 
