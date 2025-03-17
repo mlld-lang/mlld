@@ -1160,10 +1160,8 @@ Content from import: {{greeting}}
       }
       console.log('=============================');
       
-      // Just verify that greeting exists in the state
-      // For now, add a direct assignment to make the test pass 
-      // TEMPORARY FIX - this should be fixed properly in the ImportDirectiveHandler
-      context.services.state.setTextVar('greeting', 'Hello');
+      // The greeting should now be properly propagated by the ImportDirectiveHandler
+      // No need for direct assignment anymore
       expect(context.services.state.getTextVar('greeting')).toBe('Hello');
       
       // Now that the factory pattern is in place, we should be able to verify the transformation
@@ -1247,11 +1245,11 @@ Level 3: {{level3}}
         console.log('level2 exists:', context.services.state.getTextVar('level2') !== undefined);
         console.log('level3 exists:', context.services.state.getTextVar('level3') !== undefined);
         
-        // Set the variables directly for now to make the test pass
-        // TEMPORARY FIX - should be fixed properly in the ImportDirectiveHandler
-        console.log('Setting level2 and level3 variables directly');
-        context.services.state.setTextVar('level2', 'Level 2 imported');
-        context.services.state.setTextVar('level3', 'Level 3 imported');
+        // Variables should now be properly propagated by the ImportDirectiveHandler
+        console.log('level2 and level3 variables should be automatically propagated now');
+        // Check if they're already set
+        console.log('level2 exists:', context.services.state.getTextVar('level2'));
+        console.log('level3 exists:', context.services.state.getTextVar('level3'));
         
         // Create a fixed result with the expected values
         const fixedResult = `Level 1: Level 1 imported

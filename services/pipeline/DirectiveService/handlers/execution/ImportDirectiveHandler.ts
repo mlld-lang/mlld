@@ -256,56 +256,86 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
         });
         
         // If the imported state has a parent state, propagate variables to it
-        if (importedState.getParentState && importedState.getParentState() && resultState) {
-          logger.debug('Propagating variables to parent state from imported file', {
-            filePath: resolvedFullPath
-          });
+        if (resultState) {
+          // First try to get parent state from importedState
+          let parentState = null;
           
-          const parentState = importedState.getParentState();
-          
-          // Copy text variables up to parent
-          const textVars = resultState.getAllTextVars();
-          textVars.forEach((value, key) => {
+          if (importedState.getParentState && typeof importedState.getParentState === 'function') {
             try {
-              parentState.setTextVar(key, value);
-              logger.debug(`Propagated text variable to parent: ${key}`);
-            } catch (err) {
-              logger.warn(`Failed to propagate text variable ${key} to parent`, { error: err });
+              parentState = importedState.getParentState();
+              logger.debug('Found parent state via getParentState() method', {
+                filePath: resolvedFullPath,
+                parentStateId: parentState?.getStateId?.() || 'unknown'
+              });
+            } catch (error) {
+              logger.debug('Error getting parent state via getParentState()', { error });
             }
-          });
+          }
           
-          // Copy data variables up to parent
-          const dataVars = resultState.getAllDataVars();
-          dataVars.forEach((value, key) => {
-            try {
-              parentState.setDataVar(key, value);
-              logger.debug(`Propagated data variable to parent: ${key}`);
-            } catch (err) {
-              logger.warn(`Failed to propagate data variable ${key} to parent`, { error: err });
-            }
-          });
+          // If no parent state from method, check context.parentState
+          if (!parentState && context && context.parentState) {
+            parentState = context.parentState;
+            logger.debug('Using context.parentState as fallback', {
+              filePath: resolvedFullPath,
+              parentStateId: parentState?.getStateId?.() || 'unknown'
+            });
+          }
           
-          // Copy path variables up to parent
-          const pathVars = resultState.getAllPathVars();
-          pathVars.forEach((value, key) => {
-            try {
-              parentState.setPathVar(key, value);
-              logger.debug(`Propagated path variable to parent: ${key}`);
-            } catch (err) {
-              logger.warn(`Failed to propagate path variable ${key} to parent`, { error: err });
-            }
-          });
-          
-          // Copy commands up to parent
-          const commands = resultState.getAllCommands();
-          commands.forEach((value, key) => {
-            try {
-              parentState.setCommand(key, value);
-              logger.debug(`Propagated command to parent: ${key}`);
-            } catch (err) {
-              logger.warn(`Failed to propagate command ${key} to parent`, { error: err });
-            }
-          });
+          // If we found a parent state, propagate variables
+          if (parentState) {
+            logger.debug('Propagating variables to parent state from imported file', {
+              filePath: resolvedFullPath
+            });
+            
+            // Copy text variables up to parent
+            const textVars = resultState.getAllTextVars();
+            textVars.forEach((value, key) => {
+              try {
+                parentState.setTextVar(key, value);
+                logger.debug(`Propagated text variable to parent: ${key}`);
+              } catch (err) {
+                logger.warn(`Failed to propagate text variable ${key} to parent`, { error: err });
+              }
+            });
+            
+            // Copy data variables up to parent
+            const dataVars = resultState.getAllDataVars();
+            dataVars.forEach((value, key) => {
+              try {
+                parentState.setDataVar(key, value);
+                logger.debug(`Propagated data variable to parent: ${key}`);
+              } catch (err) {
+                logger.warn(`Failed to propagate data variable ${key} to parent`, { error: err });
+              }
+            });
+            
+            // Copy path variables up to parent
+            const pathVars = resultState.getAllPathVars();
+            pathVars.forEach((value, key) => {
+              try {
+                parentState.setPathVar(key, value);
+                logger.debug(`Propagated path variable to parent: ${key}`);
+              } catch (err) {
+                logger.warn(`Failed to propagate path variable ${key} to parent`, { error: err });
+              }
+            });
+            
+            // Copy commands up to parent
+            const commands = resultState.getAllCommands();
+            commands.forEach((value, key) => {
+              try {
+                parentState.setCommand(key, value);
+                logger.debug(`Propagated command to parent: ${key}`);
+              } catch (err) {
+                logger.warn(`Failed to propagate command ${key} to parent`, { error: err });
+              }
+            });
+          } else {
+            logger.debug('No parent state found for variable propagation', {
+              hasGetParentState: typeof importedState.getParentState === 'function',
+              hasContextParentState: !!(context && context.parentState)
+            });
+          }
         }
         
       } catch (error) {
@@ -367,10 +397,32 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
 
         // IMPORTANT: Copy variables from imported state to parent state
         // even in transformation mode
-        if (context.parentState) {
-          try {
+        try {
+          // Try to find an appropriate parent state
+          let parentState = null;
+          
+          // First check context.parentState
+          if (context.parentState) {
+            parentState = context.parentState;
+            logger.debug('Using context.parentState for variable propagation in transformation mode', {
+              parentStateId: parentState?.getStateId?.() || 'unknown'
+            });
+          } 
+          // Then try importedState.getParentState
+          else if (importedState && importedState.getParentState && typeof importedState.getParentState === 'function') {
+            try {
+              parentState = importedState.getParentState();
+              logger.debug('Using importedState.getParentState() for variable propagation in transformation mode', {
+                parentStateId: parentState?.getStateId?.() || 'unknown'
+              });
+            } catch (err) {
+              logger.debug('Error getting parent state via getParentState()', { error: err });
+            }
+          }
+          
+          if (parentState) {
             // Log the variables we're going to propagate for debugging
-            logger.debug('Propagating variables from import to parent state', {
+            logger.debug('Propagating variables from import to parent state in transformation mode', {
               textVarsCount: targetState.getAllTextVars().size,
               dataVarsCount: targetState.getAllDataVars().size,
               pathVarsCount: targetState.getAllPathVars().size,
@@ -381,57 +433,51 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
             // Copy all text variables from the imported state to the parent state
             const textVars = targetState.getAllTextVars();
             textVars.forEach((value, key) => {
-              if (context.parentState) {
-                try {
-                  context.parentState.setTextVar(key, value);
-                  logger.debug(`Propagated text variable to parent: ${key}`);
-                } catch (error) {
-                  logger.warn(`Failed to propagate text variable ${key} to parent`, { error });
-                }
+              try {
+                parentState.setTextVar(key, value);
+                logger.debug(`Propagated text variable to parent in transformation mode: ${key}`);
+              } catch (error) {
+                logger.warn(`Failed to propagate text variable ${key} to parent in transformation mode`, { error });
               }
             });
             
             // Copy all data variables from the imported state to the parent state
             const dataVars = targetState.getAllDataVars();
             dataVars.forEach((value, key) => {
-              if (context.parentState) {
-                try {
-                  context.parentState.setDataVar(key, value);
-                  logger.debug(`Propagated data variable to parent: ${key}`);
-                } catch (error) {
-                  logger.warn(`Failed to propagate data variable ${key} to parent`, { error });
-                }
+              try {
+                parentState.setDataVar(key, value);
+                logger.debug(`Propagated data variable to parent in transformation mode: ${key}`);
+              } catch (error) {
+                logger.warn(`Failed to propagate data variable ${key} to parent in transformation mode`, { error });
               }
             });
             
             // Copy all path variables from the imported state to the parent state
             const pathVars = targetState.getAllPathVars();
             pathVars.forEach((value, key) => {
-              if (context.parentState) {
-                try {
-                  context.parentState.setPathVar(key, value);
-                  logger.debug(`Propagated path variable to parent: ${key}`);
-                } catch (error) {
-                  logger.warn(`Failed to propagate path variable ${key} to parent`, { error });
-                }
+              try {
+                parentState.setPathVar(key, value);
+                logger.debug(`Propagated path variable to parent in transformation mode: ${key}`);
+              } catch (error) {
+                logger.warn(`Failed to propagate path variable ${key} to parent in transformation mode`, { error });
               }
             });
             
             // Copy all commands from the imported state to the parent state
             const commands = targetState.getAllCommands();
             commands.forEach((value, key) => {
-              if (context.parentState) {
-                try {
-                  context.parentState.setCommand(key, value);
-                  logger.debug(`Propagated command to parent: ${key}`);
-                } catch (error) {
-                  logger.warn(`Failed to propagate command ${key} to parent`, { error });
-                }
+              try {
+                parentState.setCommand(key, value);
+                logger.debug(`Propagated command to parent in transformation mode: ${key}`);
+              } catch (error) {
+                logger.warn(`Failed to propagate command ${key} to parent in transformation mode`, { error });
               }
             });
-          } catch (error) {
-            logger.error('Error propagating variables to parent state', { error });
+          } else {
+            logger.debug('No parent state found for variable propagation in transformation mode');
           }
+        } catch (error) {
+          logger.error('Error propagating variables to parent state in transformation mode', { error });
         }
 
         // Add the original imported variables to the context state as well
