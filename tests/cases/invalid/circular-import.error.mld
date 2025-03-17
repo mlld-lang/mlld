@@ -5,6 +5,6 @@ creating a circular dependency that should be detected and rejected.
 
 @text message = "This is file A"
 
-@import [$./circular-import-b.error.mld]
+@import [$./tests/cases/invalid/circular-import-b.error.mld]
 
 The message from file B: {{message_b}} 

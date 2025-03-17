@@ -1,1 +1,1 @@
-Circular dependency detected 
+Circular import detected for file: /Users/adam/dev/claude-meld/tests/cases/invalid/circular-import.error.mld
