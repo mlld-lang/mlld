@@ -448,6 +448,7 @@ type FormatConverter = (
 const DEFAULT_OPTIONS: Required<OutputOptions> = {
   includeState: false,
   preserveFormatting: true,
+  pretty: false,
   formatOptions: {}
 };
 
@@ -817,9 +818,7 @@ export class OutputService implements IOutputService {
                 isBlock: context.contextType === 'block',
                 nodeType: context.nodeType,
                 linePosition: context.atLineStart ? 'start' : (context.atLineEnd ? 'end' : 'middle'),
-                isTransformation: context.transformationMode,
-                isOutputLiteral: context.isOutputLiteral ?? context.transformationMode,
-                preserveFormatting: context.preserveFormatting ?? (context.isOutputLiteral ?? context.transformationMode)
+                isTransformation: context.transformationMode
               }
             };
             
@@ -1005,10 +1004,8 @@ export class OutputService implements IOutputService {
         isBlock: formatOptions?.context === 'block',
         nodeType: 'Text', // Default to Text node
         linePosition: 'middle', // Default to middle of line
-        // Use new isOutputLiteral terminology, but keep backward compatibility with transformationMode
-        isTransformation: currentContext.isOutputLiteral ?? currentContext.transformationMode,
-        isOutputLiteral: currentContext.isOutputLiteral ?? currentContext.transformationMode,
-        preserveFormatting: currentContext.preserveFormatting ?? (currentContext.isOutputLiteral ?? currentContext.transformationMode)
+        // Use transformation mode for formatting
+        isTransformation: currentContext.transformationMode
       }
     };
     
@@ -1223,45 +1220,23 @@ export class OutputService implements IOutputService {
       });
       
       // Convert markdown to XML using llmxml with per-call configuration
-      const xmlResult = await llmxml.toXML(markdown, {
-        // Apply defaults, then override with any provided options
-        includeHlevel: false,
-        includeTitle: false,
-        tagFormat: 'PascalCase',
-        ...xmlOptions
-      });
+      const xmlResult = await llmxml.toXML(markdown);
       
       logger.debug('Successfully converted to XML', { xmlLength: xmlResult.length });
       return xmlResult;
     } catch (error) {
-      // Use enhanced error handling from llmxml 1.5.0
-      if (error && typeof error === 'object' && 'code' in error) {
-        const llmError = error as any;
-        logger.error('LLMXML conversion error', {
-          code: llmError.code,
-          details: llmError.details
-        });
-        
-        throw new MeldOutputError(
-          `XML conversion error: ${llmError.message || 'Unknown error'}`,
-          'xml',
-          { 
-            cause: error,
-            details: llmError.details
-          }
-        );
-      }
-      
-      // Standard error handling for non-llmxml errors
-      logger.error('Error in convertToXML', {
+      // Handle error
+      logger.error('LLMXML conversion error', {
         error: error instanceof Error ? error.message : String(error)
       });
       
       throw new MeldOutputError(
-        `Failed to convert output to XML: ${error instanceof Error ? error.message : String(error)}`,
-        'xml',
-        { cause: error instanceof Error ? error : undefined }
-      );
+          `XML conversion error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          'xml',
+          { 
+            cause: error instanceof Error ? error : new Error(String(error))
+          }
+        );
     }
   }
 

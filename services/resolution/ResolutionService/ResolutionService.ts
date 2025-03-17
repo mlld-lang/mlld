@@ -974,19 +974,45 @@ export class ResolutionService implements IResolutionService {
   }
   
   /**
-   * Extract all headings from content using llmxml.getHeadings
-   * This uses the new API from llmxml 1.5.0
+   * Extract all headings from content using regex
+   * Since llmxml API compatibility issues, we'll use a simple regex approach
    * @private
    */
   private async extractHeadingsFromContent(content: string): Promise<{ title: string; level: number; path: string[] }[]> {
     try {
-      const { createLLMXML } = await import('llmxml');
-      const llmxml = createLLMXML({
-        warningLevel: 'none'
-      });
+      // Simple regex to extract markdown headings
+      const headingRegex = /^(#{1,6})\s+(.+?)(?:\s+#+)?$/gm;
+      const matches = [...content.matchAll(headingRegex)];
       
-      // Use the new getHeadings method
-      const headings = await llmxml.getHeadings(content);
+      // Transform regex matches into structured heading objects
+      const headings: { title: string; level: number; path: string[] }[] = [];
+      const pathMap: Map<number, string[]> = new Map(); // Level -> current path at that level
+      
+      for (const match of matches) {
+        const level = match[1].length; // Number of # characters
+        const title = match[2].trim();
+        
+        // Create a path array by inheriting from parent levels
+        const path: string[] = [];
+        for (let i = 1; i < level; i++) {
+          const parentPath = pathMap.get(i);
+          if (parentPath && parentPath.length > 0) {
+            path.push(...parentPath);
+          }
+        }
+        path.push(title);
+        
+        // Update the path map for this level
+        pathMap.set(level, [title]);
+        
+        // Add to headings array
+        headings.push({
+          title,
+          level,
+          path
+        });
+      }
+      
       return headings;
     } catch (error) {
       logger.warn('Error extracting headings', {

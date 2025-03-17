@@ -79,6 +79,8 @@ enum ResolutionErrorCode {
   COMMAND_NOT_FOUND = 'COMMAND_NOT_FOUND',
   /** Section not found in the content */
   SECTION_NOT_FOUND = 'SECTION_NOT_FOUND',
+  /** Section extraction failed */
+  SECTION_EXTRACTION_FAILED = 'SECTION_EXTRACTION_FAILED',
   /** Specific field not found in variable */
   FIELD_NOT_FOUND = 'FIELD_NOT_FOUND',
   /** Invalid access pattern (e.g., array access on non-array) */

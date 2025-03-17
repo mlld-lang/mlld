@@ -11,6 +11,7 @@ export interface ResolutionErrorDetails {
   contentPreview?: string;
   error?: string;
   availableHeadings?: string;
+  suggestions?: string;
   // Additional properties used in VariableReferenceResolver
   variable?: string;
   field?: string;
