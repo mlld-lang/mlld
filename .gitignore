@@ -58,6 +58,8 @@ pids
 examples/*.xml
 examples/*.md
 examples/logs/
+tests/cases/**/*.o.xml
+tests/cases/**/*.o.md
 
 # Temporary files
 diff.txt

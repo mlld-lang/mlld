@@ -1,0 +1,1 @@
+@import [$./tests/cases/invalid/circular-import.error.mld]
