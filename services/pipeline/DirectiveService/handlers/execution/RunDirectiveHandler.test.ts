@@ -292,21 +292,18 @@ describe('RunDirectiveHandler', () => {
     });
 
     it('should handle custom output variable', async () => {
-      // Instead of using createRealRunDirective, create a node directly
-      // This bypasses the createRealRunDirective function which is using problematic syntax
-      const node = {
-        type: 'Directive',
-        directive: {
-          kind: 'run',
-          identifier: 'run',
-          command: 'echo test',
-          output: 'variable_name'
-        },
-        location: {
-          start: { line: 1, column: 1, offset: 0 },
-          end: { line: 1, column: 20, offset: 19 }
-        }
-      } as DirectiveNode;
+      // Use the local createRunDirectiveNode helper to create a node with correct structure
+      // This aligns with the pattern used in other tests and avoids hardcoding node structure
+      // While we could use runDirectiveExamples.atomic.outputCapture, the helper is more direct
+      // for this specific test case that focuses on the output variable handling
+      const node = createRunDirectiveNode('echo test', 'variable_name');
+      
+      // Add location data for consistent behavior with other nodes
+      // Location information is important for proper error reporting and formatting
+      node.location = {
+        start: { line: 1, column: 1, offset: 0 },
+        end: { line: 1, column: 20, offset: 19 }
+      };
       
       const context = { currentFilePath: 'test.meld', state: stateService };
 
