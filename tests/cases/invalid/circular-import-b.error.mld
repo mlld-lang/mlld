@@ -1,1 +1,8 @@
-@import [$./tests/cases/invalid/circular-import.error.mld]
+# Circular Import File B
+
+This file is circular-import-b.error.mld.
+It imports circular-import.error.mld, creating a circular dependency.
+
+@text message_b = "This is file B"
+
+@import [circular-import.error.mld]
