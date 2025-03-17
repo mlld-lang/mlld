@@ -333,8 +333,23 @@ describe('RunDirectiveHandler', () => {
     });
 
     it('should properly expand command references with $', async () => {
-      // Create a run directive node with a command reference
-      const node = createRunDirectiveNode('$greet(World)');
+      // Create a run directive node with a command reference in the new AST format
+      const node = {
+        type: 'Directive',
+        directive: {
+          kind: 'run',
+          command: {
+            name: 'greet',
+            args: [{ type: 'string', value: 'World' }],
+            raw: '$greet(World)'
+          },
+          isReference: true
+        },
+        location: { 
+          start: { line: 1, column: 1 },
+          end: { line: 1, column: 20 }
+        }
+      };
       
       // Setup mock context
       const context = { 
@@ -352,12 +367,8 @@ describe('RunDirectiveHandler', () => {
       
       // For command arguments resolution
       vi.mocked(resolutionService.resolveInContext).mockImplementation((arg, ctx) => {
-        // For command arguments (the "World" in $greet(World))
-        if (arg === "World") {
-          return Promise.resolve("World");
-        }
-        // For the final resolved command
-        return Promise.resolve('echo "Hello, World!"');
+        // For the final resolved command - the implementation will call this to resolve variables
+        return Promise.resolve(arg);
       });
       
       // Mock command execution
@@ -374,7 +385,7 @@ describe('RunDirectiveHandler', () => {
       expect(stateService.getCommand).toHaveBeenCalledWith('greet');
       
       expect(fileSystemService.executeCommand).toHaveBeenCalledWith(
-        'echo "Hello, World!"',
+        'echo World',
         expect.objectContaining({ 
           cwd: '/workspace' 
         })

@@ -8,7 +8,7 @@ We are going to make the following changes to the run grammar:
   allow for passing the whole contents of the lines between [[ and ]] along with the
    language indicator, so:
 
-  @run [[ javascript
+  @run javascript [[ 
   some invalid
   js with a {{variable}}
   here
@@ -26,7 +26,7 @@ We are going to make the following changes to the run grammar:
   4. allow the same as the above but also with passed variables also handled so you
   can do:
   ```
-  @run ({{variable}},{{othervariable}} [[ javascript
+  @run javascript ({{variable}},{{othervariable}} [[ 
   (some python here that has {{variable}} and {{othervariable}} available to import
   natively)
   ]]

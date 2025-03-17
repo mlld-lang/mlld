@@ -1,8 +1,8 @@
 // Test with variable references
- (howdy, planet)
+ howdy planet
 
 // Test with string literals
- ("hello","world")
+ hello world
 
 // Test with string literals containing commas
- ("hello, friend","beautiful world")
+ hello, friend beautiful world

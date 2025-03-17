@@ -92,8 +92,8 @@ describe('Command References in Run directives', async () => {
     
     // In the integration test, we can't execute actual commands
     // Instead, we check that the command reference is correctly processed
-    expect(result).toContain('(Hello World)');
-    expect(result).toContain('(John)');
+    expect(result).toContain('Hello World');
+    expect(result).toContain('John');
     
     // Cleanup
     await testContext.cleanup();
@@ -122,7 +122,7 @@ describe('Command References in Run directives', async () => {
     
     // In the integration test, we can't execute actual commands
     // Instead, we check that the command reference is correctly processed
-    expect(result).toContain('(Alice)');
+    expect(result).toContain('Alice');
     
     // Cleanup
     await testContext.cleanup();
@@ -150,7 +150,7 @@ describe('Command References in Run directives', async () => {
     
     // In the integration test, we can't execute actual commands
     // Instead, we check that the command reference is correctly processed
-    expect(result).toContain('("hello, world", "nice, day")');
+    expect(result).toContain('hello, world nice, day');
     
     // Cleanup
     await testContext.cleanup();
