@@ -169,7 +169,17 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
 
       // Check for circular imports
       try {
-        this.circularityService.beginImport(resolvedFullPath);
+        // Normalize the path to ensure consistent format with CircularityService
+        // This ensures paths with different formats (e.g., backslashes vs forward slashes)
+        // are properly compared for circular import detection
+        const normalizedPath = resolvedFullPath.replace(/\\/g, '/');
+        logger.debug('Checking for circular imports', { 
+          originalPath: resolvedFullPath,
+          normalizedPath,
+          isPathDifferent: normalizedPath !== resolvedFullPath
+        });
+        
+        this.circularityService.beginImport(normalizedPath);
       } catch (error: any) {
         // Rethrow as a directive error
         throw new DirectiveError(
@@ -380,7 +390,9 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
 
       // End import tracking
       if (resolvedFullPath) {
-        this.circularityService.endImport(resolvedFullPath);
+        // Use the same normalization approach as in beginImport
+        const normalizedPath = resolvedFullPath.replace(/\\/g, '/');
+        this.circularityService.endImport(normalizedPath);
       }
 
       // Check if transformation is enabled
@@ -638,7 +650,9 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
       // End import tracking if necessary
       if (resolvedFullPath) {
         try {
-          this.circularityService.endImport(resolvedFullPath);
+          // Use the same normalization approach as in beginImport
+          const normalizedPath = resolvedFullPath.replace(/\\/g, '/');
+          this.circularityService.endImport(normalizedPath);
         } catch (cleanupError) {
           logger.warn('Error during import cleanup', { error: cleanupError });
         }
