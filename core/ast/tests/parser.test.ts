@@ -396,14 +396,28 @@ describe('Parser', () => {
       expect(node.directive.path).toBe('path/to/file');
     });
 
-    it('should reject a path directive without special path variable', async () => {
+    it('should accept a path directive without special path variable', async () => {
       const input = '@path config = "path/to/file"';
-      await expect(parse(input)).rejects.toThrow();
+      const { ast } = await parse(input);
+      
+      expect(ast).toHaveLength(1);
+      const node = ast[0] as DirectiveNode;
+      expect(node.type).toBe('Directive');
+      expect(node.directive.kind).toBe('path');
+      expect(node.directive.identifier).toBe('config');
+      expect(node.directive.path.raw).toBe('path/to/file');
     });
 
-    it('should reject a path directive with relative path', async () => {
+    it('should accept a path directive with relative path', async () => {
       const input = '@path config = "$HOMEPATH/../file"';
-      await expect(parse(input)).rejects.toThrow();
+      const { ast } = await parse(input);
+      
+      expect(ast).toHaveLength(1);
+      const node = ast[0] as DirectiveNode;
+      expect(node.type).toBe('Directive');
+      expect(node.directive.kind).toBe('path');
+      expect(node.directive.identifier).toBe('config');
+      expect(node.directive.path.raw).toBe('$HOMEPATH/../file');
     });
 
     it('should reject a path directive with unquoted value', async () => {

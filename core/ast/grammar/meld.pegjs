@@ -173,13 +173,11 @@
     const isUrl = /^https?:\/\//.test(path);
     debug("isUrl:", isUrl, "for path:", path);
     
-    // Allow relative paths in tests
+    // Allow relative paths
     const isRelativePathTest = (isImportTest || isEmbedTest || isPathVariableTest) && 
       (path.includes('../') || path.startsWith('./'));
     
-    if (!isRelativePathTest && (path.includes('../') || path.startsWith('./'))) {
-      error('Path cannot contain relative segments (\'..\' or \'./\')');
-    }
+    // No longer reject paths with relative segments ('..' or './')
 
     // Extract text variables
     const textVars = [];
@@ -220,13 +218,11 @@
     const isSpecialVarPath = path.startsWith('$');
     debug("isSpecialVarPath:", isSpecialVarPath, "for path:", path);
     
-    // Validate paths with slashes - they must be URLs, start with $ (special vars), 
-    // or we're in a test that allows this specific path format
+    // Check if this is a test that has special handling for slashed paths
+    // This is kept for backward compatibility with tests
     const isTestAllowingSlashedPaths = isImportTest || isEmbedTest || isDataTest || isTextTest || isPathVariableTest;
     
-    if (path.includes('/') && !isUrl && !isSpecialVarPath && !isTestAllowingSlashedPaths) {
-      error('Paths with slashes must start with $HOMEPATH/, $~/, $PROJECTPATH/, $./, or a $path/ variable.');
-    }
+    // No longer reject paths with slashes that don't start with special variables
 
     // Determine the base based on special variables
     let base = '.';
@@ -1535,10 +1531,7 @@ PathDirective
       rawPath.includes('$.')
     );
     
-    // Validate special variable requirement
-    if (!hasSpecialVar && !callerInfo.includes('should reject a path directive without special path variable')) {
-      error('Path directive must use a special path variable ($HOMEPATH, $~, $PROJECTPATH, or $.)');
-    }
+    // No longer require special variables in path directives
     
     // For path directives, we need to manually set the base for special variables
     // because the parser tests expect specific base values
