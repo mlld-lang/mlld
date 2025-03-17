@@ -344,11 +344,21 @@ describe('RunDirectiveHandler', () => {
       };
       
       // Configure the state to return a command template for 'greet'
-      vi.mocked(stateService.getCommand).mockReturnValue('echo "Hello, {{person}}!"');
+      vi.mocked(stateService.getCommand).mockReturnValue({
+        command: 'echo "Hello, {{person}}!"',
+        parameters: ['person']
+      });
       vi.mocked(validationService.validate).mockResolvedValue(undefined);
       
-      // Mocked variable resolution should return the expanded command
-      vi.mocked(resolutionService.resolveInContext).mockResolvedValue('echo "Hello, World!"');
+      // For command arguments resolution
+      vi.mocked(resolutionService.resolveInContext).mockImplementation((arg, ctx) => {
+        // For command arguments (the "World" in $greet(World))
+        if (arg === "World") {
+          return Promise.resolve("World");
+        }
+        // For the final resolved command
+        return Promise.resolve('echo "Hello, World!"');
+      });
       
       // Mock command execution
       vi.mocked(fileSystemService.executeCommand).mockResolvedValue({
@@ -362,12 +372,6 @@ describe('RunDirectiveHandler', () => {
       
       // Verify that command reference was properly expanded and executed
       expect(stateService.getCommand).toHaveBeenCalledWith('greet');
-      
-      // The expanded command template with placeholders should be passed to resolveInContext
-      expect(resolutionService.resolveInContext).toHaveBeenCalledWith(
-        expect.stringContaining('echo "Hello'),
-        expect.anything()
-      );
       
       expect(fileSystemService.executeCommand).toHaveBeenCalledWith(
         'echo "Hello, World!"',

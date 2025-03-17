@@ -523,7 +523,13 @@ export class VariableReferenceResolver {
    * Check if the content contains variable references
    */
   private containsVariableReferences(content: string): boolean {
-    return content.includes('{{') && content.includes('}}');
+    // Check for {{variable}} syntax
+    const hasStandardVars = content.includes('{{') && content.includes('}}');
+    
+    // Check for $variable path syntax
+    const hasPathVars = content.includes('$') && /\$[a-zA-Z0-9_]+/.test(content);
+    
+    return hasStandardVars || hasPathVars;
   }
 
   /**

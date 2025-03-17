@@ -659,6 +659,10 @@ export class ResolutionService implements IResolutionService {
     if (value.includes('{{') || value.includes('${') || value.includes('$')) {
       logger.debug('Resolving variables in string:', { value });
       
+      // Special handling for path variables with $ prefix (like $temp)
+      // Uncomment when adding path variable support
+      // value = await this.resolvePathVariablesInText(value, context);
+      
       // Ensure factory is initialized before trying to use it
       this.ensureFactoryInitialized();
       

@@ -1018,7 +1018,7 @@ DefineField
   }
 
 DefineParams
-  = "(" _ params:IdentifierList _ ")" {
+  = _ "(" _ params:IdentifierList _ ")" {
     return params;
   }
 

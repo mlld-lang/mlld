@@ -47,7 +47,9 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
       // 3. Create command definition
       const commandDef: Omit<CommandDefinition, 'metadata'> = {
         parameters: parameters || [],
-        command: command.kind === 'run' ? command.command : ''
+        command: command.kind === 'run' ? command.command : '',
+        // Explicitly add an empty parameters array if none was provided
+        ...(parameters === undefined && { parameters: [] })
       };
 
       // 4. Create new state for modifications
