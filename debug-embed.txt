@@ -1,18 +1,5 @@
-========= TEST RUN STARTED =========
-Creating test file with variable embed
-Test file created. Content: @data role = { "architect": "Senior architect" }
-@embed {{role.architect}}
-State service info:
-State service type: object
-Added role variable directly to state
-Role: {"architect":"Senior architect"}
-Running main() with transformation mode enabled
-main() completed successfully
-Result: "
-Senior architect"
-Expected: "Senior architect"
-Actual: "
-Senior architect"
-✅ PASS: result matches expected value
-✅ PASS: result does not contain @embed directive
-========= TEST RUN ENDED =========
+Before
+Line 1
+Line 2
+Line 3
+After
