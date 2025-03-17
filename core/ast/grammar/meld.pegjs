@@ -2,12 +2,12 @@
 // Meld grammar implementation
 
 {
-  // Add debug flag and logging
-  const DEBUG = process.env.MELD_DEBUG === 'true' || false;
+  // Add debug flag and logging - always enable for now
+  const DEBUG = true; // process.env.MELD_DEBUG === 'true' || false;
 
   function debug(msg, ...args) {
     if (DEBUG) {
-      console.log(`[DEBUG] ${msg}`, ...args);
+      console.log(`[DEBUG GRAMMAR] ${msg}`, ...args);
     }
   }
 
@@ -525,40 +525,115 @@ Directive
     / VarDirective
   ) { return directive; }
 
+// Command reference parsing rule
+CommandReference
+  = "$" name:Identifier args:CommandArgs? {
+      return {
+        name,
+        args: args || [],
+        isCommandReference: true
+      };
+    }
+
+CommandArgs
+  = "(" _ args:CommandArgsList? _ ")" {
+      return args || [];
+    }
+
+CommandArgsList
+  = first:CommandArg rest:(_ "," _ arg:CommandArg { return arg; })* {
+      return [first, ...rest];
+    }
+
+CommandArg
+  = str:StringLiteral { return { type: 'string', value: str }; }
+  / varRef:Variable { return { type: 'variable', value: varRef }; }
+  / chars:RawArgChar+ { return { type: 'raw', value: chars.join('').trim() }; }
+
+RawArgChar
+  = !("," / ")") char:. { return char; }
+
 RunDirective
   = "run" _ content:DirectiveContent header:UnderHeader? {
-    validateRunContent(content);
-    return createDirective('run', {
-      command: content,
-      ...(content.startsWith("$") ? { isReference: true } : {}),
-      ...(header ? { underHeader: header } : {})
-    }, location());
-  }
+      debug("RUN DIRECTIVE PARSER CALLED");
+      debug("Content:", content);
+      debug("Start pos:", location().start);
+      debug("End pos:", location().end);
+      
+      validateRunContent(content);
+      
+      // Handle command references with arguments - detect $command(args) format
+      if (content.startsWith("$")) {
+        debug("DETECTED COMMAND REFERENCE:", content);
+        
+        const commandMatch = content.match(/\$([a-zA-Z0-9_]+)(?:\((.*)\))?/);
+        if (commandMatch) {
+          const commandName = commandMatch[1];
+          const rawArgs = commandMatch[2] || '';
+          
+          debug("✅ Found command reference:", content);
+          debug("✅ Command name:", commandName);
+          debug("✅ Raw args:", rawArgs);
+          
+          // Custom command object structure to make it easier to use in RunDirectiveHandler
+          const commandObj = {
+            raw: content,
+            name: commandName,
+            rawArgs: rawArgs
+          };
+          
+          // Create a special directive object that the RunDirectiveHandler can easily use
+          const result = {
+            type: 'Directive',
+            directive: {
+              kind: 'run',
+              command: commandObj,
+              isReference: true,
+              ...(header ? { underHeader: header } : {})
+            },
+            location: location()
+          };
+          
+          debug("🔍 Created run directive with parsed args:", JSON.stringify(result, null, 2));
+          return result;
+        } else {
+          debug("❌ COMMAND MATCH FAILED, regex didn't match:", content);
+        }
+      } else {
+        debug("➡️ Not a command reference, normal command:", content);
+      }
+      
+      return createDirective('run', {
+        command: content,
+        ...(content.startsWith("$") ? { isReference: true } : {}),
+        ...(header ? { underHeader: header } : {})
+      }, location());
+    }
   / "run" __ variable:Variable header:UnderHeader? {
-    // Handle direct variable embedding (without brackets)
-    // This allows syntax like @run {{variable}}
-    
-    // Get the variable text directly from the variable node
-    const variableText = variable.valueType === 'text' 
-      ? `{{${variable.identifier}}}` 
-      : variable.valueType === 'data' 
-        ? `{{${variable.identifier}${variable.fields.map(f => {
-            if (f.type === 'field') return '.' + f.value;
-            if (f.type === 'index') return typeof f.value === 'string' ? `[${JSON.stringify(f.value)}]` : `[${f.value}]`;
-            return '';
-          }).join('')}}}` 
-        : variable.valueType === 'path' 
-          ? `$${variable.identifier}` 
-          : '';
-    
-    validateRunContent(variableText);
-    
-    return createDirective('run', {
-      command: variableText,
-      ...(variableText.startsWith("$") ? { isReference: true } : {}),
-      ...(header ? { underHeader: header } : {})
-    }, location());
-  }
+      // Handle direct variable embedding (without brackets)
+      // This allows syntax like @run {{variable}}
+      
+      // Get the variable text directly from the variable node
+      const variableText = variable.valueType === 'text' 
+        ? `{{${variable.identifier}}}` 
+        : variable.valueType === 'data' 
+          ? `{{${variable.identifier}${variable.fields.map(f => {
+              if (f.type === 'field') return '.' + f.value;
+              if (f.type === 'index') return typeof f.value === 'string' ? `[${JSON.stringify(f.value)}]` : `[${f.value}]`;
+              return '';
+            }).join('')}}}` 
+          : variable.valueType === 'path' 
+            ? `$${variable.identifier}` 
+            : '';
+      
+      validateRunContent(variableText);
+      
+      return createDirective('run', {
+        command: variableText,
+        ...(variableText.startsWith("$") ? { isReference: true } : {}),
+        ...(header ? { underHeader: header } : {})
+      }, location());
+    }
 
 ImportDirective
   = // Named imports with from syntax
@@ -1050,6 +1125,7 @@ DefineValue
 
 DirectiveContent
   = "[" content:BracketContent "]" {
+    debug("DirectiveContent parsed:", content);
     return content;
   }
 

@@ -38,247 +38,285 @@ export class RunDirectiveHandler implements IDirectiveHandler {
       // Validate the directive
       await this.validationService.validate(node);
 
-      // Get the command string from the directive
-      const rawCommand = typeof directive.command === 'string' 
-        ? directive.command 
-        : directive.command.raw;
-      
+      // Get the command from directive
+      let rawCommand = '';
+      if (typeof directive.command === 'string') {
+        rawCommand = directive.command;
+      } else if (directive.command && directive.command.raw) {
+        rawCommand = directive.command.raw;
+      } else if (directive.command) {
+        rawCommand = JSON.stringify(directive.command);
+      }
+
       directiveLogger.debug(`Processing run directive with command: ${rawCommand}`);
       
       // Check if this is a command reference (starts with $)
       let commandToExecute = rawCommand;
       if (rawCommand.startsWith('$')) {
-        // Use the AST structure that's already parsed and available for us
-        // The directive.command is either a string or an object with AST details
-        // If it's an object and has isReference = true, it's a command reference
-        const isCommandReference = typeof directive.command !== 'string' && 
-                                  directive.command.isReference === true;
+        // It's a command reference - extract the command name and arguments
+        // Match $commandName(args) - including with quoted arguments
+        const commandMatch = rawCommand.match(/\$([a-zA-Z0-9_]+)(?:\((.*)\))?/);
         
-        if (isCommandReference || directive.isReference) {
-          // Extract the command name from the command reference
-          // Format is typically: $commandName(args)
-          const commandMatch = rawCommand.match(/\$([a-zA-Z0-9_]+)(?:\((.*)\))?/);
-          if (!commandMatch) {
-            throw new DirectiveError(
-              `Invalid command reference format: ${rawCommand}`,
-              this.kind,
-              DirectiveErrorCode.EXECUTION_FAILED,
-              { severity: ErrorSeverity.Error }
-            );
+        // Also try a more specific regex for quoted arguments
+        const quotedArgsMatch = rawCommand.match(/\$([a-zA-Z0-9_]+)\(\"([^\"]*)\"\)/);
+        if (quotedArgsMatch) {
+            console.log("Found quoted argument:", quotedArgsMatch[2]);
+        }
+        if (!commandMatch) {
+          throw new DirectiveError(
+            `Invalid command reference format: ${rawCommand}`,
+            this.kind,
+            DirectiveErrorCode.EXECUTION_FAILED,
+            { severity: ErrorSeverity.Error }
+          );
+        }
+        
+        const commandName = commandMatch[1];
+        const commandArgs = commandMatch[2] || '';
+        
+        console.log("DETECTED COMMAND REFERENCE:");
+        console.log("Command match:", commandMatch);
+        console.log("Command name:", commandName);
+        console.log("Command args:", commandArgs);
+        
+        directiveLogger.debug(`Detected command reference: $${commandName}(${commandArgs})`);
+        
+        // Get the command definition from state
+        const commandDef = state.getCommand(commandName);
+        
+        if (!commandDef) {
+          throw new DirectiveError(
+            `Command '${commandName}' not found`,
+            this.kind,
+            DirectiveErrorCode.EXECUTION_FAILED,
+            { severity: ErrorSeverity.Error }
+          );
+        }
+        
+        // Get the command string from the definition
+        const commandTemplate = commandDef.command;
+        if (!commandTemplate) {
+          throw new DirectiveError(
+            `Invalid command format for '${commandName}'`,
+            this.kind,
+            DirectiveErrorCode.EXECUTION_FAILED,
+            { severity: ErrorSeverity.Error }
+          );
+        }
+        
+        // Handle @run directive embedded in the command definition
+        let commandString = commandTemplate;
+        if (commandTemplate.startsWith('@run ')) {
+          const runMatch = commandTemplate.match(/@run\s*\[(.*)\]/);
+          if (runMatch) {
+            commandString = runMatch[1];
+            directiveLogger.debug(`Extracted command from @run directive: ${commandString}`);
           }
-          
-          const commandName = commandMatch[1];
-          const commandArgs = commandMatch[2] || '';
-          
-          directiveLogger.debug(`Detected command reference: $${commandName}(${commandArgs})`);
-          
-          // Get the command definition from state
-          const commandDef = state.getCommand(commandName);
-          
-          if (!commandDef) {
-            throw new DirectiveError(
-              `Command '${commandName}' not found`,
-              this.kind,
-              DirectiveErrorCode.EXECUTION_FAILED,
-              { severity: ErrorSeverity.Error }
-            );
-          }
-          
-          directiveLogger.debug(`Command definition from state: ${JSON.stringify(commandDef)}`);
-          
-          // Get the command string from the definition
-          const commandTemplate = commandDef.command;
-          if (!commandTemplate) {
-            throw new DirectiveError(
-              `Invalid command format for '${commandName}'`,
-              this.kind,
-              DirectiveErrorCode.EXECUTION_FAILED,
-              { severity: ErrorSeverity.Error }
-            );
-          }
-          
-          // Handle @run directive embedded in the command definition
-          let commandString = commandTemplate;
-          if (commandTemplate.startsWith('@run ')) {
-            const runMatch = commandTemplate.match(/@run\s*\[(.*)\]/);
-            if (runMatch) {
-              commandString = runMatch[1];
-              directiveLogger.debug(`Extracted command from @run directive: ${commandString}`);
-            }
-          }
-          
-          directiveLogger.debug(`Command string before parameter substitution: "${commandString}"`);
-          
-          // Debug parameter pattern matches before doing any replacements
-          const paramPattern = /\{\{([^}]+)\}\}/g;
-          let paramMatch;
-          while ((paramMatch = paramPattern.exec(commandString)) !== null) {
-            directiveLogger.debug(`Found parameter pattern: {{${paramMatch[1]}}}`);
-          }
-          
-          // Resolve variables in the command arguments
-          const resolvedArgs = await this.resolutionService.resolveInContext(commandArgs, context);
-          directiveLogger.debug(`Resolved command arguments: ${resolvedArgs}`);
-          
-          // Print the AST structure for debugging
-          console.log('Command Reference AST Structure:');
-          console.log('Original command:', rawCommand);
-          console.log('Node directive:', JSON.stringify(node.directive, null, 2));
-          console.log('Command definition from state:', JSON.stringify(commandDef, null, 2));
-          console.log('Original arguments:', commandArgs);
-          console.log('Resolved arguments:', resolvedArgs);
-          
-          // Let's use ResolutionService to resolve the arguments entirely
-          // This ensures we leverage the AST instead of doing manual parsing
-          let commandWithArgs = commandString;
-          
-          // Create parameter mapping
-          let parameterMap: Record<string, string> = {};
-          
-          // Get parameters defined in the command definition
-          const parameters = Array.isArray(commandDef.parameters) ? commandDef.parameters : [];
-          
-          // For direct access to arguments, we can use NodeJS's built-in function-args module
-          // or we can implement a simplified version here using the same logic the AST already uses
-          const parseArgs = (argsString: string): string[] => {
-            if (!argsString || argsString.trim() === '') {
-              return [];
-            }
+        }
+        
+        // Get parameters defined in the command definition
+        const parameters = Array.isArray(commandDef.parameters) ? commandDef.parameters : [];
+        
+        // Special handling for quoted arguments
+        // If we detected a quoted argument with our specific regex, use it directly
+        if (quotedArgsMatch && quotedArgsMatch.length >= 3 && parameters.length > 0) {
+            console.log("USING QUOTED ARGUMENT DIRECTLY");
+            const quotedArg = quotedArgsMatch[2];
+            const parameterMap = { [parameters[0]]: quotedArg };
             
-            const args: string[] = [];
-            let currentArg = '';
-            let inQuote = false;
-            let quoteChar = '';
-            
-            for (let i = 0; i < argsString.length; i++) {
-              const char = argsString[i];
-              
-              // Handle quotes
-              if ((char === '"' || char === "'") && (i === 0 || argsString[i - 1] !== '\\')) {
-                if (!inQuote) {
-                  inQuote = true;
-                  quoteChar = char;
-                  continue; // Skip the opening quote
-                } else if (char === quoteChar) {
-                  inQuote = false;
-                  quoteChar = '';
-                  continue; // Skip the closing quote
-                }
-              }
-              
-              // If not in quotes and we hit a comma, push the arg and reset
-              if (!inQuote && char === ',') {
-                args.push(currentArg.trim());
-                currentArg = '';
-                continue;
-              }
-              
-              // Add the character to our current arg
-              currentArg += char;
-            }
-            
-            // Add the last arg if there is one
-            if (currentArg.trim() !== '') {
-              args.push(currentArg.trim());
-            }
-            
-            return args;
-          };
-          
-          // Parse the arguments using our AST-compatible parser
-          const argParts = parseArgs(resolvedArgs);
-          directiveLogger.debug(`Parsed arguments: ${JSON.stringify(argParts)}`);
-          
-          // The issue is that the parenthesis and quotes aren't being properly stripped.
-          // Let's sanitize the arguments to remove any surrounding quotes.
-          const sanitizeArg = (arg: string): string => {
-            // Remove surrounding quotes if present
-            if ((arg.startsWith('"') && arg.endsWith('"')) || 
-                (arg.startsWith("'") && arg.endsWith("'"))) {
-              return arg.substring(1, arg.length - 1);
-            }
-            return arg;
-          };
-          
-          const sanitizedArgs = argParts.map(sanitizeArg);
-          directiveLogger.debug(`Sanitized arguments: ${JSON.stringify(sanitizedArgs)}`);
-          
-          // Extract the parameters from the command reference
-          if (parameters.length > 0) {
-            // Map provided args to named parameters
-            parameters.forEach((paramName, i) => {
-              if (i < sanitizedArgs.length) {
-                parameterMap[paramName] = sanitizeArg(argParts[i]);
-              }
-            });
-          } else {
-            // If there are no parameters defined, use positional parameters
-            // Look for {{param}} patterns in the command template
-            const paramPattern = /\{\{([^}]+)\}\}/g;
-            const paramNames: string[] = [];
-            let match;
-            
-            while ((match = paramPattern.exec(commandString)) !== null) {
-              paramNames.push(match[1].trim());
-            }
-            
-            // Map positional parameters
-            paramNames.forEach((paramName, i) => {
-              if (i < sanitizedArgs.length) {
-                parameterMap[paramName] = sanitizedArgs[i];
-              }
-            });
-          }
-          
-          directiveLogger.debug(`Parameter mapping: ${JSON.stringify(parameterMap)}`);
-          
-          // Special handling for echo commands
-          if (commandString.startsWith('echo ') && sanitizedArgs.length > 0) {
-            // This is a very direct approach to fix echo commands with parameters
-            // Strip any remaining quotes from arguments
-            const strippedArgs = sanitizedArgs.map(arg => {
-              if ((arg.startsWith('"') && arg.endsWith('"')) || 
-                  (arg.startsWith("'") && arg.endsWith("'"))) {
-                return arg.substring(1, arg.length - 1);
-              }
-              return arg;
-            });
-            
-            commandToExecute = `echo ${strippedArgs.join(' ')}`;
-            directiveLogger.debug(`Built direct echo command: ${commandToExecute}`);
-          } else {
-            // Standard approach: replace parameters in the template
+            // Replace parameters in the template
             let expandedCommand = commandString;
             
-            directiveLogger.debug(`Parameter map for replacement: ${JSON.stringify(parameterMap)}`);
-            directiveLogger.debug(`Command template before replacement: ${expandedCommand}`);
-            
             for (const [name, value] of Object.entries(parameterMap)) {
-              // Create a pattern that allows whitespace inside the braces for more forgiving matching
-              const paramPattern = new RegExp(`{{\\s*${name}\\s*}}`, 'g');
-              directiveLogger.debug(`Looking for pattern: {{${name}}}`);
-              
-              const beforeReplace = expandedCommand;
-              expandedCommand = expandedCommand.replace(paramPattern, value);
-              
-              // Debug replacement
-              if (beforeReplace !== expandedCommand) {
-                directiveLogger.debug(`Replaced parameter {{${name}}} with "${value}"`);
-              } else {
-                directiveLogger.debug(`No replacement occurred for {{${name}}}`);
+                const paramPattern = new RegExp(`{{\\s*${name}\\s*}}`, 'g');
+                expandedCommand = expandedCommand.replace(paramPattern, value);
+            }
+            
+            commandToExecute = expandedCommand;
+            console.log("CREATED COMMAND WITH DIRECT SUBSTITUTION:", commandToExecute);
+            
+            // Show feedback that command is running (skips in test env)
+            this.showRunningCommandFeedback(commandToExecute);
+            
+            try {
+                // Execute the command
+                const { stdout, stderr } = await this.fileSystemService.executeCommand(
+                  commandToExecute,
+                  {
+                    cwd: context.workingDirectory || this.fileSystemService.getCwd()
+                  }
+                );
+                
+                // Clear the animated feedback after command completes
+                this.clearCommandFeedback();
+                
+                // Store the output in state variables
+                if (node.directive.output) {
+                  clonedState.setTextVar(node.directive.output, stdout);
+                } else {
+                  clonedState.setTextVar('stdout', stdout);
+                }
+                if (stderr) {
+                  clonedState.setTextVar('stderr', stderr);
+                }
+                
+                // For consistency with the rest of the method
+                const formattingMetadata = {
+                  isFromDirective: true,
+                  originalNodeType: node.type,
+                  preserveFormatting: false  // Not preserving in standard mode
+                };
+                
+                // If we have formatting context, include it
+                if (context.formattingContext) {
+                  Object.assign(formattingMetadata, {
+                    contextType: context.formattingContext.contextType,
+                    nodeType: context.formattingContext.nodeType || node.type
+                  });
+                }
+                
+                const placeholder: TextNode = {
+                  type: 'Text',
+                  content: '[run directive output placeholder]',
+                  location: node.location,
+                  formattingMetadata
+                };
+                return { state: clonedState, replacement: placeholder };
+            } catch (error) {
+                // Error handling for direct execution
+                this.clearCommandFeedback();
+                throw error;
+            }
+        }
+        
+        // Improved argument parsing that properly handles quotes and commas
+        const parseArgs = (argsString: string): string[] => {
+          if (!argsString || argsString.trim() === '') {
+            return [];
+          }
+          
+          const args: string[] = [];
+          let currentArg = '';
+          let inQuote = false;
+          let quoteChar = '';
+          
+          for (let i = 0; i < argsString.length; i++) {
+            const char = argsString[i];
+            
+            // Handle quotes
+            if ((char === '"' || char === "'") && (i === 0 || argsString[i - 1] !== '\\')) {
+              if (!inQuote) {
+                inQuote = true;
+                quoteChar = char;
+                continue; // Skip the opening quote
+              } else if (char === quoteChar) {
+                inQuote = false;
+                quoteChar = '';
+                continue; // Skip the closing quote
               }
             }
             
-            directiveLogger.debug(`Command template after replacement: ${expandedCommand}`);
+            // If not in quotes and we hit a comma, push the arg and reset
+            if (!inQuote && char === ',') {
+              args.push(currentArg.trim());
+              currentArg = '';
+              continue;
+            }
             
-            // Set the expanded command as the command to execute
-            commandToExecute = expandedCommand;
+            // Add the character to our current arg
+            currentArg += char;
           }
           
-          directiveLogger.debug(`Final command to execute: ${commandToExecute}`);
+          // Add the last arg if there is one
+          if (currentArg.trim() !== '') {
+            args.push(currentArg.trim());
+          }
+          
+          return args;
+        };
+        
+        // First, resolve any variables in the args string
+        const resolvedArgsString = await this.resolutionService.resolveInContext(
+          commandArgs,
+          context
+        );
+        
+        directiveLogger.debug(`Raw args: ${commandArgs}`);
+        directiveLogger.debug(`Resolved args string: ${resolvedArgsString}`);
+        
+        // Then parse the args into separate values
+        const argParts = parseArgs(resolvedArgsString);
+        directiveLogger.debug(`Parsed arguments: ${JSON.stringify(argParts)}`);
+        
+        // Create the parameter map for substitution
+        let parameterMap: Record<string, string> = {};
+        
+        // Log what we've got so far
+        console.log("Command parameters from definition:", parameters);
+        console.log("Parsed arguments:", argParts);
+        
+        // Map provided args to parameters based on position
+        if (parameters.length > 0) {
+          parameters.forEach((paramName, i) => {
+            if (i < argParts.length) {
+              parameterMap[paramName] = argParts[i];
+              console.log(`Setting parameter "${paramName}" to "${argParts[i]}"`);
+            }
+          });
+        } else {
+          // If no parameters are defined, try to extract them from the template
+          const templateParamPattern = /\{\{([^}]+)\}\}/g;
+          const paramNames: string[] = [];
+          let match;
+          
+          console.log("Looking for parameter placeholders in template:", commandString);
+          while ((match = templateParamPattern.exec(commandString)) !== null) {
+            paramNames.push(match[1].trim());
+            console.log(`Found parameter placeholder: {{${match[1].trim()}}}`);
+          }
+          
+          // Map positional parameters
+          paramNames.forEach((paramName, i) => {
+            if (i < argParts.length) {
+              parameterMap[paramName] = argParts[i];
+              console.log(`Setting parameter "${paramName}" to "${argParts[i]}"`);
+            }
+          });
+        }
+        
+        directiveLogger.debug(`Parameter map: ${JSON.stringify(parameterMap)}`);
+        
+        // Replace parameters in the template
+        let expandedCommand = commandString;
+        
+        console.log("Command string before parameter substitution:", commandString);
+        console.log("Parameter map for substitution:", parameterMap);
+        
+        // For echo commands, use a special handling approach
+        if (commandString.startsWith('echo ') && argParts.length > 0) {
+          commandToExecute = `echo ${argParts.join(' ')}`;
+          console.log(`Special echo handling: ${commandToExecute}`);
+        } else {
+          // Standard parameter substitution
+          for (const [name, value] of Object.entries(parameterMap)) {
+            const paramPattern = new RegExp(`{{\\s*${name}\\s*}}`, 'g');
+            console.log(`Looking for pattern: {{${name}}}`);
+            
+            const beforeReplace = expandedCommand;
+            expandedCommand = expandedCommand.replace(paramPattern, value);
+            
+            if (beforeReplace !== expandedCommand) {
+              console.log(`Replaced parameter {{${name}}} with "${value}"`);
+            } else {
+              console.log(`No replacement occurred for {{${name}}}`);
+            }
+          }
+          
+          commandToExecute = expandedCommand;
+          console.log("Final command after substitution:", expandedCommand);
         }
       } else {
-        // For regular commands (not references), just resolve variables in the command
+        // For regular commands (not references), resolve variables in the command
         commandToExecute = await this.resolutionService.resolveInContext(
           rawCommand,
           context
