@@ -90,4 +90,17 @@ export function createTestCodeFence(
     language,
     location
   };
+}
+
+/**
+ * Create a test node with an unknown type for error testing
+ * This is intentionally generic to test error handling for unknown node types
+ */
+export function createTestUnknownNode(
+  location: SourceLocation = DEFAULT_LOCATION
+): MeldNode {
+  return {
+    type: 'Unknown',
+    location
+  } as MeldNode;
 } 

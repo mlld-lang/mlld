@@ -424,24 +424,20 @@ describe('OutputService', () => {
     });
 
     it('should throw MeldOutputError for unknown node types', async () => {
-      // Create a mock node with an unknown type
-      const unknownNode = { 
-        type: 'unknown', 
-        // This property is needed to bypass the isDirectiveNode check
-        isDirectiveNode: false 
-      };
+      // Import and use the standardized factory to create an unknown node type
+      const { createTestUnknownNode } = await import('@tests/utils/nodeFactories.js');
       
-      // Mock the nodeToMarkdown method to throw an error for unknown node types
-      const mockNodeToMarkdown = vi.fn().mockImplementation(() => {
-        throw new MeldOutputError('Unknown node type: unknown', 'markdown');
+      // Create an unknown node type using the proper factory
+      const unknownNode = createTestUnknownNode({
+        start: { line: 1, column: 1, offset: 0 },
+        end: { line: 1, column: 10, offset: 9 }
       });
       
-      // Create a service with the mocked method
-      const testService = new OutputService(state, resolutionService, undefined, mockVariableNodeFactory);
-      (testService as any).nodeToMarkdown = mockNodeToMarkdown;
+      // No need to mock nodeToMarkdown anymore since we're testing actual error handling
+      // The OutputService should properly detect an unknown node type and throw
       
-      // Expect the convert method to throw a MeldOutputError
-      await expect(testService.convert([unknownNode as any], state, 'markdown'))
+      // Expect the convert method to throw a MeldOutputError with the correct error message
+      await expect(service.convert([unknownNode], state, 'markdown'))
         .rejects
         .toThrow(MeldOutputError);
     });
