@@ -5,6 +5,10 @@ export interface ImportErrorDetails {
   filePath?: string;
   cause?: Error;
   variableName?: string;
+  // Additional fields for enhanced circular import detection
+  maxDepth?: number;
+  fileName?: string;
+  count?: number;
 }
 
 export interface MeldImportErrorOptions {
