@@ -845,9 +845,9 @@ Docs are at $docs
       console.log('Debug session results:', Object.keys(debugResults));
     });
     
-    it('should reject invalid path formats (raw absolute paths)', async () => {
+    it('should allow raw absolute paths', async () => {
       const content = `
-        @path bad = "/absolute/path"
+        @path absPath = "/absolute/path"
       `;
       await context.services.filesystem.writeFile('test.meld', content);
       
@@ -894,8 +894,10 @@ Docs are at $docs
       pathService.setTestMode(false);
       
       try {
-        // Directly validate the path
-        await expect(pathService.validatePath(structuredPath)).rejects.toThrow(/Paths with segments must start with \$\. or \$~ or \$PROJECTPATH or \$HOMEPATH/);
+        // No longer rejects - paths with segments and no path variables are now allowed
+        const validatedPath = await pathService.validatePath(structuredPath);
+        // Should validate and return the absolute path
+        expect(validatedPath).toBe('/absolute/path');
       } finally {
         // Restore original test mode setting
         pathService.setTestMode(wasTestMode);
@@ -956,9 +958,9 @@ Docs are at $docs
       }
     });
     
-    it('should reject invalid path formats (relative paths with dot segments)', async () => {
+    it('should allow paths with dot segments', async () => {
       const content = `
-        @path bad = "../path/with/dot"
+        @path dotPath = "../path/with/dot"
       `;
       await context.services.filesystem.writeFile('test.meld', content);
       
@@ -992,8 +994,10 @@ Docs are at $docs
         }
       };
       
-      // Directly validate the path
-      await expect(pathService.validatePath(structuredPath)).rejects.toThrow(/Paths with segments must start with \$\. or \$~ or \$PROJECTPATH or \$HOMEPATH/);
+      // No longer rejects - paths with dot segments are now allowed
+      const validatedPath = await pathService.validatePath(structuredPath);
+      // Should validate and return the relative path (since baseDir not provided)
+      expect(validatedPath).toBe('../path/with/dot');
       
       // Try with transformation enabled to match the first test
       // context.disableTransformation(); // Comment out for debugging

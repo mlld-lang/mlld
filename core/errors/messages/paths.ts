@@ -26,30 +26,30 @@ export const PathErrorMessages = {
    */
   validation: {
     /**
-     * Error message for raw absolute paths
+     * Guidance message for raw absolute paths
      */
     rawAbsolutePath: {
-      message: "Paths with segments must start with $. or $~ or $PROJECTPATH or $HOMEPATH - use $. or $PROJECTPATH for project-relative paths and $~ or $HOMEPATH for home-relative paths, or use a path variable ($variableName)",
-      code: "PATH_VALIDATION_FAILED",
-      severity: "recoverable" as ErrorSeverity
+      message: "For better cross-platform portability, consider using path variables like $. or $PROJECTPATH for project-relative paths and $~ or $HOMEPATH for home-relative paths. Raw absolute paths are allowed but may not work across different environments.",
+      code: "PATH_GUIDANCE",
+      severity: "info" as ErrorSeverity
     },
 
     /**
-     * Error message for paths with slashes but no path variable
+     * Guidance message for paths with slashes but no path variable
      */
     slashesWithoutPathVariable: {
-      message: "Paths with segments must start with $. or $~ or $PROJECTPATH or $HOMEPATH - use $. or $PROJECTPATH for project-relative paths and $~ or $HOMEPATH for home-relative paths, or use a path variable ($variableName)",
-      code: "PATH_VALIDATION_FAILED",
-      severity: "recoverable" as ErrorSeverity
+      message: "For better cross-platform portability, consider using path variables like $. or $PROJECTPATH for project-relative paths and $~ or $HOMEPATH for home-relative paths. Standard paths are allowed but may not work across different environments.",
+      code: "PATH_GUIDANCE",
+      severity: "info" as ErrorSeverity
     },
 
     /**
-     * Error message for paths with dot segments
+     * Guidance message for paths with dot segments
      */
     dotSegments: {
-      message: "Paths with segments must start with $. or $~ or $PROJECTPATH or $HOMEPATH - use $. or $PROJECTPATH for project-relative paths and $~ or $HOMEPATH for home-relative paths, or use a path variable ($variableName)",
-      code: "PATH_DOT_SEGMENTS",
-      severity: "recoverable" as ErrorSeverity
+      message: "For better cross-platform portability, consider using path variables like $. or $PROJECTPATH for project-relative paths and $~ or $HOMEPATH for home-relative paths. Relative paths with dot segments are allowed but may not work across different environments.",
+      code: "PATH_GUIDANCE",
+      severity: "info" as ErrorSeverity
     }
   },
 

@@ -51,28 +51,29 @@ interface PathOptions {
 
 /**
  * Service responsible for path validation, resolution, and manipulation.
- * Enforces security constraints and provides standardized path handling.
+ * Provides standardized path handling and variable substitution.
  * 
  * @remarks
- * The PathService is one of the core security services in Meld. It enforces strict
- * path validation rules to prevent directory traversal and unauthorized filesystem access.
- * It provides path resolution within a constrained set of allowed locations (project directory,
- * home directory) and standardized path manipulation utilities.
+ * The PathService provides path resolution and standardized path manipulation utilities.
+ * It supports path variables for cross-platform portability while allowing standard path formats.
  * 
- * Meld enforces the following path rules:
+ * Meld supports the following path formats:
  * 1. Simple paths (no slashes):
- *    - Allowed only when path contains no slashes
  *    - Example: file.mld
  * 
- * 2. Paths with slashes:
- *    - Must start with $. (alias for $PROJECTPATH) or $~ (alias for $HOMEPATH)
- *    - Example: $./path/to/file.mld or $~/path/to/file.mld
+ * 2. Relative paths:
+ *    - Example: path/to/file.mld
+ *    - Example: ./path/to/file.mld
+ *    - Example: ../path/to/file.mld
  * 
- * 3. Forbidden:
- *    - Parent directory references (..)
- *    - Current directory references (.)
- *    - Raw absolute paths
- *    - Paths with slashes not using $. or $~
+ * 3. Absolute paths:
+ *    - Example: /absolute/path/to/file.mld
+ * 
+ * 4. Path variables (for cross-platform portability):
+ *    - $. or $PROJECTPATH: Project root directory
+ *      Example: $./path/to/file.mld
+ *    - $~ or $HOMEPATH: User's home directory
+ *      Example: $~/path/to/file.mld
  * 
  * Dependencies:
  * - IFileSystemService: For file and directory existence checks

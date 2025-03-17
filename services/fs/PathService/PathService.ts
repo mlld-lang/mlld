@@ -325,20 +325,8 @@ export class PathService implements IPathService {
         return '';
       }
       
-      // Check for invalid path segments in structured path (e.g., ".." segments)
-      if (filePath.structured && filePath.structured.segments) {
-        const segments = filePath.structured.segments;
-        // Check for dot segments which are not allowed
-        if (segments.includes('..') || segments.includes('.')) {
-          throw new PathValidationError(
-            PathErrorMessages.validation.dotSegments.message,
-            {
-              code: PathErrorCode.CONTAINS_DOT_SEGMENTS,
-              path: rawPath
-            }
-          );
-        }
-      }
+      // No longer check for dot segments in structured path
+      // Paths with './' or '../' segments are now allowed
       
       // Use the raw path for resolution
       return this.resolvePath(rawPath, baseDir);
@@ -352,66 +340,24 @@ export class PathService implements IPathService {
     // Handle special path variables first
     // Resolve home path
     if (filePath.startsWith('$~') || filePath.startsWith('$HOMEPATH')) {
-      // Check for dot segments in the path
-      if (this.hasDotSegments(filePath)) {
-        throw new PathValidationError(
-          PathErrorMessages.validation.slashesWithoutPathVariable.message,
-          {
-            code: PathErrorCode.CONTAINS_DOT_SEGMENTS,
-            path: filePath
-          }
-        );
-      }
+      // No longer reject dot segments in paths - these are now allowed
       return this.resolveHomePath(filePath);
     }
     
     // Resolve project path
     if (filePath.startsWith('$.') || filePath.startsWith('$PROJECTPATH')) {
-      // Check for dot segments in the path
-      if (this.hasDotSegments(filePath)) {
-        throw new PathValidationError(
-          PathErrorMessages.validation.slashesWithoutPathVariable.message,
-          {
-            code: PathErrorCode.CONTAINS_DOT_SEGMENTS,
-            path: filePath
-          }
-        );
-      }
+      // No longer reject dot segments in paths - these are now allowed
       return this.resolveProjPath(filePath);
     }
     
-    // Reject paths with dot segments
-    if ((filePath.includes('./') || filePath.includes('../')) && !this.hasPathVariables(filePath) && !this.testMode) {
-      throw new PathValidationError(
-        PathErrorMessages.validation.slashesWithoutPathVariable.message,
-        {
-          code: PathErrorCode.CONTAINS_DOT_SEGMENTS,
-          path: filePath
-        }
-      );
-    }
+    // No longer reject paths with dot segments - these are now allowed
+    // Paths with './' or '../' can be used without path variables
     
-    // Reject raw absolute paths
-    if (path.isAbsolute(filePath) && !this.hasPathVariables(filePath) && !this.testMode) {
-      throw new PathValidationError(
-        PathErrorMessages.validation.rawAbsolutePath.message,
-        {
-          code: PathErrorCode.INVALID_PATH_FORMAT,
-          path: filePath
-        }
-      );
-    }
+    // No longer reject raw absolute paths - these are now allowed
+    // Absolute paths like '/path/to/file' can be used without path variables
     
-    // Reject paths with slashes but no path variable
-    if (filePath.includes('/') && !this.hasPathVariables(filePath) && !path.isAbsolute(filePath) && !this.testMode) {
-      throw new PathValidationError(
-        PathErrorMessages.validation.slashesWithoutPathVariable.message,
-        {
-          code: PathErrorCode.INVALID_PATH_FORMAT,
-          path: filePath
-        }
-      );
-    }
+    // No longer reject paths with slashes but no path variable
+    // Paths like 'path/to/file' can be used without path variables
     
     // If baseDir is provided and path is relative, resolve against baseDir
     if (baseDir && !path.isAbsolute(filePath) && !this.hasPathVariables(filePath)) {
@@ -772,36 +718,16 @@ export class PathService implements IPathService {
       return;
     }
     
-    // Check for dot segments
-    if (pathString.includes('./') || pathString.includes('../')) {
-      throw new PathValidationError(
-        PathErrorMessages.validation.slashesWithoutPathVariable.message,
-        {
-          code: PathErrorCode.CONTAINS_DOT_SEGMENTS,
-          path: pathString
-        },
-        location
-      );
-    }
+    // No longer reject paths with dot segments
+    // No longer reject raw absolute paths 
+    // No longer reject paths with slashes but no path variable
     
-    // Check for raw absolute paths
-    if (path.isAbsolute(pathString) && !this.hasPathVariables(pathString)) {
+    // Only perform basic path safety checks like null byte detection
+    if (pathString.includes('\0')) {
       throw new PathValidationError(
-        PathErrorMessages.validation.rawAbsolutePath.message,
+        PathErrorMessages.NULL_BYTE,
         {
-          code: PathErrorCode.INVALID_PATH_FORMAT,
-          path: pathString
-        },
-        location
-      );
-    }
-    
-    // Check for paths with slashes but no path variable
-    if (pathString.includes('/') && !this.hasPathVariables(pathString) && !path.isAbsolute(pathString)) {
-      throw new PathValidationError(
-        PathErrorMessages.validation.slashesWithoutPathVariable.message,
-        {
-          code: PathErrorCode.INVALID_PATH_FORMAT,
+          code: PathErrorCode.NULL_BYTE,
           path: pathString
         },
         location

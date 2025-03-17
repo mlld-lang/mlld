@@ -120,9 +120,17 @@ describe('PathService Temporary Path Rules', () => {
     });
   });
 
-  it('should reject simple paths containing dots', () => {
-    expect(() => service.resolvePath('./file.meld')).toThrow(PathValidationError);
-    expect(() => service.resolvePath('../file.meld')).toThrow(PathValidationError);
+  it('should allow simple paths containing dots', () => {
+    // No longer throws - these paths are now allowed
+    const result1 = service.resolvePath('./file.meld', '/current/dir');
+    const result2 = service.resolvePath('../file.meld', '/current/dir');
+    
+    // Should resolve relative to current directory
+    // Note: path.join normalizes the paths
+    expect(result1).toBe('/current/dir/file.meld');  // normalized from /current/dir/./file.meld
+    // Node's path normalization may resolve '../' resulting in '/current/file.meld'
+    // We're just checking that it resolves without throwing errors
+    expect(result2.includes('/file.meld')).toBe(true);
     
     // Test with structured paths
     const dotPath: StructuredPath = {
@@ -139,17 +147,24 @@ describe('PathService Temporary Path Rules', () => {
         cwd: true
       }
     };
-    expect(() => service.resolvePath(dotPath)).toThrow(PathValidationError);
-    expect(() => service.resolvePath(dotDotPath)).toThrow(PathValidationError);
+    
+    // No longer throws - these paths are now allowed
+    const structuredResult1 = service.resolvePath(dotPath, '/current/dir');
+    const structuredResult2 = service.resolvePath(dotDotPath, '/current/dir');
+    
+    // Note: path.join normalizes the paths
+    expect(structuredResult1).toBe('/current/dir/file.meld');  // normalized from /current/dir/./file.meld
+    // Node's path normalization may resolve '../' resulting in '/current/file.meld'
+    // We're just checking that it resolves without throwing errors
+    expect(structuredResult2.includes('/file.meld')).toBe(true);
   });
 
   describe('Path validation rules', () => {
-    it('should reject paths with .. segments', () => {
-      expect(() => service.resolvePath('$./path/../file.meld'))
-        .toThrow(new PathValidationError(
-          PathErrorMessages.validation.dotSegments.message,
-          PathErrorCode.CONTAINS_DOT_SEGMENTS
-        ));
+    it('should allow paths with .. segments', () => {
+      // No longer throws - paths with .. segments are now allowed
+      const result = service.resolvePath('$./path/../file.meld');
+      // Node's path.join may or may not normalize this path - we're just checking it doesn't throw
+      expect(result.endsWith('file.meld')).toBe(true);
         
       // Test with structured path
       const structuredPath: StructuredPath = {
@@ -161,19 +176,19 @@ describe('PathService Temporary Path Rules', () => {
           }
         }
       };
-      expect(() => service.resolvePath(structuredPath))
-        .toThrow(new PathValidationError(
-          PathErrorMessages.validation.dotSegments.message,
-          PathErrorCode.CONTAINS_DOT_SEGMENTS
-        ));
+      
+      // No longer throws - paths with .. segments are now allowed
+      const structuredResult = service.resolvePath(structuredPath);
+      // Node's path.join may or may not normalize this path - we're just checking it doesn't throw
+      expect(structuredResult.endsWith('file.meld')).toBe(true);
     });
 
-    it('should reject paths with . segments', () => {
-      expect(() => service.resolvePath('$./path/./file.meld'))
-        .toThrow(new PathValidationError(
-          PathErrorMessages.validation.dotSegments.message,
-          PathErrorCode.CONTAINS_DOT_SEGMENTS
-        ));
+    it('should allow paths with . segments', () => {
+      // No longer throws - paths with . segments are now allowed
+      const result = service.resolvePath('$./path/./file.meld');
+      // Node's path.join may normalize this path - we're just checking it doesn't throw
+      expect(result.includes('path')).toBe(true);
+      expect(result.endsWith('file.meld')).toBe(true);
         
       // Test with structured path
       const structuredPath: StructuredPath = {
@@ -185,21 +200,18 @@ describe('PathService Temporary Path Rules', () => {
           }
         }
       };
-      expect(() => service.resolvePath(structuredPath))
-        .toThrow(new PathValidationError(
-          PathErrorMessages.validation.dotSegments.message,
-          PathErrorCode.CONTAINS_DOT_SEGMENTS
-        ));
+      
+      // No longer throws - paths with . segments are now allowed
+      const structuredResult = service.resolvePath(structuredPath);
+      // Node's path.join may normalize this path - we're just checking it doesn't throw
+      expect(structuredResult.includes('path')).toBe(true);
+      expect(structuredResult.endsWith('file.meld')).toBe(true);
     });
 
-    it('should reject raw absolute paths', () => {
-      // Note: The current implementation checks for path variables first,
-      // so the error code is INVALID_PATH_FORMAT instead of RAW_ABSOLUTE_PATH
-      expect(() => service.resolvePath('/absolute/path/file.meld'))
-        .toThrow(new PathValidationError(
-          PathErrorMessages.validation.rawAbsolutePath.message,
-          PathErrorCode.INVALID_PATH_FORMAT
-        ));
+    it('should allow raw absolute paths', () => {
+      // No longer throws - raw absolute paths are now allowed
+      const result = service.resolvePath('/absolute/path/file.meld');
+      expect(result).toBe('/absolute/path/file.meld');
         
       // Test with structured path
       const structuredPath: StructuredPath = {
@@ -209,19 +221,16 @@ describe('PathService Temporary Path Rules', () => {
           // No special variables or cwd flag
         }
       };
-      expect(() => service.resolvePath(structuredPath))
-        .toThrow(new PathValidationError(
-          PathErrorMessages.validation.rawAbsolutePath.message,
-          PathErrorCode.INVALID_PATH_FORMAT
-        ));
+      
+      // No longer throws - raw absolute paths are now allowed
+      const structuredResult = service.resolvePath(structuredPath);
+      expect(structuredResult).toBe('/absolute/path/file.meld');
     });
 
-    it('should reject paths with slashes but no path variable', () => {
-      expect(() => service.resolvePath('path/to/file.meld'))
-        .toThrow(new PathValidationError(
-          PathErrorMessages.validation.slashesWithoutPathVariable.message,
-          PathErrorCode.INVALID_PATH_FORMAT
-        ));
+    it('should allow paths with slashes but no path variable', () => {
+      // No longer throws - paths with slashes but no path variable are now allowed
+      const result = service.resolvePath('path/to/file.meld', '/current/dir');
+      expect(result).toBe('/current/dir/path/to/file.meld');
         
       // Test with structured path
       const structuredPath: StructuredPath = {
@@ -231,48 +240,31 @@ describe('PathService Temporary Path Rules', () => {
           // No special variables or cwd flag
         }
       };
-      expect(() => service.resolvePath(structuredPath))
-        .toThrow(new PathValidationError(
-          PathErrorMessages.validation.slashesWithoutPathVariable.message,
-          PathErrorCode.INVALID_PATH_FORMAT
-        ));
+      
+      // No longer throws - paths with slashes but no path variable are now allowed
+      const structuredResult = service.resolvePath(structuredPath, '/current/dir');
+      expect(structuredResult).toBe('/current/dir/path/to/file.meld');
     });
   });
 
-  describe('Error messages and codes', () => {
-    it('should provide helpful error messages for dot segments', () => {
-      try {
-        service.resolvePath('$./path/../file.meld');
-        fail('Should have thrown error');
-      } catch (e) {
-        const err = e as PathValidationError;
-        expect(err.code).toBe(PathErrorCode.CONTAINS_DOT_SEGMENTS);
-        expect(err.message).toBe(PathErrorMessages.validation.dotSegments.message);
-      }
+  describe('Path guidance - no longer errors', () => {
+    it('should no longer throw errors for dot segments', () => {
+      // No longer throws - paths with dot segments are now allowed
+      const result = service.resolvePath('$./path/../file.meld');
+      // Node's path.join may or may not normalize this path - we're just checking it doesn't throw
+      expect(result.endsWith('file.meld')).toBe(true);
     });
 
-    it('should provide helpful error messages for raw absolute paths', () => {
-      try {
-        service.resolvePath('/absolute/path.meld');
-        fail('Should have thrown error');
-      } catch (e) {
-        const err = e as PathValidationError;
-        // Note: The current implementation checks for path variables first,
-        // so the error code is INVALID_PATH_FORMAT instead of RAW_ABSOLUTE_PATH
-        expect(err.code).toBe(PathErrorCode.INVALID_PATH_FORMAT);
-        expect(err.message).toBe(PathErrorMessages.validation.rawAbsolutePath.message);
-      }
+    it('should no longer throw errors for raw absolute paths', () => {
+      // No longer throws - raw absolute paths are now allowed
+      const result = service.resolvePath('/absolute/path.meld');
+      expect(result).toBe('/absolute/path.meld');
     });
 
-    it('should provide helpful error messages for invalid path formats', () => {
-      try {
-        service.resolvePath('path/to/file.meld');
-        fail('Should have thrown error');
-      } catch (e) {
-        const err = e as PathValidationError;
-        expect(err.code).toBe(PathErrorCode.INVALID_PATH_FORMAT);
-        expect(err.message).toBe(PathErrorMessages.validation.slashesWithoutPathVariable.message);
-      }
+    it('should no longer throw errors for paths with slashes but no path variable', () => {
+      // No longer throws - paths with slashes but no path variable are now allowed
+      const result = service.resolvePath('path/to/file.meld', '/current/dir');
+      expect(result).toBe('/current/dir/path/to/file.meld');
     });
   });
 
@@ -283,14 +275,22 @@ describe('PathService Temporary Path Rules', () => {
       filePath: 'test.meld'
     };
 
-    it('should include location information in errors when provided', () => {
+    it('should include location information in errors for unsupported paths', () => {
+      // Now only checks for null bytes - relative paths are allowed
+      
+      // Test with a path containing a null byte (still invalid)
       try {
-        service.validateMeldPath('../invalid.meld', testLocation);
+        service.validateMeldPath('invalid\0.meld', testLocation);
         fail('Should have thrown error');
       } catch (e) {
         const err = e as PathValidationError;
         expect(err.location).toBe(testLocation);
+        expect(err.code).toBe(PathErrorCode.NULL_BYTE);
       }
+      
+      // Regular paths should not throw errors anymore
+      const validRelativePath = '../valid.meld';
+      expect(() => service.validateMeldPath(validRelativePath, testLocation)).not.toThrow();
     });
   });
 }); 
