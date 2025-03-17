@@ -22,20 +22,38 @@ export class CircularityService implements ICircularityService {
   private importStack: string[] = [];
 
   /**
+   * Normalize a path to ensure consistent handling across the application
+   * Replaces backslashes with forward slashes for cross-platform compatibility
+   * 
+   * @param path - The path to normalize
+   * @returns The normalized path with consistent slash format
+   * @private
+   */
+  private normalizePath(path: string): string {
+    // Normalize path by replacing Windows-style backslashes with forward slashes
+    // This ensures consistent path comparisons across platforms
+    return path.replace(/\\/g, '/');
+  }
+
+  /**
    * Begins tracking an import of the specified file
    * @param filePath - Path of the file being imported
    * @throws {MeldImportError} If a circular import is detected
    */
   beginImport(filePath: string): void {
+    const normalizedPath = this.normalizePath(filePath);
+    
     logger.debug('Beginning import', { 
       filePath,
+      normalizedPath,
       currentStack: this.importStack 
     });
 
-    if (this.isInStack(filePath)) {
-      const importChain = [...this.importStack, filePath];
+    if (this.isInStack(normalizedPath)) {
+      const importChain = [...this.importStack, normalizedPath];
       logger.error('Circular import detected', {
         filePath,
+        normalizedPath,
         importChain
       });
 
@@ -48,7 +66,7 @@ export class CircularityService implements ICircularityService {
       );
     }
 
-    this.importStack.push(filePath);
+    this.importStack.push(normalizedPath);
   }
 
   /**
@@ -56,16 +74,20 @@ export class CircularityService implements ICircularityService {
    * @param filePath - Path of the file whose import has completed
    */
   endImport(filePath: string): void {
-    const idx = this.importStack.lastIndexOf(filePath);
+    const normalizedPath = this.normalizePath(filePath);
+    const idx = this.importStack.lastIndexOf(normalizedPath);
+    
     if (idx !== -1) {
       this.importStack.splice(idx, 1);
       logger.debug('Ended import', { 
         filePath,
+        normalizedPath,
         remainingStack: this.importStack 
       });
     } else {
       logger.warn('Attempted to end import for file not in stack', {
         filePath,
+        normalizedPath,
         currentStack: this.importStack
       });
     }
@@ -77,7 +99,8 @@ export class CircularityService implements ICircularityService {
    * @returns True if the file is in the import stack, false otherwise
    */
   isInStack(filePath: string): boolean {
-    return this.importStack.includes(filePath);
+    const normalizedPath = this.normalizePath(filePath);
+    return this.importStack.includes(normalizedPath);
   }
 
   /**

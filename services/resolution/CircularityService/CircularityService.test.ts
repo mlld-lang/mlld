@@ -148,4 +148,44 @@ describe('CircularityService', () => {
       expect(service.isInStack('fileB.meld')).toBe(false);
     });
   });
+
+  describe('Path normalization', () => {
+    it('should normalize paths with backslashes', () => {
+      // Use Windows-style path with backslashes
+      service.beginImport('C:\\path\\to\\file.meld');
+      
+      // Should be able to find it with forward slashes
+      expect(service.isInStack('C:/path/to/file.meld')).toBe(true);
+    });
+
+    it('should normalize paths with forward slashes', () => {
+      // Use path with forward slashes
+      service.beginImport('/path/to/file.meld');
+      
+      // Should be able to find it with backslashes
+      expect(service.isInStack('\\path\\to\\file.meld')).toBe(true);
+    });
+
+    it('should detect circular imports with different path formats', () => {
+      // Add a path with forward slashes
+      service.beginImport('/path/to/file.meld');
+      service.beginImport('/path/to/another.meld');
+      
+      // Try to import the first file again but with backslashes
+      // This should detect the circular import despite different slash formats
+      expect(() => service.beginImport('\\path\\to\\file.meld'))
+        .toThrow(MeldImportError);
+    });
+
+    it('should correctly end import with different path formats', () => {
+      // Add a path with forward slashes
+      service.beginImport('/path/to/file.meld');
+      
+      // End import with backslashes
+      service.endImport('\\path\\to\\file.meld');
+      
+      // The stack should be empty now
+      expect(service.getImportStack()).toEqual([]);
+    });
+  });
 }); 
