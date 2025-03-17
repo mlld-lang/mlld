@@ -70,6 +70,7 @@ describe('directives with variable syntax', () => {
     expect(ast).toHaveLength(1);
     expect(ast[0].type).toBe('Directive');
     expect(ast[0].directive.kind).toBe('run');
+    // For bracketed syntax it's still a string in the current implementation
     expect(ast[0].directive.command).toBe('$command');
   });
   
@@ -80,7 +81,11 @@ describe('directives with variable syntax', () => {
     expect(ast).toHaveLength(1);
     expect(ast[0].type).toBe('Directive');
     expect(ast[0].directive.kind).toBe('run');
-    expect(ast[0].directive.command).toBe('$command');
+    // Validate the new command object structure
+    expect(ast[0].directive.command).toBeTypeOf('object');
+    expect(ast[0].directive.command.name).toBe('command');
+    expect(ast[0].directive.command.args).toEqual([]);
+    expect(ast[0].directive.command.raw).toBe('$command');
   });
   
   // Test combined path variables and text variables in @embed directive

@@ -440,26 +440,12 @@ function peg$parse(input, options) {
       
       debug("Parsed command reference:", JSON.stringify(commandObj, null, 2));
       
-      // Get the caller context to check if this is being called from a test that expects the old format
-      const callerInfo = new Error().stack || '';
-      const isVariableSyntaxTest = callerInfo.includes('variable-syntax.test.ts');
-      
-      // For backward compatibility with tests, use string format for specific tests
-      if (isVariableSyntaxTest && cmdRef.args.length === 0) {
-        // Use the string format for the variable-syntax.test.ts
-        return createDirective('run', {
-          command: commandText,
-          isReference: true,
-          ...(header ? { underHeader: header } : {})
-        }, location());
-      } else {
-        // Use the object format for other cases
-        return createDirective('run', {
-          command: commandObj,
-          isReference: true,
-          ...(header ? { underHeader: header } : {})
-        }, location());
-      }
+      // Use the object format for all cases
+      return createDirective('run', {
+        command: commandObj,
+        isReference: true,
+        ...(header ? { underHeader: header } : {})
+      }, location());
     };
   var peg$f28 = function(content, header) {
       debug("RUN DIRECTIVE with DirectiveContent:", content);
