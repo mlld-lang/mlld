@@ -1,23 +1,7 @@
 # Issues:
 
-## 1. Circularity imports
-Circularity import detection is not working. Tests show that circular imports are not being properly detected, instead giving a "File not found" error.
-
-**Investigation Notes:**
-- The CircularityService implementation looks correct and has proper unit tests that pass
-- The ImportDirectiveHandler correctly uses the CircularityService by calling beginImport() and endImport()
-- The issue appears to be with path resolution in the e2e test environment
-- In the e2e tests, the circular import test files (`circular-import.error.mld` and `circular-import-b.error.mld`) are failing but not with the expected circular import error
-- Tests are failing because the error is not being caught at all, which suggests one of two issues:
-  1. The paths being resolved during import are not matching what the CircularityService expects, preventing detection
-  2. The error handling and propagation in the test environment is not working correctly
-- The RelativePathResolver may be normalizing paths differently than expected, causing the circular imports to appear as different paths to the CircularityService
-- The test files themselves are correctly set up for circular dependency detection
-
-**Potential Fix:** 
-- Ensure path normalization is consistent between the FileSystemService, PathService, and CircularityService
-- Add additional logging to trace the exact paths being used during import detection
-- Consider updating the test environment setup to better handle path resolution in test cases
+## 1. Circularity imports ✅ FIXED
+Circular imports (A imports B which imports A) are now properly detected with clear error messages showing the import chain. The fix includes multiple detection mechanisms for robustness.
 
 ## 2. Problematic syntax working
 Many examples using inline {{variables}} are invalid and work! `This is a {{variable}}` examples should not be valid -- interpolation should only happen in @directives. This shouldn't work in our grammar at all and if there's something interpolating these somewhere else, it's an ugly hack. There is likely some test example pointing the wrong direction toward this functionality.
