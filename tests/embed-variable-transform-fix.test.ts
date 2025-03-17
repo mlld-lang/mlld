@@ -152,76 +152,35 @@ describe('Phase 4B: Variable-based Embed Transformation Fix', () => {
     await context?.cleanup();
   });
 
-  it('should document the approach for implementing Phase 4B', async () => {
-    // Test with a simple data variable and embed
-    await context.services.filesystem.writeFile('test.meld', 
+  it('should properly resolve variable field access in embed directives with transformation', async () => {
+    // Create a test file with a simple data variable and embed directive
+    const testFilePath = 'field-access-embed.meld';
+    await context.services.filesystem.writeFile(testFilePath, 
       '@data role = { "architect": "Senior architect" }\n@embed {{role.architect}}'
     );
     
-    // Process the file with transformation disabled (standard mode)
-    const standardResult = await main('test.meld', {
+    // Process the file with transformation enabled
+    const transformedResult = await main(testFilePath, {
       fs: context.services.filesystem,
-      services: context.services as unknown as Partial<Services>,
-      format: 'md'
-    });
-    
-    console.log('Standard result without transformation:', standardResult);
-    
-    // Now process with transformation enabled - this will show the issue
-    const transformedResult = await main('test.meld', {
-      fs: context.services.filesystem,
-      services: context.services as unknown as Partial<Services>,
       transformation: true,
       format: 'md'
     });
     
-    console.log('Current result with transformation (shows the issue):', transformedResult);
+    // Log the actual output for debugging
+    console.log('Transformed output:', transformedResult);
     
-    /* 
-    To properly fix this issue, we would need to:
+    // Verify that the variable's field value is correctly embedded in the output
+    // This tests the fix for field access in variable embeds
+    expect(transformedResult).toContain("Senior architect");
     
-    1. Directly modify the OutputService.nodeToMarkdown method in the actual implementation
-       by adding special handling for variable-based embed directives, similar to:
-       
-       ```typescript
-       // In OutputService.nodeToMarkdown, case 'Directive':
-       if (node.directive.kind === 'embed') {
-         // Special handling for variable-based embed directives in transformation mode
-         if (node.directive.path && 
-             typeof node.directive.path === 'object' && 
-             node.directive.path.isVariableReference === true &&
-             state.isTransformationEnabled()) {
-           
-           // Extract and resolve the variable directly
-           // This bypasses the need for transformation lookup
-           
-           [implementation of resolveVariableBasedEmbed function here]
-           return resolvedVariableContent;
-         }
-         
-         // Continue with existing transformation lookup for other embed directives
-       }
-       ```
-       
-    2. We would need to integrate this solution into the actual implementation files:
-       - services/pipeline/OutputService/OutputService.ts
-       
-    3. Then remove the temporary workarounds from:
-       - tests/embed-transformation-e2e.test.ts
-       - tests/embed-transformation-variable-fix.test.ts
-    */
-    
-    // Document the expected output for reference
-    const expectedOutput = "Senior architect";
-    
-    // This is a documentation of a fix implemented in EmbedDirectiveHandler, not a test of a problem
-    // We've fixed the issue, so now the output should contain the expected value
-    expect(transformedResult).toContain(expectedOutput);
+    // Verify the variable reference has been properly transformed
+    expect(transformedResult).not.toContain("{{role.architect}}");
   });
   
-  it('should document test cases for the Phase 4B fix', async () => {
-    // Create a complex test case with nested objects and array access
-    await context.services.filesystem.writeFile('complex.meld', `
+  it('should support complex field access patterns in variable embeds', async () => {
+    // Create a complex test case with nested objects and array access patterns
+    const testFilePath = 'complex-access.meld';
+    await context.services.filesystem.writeFile(testFilePath, `
 @data user = {
   "info": {
     "name": "John Doe",
@@ -245,35 +204,46 @@ First Project: @embed {{user.projects.0.name}}
 Project Role: @embed {{user.projects.0.role}}
 `);
     
-    /* 
-    This test case demonstrates the various field access patterns that need to be supported:
-    
-    1. Simple object property access: {{user.info.name}}
-    2. Array indexing: {{user.info.roles.0}}
-    3. Nested property access: {{user.info.contact.email}}
-    4. Complex nested structure: {{user.projects.0.name}} and {{user.projects.0.role}}
-    
-    After implementing the Phase 4B fix, we should create comprehensive tests that verify:
-    
-    1. All these access patterns work correctly
-    2. Error handling for invalid field paths, non-existent fields, etc.
-    3. Type conversion for different value types (strings, numbers, objects, arrays)
-    4. Proper handling of transformation mode
-    
-    The implementation function above (resolveVariableBasedEmbed) contains the logic
-    needed to handle all these cases properly.
-    */
-    
-    // Process with transformation disabled to show expected output
-    const standardResult = await main('complex.meld', {
+    // Process the file with transformation disabled first to verify original formatting
+    const standardResult = await main(testFilePath, {
       fs: context.services.filesystem,
-      services: context.services as unknown as Partial<Services>,
+      format: 'md' // Transformation disabled
+    });
+    
+    // Verify original format has embed directives
+    expect(standardResult).toContain("@embed");
+    
+    // Process with transformation enabled 
+    const transformedResult = await main(testFilePath, {
+      fs: context.services.filesystem,
+      transformation: true,
       format: 'md'
     });
     
-    console.log('Standard result without transformation:', standardResult);
+    // Log the actual output for debugging
+    console.log('Complex transformation output:', transformedResult);
     
-    // Pass this test since it's just documentation
-    expect(true).toBe(true);
+    // Check for properly resolved values without assuming specific formatting
+    
+    // 1. Simple object property access
+    expect(transformedResult).toContain("John Doe");
+    
+    // 2. Array indexing
+    expect(transformedResult).toContain("Developer");
+    
+    // 3. Nested property access
+    expect(transformedResult).toContain("john@example.com");
+    
+    // 4. Complex nested structure with array and object access
+    expect(transformedResult).toContain("Project A");
+    expect(transformedResult).toContain("Lead");
+    
+    // Verify variable references are transformed (regardless of directive format)
+    expect(transformedResult).not.toContain("{{user.info.name}}");
+    expect(transformedResult).not.toContain("{{user.info.roles.0}}");
+    expect(transformedResult).not.toContain("{{user.projects.0.name}}");
+    
+    // This test verifies the issue is fixed - the values are properly being resolved
+    // The exact formatting may vary in different implementations
   });
 });
