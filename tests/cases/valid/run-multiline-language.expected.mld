@@ -1,0 +1,7 @@
+@text message = "Hello world"
+
+# Test multi-line run with language indicator
+[run directive output placeholder]
+
+# Test multi-line run with parameter passing
+[run directive output placeholder]

@@ -1,0 +1,12 @@
+@text message = "Hello world"
+
+# Test multi-line run with language indicator
+@run javascript [[
+console.log("This is JavaScript code");
+console.log("It uses a language indicator");
+]]
+
+# Test multi-line run with parameter passing
+@run bash ({{message}}) [[
+echo "Passed parameter: $1"
+]]

@@ -1,0 +1,10 @@
+@text message = "Hello world"
+
+# Test multi-line run directive with double brackets
+@run [[
+echo "This is a multi-line run directive"
+echo "It can contain multiple commands"
+]]
+
+# Test that the output is captured
+@run echo $stdout
