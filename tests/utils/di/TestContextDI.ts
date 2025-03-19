@@ -347,6 +347,7 @@ export class TestContextDI extends TestContext {
    */
   private async registerServices(): Promise<void> {
     this.registerFileSystemService();
+    this.registerURLContentResolver();
     this.registerPathService();
     this.registerStateEventService();
     this.registerStateService();
@@ -359,6 +360,45 @@ export class TestContextDI extends TestContext {
     this.registerOutputService();
     this.registerDebugServices();
     this.registerFactories();
+  }
+
+  /**
+   * Registers the URLContentResolver mock
+   */
+  private registerURLContentResolver(): void {
+    const mockURLContentResolver = {
+      isURL: vi.fn().mockImplementation((path: string) => {
+        if (!path) return false;
+        try {
+          const url = new URL(path);
+          return !!url.protocol && !!url.host;
+        } catch {
+          return false;
+        }
+      }),
+      validateURL: vi.fn().mockImplementation(async (url: string, options?: any) => {
+        // Simple validation that just returns the URL if it looks like a URL
+        try {
+          new URL(url);
+          return url;
+        } catch (error) {
+          throw new Error(`Invalid URL: ${url}`);
+        }
+      }),
+      fetchURL: vi.fn().mockImplementation(async (url: string, options?: any) => {
+        return {
+          content: `Mock content for ${url}`,
+          metadata: {
+            statusCode: 200,
+            contentType: 'text/plain'
+          },
+          fromCache: false,
+          url
+        };
+      })
+    };
+    
+    this.container.registerMock('IURLContentResolver', mockURLContentResolver);
   }
 
   /**

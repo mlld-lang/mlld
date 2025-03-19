@@ -21,10 +21,20 @@ import type { IStateTrackingService } from '@tests/utils/debug/StateTrackingServ
 import { inject, injectable } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
 import { InterpreterOptionsBase, StructuredPath, StateServiceLike } from '@core/shared-service-types.js';
+import type { IPathService } from '@services/fs/PathService/IPathService.js';
 
 // Define the embed directive parameters interface
 interface EmbedDirectiveParams {
   path?: string | StructuredPath;
+  url?: string;
+  allowURLs?: boolean;
+  urlOptions?: {
+    allowedProtocols?: string[];
+    allowedDomains?: string[];
+    blockedDomains?: string[];
+    maxResponseSize?: number;
+    timeout?: number;
+  };
   section?: string;
   headingLevel?: string;
   underHeader?: string;
@@ -80,6 +90,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
     @inject('ICircularityService') private circularityService: ICircularityService,
     @inject('IFileSystemService') private fileSystemService: IFileSystemService,
     @inject('IParserService') private parserService: IParserService,
+    @inject('IPathService') private pathService: IPathService,
     @inject('InterpreterServiceClientFactory') private interpreterServiceClientFactory: InterpreterServiceClientFactory,
     private logger: ILogger = embedLogger,
     @inject('StateTrackingService') trackingService?: IStateTrackingService
@@ -308,15 +319,21 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
     this.validationService.validate(node);
     
     // Extract properties from the directive
-    const { path, section, headingLevel, underHeader, fuzzy } = node.directive as EmbedDirectiveParams;
+    const { path, url, allowURLs, urlOptions, section, headingLevel, underHeader, fuzzy } = node.directive as EmbedDirectiveParams;
 
-    if (!path) {
+    // Check if we have a path or URL
+    if (!path && !url) {
       throw new DirectiveError(
-        'Path is required for embed directive',
+        'Either path or url is required for embed directive',
         this.kind,
         DirectiveErrorCode.VALIDATION_FAILED
       );
     }
+    
+    // We need to check if this is a URL
+    // URL support is not yet fully implemented in the directive handlers
+    // For now, we'll just treat url parameter as a flag
+    const isURLEmbed = !!url || !!allowURLs;
 
     // Clone the current state for modifications
     const newState = context.state.clone();
@@ -450,10 +467,17 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
       });
 
       // Resolve variables in the path
-      resolvedPath = await this.resolutionService.resolveInContext(
-        processedPath,
-        resolutionContext
-      );
+      if (processedPath !== undefined) {
+        resolvedPath = await this.resolutionService.resolveInContext(
+          processedPath,
+          resolutionContext
+        );
+      } else {
+        this.logger.warn('Path is undefined, unable to resolve in context', {
+          originalPath: path
+        });
+        resolvedPath = '';
+      }
       
       // Special handling for when the resolved path might be an object from a data variable
       if (resolvedPath !== null && typeof resolvedPath === 'object') {
@@ -650,43 +674,121 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
         this.logger.debug('Not parsing variable reference content (standard behavior)');
       } 
       /**
-       * fileEmbed:
+       * fileEmbed or urlEmbed:
        * If this is a file path, read the content from the file system.
+       * If this is a URL, fetch the content from the URL.
        * Content is treated as literal text and not parsed.
        */
       else {
-        // Begin import tracking for file paths
-        this.circularityService.beginImport(resolvedPath);
-
-        // Check for circular imports
-        try {
-          if (this.circularityService.isInStack(resolvedPath)) {
-            throw new Error(`Circular import detected: ${resolvedPath}`);
+        // Handle URL embeds
+        if (isURLEmbed) {
+          const urlToFetch = url || (typeof path === 'string' ? path : '');
+          
+          if (!urlToFetch) {
+            throw new DirectiveError(
+              'URL embedding requires a valid URL',
+              this.kind,
+              DirectiveErrorCode.VALIDATION_FAILED
+            );
           }
-        } catch (error: any) {
-          // Circular imports during embedding should be logged but not fail normal operation
-          this.logger.warn(`Circular import detected in embed directive: ${error.message}`, {
-            error,
-            path: resolvedPath,
-            currentFile: context.currentFilePath
-          });
-        }
-
-        // Check if the file exists
-        if (!(await this.fileSystemService.exists(resolvedPath))) {
-          throw new MeldFileNotFoundError(
-            resolvedPath,
-            {
-              context: { 
-                directive: this.kind,
-                location: node.location
+          
+          try {
+            // Validate URL according to security policy
+            await this.pathService.validateURL(urlToFetch, urlOptions);
+            
+            // Fetch content with caching
+            const response = await this.pathService.fetchURL(urlToFetch, {
+              bypassCache: false,
+              timeout: urlOptions?.timeout
+            });
+            
+            // Use the fetched content
+            content = response.content;
+            
+            // Register source for debugging and error reporting
+            try {
+              const { registerSource, addMapping } = require('@core/utils/sourceMapUtils.js');
+              registerSource(urlToFetch, content);
+              
+              if (node.location && node.location.start) {
+                addMapping(
+                  urlToFetch,
+                  1, // Start at line 1 of the fetched content
+                  1, // Start at column 1
+                  node.location.start.line,
+                  node.location.start.column
+                );
+              }
+            } catch (err) {
+              this.logger.debug('Source mapping not available, skipping', { error: err });
+            }
+          } catch (error: any) {
+            // Handle URL-specific errors
+            if (typeof error === 'object' && error !== null) {
+              // First check if the error is one of our known URL error types
+              if (error.name === 'URLValidationError' || 
+                  error.name === 'URLSecurityError' || 
+                  error.name === 'URLFetchError') {
+                throw new DirectiveError(
+                  `URL embedding failed: ${error.message}`,
+                  this.kind,
+                  DirectiveErrorCode.VALIDATION_FAILED,
+                  { cause: error as Error }
+                );
               }
             }
-          );
-        }
+            
+            // Re-throw if it's already a DirectiveError
+            if (error instanceof DirectiveError) {
+              throw error;
+            }
+            
+            // Wrap other errors
+            throw new DirectiveError(
+              `URL embedding failed: ${error instanceof Error ? error.message : String(error)}`,
+              this.kind,
+              DirectiveErrorCode.EXECUTION_FAILED,
+              { cause: error instanceof Error ? error : undefined }
+            );
+          }
+        } 
+        // Handle file system embeds
+        else {
+          // Begin import tracking for file paths
+          if (resolvedPath) {
+            this.circularityService.beginImport(resolvedPath);
+          }
 
-        // Read the file content
-        content = await this.fileSystemService.readFile(resolvedPath);
+          // Check for circular imports
+          try {
+            if (resolvedPath && this.circularityService.isInStack(resolvedPath)) {
+              throw new Error(`Circular import detected: ${resolvedPath}`);
+            }
+          } catch (error: any) {
+            // Circular imports during embedding should be logged but not fail normal operation
+            this.logger.warn(`Circular import detected in embed directive: ${error.message}`, {
+              error,
+              path: resolvedPath,
+              currentFile: context.currentFilePath
+            });
+          }
+
+          // Check if the file exists
+          if (!(await this.fileSystemService.exists(resolvedPath))) {
+            throw new MeldFileNotFoundError(
+              resolvedPath,
+              {
+                context: { 
+                  directive: this.kind,
+                  location: node.location
+                }
+              }
+            );
+          }
+
+          // Read the file content
+          content = await this.fileSystemService.readFile(resolvedPath);
+        }
         
         // Register the source file with source mapping service if available
         try {

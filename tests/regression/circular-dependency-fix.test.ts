@@ -14,6 +14,7 @@ import { FileSystemService } from '@services/fs/FileSystemService/FileSystemServ
 import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService.js';
 import { ProjectPathResolver } from '@services/fs/ProjectPathResolver.js';
 import { container } from 'tsyringe';
+import { URLContentResolver } from '@services/resolution/URLContentResolver/URLContentResolver.js';
 
 describe('Circular Dependency Regression Tests', () => {
   let context: TestContextDI;
@@ -44,12 +45,14 @@ describe('Circular Dependency Regression Tests', () => {
     const nodeFileSystem = new NodeFileSystem();
     const pathOps = new PathOperationsService();
     const projectPathResolver = new ProjectPathResolver();
+    const urlContentResolver = new URLContentResolver();
     
     // Register core dependencies
     context.registerMock('IFileSystem', nodeFileSystem);
     context.registerMock('NodeFileSystem', nodeFileSystem);
     context.registerMock('IPathOperationsService', pathOps);
     context.registerMock(ProjectPathResolver, projectPathResolver);
+    context.registerMock('IURLContentResolver', urlContentResolver);
     
     // Now register the full service classes that will have circular dependencies
     context.registerMockClass('PathService', PathService);
@@ -88,12 +91,14 @@ describe('Circular Dependency Regression Tests', () => {
     const nodeFileSystem = new NodeFileSystem();
     const pathOps = new PathOperationsService();
     const projectPathResolver = new ProjectPathResolver();
+    const urlContentResolver = new URLContentResolver();
     
     // Register core services directly to simulate our di-config
     childContainer.registerInstance('IFileSystem', nodeFileSystem);
     childContainer.registerInstance('NodeFileSystem', nodeFileSystem);
     childContainer.registerInstance('IPathOperationsService', pathOps);
     childContainer.registerInstance(ProjectPathResolver, projectPathResolver);
+    childContainer.registerInstance('IURLContentResolver', urlContentResolver);
     
     // Register the services with circular dependencies
     childContainer.register('PathService', { useClass: PathService });

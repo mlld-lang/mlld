@@ -17,6 +17,7 @@ import { StateVariableCopier } from '@services/state/utilities/StateVariableCopi
 import { inject, injectable } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
 import type { IPathService } from '@services/fs/PathService/IPathService.js';
+import type { IURLContentResolver, URLFetchOptions, URLValidationOptions } from '@services/resolution/URLContentResolver/IURLContentResolver.js';
 
 /**
  * Handler for @import directives
@@ -42,6 +43,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
     @inject('IPathService') private pathService: IPathService,
     @inject('InterpreterServiceClientFactory') private interpreterServiceClientFactory: InterpreterServiceClientFactory,
     @inject('ICircularityService') private circularityService: ICircularityService,
+    @inject('IURLContentResolver') private urlContentResolver?: IURLContentResolver,
     @inject('StateTrackingService') trackingService?: IStateTrackingService
   ) {
     this.stateTrackingService = trackingService;
@@ -157,12 +159,119 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
       
       // Handle URL and path differently
       if (isURLImport) {
-        // URL support not fully implemented yet
-        throw new DirectiveError(
-          'URL importing is not yet supported. Please use file paths instead.',
-          this.kind,
-          DirectiveErrorCode.VALIDATION_FAILED
-        );
+        const urlToFetch = url || (typeof path === 'string' ? path : '');
+        
+        if (!urlToFetch) {
+          throw new DirectiveError(
+            'URL import requires a valid URL',
+            this.kind,
+            DirectiveErrorCode.VALIDATION_FAILED
+          );
+        }
+        
+        try {
+          // Use URLContentResolver if available, otherwise fall back to PathService
+          // This maintains backward compatibility during the transition period
+          if (this.urlContentResolver) {
+            logger.debug('Using URLContentResolver for URL validation and fetching', { url: urlToFetch });
+            
+            // Validate URL according to security policy
+            await this.urlContentResolver.validateURL(urlToFetch, urlOptions);
+          } else {
+            // Backward compatibility path - use PathService
+            logger.debug('URLContentResolver not available, falling back to PathService', { url: urlToFetch });
+            await this.pathService.validateURL(urlToFetch, urlOptions);
+          }
+          
+          // Check for circular imports using the URL as the identifier
+          try {
+            // Normalize the URL to ensure consistent format with CircularityService
+            const normalizedUrl = urlToFetch.replace(/\\/g, '/');
+            logger.debug('Checking for circular imports in URL import', { 
+              url: urlToFetch,
+              normalizedUrl,
+              isUrlDifferent: normalizedUrl !== urlToFetch
+            });
+            
+            this.circularityService.beginImport(normalizedUrl);
+          } catch (error: any) {
+            // Rethrow as a directive error
+            throw new DirectiveError(
+              `Circular import detected: ${error.message}`,
+              this.kind,
+              DirectiveErrorCode.CIRCULAR_REFERENCE
+            );
+          }
+          
+          // Fetch content with caching - use URLContentResolver if available, otherwise PathService
+          const response = this.urlContentResolver 
+            ? await this.urlContentResolver.fetchURL(urlToFetch, {
+                bypassCache: false,
+                timeout: urlOptions?.timeout
+              })
+            : await this.pathService.fetchURL(urlToFetch, {
+                bypassCache: false,
+                timeout: urlOptions?.timeout
+              });
+          
+          // Set the URL as the resolved path for source mapping and error reporting
+          resolvedFullPath = urlToFetch;
+          fileContent = response.content;
+          
+          // Register for source mapping
+          try {
+            const { registerSource, addMapping } = require('@core/utils/sourceMapUtils.js');
+            registerSource(resolvedFullPath, fileContent);
+            
+            if (node.location && node.location.start) {
+              addMapping(
+                resolvedFullPath,
+                1, // Start at line 1 of the imported file
+                1, // Start at column 1
+                node.location.start.line,
+                node.location.start.column
+              );
+            }
+          } catch (err) {
+            logger.debug('Source mapping not available, skipping', { error: err });
+          }
+        } catch (error: any) {
+          // Handle URL-specific errors
+          if (typeof error === 'object' && error !== null) {
+            // Check for URL validation errors
+            if (error.name === 'URLValidationError' || error.name === 'URLSecurityError') {
+              throw new DirectiveError(
+                `URL validation error: ${error.message}`,
+                this.kind,
+                DirectiveErrorCode.VALIDATION_FAILED,
+                { cause: error as Error }
+              );
+            }
+            
+            // Check for URL fetch errors
+            if (error.name === 'URLFetchError') {
+              throw new DirectiveError(
+                `Failed to fetch URL: ${error.message}`,
+                this.kind,
+                DirectiveErrorCode.FILE_NOT_FOUND, // Use FILE_NOT_FOUND for fetch errors
+                { cause: error as Error }
+              );
+            }
+          }
+          
+          // Re-throw if it's already a DirectiveError
+          if (error instanceof DirectiveError) {
+            throw error;
+          }
+          
+          // Wrap other errors
+          throw new DirectiveError(
+            `URL import error: ${error instanceof Error ? error.message : String(error)}`,
+            this.kind,
+            DirectiveErrorCode.EXECUTION_FAILED,
+            { cause: error instanceof Error ? error : undefined }
+          );
+        }
       } else {
         // For file path imports
         if (path !== undefined) {
@@ -432,6 +541,14 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
         // Use the same normalization approach as in beginImport
         const normalizedPath = resolvedFullPath.replace(/\\/g, '/');
         this.circularityService.endImport(normalizedPath);
+        
+        // Log for debugging
+        if (isURLImport) {
+          logger.debug('Ended import tracking for URL', {
+            url: resolvedFullPath,
+            normalizedPath
+          });
+        }
       }
 
       // Check if transformation is enabled

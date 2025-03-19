@@ -15,6 +15,7 @@ import { ProjectPathResolver } from '@services/fs/ProjectPathResolver.js';
 import { ErrorDisplayService } from '@services/display/ErrorDisplayService/ErrorDisplayService.js';
 import { ValidationService } from '@services/resolution/ValidationService/ValidationService.js';
 import { CircularityService } from '@services/resolution/CircularityService/CircularityService.js';
+import { URLContentResolver } from '@services/resolution/URLContentResolver/URLContentResolver.js';
 import { StateTrackingService } from '@tests/utils/debug/StateTrackingService/StateTrackingService.js';
 import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService.js';
 import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
@@ -74,8 +75,13 @@ const projectPathResolver = new ProjectPathResolver();
 container.registerInstance('IFileSystem', nodeFileSystem);
 container.registerInstance('NodeFileSystem', nodeFileSystem);
 
-// Create PathService first
-const pathService = new PathService(projectPathResolver);
+// Create URLContentResolver first (no dependencies)
+const urlContentResolver = new URLContentResolver();
+container.registerInstance('URLContentResolver', urlContentResolver);
+container.registerInstance('IURLContentResolver', urlContentResolver);
+
+// Create PathService with URLContentResolver dependency
+const pathService = new PathService(projectPathResolver, urlContentResolver);
 // Put PathService in test mode for debugging
 pathService.setTestMode(true);
 
@@ -179,6 +185,8 @@ container.register('IValidationService', { useToken: 'ValidationService' });
 // CircularityService
 container.register('CircularityService', { useClass: CircularityService });
 container.register('ICircularityService', { useToken: 'CircularityService' });
+
+// URLContentResolver is already registered above (lines 79-81)
 
 // ProjectPathResolver
 container.register(ProjectPathResolver, { useClass: ProjectPathResolver });

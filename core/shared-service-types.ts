@@ -187,7 +187,7 @@ export interface FileSystemLike {
  */
 export interface PathServiceLike {
   /** Validate a path */
-  validatePath(path: string | StructuredPath): Promise<string | StructuredPath>;
+  validatePath(path: string | StructuredPath, options?: any): Promise<string>;
   /** Resolve a path */
   resolvePath(path: string | StructuredPath, baseDir?: string): string;
   /** Join path segments */

@@ -168,6 +168,16 @@ describe('ImportDirectiveHandler Transformation', () => {
 
     // Configure interpreter service
     interpreterService.interpret.mockResolvedValue(childState);
+    
+    // Create interpreter service client factory mock
+    const interpreterServiceClientFactory = {
+      createClient: vi.fn().mockReturnValue({
+        interpret: vi.fn().mockResolvedValue(childState),
+        createChildContext: vi.fn().mockImplementation(async (parentState) => parentState)
+      })
+    };
+    
+    context.registerMock('InterpreterServiceClientFactory', interpreterServiceClientFactory);
 
     // Register the handler through DI with all required dependencies
     context.registerMock('ImportDirectiveHandler', new ImportDirectiveHandler(
@@ -176,7 +186,8 @@ describe('ImportDirectiveHandler Transformation', () => {
       stateService,
       fileSystemService,
       parserService,
-      interpreterService,
+      context.container.resolve('IPathService'),
+      interpreterServiceClientFactory,
       circularityService
     ));
     handler = await context.container.resolve('ImportDirectiveHandler');

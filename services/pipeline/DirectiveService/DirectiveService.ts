@@ -301,6 +301,8 @@ export class DirectiveService implements IDirectiveService, DirectiveServiceLike
       )
     );
 
+    // Create the EmbedDirectiveHandler
+    // Note: We need to cast pathService to any to avoid type errors with IPathService
     this.registerHandler(
       new EmbedDirectiveHandler(
         this.validationService!,
@@ -309,11 +311,14 @@ export class DirectiveService implements IDirectiveService, DirectiveServiceLike
         this.circularityService!,
         this.fileSystemService!,
         this.parserService!,
+        this.pathService! as any,
         this.interpreterClientFactory!,
         this.logger
       )
     );
 
+    // Create the ImportDirectiveHandler
+    // Note: We need to cast pathService to any to avoid type errors with IPathService
     this.registerHandler(
       new ImportDirectiveHandler(
         this.validationService!,
@@ -321,6 +326,7 @@ export class DirectiveService implements IDirectiveService, DirectiveServiceLike
         this.stateService!,
         this.fileSystemService!,
         this.parserService!,
+        this.pathService! as any,
         this.interpreterClientFactory!,
         this.circularityService!
       )

@@ -4,6 +4,40 @@ import type { Location } from '@core/types/index.js';
 import { PathServiceBase } from '@core/shared/types.js';
 import { StructuredPath } from '@core/shared-service-types.js';
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
+import type { URLResponse, URLFetchOptions } from '@services/fs/PathService/IURLCache.js';
+
+/**
+ * Options for URL validation and operations
+ */
+interface URLValidationOptions {
+  /**
+   * Allowed protocols
+   * @default ['http', 'https']
+   */
+  allowedProtocols?: string[];
+  
+  /**
+   * Domain allowlist (if empty, all domains allowed unless blocklisted)
+   */
+  allowedDomains?: string[];
+  
+  /**
+   * Domain blocklist (overrides allowlist)
+   */
+  blockedDomains?: string[];
+  
+  /**
+   * Maximum response size in bytes
+   * @default 5MB
+   */
+  maxResponseSize?: number;
+  
+  /**
+   * Request timeout in milliseconds
+   * @default 30000
+   */
+  timeout?: number;
+}
 
 /**
  * Options for path validation and operations
@@ -42,6 +76,17 @@ interface PathOptions {
    * @default false
    */
   mustBeDirectory?: boolean;
+
+  /**
+   * Whether to allow URLs for this path
+   * @default false
+   */
+  allowURLs?: boolean;
+
+  /**
+   * Options for URL validation and fetching
+   */
+  urlOptions?: URLValidationOptions;
 
   /**
    * Source location information for error reporting.
@@ -171,6 +216,7 @@ interface IPathService extends PathServiceBase {
    * - Simple paths are resolved relative to baseDir or cwd
    * - $. paths are resolved relative to project root
    * - $~ paths are resolved relative to home directory
+   * - URL paths are returned as-is if allowURLs is true
    * 
    * @example
    * ```ts
@@ -252,6 +298,67 @@ interface IPathService extends PathServiceBase {
    * It's primarily used for internal path manipulation.
    */
   normalizePath?(filePath: string): string;
+
+  /**
+   * Check if a string is a URL.
+   * 
+   * @param path - String to check
+   * @returns True if the string is a valid URL
+   * 
+   * @example
+   * ```ts
+   * // Check if a path is a URL
+   * if (pathService.isURL("https://example.com/data.json")) {
+   *   console.log("This is a URL");
+   * }
+   * ```
+   */
+  isURL(path: string): boolean;
+
+  /**
+   * Validate a URL according to security policy.
+   * 
+   * @param url - The URL to validate
+   * @param options - Validation options
+   * @returns The validated URL
+   * @throws {URLValidationError} If URL is invalid
+   * @throws {URLSecurityError} If URL is blocked by security policy
+   * 
+   * @example
+   * ```ts
+   * try {
+   *   const validatedUrl = await pathService.validateURL("https://example.com/data.json", {
+   *     allowedDomains: ["example.com"]
+   *   });
+   *   console.log(`Valid URL: ${validatedUrl}`);
+   * } catch (error) {
+   *   console.error(`Invalid URL: ${error.message}`);
+   * }
+   * ```
+   */
+  validateURL(url: string, options?: URLValidationOptions): Promise<string>;
+
+  /**
+   * Fetch content from a URL with caching.
+   * 
+   * @param url - The URL to fetch
+   * @param options - Fetch options
+   * @returns The URL response with content and metadata
+   * @throws {URLFetchError} If fetch fails
+   * @throws {URLSecurityError} If URL is blocked or response too large
+   * 
+   * @example
+   * ```ts
+   * try {
+   *   const response = await pathService.fetchURL("https://example.com/data.json");
+   *   console.log(`Fetched ${response.url} (${response.fromCache ? 'from cache' : 'from network'})`);
+   *   console.log(`Content: ${response.content.substring(0, 100)}...`);
+   * } catch (error) {
+   *   console.error(`Failed to fetch URL: ${error.message}`);
+   * }
+   * ```
+   */
+  fetchURL(url: string, options?: URLFetchOptions): Promise<URLResponse>;
 }
 
-export type { PathOptions, IPathService }; 
+export type { PathOptions, URLValidationOptions, IPathService }; 

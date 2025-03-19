@@ -1,4 +1,4 @@
-import type { IPathService, PathOptions } from '@services/fs/PathService/IPathService.js';
+import type { IPathService, PathOptions, URLValidationOptions } from '@services/fs/PathService/IPathService.js';
 import type { StructuredPath } from '@core/shared-service-types.js';
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import { PathValidationError, PathErrorCode, PathValidationErrorDetails } from '@services/fs/PathService/errors/PathValidationError.js';
@@ -22,6 +22,11 @@ import { container } from 'tsyringe';
 import { pathLogger as logger } from '@core/utils/logger.js';
 import type { IFileSystemServiceClient } from '@services/fs/FileSystemService/interfaces/IFileSystemServiceClient.js';
 import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/factories/FileSystemServiceClientFactory.js';
+import type { URLResponse, URLFetchOptions } from '@services/fs/PathService/IURLCache.js';
+import { 
+  URLError 
+} from '@services/fs/PathService/errors/url/index';
+import type { IURLContentResolver } from '@services/resolution/URLContentResolver/IURLContentResolver.js';
 
 /**
  * Service for validating and normalizing paths
@@ -43,9 +48,11 @@ export class PathService implements IPathService {
    * Creates a new PathService with dependencies injected.
    * 
    * @param projectPathResolver Resolver for project paths
+   * @param urlContentResolver Resolver for URL content (optional, used for URL operations)
    */
   constructor(
-    @inject(ProjectPathResolver) private readonly projectPathResolver: ProjectPathResolver
+    @inject(ProjectPathResolver) private readonly projectPathResolver: ProjectPathResolver,
+    @inject('IURLContentResolver') private readonly urlContentResolver?: IURLContentResolver
   ) {
     const homeEnv = process.env.HOME || process.env.USERPROFILE;
     if (!homeEnv && !this.testMode) {
@@ -61,6 +68,7 @@ export class PathService implements IPathService {
       console.log('PathService: Initialized with', {
         hasFileSystemClient: !!this.fsClient,
         hasFactory: !!this.fsClientFactory,
+        urlContentResolverAvailable: !!this.urlContentResolver,
         testMode: this.testMode
       });
     }
@@ -301,6 +309,7 @@ export class PathService implements IPathService {
    * - Simple paths are resolved relative to baseDir or cwd
    * - $. paths are resolved relative to project root
    * - $~ paths are resolved relative to home directory
+   * - URLs are returned as-is
    * 
    * @param filePath The path to resolve (string or StructuredPath)
    * @param baseDir Optional base directory for simple paths
@@ -335,6 +344,11 @@ export class PathService implements IPathService {
     // Handle string path
     if (!filePath) {
       return '';
+    }
+    
+    // Handle URLs - return as-is
+    if (this.isURL(filePath)) {
+      return filePath;
     }
 
     // Handle special path variables first
@@ -539,6 +553,31 @@ export class PathService implements IPathService {
         },
         options.location
       );
+    }
+    
+    // Handle URL paths
+    if (options.allowURLs && this.isURL(pathToProcess)) {
+      try {
+        // Validate URL according to security policy
+        await this.validateURL(pathToProcess, options.urlOptions);
+        
+        // Return the validated URL
+        return pathToProcess;
+      } catch (error) {
+        if (error instanceof URLError) {
+          // Wrap URL errors in PathValidationError for consistent error handling
+          throw new PathValidationError(
+            error.message,
+            {
+              code: PathErrorCode.INVALID_PATH,
+              path: pathToProcess,
+              cause: error
+            },
+            options.location
+          );
+        }
+        throw error;
+      }
     }
     
     // Call parser service if available and not in test mode
@@ -850,5 +889,114 @@ export class PathService implements IPathService {
    */
   basename(filePath: string): string {
     return path.basename(filePath);
+  }
+
+  /**
+   * Checks if a string is a URL
+   * 
+   * @param path String to check
+   * @returns True if the string is a valid URL
+   */
+  isURL(path: string): boolean {
+    // If URLContentResolver is available, delegate to it
+    if (this.urlContentResolver) {
+      return this.urlContentResolver.isURL(path);
+    }
+    
+    // Fallback implementation for tests that don't have URLContentResolver
+    if (!path) return false;
+    
+    try {
+      const url = new URL(path);
+      // Must have protocol and host to be considered a valid URL
+      return !!url.protocol && !!url.host;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Validates a URL according to security policy
+   * 
+   * @param url URL to validate
+   * @param options Validation options
+   * @returns The validated URL
+   * @throws URLValidationError if URL is invalid
+   * @throws URLSecurityError if URL is blocked by security policy
+   */
+  async validateURL(url: string, options?: URLValidationOptions): Promise<string> {
+    // If URLContentResolver is available, delegate to it
+    if (this.urlContentResolver) {
+      return this.urlContentResolver.validateURL(url, options);
+    }
+    
+    // Fallback implementation for tests that don't have URLContentResolver
+    const opts = { 
+      allowedProtocols: ['http', 'https'],
+      allowedDomains: [],
+      blockedDomains: [],
+      ...options
+    };
+    
+    try {
+      const parsedUrl = new URL(url);
+      
+      // Validate protocol
+      const protocol = parsedUrl.protocol.replace(':', '');
+      if (opts.allowedProtocols?.length && !opts.allowedProtocols.includes(protocol)) {
+        throw new URLError(url, `Protocol '${protocol}' is not allowed`);
+      }
+      
+      // Validate domain
+      const domain = parsedUrl.hostname;
+      
+      // Blocklist takes precedence over allowlist
+      if (opts.blockedDomains?.includes(domain)) {
+        throw new URLError(url, `Domain '${domain}' is blocked`);
+      }
+      
+      // If allowlist is not empty, domain must be in the list
+      if (opts.allowedDomains?.length && !opts.allowedDomains.includes(domain)) {
+        throw new URLError(url, `Domain '${domain}' is not in the allowlist`);
+      }
+      
+      return url;
+    } catch (error) {
+      if (error instanceof URLError) {
+        throw error;
+      }
+      
+      throw new URLError(url, (error as Error).message);
+    }
+  }
+
+  /**
+   * Fetches content from a URL with caching
+   * 
+   * @param url URL to fetch
+   * @param options Fetch options
+   * @returns The URL response with content and metadata
+   * @throws URLFetchError if fetch fails
+   * @throws URLSecurityError if URL is blocked or response too large
+   */
+  async fetchURL(url: string, options?: URLFetchOptions): Promise<URLResponse> {
+    // If URLContentResolver is available, delegate to it
+    if (this.urlContentResolver) {
+      return this.urlContentResolver.fetchURL(url, options);
+    }
+    
+    // Fallback implementation for tests that don't have URLContentResolver
+    // Just return a mock response
+    logger.warn('Using fallback fetchURL implementation - URLContentResolver not available');
+    
+    return {
+      content: `Mock content for ${url} (fallback implementation)`,
+      metadata: {
+        statusCode: 200,
+        contentType: 'text/plain'
+      },
+      fromCache: false,
+      url
+    };
   }
 }
