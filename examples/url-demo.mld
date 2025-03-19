@@ -1,0 +1,46 @@
+# URL Functionality Demo
+
+This example demonstrates how to use URLs in Meld directives.
+
+## URL Embedding Examples
+
+### Embedding content from a URL
+
+@embed(url="https://raw.githubusercontent.com/anthropics/claude-code/main/README.md", allowURLs=true)
+
+### Embedding with custom URL options
+
+@embed(url="https://raw.githubusercontent.com/anthropics/claude-code/main/README.md", 
+  allowURLs=true, 
+  urlOptions={
+    allowedProtocols: ["https"],
+    allowedDomains: ["raw.githubusercontent.com"],
+    maxResponseSize: 1048576,  // 1MB
+    timeout: 10000  // 10 seconds
+  }
+)
+
+### Embedding a specific section
+
+@embed(url="https://raw.githubusercontent.com/anthropics/claude-code/main/README.md", 
+  allowURLs=true,
+  section="Installation"
+)
+
+## URL Import Examples
+
+### Importing variables from a URL
+
+@import(url="https://raw.githubusercontent.com/anthropics/claude-code/main/examples/demo.mld", allowURLs=true)
+
+### Using imported variables
+
+After importing from the URL, you can use the variables:
+
+{{greeting}}
+
+## Using URL with path parameter
+
+The URL functionality also works when using the path parameter with allowURLs=true:
+
+@embed(path="https://raw.githubusercontent.com/anthropics/claude-code/main/README.md", allowURLs=true)
