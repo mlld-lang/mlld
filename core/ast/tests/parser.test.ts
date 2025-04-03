@@ -318,81 +318,75 @@ describe('Parser', () => {
     });
 
     it('should parse a path directive', async () => {
-      const input = '@path config = "$HOMEPATH/config"';
+      const input = `@path config = "$HOMEPATH/config"`;
       const { ast } = await parse(input);
-      
       expect(ast).toHaveLength(1);
       const node = ast[0] as DirectiveNode;
       expect(node.type).toBe('Directive');
       expect(node.directive.kind).toBe('path');
       expect(node.directive.identifier).toBe('config');
-      expect(node.directive.path.base).toBe('$HOMEPATH');
-      expect(node.directive.path.segments).toEqual(['config']);
+      expect(node.directive.path.structured.base).toBe('$HOMEPATH');
+      expect(node.directive.path.structured.segments).toEqual(['config']);
     });
 
     it('should parse a path directive with single quotes', async () => {
-      const input = "@path config = '$HOMEPATH/config'";
+      const input = `@path config = '$HOMEPATH/config'`;
       const { ast } = await parse(input);
-      
       expect(ast).toHaveLength(1);
       const node = ast[0] as DirectiveNode;
       expect(node.type).toBe('Directive');
       expect(node.directive.kind).toBe('path');
       expect(node.directive.identifier).toBe('config');
-      expect(node.directive.path.base).toBe('$HOMEPATH');
-      expect(node.directive.path.segments).toEqual(['config']);
+      expect(node.directive.path.structured.base).toBe('$HOMEPATH');
+      expect(node.directive.path.structured.segments).toEqual(['config']);
     });
 
     it('should parse a path directive with backticks', async () => {
-      const input = "@path config = `$HOMEPATH/config`";
+      const input = '@path config = `$HOMEPATH/config`';
       const { ast } = await parse(input);
-      
       expect(ast).toHaveLength(1);
       const node = ast[0] as DirectiveNode;
       expect(node.type).toBe('Directive');
       expect(node.directive.kind).toBe('path');
       expect(node.directive.identifier).toBe('config');
-      expect(node.directive.path.base).toBe('$HOMEPATH');
-      expect(node.directive.path.segments).toEqual(['config']);
+      expect(node.directive.path.structured.base).toBe('$HOMEPATH');
+      expect(node.directive.path.structured.segments).toEqual(['config']);
     });
 
     it('should parse a path directive with $PROJECTPATH', async () => {
-      const input = '@path config = "$PROJECTPATH/config"';
+      const input = `@path config = "$PROJECTPATH/config"`;
       const { ast } = await parse(input);
-      
       expect(ast).toHaveLength(1);
       const node = ast[0] as DirectiveNode;
       expect(node.type).toBe('Directive');
       expect(node.directive.kind).toBe('path');
       expect(node.directive.identifier).toBe('config');
-      expect(node.directive.path.base).toBe('$PROJECTPATH');
-      expect(node.directive.path.segments).toEqual(['config']);
+      expect(node.directive.path.structured.base).toBe('$PROJECTPATH');
+      expect(node.directive.path.structured.segments).toEqual(['config']);
     });
 
     it('should parse a path directive with $~', async () => {
-      const input = '@path config = "$~/config"';
+      const input = `@path config = "$~/config"`;
       const { ast } = await parse(input);
-      
       expect(ast).toHaveLength(1);
       const node = ast[0] as DirectiveNode;
       expect(node.type).toBe('Directive');
       expect(node.directive.kind).toBe('path');
       expect(node.directive.identifier).toBe('config');
-      expect(node.directive.path.base).toBe('$~');
-      expect(node.directive.path.segments).toEqual(['config']);
+      expect(node.directive.path.structured.base).toBe('$~');
+      expect(node.directive.path.structured.segments).toEqual(['config']);
     });
 
     it('should parse a path directive with $.', async () => {
-      const input = '@path config = "$./config"';
+      const input = `@path config = "$./config"`;
       const { ast } = await parse(input);
-      
       expect(ast).toHaveLength(1);
       const node = ast[0] as DirectiveNode;
       expect(node.type).toBe('Directive');
       expect(node.directive.kind).toBe('path');
       expect(node.directive.identifier).toBe('config');
-      expect(node.directive.path.base).toBe('$.');
-      expect(node.directive.path.segments).toEqual(['config']);
+      expect(node.directive.path.structured.base).toBe('$.');
+      expect(node.directive.path.structured.segments).toEqual(['config']);
     });
 
     it('should parse an embed directive', async () => {

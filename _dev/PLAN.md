@@ -16,7 +16,11 @@ Modify the **existing** `core/ast/grammar/meld.pegjs` file to:
 
 1.  **Consolidate Variable Node Types:** Modify grammar rules to directly produce a single, unified `VariableReference` node type for all variable references (`{{text}}`, `{{data.field}}`, `$path`), incorporating a `valueType` field ('text', 'data', 'path'). *(Complete)*
 2.  **Introduce Explicit Directive Subtypes:** Modify grammar rules for `@run`, `@embed`, and `@import` to explicitly determine the directive's subtype based on syntax and add a `subtype` field (e.g., `'runCommand'`, `'embedVariable'`, `'importNamed'`) to the resulting `DirectiveNode`. *(Complete)*
-3.  **Simplify `validatePath` Helper & Remove Stack Trace Checks:** Opportunistically refactor the `validatePath` helper function within the grammar *and remove all other stack trace (`callerInfo`) checks* to reduce test-specific logic and improve clarity. *(In Progress - `isParserTest` checks removed)*
+3.  **Simplify `validatePath` Helper & Remove Stack Trace Checks:** Opportunistically refactor the `validatePath` helper function within the grammar *and remove all other stack trace (`callerInfo`) checks* to reduce test-specific logic and improve clarity. *(In Progress)*
+    *   Removed `isParserTest` checks from `@import` and `@embed` rules; updated `parser.test.ts`. *(Complete)*
+    *   Simplified `validatePath` internal logic: removed flags (`isEmbedTest`, etc.), standardized `normalized` output, simplified `cwd` logic based on path structure. *(Complete)*
+    *   Removed `callerInfo` checks and hardcoding from `DataDirective` and `DataValue`. *(Complete)*
+    *   Remaining `callerInfo` checks (within `TextValue`, `PathDirective`, `PathValue`) need removal. *(Outstanding - Blocked by tool issue reading TextValue)*
 4.  **Remove Parser Shim:** Eliminate the `transformVariableNode` function from `ParserService` once the grammar produces the consolidated variable types. *(Pending Phase 3)*
 
 ## Rationale & Motivation
@@ -65,7 +69,9 @@ Modify the **existing** `core/ast/grammar/meld.pegjs` file to:
     *   Review and refactor the `validatePath` helper function and other rules using `callerInfo`.
     *   Aim to significantly reduce reliance on test-specific logic derived from stack traces (`callerInfo`).
         *   `isParserTest` checks removed. *(Complete)*
-        *   Remaining `callerInfo` checks (within `validatePath`, `DataDirective`, `DataValue`, `TextValue`, `PathDirective`, `PathValue`) need removal. *(Outstanding)*
+        *   `validatePath` internal flags/logic simplified (`isEmbedTest`, `normalized`, `cwd`). *(Complete)*
+        *   `DataDirective` / `DataValue` checks removed. *(Complete)*
+        *   Remaining `callerInfo` checks (within `TextValue`, `PathDirective`, `PathValue`) need removal. *(Outstanding - Blocked by tool issue reading TextValue)*
     *   Improve clarity and potentially return a more standardized structure if feasible without major overhaul.
 
 ## Other Code Changes

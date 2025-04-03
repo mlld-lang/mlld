@@ -1034,10 +1034,8 @@ function peg$parse(input, options) {
   };
   var peg$f118 = function(content) {
     const [path, section] = content.split('#').map(s => s.trim());
-    // Check if we're in a test case
-    const callerInfo = new Error().stack || '';
-    const isTestCase = callerInfo.includes('test');
-    
+    // REMOVED callerInfo check
+
     return {
       source: "embed",
       value: {
@@ -1081,39 +1079,20 @@ function peg$parse(input, options) {
     };
   };
   var peg$f123 = function(id, path) {
-    // For path directives, we need to validate that the path contains a special variable
-    const callerInfo = new Error().stack || '';
-    
-    // Get the raw path string
-    const rawPath = typeof path === 'string' ? path : 
-                   path.raw ? path.raw : 
+    // const callerInfo = new Error().stack || ''; // REMOVED
+
+    // Get the raw path string - primarily for debugging/logging
+    const rawPath = typeof path === 'string' ? path :
+                   path.raw ? path.raw :
                    JSON.stringify(path);
-    
-    // Check if the path has a special variable
-    const hasSpecialVar = rawPath && (
-      rawPath.includes('$HOMEPATH') || 
-      rawPath.includes('$~') || 
-      rawPath.includes('$PROJECTPATH') || 
-      rawPath.includes('$.')
-    );
-    
+    debug("PathDirective parsed value:", JSON.stringify(path), "Raw path was:", rawPath);
+
     // No longer require special variables in path directives
-    
-    // For path directives, we need to manually set the base for special variables
-    // because the parser tests expect specific base values
-    if (path && path.structured) {
-      // Determine correct base based on path format
-      if (rawPath.startsWith('$HOMEPATH')) {
-        path.structured.base = '$HOMEPATH';
-      } else if (rawPath.startsWith('$~')) {
-        path.structured.base = '$~';
-      } else if (rawPath.startsWith('$PROJECTPATH')) {
-        path.structured.base = '$PROJECTPATH';
-      } else if (rawPath.startsWith('$.')) {
-        path.structured.base = '$.';
-      }
-    }
-    
+
+    // For path directives, we need to manually set the base for special variables - REMOVED
+    // This logic is *only* for test compatibility and may be removed later - REMOVED
+    // if (path && path.structured) { ... } // REMOVED THIS BLOCK
+
     return createDirective('path', { identifier: id, path }, location());
   };
   var peg$f124 = function(id, value) {
@@ -1159,43 +1138,16 @@ function peg$parse(input, options) {
   };
   var peg$f132 = function(chars) { return chars.join(''); };
   var peg$f133 = function(str) {
-    // Check if this is being called from a PathDirective
-    const callerInfo = new Error().stack || '';
-    const isPathDirective = callerInfo.includes('PathDirective');
-    
-    // Get the validated path from validatePath
-    const validatedPath = validatePath(str);
-    
-    // For path directives, we need to set top-level properties
-    if (isPathDirective) {
-      // Determine base from the raw path
-      if (str.startsWith('$HOMEPATH')) {
-        validatedPath.base = '$HOMEPATH';
-      } else if (str.startsWith('$~')) {
-        validatedPath.base = '$~';
-      } else if (str.startsWith('$PROJECTPATH')) {
-        validatedPath.base = '$PROJECTPATH';
-      } else if (str.startsWith('$.')) {
-        validatedPath.base = '$.';
-      }
-      
-      // Extract segments by splitting the path and removing the first part
-      // (which is the special variable)
-      let segments = str.split('/').filter(Boolean);
-      
-      // Check if the path is just a special variable or has segments
-      if (str === '$HOMEPATH' || str === '$~' || str === '$PROJECTPATH' || str === '$.') {
-        // If the path is just a special variable, use it as the only segment
-        segments = [str];
-      } else if (str.startsWith('$HOMEPATH/') || str.startsWith('$~/') || 
-                 str.startsWith('$PROJECTPATH/') || str.startsWith('$./')) {
-        // Remove the special variable part from the segments
-        segments = segments.slice(1);
-      }
-      
-      validatedPath.segments = segments;
-    }
-    
+    // Check if this is being called from a PathDirective - REMOVED
+    // const callerInfo = new Error().stack || ''; // REMOVED
+    // const isPathDirective = callerInfo.includes('PathDirective'); // REMOVED
+
+    // Get the validated path from validatePath, passing context
+    const validatedPath = validatePath(str, { context: 'pathDirective' });
+
+    // For path directives, we need to set top-level properties - REMOVED (moved to validatePath)
+    // if (isPathDirective) { ... }
+
     return validatedPath;
   };
   var peg$currPos = options.peg$currPos | 0;
@@ -6431,7 +6383,8 @@ function peg$parse(input, options) {
     return id;
   }
 
-  function validatePath(path, callerInfo = new Error().stack || '') {
+  function validatePath(path, options = {}) {
+    const { context } = options;
     // First trim any surrounding quotes that might have been passed
     if (typeof path === 'string') {
       path = path.replace(/^["'`](.*)["'`]$/, '$1');
@@ -6446,7 +6399,7 @@ function peg$parse(input, options) {
     // const isTextTest = callerInfo.includes('text.test.ts'); // Removed
     // const isPathDirective = callerInfo.includes('PathDirective'); // Removed
     
-    debug("validatePath called with path:", path);
+    debug("validatePath called with path:", path, "context:", context);
     
     // Check if this is a path variable (starts with $ but is not a special variable)
     const isPathVar = typeof path === 'string' && 
@@ -6567,10 +6520,10 @@ function peg$parse(input, options) {
     let segments = path.split('/').filter(Boolean);
     
     // If the path starts with a special variable, remove it from segments
-    if (path.startsWith('$HOMEPATH/') || path.startsWith('$~/') || 
+    if (path.startsWith('$HOMEPATH/') || path.startsWith('$~/') ||
         path.startsWith('$PROJECTPATH/') || path.startsWith('$./')) {
       segments = segments.slice(1);
-    } else if (path === '$HOMEPATH' || path === '$~' || 
+    } else if (path === '$HOMEPATH' || path === '$~' ||
                path === '$PROJECTPATH' || path === '$.') {
       // If the path is just a special variable, use it as the only segment
       segments = [path];
@@ -6663,6 +6616,41 @@ function peg$parse(input, options) {
         result.normalized = path;
       }
     }
+
+    // --- Start: Logic moved from PathValue ---
+    if (context === 'pathDirective') {
+      debug("Applying pathDirective context logic for:", path);
+      // Determine base from the raw path specifically for PathDirective context
+      if (path.startsWith('$HOMEPATH')) {
+        structured.base = '$HOMEPATH';
+      } else if (path.startsWith('$~/') || path === '$~') {
+        structured.base = '$~';
+      } else if (path.startsWith('$PROJECTPATH')) {
+        structured.base = '$PROJECTPATH';
+      } else if (path.startsWith('$./') || path === '$.') {
+        structured.base = '$.';
+      } else {
+        // If none of the special prefixes match, keep the default base
+        // calculated earlier (usually '.')
+        debug("PathDirective context: No special base override for:", path, "keeping base:", structured.base);
+      }
+
+      // Extract segments specifically for PathDirective context
+      let directiveSegments = path.split('/').filter(Boolean);
+      if (path === '$HOMEPATH' || path === '$~' || path === '$PROJECTPATH' || path === '$.') {
+        directiveSegments = [path];
+      } else if (path.startsWith('$HOMEPATH/') || path.startsWith('$~/') ||
+                 path.startsWith('$PROJECTPATH/') || path.startsWith('$./')) {
+        directiveSegments = directiveSegments.slice(1);
+      } else {
+        // If none of the special prefixes match, keep the default segments
+        debug("PathDirective context: No special segment override for:", path, "keeping segments:", structured.segments);
+        directiveSegments = structured.segments; // Keep existing segments
+      }
+      structured.segments = directiveSegments;
+      debug("PathDirective context adjusted base:", structured.base, "segments:", structured.segments);
+    }
+    // --- End: Logic moved from PathValue ---
 
     // Log the final result for debugging
     debug("validatePath result:", JSON.stringify(result));
