@@ -375,9 +375,11 @@ function peg$parse(input, options) {
     }, location());
   };
   var peg$f10 = function(id) {
+    // Check if the matched identifier is special
+    const isSpecial = isSpecialPathIdentifier(id);
     return createVariableReferenceNode('path', {
       identifier: normalizePathVar(id),
-      isSpecial: true
+      isSpecial: isSpecial
     }, location());
   };
   var peg$f11 = function() {
@@ -6524,6 +6526,11 @@ function peg$parse(input, options) {
     debug("Checking line start at pos", pos, "char at pos-1:", JSON.stringify(pos > 0 ? input.charAt(pos - 1) : ''));
     debug("Input:", JSON.stringify(input));
     return pos === 0 || input.charAt(pos - 1) === '\n';
+  }
+
+  // Helper to check if an identifier is a special path variable name
+  function isSpecialPathIdentifier(id) {
+    return ['HOMEPATH', '~', 'PROJECTPATH', '.'].includes(id);
   }
 
   function validateRunContent(content) {

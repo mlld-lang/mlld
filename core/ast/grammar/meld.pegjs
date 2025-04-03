@@ -18,6 +18,11 @@
     return pos === 0 || input.charAt(pos - 1) === '\n';
   }
 
+  // Helper to check if an identifier is a special path variable name
+  function isSpecialPathIdentifier(id) {
+    return ['HOMEPATH', '~', 'PROJECTPATH', '.'].includes(id);
+  }
+
   function validateRunContent(content) {
     // For now, just return the content as is
     // We can add more validation later if needed
@@ -465,9 +470,11 @@ DataVar
 
 PathVar
   = "$" id:PathIdentifier {
+    // Check if the matched identifier is special
+    const isSpecial = isSpecialPathIdentifier(id);
     return createVariableReferenceNode('path', {
       identifier: normalizePathVar(id),
-      isSpecial: true
+      isSpecial: isSpecial
     }, location());
   }
 

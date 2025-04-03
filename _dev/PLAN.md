@@ -48,16 +48,16 @@ Modify the **existing** `core/ast/grammar/meld.pegjs` file to:
     *   **Grammar Rules to Modify:** Update `TextVar`, `DataVar`, `PathVar` rules (and potentially `createVariableReferenceNode` helper) to create this unified `VariableReferenceNode` directly, setting `valueType` appropriately.
 
 2.  **`@run` Subtyping:**
-    *   **Target Subtypes:** `'basicCommand'`, `'languageCommand'`, `'definedCommand'`.
-    *   **Grammar Rules to Modify:** Update alternatives within the `RunDirective` rule to determine the subtype based on syntax (presence/absence of `lang`, `$` prefix, bracket types) and add the `subtype` field to the `DirectiveNode`. Slightly refactor rule structure for clarity if beneficial.
+    *   **Target Subtypes:** `'runCommand'`, `'runCode'`, `'runCodeParams'`, `'runDefined'`.
+    *   **Grammar Rules to Modify:** Update alternatives within the `RunDirective` rule to determine the subtype based on syntax (presence/absence of `lang`, `(...)` parameters, `$` prefix, bracket types) and add the `subtype` field to the `DirectiveNode`. Ensure spacing for parameters is handled consistently. Slightly refactor rule structure for clarity if beneficial.
 
 3.  **`@embed` Subtyping:**
     *   **Target Subtypes:** `'embedPath'`, `'embedVariable'`, `'embedTemplate'`.
     *   **Grammar Rules to Modify:** Update the `EmbedDirective` rule. Add logic to distinguish between a file path (`[...]`) and a variable (`{{...}}`) within single brackets (likely by inspecting content structure). Add the identified `subtype` field to the `DirectiveNode`. Slightly refactor rule structure for clarity if beneficial.
 
 4.  **`@import` Subtyping:**
-    *   **Target Subtypes:** `'importAll'`, `'namedImport'`, `'renamedImport'`.
-    *   **Grammar Rules to Modify:** Update the `ImportDirective` rule to determine the subtype based on the import specifier structure (`[...]` vs `{...} from [...]`). Add the identified `subtype` field to the `DirectiveNode`. Slightly refactor rule structure for clarity if beneficial.
+    *   **Target Subtypes:** `'importAll'`, `'importStandard'`, `'importNamed'`.
+    *   **Grammar Rules to Modify:** Update the `ImportDirective` rule to determine the subtype based on the import specifier structure (legacy path-only, `[*] from ...`, `[...] from ...` without aliases, `[...] from ...` with aliases). Add the identified `subtype` field to the `DirectiveNode`. Slightly refactor rule structure for clarity if beneficial.
 
 5.  **Simplify `validatePath` Function:**
     *   Review and refactor the `validatePath` helper function.
