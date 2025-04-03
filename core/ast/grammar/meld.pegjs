@@ -119,21 +119,10 @@
     
     // Extract test information from the stack trace
     const isImportTest = callerInfo.includes('import.test.ts');
-    const isEmbedTest = callerInfo.includes('embed.test.ts');
-    const isHeaderLevelTest = callerInfo.includes('embed-header.test.ts') || 
-                             callerInfo.includes('header-level') || 
-                             callerInfo.includes('Embed with header level') ||
-                             callerInfo.includes('section-with-header') || 
-                             callerInfo.includes('Embed section with header');
     const isPathVariableTest = callerInfo.includes('path-variable-embed.test.ts');
-    const isDataTest = callerInfo.includes('data.test.ts');
-    const isTextTest = callerInfo.includes('text.test.ts');
     const isPathDirective = callerInfo.includes('PathDirective');
     
     debug("validatePath called with path:", path);
-    debug("isHeaderLevelTest:", isHeaderLevelTest);
-    debug("isPathDirective:", isPathDirective);
-    debug("isPathVariableTest:", isPathVariableTest);
     
     // Check if this is a path variable (starts with $ but is not a special variable)
     const isPathVar = typeof path === 'string' && 
@@ -194,7 +183,7 @@
     debug("isUrl:", isUrl, "for path:", path);
     
     // Allow relative paths
-    const isRelativePathTest = (isImportTest || isEmbedTest || isPathVariableTest) && 
+    const isRelativePathTest = (isImportTest || isPathVariableTest) && 
       (path.includes('../') || path.startsWith('./'));
     
     // No longer reject paths with relative segments ('..' or './')
@@ -238,12 +227,6 @@
     const isSpecialVarPath = path.startsWith('$');
     debug("isSpecialVarPath:", isSpecialVarPath, "for path:", path);
     
-    // Check if this is a test that has special handling for slashed paths
-    // This is kept for backward compatibility with tests
-    const isTestAllowingSlashedPaths = isImportTest || isEmbedTest || isDataTest || isTextTest || isPathVariableTest;
-    
-    // No longer reject paths with slashes that don't start with special variables
-
     // Determine the base based on special variables
     let base = '.';
     if (specialVars.length > 0) {
@@ -358,17 +341,6 @@
         // For other paths, use as is
         result.normalized = path;
       }
-    }
-
-    // Handle specific test cases based on the test file
-    if (isImportTest) {
-      // Import tests don't expect normalized property
-      delete result.normalized;
-    }
-
-    // Always keep the variables object, even if empty
-    if (Object.keys(structured.variables).length === 0) {
-      structured.variables = {};
     }
 
     // Log the final result for debugging

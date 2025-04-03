@@ -1,5 +1,7 @@
 # Refactor meld.pegjs Grammar for Variable Consolidation and Explicit Directive Subtypes
 
+*Status: Phase 1 & 2 Complete. Phase 3 In Progress.* 
+
 ## Introduction & Background
 
 The current Meld parser (`core/ast/grammar/meld.pegjs`) produces distinct Abstract Syntax Tree (AST) node types for different kinds of variable references (`TextVar`, `DataVar`, `PathVar`). This necessitates a transformation step (`transformVariableNode` in `ParserService`) to consolidate these into a unified `VariableReference` node type expected by downstream services.
@@ -12,10 +14,10 @@ This plan outlines refactoring the **existing** `core/ast/grammar/meld.pegjs` fi
 
 Modify the **existing** `core/ast/grammar/meld.pegjs` file to:
 
-1.  **Consolidate Variable Node Types:** Modify grammar rules to directly produce a single, unified `VariableReference` node type for all variable references (`{{text}}`, `{{data.field}}`, `$path`), incorporating a `valueType` field ('text', 'data', 'path').
-2.  **Introduce Explicit Directive Subtypes:** Modify grammar rules for `@run`, `@embed`, and `@import` to explicitly determine the directive's subtype based on syntax and add a `subtype` field (e.g., `'languageCommand'`, `'embedVariable'`, `'namedImport'`) to the resulting `DirectiveNode`.
-3.  **Simplify `validatePath` Helper:** Opportunistically refactor the `validatePath` helper function within the grammar to reduce test-specific logic and improve clarity.
-4.  **Remove Parser Shim:** Eliminate the `transformVariableNode` function from `ParserService` once the grammar produces the consolidated variable types.
+1.  **Consolidate Variable Node Types:** Modify grammar rules to directly produce a single, unified `VariableReference` node type for all variable references (`{{text}}`, `{{data.field}}`, `$path`), incorporating a `valueType` field ('text', 'data', 'path'). *(Complete)*
+2.  **Introduce Explicit Directive Subtypes:** Modify grammar rules for `@run`, `@embed`, and `@import` to explicitly determine the directive's subtype based on syntax and add a `subtype` field (e.g., `'runCommand'`, `'embedVariable'`, `'importNamed'`) to the resulting `DirectiveNode`. *(Complete)*
+3.  **Simplify `validatePath` Helper & Remove Stack Trace Checks:** Opportunistically refactor the `validatePath` helper function within the grammar *and remove all other stack trace (`callerInfo`) checks* to reduce test-specific logic and improve clarity. *(In Progress - `isParserTest` checks removed)*
+4.  **Remove Parser Shim:** Eliminate the `transformVariableNode` function from `ParserService` once the grammar produces the consolidated variable types. *(Pending Phase 3)*
 
 ## Rationale & Motivation
 
@@ -31,7 +33,7 @@ Modify the **existing** `core/ast/grammar/meld.pegjs` file to:
 
 ## Proposed Changes in `core/ast/grammar/meld.pegjs`
 
-1.  **Variable Consolidation:**
+1.  **Variable Consolidation:** *(Complete)*
     *   **Target Node Structure:**
         ```typescript
         interface VariableReferenceNode {
@@ -47,26 +49,28 @@ Modify the **existing** `core/ast/grammar/meld.pegjs` file to:
         ```
     *   **Grammar Rules to Modify:** Update `TextVar`, `DataVar`, `PathVar` rules (and potentially `createVariableReferenceNode` helper) to create this unified `VariableReferenceNode` directly, setting `valueType` appropriately.
 
-2.  **`@run` Subtyping:**
+2.  **`@run` Subtyping:** *(Complete)*
     *   **Target Subtypes:** `'runCommand'`, `'runCode'`, `'runCodeParams'`, `'runDefined'`.
     *   **Grammar Rules to Modify:** Update alternatives within the `RunDirective` rule to determine the subtype based on syntax (presence/absence of `lang`, `(...)` parameters, `$` prefix, bracket types) and add the `subtype` field to the `DirectiveNode`. Ensure spacing for parameters is handled consistently. Slightly refactor rule structure for clarity if beneficial.
 
-3.  **`@embed` Subtyping:**
+3.  **`@embed` Subtyping:** *(Complete)*
     *   **Target Subtypes:** `'embedPath'`, `'embedVariable'`, `'embedTemplate'`.
     *   **Grammar Rules to Modify:** Update the `EmbedDirective` rule. Add logic to distinguish between a file path (`[...]`) and a variable (`{{...}}`) within single brackets (likely by inspecting content structure). Add the identified `subtype` field to the `DirectiveNode`. Slightly refactor rule structure for clarity if beneficial.
 
-4.  **`@import` Subtyping:**
+4.  **`@import` Subtyping:** *(Complete)*
     *   **Target Subtypes:** `'importAll'`, `'importStandard'`, `'importNamed'`.
     *   **Grammar Rules to Modify:** Update the `ImportDirective` rule to determine the subtype based on the import specifier structure (legacy path-only, `[*] from ...`, `[...] from ...` without aliases, `[...] from ...` with aliases). Add the identified `subtype` field to the `DirectiveNode`. Slightly refactor rule structure for clarity if beneficial.
 
-5.  **Simplify `validatePath` Function:**
-    *   Review and refactor the `validatePath` helper function.
+5.  **Simplify `validatePath` Function & Remove Stack Trace Checks:** *(In Progress)*
+    *   Review and refactor the `validatePath` helper function and other rules using `callerInfo`.
     *   Aim to significantly reduce reliance on test-specific logic derived from stack traces (`callerInfo`).
+        *   `isParserTest` checks removed. *(Complete)*
+        *   Remaining `callerInfo` checks (within `validatePath`, `DataDirective`, `DataValue`, `TextValue`, `PathDirective`, `PathValue`) need removal. *(Outstanding)*
     *   Improve clarity and potentially return a more standardized structure if feasible without major overhaul.
 
 ## Other Code Changes
 
-1.  **Remove `ParserService` Shim:**
+1.  **Remove `ParserService` Shim:** *(Pending Phase 3)*
     *   Delete the `transformVariableNode` function and its usage from `services/pipeline/ParserService/ParserService.ts`.
 
 ## Scope
