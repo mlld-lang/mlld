@@ -1,0 +1,86 @@
+## Files Handling Embed Directives
+
+### Core Implementation
+
+1. **EmbedDirectiveHandler.ts**
+   - Primary implementation of embed directive processing
+   - Contains multiple embed type handling methods
+   - Handles transformation and context creation
+
+2. **OutputService.ts**
+   - Contains duplicate variable resolution code for embed directives
+   - Creates custom resolution contexts with non-standard flags
+   - Implements transformation for variable embeds
+
+3. **EmbedDirectiveValidator.ts**
+   - Validates embed directive syntax and parameters
+
+### Testing and Factory Files
+
+4. **EmbedDirectiveHandler.test.ts**
+5. **EmbedDirectiveHandler.transformation.test.ts**
+6. **EmbedDirectiveHandler.config.test.ts**
+7. **output-service-embed-transformation.test.ts**
+8. **testFactories.js** (contains createEmbedDirective)
+
+### Reference and Documentation
+
+9. **EMBED-CLARITY.md**
+   - Documents the three embed types and their behavior
+   - Defines implementation patterns
+
+10. **variable-embed-resolution.md**
+    - Documents variable resolution in embeds
+
+### Related Services
+
+11. **ResolutionService.ts**
+    - Responsible for resolving variables in content
+    - Used by EmbedDirectiveHandler
+
+12. **ResolutionContextFactory.ts**
+    - Creates contexts for resolution operations
+    - Has specific method for variable embeds
+
+13. **ValidationService.ts**
+    - Registers and invokes embed directive validators
+
+14. **DirectiveService.ts**
+    - Routes directives to appropriate handlers
+    - Registers the EmbedDirectiveHandler
+
+## Embed Types Found
+
+1. **Path Embed**: `@embed [path/to/file.md]`
+   - Embeds content from a file
+   - Used in most documentation examples
+
+2. **Variable Embed**: `@embed {{variable}}`
+   - Embeds the value of a variable
+   - Supports field/property access with dot notation
+   - Supports array indexing with both dot and bracket notation
+
+3. **Template Embed**: `@embed [[template with {{variables}}]]`
+   - Embeds multiline content with variable interpolation
+   - First newline is ignored for formatting
+
+## Key Issues Identified
+
+1. **Duplicate Resolution Logic**:
+   - Both EmbedDirectiveHandler and OutputService contain complex variable resolution code
+   - Resolution context creation happens in multiple places with inconsistent flags
+
+2. **Unclear Type Detection**:
+   - EmbedDirectiveHandler uses complex conditional logic to determine embed type
+   - No explicit subtype field in AST
+
+3. **Complex Context Flags**:
+   - Custom context flags in OutputService (`isInVariableContext`, `isInEmbedDirective`)
+   - Multiple path prefixing prevention flags (`disablePathPrefixing`, `preventPathPrefixing`)
+   - Different field access options between handlers
+
+4. **Debug Code**:
+   - OutputService contains debugging code writing to files
+   - Multiple fallback resolution attempts
+
+This information provides a solid foundation for designing explicit types for each embed subtype and identifying areas where type-based refactoring would be most beneficial.
