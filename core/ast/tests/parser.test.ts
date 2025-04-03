@@ -254,7 +254,17 @@ describe('Parser', () => {
       const node = ast[0] as DirectiveNode;
       expect(node.type).toBe('Directive');
       expect(node.directive.kind).toBe('import');
-      expect(node.directive.path).toBe('path/to/file');
+      expect(node.directive.path).toEqual({
+        raw: 'path/to/file',
+        normalized: 'path/to/file',
+        structured: {
+          base: '.',
+          segments: ['path', 'to', 'file'],
+          variables: {},
+        },
+      });
+      expect(node.directive.subtype).toBe('importAll');
+      expect(node.directive.imports).toEqual([{ name: "*", alias: null }]);
     });
 
     it('should parse a run directive', async () => {
@@ -393,7 +403,16 @@ describe('Parser', () => {
       const node = ast[0] as DirectiveNode;
       expect(node.type).toBe('Directive');
       expect(node.directive.kind).toBe('embed');
-      expect(node.directive.path).toBe('path/to/file');
+      expect(node.directive.path).toEqual({
+        raw: 'path/to/file',
+        normalized: 'path/to/file',
+        structured: {
+          base: '.',
+          segments: ['path', 'to', 'file'],
+          variables: {},
+        },
+      });
+      expect(node.directive.subtype).toBe('embedPath');
     });
 
     it('should accept a path directive without special path variable', async () => {

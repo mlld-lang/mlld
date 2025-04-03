@@ -23,6 +23,21 @@
     return ['HOMEPATH', '~', 'PROJECTPATH', '.'].includes(id);
   }
 
+  // Helper to determine import subtype based on parsed imports list
+  function getImportSubtype(importsList) {
+    if (!importsList || importsList.length === 0) {
+      // Should not happen with current grammar, but handle defensively
+      return 'importAll'; // Treat empty/null as wildcard
+    }
+    if (importsList.length === 1 && importsList[0].name === '*' && importsList[0].alias === null) {
+      return 'importAll';
+    }
+    if (importsList.some(item => item.alias !== null)) {
+      return 'importNamed';
+    }
+    return 'importStandard';
+  }
+
   function validateRunContent(content) {
     // For now, just return the content as is
     // We can add more validation later if needed
@@ -104,21 +119,10 @@
     
     // Extract test information from the stack trace
     const isImportTest = callerInfo.includes('import.test.ts');
-    const isEmbedTest = callerInfo.includes('embed.test.ts');
-    const isHeaderLevelTest = callerInfo.includes('embed-header.test.ts') || 
-                             callerInfo.includes('header-level') || 
-                             callerInfo.includes('Embed with header level') ||
-                             callerInfo.includes('section-with-header') || 
-                             callerInfo.includes('Embed section with header');
     const isPathVariableTest = callerInfo.includes('path-variable-embed.test.ts');
-    const isDataTest = callerInfo.includes('data.test.ts');
-    const isTextTest = callerInfo.includes('text.test.ts');
     const isPathDirective = callerInfo.includes('PathDirective');
     
     debug("validatePath called with path:", path);
-    debug("isHeaderLevelTest:", isHeaderLevelTest);
-    debug("isPathDirective:", isPathDirective);
-    debug("isPathVariableTest:", isPathVariableTest);
     
     // Check if this is a path variable (starts with $ but is not a special variable)
     const isPathVar = typeof path === 'string' && 
@@ -179,7 +183,7 @@
     debug("isUrl:", isUrl, "for path:", path);
     
     // Allow relative paths
-    const isRelativePathTest = (isImportTest || isEmbedTest || isPathVariableTest) && 
+    const isRelativePathTest = (isImportTest || isPathVariableTest) && 
       (path.includes('../') || path.startsWith('./'));
     
     // No longer reject paths with relative segments ('..' or './')
@@ -225,7 +229,7 @@
     
     // Check if this is a test that has special handling for slashed paths
     // This is kept for backward compatibility with tests
-    const isTestAllowingSlashedPaths = isImportTest || isEmbedTest || isDataTest || isTextTest || isPathVariableTest;
+    const isTestAllowingSlashedPaths = isImportTest || isPathVariableTest;
     
     // No longer reject paths with slashes that don't start with special variables
 
@@ -578,8 +582,8 @@ RunDirective
       
       // Use the object format for all cases
       return createDirective('run', {
+        subtype: 'runDefined',
         command: commandObj,
-        isReference: true,
         ...(header ? { underHeader: header } : {})
       }, location());
     }
@@ -590,8 +594,8 @@ RunDirective
       
       // Standard run directive
       return createDirective('run', {
+        subtype: 'runCommand',
         command: content,
-        ...(content.startsWith("$") ? { isReference: true } : {}),
         ...(header ? { underHeader: header } : {})
       }, location());
     }
@@ -603,6 +607,7 @@ RunDirective
       debug("Params:", params);
       
       return createDirective('run', {
+        subtype: params ? 'runCodeParams' : 'runCode',
         command: contentStr,
         ...(lang ? { language: lang } : {}),
         ...(params ? { parameters: params } : {}),
@@ -631,8 +636,8 @@ RunDirective
       validateRunContent(variableText);
       
       return createDirective('run', {
+        subtype: 'runCommand',
         command: variableText,
-        ...(variableText.startsWith("$") ? { isReference: true } : {}),
         ...(header ? { underHeader: header } : {})
       }, location());
     }
@@ -654,13 +659,8 @@ RunParam
   / identifier:Identifier { return identifier; }
 
 ImportDirective
-  = // Named imports with from syntax
-    "import" _ "[" _ imports:ImportsList _ "]" _ "from" _ content:DirectiveContent {
-      // Check if we're in a parser test
-      const callerInfo = new Error().stack || '';
-      const isParserTest = callerInfo.includes('parser.test.ts');
-      const isPathVariableTest = callerInfo.includes('path-variable-embed.test.ts');
-      
+  // Named imports with from syntax
+  = "import" _ "[" _ imports:ImportsList _ "]" _ "from" _ content:DirectiveContent {
       // Check if this is a path variable
       const isPathVar = typeof content === 'string' && 
         content.startsWith('$') && 
@@ -672,15 +672,7 @@ ImportDirective
       
       debug("ImportDirective isPathVar:", isPathVar, "for path:", content);
       
-      // For parser tests, return the raw path
-      if (isParserTest) {
-        return createDirective('import', {
-          path: content,
-          imports: imports
-        }, location());
-      }
-      
-      // Validate the path
+      // Always validate the path
       const validatedPath = validatePath(content);
       
       // If this is a path variable, ensure it has the isPathVariable flag
@@ -688,18 +680,15 @@ ImportDirective
         validatedPath.isPathVariable = true;
       }
       
-      // For other tests, return the validated path
+      // Return the validated path and subtype
       return createDirective('import', {
+        subtype: getImportSubtype(imports),
         path: validatedPath,
         imports: imports
       }, location());
     }
   / // Named imports with from syntax using variable
     "import" _ "[" _ imports:ImportsList _ "]" _ "from" __ variable:Variable {
-      // Check if we're in a parser test
-      const callerInfo = new Error().stack || '';
-      const isParserTest = callerInfo.includes('parser.test.ts');
-      
       // Get the variable text directly from the variable node
       const variableText = variable.valueType === 'text' 
         ? `{{${variable.identifier}}}` 
@@ -712,46 +701,27 @@ ImportDirective
           : variable.valueType === 'path' 
             ? `$${variable.identifier}` 
             : '';
-      
-      // For parser tests, return the raw path
-      if (isParserTest) {
-        return createDirective('import', {
-          path: variableText,
-          imports: imports
-        }, location());
-      }
-      
+            
       // Check if this is a path variable
       const isPathVar = variable.valueType === 'path';
       
-      // For path variables, use validatePath
-      if (isPathVar) {
-        const validatedPath = validatePath(variableText);
-        
-        // Ensure the isPathVariable flag is set
-        if (!validatedPath.isPathVariable) {
+      // Validate the path (variableText)
+      const validatedPath = validatePath(variableText);
+
+      // For path variables, ensure the isPathVariable flag is set
+      if (isPathVar && !validatedPath.isPathVariable) {
           validatedPath.isPathVariable = true;
-        }
-        
-        return createDirective('import', {
-          path: validatedPath,
-          imports: imports
-        }, location());
       }
-      
-      // For other tests, return the validated path
+        
+      // Return the validated path and subtype
       return createDirective('import', {
-        path: validatePath(variableText),
+        subtype: getImportSubtype(imports),
+        path: validatedPath,
         imports: imports
       }, location());
     }
   / // Traditional import (backward compatibility)
     "import" _ content:DirectiveContent {
-      // Check if we're in a parser test
-      const callerInfo = new Error().stack || '';
-      const isParserTest = callerInfo.includes('parser.test.ts');
-      const isPathVariableTest = callerInfo.includes('path-variable-embed.test.ts');
-      
       // Check if this is a path variable
       const isPathVar = typeof content === 'string' && 
         content.startsWith('$') && 
@@ -763,16 +733,7 @@ ImportDirective
       
       debug("ImportDirective isPathVar:", isPathVar, "for path:", content);
       
-      // For parser tests, return the raw path
-      if (isParserTest) {
-        return createDirective('import', {
-          path: content,
-          // Implicit wildcard import for backward compatibility
-          imports: [{name: "*", alias: null}]
-        }, location());
-      }
-      
-      // Validate the path
+      // Always validate the path
       const validatedPath = validatePath(content);
       
       // If this is a path variable, ensure it has the isPathVariable flag
@@ -780,19 +741,16 @@ ImportDirective
         validatedPath.isPathVariable = true;
       }
       
-      // For other tests, return the validated path
+      const implicitImports = [{name: "*", alias: null}];
+      // Return the validated path and subtype
       return createDirective('import', {
+        subtype: getImportSubtype(implicitImports), // Always importAll
         path: validatedPath,
-        // Implicit wildcard import for backward compatibility
-        imports: [{name: "*", alias: null}]
+        imports: implicitImports
       }, location());
     }
   / // Traditional import with variable (backward compatibility)
     "import" __ variable:Variable {
-      // Check if we're in a parser test
-      const callerInfo = new Error().stack || '';
-      const isParserTest = callerInfo.includes('parser.test.ts');
-      
       // Get the variable text directly from the variable node
       const variableText = variable.valueType === 'text' 
         ? `{{${variable.identifier}}}` 
@@ -806,39 +764,23 @@ ImportDirective
             ? `$${variable.identifier}` 
             : '';
       
-      // For parser tests, return the raw path
-      if (isParserTest) {
-        return createDirective('import', {
-          path: variableText,
-          // Implicit wildcard import for backward compatibility
-          imports: [{name: "*", alias: null}]
-        }, location());
-      }
-      
       // Check if this is a path variable
       const isPathVar = variable.valueType === 'path';
-      
-      // For path variables, use validatePath and ensure the flag is set
-      if (isPathVar) {
-        const validatedPath = validatePath(variableText);
+
+      // Always validate the path (variableText)
+      const validatedPath = validatePath(variableText);
         
-        // Ensure the isPathVariable flag is set
-        if (!validatedPath.isPathVariable) {
+      // For path variables, ensure the isPathVariable flag is set
+      if (isPathVar && !validatedPath.isPathVariable) {
           validatedPath.isPathVariable = true;
-        }
-        
-        return createDirective('import', {
-          path: validatedPath,
-          // Implicit wildcard import for backward compatibility
-          imports: [{name: "*", alias: null}]
-        }, location());
       }
-      
-      // For other tests, return the validated path
+        
+      const implicitImports = [{name: "*", alias: null}];
+      // Return the validated path and subtype
       return createDirective('import', {
-        path: validatePath(variableText),
-        // Implicit wildcard import for backward compatibility
-        imports: [{name: "*", alias: null}]
+        subtype: getImportSubtype(implicitImports), // Always importAll
+        path: validatedPath,
+        imports: implicitImports
       }, location());
     }
 
@@ -873,28 +815,27 @@ EmbedDirective
     const contentStr = content.join('');
     const validationResult = validateEmbedContent(contentStr);
     
-    const result = {
-      type: 'Directive',
-      directive: {
-        kind: 'embed',
-        content: contentStr,
-        isTemplateContent: true, // Explicitly mark this as template content, not a path
-        ...(options ? { options } : {}),
-        ...(header ? { headerLevel: header } : {}),
-        ...(under ? { underHeader: under } : {})
-      },
-      location: location()
+    // Use createDirective for consistency
+    const directiveData = {
+      subtype: 'embedTemplate', // Added subtype
+      content: contentStr,
+      isTemplateContent: true, // Explicitly mark this as template content, not a path
+      ...(options ? { options } : {}),
+      ...(header ? { headerLevel: header } : {}),
+      ...(under ? { underHeader: under } : {})
     };
+    
+    const node = createDirective('embed', directiveData, location());
     
     // Add warning if the content looks like a path
     if (validationResult.warning) {
-      result.warnings = [{ 
+      node.warnings = [{ 
         message: validationResult.warning,
         location: location()
       }];
     }
     
-    return result;
+    return node;
   }
   / "embed" __ variable:Variable options:DirectiveOptions? header:HeaderLevel? under:UnderHeader? {
     // Handle direct variable embedding (without brackets)
@@ -912,23 +853,11 @@ EmbedDirective
         : variable.valueType === 'path' 
           ? `$${variable.identifier}` 
           : '';
-    
-    // For parser tests, return the raw path
-    const callerInfo = new Error().stack || '';
-    const isParserTest = callerInfo.includes('parser.test.ts');
-    
-    if (isParserTest) {
-      return createDirective('embed', {
-        path: variableText,
-        ...(options ? { options } : {}),
-        ...(header ? { headerLevel: header } : {}),
-        ...(under ? { underHeader: under } : {})
-      }, location());
-    }
-    
+            
     // Path variables are a special case - we should use validatePath to handle them
     if (variable.valueType === 'path') {
       return createDirective('embed', {
+        subtype: 'embedVariable', // Added subtype (still variable context)
         path: validatePath(variableText),
         ...(options ? { options } : {}),
         ...(header ? { headerLevel: header } : {}),
@@ -936,9 +865,9 @@ EmbedDirective
       }, location());
     }
     
-    // For text variables, we need to include structured.variables for backward compatibility
-    // while still marking it as a variable reference
+    // For text/data variables, create the specific structure
     return createDirective('embed', {
+        subtype: 'embedVariable', // Added subtype
         path: {
           raw: variableText,
           isVariableReference: true,
@@ -963,33 +892,6 @@ EmbedDirective
     // Validate that the content is a path
     validateEmbedPath(path);
     
-    // Check if we're in a parser test
-    const callerInfo = new Error().stack || '';
-    debug("EmbedDirective callerInfo:", callerInfo);
-    
-    const isParserTest = callerInfo.includes('parser.test.ts');
-    const isHeaderLevelTest = callerInfo.includes('embed-header.test.ts') || 
-                             callerInfo.includes('header-level') || 
-                             callerInfo.includes('Embed with header level') ||
-                             callerInfo.includes('section-with-header') || 
-                             callerInfo.includes('Embed section with header');
-    const isPathVariableTest = callerInfo.includes('path-variable-embed.test.ts');
-    
-    debug("EmbedDirective isHeaderLevelTest:", isHeaderLevelTest);
-    debug("EmbedDirective header:", header);
-    debug("EmbedDirective isPathVariableTest:", isPathVariableTest);
-    
-    // For parser tests, return the raw path
-    if (isParserTest) {
-      return createDirective('embed', {
-        path: path,
-        ...(section ? { section } : {}),
-        ...(options ? { options } : {}),
-        ...(header ? { headerLevel: header } : {}),
-        ...(under ? { underHeader: under } : {})
-      }, location());
-    }
-    
     // Check if this is a path variable
     const isPathVar = typeof path === 'string' && 
       path.startsWith('$') && 
@@ -1001,7 +903,7 @@ EmbedDirective
     
     debug("EmbedDirective isPathVar:", isPathVar, "for path:", path);
     
-    // Validate the path if needed
+    // Validate the path
     const validatedPath = validatePath(path);
     debug("After validatePath, validatedPath:", JSON.stringify(validatedPath));
     
@@ -1019,6 +921,7 @@ EmbedDirective
     }
     
     const result = createDirective('embed', {
+      subtype: 'embedPath', // Added subtype
       path: finalPath,
       ...(section ? { section } : {}),
       ...(options ? { options } : {}),
@@ -1036,6 +939,7 @@ EmbedDirective
     validateEmbedPath(path);
     
     return createDirective('embed', {
+      subtype: 'embedPath', // Added subtype
       path: validatePath(path),
       ...(section ? { section } : {}),
       names,

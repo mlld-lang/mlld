@@ -99,6 +99,7 @@ export const embedTests: ParserTestCase[] = [
       type: 'Directive',
       directive: {
         kind: 'embed',
+        subtype: 'embedPath',
         path: {
           raw: 'path/to/file.md',
           normalized: 'path/to/file.md',
@@ -119,6 +120,7 @@ export const embedTests: ParserTestCase[] = [
       type: 'Directive',
       directive: {
         kind: 'embed',
+        subtype: 'embedPath',
         path: {
           raw: 'file.md:2',
           normalized: './file.md:2',
@@ -140,6 +142,7 @@ export const embedTests: ParserTestCase[] = [
       type: 'Directive',
       directive: {
         kind: 'embed',
+        subtype: 'embedPath',
         path: {
           raw: 'file.md',
           normalized: './file.md',
@@ -162,6 +165,7 @@ export const embedTests: ParserTestCase[] = [
       type: 'Directive',
       directive: {
         kind: 'embed',
+        subtype: 'embedPath',
         path: {
           raw: 'file[1].md',
           normalized: './file[1].md',
@@ -199,6 +203,7 @@ export const importTests: ParserTestCase[] = [
       type: 'Directive',
       directive: {
         kind: 'import',
+        subtype: 'importAll',
         imports: [{ name: '*', alias: null }],
         path: {
           raw: 'utilities.meld',
@@ -221,6 +226,7 @@ export const importTests: ParserTestCase[] = [
       type: 'Directive',
       directive: {
         kind: 'import',
+        subtype: 'importAll',
         imports: [{ name: '*', alias: null }],
         path: {
           raw: '$pathvar',
@@ -246,6 +252,7 @@ export const importTests: ParserTestCase[] = [
       type: 'Directive',
       directive: {
         kind: 'import',
+        subtype: 'importAll',
         imports: [{ name: '*', alias: null }],
         path: {
           raw: '$HOMEPATH/config.meld',
@@ -286,7 +293,8 @@ export const runTests: ParserTestCase[] = [
       type: 'Directive',
       directive: {
         kind: 'run',
-        command: 'echo hello world'
+        command: 'echo hello world',
+        subtype: 'runCommand'
       }
     }
   }

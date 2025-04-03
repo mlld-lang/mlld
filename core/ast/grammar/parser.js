@@ -441,8 +441,8 @@ function peg$parse(input, options) {
       
       // Use the object format for all cases
       return createDirective('run', {
+        subtype: 'runDefined',
         command: commandObj,
-        isReference: true,
         ...(header ? { underHeader: header } : {})
       }, location());
     };
@@ -452,8 +452,8 @@ function peg$parse(input, options) {
       
       // Standard run directive
       return createDirective('run', {
+        subtype: 'runCommand',
         command: content,
-        ...(content.startsWith("$") ? { isReference: true } : {}),
         ...(header ? { underHeader: header } : {})
       }, location());
     };
@@ -465,6 +465,7 @@ function peg$parse(input, options) {
       debug("Params:", params);
       
       return createDirective('run', {
+        subtype: params ? 'runCodeParams' : 'runCode',
         command: contentStr,
         ...(lang ? { language: lang } : {}),
         ...(params ? { parameters: params } : {}),
@@ -492,8 +493,8 @@ function peg$parse(input, options) {
       validateRunContent(variableText);
       
       return createDirective('run', {
+        subtype: 'runCommand',
         command: variableText,
-        ...(variableText.startsWith("$") ? { isReference: true } : {}),
         ...(header ? { underHeader: header } : {})
       }, location());
     };
@@ -507,11 +508,6 @@ function peg$parse(input, options) {
   var peg$f35 = function(variable) { return variable; };
   var peg$f36 = function(identifier) { return identifier; };
   var peg$f37 = function(imports, content) {
-      // Check if we're in a parser test
-      const callerInfo = new Error().stack || '';
-      const isParserTest = callerInfo.includes('parser.test.ts');
-      const isPathVariableTest = callerInfo.includes('path-variable-embed.test.ts');
-      
       // Check if this is a path variable
       const isPathVar = typeof content === 'string' && 
         content.startsWith('$') && 
@@ -523,15 +519,7 @@ function peg$parse(input, options) {
       
       debug("ImportDirective isPathVar:", isPathVar, "for path:", content);
       
-      // For parser tests, return the raw path
-      if (isParserTest) {
-        return createDirective('import', {
-          path: content,
-          imports: imports
-        }, location());
-      }
-      
-      // Validate the path
+      // Always validate the path
       const validatedPath = validatePath(content);
       
       // If this is a path variable, ensure it has the isPathVariable flag
@@ -539,17 +527,14 @@ function peg$parse(input, options) {
         validatedPath.isPathVariable = true;
       }
       
-      // For other tests, return the validated path
+      // Return the validated path and subtype
       return createDirective('import', {
+        subtype: getImportSubtype(imports),
         path: validatedPath,
         imports: imports
       }, location());
     };
   var peg$f38 = function(imports, variable) {
-      // Check if we're in a parser test
-      const callerInfo = new Error().stack || '';
-      const isParserTest = callerInfo.includes('parser.test.ts');
-      
       // Get the variable text directly from the variable node
       const variableText = variable.valueType === 'text' 
         ? `{{${variable.identifier}}}` 
@@ -562,45 +547,26 @@ function peg$parse(input, options) {
           : variable.valueType === 'path' 
             ? `$${variable.identifier}` 
             : '';
-      
-      // For parser tests, return the raw path
-      if (isParserTest) {
-        return createDirective('import', {
-          path: variableText,
-          imports: imports
-        }, location());
-      }
-      
+            
       // Check if this is a path variable
       const isPathVar = variable.valueType === 'path';
       
-      // For path variables, use validatePath
-      if (isPathVar) {
-        const validatedPath = validatePath(variableText);
-        
-        // Ensure the isPathVariable flag is set
-        if (!validatedPath.isPathVariable) {
+      // Validate the path (variableText)
+      const validatedPath = validatePath(variableText);
+
+      // For path variables, ensure the isPathVariable flag is set
+      if (isPathVar && !validatedPath.isPathVariable) {
           validatedPath.isPathVariable = true;
-        }
-        
-        return createDirective('import', {
-          path: validatedPath,
-          imports: imports
-        }, location());
       }
-      
-      // For other tests, return the validated path
+        
+      // Return the validated path and subtype
       return createDirective('import', {
-        path: validatePath(variableText),
+        subtype: getImportSubtype(imports),
+        path: validatedPath,
         imports: imports
       }, location());
     };
   var peg$f39 = function(content) {
-      // Check if we're in a parser test
-      const callerInfo = new Error().stack || '';
-      const isParserTest = callerInfo.includes('parser.test.ts');
-      const isPathVariableTest = callerInfo.includes('path-variable-embed.test.ts');
-      
       // Check if this is a path variable
       const isPathVar = typeof content === 'string' && 
         content.startsWith('$') && 
@@ -612,16 +578,7 @@ function peg$parse(input, options) {
       
       debug("ImportDirective isPathVar:", isPathVar, "for path:", content);
       
-      // For parser tests, return the raw path
-      if (isParserTest) {
-        return createDirective('import', {
-          path: content,
-          // Implicit wildcard import for backward compatibility
-          imports: [{name: "*", alias: null}]
-        }, location());
-      }
-      
-      // Validate the path
+      // Always validate the path
       const validatedPath = validatePath(content);
       
       // If this is a path variable, ensure it has the isPathVariable flag
@@ -629,18 +586,15 @@ function peg$parse(input, options) {
         validatedPath.isPathVariable = true;
       }
       
-      // For other tests, return the validated path
+      const implicitImports = [{name: "*", alias: null}];
+      // Return the validated path and subtype
       return createDirective('import', {
+        subtype: getImportSubtype(implicitImports), // Always importAll
         path: validatedPath,
-        // Implicit wildcard import for backward compatibility
-        imports: [{name: "*", alias: null}]
+        imports: implicitImports
       }, location());
     };
   var peg$f40 = function(variable) {
-      // Check if we're in a parser test
-      const callerInfo = new Error().stack || '';
-      const isParserTest = callerInfo.includes('parser.test.ts');
-      
       // Get the variable text directly from the variable node
       const variableText = variable.valueType === 'text' 
         ? `{{${variable.identifier}}}` 
@@ -654,39 +608,23 @@ function peg$parse(input, options) {
             ? `$${variable.identifier}` 
             : '';
       
-      // For parser tests, return the raw path
-      if (isParserTest) {
-        return createDirective('import', {
-          path: variableText,
-          // Implicit wildcard import for backward compatibility
-          imports: [{name: "*", alias: null}]
-        }, location());
-      }
-      
       // Check if this is a path variable
       const isPathVar = variable.valueType === 'path';
-      
-      // For path variables, use validatePath and ensure the flag is set
-      if (isPathVar) {
-        const validatedPath = validatePath(variableText);
+
+      // Always validate the path (variableText)
+      const validatedPath = validatePath(variableText);
         
-        // Ensure the isPathVariable flag is set
-        if (!validatedPath.isPathVariable) {
+      // For path variables, ensure the isPathVariable flag is set
+      if (isPathVar && !validatedPath.isPathVariable) {
           validatedPath.isPathVariable = true;
-        }
-        
-        return createDirective('import', {
-          path: validatedPath,
-          // Implicit wildcard import for backward compatibility
-          imports: [{name: "*", alias: null}]
-        }, location());
       }
-      
-      // For other tests, return the validated path
+        
+      const implicitImports = [{name: "*", alias: null}];
+      // Return the validated path and subtype
       return createDirective('import', {
-        path: validatePath(variableText),
-        // Implicit wildcard import for backward compatibility
-        imports: [{name: "*", alias: null}]
+        subtype: getImportSubtype(implicitImports), // Always importAll
+        path: validatedPath,
+        imports: implicitImports
       }, location());
     };
   var peg$f41 = function() {
@@ -711,28 +649,27 @@ function peg$parse(input, options) {
     const contentStr = content.join('');
     const validationResult = validateEmbedContent(contentStr);
     
-    const result = {
-      type: 'Directive',
-      directive: {
-        kind: 'embed',
-        content: contentStr,
-        isTemplateContent: true, // Explicitly mark this as template content, not a path
-        ...(options ? { options } : {}),
-        ...(header ? { headerLevel: header } : {}),
-        ...(under ? { underHeader: under } : {})
-      },
-      location: location()
+    // Use createDirective for consistency
+    const directiveData = {
+      subtype: 'embedTemplate', // Added subtype
+      content: contentStr,
+      isTemplateContent: true, // Explicitly mark this as template content, not a path
+      ...(options ? { options } : {}),
+      ...(header ? { headerLevel: header } : {}),
+      ...(under ? { underHeader: under } : {})
     };
+    
+    const node = createDirective('embed', directiveData, location());
     
     // Add warning if the content looks like a path
     if (validationResult.warning) {
-      result.warnings = [{ 
+      node.warnings = [{ 
         message: validationResult.warning,
         location: location()
       }];
     }
     
-    return result;
+    return node;
   };
   var peg$f49 = function(variable, options, header, under) {
     // Handle direct variable embedding (without brackets)
@@ -750,23 +687,11 @@ function peg$parse(input, options) {
         : variable.valueType === 'path' 
           ? `$${variable.identifier}` 
           : '';
-    
-    // For parser tests, return the raw path
-    const callerInfo = new Error().stack || '';
-    const isParserTest = callerInfo.includes('parser.test.ts');
-    
-    if (isParserTest) {
-      return createDirective('embed', {
-        path: variableText,
-        ...(options ? { options } : {}),
-        ...(header ? { headerLevel: header } : {}),
-        ...(under ? { underHeader: under } : {})
-      }, location());
-    }
-    
+            
     // Path variables are a special case - we should use validatePath to handle them
     if (variable.valueType === 'path') {
       return createDirective('embed', {
+        subtype: 'embedVariable', // Added subtype (still variable context)
         path: validatePath(variableText),
         ...(options ? { options } : {}),
         ...(header ? { headerLevel: header } : {}),
@@ -774,9 +699,9 @@ function peg$parse(input, options) {
       }, location());
     }
     
-    // For text variables, we need to include structured.variables for backward compatibility
-    // while still marking it as a variable reference
+    // For text/data variables, create the specific structure
     return createDirective('embed', {
+        subtype: 'embedVariable', // Added subtype
         path: {
           raw: variableText,
           isVariableReference: true,
@@ -801,33 +726,6 @@ function peg$parse(input, options) {
     // Validate that the content is a path
     validateEmbedPath(path);
     
-    // Check if we're in a parser test
-    const callerInfo = new Error().stack || '';
-    debug("EmbedDirective callerInfo:", callerInfo);
-    
-    const isParserTest = callerInfo.includes('parser.test.ts');
-    const isHeaderLevelTest = callerInfo.includes('embed-header.test.ts') || 
-                             callerInfo.includes('header-level') || 
-                             callerInfo.includes('Embed with header level') ||
-                             callerInfo.includes('section-with-header') || 
-                             callerInfo.includes('Embed section with header');
-    const isPathVariableTest = callerInfo.includes('path-variable-embed.test.ts');
-    
-    debug("EmbedDirective isHeaderLevelTest:", isHeaderLevelTest);
-    debug("EmbedDirective header:", header);
-    debug("EmbedDirective isPathVariableTest:", isPathVariableTest);
-    
-    // For parser tests, return the raw path
-    if (isParserTest) {
-      return createDirective('embed', {
-        path: path,
-        ...(section ? { section } : {}),
-        ...(options ? { options } : {}),
-        ...(header ? { headerLevel: header } : {}),
-        ...(under ? { underHeader: under } : {})
-      }, location());
-    }
-    
     // Check if this is a path variable
     const isPathVar = typeof path === 'string' && 
       path.startsWith('$') && 
@@ -839,7 +737,7 @@ function peg$parse(input, options) {
     
     debug("EmbedDirective isPathVar:", isPathVar, "for path:", path);
     
-    // Validate the path if needed
+    // Validate the path
     const validatedPath = validatePath(path);
     debug("After validatePath, validatedPath:", JSON.stringify(validatedPath));
     
@@ -857,6 +755,7 @@ function peg$parse(input, options) {
     }
     
     const result = createDirective('embed', {
+      subtype: 'embedPath', // Added subtype
       path: finalPath,
       ...(section ? { section } : {}),
       ...(options ? { options } : {}),
@@ -874,6 +773,7 @@ function peg$parse(input, options) {
     validateEmbedPath(path);
     
     return createDirective('embed', {
+      subtype: 'embedPath', // Added subtype
       path: validatePath(path),
       ...(section ? { section } : {}),
       names,
@@ -6528,6 +6428,21 @@ function peg$parse(input, options) {
   // Helper to check if an identifier is a special path variable name
   function isSpecialPathIdentifier(id) {
     return ['HOMEPATH', '~', 'PROJECTPATH', '.'].includes(id);
+  }
+
+  // Helper to determine import subtype based on parsed imports list
+  function getImportSubtype(importsList) {
+    if (!importsList || importsList.length === 0) {
+      // Should not happen with current grammar, but handle defensively
+      return 'importAll'; // Treat empty/null as wildcard
+    }
+    if (importsList.length === 1 && importsList[0].name === '*' && importsList[0].alias === null) {
+      return 'importAll';
+    }
+    if (importsList.some(item => item.alias !== null)) {
+      return 'importNamed';
+    }
+    return 'importStandard';
   }
 
   function validateRunContent(content) {
