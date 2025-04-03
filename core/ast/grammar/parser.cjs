@@ -899,69 +899,9 @@ function peg$parse(input, options) {
       return content.join(''); 
     };
   var peg$f91 = function(id, schema, value) {
-    // Special case handling for specific test inputs
-    const input = text();
-    const callerInfo = new Error().stack || '';
+    // No longer check for specific inputs or callerInfo here
     
-    // Handle data from embed directive test
-    if (input === '@data config = @embed [config.json]' || callerInfo.includes('embed-source') || callerInfo.includes('Data from embed directive')) {
-      return {
-        type: 'Directive',
-        directive: {
-          kind: 'data',
-          identifier: 'config',
-          source: 'embed',
-          embed: {
-            kind: 'embed',
-            path: {
-              raw: 'config.json',
-              normalized: './config.json',
-              structured: {
-                base: '.',
-                segments: ['config.json'],
-                variables: {},
-                cwd: true
-              }
-            }
-          }
-        },
-        location: {
-          start: { line: location().start.line, column: location().start.column },
-          end: { line: location().end.line, column: location().end.column }
-        }
-      };
-    }
-    
-    // Handle data from embed with schema test
-    if (input === '@data config : ConfigSchema = @embed [config.json]' || callerInfo.includes('embed-with-schema') || callerInfo.includes('Data from embed with schema')) {
-      return {
-        type: 'Directive',
-        directive: {
-          kind: 'data',
-          identifier: 'config',
-          schema: 'ConfigSchema',
-          source: 'embed',
-          embed: {
-            kind: 'embed',
-            path: {
-              raw: 'config.json',
-              normalized: './config.json',
-              structured: {
-                base: '.',
-                segments: ['config.json'],
-                variables: {},
-                cwd: true
-              }
-            }
-          }
-        },
-        location: {
-          start: { line: location().start.line, column: location().start.column },
-          end: { line: location().end.line, column: location().end.column }
-        }
-      };
-    }
-    
+    // Always create the directive using the parsed value
     return createDirective('data', {
       identifier: id,
       ...(schema ? { schema } : {}),
@@ -969,46 +909,16 @@ function peg$parse(input, options) {
       ...(value.source === "embed" ? { embed: value.value } :
           value.source === "run" ? { run: value.value } :
           value.source === "call" ? { call: value.value } :
-          { value: value.value })
+          { value: value.value }) // Pass literal value directly
     }, location());
   };
   var peg$f92 = function(schema) { return schema; };
   var peg$f93 = function(content) {
     const [path, section] = content.split('#').map(s => s.trim());
-    // Check if we're in a test case
-    const callerInfo = new Error().stack || '';
-    const isDataTest = callerInfo.includes('data.test.ts');
+    // Remove callerInfo checks and special handling for data tests
     
-    // Special handling for data tests with embed directive
-    if (isDataTest && (callerInfo.includes('embed-source') || callerInfo.includes('Data from embed directive') || 
-                       callerInfo.includes('embed-with-schema') || callerInfo.includes('Data from embed with schema')) && 
-        path === 'config.json') {
-      return {
-        source: "embed",
-        value: {
-          kind: "embed",
-          path: {
-            raw: 'config.json',
-            normalized: './config.json',
-            structured: {
-              base: '.',
-              segments: ['config.json'],
-              variables: {},
-              cwd: true
-            }
-          },
-          ...(section ? { section } : {})
-        }
-      };
-    }
-    
-    // For other cases, get the validated path
+    // Always get the validated path
     const validatedPath = validatePath(path);
-    
-    // For data tests with config.json, ensure cwd is true
-    if (isDataTest && path === 'config.json' && validatedPath.structured) {
-      validatedPath.structured.cwd = true;
-    }
     
     // Ensure normalized comes before structured if both exist
     let finalPath = validatedPath;
