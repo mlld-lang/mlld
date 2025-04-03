@@ -1,39 +1,38 @@
-# Context for Grammar Refactor Plan (PLAN.md)
+# Context for Meld Grammar Refactoring
 
-This document provides context and reasoning for the incremental grammar refactor outlined in `_dev/PLAN.md`.
+*Status: `_dev/PLAN.md` is COMPLETE. Next phase described in `_dev/PLAN-RHS.md`.*
+
+This document provides context and reasoning for the Meld grammar refactoring efforts.
 
 ## Background & Problem
 
-*   **Historical Complexity:** The Meld grammar (`core/ast/grammar/meld.pegjs`) and associated pipeline have grown complex over time. Directives like `@embed` and `@run` became overloaded, handling multiple distinct semantic meanings based on subtle syntax variations.
-*   **Variable Types:** The parser originally produced distinct AST nodes for different variable types (`TextVar`, `DataVar`, `PathVar`), requiring a post-processing step (`transformVariableNode` in `ParserService`) to unify them into the `VariableReference` type expected downstream.
-*   **Implicit Subtypes:** Directive subtypes (e.g., distinguishing `@embed [path]` vs. `@embed {{variable}}`) were often determined implicitly within directive handlers later in the pipeline, making the initial AST less informative and pushing complexity downstream.
-*   **Previous Attempts (`e2e-fixes-embed`):** Significant effort was previously invested (on the `e2e-fixes-embed` branch) to refactor `@embed` and address related issues like variable path prefixing. While conceptual progress was made (captured in `_dev/EMBED-CLARITY.md`, `_dev/RUN-CLARITY.md`) and new E2E tests were added, the implementation on that branch proved unstable, with many failing tests (including regressions) and incomplete architectural changes (e.g., the `resolveVariablesInOutput` feature flag).
-*   **Test State:** Tests on `e2e-fixes-embed`, while numerous, were largely failing. Tests on `new-urlservice` pass, but achieve this partly by skipping core E2E suites, potentially masking issues.
+*   **Historical Complexity:** The Meld grammar (`core/ast/grammar/meld.pegjs`) and associated pipeline had grown complex. Directives like `@embed` and `@run` became overloaded, handling multiple distinct semantic meanings based on subtle syntax variations. Variable types (`TextVar`, `DataVar`, `PathVar`) required post-processing (`transformVariableNode` in `ParserService`) for downstream compatibility. Directive subtypes were often implicit, pushing complexity downstream.
+*   **Previous Attempts (`e2e-fixes-embed`):** Significant effort was previously invested to refactor `@embed` and related issues, but the implementation proved unstable. Valuable conceptual clarity was gained (captured in `-CLARITY.md` documents) but not fully realized in a stable way.
+*   **Test State:** E2E tests integrated from `e2e-fixes-embed` initially failed, serving as a specification for the refactor. Many still fail and require updates based on the completed and upcoming AST changes.
 
-## Chosen Approach: Incremental Grammar Refactor
+## Completed Refactor (`_dev/PLAN.md`)
 
-We decided *not* to directly merge or salvage the implementation from `e2e-fixes-embed` due to its instability. Instead, we are pursuing an incremental refactor of the *existing* `core/ast/grammar/meld.pegjs` file on the `consolidate-base` branch.
+An incremental refactor of the *existing* `core/ast/grammar/meld.pegjs` grammar (on `consolidate-base`) was undertaken and completed, addressing the root causes identified above.
 
-**Rationale:**
+**Achievements:**
 
-*   **Leverage Learnings:** This approach uses the valuable conceptual clarity gained from the `e2e-fixes-embed` effort (specifically the `-CLARITY.md` documents) to guide the refactor.
-*   **Address Root Cause:** Modifying the grammar directly addresses the root cause of the complexity – the lack of explicit variable type consolidation and directive subtyping at the source (parser).
-*   **Pragmatism:** It avoids the larger undertaking of implementing the full dual-grammar system proposed in Issue #14, delivering significant improvements sooner.
-*   **Stability:** Working on `consolidate-base` provides a more stable foundation than the `e2e-fixes-embed` branch.
-*   **Test-Driven:** We have integrated the E2E tests from `e2e-fixes-embed` into `consolidate-base` to serve as a clear specification and guide for the refactor. These tests are expected to fail initially.
+1.  **Consolidated Variable Nodes:** Grammar rules now directly produce a unified `VariableReferenceNode` for all variable types (`{{text}}`, `{{data.field}}`, `$path`), removing the need for the `transformVariableNode` shim.
+2.  **Explicit Standalone Directive Subtypes:** Standalone directives (`@run`, `@embed`, `@import`) now include an explicit `subtype` field (e.g., `'runCommand'`, `'embedVariable'`, `'importNamed'`) based on syntax.
+3.  **Simplified Grammar:** Test-specific logic using stack trace inspection (`callerInfo`) was removed, and the `validatePath` helper was simplified.
+4.  **Removed Parser Shim:** The `transformVariableNode` function was removed from `ParserService`.
+5.  **Tests Passing:** All core AST tests (`core/ast`) pass after these changes.
 
-## Key Considerations & Observations
+## Next Steps: RHS Consistency (`_dev/PLAN-RHS.md`)
 
-*   **`meld.pegjs` State:** The current grammar file contains significant test-specific logic (especially in `validatePath` using stack traces) that complicates understanding and maintenance. The refactor plan includes simplifying this opportunistically.
-*   **Path Handling:** Cleaning up `validatePath` is important as path logic is crucial for `@embed` and `@import`.
-*   **Breaking Change:** This refactor *is* a breaking change for tests and potentially downstream code that relies on the old AST structure (specific variable types, implicit subtypes). Test updates are a necessary part of the work.
-*   **Long-Term Vision (Issue #14):** While this plan defers the full `meld-strict.pegjs` implementation, it's a deliberate step *towards* that vision.
+While the previous refactor significantly improved the AST for standalone directives and variable references, an inconsistency remains for `@embed` and `@run` directives used on the **right-hand side (RHS)** of assignments (e.g., `@data x = @embed [...]`).
 
-## Next Steps (as per `_dev/PLAN.md`)
+*   **Problem:** The AST nodes generated for RHS `@embed`/`@run` currently lack the explicit `subtype` field added to their standalone counterparts.
+*   **Goal:** Refactor the grammar (`DataValue`, `TextValue` rules, potentially reusing logic via helper rules) to ensure RHS `@embed`/`@run` operations produce an AST node that includes the relevant `subtype`, mirroring the structure of standalone directives for improved consistency and downstream processing.
+*   **Plan:** See `_dev/PLAN-RHS.md` for detailed steps.
 
-1.  Begin modifying `core/ast/grammar/meld.pegjs`, starting with the variable rules (`TextVar`, `DataVar`, `PathVar`) to produce unified `VariableReference` nodes.
-2.  Update parser tests (`core/ast/tests/parser.test.ts`) to reflect the new expected AST structure for variables.
-3.  Proceed with adding explicit `subtype` fields for `@run`, `@embed`, and `@import` rules in the grammar and update relevant tests.
-4.  Refactor/simplify `validatePath`.
-5.  Remove the `transformVariableNode` shim from `ParserService`.
-6.  Continuously run tests (`TestContextDI`, E2E tests) to validate progress and catch regressions. 
+## Key Considerations & Observations (Still Relevant)
+
+*   **`meld.pegjs` State:** The grammar file, while simplified, remains large. Further modularization (e.g., splitting the file) could be considered in the future but is out of scope for the RHS refactor.
+*   **Path Handling:** Path logic (`validatePath`) is crucial and was improved, but careful attention is always needed.
+*   **Breaking Changes:** The completed refactor *was* a breaking change for tests, requiring updates. The upcoming RHS refactor will also be a breaking change for parser tests asserting the old RHS structure. E2E tests still require significant updates to align with the new AST.
+*   **Long-Term Vision (Issue #14):** These incremental refactors are deliberate steps *towards* the cleaner, more robust grammar and type system envisioned in Issue #14. 

@@ -536,21 +536,147 @@ VarFormat
     return format;
   }
 
-Directive
-  = &{ 
-      // Only match directive at line start
-      const pos = offset();
-      return isLineStart(input, pos);
-    } "@" directive:(
-      ImportDirective
-    / EmbedDirective
-    / RunDirective
-    / DefineDirective
-    / DataDirective
-    / TextDirective
-    / PathDirective
-    / VarDirective
-  ) { return directive; }
+// <<< START EDIT --- Move Helper Rules Before Directive --- >>>
+
+// Helper rule for parsing RHS @embed variations
+// Returns { subtype: '...', ... } structure without 'source' field.
+_EmbedRHS
+   = _ "[[" content:(!"]]" char:. { return char; })* "]]" options:DirectiveOptions? {
+     // Multi-line template embed [[...]]
+     const contentStr = content.join('');
+     validateEmbedContent(contentStr); // Reuse validation
+     return {
+       subtype: 'embedTemplate',
+       content: contentStr,
+       isTemplateContent: true, // Mark as template content
+       ...(options ? { options } : {})
+     };
+   }
+   / __ variable:Variable options:DirectiveOptions? {
+     // Variable embed {{...}} or $...
+     const variableText = variable.valueType === 'text'
+       ? `{{${variable.identifier}}}`
+       : variable.valueType === 'data'
+         ? `{{${variable.identifier}${variable.fields.map(f => {
+             if (f.type === 'field') return '.' + f.value;
+             if (f.type === 'index') return typeof f.value === 'string' ? `[${JSON.stringify(f.value)}]` : `[${f.value}]`;
+             return '';
+           }).join('')}}}`
+         : variable.valueType === 'path'
+           ? `$${variable.identifier}`
+           : '';
+
+     if (variable.valueType === 'path') {
+       // Path variable $...
+       return {
+         subtype: 'embedVariable', // Keep subtype as variable for path vars too
+         path: validatePath(variableText),
+         ...(options ? { options } : {})
+       };
+     } else {
+       // Text/Data variable {{...}}
+       return {
+         subtype: 'embedVariable',
+         path: { // Maintain structure expected by downstream (temporary?)
+           raw: variableText,
+           isVariableReference: true,
+           variable: variable,
+           structured: {
+             variables: {
+               text: variable.valueType === 'text' ? [variable.identifier] :
+                     variable.valueType === 'data' ? [variable.identifier] : []
+             }
+           }
+         },
+         ...(options ? { options } : {})
+       };
+     }
+   }
+   / _ content:DirectiveContent options:DirectiveOptions? {
+     // Path embed [...]
+     const [path, section] = content.split('#').map(s => s.trim());
+     validateEmbedPath(path); // Reuse validation
+     const validatedPath = validatePath(path);
+
+     // Reorder properties if necessary (consistent with standalone EmbedDirective)
+     let finalPath = validatedPath;
+     if (validatedPath.normalized && validatedPath.structured) {
+       const { raw, normalized, structured, ...rest } = validatedPath;
+       finalPath = { raw, normalized, structured, ...rest };
+     }
+
+     return {
+       subtype: 'embedPath',
+       path: finalPath,
+       ...(section ? { section } : {}),
+       ...(options ? { options } : {})
+     };
+   }
+   // Note: Did not include the "{ names } from path" variant here,
+   // as it's less common on RHS and adds complexity. Can add later if needed.
+
+// Helper rule for parsing RHS @run variations
+// Returns { subtype: '...', ... } structure without 'source' field.
+_RunRHS
+  // Command reference without brackets
+  = _ cmdRef:CommandReference {
+      debug("RunRHS parsing CommandReference:", cmdRef);
+      const commandObj = {
+        raw: `$${cmdRef.name}${cmdRef.args.length > 0 ? `(${cmdRef.args.map(arg => {
+          if (arg.type === 'string') return `\"${arg.value}\"`;
+          if (arg.type === 'variable') return arg.value.raw || '';
+          return arg.value;
+        }).join(', ')})` : ''}`,
+        name: cmdRef.name,
+        args: cmdRef.args
+      };
+      return {
+        subtype: 'runDefined',
+        command: commandObj
+      };
+    }
+  // Multi-line run directive with double brackets
+  / _ lang:Identifier? _ params:RunVariableParams? _ "[[" content:(!"]" char:. { return char; })* "]]" {
+      const contentStr = content.join('');
+      debug("RunRHS parsing Multi-line Run:", contentStr, "Lang:", lang, "Params:", params);
+      return {
+        subtype: params ? 'runCodeParams' : 'runCode',
+        command: contentStr,
+        ...(lang ? { language: lang } : {}),
+        ...(params ? { parameters: params } : {}),
+        isMultiLine: true
+      };
+    }
+  // Standard run directive with content in brackets
+  / _ content:DirectiveContent {
+      debug("RunRHS parsing DirectiveContent:", content);
+      validateRunContent(content); // Reuse validation
+      return {
+        subtype: 'runCommand',
+        command: content
+      };
+    }
+  // Note: Direct variable variant @run {{var}} is handled by PropertyValue/VarValue
+  // and is not parsed explicitly *by* @run here in RHS context.
+  // The standalone RunDirective *does* handle it, consistency check needed later.
+
+// --- END EDIT --- >>>
+
+ Directive
+   = &{ 
+       // Only match directive at line start
+       const pos = offset();
+       return isLineStart(input, pos);
+     } "@" directive:(
+       ImportDirective
+     / EmbedDirective
+     / RunDirective
+     / DefineDirective
+     / DataDirective
+     / TextDirective
+     / PathDirective
+     / VarDirective
+   ) { return directive; }
 
 // Command reference parsing rule
 CommandReference
@@ -581,64 +707,25 @@ RawArgChar
   = !("," / ")") char:. { return char; }
 
 RunDirective
-  // Command reference without brackets - this must come before the other rules
-  = "run" _ cmdRef:CommandReference header:UnderHeader? {
-      debug("RUN DIRECTIVE with CommandReference:", cmdRef);
-      
-      // Create an object with parsed command reference details
-      const commandText = `$${cmdRef.name}${cmdRef.args.length > 0 ? `(${cmdRef.args.map(arg => {
-        if (arg.type === 'string') return `"${arg.value}"`;
-        if (arg.type === 'variable') return arg.value.raw || '';
-        return arg.value;
-      }).join(', ')})` : ''}`;
-      
-      const commandObj = {
-        raw: commandText,
-        name: cmdRef.name,
-        args: cmdRef.args
+  // <<< START EDIT --- Reorder RunDirective Alternatives --- >>>
+  // Prioritize _RunRHS to handle $commandRef, [...], [[...]] variants first
+  = "run" runResult:_RunRHS header:UnderHeader? {
+      debug("Standalone RunDirective parsed via RunRHS:", JSON.stringify(runResult));
+
+      // Create the final directive node using the result from RunRHS
+      // _RunRHS already contains the subtype and specific data (command, lang, params, etc.)
+      // We just need to add the underHeader if it exists.
+      const directiveData = {
+        ...runResult, // Spread the result from _RunRHS ({ subtype, command, ... })
+        ...(header ? { underHeader: header } : {})
       };
-      
-      debug("Parsed command reference:", JSON.stringify(commandObj, null, 2));
-      
-      // Use the object format for all cases
-      return createDirective('run', {
-        subtype: 'runDefined',
-        command: commandObj,
-        ...(header ? { underHeader: header } : {})
-      }, location());
+
+      return createDirective('run', directiveData, location());
     }
-  // Standard run directive with content in brackets
-  / "run" _ content:DirectiveContent header:UnderHeader? {
-      debug("RUN DIRECTIVE with DirectiveContent:", content);
-      validateRunContent(content);
-      
-      // Standard run directive
-      return createDirective('run', {
-        subtype: 'runCommand',
-        command: content,
-        ...(header ? { underHeader: header } : {})
-      }, location());
-    }
-  // Multi-line run directive with double brackets
-  / "run" _ lang:Identifier? _ params:RunVariableParams? _ "[[" content:(!"]]" char:. { return char; })* "]]" header:UnderHeader? {
-      const contentStr = content.join('');
-      debug("MULTI-LINE RUN DIRECTIVE:", contentStr);
-      debug("Language:", lang);
-      debug("Params:", params);
-      
-      return createDirective('run', {
-        subtype: params ? 'runCodeParams' : 'runCode',
-        command: contentStr,
-        ...(lang ? { language: lang } : {}),
-        ...(params ? { parameters: params } : {}),
-        isMultiLine: true,
-        ...(header ? { underHeader: header } : {})
-      }, location());
-    }
-  // Run directive with direct variable (without brackets)
-  / "run" __ variable:Variable header:UnderHeader? {
+  // Handle direct non-command variables (TextVar, DataVar) - PathVar $... handled by _RunRHS now.
+  / "run" __ variable:(TextVar / DataVar) header:UnderHeader? { 
       // Handle direct variable embedding (without brackets)
-      // This allows syntax like @run {{variable}}
+      // This allows syntax like @run {{variable}} or @run {{data.field}}
       
       // Get the variable text directly from the variable node
       const variableText = variable.valueType === 'text' 
@@ -649,21 +736,20 @@ RunDirective
               if (f.type === 'index') return typeof f.value === 'string' ? `[${JSON.stringify(f.value)}]` : `[${f.value}]`;
               return '';
             }).join('')}}}` 
-          : variable.valueType === 'path' 
-            ? `$${variable.identifier}` 
-            : '';
+          : ''; // Should not happen due to (TextVar / DataVar) constraint
       
       validateRunContent(variableText);
       
+      // NOTE: This produces subtype 'runCommand' with the variable string as the command.
+      // This remains consistent with previous behavior.
       return createDirective('run', {
         subtype: 'runCommand',
         command: variableText,
         ...(header ? { underHeader: header } : {})
       }, location());
     }
-
-// Parameters for multi-line run directives (e.g., @run (param1, param2) [[...]])
-RunVariableParams
+  // Parameters for multi-line run directives (e.g., @run (param1, param2) [[...]])
+  RunVariableParams
   = "(" _ params:RunParamsList? _ ")" {
       return params || [];
     }
@@ -830,128 +916,20 @@ ImportAlias
     }
 
 EmbedDirective
-  = "embed" _ "[[" content:(!"]]" char:. { return char; })* "]]" options:DirectiveOptions? header:HeaderLevel? under:UnderHeader? {
-    // For multi-line embeds, we create a content property directly instead of a path
-    const contentStr = content.join('');
-    const validationResult = validateEmbedContent(contentStr);
-    
-    // Use createDirective for consistency
-    const directiveData = {
-      subtype: 'embedTemplate', // Added subtype
-      content: contentStr,
-      isTemplateContent: true, // Explicitly mark this as template content, not a path
-      ...(options ? { options } : {}),
-      ...(header ? { headerLevel: header } : {}),
-      ...(under ? { underHeader: under } : {})
-    };
-    
-    const node = createDirective('embed', directiveData, location());
-    
-    // Add warning if the content looks like a path
-    if (validationResult.warning) {
-      node.warnings = [{ 
-        message: validationResult.warning,
-        location: location()
-      }];
-    }
-    
-    return node;
-  }
-  / "embed" __ variable:Variable options:DirectiveOptions? header:HeaderLevel? under:UnderHeader? {
-    // Handle direct variable embedding (without brackets)
-    // This allows syntax like @embed {{variable}}
-    
-    // Get the variable text directly from the variable node
-    const variableText = variable.valueType === 'text' 
-      ? `{{${variable.identifier}}}` 
-      : variable.valueType === 'data' 
-        ? `{{${variable.identifier}${variable.fields.map(f => {
-            if (f.type === 'field') return '.' + f.value;
-            if (f.type === 'index') return typeof f.value === 'string' ? `[${JSON.stringify(f.value)}]` : `[${f.value}]`;
-            return '';
-          }).join('')}}}` 
-        : variable.valueType === 'path' 
-          ? `$${variable.identifier}` 
-          : '';
-            
-    // Path variables are a special case - we should use validatePath to handle them
-    if (variable.valueType === 'path') {
-      return createDirective('embed', {
-        subtype: 'embedVariable', // Added subtype (still variable context)
-        path: validatePath(variableText),
-        ...(options ? { options } : {}),
+  = "embed" embedResult:_EmbedRHS header:HeaderLevel? under:UnderHeader? {
+      debug("Standalone EmbedDirective parsed via EmbedRHS:", JSON.stringify(embedResult));
+
+      // Create the final directive node using the result from EmbedRHS
+      // EmbedRHS already contains the subtype and specific data (path, content, etc.)
+      // We just need to add the header/underHeader if they exist.
+      const directiveData = {
+        ...embedResult, // Spread the result from EmbedRHS ({ subtype, path/content, options, etc. })
         ...(header ? { headerLevel: header } : {}),
         ...(under ? { underHeader: under } : {})
-      }, location());
+      };
+
+      return createDirective('embed', directiveData, location());
     }
-    
-    // For text/data variables, create the specific structure
-    return createDirective('embed', {
-        subtype: 'embedVariable', // Added subtype
-        path: {
-          raw: variableText,
-          isVariableReference: true,
-          variable: variable,
-          // Add structured field with variables for backward compatibility
-          structured: {
-            variables: {
-              text: variable.valueType === 'text' ? [variable.identifier] : 
-                    variable.valueType === 'data' ? [variable.identifier] : []
-            }
-          },
-          ...(options ? { options } : {}),
-          ...(header ? { headerLevel: header } : {}),
-          ...(under ? { underHeader: under } : {})
-        }
-    }, location());
-  }
-  / "embed" _ content:DirectiveContent options:DirectiveOptions? header:HeaderLevel? under:UnderHeader? {
-    // Split the content to handle section specifiers
-    const [path, section] = content.split('#').map(s => s.trim());
-    
-    // Validate that the content is a path
-    validateEmbedPath(path);
-    
-    // Check if this is a path variable
-    const isPathVar = typeof path === 'string' && 
-      path.startsWith('$') && 
-      !path.startsWith('$HOMEPATH') && 
-      !path.startsWith('$~') && 
-      !path.startsWith('$PROJECTPATH') && 
-      !path.startsWith('$.') &&
-      path.match(/^\$[a-z][a-zA-Z0-9_]*/);
-    
-    debug("EmbedDirective isPathVar:", isPathVar, "for path:", path);
-    
-    // Validate the path
-    const validatedPath = validatePath(path);
-    debug("After validatePath, validatedPath:", JSON.stringify(validatedPath));
-    
-    // If this is a path variable, ensure it has the isPathVariable flag
-    if (isPathVar && !validatedPath.isPathVariable) {
-      validatedPath.isPathVariable = true;
-    }
-    
-    // Ensure normalized comes before structured if both exist
-    let finalPath = validatedPath;
-    if (validatedPath.normalized && validatedPath.structured) {
-      const { raw, normalized, structured, ...rest } = validatedPath;
-      finalPath = { raw, normalized, structured, ...rest };
-      debug("Reordered finalPath:", JSON.stringify(finalPath));
-    }
-    
-    const result = createDirective('embed', {
-      subtype: 'embedPath', // Added subtype
-      path: finalPath,
-      ...(section ? { section } : {}),
-      ...(options ? { options } : {}),
-      ...(header ? { headerLevel: header } : {}),
-      ...(under ? { underHeader: under } : {})
-    }, location());
-    
-    debug("Final embed directive:", JSON.stringify(result));
-    return result;
-  }
   / "embed" _ "{" _ names:NameList _ "}" _ "from" _ content:DirectiveContent options:DirectiveOptions? header:HeaderLevel? under:UnderHeader? {
     const [path, section] = content.split('#').map(s => s.trim());
     
@@ -1149,39 +1127,20 @@ SchemaValidation
   = _ ":" _ schema:Identifier { return schema; }
 
 DataValue
-  = "@embed" _ content:DirectiveContent {
-    const [path, section] = content.split('#').map(s => s.trim());
-    // Remove callerInfo checks and special handling for data tests
-    
-    // Always get the validated path
-    const validatedPath = validatePath(path);
-    
-    // Ensure normalized comes before structured if both exist
-    let finalPath = validatedPath;
-    if (validatedPath.normalized && validatedPath.structured) {
-      const { raw, normalized, structured, ...rest } = validatedPath;
-      finalPath = { raw, normalized, structured, ...rest };
+  = "@embed" embedResult:_EmbedRHS {
+      debug("DataValue parsed @embed via EmbedRHS:", JSON.stringify(embedResult));
+      return {
+        source: "embed",
+        embed: embedResult // EmbedRHS already returns the structured { subtype, ... }
+      };
     }
-    
-    return {
-      source: "embed",
-      value: {
-        kind: "embed",
-        path: finalPath,
-        ...(section ? { section } : {})
-      }
-    };
-  }
-  / "@run" _ content:DirectiveContent {
-    return {
-      source: "run",
-      value: {
-        kind: "run",
-        command: content,
-        ...(content.startsWith("$") ? { isReference: true } : {})
-      }
-    };
-  }
+  / "@run" runResult:_RunRHS {
+      debug("DataValue parsed @run via RunRHS:", JSON.stringify(runResult));
+      return {
+        source: "run",
+        run: runResult // RunRHS already returns the structured { subtype, ... }
+      };
+    }
   / "@call" _ api:Identifier "." method:Identifier _ content:DirectiveContent {
     return {
       source: "call",
@@ -1297,37 +1256,28 @@ TextDirective
     return createDirective('text', {
       identifier: id,
       source: value.source,
-      ...(value.source === "embed" ? { embed: value.value } :
-          value.source === "run" ? { run: value.value } :
+      ...(value.source === "embed" ? { embed: value.embed } :
+          value.source === "run" ? { run: value.run } :
           value.source === "call" ? { call: value.value } :
           { value: value.value })
     }, location());
   }
 
 TextValue
-  = "@embed" _ content:DirectiveContent {
-    const [path, section] = content.split('#').map(s => s.trim());
-    // REMOVED callerInfo check
-
-    return {
-      source: "embed",
-      value: {
-        kind: "embed",
-        path: validatePath(path),
-        ...(section ? { section } : {})
-      }
-    };
-  }
-  / "@run" _ content:DirectiveContent {
-    return {
-      source: "run",
-      value: {
-        kind: "run",
-        command: content,
-        ...(content.startsWith("$") ? { isReference: true } : {})
-      }
-    };
-  }
+  = "@embed" embedResult:_EmbedRHS {
+      debug("TextValue parsed @embed via EmbedRHS:", JSON.stringify(embedResult));
+      return {
+        source: "embed",
+        embed: embedResult // EmbedRHS already returns the structured { subtype, ... }
+      };
+    }
+  / "@run" runResult:_RunRHS {
+      debug("TextValue parsed @run via RunRHS:", JSON.stringify(runResult));
+      return {
+        source: "run",
+        run: runResult // RunRHS already returns the structured { subtype, ... }
+      };
+    }
   / "@call" _ api:Identifier "." method:Identifier _ content:DirectiveContent {
     return {
       source: "call",
