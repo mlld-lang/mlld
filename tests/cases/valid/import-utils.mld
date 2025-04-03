@@ -7,3 +7,9 @@ This file contains variables and data that can be imported by other Meld files.
   "version": "1.0.0",
   "environment": "test"
 } 
+
+@embed {{config.version}}
+
+@embed [[
+  my imported variable is {{imported_variable}}
+]]

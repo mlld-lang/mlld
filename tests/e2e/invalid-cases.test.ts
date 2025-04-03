@@ -8,7 +8,7 @@ import { findFiles, getTestCaseName, setupTestContext, INVALID_CASES_DIR, ERROR_
 import { promises as realFs } from 'fs';
 import type { Services } from '@core/types.js';
 
-describe.skip('Invalid Meld Test Cases', async () => {
+describe('Invalid Meld Test Cases', async () => {
   const allInvalidFiles = await findFiles(INVALID_CASES_DIR, '.mld');
   const invalidTestCases = allInvalidFiles.filter(file => file.endsWith(ERROR_EXTENSION));
   const context = await setupTestContext(invalidTestCases);
@@ -30,10 +30,30 @@ describe.skip('Invalid Meld Test Cases', async () => {
       let errorCaught = false;
       let errorMessage = '';
       
+      // Create a complete mock CommandExecutionService
+      const mockCommandExecutionService = {
+        executeShellCommand: vi.fn().mockImplementation(async (command) => {
+          return { stdout: `Mocked output for: ${command}`, stderr: '', exitCode: 0 };
+        }),
+        executeLanguageCode: vi.fn().mockImplementation(async (code, language) => {
+          return { stdout: `Mocked ${language} output`, stderr: '', exitCode: 0 };
+        })
+      };
+      
+      // Re-register the mock to ensure it's available
+      context.registerMock('ICommandExecutionService', mockCommandExecutionService);
+      
+      // Process through API with properly structured services
+      const services = {
+        ...context.services,
+        // Need to provide commandExecution property directly for main function
+        commandExecution: mockCommandExecutionService 
+      };
+      
       try {
         await main(errorPath, {
           fs: context.services.filesystem as any,
-          services: context.services as unknown as Partial<Services>,
+          services: services as unknown as Partial<Services>,
           transformation: true
         });
       } catch (error: any) {

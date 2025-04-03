@@ -4,16 +4,17 @@
 
 This is a simple example with variables:
 
-{{message}}
+@embed {{message}}
 
 @data user = {
   "name": "Alice",
   "role": "Developer",
   "skills": ["JavaScript", "TypeScript", "Meld"]
 }
-
+@embed [[
 User Information:
 - Name: {{user.name}}
 - Role: {{user.role}}
 - Skills: {{user.skills}}
 - First skill: {{user.skills.0}} 
+]]

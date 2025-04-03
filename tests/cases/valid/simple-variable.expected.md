@@ -2,6 +2,10 @@
 
 This test demonstrates the basic usage of variables in Meld.
 
+
+
+
+
 ## Output
 
 The greeting is: Hello, World!

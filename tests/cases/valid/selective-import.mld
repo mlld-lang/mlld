@@ -7,9 +7,7 @@ This test demonstrates importing specific variables from another Meld file.
 @import [imported_variable] from ["$PROJECTPATH/tests/cases/valid/import-utils.mld"]
 
 ## Selective Import Results
-
+@embed [[
 Local greeting: {{local_greeting}}
 Imported variable: {{imported_variable}}
-
-// The following would cause an error since we didn't import config
-// Config version: {{config.version}} 
+]]

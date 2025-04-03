@@ -26,7 +26,7 @@ This test demonstrates the usage of complex data structures in Meld.
     "employees": []
   }
 ]
-
+@embed [[
 ## Company Structure
 
 ### {{departments.0.name}} Department
@@ -61,3 +61,4 @@ Employees:
 Manager: {{departments.2.manager}}
 
 No employees in this department. 
+]]

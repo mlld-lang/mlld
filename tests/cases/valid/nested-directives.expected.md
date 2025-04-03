@@ -2,6 +2,8 @@
 
 This test demonstrates the usage of complex data structures in Meld.
 
+
+
 ## Company Structure
 
 ### Engineering Department
@@ -35,15 +37,4 @@ Employees:
 ### Sales Department
 Manager: Henry Moore
 
-No employees in this department.
-
-## Project Summary
-
-- Alpha has team member Bob Johnson from Engineering
-- Beta has team member Bob Johnson from Engineering
-- Alpha has team member Carol Williams from Engineering
-- Beta has team member Dave Brown from Engineering
-- Gamma has team member Dave Brown from Engineering
-- Delta has team member Frank Miller from Marketing
-- Delta has team member Grace Wilson from Marketing
-- Epsilon has team member Grace Wilson from Marketing 
+No employees in this department. 

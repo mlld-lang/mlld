@@ -1,0 +1,6 @@
+@text message = "Hello world"
+
+# Test bash with parameter passing
+@run bash ({{message}}) [[
+echo "Passed parameter: $1"
+]]

@@ -26,15 +26,12 @@ Students:
 
 # Circular Import Test
 
-This file imports circular-import-b.error.mld, which then imports this file back,
+This file is circular-import.error.mld.
+It imports circular-import-b.error.mld, which then imports this file back,
 creating a circular dependency that should be detected and rejected.
 
 @text message = "This is file A"
 
-@import [$./circular-import-b.error.mld]
+@import [circular-import-b.error.mld]
 
 The message from file B: {{message_b}} 
-
-
-
-

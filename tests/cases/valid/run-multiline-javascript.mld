@@ -1,0 +1,7 @@
+@text message = "Hello world"
+
+# Test multi-line run with language indicator
+@run javascript [[
+console.log("This is JavaScript code");
+console.log("It uses a language indicator");
+]]

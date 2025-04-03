@@ -12,6 +12,7 @@ This test demonstrates the usage of nested variables and objects in Meld.
   "skills": ["JavaScript", "Python", "Go"]
 }
 
+@embed [[
 ## Person Details
 
 Name: {{person.name}}
@@ -27,3 +28,4 @@ Phone: {{person.contact.phone}}
 - {{person.skills.0}}
 - {{person.skills.1}}
 - {{person.skills.2}} 
+]]

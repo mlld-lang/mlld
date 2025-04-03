@@ -9,7 +9,7 @@ This test demonstrates the usage of various variable types in Meld.
   { "name": "Charlie", "score": 85, "grade": "B" },
   { "name": "Diana", "score": 65, "grade": "D" }
 ]
-
+@embed[[
 ## Student Information
 
 Current grade: {{grade}}
@@ -19,3 +19,4 @@ Students:
 - {{students.1.name}}: {{students.1.score}} ({{students.1.grade}})
 - {{students.2.name}}: {{students.2.score}} ({{students.2.grade}})
 - {{students.3.name}}: {{students.3.score}} ({{students.3.grade}}) 
+]]

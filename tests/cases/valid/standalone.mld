@@ -6,13 +6,14 @@
 
 This is a self-contained example without any imports.
 
-{{message}}
+@embed {{message}}
 
 @data config = {
   "version": "1.0.0",
   "environment": "test"
 }
-
+@embed [[
 ## Configuration
 - Version: {{config.version}}
 - Environment: {{config.environment}} 
+]]

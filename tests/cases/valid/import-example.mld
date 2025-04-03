@@ -7,7 +7,8 @@ This test demonstrates the usage of imports in Meld.
 @import [$PROJECTPATH/tests/cases/valid/import-utils.mld]
 
 ## Import Results
-
+@embed [[
 Main file variable: {{local_variable}}
 Imported variable: {{imported_variable}}
 Combined message: {{local_variable}} and {{imported_variable}} 
+]]

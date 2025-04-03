@@ -7,9 +7,10 @@ This test demonstrates the basic usage of variables in Meld.
 @text isActive = "true"
 
 ## Output
-
+@embed [[
 The greeting is: {{greeting}}
 
 The value is: {{value}}
 
 Is active: {{isActive}} 
+]]

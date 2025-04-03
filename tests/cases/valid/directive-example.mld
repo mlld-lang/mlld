@@ -8,6 +8,7 @@ This test demonstrates the basic usage of data structures in Meld.
   {"id": 3, "name": "Item 3", "price": 5.75}
 ]
 
+@embed [[
 ## Products
 
 - **{{items.0.name}}** (${{items.0.price}})
@@ -17,3 +18,4 @@ This test demonstrates the basic usage of data structures in Meld.
 ## Summary
 
 There are 3 products available. 
+]]

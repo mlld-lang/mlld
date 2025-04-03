@@ -1,6 +1,7 @@
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import path from 'path';
 import { promises as realFs } from 'fs';
+import { vi } from 'vitest';
 
 // Configuration
 export const TEST_CASES_DIR = 'tests/cases';
@@ -44,6 +45,27 @@ export function getTestCaseName(filePath: string): string {
 export async function setupTestContext(testFiles: string[]): Promise<TestContextDI> {
   const context = TestContextDI.create();
   await context.initialize();
+  
+  // Create a consistent CommandExecutionService mock for all tests
+  const mockCommandExecutionService = {
+    executeShellCommand: vi.fn().mockImplementation(async (command: string) => {
+      console.log(`Mock executing shell command in e2e test: ${command}`);
+      // Extract actual command output - strip out "echo" and any shell syntax
+      const outputMatch = command.match(/^echo\s+(.*)$/);
+      const output = outputMatch ? outputMatch[1].trim() : command.trim();
+      return { stdout: output, stderr: '', exitCode: 0 };
+    }),
+    executeLanguageCode: vi.fn().mockImplementation(async (code: string, language: string) => {
+      console.log(`Mock executing ${language} code in e2e test`);
+      return { stdout: code.trim(), stderr: '', exitCode: 0 };
+    })
+  };
+  
+  // Register the mock service with the container
+  context.registerMock('ICommandExecutionService', mockCommandExecutionService);
+  
+  // Make it available directly on the services object
+  context.services.commandExecution = mockCommandExecutionService;
   
   // Enable transformation for test examples
   context.enableTransformation({

@@ -1,6 +1,6 @@
 @text title = "Meld Directives Demo"
 
-# {{title}}
+@embed [[# {{title}}]]
 
 @data user = {
   "name": "Test User",
@@ -17,6 +17,7 @@ This example demonstrates different directive types in Meld.
 @text greeting = "Hello"
 @text message = `{{greeting}}, {{user.name}}!`
 
+@embed [[
 {{message}}
 
 ## Path Variables
@@ -25,6 +26,7 @@ Temporary files are stored at: $temp
 ## Data Variables
 User ID: {{user.id}}
 User Role: {{user.role}}
+]]
 
 ## Run Directive
 @run [echo "This is output from a command"]
