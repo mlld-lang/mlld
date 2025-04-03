@@ -1,0 +1,30 @@
+name: group-requirements
+description: "Group and synthesize requirements for file/path structures, execution, and validation separately."
+# No for_each, runs once after all feedback is gathered.
+
+tasks:
+  # Task for synthesizing the internal type structures
+  - useTask: synthesize-subtype-reqs # Renamed to focus on structure
+    prior_outputs:
+      FileSystemCoreFeedback: "{{ gather-requirements.analyze-service-needs-for-directive[FileSystemCore].output }}"
+      PathServiceFeedback: "{{ gather-requirements.analyze-service-needs-for-directive[PathService].output }}"
+      PathResolutionFeedback: "{{ gather-requirements.analyze-service-needs-for-directive[PathResolution].output }}"
+      ParserCoreFeedback: "{{ gather-requirements.analyze-service-needs-for-directive[ParserCore].output }}"
+
+  # Task for synthesizing requirements related to runtime execution
+  - useTask: synthesize-execution-reqs 
+    prior_outputs:
+      FileSystemCoreFeedback: "{{ gather-requirements.analyze-service-needs-for-directive[FileSystemCore].output }}"
+      PathServiceFeedback: "{{ gather-requirements.analyze-service-needs-for-directive[PathService].output }}"
+      PathResolutionFeedback: "{{ gather-requirements.analyze-service-needs-for-directive[PathResolution].output }}"
+      InterpreterCoreFeedback: "{{ gather-requirements.analyze-service-needs-for-directive[InterpreterCore].output }}"
+      CoreDirectiveFeedback: "{{ gather-requirements.analyze-service-needs-for-directive[CoreDirective].output }}" # Import handler logic
+      ContentResolutionFeedback: "{{ gather-requirements.analyze-service-needs-for-directive[ContentResolution].output }}" # If importing text directives
+
+  # Task for synthesizing validation requirements
+  - useTask: synthesize-validation-reqs
+    prior_outputs:
+      FileSystemCoreFeedback: "{{ gather-requirements.analyze-service-needs-for-directive[FileSystemCore].output }}"
+      PathServiceFeedback: "{{ gather-requirements.analyze-service-needs-for-directive[PathService].output }}"
+      CoreDirectiveFeedback: "{{ gather-requirements.analyze-service-needs-for-directive[CoreDirective].output }}"
+      ParserCoreFeedback: "{{ gather-requirements.analyze-service-needs-for-directive[ParserCore].output }}" 

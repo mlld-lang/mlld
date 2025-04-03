@@ -1,2 +1,0 @@
-@text variable = "Hello world"
-@embed {{variable}}
