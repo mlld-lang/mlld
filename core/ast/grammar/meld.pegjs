@@ -118,9 +118,13 @@
     }
     
     // Extract test information from the stack trace
-    const isImportTest = callerInfo.includes('import.test.ts');
-    const isPathVariableTest = callerInfo.includes('path-variable-embed.test.ts');
-    const isPathDirective = callerInfo.includes('PathDirective');
+    // const isImportTest = callerInfo.includes('import.test.ts'); // Removed
+    // const isEmbedTest = callerInfo.includes('embed.test.ts'); // Removed
+    //                          callerInfo.includes('Embed section with header'); // Removed
+    // const isPathVariableTest = callerInfo.includes('path-variable-embed.test.ts'); // Removed
+    // const isDataTest = callerInfo.includes('data.test.ts'); // Removed
+    // const isTextTest = callerInfo.includes('text.test.ts'); // Removed
+    // const isPathDirective = callerInfo.includes('PathDirective'); // Removed
     
     debug("validatePath called with path:", path);
     
@@ -169,10 +173,8 @@
         result.variable_warning = true;
       }
       
-      // Set cwd to false for path variables in imports
-      if (isImportTest || isPathVariableTest) {
-        result.structured.cwd = false;
-      }
+      // Set cwd to false for path variables (unconditionally)
+      result.structured.cwd = false;
       
       debug("Path variable result:", JSON.stringify(result));
       return result;
@@ -183,8 +185,7 @@
     debug("isUrl:", isUrl, "for path:", path);
     
     // Allow relative paths
-    const isRelativePathTest = (isImportTest || isPathVariableTest) && 
-      (path.includes('../') || path.startsWith('./'));
+    const isRelativePathTest = (path.includes('../') || path.startsWith('./'));
     
     // No longer reject paths with relative segments ('..' or './')
 
@@ -287,8 +288,8 @@
     if (isCwd) {
       structured.cwd = true;
       debug("Set structured.cwd = true for path:", path);
-    } else if ((path.startsWith('$') && !isPathDirective) || (path.match(/^\$[a-zA-Z][a-zA-Z0-9_]*/) && isImportTest)) {
-      // Set cwd: false for special variables and path variables in import tests
+    } else if (path.startsWith('$')) {
+      // Set cwd: false for special variables and path variables
       structured.cwd = false;
       debug("Set structured.cwd = false for path:", path);
     }
