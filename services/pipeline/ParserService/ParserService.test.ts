@@ -321,50 +321,6 @@ describe('ParserService', () => {
         { type: 'field', value: 'name' }
       ]);
     });
-    
-    it('should validate that factory is properly initialized', async () => {
-      // Test that the service has initialized the factory
-      expect(service['variableNodeFactory']).toBe(mockVariableNodeFactory);
-      
-      // Verify that we can transform a node using the service's private method
-      const legacyNode = {
-        type: 'TextVar',
-        value: 'greeting',
-        location: {
-          start: { line: 1, column: 7 },
-          end: { line: 1, column: 20 }
-        }
-      };
-      
-      // Use service's private method directly through the service instance
-      // @ts-ignore - accessing private method for testing
-      const transformed = service['transformVariableNode'](legacyNode);
-      
-      // Verify the factory was called
-      expect(mockVariableNodeFactory.createVariableReferenceNode).toHaveBeenCalledWith(
-        'greeting',
-        'text',
-        [],
-        undefined,
-        expect.objectContaining({
-          start: { line: 1, column: 7 },
-          end: { line: 1, column: 20 }
-        })
-      );
-      
-      // Verify the result
-      expect(transformed).toEqual({
-        type: 'VariableReference',
-        identifier: 'greeting',
-        valueType: 'text',
-        fields: [],
-        isVariableReference: true,
-        location: {
-          start: { line: 1, column: 7 },
-          end: { line: 1, column: 20 }
-        }
-      });
-    });
   });
 
   describe('parseWithLocations', () => {

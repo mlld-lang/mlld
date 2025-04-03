@@ -119,91 +119,6 @@ export class ParserService implements IParserService {
     }
   }
 
-  /**
-   * Transform old variable node types into the consolidated VariableReferenceNode type
-   * Also recursively processes nested nodes
-   */
-  private transformVariableNode(node: MeldNode): MeldNode {
-    if (!node || typeof node !== 'object') {
-      return node;
-    }
-    
-    // Using type assertion since we need to access properties not in base MeldNode
-    const anyNode = node as any;
-    
-    // First transform arrays recursively
-    if (Array.isArray(anyNode)) {
-      return anyNode.map(item => this.transformVariableNode(item)) as any;
-    }
-    
-    // Handle variable node types
-    if (anyNode.type === 'TextVar' || anyNode.type === 'DataVar' || anyNode.type === 'PathVar') {
-      // Determine the valueType based on the original node type
-      let valueType: 'text' | 'data' | 'path';
-      if (anyNode.type === 'TextVar') {
-        valueType = 'text';
-      } else if (anyNode.type === 'DataVar') {
-        valueType = 'data';
-      } else { // PathVar
-        valueType = 'path';
-      }
-      
-      // Get identifier from the appropriate property
-      const identifier = anyNode.identifier || anyNode.value || '';
-      
-      // Get fields or empty array
-      const fields = anyNode.fields || [];
-      
-      // Get format if it exists
-      const format = anyNode.format;
-      
-      // Get location if it exists
-      const location = anyNode.location;
-      
-      // Use factory to create variable reference node
-      if (this.variableNodeFactory) {
-        return this.variableNodeFactory.createVariableReferenceNode(
-          identifier,
-          valueType,
-          fields,
-          format,
-          location
-        ) as MeldNode;
-      } else {
-        // Fallback to direct creation if factory is unavailable
-        logger.warn('VariableNodeFactory not available, falling back to direct creation');
-        return {
-          type: 'VariableReference',
-          identifier,
-          valueType,
-          fields,
-          isVariableReference: true,
-          ...(format && { format }),
-          ...(location && { location })
-        } as MeldNode;
-      }
-    }
-    
-    // Process other node types that might contain variable nodes in their properties
-    // For example, a Directive node might contain variable references in its values
-    if (anyNode.type === 'Directive' && anyNode.directive) {
-      // Clone the directive data and recursively transform any variables it contains
-      const transformedDirective = { ...anyNode.directive };
-      
-      // Check for specific properties that might contain variable references
-      if (transformedDirective.value && typeof transformedDirective.value === 'object') {
-        transformedDirective.value = this.transformVariableNode(transformedDirective.value);
-      }
-      
-      return {
-        ...anyNode,
-        directive: transformedDirective
-      };
-    }
-    
-    return anyNode;
-  }
-
   private async parseContent(content: string, filePath?: string): Promise<MeldNode[]> {
     try {
       // parse is already imported at the top of the file
@@ -235,12 +150,13 @@ export class ParserService implements IParserService {
 
       // Parse the content
       const result = await parse(content, options);
-      
-      // Transform old variable node types into consolidated type
-      const transformedAst = (result.ast || []).map((node: MeldNode) => this.transformVariableNode(node));
-      
+
+      // Transform old variable node types into consolidated type - REMOVED
+      // const transformedAst = (result.ast || []).map((node: MeldNode) => this.transformVariableNode(node)); // REMOVED
+      const ast = result.ast || []; // Assign directly
+
       // Validate code fence nesting
-      this.validateCodeFences(transformedAst);
+      this.validateCodeFences(ast); // Use ast directly
 
       // Log any non-fatal errors
       if (result.errors && result.errors.length > 0) {
@@ -252,7 +168,7 @@ export class ParserService implements IParserService {
         });
       }
 
-      return transformedAst;
+      return ast; // Return ast directly
     } catch (error) {
       if (isMeldAstError(error)) {
         // Create a MeldParseError with the original error information
