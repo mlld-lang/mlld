@@ -977,7 +977,7 @@ function peg$parse(input, options) {
     const [path, section] = content.split('#').map(s => s.trim());
     // Check if we're in a test case
     const callerInfo = new Error().stack || '';
-    const isDataTest = callerInfo.includes('data.test.ts');
+    
     
     // Special handling for data tests with embed directive
     if (isDataTest && (callerInfo.includes('embed-source') || callerInfo.includes('Data from embed directive') || 
@@ -1171,39 +1171,8 @@ function peg$parse(input, options) {
     };
   };
   var peg$f123 = function(id, path) {
-    // For path directives, we need to validate that the path contains a special variable
-    const callerInfo = new Error().stack || '';
-    
-    // Get the raw path string
-    const rawPath = typeof path === 'string' ? path : 
-                   path.raw ? path.raw : 
-                   JSON.stringify(path);
-    
-    // Check if the path has a special variable
-    const hasSpecialVar = rawPath && (
-      rawPath.includes('$HOMEPATH') || 
-      rawPath.includes('$~') || 
-      rawPath.includes('$PROJECTPATH') || 
-      rawPath.includes('$.')
-    );
-    
-    // No longer require special variables in path directives
-    
-    // For path directives, we need to manually set the base for special variables
-    // because the parser tests expect specific base values
-    if (path && path.structured) {
-      // Determine correct base based on path format
-      if (rawPath.startsWith('$HOMEPATH')) {
-        path.structured.base = '$HOMEPATH';
-      } else if (rawPath.startsWith('$~')) {
-        path.structured.base = '$~';
-      } else if (rawPath.startsWith('$PROJECTPATH')) {
-        path.structured.base = '$PROJECTPATH';
-      } else if (rawPath.startsWith('$.')) {
-        path.structured.base = '$.';
-      }
-    }
-    
+    // Trust the path object returned by PathValue (which uses validatePath)
+    debug("PathDirective received path object:", JSON.stringify(path));
     return createDirective('path', { identifier: id, path }, location());
   };
   var peg$f124 = function(id, value) {
@@ -1249,42 +1218,8 @@ function peg$parse(input, options) {
   };
   var peg$f132 = function(chars) { return chars.join(''); };
   var peg$f133 = function(str) {
-    // Check if this is being called from a PathDirective
-    const callerInfo = new Error().stack || '';
-    const isPathDirective = callerInfo.includes('PathDirective');
-    
     // Get the validated path from validatePath
     const validatedPath = validatePath(str);
-    
-    // For path directives, we need to set top-level properties
-    if (isPathDirective) {
-      // Determine base from the raw path
-      if (str.startsWith('$HOMEPATH')) {
-        validatedPath.base = '$HOMEPATH';
-      } else if (str.startsWith('$~')) {
-        validatedPath.base = '$~';
-      } else if (str.startsWith('$PROJECTPATH')) {
-        validatedPath.base = '$PROJECTPATH';
-      } else if (str.startsWith('$.')) {
-        validatedPath.base = '$.';
-      }
-      
-      // Extract segments by splitting the path and removing the first part
-      // (which is the special variable)
-      let segments = str.split('/').filter(Boolean);
-      
-      // Check if the path is just a special variable or has segments
-      if (str === '$HOMEPATH' || str === '$~' || str === '$PROJECTPATH' || str === '$.') {
-        // If the path is just a special variable, use it as the only segment
-        segments = [str];
-      } else if (str.startsWith('$HOMEPATH/') || str.startsWith('$~/') || 
-                 str.startsWith('$PROJECTPATH/') || str.startsWith('$./')) {
-        // Remove the special variable part from the segments
-        segments = segments.slice(1);
-      }
-      
-      validatedPath.segments = segments;
-    }
     
     return validatedPath;
   };
@@ -6528,22 +6463,10 @@ function peg$parse(input, options) {
     }
     
     // Extract test information from the stack trace
-    const isImportTest = callerInfo.includes('import.test.ts');
-    const isEmbedTest = callerInfo.includes('embed.test.ts');
-    const isHeaderLevelTest = callerInfo.includes('embed-header.test.ts') || 
-                             callerInfo.includes('header-level') || 
-                             callerInfo.includes('Embed with header level') ||
-                             callerInfo.includes('section-with-header') || 
-                             callerInfo.includes('Embed section with header');
-    const isPathVariableTest = callerInfo.includes('path-variable-embed.test.ts');
-    const isDataTest = callerInfo.includes('data.test.ts');
-    const isTextTest = callerInfo.includes('text.test.ts');
-    const isPathDirective = callerInfo.includes('PathDirective');
+    // const isPathDirective = callerInfo.includes('PathDirective');
     
     debug("validatePath called with path:", path);
-    debug("isHeaderLevelTest:", isHeaderLevelTest);
-    debug("isPathDirective:", isPathDirective);
-    debug("isPathVariableTest:", isPathVariableTest);
+    // debug("isPathDirective:", isPathDirective);
     
     // Check if this is a path variable (starts with $ but is not a special variable)
     const isPathVar = typeof path === 'string' && 
@@ -6590,11 +6513,6 @@ function peg$parse(input, options) {
         result.variable_warning = true;
       }
       
-      // Set cwd to false for path variables in imports
-      if (isImportTest || isPathVariableTest) {
-        result.structured.cwd = false;
-      }
-      
       debug("Path variable result:", JSON.stringify(result));
       return result;
     }
@@ -6603,12 +6521,6 @@ function peg$parse(input, options) {
     const isUrl = /^https?:\/\//.test(path);
     debug("isUrl:", isUrl, "for path:", path);
     
-    // Allow relative paths
-    const isRelativePathTest = (isImportTest || isEmbedTest || isPathVariableTest) && 
-      (path.includes('../') || path.startsWith('./'));
-    
-    // No longer reject paths with relative segments ('..' or './')
-
     // Extract text variables
     const textVars = [];
     const textVarRegex = /\{\{([a-zA-Z0-9_]+)\}\}/g;
@@ -6648,27 +6560,6 @@ function peg$parse(input, options) {
     const isSpecialVarPath = path.startsWith('$');
     debug("isSpecialVarPath:", isSpecialVarPath, "for path:", path);
     
-    // Check if this is a test that has special handling for slashed paths
-    // This is kept for backward compatibility with tests
-    const isTestAllowingSlashedPaths = isImportTest || isEmbedTest || isDataTest || isTextTest || isPathVariableTest;
-    
-    // No longer reject paths with slashes that don't start with special variables
-
-    // Determine the base based on special variables
-    let base = '.';
-    if (specialVars.length > 0) {
-      // If there's a special variable, use it as the base
-      if (path.startsWith('$HOMEPATH') || path.startsWith('$~')) {
-        base = path.startsWith('$HOMEPATH') ? '$HOMEPATH' : '$~';
-      } else if (path.startsWith('$PROJECTPATH') || path.startsWith('$.')) {
-        base = path.startsWith('$PROJECTPATH') ? '$PROJECTPATH' : '$.';
-      }
-    } else if (path.startsWith('../')) {
-      base = '..';
-    } else if (path.startsWith('./')) {
-      base = '.';
-    }
-
     // Get path segments, excluding the base path part
     let segments = path.split('/').filter(Boolean);
     
@@ -6690,7 +6581,7 @@ function peg$parse(input, options) {
 
     // Build the structured object with variables
     const structured = {
-      base: base,
+      base: isSpecialVarPath ? path.split('/')[0] : '.',
       segments: segments,
       variables: {}
     };
@@ -6709,15 +6600,13 @@ function peg$parse(input, options) {
     }
 
     // Add cwd property based on path structure
-    // Paths without slashes that don't start with $ or ./ are CWD paths (cwd: true)
-    // Paths that start with $ are not CWD paths (cwd: false)
     if (isCwd) {
       structured.cwd = true;
       debug("Set structured.cwd = true for path:", path);
-    } else if ((path.startsWith('$') && !isPathDirective) || (path.match(/^\$[a-zA-Z][a-zA-Z0-9_]*/) && isImportTest)) {
-      // Set cwd: false for special variables and path variables in import tests
+    } else if (path.startsWith('$')) {
+      // Set cwd: false for any path starting with $
       structured.cwd = false;
-      debug("Set structured.cwd = false for path:", path);
+      debug("Set structured.cwd = false for path starting with $:", path);
     }
     
     // Add url property for URL paths
@@ -6770,18 +6659,15 @@ function peg$parse(input, options) {
       }
     }
 
-    // Handle specific test cases based on the test file
-    if (isImportTest) {
-      // Import tests don't expect normalized property
-      delete result.normalized;
-    }
-
     // Always keep the variables object, even if empty
     if (Object.keys(structured.variables).length === 0) {
       structured.variables = {};
     }
 
     // Log the final result for debugging
+    if (path.includes('$HOMEPATH')) {
+      debug("validatePath final structure for $HOMEPATH path:", JSON.stringify(result.structured));
+    }
     debug("validatePath result:", JSON.stringify(result));
 
     return result;
