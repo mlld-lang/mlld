@@ -1,145 +1,275 @@
-# Consolidated Requirements for Meld's Internal Variable Handling
+# Consolidated Requirements for Meld Variable Handling
 
-## Core Type Structure
+## Core Variable Type System
 
-1. **Base Variable Interface**
-   - Define `IVariable<T>` interface with:
-     - `type: VariableType` discriminant property
-     - `value: T` for strongly-typed values
-     - `metadata?: VariableMetadata` for tracking history
-   - Implement discriminated unions for type safety
+- **Base Variable Interface**: Implement a common interface `IVariable<T>` with discriminated union pattern for type safety:
+  ```typescript
+  interface IVariable<T> {
+    type: VariableType;  // Discriminator
+    name: string;
+    value: T;
+    sourceLocation?: SourceLocation;
+    lastModified: number;
+    isImmutable: boolean;
+  }
+  
+  enum VariableType {
+    TEXT = 'text',
+    DATA = 'data',
+    PATH = 'path',
+    COMMAND = 'command'
+  }
+  ```
 
-2. **Variable Types**
-   - Define `VariableType` enum with `TEXT`, `DATA`, `PATH`, and `COMMAND` types
-   - Create specialized interfaces for each type:
-     - `ITextVariable` (string values)
-     - `IDataVariable` (JSON-compatible values)
-     - `IPathVariable` (path strings with validation)
-     - `ICommandVariable` (command definitions)
+- **Strongly-Typed Variable Containers**: Replace direct Map usage with type-safe stores:
+  ```typescript
+  interface IVariableStore<T extends IVariable<any>> {
+    get(name: string): T['value'] | undefined;
+    set(name: string, value: T['value'], context?: StateUpdateContext): void;
+    has(name: string): boolean;
+    delete(name: string): boolean;
+    entries(): IterableIterator<[string, T['value']]>;
+    clone(): IVariableStore<T>;
+  }
+  ```
 
-3. **Metadata Tracking**
-   - Define `VariableMetadata` interface with:
-     - `source: SourceLocation` for tracking definition location
-     - `createdAt: number` timestamp
-     - `updatedAt: number` timestamp
-     - `history?: VariableChange[]` for tracking changes
+- **Specific Variable Types**: Implement concrete types with appropriate value constraints:
+  ```typescript
+  interface ITextVariable extends IVariable<string> {
+    type: VariableType.TEXT;
+  }
+  
+  interface IDataVariable extends IVariable<DataValue> {
+    type: VariableType.DATA;
+  }
+  
+  interface IPathVariable extends IVariable<string> {
+    type: VariableType.PATH;
+  }
+  
+  interface ICommandVariable extends IVariable<CommandDefinition> {
+    type: VariableType.COMMAND;
+  }
+  ```
 
-4. **Data Variable Structure**
-   - Define `DataValue` type as union of JSON-compatible values:
-     - `null | boolean | number | string | DataObject | DataArray`
-   - Define `DataObject` as `Record<string, DataValue>`
-   - Define `DataArray` as `DataValue[]`
+## Data Structure Types
 
-## Variable Storage & Access
+- **Data Value Types**: Define structured types for data variables:
+  ```typescript
+  type DataPrimitive = string | number | boolean | null;
+  type DataArray = DataValue[];
+  type DataObject = Record<string, DataValue>;
+  type DataValue = DataPrimitive | DataArray | DataObject;
+  
+  // Type guards
+  function isDataObject(value: unknown): value is DataObject;
+  function isDataArray(value: unknown): value is DataArray;
+  function isDataPrimitive(value: unknown): value is DataPrimitive;
+  ```
 
-5. **State Storage Interface**
-   - Define `IVariableStorage` interface with:
-     - Type-specific maps: `textVars`, `dataVars`, `pathVars`, `commands`
-     - Generic `getVariable<T>(type, name)` method
-     - Type-specific getters (e.g., `getTextVar`, `getDataVar`)
-     - Type-safe setters that enforce value types
+- **Command Definition**: Structured type for command variables:
+  ```typescript
+  interface CommandDefinition {
+    command: string;
+    options: Record<string, DataValue>;
+    description?: string;
+    sourceFile?: string;
+    location?: SourceLocation;
+  }
+  ```
 
-6. **Variable Resolution Context**
-   - Define `ResolutionContext` interface with:
-     - `state: IStateService` for accessing variables
-     - `strict: boolean` to control error behavior
-     - `depth: number` to prevent infinite recursion
-     - `allowedVariableTypes?: VariableType[]` to restrict resolution
-     - `isVariableEmbed?: boolean` to modify resolution behavior
-     - `formattingContext?: FormattingContext` for output formatting
+## Variable Reference & Resolution
 
-## Variable References & Field Access
+- **Variable Reference Structure**: Unified structure for variable references:
+  ```typescript
+  interface IVariableReference {
+    type: VariableType;
+    name: string;
+    fields?: FieldAccessPath;
+    originalReference: string; // The raw reference string ({{var.field}}, $path, etc.)
+  }
+  
+  type FieldAccessPath = Array<FieldAccessSegment>;
+  
+  interface FieldAccessSegment {
+    type: 'identifier' | 'number' | 'string';
+    value: string | number;
+  }
+  ```
 
-7. **Variable Reference Structure**
-   - Define `IVariableReference` interface with:
-     - `type: 'variable-reference'` for type discrimination
-     - `identifier: string` for variable name
-     - `fields?: FieldAccess[]` for field access
-     - `fallback?: string` for default value
+- **Resolution Context**: Context object for variable resolution:
+  ```typescript
+  interface ResolutionContext {
+    strict: boolean;  // Whether to throw on missing variables
+    depth: number;    // Current resolution depth
+    maxDepth: number; // Maximum allowed depth
+    visited: Set<string>; // Variables already visited (for circularity detection)
+    allowedVariableTypes?: VariableType[]; // Limit to specific variable types
+    formattingMode: FormattingMode; // How to format resolved values
+  }
+  
+  enum FormattingMode {
+    INLINE,  // Compact, single-line representation
+    BLOCK,   // Pretty-printed, multi-line representation
+    RAW      // No formatting, return as-is
+  }
+  ```
 
-8. **Field Access Types**
-   - Define `FieldAccess` interface with:
-     - `type: 'property' | 'index'` for access type
-     - `value: string | number` for property name or index
-   - Implement type-safe field accessor utilities
+- **Field Access Results**: Structured results from field access operations:
+  ```typescript
+  interface FieldAccessResult {
+    value: DataValue;
+    exists: boolean;
+    isTerminal: boolean; // Whether this is a leaf node
+    remainingPath?: FieldAccessPath; // Unused path segments if any
+  }
+  ```
 
-## Command Definitions
+## Validation Requirements
 
-9. **Command Structure**
-   - Define `ICommand` interface with:
-     - `name: string` for command identifier
-     - `parameters: ICommandParameter[]` for parameter definitions
-     - `implementation: CommandFunction` for execution
-     - `description?: string` for documentation
+- **Identifier Validation**: Enforce consistent naming rules:
+  ```typescript
+  function validateIdentifier(name: string): boolean {
+    // Alphanumeric, underscores, no spaces, not a reserved word
+    return /^[a-zA-Z0-9_]+$/.test(name) && !RESERVED_KEYWORDS.includes(name);
+  }
+  ```
 
-10. **Command Parameters**
-    - Define `ICommandParameter` interface with:
-      - `name: string` for parameter name
-      - `type: ParameterType` for parameter type
-      - `defaultValue?: any` for optional default
-      - `description?: string` for documentation
+- **Existence Validation**: Check for variable existence before access:
+  ```typescript
+  function resolveVariable(
+    ref: IVariableReference, 
+    state: IStateService,
+    context: ResolutionContext
+  ): ResolvedValue {
+    // Check existence based on strict mode
+    if (!state.hasVariable(ref.type, ref.name)) {
+      if (context.strict) {
+        throw new VariableResolutionError(`Variable ${ref.name} not found`);
+      }
+      return { value: undefined, exists: false };
+    }
+    // Resolve the variable...
+  }
+  ```
 
-## Resolution & Validation
+- **Circular Reference Detection**: Prevent infinite resolution loops:
+  ```typescript
+  function detectCircularReference(
+    varName: string, 
+    context: ResolutionContext
+  ): boolean {
+    if (context.visited.has(varName)) {
+      return true;
+    }
+    
+    if (context.depth >= context.maxDepth) {
+      throw new CircularReferenceError(
+        `Maximum resolution depth (${context.maxDepth}) exceeded`
+      );
+    }
+    
+    // Update context for next resolution
+    context.visited.add(varName);
+    context.depth += 1;
+    
+    return false;
+  }
+  ```
 
-11. **Resolution System**
-    - Implement nested variable resolution with depth tracking
-    - Support different resolution behaviors based on context
-    - Handle field access for data variables with proper validation
-    - Implement circular reference detection
+- **Path Validation**: Ensure path variables are valid and secure:
+  ```typescript
+  function validatePath(path: string): boolean {
+    // Check for directory traversal, invalid characters, etc.
+    if (path.includes('..')) {
+      throw new PathValidationError('Directory traversal not allowed');
+    }
+    
+    // Additional path validation logic...
+    return true;
+  }
+  ```
 
-12. **Validation Rules**
-    - Validate variable existence before access
-    - Verify field access operations are valid for variable type
-    - Check array bounds when accessing array elements
-    - Validate state transitions maintain variable integrity
+## State Management
 
-13. **Error Handling**
-    - Provide structured error information with variable name and field path
-    - Support different error behaviors based on strict mode
-    - Implement fallback mechanisms for missing variables
+- **State Update Context**: Track variable modifications:
+  ```typescript
+  interface StateUpdateContext {
+    operation: 'set' | 'delete' | 'merge' | 'transform';
+    source: string; // Source of the update (e.g., directive, import)
+    timestamp: number;
+    variableType: VariableType;
+    variableName: string;
+    sourceLocation?: SourceLocation;
+  }
+  ```
 
-## Type Conversion & Formatting
+- **Source Location Tracking**: Track where variables are defined:
+  ```typescript
+  interface SourceLocation {
+    file: string;
+    line: number;
+    column: number;
+    endLine?: number;
+    endColumn?: number;
+  }
+  ```
 
-14. **Formatting Context**
-    - Support block vs. inline formatting based on context
-    - Implement pretty-printed JSON for block context
-    - Use compact representation for inline context
+## String Conversion & Formatting
 
-15. **Type Guards & Safety**
-    - Implement type guard functions (e.g., `isTextVariable`, `isDataVariable`)
-    - Use branded types for variable names and state IDs
-    - Ensure exhaustive type checking in switch statements
+- **Type-Specific Formatters**: Convert different types to strings:
+  ```typescript
+  interface StringConversionOptions {
+    mode: FormattingMode;
+    indentLevel?: number;
+    maxArrayItems?: number; // Limit array output
+    maxObjectDepth?: number; // Limit object nesting in output
+  }
+  
+  function convertToString(
+    value: DataValue,
+    options: StringConversionOptions
+  ): string {
+    if (value === null || value === undefined) {
+      return '';
+    }
+    
+    if (typeof value === 'string') {
+      return value;
+    }
+    
+    if (typeof value === 'number' || typeof value === 'boolean') {
+      return String(value);
+    }
+    
+    if (Array.isArray(value)) {
+      return formatArray(value, options);
+    }
+    
+    if (typeof value === 'object') {
+      return formatObject(value, options);
+    }
+    
+    return String(value);
+  }
+  ```
 
-## Implementation Approach
+## Key Design Decisions & Rationale
 
-16. **Migration Strategy**
-    - Support backward compatibility with existing code
-    - Allow progressive adoption of new type system
-    - Provide adapter functions for legacy code integration
+1. **Discriminated Union Pattern**: Chosen for variable types to enable compile-time type checking and exhaustive pattern matching, reducing runtime errors.
 
-17. **Developer Experience**
-    - Design types to provide helpful IDE hints
-    - Include comprehensive JSDoc comments
-    - Create builder patterns for complex objects
+2. **Strict Typing with Type Guards**: Prioritized to catch type errors early and provide clear runtime validation.
 
-## Key Design Decisions
+3. **Context-Based Resolution**: Implemented comprehensive context objects to manage resolution state, formatting preferences, and validation rules in a centralized way.
 
-1. **Discriminated Unions**: Using TypeScript's discriminated unions with the `type` property provides strong type safety and enables exhaustive checking.
+4. **Immutability Controls**: Added to prevent accidental modification of variables that should remain constant.
 
-2. **Context-Based Resolution**: The `ResolutionContext` approach provides flexibility while maintaining type safety, allowing different resolution behaviors based on execution context.
+5. **Formatting Modes as Enum**: Replaced boolean flags with an enum to make formatting intentions explicit and allow for future expansion.
 
-3. **Metadata Tracking**: Including optional metadata enables debugging and history tracking without impacting performance in production.
+6. **Circularity Detection**: Implemented robust tracking of visited variables and resolution depth to prevent infinite loops.
 
-4. **Validation Strategy**: Combining static (compile-time) and runtime validation ensures maximum safety while maintaining flexibility.
+7. **Source Location Tracking**: Added to all variables to improve error reporting and debugging experience.
 
-5. **Format Context Separation**: Separating formatting concerns from core variable structure improves separation of concerns and maintainability.
+8. **Consistent Error Handling**: Standardized error types and messages across all variable operations.
 
-## Implementation Priorities
-
-1. **Base Type Structure**: Implement core variable interfaces and type discrimination first.
-2. **Storage & Access**: Implement type-safe storage and access methods next.
-3. **Resolution Context**: Build the resolution context system to support different behaviors.
-4. **Field Access**: Implement robust field access with proper validation.
-5. **Error Handling**: Develop comprehensive error handling with appropriate context.
-
-This consolidated approach balances type safety, flexibility, and backward compatibility while providing a solid foundation for Meld's variable handling system.
+The implementation prioritizes type safety, explicit context management, and robust validation to create a maintainable and predictable variable handling system.

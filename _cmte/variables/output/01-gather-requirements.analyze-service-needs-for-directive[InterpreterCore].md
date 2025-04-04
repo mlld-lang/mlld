@@ -1,14 +1,21 @@
-# Improving Variable Handling Types in the InterpreterService
+# Improving Variable Handling Types in InterpreterService
 
-After reviewing the InterpreterService code and the broader Meld architecture, I've identified several areas where stronger TypeScript types for variable handling would significantly improve code clarity, safety, and maintainability.
+After analyzing the InterpreterService implementation, I've identified several areas where stronger TypeScript typing would significantly improve variable handling, state management, and directive processing. Below are my proposed improvements with clear justifications for each.
 
-## 1. Strongly Typed Directive Result Interface
+## 1. Strongly Typed Directive Results
 
 ### Current Issue
 ```typescript
-// Current implementation uses type casting and property checking
+// Current implementation uses 'any' and unsafe type casting
+const directiveResult = await this.callDirectiveHandleDirective(directiveNode, {
+  state: directiveState,
+  parentState: currentState,
+  currentFilePath: state.getCurrentFilePath() ?? undefined,
+  formattingContext
+});
+
+// Unsafe type assertion with 'as unknown as'
 if (directiveResult && 'replacement' in directiveResult && 'state' in directiveResult) {
-  // We need to extract the replacement node and state from the result
   const result = directiveResult as unknown as { 
     replacement: MeldNode;
     state: StateServiceLike;
@@ -16,44 +23,57 @@ if (directiveResult && 'replacement' in directiveResult && 'state' in directiveR
 }
 ```
 
-The service uses property checking and unsafe type casting when handling directive results, especially for transformation mode. This creates potential runtime errors and makes the code harder to understand.
-
 ### Proposed Solution
 ```typescript
 // Define a proper interface for directive results
 interface DirectiveResult {
   state: StateServiceLike;
   replacement?: MeldNode;
-  getFormattingContext?(): FormattingContext;
+  getFormattingContext?: () => FormattingContext | undefined;
 }
 
-// Type-safe directive handling
-private async callDirectiveHandleDirective(node: DirectiveNode, context: DirectiveContext): Promise<DirectiveResult> {
-  // Implementation remains similar, but with proper return type
+// Use this type in the method signature
+private async callDirectiveHandleDirective(
+  node: DirectiveNode, 
+  context: DirectiveContext
+): Promise<DirectiveResult> {
+  // Implementation remains similar
+}
+
+// Then in the interpretNode method:
+const directiveResult = await this.callDirectiveHandleDirective(directiveNode, context);
+if (directiveResult.replacement) {
+  const replacement = directiveResult.replacement;
+  // No type casting needed
 }
 ```
 
-### Benefits
-1. **Type Safety**: Eliminates unsafe type casting with `as unknown as`
-2. **Self-Documentation**: Makes it clear what properties a directive result should have
-3. **IDE Support**: Enables autocomplete and type checking when working with directive results
-4. **Error Prevention**: Catches mismatches between expected and actual return values at compile time
+### Justification
+1. **Type Safety**: Eliminates risky `as unknown as` casts that could break at runtime
+2. **Self-documenting**: Clearly expresses what a directive handler can return
+3. **IDE Support**: Enables autocomplete for properties of the result
+4. **Error Prevention**: Prevents accessing non-existent properties
+5. **Maintainability**: Makes refactoring safer as type errors would be caught at compile time
 
 ## 2. Strongly Typed Formatting Context
 
 ### Current Issue
 ```typescript
-// Current implementation uses a loosely typed object
+// Weakly typed with inline type assertion
 const formattingContext = {
   isOutputLiteral: state.isTransformationEnabled?.() || false,
-  contextType: 'block' as 'inline' | 'block', // Default to block context
+  contextType: 'block' as 'inline' | 'block', // Type asserted inline
   nodeType: node.type,
   atLineStart: true, // Default assumption
   atLineEnd: false // Default assumption
 };
-```
 
-The formatting context is critical for consistent variable rendering but uses inline type assertions and has no formal interface, making it error-prone when passed between services.
+// Unsafe property access check
+if (directiveResult.getFormattingContext) {
+  const updatedContext = directiveResult.getFormattingContext();
+  // No type safety on the returned context
+}
+```
 
 ### Proposed Solution
 ```typescript
@@ -66,7 +86,7 @@ interface FormattingContext {
   atLineEnd: boolean;
 }
 
-// Create with proper typing
+// Create a typed context
 const formattingContext: FormattingContext = {
   isOutputLiteral: state.isTransformationEnabled?.() || false,
   contextType: 'block',
@@ -74,25 +94,109 @@ const formattingContext: FormattingContext = {
   atLineStart: true,
   atLineEnd: false
 };
-```
 
-### Benefits
-1. **Consistency**: Ensures formatting context has the same structure throughout the codebase
-2. **Validation**: Prevents missing properties when creating formatting contexts
-3. **Cross-Service Clarity**: Makes it clear what data is being passed between services
-4. **Documentation**: Serves as self-documentation for what properties affect formatting
-
-## 3. Proper Directive Context Type
-
-### Current Issue
-```typescript
-// Current implementation uses 'any' type
-private async callDirectiveHandleDirective(node: DirectiveNode, context: any): Promise<any> {
-  // Implementation
+// Safe property access with type checking
+if (directiveResult.getFormattingContext) {
+  const updatedContext = directiveResult.getFormattingContext();
+  if (updatedContext) {
+    // Type-safe property access
+    logger.debug('Formatting context updated by directive', {
+      directiveKind: directiveNode.directive.kind,
+      contextType: updatedContext.contextType,
+      isOutputLiteral: updatedContext.isOutputLiteral
+    });
+  }
 }
 ```
 
-The directive context is passed as `any`, which loses all type safety and makes it unclear what properties are required or optional.
+### Justification
+1. **Consistency**: Ensures consistent formatting context across service boundaries
+2. **Validation**: Prevents invalid context types (must be 'inline' or 'block')
+3. **Documentation**: Makes the purpose and structure of the context explicit
+4. **Discoverability**: Makes it clear what properties are available in the context
+5. **Maintenance**: Easier to update all code that uses the context when requirements change
+
+## 3. Typed Variable Reference Handling
+
+### Current Issue
+```typescript
+// Inconsistent handling of variable reference types
+if ((node as any).valueType === 'text') {
+  // Handle TextVar nodes similar to Text nodes
+  const textVarState = currentState.clone();
+  textVarState.addNode(node);
+  currentState = textVarState;
+} else if ((node as any).valueType === 'data') {
+  // Handle DataVar nodes similar to Text/TextVar nodes
+  const dataVarState = currentState.clone();
+  dataVarState.addNode(node);
+  currentState = dataVarState;
+}
+
+// Legacy cases with type assertions
+case 'TextVar' as any:
+  // Handle TextVar nodes similar to Text nodes
+  const textVarState = currentState.clone();
+  textVarState.addNode(node);
+  currentState = textVarState;
+  break;
+
+case 'DataVar' as any:
+  // Handle DataVar nodes similar to Text/TextVar nodes
+  const dataVarState = currentState.clone();
+  dataVarState.addNode(node);
+  currentState = dataVarState;
+  break;
+```
+
+### Proposed Solution
+```typescript
+// Define proper types for variable references
+interface VariableReferenceNode extends MeldNode {
+  type: 'VariableReference';
+  valueType: 'text' | 'data' | 'path';
+  name: string;
+  fields?: string[];
+}
+
+// Then in the switch statement:
+case 'VariableReference':
+  const varRefNode = node as VariableReferenceNode;
+  const varRefState = currentState.clone();
+  varRefState.addNode(node);
+  currentState = varRefState;
+  
+  // Log appropriate information based on variable type
+  logger.debug('Processing variable reference', {
+    valueType: varRefNode.valueType,
+    name: varRefNode.name,
+    hasFields: !!varRefNode.fields
+  });
+  break;
+
+// Remove legacy cases
+```
+
+### Justification
+1. **Unified Handling**: Treats all variable references consistently
+2. **Type Safety**: Eliminates unsafe `as any` casts
+3. **Code Clarity**: Makes it explicit what properties are expected
+4. **Refactoring Support**: Makes it easier to update variable handling logic
+5. **Migration Path**: Provides a clear path to remove legacy code
+6. **Debugging**: Improves logging with type-specific information
+
+## 4. Typed Directive Context
+
+### Current Issue
+```typescript
+// Untyped context object passed to directive handlers
+const directiveResult = await this.callDirectiveHandleDirective(directiveNode, {
+  state: directiveState,
+  parentState: currentState,
+  currentFilePath: state.getCurrentFilePath() ?? undefined,
+  formattingContext // Add formatting context for cross-service propagation
+});
+```
 
 ### Proposed Solution
 ```typescript
@@ -102,264 +206,259 @@ interface DirectiveContext {
   parentState: StateServiceLike;
   currentFilePath?: string;
   formattingContext: FormattingContext;
-  importFilter?: string[];
 }
 
-// Use the interface
-private async callDirectiveHandleDirective(node: DirectiveNode, context: DirectiveContext): Promise<DirectiveResult> {
-  // Implementation remains similar, but with proper types
-}
+// Create a typed context
+const directiveContext: DirectiveContext = {
+  state: directiveState,
+  parentState: currentState,
+  currentFilePath: state.getCurrentFilePath() ?? undefined,
+  formattingContext
+};
+
+const directiveResult = await this.callDirectiveHandleDirective(directiveNode, directiveContext);
 ```
 
-### Benefits
-1. **API Clarity**: Makes it clear what properties directive handlers can expect
-2. **Compile-Time Checking**: Ensures all required properties are provided
-3. **Prevents Typos**: Catches property name typos at compile time
-4. **Consistency**: Ensures consistent context structure across directive handlers
+### Justification
+1. **Contract Definition**: Clearly defines what directive handlers can expect
+2. **Validation**: Ensures all required properties are provided
+3. **Documentation**: Self-documents the expected structure
+4. **Cross-Service Consistency**: Ensures consistent context structure across service boundaries
+5. **Extensibility**: Makes it easier to add new context properties in the future
 
-## 4. Enum for Node Types
+## 5. Enhanced StateServiceLike Interface
 
 ### Current Issue
 ```typescript
-// Current implementation uses string comparison
-switch (node.type) {
-  case 'Text':
-    // Implementation
-    break;
-  case 'CodeFence':
-    // Implementation
-    break;
-  // More cases...
-}
-
-// Legacy compatibility with string casting
-case 'TextVar' as any:
-  // Implementation
-  break;
-```
-
-The code uses string literals for node types and has to handle legacy node types with type casting, making it brittle and harder to maintain.
-
-### Proposed Solution
-```typescript
-// Define an enum for node types
-enum NodeType {
-  Text = 'Text',
-  CodeFence = 'CodeFence',
-  VariableReference = 'VariableReference',
-  Directive = 'Directive',
-  Comment = 'Comment',
-  // Legacy types for compatibility
-  TextVar = 'TextVar',
-  DataVar = 'DataVar'
-}
-
-// Use the enum
-switch (node.type as NodeType) {
-  case NodeType.Text:
-    // Implementation
-    break;
-  case NodeType.CodeFence:
-    // Implementation
-    break;
-  // More cases...
-}
-```
-
-### Benefits
-1. **Centralized Definition**: Single source of truth for all node types
-2. **Discoverability**: Makes all possible node types visible in one place
-3. **Refactoring Support**: Makes it easier to rename or consolidate node types
-4. **Error Prevention**: Prevents typos in node type strings
-
-## 5. Variable Type Discrimination
-
-### Current Issue
-```typescript
-// Current implementation uses property checking
-if ((node as any).valueType === 'text') {
-  // Handle TextVar nodes
-} else if ((node as any).valueType === 'data') {
-  // Handle DataVar nodes
-}
-```
-
-The code uses type casting and property checking to determine variable types, which is error-prone and obscures the actual data model.
-
-### Proposed Solution
-```typescript
-// Define a discriminated union for variable types
-interface BaseVariableNode extends MeldNode {
-  valueType: string;
-}
-
-interface TextVariableNode extends BaseVariableNode {
-  valueType: 'text';
-  name: string;
-  value: string;
-}
-
-interface DataVariableNode extends BaseVariableNode {
-  valueType: 'data';
-  name: string;
-  value: unknown;
-  fields?: string[];
-}
-
-// Type guard functions
-function isTextVariableNode(node: MeldNode): node is TextVariableNode {
-  return node.type === 'VariableReference' && 
-         'valueType' in node && 
-         (node as any).valueType === 'text';
-}
-
-function isDataVariableNode(node: MeldNode): node is DataVariableNode {
-  return node.type === 'VariableReference' && 
-         'valueType' in node && 
-         (node as any).valueType === 'data';
-}
-
-// Usage
-if (isTextVariableNode(node)) {
-  // TypeScript knows this is a TextVariableNode
-  const textVarState = currentState.clone();
-  textVarState.addNode(node);
-  currentState = textVarState;
-} else if (isDataVariableNode(node)) {
-  // TypeScript knows this is a DataVariableNode
-  const dataVarState = currentState.clone();
-  dataVarState.addNode(node);
-  currentState = dataVarState;
-}
-```
-
-### Benefits
-1. **Type Safety**: Eliminates unsafe type casting
-2. **Code Clarity**: Makes the variable type model explicit
-3. **Error Prevention**: Catches errors when accessing properties that don't exist
-4. **Self-Documentation**: Documents the structure of variable nodes
-
-## 6. Enhanced StateServiceLike Interface
-
-### Current Issue
-```typescript
-// Current implementation uses optional chaining and null checks
+// Inconsistent optional chaining due to uncertain interface
 if (!currentState.getTransformedNodes || !currentState.getTransformedNodes()) {
   // Initialize transformed nodes if needed
   const originalNodes = currentState.getNodes();
   if (originalNodes && currentState.setTransformedNodes) {
     currentState.setTransformedNodes([...originalNodes]);
-    // ...
+    logger.debug('Initialized transformed nodes array', {
+      nodesCount: originalNodes.length
+    });
   }
+}
+
+// Multiple optional chaining and non-null assertions
+if (isImportDirective && 
+    currentState.isTransformationEnabled && 
+    currentState.isTransformationEnabled()) {
+  // ...
 }
 ```
 
-The code has to constantly check if methods exist before calling them, leading to verbose code and potential runtime errors.
-
 ### Proposed Solution
 ```typescript
-// Define a more specific interface for transformation-capable states
-interface TransformationCapableState extends StateServiceLike {
+// Enhanced interface with clear transformation capabilities
+interface TransformableStateService extends StateServiceLike {
+  // Core state methods (always present)
+  getNodes(): MeldNode[];
+  addNode(node: MeldNode): void;
+  clone(): TransformableStateService;
+  
+  // Transformation methods (grouped for clarity)
   isTransformationEnabled(): boolean;
-  getTransformedNodes(): MeldNode[] | null;
+  getTransformedNodes(): MeldNode[] | undefined;
   setTransformedNodes(nodes: MeldNode[]): void;
   transformNode(original: MeldNode, replacement: MeldNode): void;
 }
 
-// Type guard function
-function supportsTransformation(state: StateServiceLike): state is TransformationCapableState {
-  return typeof state.isTransformationEnabled === 'function' &&
-         typeof state.getTransformedNodes === 'function' &&
-         typeof state.setTransformedNodes === 'function' &&
-         typeof state.transformNode === 'function';
+// Then in the code:
+function ensureTransformationInitialized(state: TransformableStateService): void {
+  if (!state.getTransformedNodes()) {
+    const originalNodes = state.getNodes();
+    state.setTransformedNodes([...originalNodes]);
+    logger.debug('Initialized transformed nodes array', {
+      nodesCount: originalNodes.length
+    });
+  }
 }
 
-// Usage
-if (supportsTransformation(currentState) && currentState.isTransformationEnabled()) {
-  // TypeScript knows this state supports all transformation methods
-  if (!currentState.getTransformedNodes()) {
-    const originalNodes = currentState.getNodes();
-    if (originalNodes) {
-      currentState.setTransformedNodes([...originalNodes]);
-      // ...
-    }
-  }
-  
-  // Apply the transformation
-  currentState.transformNode(node, replacement);
+// Usage in interpretNode
+if (currentState.isTransformationEnabled()) {
+  ensureTransformationInitialized(currentState as TransformableStateService);
+  // Apply transformation
+  (currentState as TransformableStateService).transformNode(node, replacement);
 }
 ```
 
-### Benefits
-1. **Code Clarity**: Reduces optional chaining and null checks
-2. **Error Prevention**: Ensures all required methods are available before use
-3. **Self-Documentation**: Makes it clear what methods are needed for transformation
-4. **Maintainability**: Makes it easier to understand the transformation capabilities
+### Justification
+1. **Explicit Capabilities**: Clearly defines what a transformable state can do
+2. **Reduced Null Checks**: Fewer optional chaining operators needed
+3. **Function Extraction**: Enables extracting helper functions with proper typing
+4. **Error Prevention**: Prevents calling transformation methods on non-transformable states
+5. **Documentation**: Self-documents the transformation capabilities
 
-## 7. Typed Variable Copying Options
+## 6. Typed Variable Value Storage
 
 ### Current Issue
+The service doesn't have clear types for the actual variable values, leading to potential issues when copying variables between states:
+
 ```typescript
-// Current implementation uses an inline object with unclear properties
+// Current implementation uses unknown types for variable values
 this.stateVariableCopier.copyAllVariables(
   currentState as unknown as IStateService, 
   originalState as unknown as IStateService, 
   {
     skipExisting: false,
-    trackContextBoundary: false, // No tracking service in the interpreter
+    trackContextBoundary: false,
     trackVariableCrossing: false
   }
 );
 ```
 
-The variable copying options are passed as an inline object with no formal interface, making it unclear what options are available and what they do.
-
 ### Proposed Solution
 ```typescript
-// Define a proper interface for copy options
+// Define clear types for variable values
+type TextVariableValue = string;
+type PathVariableValue = string;
+type DataVariableValue = string | number | boolean | null | object | any[]; // JSON-compatible values
+
+interface VariableTypes {
+  text: TextVariableValue;
+  path: PathVariableValue;
+  data: DataVariableValue;
+}
+
+// Enhanced state interface with typed variable access
+interface TypedStateService extends StateServiceLike {
+  getTextVar(name: string): TextVariableValue | undefined;
+  getPathVar(name: string): PathVariableValue | undefined;
+  getDataVar(name: string): DataVariableValue | undefined;
+  
+  setTextVar(name: string, value: TextVariableValue): void;
+  setPathVar(name: string, value: PathVariableValue): void;
+  setDataVar(name: string, value: DataVariableValue): void;
+}
+
+// Typed variable copier
 interface VariableCopyOptions {
   skipExisting: boolean;
   trackContextBoundary: boolean;
   trackVariableCrossing: boolean;
-  overwriteExisting?: boolean;
-  includeCommands?: boolean;
-  includePathVars?: boolean;
-  includeTextVars?: boolean;
-  includeDataVars?: boolean;
 }
 
-// Create with proper typing
-const copyOptions: VariableCopyOptions = {
-  skipExisting: false,
-  trackContextBoundary: false,
-  trackVariableCrossing: false,
-  // Optional properties can be added as needed
-  includeCommands: true
-};
-
-// Use the interface
-this.stateVariableCopier.copyAllVariables(
-  currentState as IStateService,
-  originalState as IStateService,
-  copyOptions
-);
+class TypedStateVariableCopier {
+  copyAllVariables(
+    source: TypedStateService,
+    target: TypedStateService,
+    options: VariableCopyOptions
+  ): void {
+    // Implementation with proper typing
+  }
+}
 ```
 
-### Benefits
-1. **Documentation**: Makes it clear what options are available
-2. **Prevents Typos**: Catches property name typos at compile time
-3. **Discoverability**: Makes all possible options visible to developers
-4. **Consistency**: Ensures consistent option structure across the codebase
+### Justification
+1. **Type Safety**: Ensures variables contain expected value types
+2. **Clear Contracts**: Defines what each variable type can store
+3. **Error Prevention**: Prevents storing invalid values in variables
+4. **Documentation**: Self-documents the variable type system
+5. **Consistency**: Ensures consistent variable handling across services
 
-## Conclusion
+## 7. Enhanced Directive Node Type
 
-Implementing these type improvements would significantly enhance the InterpreterService's variable handling capabilities. The benefits include:
+### Current Issue
+```typescript
+// Type checking with property access
+if (node.type !== 'Directive' || !('directive' in node) || !node.directive) {
+  throw new MeldInterpreterError(
+    'Invalid directive node',
+    'invalid_directive',
+    convertLocation(node.location)
+  );
+}
+const directiveNode = node as DirectiveNode;
 
-1. **Reduced Runtime Errors**: By catching type mismatches at compile time
-2. **Improved Code Clarity**: By making the data model explicit and self-documenting
-3. **Better Maintainability**: By centralizing type definitions and reducing duplication
-4. **Enhanced Developer Experience**: Through better IDE support and discoverability
+// Unsafe property access for directive kind
+const isImportDirective = directiveNode.directive.kind === 'import';
+```
 
-These improvements align with the service's core responsibility of orchestrating the Meld execution pipeline while maintaining robust variable handling across service boundaries.
+### Proposed Solution
+```typescript
+// Enhanced directive node type with discriminated union
+type DirectiveKind = 'text' | 'data' | 'path' | 'import' | 'embed' | 'run' | 'define';
 
-The most critical improvements to implement first would be the `DirectiveResult` interface and the `FormattingContext` interface, as these would provide immediate benefits in the most complex parts of the code.
+interface BaseDirective {
+  kind: DirectiveKind;
+}
+
+interface TextDirective extends BaseDirective {
+  kind: 'text';
+  name: string;
+  value: string;
+}
+
+interface DataDirective extends BaseDirective {
+  kind: 'data';
+  name: string;
+  value: any;
+}
+
+interface PathDirective extends BaseDirective {
+  kind: 'path';
+  name: string;
+  value: string;
+}
+
+interface ImportDirective extends BaseDirective {
+  kind: 'import';
+  path: string | { isVariableReference: boolean; name: string };
+}
+
+// Union type for all directives
+type DirectiveSpec = 
+  | TextDirective 
+  | DataDirective 
+  | PathDirective 
+  | ImportDirective
+  // Other directive types...
+
+// Enhanced directive node
+interface EnhancedDirectiveNode extends MeldNode {
+  type: 'Directive';
+  directive: DirectiveSpec;
+}
+
+// Then in the code, use type guards:
+function isImportDirective(node: MeldNode): node is EnhancedDirectiveNode {
+  return node.type === 'Directive' && 
+         'directive' in node && 
+         node.directive?.kind === 'import';
+}
+
+// Usage
+if (isImportDirective(node)) {
+  // Now TypeScript knows this is an import directive
+  const importPath = typeof node.directive.path === 'string' 
+    ? node.directive.path 
+    : node.directive.path.name;
+  // ...
+}
+```
+
+### Justification
+1. **Type Safety**: Ensures directive properties match their kind
+2. **Discriminated Unions**: Leverages TypeScript's powerful type narrowing
+3. **Self-Validation**: Type system ensures directive properties are consistent
+4. **Code Clarity**: Makes directive structure explicit
+5. **Refactoring Support**: Makes it easier to update directive handling logic
+6. **IDE Support**: Better autocomplete and type checking
+
+## Implementation Strategy
+
+To implement these improvements systematically:
+
+1. **Start with interfaces**: Define the enhanced interfaces in a separate file
+2. **Gradual adoption**: Use type assertions initially while migrating
+3. **Update core services first**: Begin with StateService and DirectiveService
+4. **Add type guards**: Create type guards for safer type narrowing
+5. **Update tests**: Ensure tests validate the new type constraints
+6. **Remove legacy code**: Once migration is complete, remove legacy type cases
+
+This approach ensures a smooth transition without breaking existing functionality while significantly improving type safety and code clarity.
+
+I believe these enhancements would make the InterpreterCore service more robust, easier to maintain, and less prone to runtime errors related to variable handling.

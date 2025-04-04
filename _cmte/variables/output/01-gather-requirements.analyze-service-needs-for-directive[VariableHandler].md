@@ -1,362 +1,278 @@
-# Variable Handling Type System Improvements for Meld
+# VariableHandler Service Type Improvement Proposal
 
-After reviewing the VariableHandler service code, I've identified several areas where TypeScript's type system can be leveraged to create a more robust, maintainable, and self-documenting variable resolution system. The following improvements will significantly reduce runtime errors, improve code clarity, and make future maintenance easier.
+## Current Challenges in Variable Handling
 
-## 1. Strongly Typed Variable Values
+After reviewing the Meld architecture and variable handling documentation, I've identified several areas where the TypeScript type system for variable handling could be strengthened to improve code safety, readability, and maintainability.
 
-### Current Issues:
-- Variables are stored and retrieved as `any` type, leading to unpredictable runtime behaviors
-- Type checking is performed manually through conditionals (`typeof`, `Array.isArray()`)
-- Field access relies on runtime checks that could be caught at compile time
-- String conversion logic varies based on runtime type detection
+## 1. Unified Variable Type System
 
-### Proposed Solution:
+### Current Issue
+The codebase currently uses separate handling paths for different variable types (path, text, data), leading to:
+- Duplicate validation logic
+- Type casting in multiple places
+- Manual checking of variable types
+- Inconsistent handling of edge cases
+
+### Proposed Solution
 ```typescript
-// Define a union type for all possible variable value types
-type VariableValue = 
-  | string 
-  | number 
-  | boolean 
-  | null 
-  | VariableObject 
-  | VariableArray;
+// Define a discriminated union for variable types
+type MeldVariable = 
+  | { type: 'text'; value: string; sourceLocation?: SourceLocation }
+  | { type: 'path'; value: string; sourceLocation?: SourceLocation }
+  | { type: 'data'; value: any; sourceLocation?: SourceLocation };
 
-// For structured data
-interface VariableObject {
-  [key: string]: VariableValue;
-}
-
-// For array data
-type VariableArray = VariableValue[];
-
-// For variable storage in state
-interface VariableStore<T extends VariableValue = VariableValue> {
-  get(name: string): T | undefined;
-  set(name: string, value: T): void;
-  has(name: string): boolean;
-}
-
-// Type-specific stores
-interface TextVariableStore extends VariableStore<string> {}
-interface DataVariableStore extends VariableStore<VariableValue> {}
-interface PathVariableStore extends VariableStore<string> {}
-```
-
-### Benefits:
-1. **Type Safety**: Prevents improper usage of variable values by enforcing type constraints
-2. **Self-Documentation**: Makes the expected variable types explicit in the code
-3. **Simplified Logic**: Eliminates need for extensive type checking and error-prone type coercion
-4. **Better Error Messages**: TypeScript will provide clear compile-time errors when variable types are misused
-
-## 2. Field Access Type System
-
-### Current Issues:
-- Field access uses untyped arrays and manual type checking
-- Field access errors are only caught at runtime
-- Complex error handling for various field access scenarios
-- Duplicate code for field validation and access
-
-### Proposed Solution:
-```typescript
-// Type-safe field access path
-type FieldPath = Array<Field>;
-
-// Strong typing for field access operations
-interface Field {
-  type: 'field' | 'index';
-  value: string | number;
-}
-
-// Type-safe field accessor
-class TypedFieldAccessor {
-  static access<T extends VariableValue>(
-    value: T, 
-    fields: FieldPath
-  ): VariableValue | undefined {
-    // Implementation with proper type narrowing
-  }
-  
-  // Type predicates for field access validation
-  static canAccessField(value: VariableValue, field: Field): boolean {
-    if (field.type === 'index') {
-      return Array.isArray(value) && 
-             typeof field.value === 'number' && 
-             field.value >= 0 && 
-             field.value < value.length;
-    } else {
-      return typeof value === 'object' && 
-             value !== null && 
-             !Array.isArray(value) && 
-             field.value in value;
-    }
-  }
+// Type-safe accessor functions
+function getVariable(state: IStateService, name: string): MeldVariable | undefined {
+  // Implementation that unifies the current separate getTextVar/getPathVar/getDataVar paths
 }
 ```
 
-### Benefits:
-1. **Compile-time Validation**: Many field access errors can be caught during development
-2. **Centralized Logic**: Encapsulates field access in a single, well-tested component
-3. **Cleaner Error Handling**: Simplifies error handling with type predicates
-4. **Improved Testability**: Makes field access logic easier to test in isolation
+### Justification
+1. **Simplified Code**: Reduces duplicate validation logic across variable types
+2. **Type Safety**: Eliminates manual type checking and casting
+3. **Consistent Handling**: Ensures all variable types receive the same validation rigor
+4. **Better Error Messages**: TypeScript can provide more specific error messages when types are misused
 
-## 3. Resolution Context Type Enhancement
+## 2. Resolution Context Type Enhancement
 
-### Current Issues:
-- Context object is loosely typed with many properties cast as `any`
-- Context flags like `isVariableEmbed` and `disablePathPrefixing` lack proper typing
-- Context depth tracking for circular references uses type assertions
-- Context extension with additional properties is error-prone
+### Current Issue
+The `ResolutionContext` passed through variable resolution lacks clear typing for context-specific flags and properties, leading to:
+- Implicit assumptions about context properties
+- Runtime errors when expected properties are missing
+- Difficult-to-trace context propagation issues
 
-### Proposed Solution:
+### Proposed Solution
 ```typescript
-// Base resolution context
+// Define a more comprehensive ResolutionContext type
 interface ResolutionContext {
-  state: IStateService;
+  // Base context properties
   strict: boolean;
-  depth?: number;
-  allowedVariableTypes?: VariableType[];
+  depth: number;
+  
+  // Formatting context
+  formatting: {
+    isBlock: boolean;
+    nodeType?: string;
+    linePosition?: 'start' | 'middle' | 'end';
+  };
+  
+  // Resolution constraints
+  constraints: {
+    allowedVariableTypes?: Array<'text' | 'path' | 'data'>;
+    isVariableEmbed?: boolean;
+    disablePathPrefixing?: boolean;
+  };
+  
+  // Transformation options
+  transformation: {
+    enabled: boolean;
+    preserveStructure?: boolean;
+  };
+  
+  // Tracing for debugging
+  trace?: {
+    path: string[];
+    operations: string[];
+  };
 }
 
-// Extended contexts for specific resolution scenarios
-interface VariableEmbedContext extends ResolutionContext {
-  isVariableEmbed: true;
-  disablePathPrefixing?: boolean;
-}
-
-interface FieldAccessContext extends ResolutionContext {
-  preserveType?: boolean;
-  parentVariableName?: string;
-}
-
-// Type guard for context types
-function isVariableEmbedContext(
-  context: ResolutionContext
-): context is VariableEmbedContext {
-  return 'isVariableEmbed' in context && context.isVariableEmbed === true;
-}
-
-// Type-safe context creation
-function createResolutionContext(
-  state: IStateService,
-  options: Partial<ResolutionContext> = {}
-): ResolutionContext {
+// Default context factory
+function createDefaultContext(overrides?: Partial<ResolutionContext>): ResolutionContext {
   return {
-    state,
     strict: false,
-    ...options,
-    depth: options.depth ?? 0
+    depth: 0,
+    formatting: { isBlock: false },
+    constraints: {},
+    transformation: { enabled: false },
+    ...overrides
   };
 }
 ```
 
-### Benefits:
-1. **Type Safety**: Prevents misuse of context properties and flags
-2. **Explicit Intentions**: Makes the purpose of each context type clear
-3. **Reduced Type Assertions**: Eliminates need for `as any` casts
-4. **Simplified Conditionals**: Type guards provide cleaner context type checking
+### Justification
+1. **Explicit Context Requirements**: Makes clear what context properties are available
+2. **Safer Context Propagation**: Ensures all required properties are passed during context cloning/modification
+3. **Better Documentation**: The type itself documents the purpose of each context property
+4. **Compiler Assistance**: TypeScript will flag missing or incorrect context properties
 
-## 4. Formatting Context Enums and Types
+## 3. Field Access Type Safety
 
-### Current Issues:
-- Formatting decisions use boolean flags and string literals
-- The relationship between formatting parameters is unclear
-- Format determination logic is scattered and duplicated
-- Special case handling for arrays and complex structures
+### Current Issue
+The current field access mechanism in `resolveFieldAccess` and `accessFields` relies on dynamic property access and type checking, which:
+- Makes code verbose with manual type checks
+- Requires try/catch blocks for basic operations
+- Makes edge cases hard to identify at compile time
+- Results in complex, nested conditional logic
 
-### Proposed Solution:
+### Proposed Solution
 ```typescript
-// Formatting mode enum
-enum FormatMode {
-  INLINE = 'inline',
-  BLOCK = 'block'
+// Type-safe field access with path array
+function accessFields<T>(
+  value: T, 
+  fields: string[], 
+  context: ResolutionContext
+): { success: true; value: any } | { success: false; error: string } {
+  // Implementation with proper type narrowing
 }
 
-// Node position for context-aware formatting
-enum LinePosition {
-  START = 'start',
-  MIDDLE = 'middle',
-  END = 'end'
-}
+// Type-safe JSON path accessor
+type JSONPathResult<T, P extends string[]> = 
+  P extends [] ? T :
+  P extends [infer First, ...infer Rest] ?
+    First extends keyof T ?
+      Rest extends string[] ?
+        JSONPathResult<T[First], Rest> :
+        never :
+      { error: `Property ${string & First} does not exist on type` } :
+  never;
 
-// Comprehensive formatting context
-interface FormattingContext {
-  mode: FormatMode;
-  nodeType?: string;
-  linePosition?: LinePosition;
-  isTransformation?: boolean;
-}
-
-// Type-safe formatter
-class VariableFormatter {
-  static format(
-    value: VariableValue,
-    context: FormattingContext
-  ): string {
-    // Implementation with proper type handling
-  }
-  
-  // Specialized formatters for different types
-  static formatObject(
-    obj: VariableObject,
-    context: FormattingContext
-  ): string {
-    return context.mode === FormatMode.BLOCK
-      ? JSON.stringify(obj, null, 2)
-      : JSON.stringify(obj);
-  }
-  
-  static formatArray(
-    arr: VariableArray,
-    context: FormattingContext
-  ): string {
-    // Array-specific formatting logic
-  }
+function typeSafeAccessFields<T, P extends string[]>(
+  value: T,
+  path: P
+): JSONPathResult<T, P> {
+  // Implementation that leverages TypeScript's type system
 }
 ```
 
-### Benefits:
-1. **Consistent Formatting**: Ensures consistent formatting decisions across the codebase
-2. **Self-Documenting Code**: Makes formatting intentions explicit
-3. **Centralized Logic**: Consolidates formatting logic in one place
-4. **Extensibility**: Makes it easy to add new formatting options
+### Justification
+1. **Reduced Error Handling**: Less manual error handling code needed
+2. **Early Error Detection**: Many invalid field access patterns can be caught at compile time
+3. **Self-Documenting**: The return type clearly indicates success/failure
+4. **Simplified Logic**: Removes complex nested conditionals and type checks
 
-## 5. Variable Reference Node Type System
+## 4. Variable State Management Interface
 
-### Current Issues:
-- Multiple variable node types with overlapping properties
-- Type checking relies on runtime property checks
-- Legacy node types maintained for backward compatibility
-- Factory pattern implementation mixes with direct type checking
+### Current Issue
+The current state service interface for variables lacks specificity about what operations are supported, leading to:
+- Inconsistent variable mutation patterns
+- Unclear immutability guarantees
+- Difficulty tracing variable lifecycle changes
+- Redundant defensive copying
 
-### Proposed Solution:
+### Proposed Solution
 ```typescript
-// Base variable reference interface
-interface IVariableReference {
-  type: 'VariableReference';
-  identifier: string;
-  valueType: VariableType;
-  fields?: Field[];
-  isVariableReference: boolean;
+// Clear interface for variable state operations
+interface IVariableStateService {
+  // Getters with specific return types
+  getVariable(name: string): MeldVariable | undefined;
+  
+  // Type-safe setters
+  setTextVariable(name: string, value: string, options?: VariableOptions): void;
+  setPathVariable(name: string, value: string, options?: VariableOptions): void;
+  setDataVariable(name: string, value: any, options?: VariableOptions): void;
+  
+  // Explicit variable operations
+  hasVariable(name: string): boolean;
+  deleteVariable(name: string): boolean;
+  
+  // Copy operations with clear semantics
+  cloneVariableTo(name: string, targetState: IVariableStateService): void;
+  copyAllVariablesTo(targetState: IVariableStateService, filter?: VariableFilter): void;
+  
+  // Immutability control
+  withImmutableVariables<T>(operation: () => T): T;
 }
 
-// Enum for variable types
-enum VariableType {
-  TEXT = 'text',
-  DATA = 'data',
-  PATH = 'path'
+// Options for variable creation/modification
+interface VariableOptions {
+  immutable?: boolean;
+  sourceLocation?: SourceLocation;
+  metadata?: Record<string, any>;
 }
 
-// Type guards using discriminated unions
-function isVariableReferenceNode(node: MeldNode): node is IVariableReference {
-  return node.type === 'VariableReference' && 
-         'identifier' in node &&
-         'valueType' in node;
-}
-
-// Factory with proper typing
-class VariableNodeFactory {
-  createVariableReferenceNode(
-    identifier: string,
-    valueType: VariableType,
-    fields?: Field[]
-  ): IVariableReference {
-    return {
-      type: 'VariableReference',
-      identifier,
-      valueType,
-      fields,
-      isVariableReference: true
-    };
-  }
+// Filter for variable copying
+interface VariableFilter {
+  types?: Array<'text' | 'path' | 'data'>;
+  namePattern?: RegExp;
+  excludeImmutable?: boolean;
 }
 ```
 
-### Benefits:
-1. **Type Consistency**: Ensures consistent node structure across the codebase
-2. **Cleaner Type Guards**: Simplifies node type checking
-3. **Better Factory Pattern**: Makes factory pattern more effective with proper types
-4. **Reduced Legacy Code**: Provides a path to eliminate legacy type handling
+### Justification
+1. **Clear Contract**: Explicit methods for each operation type
+2. **Type Safety**: Return types match the expected variable types
+3. **Immutability Control**: Explicit immutability options and guarantees
+4. **Traceability**: Options for tracking variable origins and changes
+5. **Simplified Implementation**: Reduces boilerplate in implementations
 
-## 6. Error Handling Type System
+## 5. Transformation Handling Types
 
-### Current Issues:
-- Error creation is inconsistent and scattered
-- Error details vary based on the error scenario
-- Error handling logic is duplicated across methods
-- Error tracking lacks proper typing
+### Current Issue
+The current transformation handling lacks clear typing for transformation options and results, leading to:
+- Inconsistent transformation application
+- Manual checking of transformation flags
+- Unclear transformation rules across directive types
+- Complex conditional logic for determining output format
 
-### Proposed Solution:
+### Proposed Solution
 ```typescript
-// Specific error types
-enum VariableErrorType {
-  VARIABLE_NOT_FOUND = 'variable-not-found',
-  FIELD_NOT_FOUND = 'field-not-found',
-  INVALID_ACCESS = 'invalid-access',
-  INDEX_OUT_OF_BOUNDS = 'index-out-of-bounds',
-  CIRCULAR_REFERENCE = 'circular-reference',
-  MAX_DEPTH_EXCEEDED = 'max-depth-exceeded'
+// Clear transformation options type
+interface TransformationOptions {
+  enabled: boolean;
+  directives: {
+    text?: boolean;
+    data?: boolean;
+    path?: boolean;
+    import?: boolean;
+    embed?: boolean;
+    run?: boolean;
+    define?: boolean;
+  };
+  output: {
+    format: 'markdown' | 'llm' | 'debug';
+    preserveStructure?: boolean;
+    includeSourceInfo?: boolean;
+  };
 }
 
-// Structured error details
-interface VariableErrorDetails {
-  variableName: string;
-  fieldPath?: string;
-  availableFields?: string[];
-  index?: number;
-  arrayLength?: number;
-  expectedType?: string;
-  actualType?: string;
-  depth?: number;
+// Type for transformation results
+interface TransformationResult {
+  originalNode: MeldNode;
+  transformedNode?: MeldNode;
+  replacementNodes?: MeldNode[];
+  skipTransformation?: boolean;
+  transformationApplied: boolean;
 }
 
-// Enhanced error factory
-class VariableResolutionErrorFactory {
-  static create(
-    type: VariableErrorType,
-    message: string,
-    details: VariableErrorDetails
-  ): MeldResolutionError {
-    return new MeldResolutionError(message, {
-      code: type,
-      severity: ErrorSeverity.Error,
-      details
-    });
-  }
-  
-  // Convenience methods for common errors
-  static variableNotFound(name: string): MeldResolutionError {
-    return this.create(
-      VariableErrorType.VARIABLE_NOT_FOUND,
-      `Variable '${name}' not found`,
-      { variableName: name }
-    );
-  }
-  
-  // Other error type methods...
+// Handler result with transformation support
+interface DirectiveHandlerResult {
+  success: boolean;
+  error?: string;
+  transformation?: TransformationResult;
+  variables?: {
+    added?: MeldVariable[];
+    modified?: MeldVariable[];
+    deleted?: string[];
+  };
 }
 ```
 
-### Benefits:
-1. **Consistent Errors**: Ensures consistent error structure and messages
-2. **Detailed Error Information**: Provides structured error details for better debugging
-3. **Type Safety**: Prevents missing required error details
-4. **Centralized Error Creation**: Consolidates error creation logic
+### Justification
+1. **Explicit Transformation Rules**: Clear specification of what gets transformed
+2. **Consistent Application**: Ensures transformation is applied uniformly
+3. **Self-Documenting**: The types document the transformation capabilities
+4. **Reduced Conditionals**: Less need for complex condition checking
+5. **Better Tracking**: Clear tracking of what transformations were applied
 
-## Implementation Strategy and Impact
+## Implementation Strategy
 
 To implement these improvements:
 
-1. **Start with Core Types**: Implement the `VariableValue` and related types first
-2. **Gradual Migration**: Update methods one at a time to use the new type system
-3. **Backward Compatibility**: Maintain compatibility layers during transition
-4. **Unit Tests**: Add tests to verify type-safe behavior
+1. **Phase 1**: Define the new types in a separate file without changing existing code
+2. **Phase 2**: Create adapter functions that bridge between old and new types
+3. **Phase 3**: Gradually migrate service methods to use the new types
+4. **Phase 4**: Update tests to use the new type system
+5. **Phase 5**: Remove legacy code paths once fully migrated
 
-These changes will have a significant impact:
+## Benefits Summary
 
-1. **Reduced Bug Surface**: Fewer runtime errors from type mismatches
-2. **Improved Developer Experience**: Better IDE support and self-documenting code
-3. **Simplified Logic**: Less defensive coding and runtime type checking
-4. **Better Maintainability**: Clearer code structure and intentions
-5. **Enhanced Performance**: Potential performance improvements from reduced type checking
+These type improvements will provide several key benefits:
 
-By implementing these type system improvements, the VariableHandler service will become more robust, easier to maintain, and less prone to bugs, ultimately improving the reliability of the entire Meld language interpreter.
+1. **Reduced Code Complexity**: Fewer manual type checks and simpler logic
+2. **Better Error Detection**: More errors caught at compile time
+3. **Improved Maintainability**: Clearer interfaces and better documentation
+4. **Enhanced Debugging**: Better tracing and error reporting
+5. **Consistent Behavior**: More uniform handling of edge cases
+6. **Future-Proofing**: Easier to extend with new features
+
+By implementing these type improvements, the VariableHandler service will become more robust, easier to maintain, and less prone to subtle bugs that currently require extensive testing to catch.

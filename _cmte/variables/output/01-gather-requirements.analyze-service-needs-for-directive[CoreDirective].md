@@ -1,271 +1,313 @@
-# CoreDirective Service Variable Handling Type Improvements
+# Variable Handling Type Improvements for CoreDirective Service
 
-After analyzing the DirectiveService code, I've identified several areas where stronger TypeScript types could significantly improve variable handling. The current implementation has several areas that could benefit from more precise typing to reduce complexity, improve safety, and enhance maintainability.
+After analyzing the DirectiveService code and the Meld variable handling system, I've identified several opportunities to improve type safety, reduce complexity, and enhance maintainability through stronger TypeScript typing. Here are my recommended improvements with clear justifications for each.
 
 ## 1. Strongly Typed Resolution Context
 
-### Current Issues
-- The `resolutionContext` in `DirectiveContext` is typed as `any`, making it unclear what properties are available or required
-- Resolution methods (`resolveText`, `resolveData`, `resolvePath`) all create similar context objects with duplicate code
-- Error handling is inconsistent across resolution methods
-
-### Proposed Solution
+### Current Issues:
 ```typescript
-// Define a clear interface for resolution context
-export interface ResolutionContext {
-  currentFilePath: string;
-  workingDirectory: string;
-  strict?: boolean;
+/** Resolution context for variable resolution */
+resolutionContext?: any;
+```
+
+The `resolutionContext` is currently typed as `any`, which:
+- Makes it unclear what properties are expected or allowed
+- Provides no type checking when passing it between services
+- Requires manual property checking in implementation code
+
+### Proposed Solution:
+```typescript
+/** 
+ * Strongly typed resolution context for variable resolution 
+ */
+interface ResolutionContext {
+  /** Current file being processed */
+  currentFilePath?: string;
+  /** Working directory for resolving paths */
+  workingDirectory?: string;
+  /** Maximum depth for nested resolution to prevent infinite recursion */
   depth?: number;
-  allowedVariableTypes?: Array<'text' | 'data' | 'path'>;
-  isVariableEmbed?: boolean;
+  /** Whether to throw on missing variables or return empty string */
+  strict?: boolean;
+  /** State for variable lookup */
   state?: StateServiceLike;
-}
-
-// Update DirectiveContext to use this type
-export interface DirectiveContext extends DirectiveContextBase {
-  // Other properties...
-  resolutionContext?: ResolutionContext;
-  // Other properties...
+  /** Allowed variable types for this resolution context */
+  allowedVariableTypes?: Array<'text' | 'data' | 'path'>;
+  /** Whether this is a variable embed (affects path prefixing) */
+  isVariableEmbed?: boolean;
 }
 ```
 
-### Benefits
-1. **Type Safety**: Eliminates runtime errors from missing or incorrectly named properties
-2. **Self-Documentation**: Makes it clear what options can be passed to resolution methods
-3. **Consistency**: Ensures the same context structure is used across all resolution methods
-4. **Code Reduction**: Removes duplicate context creation code in `resolveText`, `resolveData`, and `resolvePath`
+### Benefits:
+1. **Self-documenting API**: Clear documentation of what the resolution context can contain
+2. **Compile-time validation**: Prevents passing invalid properties to resolution methods
+3. **IDE support**: Provides autocomplete for available properties
+4. **Consistency**: Ensures the same context structure is used across all resolution calls
 
-## 2. Variable Type Discrimination Union
+## 2. Typed Variable Value Storage
 
-### Current Issues
-- The `StateServiceLike` interface doesn't distinguish between variable types
-- Methods like `setTextVar`, `setDataVar`, and `setPathVar` lack type safety for their values
-- Type checking and conversions are done at runtime with potential for errors
+### Current Issues:
+When handling directives like `@text` and `@data`, the code has to manually check types and handle conversions:
 
-### Proposed Solution
 ```typescript
-// Define specific variable type interfaces
-export interface TextVariable {
-  type: 'text';
-  value: string;
+// Value is already interpolated by meld-ast
+let value = directive.value;
+if (typeof value === 'string') {
+  value = JSON.parse(value);
+}
+await this.stateService!.setDataVar(directive.identifier, value);
+```
+
+This pattern appears multiple times with subtle variations, creating potential for inconsistencies.
+
+### Proposed Solution:
+```typescript
+/** Strongly typed variable values */
+interface VariableTypes {
+  /** Text variable value - always a string */
+  text: string;
+  /** Data variable value - can be any JSON-compatible value */
+  data: JsonValue;
+  /** Path variable value - always a string representing a path */
+  path: string;
 }
 
-export interface DataVariable {
-  type: 'data';
-  value: any; // Could be further refined with JSON type
-  schema?: JSONSchema; // Optional schema for validation
-}
+type JsonValue = 
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: JsonValue }
+  | JsonValue[];
 
-export interface PathVariable {
-  type: 'path';
-  value: string;
-  resolved: boolean; // Whether the path has been fully resolved
-}
-
-// Union type for all variable types
-export type MeldVariable = TextVariable | DataVariable | PathVariable;
-
-// Update StateServiceLike to use these types
-export interface StateServiceLike {
-  // Instead of:
-  // setTextVar(name: string, value: string): Promise<void>;
-  // setDataVar(name: string, value: any): Promise<void>;
-  // setPathVar(name: string, value: string): Promise<void>;
+/** Type-safe setter methods */
+interface StateServiceWithTypedVars extends StateServiceLike {
+  setTextVar(name: string, value: VariableTypes['text']): Promise<void>;
+  setDataVar(name: string, value: VariableTypes['data']): Promise<void>;
+  setPathVar(name: string, value: VariableTypes['path']): Promise<void>;
   
-  // Use:
-  setVariable(name: string, variable: MeldVariable): Promise<void>;
-  getVariable(name: string, type?: 'text' | 'data' | 'path'): Promise<MeldVariable | undefined>;
-  
-  // Convenience methods with proper typing
-  setTextVar(name: string, value: string): Promise<void>; // Internally calls setVariable
-  setDataVar(name: string, value: any): Promise<void>; // Internally calls setVariable
-  setPathVar(name: string, value: string): Promise<void>; // Internally calls setVariable
+  getTextVar(name: string): Promise<VariableTypes['text'] | undefined>;
+  getDataVar(name: string): Promise<VariableTypes['data'] | undefined>;
+  getPathVar(name: string): Promise<VariableTypes['path'] | undefined>;
 }
 ```
 
-### Benefits
-1. **Type Safety**: The type property ensures variables are used correctly
-2. **Runtime Validation**: Enables validation at the time variables are set
-3. **Unified Interface**: Provides a consistent pattern for all variable types
-4. **Explicit Intent**: Makes the expected variable type clear in the code
-5. **Error Prevention**: Reduces chances of using the wrong variable type in a context
+### Benefits:
+1. **Type safety**: Prevents accidentally passing the wrong type of value
+2. **Reduced manual type checking**: No need for manual `typeof` checks
+3. **Consistency**: Ensures consistent handling of variable types across the codebase
+4. **Better error messages**: TypeScript will provide clear error messages when types don't match
 
-## 3. Strongly Typed Formatting Context
+## 3. Formatting Context Type Improvements
 
-### Current Issues
-- The `formattingContext` property has a complex nested structure with optional fields
-- Properties like `isOutputLiteral` and `contextType` are duplicated in both `DirectiveContext` and `DirectiveResult`
-- The relationship between `formattingContext` and directive output is implicit
+### Current Issues:
+The current `formattingContext` type in DirectiveContext is loose:
 
-### Proposed Solution
 ```typescript
-// Define a clear interface for formatting context
-export interface FormattingContext {
+formattingContext?: {
+  /** Whether in output-literal mode (formerly transformation mode) */
   isOutputLiteral: boolean;
+  /** Whether this is an inline or block context */
   contextType: 'inline' | 'block';
+  /** Current node type being processed */
   nodeType: string;
+  /** Whether at start of line */
   atLineStart?: boolean;
+  /** Whether at end of line */
   atLineEnd?: boolean;
+  /** Parent formatting context for inheritance */
+  parentContext?: any;
+};
+```
+
+The issues include:
+- `nodeType` is a string with no validation
+- `parentContext` is typed as `any`
+- No clear distinction between required and optional properties
+- Missing validation for related properties
+
+### Proposed Solution:
+```typescript
+/** Node types for formatting context */
+type NodeType = 'Text' | 'Directive' | 'CodeFence' | 'Comment';
+
+/** Format context type for consistent output generation */
+interface FormattingContext {
+  /** Whether in output-literal mode */
+  isOutputLiteral: boolean;
+  /** Whether this is an inline or block context */
+  contextType: 'inline' | 'block';
+  /** Current node type being processed */
+  nodeType: NodeType;
+  /** Line position information */
+  linePosition?: {
+    /** Whether at start of line */
+    atLineStart: boolean;
+    /** Whether at end of line */
+    atLineEnd: boolean;
+  };
+  /** Parent formatting context for inheritance */
   parentContext?: FormattingContext;
 }
+```
 
-// Update both interfaces to use this type
-export interface DirectiveContext extends DirectiveContextBase {
-  // Other properties...
-  formattingContext?: FormattingContext;
-  // Other properties...
-}
+### Benefits:
+1. **Explicit node types**: Prevents typos and ensures only valid node types are used
+2. **Self-referential typing**: Parent context has the same type as the current context
+3. **Grouped related properties**: Line position properties are grouped logically
+4. **Clear distinction**: Required vs optional properties are clearly indicated
 
-export interface DirectiveResult {
+## 4. Directive Result Type Enhancement
+
+### Current Issues:
+The `DirectiveResult` interface has loose typing for its `formattingContext`:
+
+```typescript
+formattingContext?: {
+  isOutputLiteral?: boolean;
+  contextType?: 'inline' | 'block';
+  nodeType?: string;
+  [key: string]: any;
+};
+```
+
+This allows arbitrary properties and doesn't enforce consistency with the `DirectiveContext.formattingContext`.
+
+### Proposed Solution:
+```typescript
+/** Result of executing a directive */
+interface DirectiveResult {
+  /** Updated state after processing */
   state: StateServiceLike;
+  
+  /** Replacement node in transformation mode */
   replacement?: MeldNode;
+  
+  /** Formatting context for output generation */
   formattingContext?: Partial<FormattingContext>;
 }
 ```
 
-### Benefits
-1. **Consistency**: Ensures the same structure is used throughout the codebase
-2. **Type Checking**: Catches errors when accessing or setting properties
-3. **Self-Documentation**: Makes it clear what formatting options are available
-4. **DRY Principle**: Eliminates duplicate type definitions
-5. **Maintainability**: Changes to formatting options only need to be made in one place
+### Benefits:
+1. **Consistency**: Uses the same `FormattingContext` type defined earlier
+2. **Partial type**: Allows specifying only the properties that need to change
+3. **No index signature**: Prevents adding arbitrary properties that aren't part of the defined context
+4. **Type safety**: Ensures only valid properties with correct types can be set
 
-## 4. Directive Handler Result Type Guard
+## 5. Variable Reference Resolution Types
 
-### Current Issues
-- The `processDirective` method has complex type checking logic to determine if a result is a `DirectiveResult` or `StateServiceLike`
-- The check `if ('state' in result)` is error-prone and not type-safe
-- The type narrowing doesn't fully propagate through the code
+### Current Issues:
+The current resolution methods don't provide strong typing for field access paths:
 
-### Proposed Solution
 ```typescript
-// Add a type guard function
-export function isDirectiveResult(result: DirectiveResult | StateServiceLike): result is DirectiveResult {
-  return typeof result === 'object' && result !== null && 'state' in result;
-}
-
-// Then in the processDirective method:
-const result = await handler.execute(node, context);
-if (isDirectiveResult(result)) {
-  // TypeScript now knows result is DirectiveResult
-  if (result.formattingContext && context.formattingContext) {
-    Object.assign(context.formattingContext, result.formattingContext);
-  }
-  return result.state;
-}
-// TypeScript now knows result is StateServiceLike
-return result;
-```
-
-### Benefits
-1. **Type Safety**: Properly narrows the type for the rest of the function
-2. **Self-Documentation**: Makes the intent of the check clear
-3. **Reusability**: The type guard can be used throughout the codebase
-4. **Maintainability**: If the DirectiveResult interface changes, only the type guard needs to be updated
-5. **Error Prevention**: Eliminates potential runtime errors from incorrect type assumptions
-
-## 5. Directive-Specific Variable Handling Types
-
-### Current Issues
-- Different directive handlers have different variable handling needs
-- `handleTextDirective`, `handleDataDirective`, etc. all deal with variables differently
-- Error handling for variable operations is inconsistent
-
-### Proposed Solution
-```typescript
-// Define directive-specific variable interfaces
-export interface TextDirectiveData {
-  identifier: string;
-  value: string;
-}
-
-export interface DataDirectiveData {
-  identifier: string;
-  value: any; // Could be refined with JSON type
-  isJSON: boolean; // Whether the value is already parsed JSON
-}
-
-export interface PathDirectiveData {
-  identifier: string;
-  value: string;
-  isAbsolute: boolean;
-}
-
-// Update the DirectiveNode type to include these
-export interface DirectiveNode {
-  type: 'Directive';
-  directive: {
-    kind: string;
-    // Other common properties...
-  } & (
-    | { kind: 'text'; } & TextDirectiveData
-    | { kind: 'data'; } & DataDirectiveData
-    | { kind: 'path'; } & PathDirectiveData
-    // Other directive types...
-  );
-  // Other properties...
+private async resolveData(ref: string, context: DirectiveContext): Promise<any> {
+  // Implementation with minimal type safety
 }
 ```
 
-### Benefits
-1. **Type Safety**: Ensures each directive kind has the right properties
-2. **Self-Documentation**: Makes it clear what properties each directive has
-3. **Error Prevention**: Catches missing or incorrect properties at compile time
-4. **IDE Support**: Provides better autocompletion and documentation
-5. **Maintainability**: Makes it easier to add or modify directive properties
+This leads to:
+- Return type of `any` which propagates type unsafety
+- No validation of field access paths at compile time
+- No clear indication of what fields are available
 
-## 6. Resolution Method Return Type Refinement
-
-### Current Issues
-- The `resolveText`, `resolveData`, and `resolvePath` methods return different types but have similar signatures
-- Error handling is duplicated across these methods
-- The type of the resolved value isn't clear from the method signature
-
-### Proposed Solution
+### Proposed Solution:
 ```typescript
-// Define a generic resolution result type
-export interface ResolutionResult<T> {
-  value: T;
-  source: 'text' | 'data' | 'path' | 'none';
-  resolved: boolean;
+/** Field access path for structured data */
+type FieldPath = Array<string | number>;
+
+/** Variable reference with optional field path */
+interface VariableReference {
+  /** Variable name without field path */
+  name: string;
+  /** Optional field path for structured data */
+  fields?: FieldPath;
 }
 
-// Update the resolution methods
-private async resolveText(text: string, context: DirectiveContext): Promise<ResolutionResult<string>> {
-  // Implementation...
-}
-
-private async resolveData(ref: string, context: DirectiveContext): Promise<ResolutionResult<any>> {
-  // Implementation...
-}
-
-private async resolvePath(path: string, context: DirectiveContext): Promise<ResolutionResult<string>> {
-  // Implementation...
+/** Enhanced resolution methods */
+interface ResolutionServiceWithTypedRefs extends ResolutionServiceLike {
+  /** Resolve a variable reference with field access */
+  resolveReference(ref: VariableReference, context: ResolutionContext): Promise<JsonValue>;
+  
+  /** Parse a variable reference string into a structured reference */
+  parseReference(refString: string): VariableReference;
 }
 ```
 
-### Benefits
-1. **Type Safety**: Makes the return type clear and consistent
-2. **Error Handling**: Can include resolution status in the result
-3. **Source Tracking**: Identifies where the value came from
-4. **Self-Documentation**: Makes it clear what information is returned
-5. **Consistency**: Provides a unified pattern for all resolution methods
+### Benefits:
+1. **Structured references**: Clear separation between variable name and field path
+2. **Type safety**: Field paths are properly typed as strings or numbers
+3. **Explicit parsing**: Separates parsing from resolution for better testability
+4. **Consistent handling**: Ensures field paths are handled consistently
 
-## Implementation Priority and Impact
+## 6. Directive Context Type Improvements
 
-Based on the analysis, I recommend implementing these improvements in the following order:
+### Current Issues:
+The `DirectiveContext` interface extends a base context but adds several properties with mixed typing:
 
-1. **Strongly Typed Resolution Context** (High Impact) - This will immediately improve the clarity and safety of variable resolution throughout the codebase.
+```typescript
+export interface DirectiveContext extends DirectiveContextBase {
+  /** Parent state for nested contexts */
+  parentState?: StateServiceLike;
+  /** Current state for this directive */
+  state: StateServiceLike;
+  // ...other properties
+}
+```
 
-2. **Variable Type Discrimination Union** (High Impact) - This provides a foundation for safer variable handling and clearer type distinctions.
+This creates several issues:
+- Unclear which properties are required vs optional
+- No validation that parent/child states are compatible
+- No type enforcement for resolution and formatting contexts
 
-3. **Directive Handler Result Type Guard** (Medium Impact) - This improves type safety in a critical part of the directive processing pipeline.
+### Proposed Solution:
+```typescript
+/** Base context for all directive operations */
+interface DirectiveContextBase {
+  /** Current file being processed */
+  currentFilePath: string;
+  /** Working directory for command execution */
+  workingDirectory: string;
+}
 
-4. **Strongly Typed Formatting Context** (Medium Impact) - This ensures consistent handling of formatting options across directive boundaries.
+/** Context for directive execution */
+interface DirectiveContext extends DirectiveContextBase {
+  /** Current state for this directive */
+  state: StateServiceLike;
+  
+  /** Optional parent state for nested contexts */
+  parentState?: StateServiceLike;
+  
+  /** Context for variable resolution */
+  resolutionContext: ResolutionContext;
+  
+  /** Context for output formatting */
+  formattingContext: FormattingContext;
+}
+```
 
-5. **Directive-Specific Variable Handling Types** (Medium Impact) - This improves type safety and documentation for directive handling.
+### Benefits:
+1. **Clear requirements**: Makes it obvious which properties are required
+2. **Consistent typing**: Uses the strong types defined earlier
+3. **Explicit structure**: Clearly defines the structure of the context
+4. **IDE support**: Provides better autocomplete and documentation
 
-6. **Resolution Method Return Type Refinement** (Lower Impact) - This provides better consistency and error handling for resolution methods.
+## Overall Benefits of These Improvements
 
-These improvements will collectively make the CoreDirective service more robust, easier to maintain, and less prone to runtime errors related to variable handling.
+1. **Reduced Cognitive Load**: Developers can focus on business logic rather than manual type checking
+2. **Fewer Runtime Errors**: More issues caught at compile time means fewer runtime surprises
+3. **Self-Documenting Code**: Types serve as documentation that stays in sync with the code
+4. **Better Refactoring Support**: IDE tools can reliably find all usages when refactoring
+5. **Improved Maintainability**: New developers can more easily understand the codebase
+6. **Consistent Implementations**: Standardized types encourage consistent implementations
+
+## Implementation Strategy
+
+These improvements can be implemented incrementally:
+
+1. First, define the new type interfaces in a central location
+2. Update the core interfaces (DirectiveContext, DirectiveResult, etc.)
+3. Gradually update service implementations to use the new types
+4. Add migration helpers where needed for backward compatibility
+5. Update tests to leverage the stronger typing
+
+This approach allows for gradual adoption without breaking existing code while still providing immediate benefits in the areas where the new types are used.

@@ -2,93 +2,80 @@
 
 ## Core Variable Structure Requirements
 
-1. **Define a Generic `TypedVariable<T>` Interface**
-   - Include `type: VariableType` for type discrimination
-   - Include `value: T` for strongly-typed values
-   - Include optional `metadata?: VariableMetadata` for tracking history
+1. **Base Variable Interface**
+   - Define a common interface for all variable types with shared properties
+   - Include metadata like source location, last modified timestamp
+   - Include type discriminator for runtime type checking
 
-2. **Define `VariableType` Enum or Union Type**
-   - Include `'text'`, `'data'`, `'path'`, and `'command'` types
-   - Use as discriminant property for type narrowing
+2. **Strongly-Typed Variable Container**
+   - Define a `VariableStore<T>` interface to replace direct Map usage
+   - Include consistent methods: get, set, has, delete, forEach, entries, clone
+   - Create specialized types: TextVariableStore, DataVariableStore, PathVariableStore, CommandVariableStore
 
-3. **Define `VariableMetadata` Interface**
-   - Include `source?: string` for tracking where variable was defined
-   - Include `createdAt: number` timestamp
-   - Include `updatedAt: number` timestamp
-   - Include optional `transformations?: string[]` for tracking changes
+3. **Variable Reference Structure**
+   - Define a unified `VariableReference` interface with type discriminator
+   - Include fields for name, type, and optional path for nested access
+   - Support parsing from string formats ({{var}}, $var, etc.)
 
-4. **Define Specific Variable Type Interfaces**
-   - `TextVariable extends TypedVariable<string>`
-   - `DataVariable extends TypedVariable<VariableValue>` (JSON-compatible values)
-   - `PathVariable extends TypedVariable<string>`
-   - `CommandDefinition extends TypedVariable<CommandDefinitionValue>`
+## Variable Value Type Requirements
 
-5. **Define `VariableValue` Type for Data Variables**
-   - Use union type: `string | number | boolean | null | VariableObject | VariableArray`
-   - Define `VariableObject` as `{ [key: string]: VariableValue }`
-   - Define `VariableArray` as `VariableValue[]`
+4. **Text Variable Value Type**
+   - Simple string type for text variables
+   - Consistent string handling across the system
 
-## Variable Storage Requirements
+5. **Data Variable Value Types**
+   - Define structured types: DataPrimitive, DataArray, DataObject, DataValue
+   - Support JSON-compatible values (string, number, boolean, null, arrays, objects)
+   - Include type guards for runtime type checking
 
-6. **Define `VariableStorage` Interface**
-   - Include `text: Map<string, TypedVariable<string>>`
-   - Include `data: Map<string, TypedVariable<VariableValue>>`
-   - Include `path: Map<string, TypedVariable<string>>`
-   - Include `command: Map<string, TypedVariable<CommandDefinition>>`
+6. **Path Variable Value Type**
+   - String type representing filesystem paths
+   - Potentially include validation for path format
 
-7. **Define Type-Safe Accessor Methods**
-   - Generic `getVar<T>(type: VariableType, name: string): T | undefined`
-   - Type-specific getters that return appropriate types
-   - Type-safe setters that enforce value types
+7. **Command Definition Structure**
+   - Define `CommandDefinition` interface with command string and options
+   - Support for metadata (description, source file, definition location)
+   - Type-safe options record with DataValue types
 
-## Variable Reference Requirements
+## Metadata and Context Requirements
 
-8. **Define `VariableReference<T>` Interface**
-   - Include `type: VariableType` for type discrimination
-   - Include `name: string` for variable name
-   - Include optional `path?: string[]` for field access
-   - Include optional `defaultValue?: T` for fallback
+8. **Source Location Tracking**
+   - Define `SourceLocation` interface with file, line, column information
+   - Attach to variables for error reporting and debugging
 
-9. **Define Field Access Types**
-   - Define `Field` interface with `type: 'field' | 'index'` and `value: string | number`
-   - Define `FieldPath` as `Array<Field>`
-   - Include type-safe field accessor utilities
+9. **Variable Field Access**
+   - Define `VariableField` type for accessing nested properties
+   - Support both string and number indices for array access
+   - Include type information (identifier, number, string)
 
-## Command Definition Requirements
+10. **State Update Context**
+    - Track variable modifications with source, operation, timestamp
+    - Include variable type and name in update context
+    - Support different operation types (set, delete, merge, transform)
 
-10. **Define `CommandDefinition` Interface**
-    - Include `name: string` for command name
-    - Include `parameters: CommandParameter[]` for parameter definitions
-    - Include `body: string | CommandStep[]` for command implementation
-    - Include optional `description?: string` for documentation
-
-11. **Define `CommandParameter` Interface**
-    - Include `name: string` for parameter name
-    - Include `type: VariableType` for parameter type
-    - Include optional `defaultValue?: any` for default value
-    - Include optional `description?: string` for documentation
+11. **Resolution Context Type**
+    - Define context for variable resolution with configuration options
+    - Include depth tracking, strictness mode, allowed variable types
+    - Track visited variables to prevent infinite recursion
 
 ## Type Safety Improvements
 
-12. **Use Discriminated Unions for Type Safety**
-    - Leverage TypeScript's discriminated unions with the `type` property
-    - Include exhaustiveness checking in switch statements
+12. **Discriminated Union for Variable Types**
+    - Use TypeScript discriminated unions for type-safe handling
+    - Enable exhaustive type checking in switch statements
+    - Support pattern matching based on variable type
 
-13. **Add Type Guard Functions**
-    - Include `isTextVariable(var: TypedVariable<any>): var is TypedVariable<string>`
-    - Include `isDataVariable(var: TypedVariable<any>): var is TypedVariable<VariableValue>`
-    - Include similar guards for other variable types
+13. **Type Guards and Validation**
+    - Include isDataObject, isDataArray, etc. type guards
+    - Support runtime validation of variable values
+    - Enable compile-time type narrowing
 
-14. **Include Branded Types for Additional Safety**
-    - Consider using branded types for variable names to prevent confusion
-    - Use branded types for state IDs to ensure proper initialization
+14. **Type-Safe Variable Operations**
+    - Define interfaces for type-safe get/set operations
+    - Ensure operations maintain type consistency
+    - Prevent accidental type conversions
 
-## Implementation Considerations
-
-15. **Support Gradual Migration**
-    - Ensure backward compatibility with existing code
-    - Allow for progressive adoption of the new type system
-
-16. **Optimize for Developer Experience**
-    - Design types to provide helpful IDE hints and autocompletion
-    - Include JSDoc comments for better documentation
+15. **Immutability Controls**
+    - Support for marking variables as immutable
+    - Type-safe immutability guarantees
+    - Clear immutability semantics in interfaces

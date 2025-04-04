@@ -1,80 +1,74 @@
-# Synthesized Variable Validation Requirements for Meld
+# Variable Validation Requirements for Meld
 
-Based on the feedback from component leads, I've consolidated the following validation requirements specifically for variable definitions, references, and state management:
+Based on the feedback from the VariableHandler, StateManagement, and ParserCore components, I've synthesized the following validation requirements for variable definitions and usage in the Meld system.
 
 ## Static Validation (Compile-Time)
 
-1. **Identifier Validation**
-   - Enforce consistent naming conventions for variable identifiers
-   - Validate that variable names follow allowed character patterns
-   - Check for reserved names that may conflict with system variables
+### Identifier Validation
+- **Requirement 1**: Variable identifiers must follow a consistent naming convention (alphanumeric, underscores, no spaces).
+- **Requirement 2**: Reserved keywords cannot be used as variable identifiers.
+- **Requirement 3**: Variable names should be case-sensitive and unique within their scope.
 
-2. **Type System Validation**
-   - Ensure variable references specify a valid variable type ('text', 'data', 'path')
-   - Validate that variable reference nodes have required properties (identifier, valueType)
-   - Verify field access paths have proper syntax in variable references
+### Type Validation
+- **Requirement 4**: Variable definitions must use a recognized type ('text', 'path', 'data', 'command').
+- **Requirement 5**: Variable type must be explicitly specified in definitions and cannot change after initialization.
+- **Requirement 6**: Type-specific syntax validation for each variable type (e.g., path format for path variables).
 
-3. **Structural Validation**
-   - Enforce proper structure for variable reference nodes (type, identifier, valueType)
-   - Validate that field access expressions follow proper dot notation or index syntax
-   - Check that array indices in field paths are numeric when appropriate
-
-4. **Reference Validation**
-   - Verify that variable references use the correct syntax based on variable type
-   - Ensure consistent structure between variable definition and reference
-   - Validate that path variables follow proper path syntax conventions
+### Structure Validation
+- **Requirement 7**: Field access expressions must use proper dot notation (e.g., `data.field.subfield`).
+- **Requirement 8**: Field identifiers must follow valid property naming conventions.
+- **Requirement 9**: Array indexing must use valid numeric indices.
 
 ## Runtime Validation
 
-5. **Existence Checking**
-   - Check for variable existence before access, respecting 'strict' mode
-   - Provide meaningful error messages when variables don't exist
-   - Support default values for non-existent variables based on context
+### Existence Validation
+- **Requirement 10**: Variable references must check for existence before access, with behavior determined by `strict` mode.
+- **Requirement 11**: In strict mode, missing variables should throw errors; in non-strict mode, they should return undefined.
+- **Requirement 12**: Variable deletion should verify the variable exists before attempting removal.
 
-6. **Type Compatibility**
-   - Validate that variable values match their declared types at runtime
-   - Ensure field access operations are valid for the variable's actual type
-   - Verify that array indices are within bounds when accessing array elements
+### Type Compatibility
+- **Requirement 13**: Type checking when accessing variables to ensure they match expected types.
+- **Requirement 14**: Data variable field access should validate that the parent is an object or array.
+- **Requirement 15**: Type coercion rules should be clearly defined for cross-type operations.
 
-7. **Field Access Validation**
-   - Validate that object properties exist when accessing nested fields
-   - Check that array indices are valid when accessing array elements
-   - Verify method calls are performed on callable properties
+### Path Validation
+- **Requirement 16**: Path variables must resolve to valid file system paths or URLs.
+- **Requirement 17**: Path variables should be validated against allowed path patterns.
+- **Requirement 18**: Path variables should detect and prevent directory traversal attacks.
 
-8. **Circular Reference Detection**
-   - Implement depth tracking to detect potential circular references
-   - Set maximum resolution depth to prevent infinite recursion
-   - Track variable resolution paths to identify circular dependencies
+### Circular Reference Detection
+- **Requirement 19**: Track variable resolution depth to detect circular references.
+- **Requirement 20**: Implement a maximum resolution depth (e.g., 10 levels) to prevent infinite loops.
+- **Requirement 21**: Maintain a set of visited variables during resolution to detect cycles.
 
-9. **State Transition Validation**
-   - Ensure variables are properly initialized before access
-   - Validate state transitions maintain variable integrity
-   - Prevent modification of variables in immutable states
+### Data Structure Validation
+- **Requirement 22**: Data variables should validate against allowed data structures (primitive, object, array).
+- **Requirement 23**: Deep validation of nested data structures to ensure they contain only allowed types.
+- **Requirement 24**: Size limits for data variables to prevent memory issues.
 
-10. **Format Validation**
-    - Validate that variable formatting requests are compatible with variable types
-    - Ensure consistent string conversion based on variable type
-    - Verify that transformation operations are valid for the variable type
+## Context-Aware Validation
 
-## Error Handling
+### Resolution Context
+- **Requirement 25**: Validate variable references against allowed variable types in the resolution context.
+- **Requirement 26**: Respect context-specific constraints (e.g., block vs. inline context).
+- **Requirement 27**: Validate transformation options based on variable type and context.
 
-11. **Structured Error Reporting**
-    - Provide specific error types for different validation failures
-    - Include detailed context in error messages (variable name, field path, etc.)
-    - Support different error severity levels based on validation context
+### State Management
+- **Requirement 28**: Validate immutability constraints when attempting to modify variables.
+- **Requirement 29**: Ensure proper variable copying between parent and child states.
+- **Requirement 30**: Validate variable updates against defined update contexts.
 
-12. **Validation Context**
-    - Pass resolution context through validation chain for consistent handling
-    - Support strict/lenient validation modes based on context
-    - Allow context-specific validation rules for different execution environments
+## Error Handling and Reporting
 
-## Implementation Notes
+- **Requirement 31**: Provide detailed error messages for validation failures, including source location.
+- **Requirement 32**: Standardize error reporting format across all validation checks.
+- **Requirement 33**: Include context information in validation errors (file, line, column, variable name).
 
-- Use TypeScript's type system to enforce as many constraints as possible at compile time
-- Implement discriminated unions for variable types to ensure exhaustive type checking
-- Create specialized validators for each variable type with appropriate validation rules
-- Centralize validation logic to ensure consistent behavior across the codebase
-- Implement type guards to simplify runtime validation and improve code readability
-- Use branded types to enforce semantic constraints on variable identifiers and references
+## Implementation Considerations
 
-These requirements should guide the implementation of a robust validation system for Meld variables, ensuring consistency, type safety, and proper error handling throughout the language interpreter.
+- **Requirement 34**: Use discriminated unions for variable types to enable exhaustive type checking.
+- **Requirement 35**: Implement type guards for runtime type checking of variable values.
+- **Requirement 36**: Centralize validation logic to ensure consistent behavior across components.
+- **Requirement 37**: Provide validation utilities that can be reused across the codebase.
+
+These requirements provide a comprehensive framework for ensuring variable definitions and usage are properly validated throughout the Meld system, reducing runtime errors and improving code safety and maintainability.

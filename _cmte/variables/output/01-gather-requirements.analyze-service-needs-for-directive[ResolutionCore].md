@@ -1,607 +1,218 @@
-# Proposed Variable Type Improvements for ResolutionService
+# Improving Variable Handling Types in ResolutionCore
 
-After analyzing the ResolutionService implementation, I've identified several areas where TypeScript type enhancements would significantly improve code clarity, safety, and maintainability. These improvements focus on the variable handling system which is central to the Meld language's functionality.
+After reviewing the codebase architecture and variable handling mechanisms, I've identified several opportunities to strengthen the TypeScript type system for variable management in the ResolutionCore service. These improvements will make the code more robust, maintainable, and less prone to errors.
 
-## 1. Discriminated Union Types for Variable Values
+## Current Challenges in Variable Handling
 
-### Current Issues:
-- The codebase uses separate getter methods (`getTextVar`, `getDataVar`, `getPathVar`) with no type guarantees about the returned values
-- Type assertions are frequently required when handling variable values
-- Validation for variable type correctness happens at runtime
+The ResolutionCore service handles three distinct variable types (path, text, and data) with different reference syntaxes, resolution mechanisms, and constraints. This complexity creates several challenges:
 
+1. **Type Ambiguity**: Variables are often stored as `any` or generic types, leading to manual type checking and casting
+2. **Resolution Context Complexity**: The `ResolutionContext` lacks strong typing for different resolution scenarios
+3. **Field Access Safety**: Accessing fields in data variables involves complex fallback logic that could be made safer
+4. **String Conversion Inconsistency**: Converting variable values to strings depends on context that isn't always clearly typed
+5. **Nested Variable Resolution**: The handling of nested variables has complex fallback paths that could be simplified
+
+## Proposed Type Improvements
+
+### 1. Discriminated Union for Variable Types
+
+**Current issue**: Variables are stored in separate maps with minimal type safety, requiring manual type checking.
+
+**Proposed solution**:
 ```typescript
-// Current approach with ambiguous types:
-let refValue: string | undefined;
-switch (directiveNode.directive.kind) {
-  case 'text':
-    refValue = this.stateService.getTextVar(ref); // string | undefined
-    break;
-  case 'data':
-    const dataValue = this.stateService.getDataVar(ref); // any
-    if (dataValue && typeof dataValue === 'string') {
-      refValue = dataValue;
-    }
-    break;
-  // ...
-}
-```
-
-### Proposed Solution:
-Create a discriminated union type for variable values with guaranteed type safety:
-
-```typescript
-// Define a discriminated union for variable values
-type VariableValue = 
-  | { type: 'text'; value: string }
-  | { type: 'data'; value: any }
-  | { type: 'path'; value: string }
-  | { type: 'command'; value: { command: string; args?: string[] } };
-
-// StateService would return this typed value:
-interface IStateService {
-  getVariable(name: string): VariableValue | undefined;
-  // ...other methods
-}
-
-// Usage becomes type-safe:
-const variable = stateService.getVariable(ref);
-if (variable) {
-  switch (variable.type) {
-    case 'text':
-      return variable.value; // TypeScript knows this is string
-    case 'data':
-      return typeof variable.value === 'string' 
-        ? variable.value 
-        : JSON.stringify(variable.value);
-    // ...
-  }
-}
-```
-
-### Benefits:
-1. **Type Safety**: Eliminates runtime type checks and casts
-2. **Self-Documenting**: The type clearly indicates what kind of variable it is
-3. **Error Reduction**: Prevents accidental misuse of different variable types
-4. **Simplified Logic**: Consolidates variable handling into a single pattern
-
-## 2. Structured Field Access Types
-
-### Current Issues:
-- Field access paths are handled as plain strings with complex parsing logic
-- Error handling for invalid field access is verbose and repetitive
-- No compile-time verification of field access validity
-
-```typescript
-// Current approach with string-based field paths:
-async resolveFieldAccess(variableName: string, fieldPath: string, context?: ResolutionContext): Promise<any> {
-  // Get the base variable value
-  const baseValue = context.state.getDataVar(variableName);
-  
-  if (baseValue === undefined) {
-    throw VariableResolutionErrorFactory.variableNotFound(variableName);
-  }
-  
-  try {
-    // Complex field access logic with string parsing
-    const result = FieldAccessUtility.accessFieldsByPath(
-      baseValue,
-      fieldPath,
-      {
-        arrayNotation: true,
-        numericIndexing: true,
-        preserveType: fieldAccessOptions.preserveType !== false,
-        formattingContext: fieldAccessOptions.formattingContext
-      },
-      variableName,
-      context.strict !== false
-    );
-    
-    return result;
-  } catch (error) {
-    // Error handling...
-  }
-}
-```
-
-### Proposed Solution:
-Define a structured field access path type with parser:
-
-```typescript
-// Define structured field path types
-type FieldAccessSegment = 
-  | { type: 'property'; name: string }
-  | { type: 'index'; index: number };
-
-type FieldAccessPath = FieldAccessSegment[];
-
-// Parser function (implementation elsewhere)
-function parseFieldPath(path: string): FieldAccessPath {
-  // Parse the string path into structured segments
-}
-
-// Usage in the service
-async resolveFieldAccess(
-  variableName: string, 
-  fieldPath: string, 
-  context?: ResolutionContext
-): Promise<any> {
-  const baseValue = context.state.getDataVar(variableName);
-  if (baseValue === undefined) {
-    throw VariableResolutionErrorFactory.variableNotFound(variableName);
-  }
-  
-  // Parse once, then use the structured path
-  const accessPath = parseFieldPath(fieldPath);
-  return this.accessByStructuredPath(baseValue, accessPath, {
-    strict: context.strict !== false,
-    variableName
-  });
-}
-
-// Type-safe field access
-private accessByStructuredPath(
-  value: any, 
-  path: FieldAccessPath, 
-  options: { strict: boolean; variableName: string }
-): any {
-  let current = value;
-  
-  for (const segment of path) {
-    if (current === null || current === undefined) {
-      if (options.strict) {
-        throw VariableResolutionErrorFactory.fieldAccessError(
-          `Cannot access ${segment.type === 'property' ? segment.name : `[${segment.index}]`} on null/undefined`,
-          options.variableName
-        );
-      }
-      return undefined;
-    }
-    
-    if (segment.type === 'property') {
-      current = current[segment.name];
-    } else { // index
-      if (!Array.isArray(current) && typeof current !== 'string') {
-        if (options.strict) {
-          throw VariableResolutionErrorFactory.fieldAccessError(
-            `Cannot use index access on non-array value`,
-            options.variableName
-          );
-        }
-        return undefined;
-      }
-      current = current[segment.index];
-    }
-  }
-  
-  return current;
-}
-```
-
-### Benefits:
-1. **Clearer Intent**: The code explicitly shows what kind of access is happening
-2. **Better Error Messages**: Errors can pinpoint exactly which segment failed
-3. **Reusability**: The parsed path can be reused without re-parsing
-4. **Extensibility**: New access patterns can be added as new segment types
-
-## 3. FormattingContext Type Enhancement
-
-### Current Issues:
-- Formatting context is passed as `any` type
-- Inconsistent property access patterns for formatting options
-- No type safety for formatting options
-
-```typescript
-// Current approach with any-typed options:
-async convertToFormattedString(value: any, options?: any): Promise<string> {
-  // Fall back to basic formatting
-  if (value === undefined || value === null) {
-    return '';
-  } else if (typeof value === 'object') {
-    try {
-      // Check if this is a block context from options
-      const isBlock = options?.formattingContext?.isBlock === true;
-      const isTransformation = options?.formattingContext?.isTransformation === true;
-      
-      // For objects in block context or transformation mode, use pretty printing
-      if ((isBlock || isTransformation) && (Array.isArray(value) || Object.keys(value).length > 0)) {
-        return JSON.stringify(value, null, 2);
-      }
-      
-      // For inline contexts, use compact representation
-      return JSON.stringify(value);
-    } catch (error) {
-      // Error handling...
-    }
-  }
-}
-```
-
-### Proposed Solution:
-Create a well-defined formatting context type:
-
-```typescript
-// Define a structured formatting context
-interface FormattingContext {
-  // Display context
-  isBlock: boolean;
-  nodeType?: 'embed' | 'text' | 'data' | 'run';
-  linePosition?: 'start' | 'middle' | 'end' | 'standalone';
-  
-  // Legacy flag (renamed for clarity)
-  isTransformationMode: boolean;
-  
-  // Formatting options
-  indentation?: number;
-  preserveNewlines?: boolean;
-  compactArrays?: boolean;
-  compactObjects?: boolean;
-}
-
-// Options with the formatting context
-interface StringConversionOptions {
-  formattingContext: FormattingContext;
-  maxLength?: number;
-  ellipsis?: string;
-}
-
-// Updated method signature
-async convertToFormattedString(
-  value: any, 
-  options?: Partial<StringConversionOptions>
-): Promise<string> {
-  // Default formatting context
-  const context: FormattingContext = {
-    isBlock: options?.formattingContext?.isBlock ?? false,
-    isTransformationMode: options?.formattingContext?.isTransformationMode ?? false,
-    // Set other defaults...
-  };
-  
-  if (value === undefined || value === null) {
-    return '';
-  } else if (typeof value === 'object') {
-    // Use context with type safety
-    if ((context.isBlock || context.isTransformationMode) && 
-        (Array.isArray(value) || Object.keys(value).length > 0)) {
-      return JSON.stringify(value, null, context.indentation ?? 2);
-    }
-    
-    return JSON.stringify(value);
-  }
-  
-  return String(value);
-}
-```
-
-### Benefits:
-1. **Self-Documenting**: The type clearly shows all available formatting options
-2. **Consistency**: Ensures all code uses the same property names
-3. **Default Values**: Can provide sensible defaults for missing properties
-4. **Type Checking**: Prevents typos in property names
-
-## 4. Resolution Context Enhancements
-
-### Current Issues:
-- `ResolutionContext` contains a mix of required and optional properties
-- Extra properties are added via type assertion (`(context as any).isVariableEmbed`)
-- No validation for context completeness before use
-
-```typescript
-// Current approach with context type assertions:
-private async resolveStructuredPath(path: StructuredPath, context?: ResolutionContext): Promise<string> {
-  // IMPORTANT FIX: Check for special flags that indicate we should skip path resolution
-  // This prevents directory paths from being added to variable content in embeds
-  if ((resolveContext as any).isVariableEmbed === true || 
-      (resolveContext as any).disablePathPrefixing === true) {
-    logger.debug('Path prefixing disabled for this context (variable embed)', {
-      raw: path.raw,
-      isVariableEmbed: (resolveContext as any).isVariableEmbed,
-      disablePathPrefixing: (resolveContext as any).disablePathPrefixing
-    });
-    
-    // For variable embeds, return the raw value without path resolution
-    if (typeof path === 'string') {
-      return path;
-    }
-    return path.raw;
-  }
-  
-  // ...
-}
-```
-
-### Proposed Solution:
-Create a context builder pattern with validation:
-
-```typescript
-// Enhanced resolution context with all properties properly typed
-interface ResolutionContext {
-  // Required properties
-  state: StateServiceLike;
-  allowedVariableTypes: {
-    text: boolean;
-    data: boolean;
-    path: boolean;
-    command: boolean;
-  };
-  
-  // Optional properties with proper types
-  currentFilePath?: string;
-  pathValidation?: {
-    requireAbsolute: boolean;
-    allowedRoots: string[];
-  };
-  allowDataFields?: boolean;
-  strict?: boolean;
-  allowNested?: boolean;
-  
-  // Previously casted properties now properly defined
-  isVariableEmbed?: boolean;
-  disablePathPrefixing?: boolean;
-  preventPathPrefixing?: boolean;
-  
-  // Properly typed field access options
-  fieldAccessOptions?: {
-    preserveType?: boolean;
-    formattingContext?: FormattingContext;
-    arrayNotation?: boolean;
-    numericIndexing?: boolean;
-    variableName?: string;
-  };
-}
-
-// Context builder
-class ResolutionContextBuilder {
-  private context: Partial<ResolutionContext> = {
-    allowedVariableTypes: {
-      text: true,
-      data: true,
-      path: true,
-      command: true
-    },
-    strict: true
-  };
-  
-  withState(state: StateServiceLike): ResolutionContextBuilder {
-    this.context.state = state;
-    return this;
-  }
-  
-  withCurrentFilePath(path: string): ResolutionContextBuilder {
-    this.context.currentFilePath = path;
-    return this;
-  }
-  
-  disableVariableType(type: keyof ResolutionContext['allowedVariableTypes']): ResolutionContextBuilder {
-    if (this.context.allowedVariableTypes) {
-      this.context.allowedVariableTypes[type] = false;
-    }
-    return this;
-  }
-  
-  forVariableEmbed(isEmbed: boolean = true): ResolutionContextBuilder {
-    this.context.isVariableEmbed = isEmbed;
-    if (isEmbed) {
-      this.context.disablePathPrefixing = true;
-    }
-    return this;
-  }
-  
-  // Add more builder methods...
-  
-  build(): ResolutionContext {
-    // Validate required fields
-    if (!this.context.state) {
-      throw new Error('ResolutionContext requires a state service');
-    }
-    
-    return this.context as ResolutionContext;
-  }
-}
-
-// Usage
-const context = new ResolutionContextBuilder()
-  .withState(this.stateService)
-  .withCurrentFilePath(filePath)
-  .forVariableEmbed()
-  .build();
-
-// In resolveStructuredPath
-if (context.isVariableEmbed || context.disablePathPrefixing) {
-  // Now properly typed, no casting needed
-  logger.debug('Path prefixing disabled for this context', {
-    raw: path.raw,
-    isVariableEmbed: context.isVariableEmbed,
-    disablePathPrefixing: context.disablePathPrefixing
-  });
-  
-  return typeof path === 'string' ? path : path.raw;
-}
-```
-
-### Benefits:
-1. **Type Safety**: All context properties are properly typed
-2. **Validation**: Required properties are enforced at build time
-3. **Fluent API**: Context creation is more readable and self-documenting
-4. **Default Values**: Sensible defaults can be provided in the builder
-
-## 5. Generic Type for Variable Resolution Results
-
-### Current Issues:
-- Resolution methods return `any` or `string` with no type information
-- Type assertions needed when using resolved values
-- No compile-time guarantee that resolution matches expected type
-
-```typescript
-// Current approach with any return type:
-async resolveData(ref: string, context: ResolutionContext): Promise<any> {
-  const nodes = await this.parseForResolution(ref);
-  return this.dataResolver.resolve(nodes[0] as DirectiveNode, context);
-}
-
-// Usage requires type assertions or checks
-const userData = await resolutionService.resolveData('user', context);
-if (typeof userData === 'object' && userData !== null) {
-  const userName = userData.name; // No type safety
-}
-```
-
-### Proposed Solution:
-Add generic type parameters to resolution methods:
-
-```typescript
-// Generic resolution methods
-async resolveData<T = any>(
-  ref: string, 
-  context: ResolutionContext,
-  typeValidator?: (value: any) => value is T
-): Promise<T> {
-  const nodes = await this.parseForResolution(ref);
-  const result = await this.dataResolver.resolve(nodes[0] as DirectiveNode, context);
-  
-  // Validate the type if a validator is provided
-  if (typeValidator && !typeValidator(result)) {
-    throw new MeldResolutionError(
-      `Resolution result for "${ref}" does not match expected type`,
-      {
-        code: ResolutionErrorCode.INVALID_TYPE,
-        details: { value: ref, expectedType: 'custom', actualType: typeof result },
-        severity: ErrorSeverity.Fatal
-      }
-    );
-  }
-  
-  return result as T;
-}
-
-// Type predicates for common types
-function isUserProfile(value: any): value is UserProfile {
-  return typeof value === 'object' && value !== null && 
-         typeof value.name === 'string' && 
-         typeof value.email === 'string';
-}
-
-// Usage with type safety
-interface UserProfile {
+// Define base interface with discriminator
+interface VariableBase {
+  type: 'text' | 'data' | 'path';
   name: string;
-  email: string;
-  preferences?: {
-    theme: string;
-    notifications: boolean;
-  };
+  source?: string; // For debugging/tracing
 }
 
-// Type-safe resolution
-const userData = await resolutionService.resolveData<UserProfile>(
-  'user', 
-  context,
-  isUserProfile
-);
+// Specific variable types
+interface TextVariable extends VariableBase {
+  type: 'text';
+  value: string;
+}
 
-// TypeScript knows userData is UserProfile
-const userName = userData.name; // Properly typed as string
-const theme = userData.preferences?.theme; // Optional chaining works
+interface PathVariable extends VariableBase {
+  type: 'path';
+  value: string;
+  resolved: boolean; // Has this path been fully resolved?
+}
+
+interface DataVariable extends VariableBase {
+  type: 'path';
+  value: unknown; // Could be any JSON-compatible value
+  schema?: Record<string, unknown>; // Optional schema for validation
+}
+
+// Union type
+type MeldVariable = TextVariable | PathVariable | DataVariable;
 ```
 
-### Benefits:
-1. **Type Safety**: Resolution results have proper types
-2. **Validation**: Optional runtime validation ensures type correctness
-3. **IDE Support**: Better autocomplete and type hints
-4. **Error Prevention**: Catches type mismatches early
+**Justification**: This approach would:
+1. Eliminate type confusion by making variable types explicit
+2. Enable exhaustive type checking with switch statements
+3. Allow for type-specific operations without manual casting
+4. Provide better IDE support with autocomplete for specific variable properties
+5. Make it easier to track where variables were defined (via the source property)
 
-## 6. Enum Types for Variable Reference Syntax
+### 2. Enhanced Resolution Context Type
 
-### Current Issues:
-- Variable reference syntax is checked using string includes (`value.includes('{{')`)
-- No centralized definition of variable reference patterns
-- Hard to track all supported syntax variations
+**Current issue**: The `ResolutionContext` has grown organically with various flags and options that aren't strongly typed, leading to inconsistent usage.
 
+**Proposed solution**:
 ```typescript
-// Current approach with string checks:
-private async resolveVariables(value: string, context: ResolutionContext): Promise<string> {
-  // Check if the string contains variable references
-  if (value.includes('{{') || value.includes('${') || value.includes(')) {
-    logger.debug('Resolving variables in string:', { value });
-    // ...resolution logic
-  }
-  
-  return value;
+interface BaseResolutionContext {
+  strict: boolean;
+  depth: number;
+  maxDepth?: number;
+  parentContext?: ResolutionContext;
+}
+
+interface VariableReferenceContext extends BaseResolutionContext {
+  contextType: 'variable';
+  allowedVariableTypes?: Array<'text' | 'data'>;
+  formattingContext: FormattingContext;
+}
+
+interface PathResolutionContext extends BaseResolutionContext {
+  contextType: 'path';
+  allowRelative: boolean;
+  baseDir?: string;
+}
+
+interface FieldAccessContext extends BaseResolutionContext {
+  contextType: 'field';
+  fieldPath: string[];
+  originalReference: string;
+}
+
+type ResolutionContext = 
+  | VariableReferenceContext 
+  | PathResolutionContext 
+  | FieldAccessContext;
+
+interface FormattingContext {
+  isBlock: boolean;
+  nodeType?: string;
+  linePosition?: 'start' | 'middle' | 'end';
+  preserveStructure?: boolean;
 }
 ```
 
-### Proposed Solution:
-Create an enum and pattern registry for variable syntax:
+**Justification**: This improved context type would:
+1. Make it clear which properties are available in which resolution scenarios
+2. Prevent accidental use of context properties in the wrong situations
+3. Document the purpose of each context property directly in the type
+4. Enable better error messages when context properties are missing
+5. Make the code more self-documenting and easier to maintain
 
+### 3. Typed Field Access Result
+
+**Current issue**: Field access in data variables returns `any` and relies on complex fallback logic that's hard to follow.
+
+**Proposed solution**:
 ```typescript
-// Define variable reference patterns
-enum VariableReferencePattern {
-  TEXT_VARIABLE = 'TEXT_VARIABLE',         // {{var}}
-  LEGACY_TEXT_VARIABLE = 'LEGACY_TEXT_VARIABLE', // ${var}
-  DATA_FIELD_ACCESS = 'DATA_FIELD_ACCESS', // {{var.field}}
-  PATH_VARIABLE = 'PATH_VARIABLE',         // $var
-  COMMAND_REFERENCE = 'COMMAND_REFERENCE', // $command(args)
-  SPECIAL_PATH = 'SPECIAL_PATH'            // $HOMEPATH, $PROJECTPATH, $., $~
+// Result type for field access operations
+interface FieldAccessResult<T = unknown> {
+  success: boolean;
+  value: T;
+  error?: string;
+  path?: string[];
+  accessType?: 'direct' | 'parsed' | 'fallback';
 }
 
-// Pattern registry
-const VARIABLE_PATTERNS: Record<VariableReferencePattern, RegExp> = {
-  [VariableReferencePattern.TEXT_VARIABLE]: /\{\{([^\.}]+)\}\}/g,
-  [VariableReferencePattern.LEGACY_TEXT_VARIABLE]: /\$\{([^\.}]+)\}/g,
-  [VariableReferencePattern.DATA_FIELD_ACCESS]: /\{\{([^}]+\.[^}]+)\}\}/g,
-  [VariableReferencePattern.PATH_VARIABLE]: /\$([a-zA-Z0-9_]+)/g,
-  [VariableReferencePattern.COMMAND_REFERENCE]: /\$([a-zA-Z0-9_]+)\(([^)]*)\)/g,
-  [VariableReferencePattern.SPECIAL_PATH]: /\$(HOMEPATH|\.|~)/g
-};
-
-// Helper to detect variable references
-function containsVariableReferences(value: string): boolean {
-  return Object.values(VARIABLE_PATTERNS).some(pattern => pattern.test(value));
-}
-
-// Helper to identify specific patterns
-function identifyVariablePatterns(value: string): VariableReferencePattern[] {
-  return Object.entries(VARIABLE_PATTERNS)
-    .filter(([_, pattern]) => pattern.test(value))
-    .map(([key]) => key as VariableReferencePattern);
-}
-
-// Usage in the service
-private async resolveVariables(value: string, context: ResolutionContext): Promise<string> {
-  // Check if the string contains variable references
-  if (containsVariableReferences(value)) {
-    const patterns = identifyVariablePatterns(value);
-    logger.debug('Resolving variables in string:', { value, patterns });
-    
-    // Resolution logic can now be pattern-specific
-    // ...
-  }
-  
-  return value;
-}
+// Function signature
+function accessFields(
+  data: unknown, 
+  fields: string[], 
+  context: FieldAccessContext
+): FieldAccessResult;
 ```
 
-### Benefits:
-1. **Centralized Patterns**: All variable reference syntaxes defined in one place
-2. **Pattern Recognition**: Can identify specific variable types in strings
-3. **Maintainability**: Adding new patterns only requires updating the registry
-4. **Testing**: Easier to test pattern recognition separately from resolution
+**Justification**: This approach would:
+1. Make the success/failure of field access explicit
+2. Provide context about how the field was accessed (directly or via fallback)
+3. Include the exact path that was accessed for better error reporting
+4. Allow consumers to handle access failures gracefully
+5. Make the code more predictable and easier to debug
 
-## Implementation Priority and Impact
+### 4. String Conversion Type System
 
-Based on the potential impact and implementation complexity, I recommend prioritizing these improvements in the following order:
+**Current issue**: Converting variable values to strings depends on context that isn't clearly typed, leading to inconsistent formatting.
 
-1. **Discriminated Union Types for Variable Values** - Highest impact with moderate implementation effort
-2. **Resolution Context Enhancements** - Eliminates many type assertions and improves safety
-3. **FormattingContext Type Enhancement** - Makes output formatting more predictable and maintainable
-4. **Structured Field Access Types** - Simplifies complex field access logic
-5. **Generic Type for Variable Resolution Results** - Improves API type safety
-6. **Enum Types for Variable Reference Syntax** - Centralizes pattern definitions
+**Proposed solution**:
+```typescript
+// String conversion options
+interface StringConversionOptions {
+  format: 'inline' | 'block' | 'auto';
+  indentLevel?: number;
+  maxLength?: number;
+  arrayFormat?: 'json' | 'csv' | 'list';
+  preserveType?: boolean;
+}
 
-These improvements would significantly enhance the ResolutionService by:
+// Function signature
+function convertToString(
+  value: unknown, 
+  options: StringConversionOptions
+): string;
+```
 
-1. **Reducing Type Assertions**: Eliminating most `as any` casts and manual type checks
-2. **Improving Error Messages**: More specific errors with better context
-3. **Enhancing IDE Support**: Better autocomplete and refactoring capabilities
-4. **Preventing Bugs**: Catching type mismatches at compile time rather than runtime
-5. **Simplifying Logic**: Replacing complex string manipulation with structured types
+**Justification**: This change would:
+1. Make the formatting intent explicit through the options
+2. Ensure consistent formatting across different contexts
+3. Provide clear documentation of available formatting options
+4. Allow for future extension with new formatting options
+5. Make tests more reliable by explicitly specifying format expectations
 
-The implementation approach should be incremental, starting with the core variable value types and gradually extending to the more complex enhancements.
+### 5. Nested Resolution Result Type
+
+**Current issue**: Nested variable resolution has complex fallback paths that are hard to follow and debug.
+
+**Proposed solution**:
+```typescript
+interface NestedResolutionResult<T = unknown> {
+  resolved: boolean;
+  value: T;
+  source?: 'service' | 'client' | 'direct';
+  referencesResolved: boolean;
+  context?: ResolutionContext;
+}
+
+// Function signature
+function resolveNestedVariableReference(
+  reference: string,
+  context: ResolutionContext
+): NestedResolutionResult;
+```
+
+**Justification**: This approach would:
+1. Make it clear whether resolution succeeded
+2. Indicate which resolution path was used
+3. Track whether all nested references were resolved
+4. Preserve context information for debugging
+5. Make the resolution process more transparent and easier to debug
+
+## Implementation Strategy
+
+To implement these improvements, I recommend:
+
+1. **Start with the discriminated union for variable types**: This forms the foundation for other improvements.
+2. **Update the StateService interfaces**: Modify the state service to use the new variable types.
+3. **Enhance the ResolutionContext**: Implement the improved context types.
+4. **Update field access logic**: Implement the typed field access result.
+5. **Improve string conversion**: Add the string conversion options interface.
+6. **Enhance nested resolution**: Implement the nested resolution result type.
+
+## Benefits to ResolutionCore
+
+These type improvements would significantly benefit the ResolutionCore service by:
+
+1. **Reducing runtime errors**: Strong typing catches potential issues at compile time
+2. **Simplifying logic**: Clear types reduce the need for manual type checking and casting
+3. **Improving maintainability**: Self-documenting types make the code easier to understand
+4. **Enhancing debuggability**: Better error information makes issues easier to diagnose
+5. **Facilitating future enhancements**: A strong type foundation makes it easier to add new features
+
+By implementing these type improvements, we can make the ResolutionCore service more robust, maintainable, and easier to extend with new features in the future.

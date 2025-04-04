@@ -175,94 +175,69 @@ export interface DataVariable extends BaseVariable<JsonValue> {
 }
 
 /**
- * Path variable - stores filesystem paths OR URL states with validation.
+ * Path variable - stores filesystem paths with validation.
  * Referenced with $varName syntax.
- *
- * @remarks Revised to handle both filesystem paths and URLs using a
- * discriminated union for the 'value' property.
+ * 
+ * @remarks Enhanced based on FileSystemCore service lead feedback to 
+ * include additional path safety properties.
  */
-export interface IPathVariable extends BaseVariable<IFilesystemPathState | IUrlPathState> {
+export interface PathVariable extends BaseVariable<string> {
   type: VariableType.PATH;
-  // The 'value' field now holds a union representing detailed state
-  // for either filesystem path or URL.
-}
-
-/**
- * Discriminator for Path variable content type.
- */
-export enum PathContentType {
-  FILESYSTEM = 'filesystem',
-  URL = 'url'
-}
-
-/**
- * Represents the state of a filesystem path variable.
- */
-export interface IFilesystemPathState {
-  contentType: PathContentType.FILESYSTEM;
-  /** The original path string */
-  originalValue: string;
-  /** Whether the path syntax is valid and normalization succeeded */
-  isValidSyntax: boolean;
-  /** Whether PathService security checks passed (traversal, etc.) */
-  isSecure: boolean;
-  /** Whether the path exists according to FileSystemService */
-  exists?: boolean; // Optional as existence check might not always be done
-  /** Is the path absolute or relative? */
+  
+  /** Whether the path is absolute or relative */
   isAbsolute: boolean;
-  /** The validated and normalized path */
-  validatedPath?: ValidatedResourcePath; // Use branded type after successful validation
-}
-
-/**
- * Represents the state of a URL variable, reflecting URLContentResolver results.
- */
-export interface IUrlPathState {
-  contentType: PathContentType.URL;
-  /** The original URL string */
-  originalValue: string; // The URL itself
-  /** Whether URL syntax and security policy passed validation */
+  
+  /** Whether the path has been validated */
   isValidated: boolean;
-  /** Details from the last fetch attempt */
-  fetchStatus: 'pending' | 'fetched' | 'error' | 'not_fetched';
-  /** Error message if validation or fetch failed */
-  error?: string; // Capture validation or fetch errors
-  /** Was the last successful fetch from cache? */
-  fromCache?: boolean;
-  /** Timestamp of the last successful fetch */
-  lastFetchedAt?: number;
-  /** Metadata returned by URLContentResolver.fetchURL */
-  responseMetadata?: {
-    statusCode?: number;
-    contentType?: string;
-    contentLength?: number; // Store inferred or actual length
-    lastModified?: string;
-  };
-  /** The validated URL string (can use branded type) */
-  validatedPath?: ValidatedResourcePath; // Use branded type for the URL string
+  
+  /** Whether the path is allowed to traverse outside the project root */
+  allowTraversal: boolean;
 }
 
 /**
- * Command variable - stores a structured command definition.
+ * Command variable - stores command definitions.
  * Referenced with @commandName syntax.
- *
- * @remarks Revised so 'value' holds the detailed ICommandDefinition
- * derived from the @define directive spec.
  */
-export interface CommandVariable extends BaseVariable<ICommandDefinition> {
-  // <<< NOTE: The generic type is now ICommandDefinition
+export interface CommandVariable extends BaseVariable<CommandDefinition> {
   type: VariableType.COMMAND;
 }
 
 /**
  * Command definition structure.
- * @remarks This should align with the detailed definition in define-spec.md.
- * Assuming ICommandDefinition is defined elsewhere (e.g., imported from define-spec types)
- * It represents the union: IBasicCommandDefinition | ILanguageCommandDefinition
  */
-// Assuming ICommandDefinition is conceptually imported/defined as per define-spec.md
-// See _spec/types/define-spec.md for the full definition.
-export type ICommandDefinition = any; // Placeholder - should be imported/defined as per define-spec.md
+export interface CommandDefinition {
+  /** Unique identifier for the command */
+  id: string;
+  
+  /** Parameters accepted by the command */
+  parameters: CommandParameter[];
+  
+  /** Function to execute the command */
+  execute: CommandExecuteFunction;
+  
+  /** Documentation for the command */
+  documentation?: string;
+}
+
+/**
+ * Parameter definition for commands.
+ */
+export interface CommandParameter {
+  /** Name of the parameter */
+  name: string;
+  
+  /** Type of the parameter */
+  type: 'string' | 'number' | 'boolean' | 'object' | 'array' | 'any';
+  
+  /** Optional default value */
+  defaultValue?: any;
+  
+  /** Whether the parameter is required */
+  required: boolean;
+  
+  /** Documentation for the parameter */
+  documentation?: string;
+}
 
 /**
  * Command execution function type.
@@ -298,31 +273,30 @@ export interface CommandExecutionContext {
 
 /**
  * Branded types for path handling with validation guarantees.
- *
+ * 
  * @remarks Added based on ResolutionCore and FileSystemCore service lead feedback
  * to provide stronger typing for paths and prevent path traversal issues.
- * Renamed ValidatedPath to ValidatedResourcePath for clarity.
  */
 
 /**
- * Represents a raw, unvalidated path or URL string.
+ * Represents a raw, unvalidated path string.
  */
 export type RawPath = string & { __brand: 'RawPath' };
 
 /**
- * Represents a validated, normalized path or URL string that's guaranteed to be safe.
+ * Represents a validated, normalized path that's guaranteed to be safe.
  */
-export type ValidatedResourcePath = string & { __brand: 'ValidatedResourcePath' };
+export type ValidatedPath = string & { __brand: 'ValidatedPath' };
 
 /**
- * Represents an absolute filesystem path that's been fully resolved.
+ * Represents an absolute path that's been fully resolved.
  */
-export type AbsolutePath = ValidatedResourcePath & { __brand: 'AbsolutePath' };
+export type AbsolutePath = ValidatedPath & { __brand: 'AbsolutePath' };
 
 /**
- * Represents a relative filesystem path that's been validated but not fully resolved.
+ * Represents a relative path that's been validated but not fully resolved.
  */
-export type RelativePath = ValidatedResourcePath & { __brand: 'RelativePath' };
+export type RelativePath = ValidatedPath & { __brand: 'RelativePath' };
 
 /**
  * Create a raw path from a string.
@@ -334,9 +308,9 @@ export const createRawPath = (path: string): RawPath => path as RawPath;
  * @param path The path to validate
  * @throws {PathValidationError} If the path is invalid
  */
-export const createValidatedPath = (path: string): ValidatedResourcePath => {
+export const createValidatedPath = (path: string): ValidatedPath => {
   // Validation would happen here in the actual implementation
-  return path as ValidatedResourcePath;
+  return path as ValidatedPath;
 };
 
 /**
@@ -344,7 +318,7 @@ export const createValidatedPath = (path: string): ValidatedResourcePath => {
  * @param path The validated path to convert
  * @throws {PathValidationError} If the path is not absolute
  */
-export const createAbsolutePath = (path: ValidatedResourcePath): AbsolutePath => {
+export const createAbsolutePath = (path: ValidatedPath): AbsolutePath => {
   // Validation would happen here in the actual implementation
   return path as AbsolutePath;
 };
@@ -354,7 +328,7 @@ export const createAbsolutePath = (path: ValidatedResourcePath): AbsolutePath =>
  * @param path The validated path to convert
  * @throws {PathValidationError} If the path is not relative
  */
-export const createRelativePath = (path: ValidatedResourcePath): RelativePath => {
+export const createRelativePath = (path: ValidatedPath): RelativePath => {
   // Validation would happen here in the actual implementation
   return path as RelativePath;
 };
@@ -366,10 +340,10 @@ export const createRelativePath = (path: ValidatedResourcePath): RelativePath =>
 /**
  * Union type of all variable types for type-safe handling.
  */
-export type MeldVariable =
+export type MeldVariable = 
   | TextVariable
   | DataVariable
-  | IPathVariable // Use the revised path variable type
+  | PathVariable
   | CommandVariable;
 
 // =========================================================================
@@ -445,25 +419,22 @@ export interface VariableCopyOptions {
 
 /**
  * Interface for state storage service.
- *
+ * 
  * @remarks Enhanced based on feedback from multiple service leads to support
  * transformation, variable inheritance, and comprehensive type safety.
- * Updated setPathVar and setCommandVar signatures.
  */
 export interface IStateService {
   // Type-specific getters
   getTextVar(name: string): TextVariable | undefined;
   getDataVar(name: string): DataVariable | undefined;
-  getPathVar(name: string): IPathVariable | undefined; // Updated return type
+  getPathVar(name: string): PathVariable | undefined;
   getCommandVar(name: string): CommandVariable | undefined;
   
   // Type-specific setters
-  setTextVar(name: string, value: string, metadata?: Partial<VariableMetadata>): TextVariable;
-  setDataVar(name: string, value: JsonValue, metadata?: Partial<VariableMetadata>): DataVariable;
-  // Updated setPathVar to accept the union state type
-  setPathVar(name: string, value: IFilesystemPathState | IUrlPathState, metadata?: Partial<VariableMetadata>): IPathVariable;
-  // Updated setCommandVar to accept the structured ICommandDefinition
-  setCommandVar(name: string, value: ICommandDefinition, metadata?: Partial<VariableMetadata>): CommandVariable;
+  setTextVar(name: string, value: string, metadata?: VariableMetadata): TextVariable;
+  setDataVar(name: string, value: JsonValue, metadata?: VariableMetadata): DataVariable;
+  setPathVar(name: string, value: string, isAbsolute: boolean, metadata?: VariableMetadata): PathVariable;
+  setCommandVar(name: string, value: CommandDefinition, metadata?: VariableMetadata): CommandVariable;
   
   // Generic methods
   getVariable(name: string, type?: VariableType): MeldVariable | undefined;
@@ -949,28 +920,19 @@ export interface IDependencyStateTracker {
 /**
  * Type guard functions for runtime type checking.
  */
-export const isTextVariable = (variable: MeldVariable): variable is TextVariable =>
+export const isTextVariable = (variable: MeldVariable): variable is TextVariable => 
   variable.type === VariableType.TEXT;
 
-export const isDataVariable = (variable: MeldVariable): variable is DataVariable =>
+export const isDataVariable = (variable: MeldVariable): variable is DataVariable => 
   variable.type === VariableType.DATA;
 
-/** Checks if it's any kind of Path variable */
-export const isPathVariable = (variable: MeldVariable): variable is IPathVariable =>
+export const isPathVariable = (variable: MeldVariable): variable is PathVariable => 
   variable.type === VariableType.PATH;
 
-/** Checks if a Path variable represents a Filesystem path */
-export const isFilesystemPath = (variable: IPathVariable): variable is IPathVariable & { value: IFilesystemPathState } =>
-  variable.value.contentType === PathContentType.FILESYSTEM;
-
-/** Checks if a Path variable represents a URL */
-export const isUrlPath = (variable: IPathVariable): variable is IPathVariable & { value: IUrlPathState } =>
-  variable.value.contentType === PathContentType.URL;
-
-export const isCommandVariable = (variable: MeldVariable): variable is CommandVariable =>
+export const isCommandVariable = (variable: MeldVariable): variable is CommandVariable => 
   variable.type === VariableType.COMMAND;
 
-export const isJsonObject = (value: JsonValue): value is JsonObject =>
+export const isJsonObject = (value: JsonValue): value is JsonObject => 
   value !== null && typeof value === 'object' && !Array.isArray(value);
 
 export const isJsonArray = (value: JsonValue): value is JsonArray => 
@@ -1035,15 +997,18 @@ export const createDataVariable = (
   }
 });
 
-// Updated createPathVariable factory
 export const createPathVariable = (
   name: string,
-  value: IFilesystemPathState | IUrlPathState, // Accepts the union state
+  value: string,
+  isAbsolute: boolean,
   metadata?: Partial<VariableMetadata>
-): IPathVariable => ({
+): PathVariable => ({
   type: VariableType.PATH,
   name,
-  value, // Store the provided state directly
+  value,
+  isAbsolute,
+  isValidated: false,
+  allowTraversal: false,
   metadata: {
     createdAt: Date.now(),
     modifiedAt: Date.now(),
@@ -1052,15 +1017,14 @@ export const createPathVariable = (
   }
 });
 
-// Updated createCommandVariable factory
 export const createCommandVariable = (
   name: string,
-  value: ICommandDefinition, // Accepts the structured definition
+  value: CommandDefinition,
   metadata?: Partial<VariableMetadata>
 ): CommandVariable => ({
   type: VariableType.COMMAND,
   name,
-  value, // Store the provided definition directly
+  value,
   metadata: {
     createdAt: Date.now(),
     modifiedAt: Date.now(),

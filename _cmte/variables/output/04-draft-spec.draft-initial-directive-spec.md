@@ -1,21 +1,11 @@
-I'll provide a comprehensive TypeScript type specification proposal for Meld's internal variable handling system based on the requirements and architectural context provided.
+# Proposal: TypeScript Type Definitions for Meld Variable Handling
 
 ```typescript
 /**
- * Core types for Meld's internal variable handling system.
- * 
- * This proposal provides a comprehensive type system for managing variables
- * within the Meld interpreter, including storage, resolution, and validation.
+ * Enum defining the core variable types in Meld.
+ * Each type has specific resolution and usage patterns.
  */
-
-// =========================================================================
-// CORE VARIABLE TYPES
-// =========================================================================
-
-/**
- * Enum defining the supported variable types in Meld.
- */
-export enum VariableType {
+export enum MeldVariableType {
   TEXT = 'text',
   DATA = 'data',
   PATH = 'path',
@@ -23,619 +13,348 @@ export enum VariableType {
 }
 
 /**
- * Base interface for all Meld variables.
- * Uses discriminated union pattern for type safety.
- * 
- * @decision Used discriminated union with 'type' property to enable
- * exhaustive type checking and prevent type errors at compile time.
+ * Enum for variable formatting contexts.
+ * @remarks Replaced boolean flags with explicit enum to improve clarity
+ * and support future expansion beyond binary inline/block distinction.
  */
-export interface BaseVariable<T> {
-  /** Discriminant for type checking */
-  type: VariableType;
+export enum FormattingContext {
+  INLINE = 'inline',     // Within a line of text (compact representation)
+  BLOCK = 'block',       // Standalone block (pretty-printed)
+  EMBEDDED = 'embedded'  // For variables embedded in other content
+}
+
+/**
+ * Base interface for all Meld variable types.
+ * Uses discriminated union pattern with 'type' field.
+ */
+export interface IMeldVariable {
+  /** Discriminator field for type checking */
+  type: MeldVariableType;
   
-  /** Name of the variable */
+  /** Variable identifier/name */
   name: string;
   
-  /** The actual value of the variable */
-  value: T;
+  /** Whether the variable can be modified after initial definition */
+  readonly immutable: boolean;
   
-  /** Optional metadata for tracking and debugging */
-  metadata?: VariableMetadata;
-}
-
-/**
- * Metadata for tracking variable history and provenance.
- * 
- * @decision Made metadata optional to avoid performance overhead
- * in production while enabling debugging capabilities when needed.
- */
-export interface VariableMetadata {
-  /** Source location where the variable was defined */
-  definedAt?: SourceLocation;
+  /** Source location information for debugging and error reporting */
+  sourceLocation?: SourceLocation;
   
-  /** When the variable was created */
-  createdAt: number;
-  
-  /** When the variable was last modified */
-  modifiedAt: number;
-  
-  /** History of changes to the variable */
-  history?: VariableChange[];
-}
-
-/**
- * Represents a change to a variable's value.
- */
-export interface VariableChange {
-  /** Previous value before the change */
-  previousValue: any;
-  
-  /** New value after the change */
-  newValue: any;
-  
-  /** When the change occurred */
-  timestamp: number;
-  
-  /** Source location where the change was triggered */
-  location?: SourceLocation;
+  /** When the variable was last updated */
+  lastUpdated: Date;
 }
 
 /**
  * Source location information for tracking variable definitions.
  */
 export interface SourceLocation {
-  /** File path where the variable was defined */
+  /** Source file path */
   filePath: string;
   
-  /** Line number in the file */
+  /** Line number in source file (1-based) */
   line: number;
   
-  /** Column number in the file */
+  /** Column number in source file (1-based) */
   column: number;
+  
+  /** Directive that defined this variable */
+  directiveType: string;
 }
 
-// =========================================================================
-// SPECIFIC VARIABLE TYPES
-// =========================================================================
-
 /**
- * Text variable - stores simple string values.
+ * Text variable type - stores simple string values.
  * Referenced with {{varName}} syntax.
  */
-export interface TextVariable extends BaseVariable<string> {
-  type: VariableType.TEXT;
+export interface ITextVariable extends IMeldVariable {
+  type: MeldVariableType.TEXT;
+  value: string;
 }
 
 /**
- * JSON-compatible value types supported in data variables.
- */
-export type JsonValue = 
-  | string
-  | number
-  | boolean
-  | null
-  | JsonObject
-  | JsonArray;
-
-/**
- * JSON object type for data variables.
- */
-export interface JsonObject {
-  [key: string]: JsonValue;
-}
-
-/**
- * JSON array type for data variables.
- */
-export type JsonArray = JsonValue[];
-
-/**
- * Data variable - stores structured data (objects, arrays, or primitives).
- * Referenced with {{varName}} or {{varName.field}} syntax.
- */
-export interface DataVariable extends BaseVariable<JsonValue> {
-  type: VariableType.DATA;
-}
-
-/**
- * Path variable - stores filesystem paths with validation.
+ * Path variable type - stores filesystem paths.
  * Referenced with $varName syntax.
- * 
- * @decision Added isAbsolute flag to track whether a path has been
- * fully resolved to an absolute path, which simplifies validation
- * and helps prevent path traversal issues.
  */
-export interface PathVariable extends BaseVariable<string> {
-  type: VariableType.PATH;
+export interface IPathVariable extends IMeldVariable {
+  type: MeldVariableType.PATH;
+  value: string;
   
-  /** Whether the path is absolute or relative */
+  /** Whether this path has been validated as secure */
+  validated: boolean;
+  
+  /** Whether this is an absolute path */
   isAbsolute: boolean;
 }
 
 /**
- * Command variable - stores command definitions.
- * Referenced with @commandName syntax.
+ * Supported primitive types for data variable values.
  */
-export interface CommandVariable extends BaseVariable<CommandDefinition> {
-  type: VariableType.COMMAND;
+export type DataPrimitive = string | number | boolean | null;
+
+/**
+ * Recursive type for structured data values.
+ */
+export type DataValue = 
+  | DataPrimitive
+  | DataValue[]
+  | { [key: string]: DataValue };
+
+/**
+ * Data variable type - stores structured data.
+ * Referenced with {{varName}} or {{varName.field}} syntax.
+ */
+export interface IDataVariable extends IMeldVariable {
+  type: MeldVariableType.DATA;
+  value: DataValue;
 }
 
 /**
- * Command definition structure.
- */
-export interface CommandDefinition {
-  /** Unique identifier for the command */
-  id: string;
-  
-  /** Parameters accepted by the command */
-  parameters: CommandParameter[];
-  
-  /** Function to execute the command */
-  execute: CommandExecuteFunction;
-  
-  /** Documentation for the command */
-  documentation?: string;
-}
-
-/**
- * Parameter definition for commands.
+ * Command parameter definition.
  */
 export interface CommandParameter {
-  /** Name of the parameter */
+  /** Parameter name */
   name: string;
-  
-  /** Type of the parameter */
-  type: 'string' | 'number' | 'boolean' | 'object' | 'array' | 'any';
-  
-  /** Optional default value */
-  defaultValue?: any;
   
   /** Whether the parameter is required */
   required: boolean;
   
-  /** Documentation for the parameter */
-  documentation?: string;
+  /** Default value if not provided */
+  defaultValue?: string;
+  
+  /** Description for documentation */
+  description?: string;
 }
 
 /**
- * Command execution function type.
+ * Command variable type - stores command definitions.
  */
-export type CommandExecuteFunction = (
-  params: Record<string, any>,
-  context: CommandExecutionContext
-) => Promise<any>;
+export interface ICommandVariable extends IMeldVariable {
+  type: MeldVariableType.COMMAND;
+  
+  /** Command implementation content */
+  value: string;
+  
+  /** Defined parameters */
+  parameters: CommandParameter[];
+  
+  /** Whether this command is exported for use in child states */
+  exported: boolean;
+}
 
 /**
- * Context provided during command execution.
+ * Union type of all specific variable types.
  */
-export interface CommandExecutionContext {
-  /** Current state service */
-  state: IStateService;
+export type MeldVariable = 
+  | ITextVariable 
+  | IDataVariable 
+  | IPathVariable
+  | ICommandVariable;
+
+/**
+ * Type-safe container for storing variables by type.
+ * @remarks Replaced direct Map usage with a structured container
+ * to provide type safety and consistent access patterns.
+ */
+export interface VariableStore {
+  /** Text variables map */
+  textVars: Map<string, ITextVariable>;
   
-  /** File system service */
-  fileSystem: IFileSystemService;
+  /** Data variables map */
+  dataVars: Map<string, IDataVariable>;
   
-  /** Path service */
-  pathService: IPathService;
+  /** Path variables map */
+  pathVars: Map<string, IPathVariable>;
   
-  /** Resolution service */
-  resolutionService: IResolutionService;
+  /** Command variables map */
+  commands: Map<string, ICommandVariable>;
   
-  /** Source location of command invocation */
+  /** Get the count of all variables */
+  getVariableCount(): number;
+  
+  /** Check if a variable exists by name and optional type */
+  hasVariable(name: string, type?: MeldVariableType): boolean;
+}
+
+/**
+ * Reference to a field within a data variable.
+ */
+export interface FieldReference {
+  /** Field access path (e.g., ["user", "name"] for user.name) */
+  path: (string | number)[];
+  
+  /** Whether this is an array index access */
+  isArrayAccess?: boolean;
+}
+
+/**
+ * Structure representing a variable reference found in content.
+ */
+export interface VariableReference {
+  /** Full reference text (e.g., "{{user.name}}") */
+  fullReference: string;
+  
+  /** Variable name without field access (e.g., "user") */
+  variableName: string;
+  
+  /** Variable type being referenced */
+  variableType: MeldVariableType;
+  
+  /** Field access information if applicable */
+  fieldAccess?: FieldReference;
+  
+  /** Start position in original text */
+  startPos: number;
+  
+  /** End position in original text */
+  endPos: number;
+}
+
+/**
+ * Result of a field access operation.
+ */
+export interface FieldAccessResult {
+  /** The value found at the field path */
+  value: DataValue;
+  
+  /** Whether the field was found */
+  found: boolean;
+  
+  /** Error message if access failed */
+  error?: string;
+}
+
+/**
+ * Context object for variable resolution.
+ * @remarks Consolidated all resolution options into a single context object
+ * to improve consistency and make the resolution process more predictable.
+ */
+export interface ResolutionContext {
+  /** Current resolution depth (for circularity detection) */
+  depth: number;
+  
+  /** Maximum allowed resolution depth */
+  maxDepth: number;
+  
+  /** Set of variables already visited in this resolution chain */
+  visitedVariables: Set<string>;
+  
+  /** Whether to throw errors on missing variables */
+  strict: boolean;
+  
+  /** Formatting context for string conversion */
+  formattingContext: FormattingContext;
+  
+  /** Types of variables allowed in this resolution */
+  allowedVariableTypes?: MeldVariableType[];
+  
+  /** Whether this is a variable embed (affects path prefixing) */
+  isVariableEmbed?: boolean;
+  
+  /** Parent state for inheritance lookups */
+  parentState?: any; // Will be IStateService in implementation
+  
+  /** Whether to resolve nested variables */
+  resolveNested: boolean;
+}
+
+/**
+ * Context for state updates to track variable modifications.
+ */
+export interface StateUpdateContext {
+  /** Source file causing the update */
+  sourceFile?: string;
+  
+  /** Whether this update is from an import */
+  isImport?: boolean;
+  
+  /** Whether to allow overwriting immutable variables */
+  forceOverwrite?: boolean;
+  
+  /** Source location information */
   location?: SourceLocation;
 }
 
-// =========================================================================
-// VARIABLE UNION TYPES
-// =========================================================================
-
 /**
- * Union type of all variable types for type-safe handling.
+ * Validation result for variable identifiers.
  */
-export type MeldVariable = 
-  | TextVariable
-  | DataVariable
-  | PathVariable
-  | CommandVariable;
-
-// =========================================================================
-// STATE STORAGE
-// =========================================================================
-
-/**
- * Interface for state storage service.
- * 
- * @decision Implemented both type-specific and generic methods to
- * balance type safety with flexibility. Type-specific methods provide
- * compile-time safety, while generic methods enable more dynamic usage.
- */
-export interface IStateService {
-  // Type-specific getters
-  getTextVar(name: string): TextVariable | undefined;
-  getDataVar(name: string): DataVariable | undefined;
-  getPathVar(name: string): PathVariable | undefined;
-  getCommandVar(name: string): CommandVariable | undefined;
+export interface IdentifierValidationResult {
+  /** Whether the identifier is valid */
+  valid: boolean;
   
-  // Type-specific setters
-  setTextVar(name: string, value: string, metadata?: VariableMetadata): TextVariable;
-  setDataVar(name: string, value: JsonValue, metadata?: VariableMetadata): DataVariable;
-  setPathVar(name: string, value: string, isAbsolute: boolean, metadata?: VariableMetadata): PathVariable;
-  setCommandVar(name: string, value: CommandDefinition, metadata?: VariableMetadata): CommandVariable;
-  
-  // Generic methods
-  getVariable(name: string, type?: VariableType): MeldVariable | undefined;
-  setVariable(variable: MeldVariable): MeldVariable;
-  
-  // Variable existence checks
-  hasVariable(name: string, type?: VariableType): boolean;
-  
-  // Variable removal
-  removeVariable(name: string, type?: VariableType): boolean;
-  
-  // State management
-  createChildState(): IStateService;
-  clone(): IStateService;
-  
-  // Original and transformed nodes
-  getOriginalNodes(): MeldNode[];
-  getTransformedNodes(): MeldNode[];
-  setOriginalNodes(nodes: MeldNode[]): void;
-  setTransformedNodes(nodes: MeldNode[]): void;
-  transformNode(index: number, replacement: MeldNode | MeldNode[]): void;
-}
-
-// =========================================================================
-// VARIABLE RESOLUTION
-// =========================================================================
-
-/**
- * Context passed during variable resolution.
- * 
- * @decision Made context immutable to prevent side effects during
- * resolution, with factory methods for creating derived contexts.
- */
-export interface ResolutionContext {
-  /** State service for accessing variables */
-  readonly state: IStateService;
-  
-  /** Whether to throw errors for missing variables */
-  readonly strict: boolean;
-  
-  /** Current resolution depth (for circular reference detection) */
-  readonly depth: number;
-  
-  /** Variable types allowed in this context */
-  readonly allowedVariableTypes?: VariableType[];
-  
-  /** Special flags for modifying resolution behavior */
-  readonly flags: ResolutionFlags;
-  
-  /** Formatting context for output generation */
-  readonly formattingContext?: FormattingContext;
-  
-  /** Create a new context with increased depth */
-  withIncreasedDepth(): ResolutionContext;
-  
-  /** Create a new context with different strictness */
-  withStrictMode(strict: boolean): ResolutionContext;
-  
-  /** Create a new context with specific allowed variable types */
-  withAllowedTypes(types: VariableType[]): ResolutionContext;
-  
-  /** Create a new context with additional flags */
-  withFlags(flags: Partial<ResolutionFlags>): ResolutionContext;
-  
-  /** Create a new context with formatting context */
-  withFormattingContext(formatting: FormattingContext): ResolutionContext;
+  /** Error message if invalid */
+  error?: string;
 }
 
 /**
- * Flags that modify variable resolution behavior.
+ * Configuration for string conversion.
  */
-export interface ResolutionFlags {
-  /** Disable path prefixing for variable embedding */
-  isVariableEmbed: boolean;
-  
-  /** Enable transformation mode */
-  isTransformation: boolean;
-  
-  /** Allow resolution in raw content (pre-parsing) */
-  allowRawContentResolution: boolean;
-}
-
-/**
- * Context for formatting resolved variable values.
- */
-export interface FormattingContext {
-  /** Whether the variable is in a block context */
-  isBlock: boolean;
-  
-  /** Type of node containing the variable */
-  nodeType?: string;
-  
-  /** Position of the variable in the line */
-  linePosition?: 'start' | 'middle' | 'end';
+export interface StringConversionOptions {
+  /** Formatting context */
+  context: FormattingContext;
   
   /** Indentation level for block formatting */
-  indentationLevel?: number;
-}
-
-// =========================================================================
-// VARIABLE REFERENCES AND FIELD ACCESS
-// =========================================================================
-
-/**
- * Variable reference node from parsing {{var}} or {{var.field}} syntax.
- */
-export interface VariableReferenceNode {
-  /** Type discriminant */
-  type: 'variable-reference';
+  indentLevel?: number;
   
-  /** Variable name without field access */
-  name: string;
+  /** Maximum array items to show inline before truncating */
+  maxInlineArrayItems?: number;
   
-  /** Field access path if present */
-  fields?: FieldAccess[];
-  
-  /** Default value if variable is undefined */
-  defaultValue?: string;
+  /** Maximum object fields to show inline before truncating */
+  maxInlineObjectFields?: number;
 }
 
 /**
- * Field access types for data variables.
+ * Type guard function to check if a variable is a TextVariable.
+ * @param variable The variable to check
+ * @returns True if the variable is a TextVariable
  */
-export enum FieldAccessType {
-  PROPERTY = 'property',
-  INDEX = 'index'
+export function isTextVariable(variable: IMeldVariable): variable is ITextVariable {
+  return variable.type === MeldVariableType.TEXT;
 }
 
 /**
- * Field access specification for data variables.
+ * Type guard function to check if a variable is a DataVariable.
+ * @param variable The variable to check
+ * @returns True if the variable is a DataVariable
  */
-export interface FieldAccess {
-  /** Type of access (property or array index) */
-  type: FieldAccessType;
-  
-  /** Property name or array index */
-  key: string | number;
+export function isDataVariable(variable: IMeldVariable): variable is IDataVariable {
+  return variable.type === MeldVariableType.DATA;
 }
 
 /**
- * Service interface for resolving variable references.
+ * Type guard function to check if a variable is a PathVariable.
+ * @param variable The variable to check
+ * @returns True if the variable is a PathVariable
  */
-export interface IVariableReferenceResolver {
-  /**
-   * Resolve variable references in content.
-   */
-  resolveReferences(
-    content: string,
-    context: ResolutionContext
-  ): Promise<string>;
-  
-  /**
-   * Access fields on a data variable.
-   */
-  accessFields(
-    value: JsonValue,
-    fields: FieldAccess[],
-    context: ResolutionContext
-  ): JsonValue;
-  
-  /**
-   * Convert a resolved value to string based on formatting context.
-   */
-  convertToString(
-    value: JsonValue,
-    context: ResolutionContext
-  ): string;
-}
-
-// =========================================================================
-// TYPE GUARDS
-// =========================================================================
-
-/**
- * Type guard functions for runtime type checking.
- * 
- * @decision Added comprehensive type guards to enable safe runtime
- * type checking, which is essential for variable resolution and
- * field access operations.
- */
-export const isTextVariable = (variable: MeldVariable): variable is TextVariable => 
-  variable.type === VariableType.TEXT;
-
-export const isDataVariable = (variable: MeldVariable): variable is DataVariable => 
-  variable.type === VariableType.DATA;
-
-export const isPathVariable = (variable: MeldVariable): variable is PathVariable => 
-  variable.type === VariableType.PATH;
-
-export const isCommandVariable = (variable: MeldVariable): variable is CommandVariable => 
-  variable.type === VariableType.COMMAND;
-
-export const isJsonObject = (value: JsonValue): value is JsonObject => 
-  value !== null && typeof value === 'object' && !Array.isArray(value);
-
-export const isJsonArray = (value: JsonValue): value is JsonArray => 
-  Array.isArray(value);
-
-// =========================================================================
-// UTILITY TYPES
-// =========================================================================
-
-/**
- * Branded type for variable names to prevent confusion with other string types.
- * 
- * @decision Used branded types for improved type safety and to prevent
- * accidental usage of string literals where variable names are expected.
- */
-export type VariableName = string & { __brand: 'VariableName' };
-
-/**
- * Branded type for state IDs to prevent confusion with other string types.
- */
-export type StateId = string & { __brand: 'StateId' };
-
-/**
- * Create a variable name from a string.
- */
-export const createVariableName = (name: string): VariableName => 
-  name as VariableName;
-
-/**
- * Create a state ID from a string.
- */
-export const createStateId = (id: string): StateId => 
-  id as StateId;
-
-// =========================================================================
-// FACTORY FUNCTIONS
-// =========================================================================
-
-/**
- * Factory functions for creating variables with proper typing.
- * 
- * @decision Added factory functions to simplify variable creation
- * and ensure proper initialization of all required fields.
- */
-export const createTextVariable = (
-  name: string,
-  value: string,
-  metadata?: VariableMetadata
-): TextVariable => ({
-  type: VariableType.TEXT,
-  name,
-  value,
-  metadata: metadata || {
-    createdAt: Date.now(),
-    modifiedAt: Date.now()
-  }
-});
-
-export const createDataVariable = (
-  name: string,
-  value: JsonValue,
-  metadata?: VariableMetadata
-): DataVariable => ({
-  type: VariableType.DATA,
-  name,
-  value,
-  metadata: metadata || {
-    createdAt: Date.now(),
-    modifiedAt: Date.now()
-  }
-});
-
-export const createPathVariable = (
-  name: string,
-  value: string,
-  isAbsolute: boolean,
-  metadata?: VariableMetadata
-): PathVariable => ({
-  type: VariableType.PATH,
-  name,
-  value,
-  isAbsolute,
-  metadata: metadata || {
-    createdAt: Date.now(),
-    modifiedAt: Date.now()
-  }
-});
-
-export const createCommandVariable = (
-  name: string,
-  value: CommandDefinition,
-  metadata?: VariableMetadata
-): CommandVariable => ({
-  type: VariableType.COMMAND,
-  name,
-  value,
-  metadata: metadata || {
-    createdAt: Date.now(),
-    modifiedAt: Date.now()
-  }
-});
-
-/**
- * Builder for creating field access paths.
- */
-export class FieldAccessBuilder {
-  private fields: FieldAccess[] = [];
-  
-  /**
-   * Add a property access.
-   */
-  property(name: string): FieldAccessBuilder {
-    this.fields.push({
-      type: FieldAccessType.PROPERTY,
-      key: name
-    });
-    return this;
-  }
-  
-  /**
-   * Add an array index access.
-   */
-  index(idx: number): FieldAccessBuilder {
-    this.fields.push({
-      type: FieldAccessType.INDEX,
-      key: idx
-    });
-    return this;
-  }
-  
-  /**
-   * Build the field access array.
-   */
-  build(): FieldAccess[] {
-    return [...this.fields];
-  }
-}
-
-// =========================================================================
-// ERROR TYPES
-// =========================================================================
-
-/**
- * Error thrown when variable resolution fails.
- */
-export class VariableResolutionError extends Error {
-  constructor(
-    message: string,
-    public readonly variableName: string,
-    public readonly fields?: FieldAccess[],
-    public readonly context?: ResolutionContext
-  ) {
-    super(message);
-    this.name = 'VariableResolutionError';
-  }
+export function isPathVariable(variable: IMeldVariable): variable is IPathVariable {
+  return variable.type === MeldVariableType.PATH;
 }
 
 /**
- * Error thrown when field access fails.
+ * Type guard function to check if a variable is a CommandVariable.
+ * @param variable The variable to check
+ * @returns True if the variable is a CommandVariable
  */
-export class FieldAccessError extends Error {
-  constructor(
-    message: string,
-    public readonly value: JsonValue,
-    public readonly fields: FieldAccess[],
-    public readonly failedAt: number
-  ) {
-    super(message);
-    this.name = 'FieldAccessError';
-  }
+export function isCommandVariable(variable: IMeldVariable): variable is ICommandVariable {
+  return variable.type === MeldVariableType.COMMAND;
 }
 
 /**
- * Error thrown when variable validation fails.
+ * Pattern for valid variable identifiers.
+ * @remarks Standardized identifier validation across all variable types
+ * to ensure consistency and prevent edge cases.
  */
-export class VariableValidationError extends Error {
-  constructor(
-    message: string,
-    public readonly variable: MeldVariable
-  ) {
-    super(message);
-    this.name = 'VariableValidationError';
-  }
+export const VALID_IDENTIFIER_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+
+/**
+ * Error types for variable operations.
+ */
+export enum VariableErrorType {
+  NOT_FOUND = 'variable_not_found',
+  INVALID_IDENTIFIER = 'invalid_identifier',
+  CIRCULAR_REFERENCE = 'circular_reference',
+  INVALID_FIELD_ACCESS = 'invalid_field_access',
+  TYPE_MISMATCH = 'type_mismatch',
+  IMMUTABLE_VARIABLE = 'immutable_variable',
+  RESOLUTION_DEPTH_EXCEEDED = 'resolution_depth_exceeded',
+  INVALID_PATH = 'invalid_path'
 }
 ```
