@@ -159,3 +159,76 @@ export type MeldVariable =
   | DataVariable
   | IPathVariable // Use the revised path variable type
   | CommandVariable; 
+
+// =========================================================================
+// FACTORY FUNCTIONS
+// =========================================================================
+
+/**
+ * Factory functions for creating variables with proper typing.
+ */
+export const createTextVariable = (
+  name: string,
+  value: string,
+  metadata?: Partial<VariableMetadata>
+): TextVariable => ({
+  type: VariableType.TEXT,
+  name,
+  value,
+  metadata: {
+    createdAt: Date.now(),
+    modifiedAt: Date.now(),
+    origin: VariableOrigin.DIRECT_DEFINITION,
+    ...metadata
+  }
+});
+
+export const createDataVariable = (
+  name: string,
+  value: JsonValue,
+  metadata?: Partial<VariableMetadata>
+): DataVariable => ({
+  type: VariableType.DATA,
+  name,
+  value,
+  metadata: {
+    createdAt: Date.now(),
+    modifiedAt: Date.now(),
+    origin: VariableOrigin.DIRECT_DEFINITION,
+    ...metadata
+  }
+});
+
+// Updated createPathVariable factory
+export const createPathVariable = (
+  name: string,
+  value: IFilesystemPathState | IUrlPathState, // Accepts the union state
+  metadata?: Partial<VariableMetadata>
+): IPathVariable => ({
+  type: VariableType.PATH,
+  name,
+  value, // Store the provided state directly
+  metadata: {
+    createdAt: Date.now(),
+    modifiedAt: Date.now(),
+    origin: VariableOrigin.DIRECT_DEFINITION,
+    ...metadata
+  }
+});
+
+// Updated createCommandVariable factory
+export const createCommandVariable = (
+  name: string,
+  value: ICommandDefinition, // Accepts the structured definition
+  metadata?: Partial<VariableMetadata>
+): CommandVariable => ({
+  type: VariableType.COMMAND,
+  name,
+  value, // Store the provided definition directly
+  metadata: {
+    createdAt: Date.now(),
+    modifiedAt: Date.now(),
+    origin: VariableOrigin.DIRECT_DEFINITION,
+    ...metadata
+  }
+}); 

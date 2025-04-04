@@ -11,6 +11,26 @@ import { StateTrackingServiceClientFactory } from '@services/state/StateTracking
 import type { IStateTrackingServiceClient } from '@services/state/StateTrackingService/interfaces/IStateTrackingServiceClient.js';
 import { randomUUID } from 'crypto';
 import cloneDeep from 'lodash.cloneDeep';
+import type {
+  TextVariable,
+  DataVariable,
+  IPathVariable,
+  CommandVariable,
+  JsonValue,
+  VariableMetadata,
+  IFilesystemPathState,
+  IUrlPathState,
+  ICommandDefinition,
+  MeldVariable,
+  VariableType
+} from '@core/types/index.js';
+import { 
+  VariableOrigin,
+  createTextVariable,
+  createDataVariable,
+  createPathVariable,
+  createCommandVariable
+} from '@core/types/index.js';
 
 // Helper function to get the container
 function getContainer() {
@@ -233,15 +253,23 @@ export class StateService implements IStateService {
     return this.currentState.variables.text.get(name);
   }
 
-  setTextVar(name: string, value: string): void {
+  setTextVar(name: string, value: string, metadata?: Partial<VariableMetadata>): TextVariable {
     this.checkMutable();
+    // Create the rich variable object using the factory
+    const variable = createTextVariable(name, value, {
+      origin: VariableOrigin.DIRECT_DEFINITION,
+      ...metadata // Merge provided metadata, overwriting defaults if needed
+    });
+    // Create a new map, set the variable, and update state
     const text = new Map(this.currentState.variables.text);
+    text.set(name, variable);
     this.updateState({
       variables: {
         ...this.currentState.variables,
-        text
+        text // Use the map with the new rich object
       }
     }, `setTextVar:${name}`);
+    return variable; // Return the created object
   }
 
   getAllTextVars(): Map<string, TextVariable> {
@@ -257,15 +285,23 @@ export class StateService implements IStateService {
     return this.currentState.variables.data.get(name);
   }
 
-  setDataVar(name: string, value: unknown): void {
+  setDataVar(name: string, value: JsonValue, metadata?: Partial<VariableMetadata>): DataVariable {
     this.checkMutable();
+    // Create the rich variable object
+    const variable = createDataVariable(name, value, {
+      origin: VariableOrigin.DIRECT_DEFINITION,
+      ...metadata
+    });
+    // Create a new map, set the variable, and update state
     const data = new Map(this.currentState.variables.data);
+    data.set(name, variable);
     this.updateState({
       variables: {
         ...this.currentState.variables,
-        data
+        data // Use the map with the new rich object
       }
     }, `setDataVar:${name}`);
+    return variable; // Return the created object
   }
 
   getAllDataVars(): Map<string, DataVariable> {
@@ -281,15 +317,23 @@ export class StateService implements IStateService {
     return this.currentState.variables.path.get(name);
   }
 
-  setPathVar(name: string, value: string): void {
+  setPathVar(name: string, value: IFilesystemPathState | IUrlPathState, metadata?: Partial<VariableMetadata>): IPathVariable {
     this.checkMutable();
+    // Create the rich variable object
+    const variable = createPathVariable(name, value, {
+      origin: VariableOrigin.DIRECT_DEFINITION,
+      ...metadata
+    });
+    // Create a new map, set the variable, and update state
     const path = new Map(this.currentState.variables.path);
+    path.set(name, variable);
     this.updateState({
       variables: {
         ...this.currentState.variables,
-        path
+        path // Use the map with the new rich object
       }
     }, `setPathVar:${name}`);
+    return variable; // Return the created object
   }
 
   getAllPathVars(): Map<string, IPathVariable> {
@@ -301,12 +345,18 @@ export class StateService implements IStateService {
     return this.currentState.commands.get(name);
   }
 
-  setCommand(name: string, command: string | CommandDefinition): void {
+  setCommandVar(name: string, value: ICommandDefinition, metadata?: Partial<VariableMetadata>): CommandVariable {
     this.checkMutable();
+    // Create the rich variable object
+    const variable = createCommandVariable(name, value, {
+        origin: VariableOrigin.DIRECT_DEFINITION,
+        ...metadata
+    });
+    // Create a new map, set the variable, and update state
     const commands = new Map(this.currentState.commands);
-    const commandDef = typeof command === 'string' ? { command } : command;
-    commands.set(name, commandDef);
-    this.updateState({ commands }, `setCommand:${name}`);
+    commands.set(name, variable);
+    this.updateState({ commands }, `setCommandVar:${name}`); // Update the whole commands map
+    return variable; // Return the created object
   }
 
   getAllCommands(): Map<string, CommandVariable> {
@@ -551,7 +601,7 @@ export class StateService implements IStateService {
     
     // Copy commands
     this.getAllCommands().forEach((command, name) => {
-      childState.setCommand(name, command);
+      childState.setCommandVar(name, command);
     });
     
     // Copy import info
@@ -699,37 +749,45 @@ export class StateService implements IStateService {
    * Creates a deep clone of this state service
    */
   clone(): IStateService {
-    // Create a new StateService with the same factory, eventService and trackingServiceFactory
+    // Create a new StateService instance with the same dependencies
     const cloned = new StateService(
       this.stateFactory,
       this.eventService,
       this.trackingServiceClientFactory
+      // IMPORTANT: Do NOT pass `this` as parentState here!
     );
     
-    // Use the factory to create a cloned state with all properties correctly initialized
-    (cloned as StateService).currentState = this.stateFactory.createClonedState(
-      this.currentState,
+    // Use the factory to create a cloned StateNode with a new ID and no parent
+    // The factory now handles the deep cloning via lodash.cloneDeep
+    const clonedNode = this.stateFactory.createClonedState(
+      this.currentState, // Pass the current internal state node to be cloned
       {
-        source: 'clone',
-        filePath: this.currentState.filePath
+        // Options for createClonedState if needed (e.g., override filePath)
+        // filePath: this.currentState.filePath // Example: Keep same path
       }
     );
     
-    // Copy transformation settings
-    (cloned as StateService)._transformationEnabled = this._transformationEnabled;
-    (cloned as StateService)._transformationOptions = { ...this._transformationOptions };
+    // Assign the deeply cloned StateNode to the new service instance
+    (cloned as StateService).currentState = clonedNode;
+    
+    // Copy non-StateNode properties (like flags and transformation options)
+    // These are typically primitive values or simple objects safe for shallow copy
     (cloned as StateService)._isImmutable = this._isImmutable;
+    (cloned as StateService)._transformationEnabled = this._transformationEnabled;
+    // Ensure transformation options are copied correctly (current implementation in spec/IStateService uses object)
+    (cloned as StateService)._transformationOptions = { ...this._transformationOptions };
     
-    // Track cloning
-    // Ensure factory is initialized before trying to use it
+    // Track cloning relationship
     this.ensureFactoryInitialized();
-    
-    if (this.trackingClient) {
+    const clonedId = cloned.getStateId();
+    const originalId = this.getStateId();
+
+    if (this.trackingClient && originalId && clonedId) {
       try {
         // Register the clone-original relationship
         this.trackingClient.registerRelationship({
-          sourceId: this.getStateId()!,
-          targetId: cloned.getStateId()!,
+          sourceId: originalId,
+          targetId: clonedId,
           type: 'clone-original',
           timestamp: Date.now(),
           source: 'original'
@@ -738,11 +796,11 @@ export class StateService implements IStateService {
         // Register a "cloned" event for the state
         if (this.trackingClient.registerEvent) {
           this.trackingClient.registerEvent({
-            stateId: this.getStateId()!,
+            stateId: originalId,
             type: 'cloned',
             timestamp: Date.now(),
             details: {
-              cloneId: cloned.getStateId()!
+              cloneId: clonedId
             },
             source: 'original'
           });
@@ -750,14 +808,13 @@ export class StateService implements IStateService {
       } catch (error) {
         logger.warn('Failed to register clone with tracking client', { error });
       }
-    } else if (this.trackingService) {
+    } else if (this.trackingService && originalId && clonedId) {
       // Fall back to direct service
       try {
-        // Register the clone-original relationship with type assertion since it's valid in the client interface
         this.trackingService.addRelationship(
-          this.getStateId()!,
-          cloned.getStateId()!,
-          'parent-child' // Use 'parent-child' as fallback for direct service
+          originalId,
+          clonedId,
+          'parent-child' // Using fallback type for direct service
         );
       } catch (error) {
         logger.warn('Failed to register clone-original relationship with tracking service', { error });
@@ -989,5 +1046,113 @@ export class StateService implements IStateService {
    */
   getInternalStateNode(): StateNode {
     return this.currentState;
+  }
+
+  // Implement generic getVariable
+  getVariable(name: string, type?: VariableType): MeldVariable | undefined {
+    let variable: MeldVariable | undefined;
+    if (type === undefined || type === VariableType.TEXT) {
+      variable = this.getTextVar(name);
+      if (variable) return variable;
+    }
+    if (type === undefined || type === VariableType.DATA) {
+      variable = this.getDataVar(name);
+      if (variable) return variable;
+    }
+    if (type === undefined || type === VariableType.PATH) {
+      variable = this.getPathVar(name);
+      if (variable) return variable;
+    }
+    if (type === undefined || type === VariableType.COMMAND) {
+      variable = this.getCommandVar(name);
+      if (variable) return variable;
+    }
+    return undefined;
+  }
+
+  // Implement generic setVariable
+  setVariable(variable: MeldVariable): MeldVariable {
+    this.checkMutable();
+    switch (variable.type) {
+      case VariableType.TEXT:
+        return this.setTextVar(variable.name, variable.value, variable.metadata);
+      case VariableType.DATA:
+        return this.setDataVar(variable.name, variable.value, variable.metadata);
+      case VariableType.PATH:
+        // Type assertion needed because setPathVar expects the union, not the full variable
+        return this.setPathVar(variable.name, variable.value as (IFilesystemPathState | IUrlPathState), variable.metadata);
+      case VariableType.COMMAND:
+        // Type assertion needed because setCommandVar expects ICommandDefinition, not the full variable
+        return this.setCommandVar(variable.name, variable.value as ICommandDefinition, variable.metadata);
+      default:
+        // Should be unreachable due to discriminated union
+        throw new Error(`Unsupported variable type: ${(variable as any).type}`);
+    }
+  }
+
+  // Implement generic hasVariable
+  hasVariable(name: string, type?: VariableType): boolean {
+    if (type) {
+      switch (type) {
+        case VariableType.TEXT: return this.currentState.variables.text.has(name);
+        case VariableType.DATA: return this.currentState.variables.data.has(name);
+        case VariableType.PATH: return this.currentState.variables.path.has(name);
+        case VariableType.COMMAND: return this.currentState.commands.has(name);
+        default: return false;
+      }
+    } else {
+      // Check across all types if no specific type is given
+      return this.currentState.variables.text.has(name) ||
+             this.currentState.variables.data.has(name) ||
+             this.currentState.variables.path.has(name) ||
+             this.currentState.commands.has(name);
+    }
+  }
+
+  // Implement generic removeVariable
+  removeVariable(name: string, type?: VariableType): boolean {
+    this.checkMutable();
+    let removed = false;
+    if (type === undefined || type === VariableType.TEXT) {
+      const text = new Map(this.currentState.variables.text);
+      if (text.delete(name)) {
+        this.updateState({ variables: { ...this.currentState.variables, text }}, `removeVariable:${name}(text)`);
+        removed = true;
+      }
+    }
+    if (type === undefined || type === VariableType.DATA) {
+      const data = new Map(this.currentState.variables.data);
+      if (data.delete(name)) {
+        this.updateState({ variables: { ...this.currentState.variables, data }}, `removeVariable:${name}(data)`);
+        removed = true;
+      }
+    }
+    if (type === undefined || type === VariableType.PATH) {
+      const path = new Map(this.currentState.variables.path);
+      if (path.delete(name)) {
+        this.updateState({ variables: { ...this.currentState.variables, path }}, `removeVariable:${name}(path)`);
+        removed = true;
+      }
+    }
+    if (type === undefined || type === VariableType.COMMAND) {
+      const commands = new Map(this.currentState.commands);
+      if (commands.delete(name)) {
+        this.updateState({ commands }, `removeVariable:${name}(command)`);
+        removed = true;
+      }
+    }
+    // If a specific type was requested and nothing was removed, return false.
+    // If no type was specified, return true if anything was removed.
+    return removed;
+  }
+
+  // Add getParentState method to satisfy interface
+  getParentState(): IStateService | undefined {
+    // This needs access to the original parentState passed to constructor/initializeState
+    // which is currently not stored directly. We need to modify how parent is tracked.
+    // For now, return undefined. This might need a bigger change if parent access is crucial.
+    // TODO: Revisit parent state tracking if needed for functionality.
+    logger.warn('getParentState() is not fully implemented and may return undefined.');
+    return undefined; 
   }
 } 
