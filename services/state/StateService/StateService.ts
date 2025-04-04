@@ -1,7 +1,7 @@
 import type { MeldNode, TextNode } from '@core/syntax/types/index.js';
 import { stateLogger as logger } from '@core/utils/logger.js';
 import type { IStateService, TransformationOptions } from '@services/state/StateService/IStateService.js';
-import type { StateNode, CommandDefinition } from '@services/state/StateService/types.js';
+import type { StateNode } from '@services/state/StateService/types.js';
 import { StateFactory } from '@services/state/StateService/StateFactory.js';
 import type { IStateEventService, StateEvent } from '@services/state/StateEventService/IStateEventService.js';
 import type { IStateTrackingService } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
@@ -10,7 +10,6 @@ import { Service } from '@core/ServiceProvider.js';
 import { StateTrackingServiceClientFactory } from '@services/state/StateTrackingService/factories/StateTrackingServiceClientFactory.js';
 import type { IStateTrackingServiceClient } from '@services/state/StateTrackingService/interfaces/IStateTrackingServiceClient.js';
 import { randomUUID } from 'crypto';
-import { cloneDeep } from 'lodash';
 import type {
   TextVariable,
   DataVariable,
