@@ -165,7 +165,7 @@ export class TestContext {
     let stateFactory = new StateFactory();
     const state = new StateService(stateFactory, eventService, stateTrackingServiceClientFactory);
     state.setCurrentFilePath('test.meld'); // Set initial file path
-    state.enableTransformation(true);
+    state.setTransformationEnabled(true);
     
     // Initialize special path variables
     state.setPathVar('PROJECTPATH', '/project');
@@ -376,14 +376,17 @@ export class TestContext {
    * @param options Options for selective transformation, or true/false for all
    */
   enableTransformation(options: any = true): void {
-    this.services.state.enableTransformation(options);
+    this.services.state.setTransformationEnabled(options === true);
+    if (options !== false && options !== true) {
+        this.services.state.setTransformationOptions(options as TransformationOptions);
+    }
   }
 
   /**
    * Disable transformation mode
    */
   disableTransformation(): void {
-    this.services.state.enableTransformation(false);
+    this.services.state.setTransformationEnabled(false);
   }
 
   /**

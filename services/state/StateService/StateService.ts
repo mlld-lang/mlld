@@ -656,14 +656,7 @@ export class StateService implements IStateService {
       // Try to use the client from the factory first
       if (this.trackingClient) {
         try {
-          // Make sure parent-child relationship exists
-          this.trackingClient.addRelationship(
-            this.getStateId()!,
-            childNode.stateId,
-            'parent-child'
-          );
-          
-          // Add merge-source relationship
+          // Correct the relationship type to merge-source
           this.trackingClient.addRelationship(
             this.getStateId()!,
             childNode.stateId,
@@ -677,13 +670,6 @@ export class StateService implements IStateService {
           // Fall back to direct tracking service if available
           if (this.trackingService) {
             // Make sure parent-child relationship exists
-            this.trackingService.addRelationship(
-              this.getStateId()!,
-              childNode.stateId,
-              'parent-child'
-            );
-            
-            // Add merge-source relationship
             this.trackingService.addRelationship(
               this.getStateId()!,
               childNode.stateId,
@@ -755,6 +741,17 @@ export class StateService implements IStateService {
     if (originalId && cloneId) {
       if (this.trackingClient) {
         try {
+          // Explicitly register the CLONED state
+          this.trackingClient.registerState({
+            id: cloneId,
+            source: clonedNode.source || 'clone', // Use source from cloned node
+            filePath: clonedService.getCurrentFilePath() || undefined,
+            transformationEnabled: clonedService.isTransformationEnabled(),
+            createdAt: Date.now(), // Use current time for clone creation
+            parentId: undefined // Clones don't have parents in tracking
+          });
+          
+          // Register the relationship
           this.trackingClient.registerRelationship({
             sourceId: originalId,
             targetId: cloneId,
@@ -762,6 +759,7 @@ export class StateService implements IStateService {
             timestamp: Date.now(),
             source: 'clone'
           });
+          
           if (this.trackingClient.registerEvent) {
              this.trackingClient.registerEvent({
                 stateId: originalId,
