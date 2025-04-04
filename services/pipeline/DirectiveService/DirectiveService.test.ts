@@ -93,13 +93,13 @@ describe('DirectiveService', () => {
         const result = await service.processDirective(node, execContext);
 
         // Verify the result
-        expect(result.getTextVar('greeting')).toBe('Hello');
+        expect(result.getTextVar('greeting')?.value).toBe('Hello');
       });
 
       it('should process text directive with variable interpolation', async () => {
         // Set up initial state with a variable
         const state = context.services.state;
-        state.setTextVar('name', 'World');
+        state.setTextVar('name', { type: 'text', value: 'World' });
 
         // Parse and process
         const content = await context.fs.readFile('test-interpolation.meld');
@@ -111,7 +111,7 @@ describe('DirectiveService', () => {
           state
         });
 
-        expect(result.getTextVar('greeting')).toBe('Hello World');
+        expect(result.getTextVar('greeting')?.value).toBe('Hello World');
       });
     });
 
@@ -126,13 +126,13 @@ describe('DirectiveService', () => {
           state: context.services.state
         });
 
-        expect(result.getDataVar('config')).toEqual({ key: 'value' });
+        expect(result.getDataVar('config')?.value).toEqual({ key: 'value' });
       });
 
       it('should process data directive with variable interpolation', async () => {
         // Set up initial state
         const state = context.services.state;
-        state.setTextVar('user', 'Alice');
+        state.setTextVar('user', { type: 'text', value: 'Alice' });
 
         const content = await context.fs.readFile('test-data-interpolation.meld');
         const nodes = await context.services.parser.parse(content);
@@ -143,7 +143,7 @@ describe('DirectiveService', () => {
           state
         });
 
-        expect(result.getDataVar('config')).toEqual({ greeting: 'Hello Alice' });
+        expect(result.getDataVar('config')?.value).toEqual({ greeting: 'Hello Alice' });
       });
     });
 
@@ -183,7 +183,7 @@ describe('DirectiveService', () => {
           async (nodes: any, options: any) => {
             // Simulate interpreting the imported file by setting the variable
             if (options?.initialState) {
-              options.initialState.setTextVar('greeting', 'Hello');
+              options.initialState.setTextVar('greeting', { type: 'text', value: 'Hello' });
               return options.initialState;
             }
             return context.services.state;
@@ -196,7 +196,7 @@ describe('DirectiveService', () => {
             state: context.services.state
           });
 
-          expect(result.getTextVar('greeting')).toBe('Hello');
+          expect(result.getTextVar('greeting')?.value).toBe('Hello');
         } finally {
           // Restore original methods
           interpreterService.interpret = originalInterpret;
@@ -245,10 +245,10 @@ describe('DirectiveService', () => {
             // Simulate interpreting the imported file by setting variables
             if (options?.initialState) {
               if (options.filePath?.includes('middle.meld')) {
-                options.initialState.setTextVar('middle', 'Middle Content');
-                options.initialState.setTextVar('inner', 'Inner Content');
+                options.initialState.setTextVar('middle', { type: 'text', value: 'Middle Content' });
+                options.initialState.setTextVar('inner', { type: 'text', value: 'Inner Content' });
               } else if (options.filePath?.includes('inner.meld')) {
-                options.initialState.setTextVar('inner', 'Inner Content');
+                options.initialState.setTextVar('inner', { type: 'text', value: 'Inner Content' });
               }
               return options.initialState;
             }
@@ -262,8 +262,8 @@ describe('DirectiveService', () => {
             state: context.services.state
           });
 
-          expect(result.getTextVar('inner')).toBe('Inner Content');
-          expect(result.getTextVar('middle')).toBe('Middle Content');
+          expect(result.getTextVar('inner')?.value).toBe('Inner Content');
+          expect(result.getTextVar('middle')?.value).toBe('Middle Content');
         } finally {
           // Restore original methods
           interpreterService.interpret = originalInterpret;

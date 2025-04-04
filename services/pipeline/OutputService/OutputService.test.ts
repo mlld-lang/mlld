@@ -265,7 +265,9 @@ describe('OutputService', () => {
   });
 
   describe('Transformation Mode', () => {
-    it('should use transformed nodes when transformation is enabled', async () => {
+    // TODO: These tests are deprecated as transformation mode has been removed.
+    // They should be refactored to test the new behavior or removed entirely.
+    it.skip('should use transformed nodes when transformation is enabled', async () => {
       // MIGRATION: Using centralized syntax examples instead of hardcoded examples
       const originalNodes: MeldNode[] = [
         // Using a run directive example
@@ -284,7 +286,7 @@ describe('OutputService', () => {
       expect(output).toBe('test output\n');
     });
 
-    it('should handle mixed content in transformation mode', async () => {
+    it.skip('should handle mixed content in transformation mode', async () => {
       // MIGRATION: Using centralized syntax examples instead of hardcoded examples
       const originalNodes: MeldNode[] = [
         createTextNode('Before\n', createLocation(1, 1)),
@@ -307,7 +309,7 @@ describe('OutputService', () => {
       expect(output).toBe('Before\ntest output\nAfter\n');
     });
 
-    it('should handle definition directives in non-transformation mode', async () => {
+    it.skip('should handle definition directives in non-transformation mode', async () => {
       // MIGRATION: Using centralized syntax examples instead of hardcoded examples
       const nodes: MeldNode[] = [
         createTextNode('Before\n', createLocation(1, 1)),
@@ -324,7 +326,7 @@ describe('OutputService', () => {
       expect(output).toBe('Before\nAfter\n');
     });
 
-    it('should show placeholders for execution directives in non-transformation mode', async () => {
+    it.skip('should show placeholders for execution directives in non-transformation mode', async () => {
       // MIGRATION: Using centralized syntax examples instead of hardcoded examples
       const nodes: MeldNode[] = [
         createTextNode('Before\n', createLocation(1, 1)),

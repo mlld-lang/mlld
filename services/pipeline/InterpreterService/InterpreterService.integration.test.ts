@@ -62,8 +62,9 @@ describe('InterpreterService Integration', () => {
       
       // Check if the value is set correctly
       // For text directives, the value should be a string
-      expect(typeof value).toBe('string');
+      expect(typeof value?.value).toBe('string');
       expect(value).toBeTruthy();
+      expect(value?.value).toBe('value');
     });
 
     it('interprets data directives', async () => {
@@ -79,9 +80,9 @@ describe('InterpreterService Integration', () => {
       
       // Verify the data is an object
       expect(value).toBeDefined();
-      expect(typeof value).toBe('object');
+      expect(typeof value?.value).toBe('object');
       // Data should not be null
-      expect(value).not.toBeNull();
+      expect(value?.value).not.toBeNull();
     });
 
     it('interprets path directives', async () => {
@@ -133,15 +134,15 @@ describe('InterpreterService Integration', () => {
       const result1 = await context.services.interpreter.interpret([node]);
       const result2 = await context.services.interpreter.interpret([node]);
       expect(result1).not.toBe(result2);
-      expect(result1.getTextVar('test')).toBe('value');
-      expect(result2.getTextVar('test')).toBe('value');
+      expect(result1.getTextVar('test')?.value).toBe('value');
+      expect(result2.getTextVar('test')?.value).toBe('value');
     });
 
     it('merges child state back to parent', async () => {
       const node = context.factory.createTextDirective('child', 'value');
       const parentState = context.services.state.createChildState();
       await context.services.interpreter.interpret([node], { initialState: parentState, mergeState: true });
-      expect(parentState.getTextVar('child')).toBe('value');
+      expect(parentState.getTextVar('child')?.value).toBe('value');
     });
 
     it('maintains isolation with mergeState: false', async () => {
@@ -285,7 +286,7 @@ describe('InterpreterService Integration', () => {
       } catch (error: unknown) {
         if (error instanceof MeldInterpreterError) {
           // Verify the valid node was processed
-          expect(testState.getTextVar('greeting')).toBe('Hello');
+          expect(testState.getTextVar('greeting')?.value).toBe('Hello');
           
           // Verify the error node was not processed
           expect(testState.getTextVar('error')).toBeUndefined();
@@ -351,7 +352,7 @@ describe('InterpreterService Integration', () => {
       } catch (error: unknown) {
         if (error instanceof MeldInterpreterError) {
           // Verify the first node was processed
-          expect(testState.getTextVar('greeting')).toBe('Hello');
+          expect(testState.getTextVar('greeting')?.value).toBe('Hello');
           
           // Verify the error node and after node were not processed
           expect(testState.getTextVar('error')).toBeUndefined();
@@ -431,8 +432,9 @@ describe('InterpreterService Integration', () => {
       
       // Extract the variable name from the example
       const varName = node.directive.identifier;
-      expect(result.getTextVar(varName)).toBeDefined();
-      expect(typeof result.getTextVar(varName)).toBe('string');
+      const value = result.getTextVar(varName);
+      expect(value).toBeDefined();
+      expect(typeof value?.value).toBe('string');
     });
 
     it('handles data directives with correct format', async () => {
@@ -444,8 +446,9 @@ describe('InterpreterService Integration', () => {
       
       // Extract the variable name from the example
       const varName = node.directive.identifier;
-      expect(result.getDataVar(varName)).toBeDefined();
-      expect(typeof result.getDataVar(varName)).toBe('object');
+      const value = result.getDataVar(varName);
+      expect(value).toBeDefined();
+      expect(typeof value?.value).toBe('object');
     });
 
     it('handles path directives with correct format', async () => {
@@ -454,7 +457,8 @@ describe('InterpreterService Integration', () => {
       const node = context.factory.createPathDirective('test', 'filename.meld');
       
       const result = await context.services.interpreter.interpret([node]);
-      expect(result.getPathVar('test')).toBe('filename.meld');
+      const value = result.getPathVar('test');
+      expect(value?.value).toBe('filename.meld');
     });
 
     it('handles complex directives with schema validation', async () => {
@@ -468,7 +472,7 @@ describe('InterpreterService Integration', () => {
       const varName = node.directive.identifier;
       const value = result.getDataVar(varName);
       expect(value).toBeDefined();
-      expect(typeof value).toBe('object');
+      expect(typeof value?.value).toBe('object');
     });
 
     it('maintains correct node order with mixed content', async () => {
