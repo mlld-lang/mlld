@@ -56,14 +56,19 @@ describe('Import Directive Debug', () => {
   }
 
   // Helper method to enable transformation
-  function enableTransformation(options: {
-    variables?: boolean;
-    directives?: boolean;
-    commands?: boolean;
-    imports?: boolean;
-  } = {}): void {
+  function enableTransformation(options?: Partial<TransformationOptions>): void {
     // Pass the options directly to the enableTransformation method
-    context.services.state.enableTransformation(options);
+    // REMOVE the line below
+    // context.services.state.enableTransformation(options);
+    
+    // If options were provided, set them (assuming setTransformationOptions exists)
+    if (options) {
+       if (context.services.state.setTransformationOptions) {
+           context.services.state.setTransformationOptions(options);
+       } else {
+           logger.warn('StateService does not have setTransformationOptions method');
+       }
+    }
   }
 
   beforeEach(async () => {

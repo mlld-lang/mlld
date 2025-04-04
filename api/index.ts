@@ -296,20 +296,22 @@ export async function main(filePath: string, options: ProcessOptions = {}): Prom
     // Parse the content
     const ast = await services.parser.parse(content);
     
-    // Transformation is always enabled now, but we still handle the options parameter for backward compatibility
-    if (options.transformation) {
-      // This call has no effect (transformation is always true), but we keep it for backward compatibility
-      if (typeof options.transformation === 'boolean') {
-        services.state.enableTransformation(true);
-      } else {
-        services.state.enableTransformation(true);
+    // Transformation is now always enabled, remove explicit calls
+    /* // Keep comment for context
+    // This call has no effect (transformation is always true), but we keep it for backward compatibility
+    if (typeof options.transformation === 'boolean') {
+      services.state.enableTransformation(true);
+    } else {
+      services.state.enableTransformation(true);
+      // Potentially apply specific transformation options if provided
+      if (options.transformation) {
+        services.state.setTransformationOptions(options.transformation);
       }
-      
-      // Add debugging for transformation settings
-      logger.debug('Transformation enabled (always true now)', {
-        isEnabled: true, // Always true
-        options: services.state.getTransformationOptions?.()
-      });
+    }
+    */
+    // Ensure transformation options are set if provided (even if enabling is implicit)
+    if (options.transformation && typeof options.transformation === 'object') {
+      services.state.setTransformationOptions(options.transformation);
     }
     
     // Interpret the AST

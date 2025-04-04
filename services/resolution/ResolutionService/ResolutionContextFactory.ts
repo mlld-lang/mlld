@@ -40,7 +40,7 @@ export class ResolutionContextFactory {
    * Assumes a generic read purpose for paths if not specified.
    */
   static create(state: IStateService, filePath?: string): ResolutionContext {
-    return {
+    const baseContext = {
       state,
       strict: false, // Default strictness
       depth: 0,      // Initial depth
@@ -52,32 +52,97 @@ export class ResolutionContextFactory {
       ],
       flags: this.createDefaultFlags(),
       pathContext: this.createDefaultPathContext(PathPurpose.READ, filePath), // Generic read purpose
-      // formattingContext: undefined, // No default formatting context
-      // parserFlags: undefined, // No default parser flags
-
-      // Implement context modification methods from the spec
-      withIncreasedDepth() { 
-        return { ...this, depth: this.depth + 1 }; 
-      },
-      withStrictMode(strict: boolean) { 
-        return { ...this, strict }; 
-      },
-      withAllowedTypes(types: VariableType[]) { 
-        return { ...this, allowedVariableTypes: types }; 
-      },
-      withFlags(flags: Partial<ResolutionFlags>) { 
-        return { ...this, flags: { ...this.flags, ...flags } }; 
-      },
-      withFormattingContext(formatting: any) { // Use specific type later
-        return { ...this, formattingContext: { ...(this.formattingContext || {}), ...formatting } }; 
-      },
-      withPathContext(pathContext: Partial<PathResolutionContext>) { 
-        return { ...this, pathContext: { ...(this.pathContext || this.createDefaultPathContext(PathPurpose.READ)), ...pathContext } }; 
-      },
-      withParserFlags(flags: any) { // Use specific type later
-        return { ...this, parserFlags: { ...(this.parserFlags || {}), ...flags } }; 
-      }
+      currentFilePath: filePath, // Store the initial file path
     };
+
+    // Add helper methods dynamically
+    return {
+      ...baseContext,
+      withIncreasedDepth: () => ({ 
+        ...baseContext, 
+        depth: baseContext.depth + 1, 
+        // Re-attach methods to the new object
+        withIncreasedDepth: (baseContext as any).withIncreasedDepth,
+        withStrictMode: (baseContext as any).withStrictMode,
+        withAllowedTypes: (baseContext as any).withAllowedTypes,
+        withFlags: (baseContext as any).withFlags,
+        withFormattingContext: (baseContext as any).withFormattingContext,
+        withPathContext: (baseContext as any).withPathContext,
+        withParserFlags: (baseContext as any).withParserFlags,
+      }),
+      withStrictMode: (strict: boolean) => ({ 
+         ...(baseContext as ResolutionContext), // Cast needed initially
+         strict, 
+         // Re-attach methods 
+         withIncreasedDepth: (baseContext as any).withIncreasedDepth,
+         withStrictMode: (baseContext as any).withStrictMode,
+         withAllowedTypes: (baseContext as any).withAllowedTypes,
+         withFlags: (baseContext as any).withFlags,
+         withFormattingContext: (baseContext as any).withFormattingContext,
+         withPathContext: (baseContext as any).withPathContext,
+         withParserFlags: (baseContext as any).withParserFlags,
+      }),
+      withAllowedTypes: (types: VariableType[]) => ({ 
+         ...(baseContext as ResolutionContext), 
+         allowedVariableTypes: types, 
+         // Re-attach methods 
+         withIncreasedDepth: (baseContext as any).withIncreasedDepth,
+         withStrictMode: (baseContext as any).withStrictMode,
+         withAllowedTypes: (baseContext as any).withAllowedTypes,
+         withFlags: (baseContext as any).withFlags,
+         withFormattingContext: (baseContext as any).withFormattingContext,
+         withPathContext: (baseContext as any).withPathContext,
+         withParserFlags: (baseContext as any).withParserFlags,
+      }),
+       withFlags: (flags: Partial<ResolutionFlags>) => ({ 
+         ...(baseContext as ResolutionContext), 
+         flags: { ...baseContext.flags, ...flags },
+         // Re-attach methods 
+         withIncreasedDepth: (baseContext as any).withIncreasedDepth,
+         withStrictMode: (baseContext as any).withStrictMode,
+         withAllowedTypes: (baseContext as any).withAllowedTypes,
+         withFlags: (baseContext as any).withFlags,
+         withFormattingContext: (baseContext as any).withFormattingContext,
+         withPathContext: (baseContext as any).withPathContext,
+         withParserFlags: (baseContext as any).withParserFlags,
+      }),
+       withFormattingContext: (formatting: any) => ({ 
+         ...(baseContext as ResolutionContext), 
+         formattingContext: { ...(baseContext.formattingContext || {}), ...formatting },
+         // Re-attach methods 
+         withIncreasedDepth: (baseContext as any).withIncreasedDepth,
+         withStrictMode: (baseContext as any).withStrictMode,
+         withAllowedTypes: (baseContext as any).withAllowedTypes,
+         withFlags: (baseContext as any).withFlags,
+         withFormattingContext: (baseContext as any).withFormattingContext,
+         withPathContext: (baseContext as any).withPathContext,
+         withParserFlags: (baseContext as any).withParserFlags,
+       }),
+       withPathContext: (pathContext: Partial<PathResolutionContext>) => ({ 
+         ...(baseContext as ResolutionContext), 
+         pathContext: { ...(baseContext.pathContext || this.createDefaultPathContext(PathPurpose.READ)), ...pathContext },
+         // Re-attach methods 
+         withIncreasedDepth: (baseContext as any).withIncreasedDepth,
+         withStrictMode: (baseContext as any).withStrictMode,
+         withAllowedTypes: (baseContext as any).withAllowedTypes,
+         withFlags: (baseContext as any).withFlags,
+         withFormattingContext: (baseContext as any).withFormattingContext,
+         withPathContext: (baseContext as any).withPathContext,
+         withParserFlags: (baseContext as any).withParserFlags,
+       }),
+       withParserFlags: (flags: any) => ({ 
+         ...(baseContext as ResolutionContext), 
+         parserFlags: { ...(baseContext.parserFlags || {}), ...flags },
+          // Re-attach methods 
+         withIncreasedDepth: (baseContext as any).withIncreasedDepth,
+         withStrictMode: (baseContext as any).withStrictMode,
+         withAllowedTypes: (baseContext as any).withAllowedTypes,
+         withFlags: (baseContext as any).withFlags,
+         withFormattingContext: (baseContext as any).withFormattingContext,
+         withPathContext: (baseContext as any).withPathContext,
+         withParserFlags: (baseContext as any).withParserFlags,
+       }),
+    } as ResolutionContext; // Assert final type
   }
 
   /**

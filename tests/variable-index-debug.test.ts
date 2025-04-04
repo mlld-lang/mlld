@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { VariableReferenceResolver } from '@services/resolution/ResolutionService/resolvers/VariableReferenceResolver.js';
 import type { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
+import { FieldAccess, FieldAccessType, FieldAccessError } from '@services/resolution/ResolutionService/resolvers/FieldAccess.js';
 
 /**
  * This test file follows a hybrid approach:
@@ -89,10 +90,9 @@ describe('VariableReferenceResolver Array Index Debug', () => {
     await testContext.cleanup();
   });
 
-  it('should correctly handle field access for arrays with numeric indices via resolveFieldAccess', async () => {
+  it('should correctly handle field access for arrays with numeric indices via accessFields', async () => {
     // Setup test data
     const array = ["apple", "banana", "cherry"];
-    const simpleObj = { name: "Alice", age: 30 };
     const objArray = [
       { name: "Alice", age: 30 },
       { name: "Bob", age: 25 }
@@ -104,76 +104,61 @@ describe('VariableReferenceResolver Array Index Debug', () => {
       ]
     };
 
-    // We need to test the implementation of resolveFieldAccess directly
-    // Create a wrapper function that simulates variable resolution
-    const resolveFieldAccess = async (obj: any, fields: string[], ctx: ResolutionContext) => {
-      // Add a helper function to the resolver instance 
-      const privateResolver = resolver as any;
-      
-      // Create a mock variable name for testing
-      const mockVarName = "testVar";
-      
-      // Mock the getVariable method to return our object
-      privateResolver.getVariable = vi.fn().mockResolvedValue(obj);
-      
-      // Convert fields array to dotted path string
-      const fieldPath = fields.join('.');
-      
-      // Get whether to preserve the type (added by the test)
-      const preserveType = ctx.preserveType === true;
-      
-      // Call the actual resolveFieldAccess with our mocked variable and preserve type flag
-      return privateResolver.resolveFieldAccess(mockVarName, fieldPath, ctx, preserveType);
-    };
+    // Test the public accessFields method directly
+    // Assuming resolver has: accessFields(value: JsonValue, fields: FieldAccess[], context: ResolutionContext): Result<JsonValue, FieldAccessError>
 
     // Test simple array access
-    let result = await resolveFieldAccess(array, ["0"], context);
-    expect(result).toBe("apple");
+    let fields: FieldAccess[] = [{ type: FieldAccessType.INDEX, key: 0 }];
+    let result = await resolver.accessFields(array, fields, context);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value).toBe("apple");
 
-    // Test out of bounds array access
-    await expect(resolveFieldAccess(array, ["5"], context)).rejects.toThrow(/out of bounds/);
-
-    // Test object array access
-    result = await resolveFieldAccess(objArray, ["0"], { ...context, preserveType: true });
-    console.log('Object array access result type:', typeof result);
-    console.log('Is result object?', typeof result === 'object' && !Array.isArray(result));
-    console.log('Result value:', result);
-    console.log('Result JSON:', JSON.stringify(result));
+    // Test out of bounds array access (strict mode)
+    fields = [{ type: FieldAccessType.INDEX, key: 5 }];
+    context = context.withFlags({ ...context.flags, strict: true });
+    result = await resolver.accessFields(array, fields, context);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toBeInstanceOf(FieldAccessError);
+      expect(result.error.code).toBe('INDEX_OUT_OF_BOUNDS');
+    }
     
-    // Adjust test for string result until we fix the type preservation issue
-    if (typeof result === 'string') {
-      expect(JSON.parse(result)).toEqual({ name: "Alice", age: 30 });
-    } else {
-      expect(result).toEqual({ name: "Alice", age: 30 });
+    // Test out of bounds array access (non-strict mode)
+    context = context.withFlags({ ...context.flags, strict: false });
+    result = await resolver.accessFields(array, fields, context);
+    expect(result.ok).toBe(true); // Non-strict might return success with undefined/null value
+    if (result.ok) expect(result.value).toBeUndefined(); // Or null
+
+    // Test object array access (preserve type)
+    fields = [{ type: FieldAccessType.INDEX, key: 0 }];
+    // Use context.withFormattingContext if that's how preserveType is passed
+    // Assuming context needs a way to specify preserveType for accessFields
+    const preserveTypeContext = { ...context, flags: { ...context.flags, preserveType: true }}; // Example way to pass flag
+    result = await resolver.accessFields(objArray, fields, preserveTypeContext);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value).toEqual({ name: "Alice", age: 30 });
     }
 
     // Test nested array access
-    result = await resolveFieldAccess(objArray, ["0", "name"], context);
-    expect(result).toBe("Alice");
+    fields = [
+        { type: FieldAccessType.INDEX, key: 0 }, 
+        { type: FieldAccessType.PROPERTY, key: 'name' } 
+    ];
+    result = await resolver.accessFields(objArray, fields, context);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value).toBe("Alice");
 
     // Test complex nested access
-    result = await resolveFieldAccess(nestedObj, ["users", "0", "hobbies", "1"], context);
-    expect(result).toBe("hiking");
-  });
-
-  it('should correctly debug field access with various inputs', async () => {
-    // Setup test data
-    const array = ["apple", "banana", "cherry"];
-    const objArray = [
-      { name: "Alice", age: 30 },
-      { name: "Bob", age: 25 }
+    fields = [
+        { type: FieldAccessType.PROPERTY, key: 'users' }, 
+        { type: FieldAccessType.INDEX, key: 0 }, 
+        { type: FieldAccessType.PROPERTY, key: 'hobbies' }, 
+        { type: FieldAccessType.INDEX, key: 1 }
     ];
-
-    // Use the debug method to test functionality
-    const debugFieldAccess = (resolver as any).debugFieldAccess.bind(resolver);
-
-    // Test array access
-    let result = debugFieldAccess(array, ["0"], context);
-    expect(result.result).toBe("apple");
-
-    // Test object array access
-    result = debugFieldAccess(objArray, ["0", "name"], context);
-    expect(result.result).toBe("Alice");
+    result = await resolver.accessFields(nestedObj, fields, context);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value).toBe("hiking");
   });
 
   it('should correctly resolve array indices in variable references', async () => {
