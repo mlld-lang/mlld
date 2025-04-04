@@ -42,9 +42,10 @@ This plan details the steps to refactor `ResolutionService` and its components t
     *   Refactor field access logic (`resolveFieldAccess`, potentially internal helpers in `VariableReferenceResolver`) to operate on the strictly typed `DataVariable` from `StateService` and handle the `fields` array from `VariableReferenceNode`.
     *   Ensure `ResolutionContext` is properly instantiated (likely via a factory or helper) and propagated through internal calls, incrementing depth (`context.withIncreasedDepth()`) for recursion/nesting control. Consider creating/using a dedicated `ResolutionContextFactory` or helper functions for consistent context creation and modification.
     *   Update internal helper methods and potentially delegate more specific logic to sub-resolvers (`TextResolver`, `DataResolver`, `PathResolver`, `VariableReferenceResolver`).
+    *   **Refactor Sub-Resolvers (Iterative Focus):** Following the initial interface alignment in `ResolutionService.ts`, the primary focus should shift to refactoring `VariableReferenceResolver.ts`. This resolver is key to handling the unified `VariableReferenceNode`. Updates to other resolvers (`TextResolver`, `DataResolver`, `PathResolver`, etc.) will follow as needed based on the changes in `VariableReferenceResolver` and the main service.
 *   **Files:**
     *   `services/resolution/ResolutionService/ResolutionService.ts`
-    *   `services/resolution/ResolutionService/resolvers/VariableReferenceResolver.ts` (major changes likely here)
+    *   `services/resolution/ResolutionService/resolvers/VariableReferenceResolver.ts` (major changes likely here - **PRIORITY AFTER SERVICE INTERFACE ALIGNMENT**)
     *   `services/resolution/ResolutionService/resolvers/TextResolver.ts`
     *   `services/resolution/ResolutionService/resolvers/DataResolver.ts`
     *   `services/resolution/ResolutionService/resolvers/PathResolver.ts`
@@ -57,7 +58,7 @@ This plan details the steps to refactor `ResolutionService` and its components t
     *   Error handling (`MeldResolutionError`) should be updated to use codes and details consistent with the new structure and context.
     *   Pay attention to how the `ResolutionContext` flags (e.g., `isVariableEmbed`, `isTransformation`) influence behavior in different resolution paths.
     *   Ensure interaction with the ParserService client/interface remains compatible or update as needed (though ParserService changes are mostly outside this phase).
-*   **Testing:** See step 3.
+*   **Testing:** See step 3. **Note:** Comprehensive testing in Step 3 should ideally follow the significant refactoring of `VariableReferenceResolver.ts`.
 
 ### 3. Update Unit Tests (`services/resolution/ResolutionService/ResolutionService.test.ts` and sub-resolver tests)
 
