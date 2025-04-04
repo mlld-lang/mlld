@@ -1,3 +1,5 @@
+import type { ValidatedResourcePath } from '@core/types/paths.js';
+
 /**
  * Minimal interface for what PathService needs from FileSystemService.
  * This interface is used to break the circular dependency between PathService and FileSystemService.
@@ -6,16 +8,16 @@ export interface IFileSystemServiceClient {
   /**
    * Checks if a file or directory exists.
    * 
-   * @param filePath - Path to check
+   * @param filePath - Validated path to check
    * @returns A promise that resolves with true if the path exists, false otherwise
    */
-  exists(filePath: string): Promise<boolean>;
+  exists(filePath: ValidatedResourcePath): Promise<boolean>;
   
   /**
    * Checks if a path points to a directory.
    * 
-   * @param filePath - Path to check
+   * @param filePath - Validated path to check
    * @returns A promise that resolves with true if the path is a directory, false otherwise
    */
-  isDirectory(filePath: string): Promise<boolean>;
+  isDirectory(filePath: ValidatedResourcePath): Promise<boolean>;
 } 

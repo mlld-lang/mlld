@@ -4,6 +4,10 @@ import { ResolutionError } from '@services/resolution/ResolutionService/errors/R
 import type { MeldNode, DirectiveNode, TextNode, StructuredPath, VariableReferenceNode } from '@core/syntax/types.js';
 import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
+import type { ResolutionContext as CoreResolutionContext } from '@core/types/resolution.js';
+import type { PathValidationContext } from '@core/types/paths.js';
+import type { MeldValue } from '@core/types/variables.js';
+import type { VariableReference } from '@core/syntax/types/index.js';
 
 /**
  * Handles resolution of path variables ($path)
@@ -281,5 +285,43 @@ export class PathResolver {
       };
     }
     return null;
+  }
+
+  protected async resolveStructuredPath(
+    structuredPath: StructuredPath,
+    context: ResolutionContext,
+  ): Promise<MeldValue> {
+    // Simplified: Assume resolution happens and returns a RawPath or StructuredPath
+    const resolvedPathInput = structuredPath; // Placeholder for resolved structured path
+
+    // TODO: Construct PathValidationContext from ResolutionContext properly
+    const validationContext: PathValidationContext = this.createValidationContextFromResolution(context); // Assume helper method exists
+
+    // TODO: Phase 3 - Remove cast and update context creation
+    const validatedPath = await this.pathService.validatePath(resolvedPathInput, validationContext) as unknown as string;
+    return validatedPath; // Returning string for now
+  }
+
+  protected async resolveStringOrVariable(
+    value: string | VariableReference,
+    context: ResolutionContext,
+  ): Promise<MeldValue> {
+    if (typeof value === 'string') {
+      // TODO: Construct PathValidationContext from ResolutionContext properly
+      const validationContext: PathValidationContext = this.createValidationContextFromResolution(context); // Assume helper method exists
+      // TODO: Phase 3 - Remove cast and update context creation
+      const validatedPath = await this.pathService.validatePath(value, validationContext) as unknown as string;
+      return validatedPath; // Returning string for now
+    }
+    // ... handle VariableReference ...
+    // Placeholder return for VariableReference case
+    return ""; 
+  }
+  
+  // Helper method placeholder
+  private createValidationContextFromResolution(context: ResolutionContext): PathValidationContext {
+      // Actual implementation would map fields from ResolutionContext (like baseDir, security flags)
+      // to PathValidationContext fields (workingDirectory, rules, etc.)
+      return {} as any; // Placeholder
   }
 } 

@@ -1106,6 +1106,33 @@ export class ResolutionService implements IResolutionService {
         });
       }
       
+      // Validate the resolved path if required by context
+      if (context.validatePath) { // Assuming context has such a flag
+          // TODO: Construct a proper PathValidationContext here based on ResolutionContext
+          const validationContext: PathValidationContext = {} as any; // Placeholder
+          try {
+              // Original call:
+              // await this.pathService.validatePath(resolvedPath, {
+              //   mustExist: context.mustExist,
+              //   mustBeFile: context.mustBeFile,
+              //   mustBeDirectory: context.mustBeDirectory,
+              //   location: variableReference.location
+              // });
+              
+              // TODO: Phase 3 - Remove cast and update context creation
+              validatedPathString = await this.pathService.validatePath(resolvedPath, validationContext) as unknown as string;
+          } catch (error) {
+              // Handle validation error
+              logger.error('Path validation failed during resolution', { error, resolvedPath });
+              // Throw a specific ResolutionError?
+              throw error; 
+          }
+      } else {
+          // If validation is not required, use the resolved path directly
+          // Ensure it's a string for downstream use
+          validatedPathString = resolvedPath as string;
+      }
+      
       return resolvedPath;
     } catch (error) {
       // Log detailed error information

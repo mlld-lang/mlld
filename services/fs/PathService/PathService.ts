@@ -1,5 +1,4 @@
-import type { IPathService, PathOptions, URLValidationOptions } from '@services/fs/PathService/IPathService.js';
-import type { StructuredPath } from '@core/shared-service-types.js';
+import type { IPathService, URLValidationOptions } from '@services/fs/PathService/IPathService.js';
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import { PathValidationError, PathErrorCode, PathValidationErrorDetails } from '@services/fs/PathService/errors/PathValidationError.js';
 import { ProjectPathResolver } from '@services/fs/ProjectPathResolver.js';
@@ -27,6 +26,24 @@ import {
   URLError 
 } from '@services/fs/PathService/errors/url/index';
 import type { IURLContentResolver } from '@services/resolution/URLContentResolver/IURLContentResolver.js';
+import {
+  AbsolutePath,
+  RelativePath,
+  UrlPath,
+  RawPath,
+  ValidatedResourcePath,
+  StructuredPath,
+  PathValidationContext,
+  NormalizedAbsoluteDirectoryPath,
+  unsafeCreateAbsolutePath,
+  unsafeCreateRelativePath,
+  unsafeCreateUrlPath,
+  isRawPath,
+  isAbsolutePath,
+  isRelativePath,
+  isUrlPath,
+  isValidatedResourcePath
+} from '@core/types/paths.js';
 
 /**
  * Service for validating and normalizing paths
@@ -305,92 +322,81 @@ export class PathService implements IPathService {
   }
 
   /**
-   * Resolve a path to its absolute form according to Meld's path rules:
+   * Resolve a path to its absolute or relative validated form according to Meld's path rules:
    * - Simple paths are resolved relative to baseDir or cwd
    * - $. paths are resolved relative to project root
    * - $~ paths are resolved relative to home directory
-   * - URLs are returned as-is
-   * 
-   * @param filePath The path to resolve (string or StructuredPath)
-   * @param baseDir Optional base directory for simple paths
-   * @returns The resolved absolute path
-   * @throws PathValidationError if path format is invalid
+   * - **Throws an error for URLs.** Use `validateURL` for URLs.
+   *
+   * @param filePath The path to resolve (RawPath or StructuredPath)
+   * @param baseDir Optional base directory for simple paths (RawPath)
+   * @returns The resolved path (AbsolutePath or RelativePath)
+   * @throws PathValidationError if path format is invalid or if input is a URL.
    */
-  resolvePath(filePath: string | StructuredPath, baseDir?: string): string {
+  resolvePath(filePath: RawPath | StructuredPath, baseDir?: RawPath): AbsolutePath | RelativePath {
     // Debug logging if enabled
     if (process.env.DEBUG_PATH_VALIDATION === 'true') {
-      console.log(`[PathService][debug] resolvePath called with:`, { 
-        filePath, 
-        baseDir, 
-        testMode: this.testMode 
+      logger.debug(`[PathService][debug] resolvePath called with:`, {
+        filePath,
+        baseDir,
+        testMode: this.testMode
       });
     }
-    
-    // Handle structured path
-    if (typeof filePath !== 'string') {
-      // Extract the raw path from structured path
-      const rawPath = filePath.raw;
-      if (!rawPath) {
-        return '';
-      }
-      
-      // No longer check for dot segments in structured path
-      // Paths with './' or '../' segments are now allowed
-      
-      // Use the raw path for resolution
-      return this.resolvePath(rawPath, baseDir);
-    }
-    
-    // Handle string path
-    if (!filePath) {
-      return '';
-    }
-    
-    // Handle URLs - return as-is
-    if (this.isURL(filePath)) {
-      return filePath;
+
+    const rawInputPath = typeof filePath === 'string' ? filePath : filePath.original;
+
+    if (!rawInputPath) {
+      // Return empty RelativePath for empty input.
+      return unsafeCreateRelativePath('');
     }
 
+    // **Handle URLs - Throw error, this method is only for filesystem paths**
+    if (this.isURL(rawInputPath)) {
+      throw new PathValidationError(
+        PathErrorMessages.EXPECTED_FILESYSTEM_PATH,
+        { code: PathErrorCode.EXPECTED_FILESYSTEM_PATH, path: rawInputPath }
+      );
+    }
+
+    let resolvedString: string;
+
     // Handle special path variables first
-    // Resolve home path
-    if (filePath.startsWith('$~') || filePath.startsWith('$HOMEPATH')) {
-      // No longer reject dot segments in paths - these are now allowed
-      return this.resolveHomePath(filePath);
+    if (rawInputPath.startsWith('$~') || rawInputPath.startsWith('$HOMEPATH')) {
+      resolvedString = this.resolveHomePath(rawInputPath);
+    } else if (rawInputPath.startsWith('$.') || rawInputPath.startsWith('$PROJECTPATH')) {
+      resolvedString = this.resolveProjPath(rawInputPath);
+    } else if (this.hasPathVariables(rawInputPath)) {
+       // Resolve other magic variables like $USERPROFILE (less common)
+      resolvedString = this.resolveMagicPath(rawInputPath);
+    } else if (baseDir && !path.isAbsolute(rawInputPath)) {
+      // If baseDir is provided and path is relative, resolve against baseDir
+      // Need to normalize the baseDir first before joining
+      const normalizedBaseDir = this.normalizePath(baseDir);
+      resolvedString = this.normalizePath(path.join(normalizedBaseDir, rawInputPath));
+    } else {
+       // Otherwise, just normalize the path (handles relative paths from CWD, absolute paths)
+      // Resolve relative paths against the project path if no baseDir provided
+      if (!path.isAbsolute(rawInputPath)) {
+          resolvedString = this.normalizePath(path.join(this.projectPath, rawInputPath));
+      } else {
+          resolvedString = this.normalizePath(rawInputPath);
+      }
     }
-    
-    // Resolve project path
-    if (filePath.startsWith('$.') || filePath.startsWith('$PROJECTPATH')) {
-      // No longer reject dot segments in paths - these are now allowed
-      return this.resolveProjPath(filePath);
+
+    // Determine if the resolved path is absolute or relative and create branded type
+    // path.isAbsolute works reliably after normalization
+    if (path.isAbsolute(resolvedString)) {
+       return unsafeCreateAbsolutePath(resolvedString);
+    } else {
+       // This case should be less common now as relative paths are resolved against projectPath
+       return unsafeCreateRelativePath(resolvedString);
     }
-    
-    // No longer reject paths with dot segments - these are now allowed
-    // Paths with './' or '../' can be used without path variables
-    
-    // No longer reject raw absolute paths - these are now allowed
-    // Absolute paths like '/path/to/file' can be used without path variables
-    
-    // No longer reject paths with slashes but no path variable
-    // Paths like 'path/to/file' can be used without path variables
-    
-    // If baseDir is provided and path is relative, resolve against baseDir
-    if (baseDir && !path.isAbsolute(filePath) && !this.hasPathVariables(filePath)) {
-      return this.normalizePath(path.join(baseDir, filePath));
-    }
-    
-    // Resolve other special variables
-    if (this.hasPathVariables(filePath)) {
-      return this.resolveMagicPath(filePath);
-    }
-    
-    // Return normalized path
-    return this.normalizePath(filePath);
   }
 
   /**
    * Resolve a home path ($~ or $HOMEPATH)
    */
-  resolveHomePath(pathString: string): string {
+  resolveHomePath(pathString: RawPath): string { // Input is RawPath
     if (!pathString) return '';
     
     if (pathString === '$~' || pathString === '$HOMEPATH') {
@@ -406,13 +412,14 @@ export class PathService implements IPathService {
       return path.join(this.homePath, pathString.substring(10));
     }
     
+    // This case should ideally not be hit if called correctly, but normalize as fallback
     return this.normalizePath(pathString);
   }
 
   /**
    * Resolve a project path ($. or $PROJECTPATH)
    */
-  resolveProjPath(pathString: string): string {
+  resolveProjPath(pathString: RawPath): string { // Input is RawPath
     if (!pathString) return '';
     
     if (pathString === '$.' || pathString === '$PROJECTPATH') {
@@ -428,18 +435,19 @@ export class PathService implements IPathService {
       return path.join(this.projectPath, pathString.substring(13));
     }
     
+    // This case should ideally not be hit if called correctly, but normalize as fallback
     return this.normalizePath(pathString);
   }
 
   /**
-   * Resolve Meld path variables like $PROJECTPATH
+   * Resolve Meld path variables like $PROJECTPATH, $USERPROFILE
    */
-  resolveMagicPath(pathString: string): string {
+  resolveMagicPath(pathString: RawPath): string { // Input is RawPath
     if (!pathString) {
       return '';
     }
     
-    let resolved = pathString;
+    let resolved = pathString as string;
     
     // Replace $PROJECTPATH with the actual project path
     if (resolved.includes('$PROJECTPATH')) {
@@ -468,6 +476,7 @@ export class PathService implements IPathService {
       resolved = path.join(this.homePath, resolved.substring(2));
     }
     
+    // Normalize the final result
     return this.normalizePath(resolved);
   }
 
@@ -525,224 +534,168 @@ export class PathService implements IPathService {
   }
 
   /**
-   * Validate a path according to Meld path rules
-   * This checks for security issues and other path constraints
+   * Validate a filesystem path according to Meld rules and the provided context.
+   * Checks for security, existence, and type constraints.
+   * Throws an error if the input path is a URL. Use validateURL for URLs.
+   *
+   * @param filePath - The path to validate (RawPath or StructuredPath).
+   * @param context - Context containing validation rules and environment info.
+   * @returns A promise resolving to the validated path (AbsolutePath or RelativePath).
+   * @throws {PathValidationError} If validation fails or input is a URL.
    */
   async validatePath(
-    filePath: string | StructuredPath, 
-    options: PathOptions = {}
-  ): Promise<string> {
-    // Debug logging if enabled
+    filePath: RawPath | StructuredPath,
+    context: PathValidationContext // Use the new context type
+  ): Promise<AbsolutePath | RelativePath> { // Return union of specific types
+
+    const rawInputPath = typeof filePath === 'string' ? filePath : filePath.original;
+
+    // Debug logging
     if (process.env.DEBUG_PATH_VALIDATION === 'true') {
-      console.log(`[PathService][debug] validatePath called with:`, { 
-        filePath, 
-        options, 
-        testMode: this.testMode 
+      logger.debug(`[PathService][debug] validatePath called with:`, {
+        rawInputPath,
+        context,
+        testMode: this.testMode
       });
     }
-    
-    // Handle empty path
-    const pathToProcess = typeof filePath === 'string' ? filePath : filePath.raw;
-    
-    if (!pathToProcess) {
+
+    // 1. Handle empty path
+    if (!rawInputPath) {
       throw new PathValidationError(
         PathErrorMessages.EMPTY_PATH,
-        {
-          code: PathErrorCode.EMPTY_PATH,
-          path: pathToProcess
-        },
-        options.location
+        { code: PathErrorCode.EMPTY_PATH, path: rawInputPath }
+        // location info might be added from context later if needed
       );
     }
-    
-    // Handle URL paths
-    if (options.allowURLs && this.isURL(pathToProcess)) {
-      try {
-        // Validate URL according to security policy
-        await this.validateURL(pathToProcess, options.urlOptions);
-        
-        // Return the validated URL
-        return pathToProcess;
-      } catch (error) {
-        if (error instanceof URLError) {
-          // Wrap URL errors in PathValidationError for consistent error handling
-          throw new PathValidationError(
-            error.message,
-            {
-              code: PathErrorCode.INVALID_PATH,
-              path: pathToProcess,
-              cause: error
-            },
-            options.location
-          );
-        }
-        throw error;
-      }
+
+    // 2. Ensure it's not a URL - this method is for filesystem paths only
+    if (this.isURL(rawInputPath)) {
+      throw new PathValidationError(
+        PathErrorMessages.EXPECTED_FILESYSTEM_PATH,
+        { code: PathErrorCode.EXPECTED_FILESYSTEM_PATH, path: rawInputPath }
+      );
     }
-    
-    // Call parser service if available and not in test mode
-    if (!this.testMode && (this as any).parserService && (this as any).parserService.parse) {
-      try {
-        // Parse the path to validate its structure
-        await (this as any).parserService.parse(pathToProcess);
-      } catch (error) {
-        // Ignore parsing errors - they'll be caught by other validation steps
-        logger.debug('Error parsing path during validation:', { path: pathToProcess, error });
-      }
-    }
-    
+
     try {
-      // Resolve the path (handle variables, normalization)
-      const resolvedPath = this.resolvePath(
-        filePath, 
-        options.baseDir
-      );
-      
-      // Check for null bytes (security concern)
-      if (resolvedPath.includes('\0')) {
+      // 3. Resolve the path (handles variables, normalization, returns branded type)
+      // NOTE: resolvePath uses cwd() implicitly if baseDir isn't passed.
+      // We rely on context.workingDirectory for validation boundary checks below,
+      // but resolvePath itself doesn't use PathValidationContext yet.
+      // This might need refinement if resolvePath logic needs workingDirectory.
+      const resolvedPath: AbsolutePath | RelativePath = this.resolvePath(filePath); // BaseDir removed, handled by context now
+
+      // 4. Null byte check
+      if ((resolvedPath as string).includes('\0')) {
         throw new PathValidationError(
           PathErrorMessages.NULL_BYTE,
-          {
-            code: PathErrorCode.NULL_BYTE,
-            path: pathToProcess
-          },
-          options.location
+          { code: PathErrorCode.NULL_BYTE, path: rawInputPath }
         );
       }
-      
-      // Check if path is within base directory (if configured)
-      // Note: In the test cases, we're validating paths against project root
-      // The condition should check if:
-      // 1. allowOutsideBaseDir is explicitly false
-      // 2. The path starts with $HOMEPATH (or similar) which is outside project
-      if (options.allowOutsideBaseDir === false) {
-        // Base directory is either provided or defaults to project path
-        const baseDir = options.baseDir || this.projectPath;
-        const normalizedBasePath = this.normalizePath(baseDir);
-        let normalizedPath = resolvedPath;
-        
-        // Special case for $HOMEPATH paths - these should trigger the outside path error
-        // when allowOutsideBaseDir is false and we're validating against project path
-        if (pathToProcess.startsWith('$HOMEPATH/') || 
-            pathToProcess.startsWith('$~/') || 
-            pathToProcess === '$HOMEPATH' || 
-            pathToProcess === '~' ||
-            pathToProcess.startsWith('~/')) {
-          // This represents a path outside project directory
-          throw new PathValidationError(
-            PathErrorMessages.OUTSIDE_BASE_DIR,
-            {
-              code: PathErrorCode.OUTSIDE_BASE_DIR,
-              path: pathToProcess,
-              resolvedPath: resolvedPath,
-              baseDir: baseDir
-            },
-            options.location
+
+      // 5. Security / Boundary Checks (using context)
+      // This logic replaces the old `allowOutsideBaseDir` check
+      if (!context.allowExternalPaths && isAbsolutePath(resolvedPath)) {
+          // Ensure projectRoot is a string for comparison, fallback to resolved projectPath
+          const projectRootDirString = context.projectRoot ? (context.projectRoot as string) : this.projectPath;
+          // Ensure allowedRoots are strings for comparison
+          const allowedDirStrings = [
+              ...(context.allowedRoots ?? []).map(p => p as string),
+              projectRootDirString
+          ];
+
+          const isWithinAllowedDir = allowedDirStrings.some(allowedDir =>
+              (resolvedPath as string).startsWith(allowedDir)
           );
-        }
-        
-        // For normal paths, check if they start with the base directory
-        normalizedPath = this.normalizePath(resolvedPath);
-        if (normalizedBasePath && !normalizedPath.startsWith(normalizedBasePath)) {
-          throw new PathValidationError(
-            PathErrorMessages.OUTSIDE_BASE_DIR,
-            {
-              code: PathErrorCode.OUTSIDE_BASE_DIR,
-              path: pathToProcess,
-              resolvedPath: resolvedPath,
-              baseDir: baseDir
-            },
-            options.location
-          );
-        }
+
+          if (!isWithinAllowedDir) {
+              throw new PathValidationError(
+                  PathErrorMessages.OUTSIDE_PROJECT_ROOT, // Or a more general "Outside Allowed Roots" message
+                  {
+                      code: PathErrorCode.OUTSIDE_PROJECT_ROOT, // Or OUTSIDE_ALLOWED_ROOTS
+                      path: rawInputPath,
+                      resolvedPath: resolvedPath,
+                      allowedRoots: allowedDirStrings // Use the string array for details
+                  }
+              );
+          }
       }
-      
-      // Check existence if required
-      if (options.mustExist) {
-        // Get the file system service from mediator if available
-        let exists = false;
-        
-        if (this.fsClient) {
-          exists = await this.fsClient.exists(resolvedPath);
-        } else if ((this as any).fs) {
-          // Fallback to direct reference (legacy mode)
-          exists = await (this as any).fs.exists(resolvedPath);
-        } else {
-          // No file system available, can't check existence
-          logger.warn('Cannot check path existence: no file system service available', {
-            path: pathToProcess,
-            resolvedPath
-          });
-          
-          throw new Error('Cannot validate path existence: no file system service available');
+      // TODO: Implement checks for allowAbsolute, allowRelative, allowParentTraversal from context.rules if needed
+      // TODO: Implement checks for maxLength, allowedPrefixes, disallowedPrefixes, pattern from context.rules
+
+
+      // 6. Existence and Type Checks (using context.rules and fsClient)
+      if (context.rules.mustExist || context.rules.mustBeFile || context.rules.mustBeDirectory) {
+        // Ensure fsClient is available
+        this.ensureFactoryInitialized(); // Make sure client/factory is initialized
+        if (!this.fsClient) {
+           // Cannot perform check if fsClient isn't available
+           const errorMsg = 'Cannot check path existence/type: FileSystemServiceClient is not available.';
+           logger.error(errorMsg, { path: rawInputPath, resolvedPath });
+           // Throw a more specific internal error? Or PathValidationError?
+           throw new PathValidationError(errorMsg, {
+               code: PathErrorCode.INTERNAL_ERROR, // Or a new code like FS_UNAVAILABLE
+               path: rawInputPath,
+               resolvedPath: resolvedPath
+           });
         }
-        
-        if (!exists) {
+
+        const exists = await this.fsClient.exists(resolvedPath as string); // Cast branded type to string for client
+
+        if (context.rules.mustExist && !exists) {
           throw new PathValidationError(
             PathErrorMessages.FILE_NOT_FOUND,
-            {
-              code: PathErrorCode.FILE_NOT_FOUND,
-              path: pathToProcess,
-              resolvedPath: resolvedPath
-            },
-            options.location
+            { code: PathErrorCode.FILE_NOT_FOUND, path: rawInputPath, resolvedPath: resolvedPath }
           );
+        }
+
+        // Only check type if it exists (or if mustExist wasn't true but type check is)
+        if (exists && (context.rules.mustBeFile || context.rules.mustBeDirectory)) {
+           const isDirectory = await this.fsClient.isDirectory(resolvedPath as string); // Cast branded type
+
+           if (context.rules.mustBeFile && isDirectory) {
+               throw new PathValidationError(
+                   PathErrorMessages.NOT_A_FILE,
+                   { code: PathErrorCode.NOT_A_FILE, path: rawInputPath, resolvedPath: resolvedPath }
+               );
+           }
+
+           if (context.rules.mustBeDirectory && !isDirectory) {
+               throw new PathValidationError(
+                   PathErrorMessages.NOT_A_DIRECTORY,
+                   { code: PathErrorCode.NOT_A_DIRECTORY, path: rawInputPath, resolvedPath: resolvedPath }
+               );
+           }
         }
       }
-      
-      // Check file type if required
-      if ((options.mustBeFile || options.mustBeDirectory) && (this.fsClient || (this as any).fs)) {
-        let isDirectory = false;
-        
-        if (this.fsClient) {
-          isDirectory = await this.fsClient.isDirectory(resolvedPath);
-        } else if ((this as any).fs) {
-          isDirectory = await (this as any).fs.isDirectory(resolvedPath);
-        }
-        
-        // Validate file type constraints
-        if (options.mustBeFile && isDirectory) {
-          throw new PathValidationError(
-            PathErrorMessages.NOT_A_FILE,
-            {
-              code: PathErrorCode.NOT_A_FILE,
-              path: pathToProcess,
-              resolvedPath: resolvedPath
-            },
-            options.location
-          );
-        }
-        
-        if (options.mustBeDirectory && !isDirectory) {
-          throw new PathValidationError(
-            PathErrorMessages.NOT_A_DIRECTORY,
-            {
-              code: PathErrorCode.NOT_A_DIRECTORY,
-              path: pathToProcess,
-              resolvedPath: resolvedPath
-            },
-            options.location
-          );
-        }
-      }
-      
-      // Path is valid, return the resolved path
+
+      // 7. Path is valid, return the resolved (and already branded) path
       return resolvedPath;
+
     } catch (error) {
-      if (error instanceof MeldError) {
-        // Re-throw Meld errors
+      // Re-throw known PathValidationErrors, wrap others
+      if (error instanceof PathValidationError) {
         throw error;
       }
-      
-      // Wrap other errors in PathValidationError
+      if (error instanceof MeldError) {
+         // Could potentially wrap MeldError as well if needed
+         throw error;
+      }
+
+      // Wrap unexpected errors
+      const details: PathValidationErrorDetails = {
+        code: PathErrorCode.INVALID_PATH, // Generic code for unexpected issues
+        path: rawInputPath,
+        cause: error instanceof Error ? error : new Error(String(error))
+      };
+      // Add resolvedPath to details if available
+      // We need to capture resolvedPath before potential errors in section 6
+      // Let's define it outside the try block or handle this differently.
+      // For now, we omit resolvedPath from generic error details.
+
       throw new PathValidationError(
-        `Invalid path: ${(error as Error).message}`,
-        {
-          code: PathErrorCode.INVALID_PATH,
-          path: pathToProcess,
-          cause: error as Error
-        },
-        options.location
+        `Validation failed for path "${rawInputPath}": ${(error as Error).message}`,
+        details
+        // location can be added from context later
       );
     }
   }
@@ -892,111 +845,74 @@ export class PathService implements IPathService {
   }
 
   /**
-   * Checks if a string is a URL
-   * 
-   * @param path String to check
-   * @returns True if the string is a valid URL
+   * Check if a string potentially represents a URL.
+   * Note: Does not validate the URL, just checks format.
    */
-  isURL(path: string): boolean {
-    // If URLContentResolver is available, delegate to it
-    if (this.urlContentResolver) {
-      return this.urlContentResolver.isURL(path);
-    }
-    
-    // Fallback implementation for tests that don't have URLContentResolver
-    if (!path) return false;
-    
-    try {
-      const url = new URL(path);
-      // Must have protocol and host to be considered a valid URL
-      return !!url.protocol && !!url.host;
-    } catch {
+  isURL(path: RawPath): boolean { // Accept RawPath
+    if (!path || typeof path !== 'string') {
       return false;
     }
+    // Basic check for common URL schemes
+    return /^https?:\/\//i.test(path);
   }
 
   /**
-   * Validates a URL according to security policy
-   * 
-   * @param url URL to validate
-   * @param options Validation options
-   * @returns The validated URL
-   * @throws URLValidationError if URL is invalid
-   * @throws URLSecurityError if URL is blocked by security policy
+   * Validate a URL according to security policy.
+   *
+   * @param url - The URL string (RawPath) to validate
+   * @param options - Validation options
+   * @returns A promise resolving to the validated URL (UrlPath)
+   * @throws {URLValidationError} If URL is invalid
+   * @throws {URLSecurityError} If URL is blocked by security policy
    */
-  async validateURL(url: string, options?: URLValidationOptions): Promise<string> {
-    // If URLContentResolver is available, delegate to it
-    if (this.urlContentResolver) {
-      return this.urlContentResolver.validateURL(url, options);
+  async validateURL(url: RawPath, options?: URLValidationOptions): Promise<UrlPath> { // Return UrlPath
+    if (!this.urlContentResolver) {
+      const msg = 'URL validation requires IURLContentResolver, but it was not provided.';
+      logger.error(msg);
+      throw new URLError(msg);
     }
     
-    // Fallback implementation for tests that don't have URLContentResolver
-    const opts = { 
-      allowedProtocols: ['http', 'https'],
-      allowedDomains: [],
-      blockedDomains: [],
-      ...options
-    };
-    
     try {
-      const parsedUrl = new URL(url);
-      
-      // Validate protocol
-      const protocol = parsedUrl.protocol.replace(':', '');
-      if (opts.allowedProtocols?.length && !opts.allowedProtocols.includes(protocol)) {
-        throw new URLError(url, `Protocol '${protocol}' is not allowed`);
-      }
-      
-      // Validate domain
-      const domain = parsedUrl.hostname;
-      
-      // Blocklist takes precedence over allowlist
-      if (opts.blockedDomains?.includes(domain)) {
-        throw new URLError(url, `Domain '${domain}' is blocked`);
-      }
-      
-      // If allowlist is not empty, domain must be in the list
-      if (opts.allowedDomains?.length && !opts.allowedDomains.includes(domain)) {
-        throw new URLError(url, `Domain '${domain}' is not in the allowlist`);
-      }
-      
-      return url;
+      // Delegate actual validation to URLContentResolver
+      const validatedUrlString = await this.urlContentResolver.validateURL(url as string, options);
+      // If validation succeeds, create and return the branded type
+      return unsafeCreateUrlPath(validatedUrlString);
     } catch (error) {
+      // Re-throw URL errors directly
       if (error instanceof URLError) {
         throw error;
       }
-      
-      throw new URLError(url, (error as Error).message);
+      // Wrap other errors
+      throw new URLError(`URL validation failed: ${(error as Error).message}`, { cause: error });
     }
   }
 
   /**
-   * Fetches content from a URL with caching
+   * Fetch content from a URL with caching.
    * 
-   * @param url URL to fetch
-   * @param options Fetch options
-   * @returns The URL response with content and metadata
-   * @throws URLFetchError if fetch fails
-   * @throws URLSecurityError if URL is blocked or response too large
+   * @param url - The URL to fetch (must be a validated UrlPath)
+   * @param options - Fetch options
+   * @returns A promise resolving to the URL response with content and metadata.
+   * @throws {URLFetchError} If fetch fails
+   * @throws {URLSecurityError} If URL is blocked or response too large
    */
-  async fetchURL(url: string, options?: URLFetchOptions): Promise<URLResponse> {
-    // If URLContentResolver is available, delegate to it
-    if (this.urlContentResolver) {
-      return this.urlContentResolver.fetchURL(url, options);
+  async fetchURL(url: UrlPath, options?: URLFetchOptions): Promise<URLResponse> { // Input is UrlPath
+    if (!this.urlContentResolver) {
+      const msg = 'URL fetching requires IURLContentResolver, but it was not provided.';
+      logger.error(msg);
+      throw new URLError(msg); // Use URLError or a more specific FetchError?
     }
-    
-    // Fallback implementation for tests that don't have URLContentResolver
-    // Just return a mock response
-    logger.warn('Using fallback fetchURL implementation - URLContentResolver not available');
-    
-    return {
-      content: `Mock content for ${url} (fallback implementation)`,
-      metadata: {
-        statusCode: 200,
-        contentType: 'text/plain'
-      },
-      fromCache: false,
-      url
-    };
+
+    try {
+      // Delegate fetching to URLContentResolver, casting UrlPath back to string
+      return await this.urlContentResolver.fetchURL(url as string, options);
+    } catch (error) {
+      // Re-throw URL errors directly
+      if (error instanceof URLError) {
+        throw error;
+      }
+      // Wrap other errors
+      throw new URLError(`URL fetch failed for "${url}": ${(error as Error).message}`, { cause: error });
+    }
   }
 }

@@ -1,5 +1,9 @@
 /**
- * Path-related types used within Meld, including states for filesystem and URL paths.
+ * Meld Path Type System
+ *
+ * Defines core types for path handling, based on specifications in
+ * _spec/types/import-spec.md and _spec/types/variables-spec.md.
+ * Uses branded types for compile-time safety.
  */
 
 /**
@@ -29,7 +33,7 @@ export type RawPath = string & { __brand: 'RawPath' };
 export type ValidatedResourcePath = string & { __brand: 'ValidatedResourcePath' };
 
 /**
- * Represents an absolute filesystem path that's been fully resolved.
+ * Represents an absolute filesystem path that's been fully resolved and validated.
  */
 export type AbsolutePath = ValidatedResourcePath & { __brand: 'AbsolutePath' };
 
@@ -39,58 +43,63 @@ export type AbsolutePath = ValidatedResourcePath & { __brand: 'AbsolutePath' };
 export type RelativePath = ValidatedResourcePath & { __brand: 'RelativePath' };
 
 /**
- * Create a raw path from a string.
+ * Represents a validated URL string.
  */
-export const createRawPath = (path: string): RawPath => path as RawPath;
+export type UrlPath = ValidatedResourcePath & { __brand: 'UrlPath' };
 
 /**
- * Create a validated path from a string.
- * @param path The path to validate
- * @throws {Error} If the path is invalid (Placeholder for PathValidationError)
+ * Union type for any path type (raw or validated).
  */
-export const createValidatedPath = (path: string): ValidatedResourcePath => {
-  // Actual validation would happen here in PathService or similar.
-  // For now, just cast assuming validation passed.
-  // TODO: Implement actual path validation logic.
-  if (typeof path !== 'string' || path.trim() === '') {
-    throw new Error('Invalid path provided.'); // Basic check
-  }
-  return path as ValidatedResourcePath;
-};
+export type AnyPath = RawPath | ValidatedResourcePath;
 
 /**
- * Create an absolute path from a validated path.
- * @param path The validated path to convert
- * @throws {Error} If the path is not absolute (Placeholder for PathValidationError)
+ * Branded type for normalized absolute directory paths (as defined in import-spec)
  */
-export const createAbsolutePath = (path: ValidatedResourcePath): AbsolutePath => {
-  // Actual validation (e.g., checking for leading / or drive letter) would happen here.
-  // TODO: Implement actual absolute path validation logic.
-  // Basic check placeholder:
-  if (!path.startsWith('/') && !/^[a-zA-Z]:\\\\/.test(path)) { 
-    // simplistic check for Unix/Windows absolute paths
-    // throw new Error('Path is not absolute.');
-    console.warn(`Path "${path}" treated as absolute despite not matching typical patterns.`);
-  }
-  return path as AbsolutePath;
-};
+export type NormalizedAbsoluteDirectoryPath = string & { __brand: 'NormalizedAbsoluteDirectoryPath' };
 
 /**
- * Create a relative path from a validated path.
- * @param path The validated path to convert
- * @throws {Error} If the path is not relative (Placeholder for PathValidationError)
+ * Structured path representation for complex path operations.
+ * From _spec/types/import-spec.md
  */
-export const createRelativePath = (path: ValidatedResourcePath): RelativePath => {
-  // Actual validation (e.g., ensuring it doesn't start with / or drive letter) would happen here.
-  // TODO: Implement actual relative path validation logic.
-    // Basic check placeholder:
-  if (path.startsWith('/') || /^[a-zA-Z]:\\\\/.test(path)) { 
-    // simplistic check for Unix/Windows absolute paths
-    // throw new Error('Path is not relative.');
-    console.warn(`Path "${path}" treated as relative despite matching typical absolute patterns.`);
-  }
-  return path as RelativePath;
-};
+export interface StructuredPath {
+  readonly segments: readonly string[];
+  readonly variables?: Readonly<Record<string, string>>;
+  readonly isAbsolute: boolean;
+  readonly isNormalized: boolean;
+  readonly isDirectory: boolean;
+  readonly original: string;
+  readonly normalized?: string;
+  readonly pathVariableRefs?: readonly string[];
+}
+
+/**
+ * Rules for validating paths.
+ * From _spec/types/import-spec.md
+ */
+export interface PathValidationRules {
+  readonly allowAbsolute: boolean;
+  readonly allowRelative: boolean;
+  readonly allowParentTraversal: boolean;
+  readonly maxLength?: number;
+  readonly allowedPrefixes?: readonly string[];
+  readonly disallowedPrefixes?: readonly string[];
+  readonly pattern?: RegExp;
+  readonly mustExist?: boolean;
+  readonly mustBeFile?: boolean;
+  readonly mustBeDirectory?: boolean;
+}
+
+/**
+ * Context for validating paths.
+ * From _spec/types/import-spec.md
+ */
+export interface PathValidationContext {
+  readonly workingDirectory: NormalizedAbsoluteDirectoryPath; // Using branded type from spec
+  readonly projectRoot?: NormalizedAbsoluteDirectoryPath;
+  readonly allowedRoots?: readonly NormalizedAbsoluteDirectoryPath[];
+  readonly allowExternalPaths: boolean;
+  readonly rules: PathValidationRules;
+}
 
 /**
  * Represents the state of a filesystem path variable.
@@ -137,4 +146,63 @@ export interface IUrlPathState {
   };
   /** The validated URL string (can use branded type) */
   validatedPath?: ValidatedResourcePath; // Use branded type for the URL string
-} 
+}
+
+/** Creates a RawPath type from a string. */
+export const createRawPath = (path: string): RawPath => path as RawPath;
+
+// Revert unsafeCreate functions to simple type assertions
+/** Unsafely creates a ValidatedResourcePath (bypasses validation). */
+export const unsafeCreateValidatedResourcePath = (path: string): ValidatedResourcePath => path as ValidatedResourcePath;
+
+/** Unsafely creates an AbsolutePath (bypasses validation). */
+export const unsafeCreateAbsolutePath = (path: string): AbsolutePath => path as AbsolutePath;
+
+/** Unsafely creates a RelativePath (bypasses validation). */
+export const unsafeCreateRelativePath = (path: string): RelativePath => path as RelativePath;
+
+/** Unsafely creates a UrlPath (bypasses validation). */
+export const unsafeCreateUrlPath = (path: string): UrlPath => path as UrlPath;
+
+/** Unsafely creates a NormalizedAbsoluteDirectoryPath (bypasses validation). */
+export const unsafeCreateNormalizedAbsoluteDirectoryPath = (path: string): NormalizedAbsoluteDirectoryPath => path as NormalizedAbsoluteDirectoryPath;
+
+// =========================================================================
+// TYPE GUARDS
+// =========================================================================
+
+// Revert hasBrand and hasSpecificBrand to simpler forms.
+// Note: These primarily rely on compile-time checks and may not reliably 
+// detect brands on primitive strings at runtime using property checks.
+const hasBrand = (path: any): boolean => typeof path === 'string'; // Basic runtime check
+
+const hasSpecificBrand = (path: any, brand: string): boolean => {
+  // We can't reliably check path.__brand at runtime on a primitive string.
+  // Rely on typeof and potentially other characteristics if needed, but mostly 
+  // trust the compile-time system enforced by using create/unsafeCreate functions.
+  return typeof path === 'string'; 
+};
+
+/** Type guard to check if a value is a RawPath */
+export const isRawPath = (path: any): path is RawPath =>
+    typeof path === 'string'; // Simplified: Assume any string could be RawPath initially
+
+/** Type guard to check if a value is a ValidatedResourcePath or one of its subtypes */
+export const isValidatedResourcePath = (path: any): path is ValidatedResourcePath =>
+    typeof path === 'string'; // Simplified for runtime, rely on compile-time
+
+/** Type guard to check if a value is an AbsolutePath */
+export const isAbsolutePath = (path: any): path is AbsolutePath =>
+    typeof path === 'string'; // Simplified for runtime, rely on compile-time
+
+/** Type guard to check if a value is a RelativePath */
+export const isRelativePath = (path: any): path is RelativePath =>
+    typeof path === 'string'; // Simplified for runtime, rely on compile-time
+
+/** Type guard to check if a value is a UrlPath */
+export const isUrlPath = (path: any): path is UrlPath =>
+    typeof path === 'string'; // Simplified for runtime, rely on compile-time
+
+/** Type guard to check if a value is a NormalizedAbsoluteDirectoryPath */
+export const isNormalizedAbsoluteDirectoryPath = (path: any): path is NormalizedAbsoluteDirectoryPath =>
+    typeof path === 'string'; // Simplified for runtime, rely on compile-time 

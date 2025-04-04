@@ -2,6 +2,7 @@ import { injectable, inject } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import type { IFileSystemServiceClient } from '@services/fs/FileSystemService/interfaces/IFileSystemServiceClient.js';
+import type { ValidatedResourcePath } from '@core/types/paths.js';
 
 /**
  * Factory for creating FileSystemServiceClient instances.
@@ -26,8 +27,8 @@ export class FileSystemServiceClientFactory {
    */
   createClient(): IFileSystemServiceClient {
     return {
-      exists: (path) => this.fileSystemService.exists(path),
-      isDirectory: (path) => this.fileSystemService.isDirectory(path)
+      exists: (filePath: ValidatedResourcePath) => this.fileSystemService.exists(filePath),
+      isDirectory: (filePath: ValidatedResourcePath) => this.fileSystemService.isDirectory(filePath)
     };
   }
 } 

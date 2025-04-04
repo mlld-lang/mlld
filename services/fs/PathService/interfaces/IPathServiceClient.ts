@@ -1,16 +1,23 @@
+import type {
+  AbsolutePath,
+  RelativePath,
+  RawPath,
+  StructuredPath
+} from '@core/types/paths.js';
+
 /**
  * Minimal interface for what FileSystemService needs from PathService.
  * This interface is used to break the circular dependency between FileSystemService and PathService.
  */
 export interface IPathServiceClient {
   /**
-   * Resolve a path to its absolute form according to Meld's path rules.
-   * 
-   * @param filePath - The path to resolve
-   * @param baseDir - Optional base directory for simple paths
-   * @returns The resolved absolute path
+   * Resolve a path to its absolute or relative validated form according to Meld's path rules.
+   *
+   * @param filePath - The path to resolve (RawPath or StructuredPath)
+   * @param baseDir - Optional base directory for simple paths (RawPath)
+   * @returns The resolved validated path (AbsolutePath or RelativePath)
    */
-  resolvePath(filePath: string, baseDir?: string): string;
+  resolvePath(filePath: RawPath | StructuredPath, baseDir?: RawPath): AbsolutePath | RelativePath;
   
   /**
    * Normalize a path according to the platform's conventions.

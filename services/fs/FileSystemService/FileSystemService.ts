@@ -14,6 +14,7 @@ import { Service } from '@core/ServiceProvider.js';
 import type { IPathService } from '@services/fs/PathService/IPathService.js';
 import type { IPathServiceClient } from '@services/fs/PathService/interfaces/IPathServiceClient.js';
 import { PathServiceClientFactory } from '@services/fs/PathService/factories/PathServiceClientFactory.js';
+import type { ValidatedResourcePath } from '@core/types/paths.js';
 
 const execAsync = promisify(exec);
 
@@ -146,75 +147,71 @@ export class FileSystemService implements IFileSystemService {
   }
 
   // File operations
-  async readFile(filePath: string): Promise<string> {
-    const resolvedPath = this.resolvePath(filePath);
+  async readFile(filePath: ValidatedResourcePath): Promise<string> {
+    const pathString = filePath as string;
     
     const context: FileOperationContext = {
       operation: 'readFile',
-      path: filePath,
-      resolvedPath
+      path: pathString,
     };
     
     try {
       logger.debug('Reading file', context);
-      // Use the correct signature with just the path
-      const content = await this.fs.readFile(resolvedPath);
+      const content = await this.fs.readFile(pathString);
       logger.debug('Successfully read file', { ...context, contentLength: content.length });
       return content;
     } catch (error) {
       const err = error as Error;
       if (err.message.includes('ENOENT')) {
         logger.error('File not found', { ...context, error: err });
-        throw new MeldFileNotFoundError(filePath, { cause: err });
+        throw new MeldFileNotFoundError(pathString, { cause: err });
       }
       logger.error('Error reading file', { ...context, error: err });
-      throw new MeldFileSystemError(`Error reading file: ${filePath}`, { 
+      throw new MeldFileSystemError(`Error reading file: ${pathString}`, { 
         cause: err,
-        // Don't include resolvedPath since it's not in the error options type
-        filePath
+        filePath: pathString
       });
     }
   }
 
-  async writeFile(filePath: string, content: string): Promise<void> {
-    const resolvedPath = this.resolvePath(filePath);
+  async writeFile(filePath: ValidatedResourcePath, content: string): Promise<void> {
+    const pathString = filePath as string;
     
     const context: FileOperationContext = {
       operation: 'writeFile',
-      path: filePath,
-      resolvedPath,
+      path: pathString,
       details: { contentLength: content.length }
     };
 
     try {
       logger.debug('Writing file', context);
-      await this.ensureDir(this.pathOps.dirname(resolvedPath));
-      await this.fs.writeFile(resolvedPath, content);
+      await this.ensureDir(this.pathOps.dirname(pathString) as ValidatedResourcePath);
+      await this.fs.writeFile(pathString, content);
       logger.debug('Successfully wrote file', context);
     } catch (error) {
       const err = error as Error;
       logger.error('Failed to write file', { ...context, error: err });
-      throw new MeldError(`Failed to write file: ${filePath}`, {
+      throw new MeldError(`Failed to write file: ${pathString}`, {
         cause: err,
-        filePath
+        filePath: pathString
       });
     }
   }
 
-  async exists(filePath: string): Promise<boolean> {
+  async exists(filePath: ValidatedResourcePath): Promise<boolean> {
+    const pathString = filePath as string;
     try {
-      const resolvedPath = this.resolvePath(filePath);
       const context: FileOperationContext = {
         operation: 'exists',
-        path: resolvedPath
+        path: pathString
       };
       
       logger.debug('Checking if path exists', context);
       
-      return await this.fs.exists(resolvedPath);
+      return await this.fs.exists(pathString);
     } catch (error) {
       logger.warn('Error checking if path exists', {
-        path: filePath,
+        path: pathString,
         error: error instanceof Error ? error.message : String(error)
       });
       return false;
@@ -227,147 +224,142 @@ export class FileSystemService implements IFileSystemService {
    * @param filePath - Path to check
    * @returns A promise that resolves with true if the path exists and is a file, false otherwise
    */
-  async fileExists(filePath: string): Promise<boolean> {
+  async fileExists(filePath: ValidatedResourcePath): Promise<boolean> {
+    const pathString = filePath as string;
     try {
-      const resolvedPath = this.resolvePath(filePath);
       const context: FileOperationContext = {
         operation: 'fileExists',
-        path: resolvedPath
+        path: pathString
       };
       
       logger.debug('Checking if file exists', context);
       
-      const exists = await this.exists(resolvedPath);
+      const exists = await this.exists(filePath);
       if (!exists) {
         return false;
       }
       
-      return await this.isFile(resolvedPath);
+      return await this.isFile(filePath);
     } catch (error) {
       logger.warn('Error checking if file exists', {
-        path: filePath,
+        path: pathString,
         error: error instanceof Error ? error.message : String(error)
       });
       return false;
     }
   }
 
-  async stat(filePath: string): Promise<fsExtra.Stats> {
-    const resolvedPath = this.resolvePath(filePath);
+  async stat(filePath: ValidatedResourcePath): Promise<fsExtra.Stats> {
+    const pathString = filePath as string;
     
     const context: FileOperationContext = {
       operation: 'stat',
-      path: filePath,
-      resolvedPath
+      path: pathString,
     };
 
     try {
       logger.debug('Getting file stats', context);
-      const stats = await this.fs.stat(resolvedPath);
+      const stats = await this.fs.stat(pathString);
       logger.debug('Successfully got file stats', { ...context, isDirectory: stats.isDirectory() });
       return stats;
     } catch (error) {
       const err = error as Error;
       logger.error('Failed to get file stats', { ...context, error: err });
-      throw new MeldError(`Failed to get file stats: ${filePath}`, {
+      throw new MeldError(`Failed to get file stats: ${pathString}`, {
         cause: err,
-        filePath
+        filePath: pathString
       });
     }
   }
 
   // Directory operations
-  async readDir(dirPath: string): Promise<string[]> {
-    const resolvedPath = this.resolvePath(dirPath);
+  async readDir(dirPath: ValidatedResourcePath): Promise<string[]> {
+    const pathString = dirPath as string;
     
     const context: FileOperationContext = {
       operation: 'readDir',
-      path: dirPath,
-      resolvedPath
+      path: pathString,
     };
 
     try {
       logger.debug('Reading directory', context);
-      const files = await this.fs.readDir(resolvedPath);
+      const files = await this.fs.readDir(pathString);
       logger.debug('Successfully read directory', { ...context, fileCount: files.length });
       return files;
     } catch (error) {
       const err = error as Error;
       logger.error('Failed to read directory', { ...context, error: err });
-      throw new MeldError(`Failed to read directory: ${dirPath}`, {
+      throw new MeldError(`Failed to read directory: ${pathString}`, {
         cause: err,
-        filePath: dirPath
+        filePath: pathString
       });
     }
   }
 
-  async ensureDir(dirPath: string): Promise<void> {
-    const resolvedPath = this.resolvePath(dirPath);
+  async ensureDir(dirPath: ValidatedResourcePath): Promise<void> {
+    const pathString = dirPath as string;
     
     const context: FileOperationContext = {
       operation: 'ensureDir',
-      path: dirPath,
-      resolvedPath
+      path: pathString,
     };
 
     try {
       logger.debug('Ensuring directory exists', context);
-      await this.fs.mkdir(resolvedPath);
+      await this.fs.mkdir(pathString);
       logger.debug('Successfully ensured directory exists', context);
     } catch (error) {
       const err = error as Error;
       logger.error('Failed to ensure directory exists', { ...context, error: err });
-      throw new MeldError(`Failed to ensure directory exists: ${dirPath}`, {
+      throw new MeldError(`Failed to ensure directory exists: ${pathString}`, {
         cause: err,
-        filePath: dirPath
+        filePath: pathString
       });
     }
   }
 
-  async isDirectory(filePath: string): Promise<boolean> {
-    const resolvedPath = this.resolvePath(filePath);
+  async isDirectory(filePath: ValidatedResourcePath): Promise<boolean> {
+    const pathString = filePath as string;
     
     const context: FileOperationContext = {
       operation: 'isDirectory',
-      path: filePath,
-      resolvedPath
+      path: pathString,
     };
 
     try {
       logger.debug('Checking if path is directory', context);
-      const isDir = await this.fs.isDirectory(resolvedPath);
+      const isDir = await this.fs.isDirectory(pathString);
       logger.debug('Path directory check complete', { ...context, isDirectory: isDir });
       return isDir;
     } catch (error) {
       const err = error as Error;
       logger.error('Failed to check if path is directory', { ...context, error: err });
-      throw new MeldError(`Failed to check if path is directory: ${filePath}`, {
+      throw new MeldError(`Failed to check if path is directory: ${pathString}`, {
         cause: err,
-        filePath
+        filePath: pathString
       });
     }
   }
 
-  async isFile(filePath: string): Promise<boolean> {
-    const resolvedPath = this.resolvePath(filePath);
+  async isFile(filePath: ValidatedResourcePath): Promise<boolean> {
+    const pathString = filePath as string;
     
     const context: FileOperationContext = {
       operation: 'isFile',
-      path: filePath,
-      resolvedPath
+      path: pathString,
     };
 
     try {
       logger.debug('Checking if path is file', context);
-      const isFile = await this.fs.isFile(resolvedPath);
+      const isFile = await this.fs.isFile(pathString);
       logger.debug('Path file check complete', { ...context, isFile });
       return isFile;
     } catch (error) {
       const err = error as Error;
       logger.error('Failed to check if path is file', { ...context, error: err });
-      throw new MeldError(`Failed to check if path is file: ${filePath}`, {
+      throw new MeldError(`Failed to check if path is file: ${pathString}`, {
         cause: err,
-        filePath
+        filePath: pathString
       });
     }
   }
@@ -381,31 +373,29 @@ export class FileSystemService implements IFileSystemService {
     return this.pathOps.dirname(filePath);
   }
 
-  watch(path: string, options?: { recursive?: boolean }): AsyncIterableIterator<{ filename: string; eventType: string }> {
-    const resolvedPath = this.resolvePath(path);
+  watch(path: ValidatedResourcePath, options?: { recursive?: boolean }): AsyncIterableIterator<{ filename: string; eventType: string }> {
+    const pathString = path as string;
     
     const context: FileOperationContext = {
       operation: 'watch',
-      path,
-      resolvedPath,
+      path: pathString,
       details: { options }
     };
 
     try {
       logger.debug('Starting file watch', context);
-      return this.fs.watch(resolvedPath, options);
+      return this.fs.watch(pathString, options);
     } catch (error) {
       const err = error as Error;
       logger.error('Failed to watch file', { ...context, error: err });
-      throw new MeldError(`Failed to watch file: ${path}`, {
+      throw new MeldError(`Failed to watch file: ${pathString}`, {
         cause: err,
-        filePath: path
+        filePath: pathString
       });
     }
   }
 
   async executeCommand(command: string, options?: { cwd?: string }): Promise<{ stdout: string; stderr: string }> {
-    // We don't need to resolve paths for command execution
     const context = {
       operation: 'executeCommand',
       command,

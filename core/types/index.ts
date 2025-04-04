@@ -93,4 +93,9 @@ export * from './resolution.js';
 // Existing exports (if needed, or remove if covered by new files)
 export * from './dependencies.js';
 
-// Note: Ensure all necessary types are exported from their respective files. 
+// Note: Ensure all necessary types are exported from their respective files.
+
+// Generic utility types (if any, keep minimal)
+export type Maybe<T> = T | null | undefined;
+
+// TODO: Consolidate other core types (e.g., from specs) here. 

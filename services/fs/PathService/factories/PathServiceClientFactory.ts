@@ -2,6 +2,13 @@ import { injectable, inject } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
 import type { IPathService } from '@services/fs/PathService/IPathService.js';
 import type { IPathServiceClient } from '@services/fs/PathService/interfaces/IPathServiceClient.js';
+// Import needed types for the signature
+import type {
+  AbsolutePath,
+  RelativePath,
+  RawPath,
+  StructuredPath
+} from '@core/types/paths.js';
 
 /**
  * Factory for creating PathServiceClient instances.
@@ -26,8 +33,10 @@ export class PathServiceClientFactory {
    */
   createClient(): IPathServiceClient {
     return {
-      resolvePath: (path, baseDir) => this.pathService.resolvePath(path, baseDir),
-      normalizePath: (path) => {
+      resolvePath: (filePath: RawPath | StructuredPath, baseDir?: RawPath): AbsolutePath | RelativePath => {
+        return this.pathService.resolvePath(filePath, baseDir);
+      },
+      normalizePath: (path: string): string => {
         if (this.pathService.normalizePath) {
           return this.pathService.normalizePath(path);
         }
