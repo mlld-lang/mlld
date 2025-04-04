@@ -10,7 +10,7 @@ import type { CircularityService } from '@services/resolution/CircularityService
 import type { DirectiveService } from '@services/pipeline/DirectiveService/DirectiveService.js';
 import type { OutputService } from '@services/pipeline/OutputService/OutputService.js';
 import type { StateDebuggerService as DebuggerService } from '@tests/utils/debug/StateDebuggerService/StateDebuggerService.js';
-import type { TransformationOptions } from '@services/state/StateService/IStateService.js';
+import type { TransformationOptions } from './state.js';
 
 /**
  * Represents a position in a file
@@ -74,4 +74,23 @@ export interface ProcessOptions {
   services?: Partial<Services>;
   /** Controls whether to apply Prettier formatting to the output */
   pretty?: boolean;
-} 
+}
+
+/**
+ * Centralized export point for core Meld types.
+ */
+
+export * from './common.js';
+export * from './variables.js';
+export * from './paths.js';
+export * from './define.js';
+export * from './state.js';
+export * from './resolution.js';
+// export * from './embed.js'; // Add when created
+// export * from './run.js';   // Add when created
+// export * from './import.js'; // Add when created
+
+// Existing exports (if needed, or remove if covered by new files)
+export * from './dependencies.js';
+
+// Note: Ensure all necessary types are exported from their respective files. 

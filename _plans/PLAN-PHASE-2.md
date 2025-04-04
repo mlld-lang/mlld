@@ -1,5 +1,11 @@
 # Plan: Phase 2 - Foundational Types - Paths & Path/FileSystem Services
 
+## Context:
+- Overall Architecture: docs/dev/DI-ARCHITECTURE.md
+- Pipeline Flow: docs/dev/PIPELINE.md
+- Current AST Structure: docs/dev/AST.md 
+- High-Level Refactoring Plan: _plans/PLAN-TYPES.md
+
 This document details the implementation plan for **Phase 2** of the Types Refactoring effort, focusing on introducing strict path types and refactoring related services.
 
 **References:**

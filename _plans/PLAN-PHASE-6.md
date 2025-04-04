@@ -1,5 +1,11 @@
 # Phase 6: E2E Tests, Cleanup & Final Review
 
+## Context:
+- Overall Architecture: @docs/dev/DI-ARCHITECTURE.md
+- Pipeline Flow: @docs/dev/PIPELINE.md
+- Current AST Structure: @docs/dev/AST.md 
+- High-Level Refactoring Plan: @_plans/PLAN-TYPES.md
+
 **Objective:** Validate end-to-end behavior, remove temporary workarounds, update documentation, and finalize the type refactoring effort.
 
 ## A. Type Refinement Proposals

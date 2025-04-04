@@ -1,7 +1,14 @@
 import type { MeldNode } from '@core/syntax/types/index.js';
+import type {
+  TextVariable,
+  DataVariable,
+  IPathVariable,
+  CommandVariable
+} from '@core/types/index.js';
 
 /**
  * Command definition with optional configuration
+ * @deprecated This will be replaced by ICommandDefinition from @core/types/define.js
  */
 export interface CommandDefinition {
   readonly command: string;
@@ -16,11 +23,11 @@ export interface StateNode {
   source?: 'clone' | 'merge' | 'new' | 'child' | 'implicit';
   filePath?: string;
   readonly variables: {
-    readonly text: Map<string, string>;
-    readonly data: Map<string, unknown>;
-    readonly path: Map<string, string>;
+    readonly text: Map<string, TextVariable>;
+    readonly data: Map<string, DataVariable>;
+    readonly path: Map<string, IPathVariable>;
   };
-  readonly commands: Map<string, CommandDefinition>;
+  readonly commands: Map<string, CommandVariable>;
   readonly nodes: MeldNode[];
   readonly transformedNodes?: MeldNode[];
   readonly imports: Set<string>;

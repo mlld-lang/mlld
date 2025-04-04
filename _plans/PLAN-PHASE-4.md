@@ -1,5 +1,11 @@
 # Plan: Phase 4 - Directive Handlers (Iterative)
 
+## Context:
+- Overall Architecture: @docs/dev/DI-ARCHITECTURE.md
+- Pipeline Flow: @docs/dev/PIPELINE.md
+- Current AST Structure: @docs/dev/AST.md 
+- High-Level Refactoring Plan: @_plans/PLAN-TYPES.md
+
 This document details the step-by-step implementation plan for Phase 4, focusing on refactoring individual directive handlers to use the improved AST (including `subtype` fields) and integrate with the strictly typed services refactored in previous phases.
 
 **Assumptions:**

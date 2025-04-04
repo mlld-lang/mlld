@@ -1,6 +1,8 @@
 # Plan: Phase 3 - Resolution Service Refactor
 
-## Context
+## Context:
+- Overall Architecture: @docs/dev/DI-ARCHITECTURE.md
+- Pipeline Flow: @docs/dev/PIPELINE.md
 
 *   **High-Level Plan:** `_plans/PLAN-TYPES.md`
 *   **Relevant Specs:** `@_spec/types/variables-spec.md` (esp. `MeldVariable`, `ResolutionContext`, `VariableReferenceNode`), `@_spec/types/import-spec.md` (esp. `MeldPath`)

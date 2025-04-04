@@ -1,5 +1,11 @@
 # Phase 5 Implementation Plan: Interpreter Service & Pipeline Integration
 
+## Context:
+- Overall Architecture: @docs/dev/DI-ARCHITECTURE.md
+- Pipeline Flow: @docs/dev/PIPELINE.md
+- Current AST Structure: @docs/dev/AST.md 
+- High-Level Refactoring Plan: @_plans/PLAN-TYPES.md
+
 This plan details the steps for implementing Phase 5 of the type refactoring, focusing on the `InterpreterService` and its integration with other refactored services. It assumes Phases 1-4 (StateService, PathService, ResolutionService, Directive Handlers) are conceptually complete or planned according to `_plans/PLAN-TYPES.md`.
 
 ## A. Type Refinement Proposals
