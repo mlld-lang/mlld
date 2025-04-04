@@ -10,6 +10,7 @@ import { Service } from '@core/ServiceProvider.js';
 import { StateTrackingServiceClientFactory } from '@services/state/StateTrackingService/factories/StateTrackingServiceClientFactory.js';
 import type { IStateTrackingServiceClient } from '@services/state/StateTrackingService/interfaces/IStateTrackingServiceClient.js';
 import { randomUUID } from 'crypto';
+import cloneDeep from 'lodash.cloneDeep';
 
 // Helper function to get the container
 function getContainer() {
@@ -153,27 +154,14 @@ export class StateService implements IStateService {
   private initializeState(parentState?: IStateService): void {
     this.currentState = this.stateFactory.createState({
       source: 'new',
-      parentState: parentState ? (parentState as StateService).currentState : undefined
+      parentState: parentState ? parentState.getInternalStateNode() : undefined
     });
-    
-    // If parent has services, inherit them
-    if (parentState) {
-      const parent = parentState as StateService;
-      
-      // Inherit services if not already set
-      if (!this.eventService && parent.eventService) {
-        this.eventService = parent.eventService;
-      }
-      if (!this.trackingService && parent.trackingService) {
-        this.trackingService = parent.trackingService;
-      }
-    }
     
     // Register state with tracking service if available
     // Ensure factory is initialized before trying to use it
     this.ensureFactoryInitialized();
     
-    const parentId = parentState ? (parentState as StateService).currentState.stateId : undefined;
+    const parentId = parentState ? parentState.getStateId() : undefined;
     
     // Try to use the client from the factory first
     if (this.trackingClient) {
@@ -241,14 +229,13 @@ export class StateService implements IStateService {
   }
 
   // Text variables
-  getTextVar(name: string): string | undefined {
+  getTextVar(name: string): TextVariable | undefined {
     return this.currentState.variables.text.get(name);
   }
 
   setTextVar(name: string, value: string): void {
     this.checkMutable();
     const text = new Map(this.currentState.variables.text);
-    text.set(name, value);
     this.updateState({
       variables: {
         ...this.currentState.variables,
@@ -257,23 +244,22 @@ export class StateService implements IStateService {
     }, `setTextVar:${name}`);
   }
 
-  getAllTextVars(): Map<string, string> {
+  getAllTextVars(): Map<string, TextVariable> {
     return new Map(this.currentState.variables.text);
   }
 
-  getLocalTextVars(): Map<string, string> {
+  getLocalTextVars(): Map<string, TextVariable> {
     return new Map(this.currentState.variables.text);
   }
 
   // Data variables
-  getDataVar(name: string): unknown {
+  getDataVar(name: string): DataVariable | undefined {
     return this.currentState.variables.data.get(name);
   }
 
   setDataVar(name: string, value: unknown): void {
     this.checkMutable();
     const data = new Map(this.currentState.variables.data);
-    data.set(name, value);
     this.updateState({
       variables: {
         ...this.currentState.variables,
@@ -282,23 +268,22 @@ export class StateService implements IStateService {
     }, `setDataVar:${name}`);
   }
 
-  getAllDataVars(): Map<string, unknown> {
+  getAllDataVars(): Map<string, DataVariable> {
     return new Map(this.currentState.variables.data);
   }
 
-  getLocalDataVars(): Map<string, unknown> {
+  getLocalDataVars(): Map<string, DataVariable> {
     return new Map(this.currentState.variables.data);
   }
 
   // Path variables
-  getPathVar(name: string): string | undefined {
+  getPathVar(name: string): IPathVariable | undefined {
     return this.currentState.variables.path.get(name);
   }
 
   setPathVar(name: string, value: string): void {
     this.checkMutable();
     const path = new Map(this.currentState.variables.path);
-    path.set(name, value);
     this.updateState({
       variables: {
         ...this.currentState.variables,
@@ -307,12 +292,12 @@ export class StateService implements IStateService {
     }, `setPathVar:${name}`);
   }
 
-  getAllPathVars(): Map<string, string> {
+  getAllPathVars(): Map<string, IPathVariable> {
     return new Map(this.currentState.variables.path);
   }
 
   // Commands
-  getCommand(name: string): CommandDefinition | undefined {
+  getCommandVar(name: string): CommandVariable | undefined {
     return this.currentState.commands.get(name);
   }
 
@@ -324,12 +309,16 @@ export class StateService implements IStateService {
     this.updateState({ commands }, `setCommand:${name}`);
   }
 
-  getAllCommands(): Map<string, CommandDefinition> {
+  getAllCommands(): Map<string, CommandVariable> {
     return new Map(this.currentState.commands);
   }
 
   // Nodes
   getNodes(): MeldNode[] {
+    return [...this.currentState.nodes];
+  }
+
+  getOriginalNodes(): MeldNode[] {
     return [...this.currentState.nodes];
   }
 
@@ -590,7 +579,7 @@ export class StateService implements IStateService {
         // Register the parent-child relationship 
         this.trackingClient.registerRelationship({
           sourceId: this.currentState.stateId,
-          targetId: (childState as StateService).currentState.stateId,
+          targetId: childState.getInternalStateNode().stateId,
           type: 'parent-child',
           timestamp: Date.now(),
           source: 'parent'
@@ -603,7 +592,7 @@ export class StateService implements IStateService {
             type: 'created-child',
             timestamp: Date.now(),
             details: {
-              childId: (childState as StateService).currentState.stateId
+              childId: childState.getInternalStateNode().stateId
             },
             source: 'parent'
           });
@@ -617,7 +606,7 @@ export class StateService implements IStateService {
       try {
         this.trackingService.addRelationship(
           this.currentState.stateId,
-          (childState as StateService).currentState.stateId,
+          childState.getInternalStateNode().stateId,
           'parent-child'
         );
       } catch (error) {
@@ -630,11 +619,11 @@ export class StateService implements IStateService {
 
   mergeChildState(childState: IStateService): void {
     this.checkMutable();
-    const child = childState as StateService;
-    this.currentState = this.stateFactory.mergeStates(this.currentState, child.currentState);
+    const childNode = childState.getInternalStateNode();
+    this.currentState = this.stateFactory.mergeStates(this.currentState, childNode);
 
     // Add merge relationship if tracking enabled
-    if (this.currentState.stateId && child.currentState.stateId) {
+    if (this.getStateId() && childNode.stateId) {
       // Ensure factory is initialized before trying to use it
       this.ensureFactoryInitialized();
       
@@ -643,15 +632,15 @@ export class StateService implements IStateService {
         try {
           // Make sure parent-child relationship exists
           this.trackingClient.addRelationship(
-            this.currentState.stateId,
-            child.currentState.stateId,
+            this.getStateId()!,
+            childNode.stateId,
             'parent-child'
           );
           
           // Add merge-source relationship
           this.trackingClient.addRelationship(
-            this.currentState.stateId,
-            child.currentState.stateId,
+            this.getStateId()!,
+            childNode.stateId,
             'merge-source'
           );
           
@@ -663,15 +652,15 @@ export class StateService implements IStateService {
           if (this.trackingService) {
             // Make sure parent-child relationship exists
             this.trackingService.addRelationship(
-              this.currentState.stateId,
-              child.currentState.stateId,
+              this.getStateId()!,
+              childNode.stateId,
               'parent-child'
             );
             
             // Add merge-source relationship
             this.trackingService.addRelationship(
-              this.currentState.stateId,
-              child.currentState.stateId,
+              this.getStateId()!,
+              childNode.stateId,
               'merge-source'
             );
           }
@@ -680,15 +669,15 @@ export class StateService implements IStateService {
         // Fall back to direct tracking service if client not available
         // Make sure parent-child relationship exists
         this.trackingService.addRelationship(
-          this.currentState.stateId,
-          child.currentState.stateId,
+          this.getStateId()!,
+          childNode.stateId,
           'parent-child'
         );
         
         // Add merge-source relationship
         this.trackingService.addRelationship(
-          this.currentState.stateId,
-          child.currentState.stateId,
+          this.getStateId()!,
+          childNode.stateId,
           'merge-source'
         );
       }
@@ -697,7 +686,7 @@ export class StateService implements IStateService {
     // Emit merge event
     this.emitEvent({
       type: 'merge',
-      stateId: this.currentState.stateId || 'unknown',
+      stateId: this.getStateId() || 'unknown',
       source: 'mergeChildState',
       timestamp: Date.now(),
       location: {
@@ -739,8 +728,8 @@ export class StateService implements IStateService {
       try {
         // Register the clone-original relationship
         this.trackingClient.registerRelationship({
-          sourceId: this.currentState.stateId,
-          targetId: (cloned as StateService).currentState.stateId,
+          sourceId: this.getStateId()!,
+          targetId: cloned.getStateId()!,
           type: 'clone-original',
           timestamp: Date.now(),
           source: 'original'
@@ -749,11 +738,11 @@ export class StateService implements IStateService {
         // Register a "cloned" event for the state
         if (this.trackingClient.registerEvent) {
           this.trackingClient.registerEvent({
-            stateId: this.currentState.stateId,
+            stateId: this.getStateId()!,
             type: 'cloned',
             timestamp: Date.now(),
             details: {
-              cloneId: (cloned as StateService).currentState.stateId
+              cloneId: cloned.getStateId()!
             },
             source: 'original'
           });
@@ -766,8 +755,8 @@ export class StateService implements IStateService {
       try {
         // Register the clone-original relationship with type assertion since it's valid in the client interface
         this.trackingService.addRelationship(
-          this.currentState.stateId,
-          (cloned as StateService).currentState.stateId,
+          this.getStateId()!,
+          cloned.getStateId()!,
           'parent-child' // Use 'parent-child' as fallback for direct service
         );
       } catch (error) {
@@ -790,7 +779,7 @@ export class StateService implements IStateService {
     // Emit transform event for state updates
     this.emitEvent({
       type: 'transform',
-      stateId: this.currentState.stateId || 'unknown',
+      stateId: this.getStateId() || 'unknown',
       source,
       timestamp: Date.now(),
       location: {
@@ -993,5 +982,12 @@ export class StateService implements IStateService {
       default:
         return false;
     }
+  }
+
+  /**
+   * Implement the new interface method
+   */
+  getInternalStateNode(): StateNode {
+    return this.currentState;
   }
 } 

@@ -399,6 +399,17 @@ interface IStateService {
    * @deprecated Transformation is now implicitly supported.
    */
   hasTransformationSupport?(): boolean;
+
+  /**
+   * Gets the underlying StateNode object. 
+   * 
+   * WARNING: This provides access to internal state representation and 
+   * should be used sparingly, primarily for operations like state merging 
+   * or cloning that inherently require access to the full internal structure.
+   * 
+   * @returns The internal StateNode object.
+   */
+  getInternalStateNode(): StateNode;
 }
 
-export type { /* TransformationOptions, */ IStateService }; 
+export type { TransformationOptions, IStateService }; 

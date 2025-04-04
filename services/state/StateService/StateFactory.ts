@@ -3,6 +3,7 @@ import { stateLogger as logger } from '@core/utils/logger.js';
 import { randomUUID } from 'crypto';
 import { Service } from '@core/ServiceProvider.js';
 import { injectable } from 'tsyringe';
+import { cloneDeep } from 'lodash';
 
 /**
  * Factory for creating and managing immutable state objects
@@ -153,21 +154,24 @@ export class StateFactory implements IStateFactory {
    * but with a new stateId and no parentState reference
    */
   createClonedState(originalState: StateNode, options?: StateNodeOptions): StateNode {
-    // Create a completely new state without parent reference
-    const clonedState: StateNode = {
-      stateId: randomUUID(),
-      variables: {
-        text: new Map(originalState.variables.text),
-        data: new Map(originalState.variables.data),
-        path: new Map(originalState.variables.path)
-      },
-      commands: new Map(originalState.commands),
-      nodes: [...originalState.nodes],
-      transformedNodes: originalState.transformedNodes ? [...originalState.transformedNodes] : undefined,
-      imports: new Set(originalState.imports),
-      filePath: options?.filePath ?? originalState.filePath,
-      source: 'clone'
-    };
+    // Use lodash.cloneDeep for a true deep copy
+    const clonedState = cloneDeep(originalState);
+
+    // Ensure the cloned state has a unique ID and no parent linkage
+    clonedState.stateId = randomUUID();
+    // Explicitly remove parentState reference after deep clone
+    (clonedState as any).parentState = undefined; // Need 'as any' because parentState is readonly in the interface
+
+    // Set source and potentially override filePath based on options
+    clonedState.source = 'clone';
+    if (options?.filePath) {
+      clonedState.filePath = options.filePath;
+    }
+    
+    // Ensure transformedNodes exists if it should, even if empty (cloneDeep preserves absence)
+    if (originalState.transformedNodes && !clonedState.transformedNodes) {
+        (clonedState as any).transformedNodes = []; // Use 'as any' for readonly property
+    }
 
     this.logOperation({
       type: 'create',
