@@ -749,45 +749,37 @@ export class StateService implements IStateService {
    * Creates a deep clone of this state service
    */
   clone(): IStateService {
-    // Create a new StateService instance with the same dependencies
+    // Create a new StateService with the same factory, eventService and trackingServiceFactory
     const cloned = new StateService(
       this.stateFactory,
       this.eventService,
       this.trackingServiceClientFactory
-      // IMPORTANT: Do NOT pass `this` as parentState here!
     );
     
-    // Use the factory to create a cloned StateNode with a new ID and no parent
-    // The factory now handles the deep cloning via lodash.cloneDeep
-    const clonedNode = this.stateFactory.createClonedState(
-      this.currentState, // Pass the current internal state node to be cloned
+    // Use the factory to create a cloned state with all properties correctly initialized
+    (cloned as StateService).currentState = this.stateFactory.createClonedState(
+      this.currentState,
       {
-        // Options for createClonedState if needed (e.g., override filePath)
-        // filePath: this.currentState.filePath // Example: Keep same path
+        source: 'clone',
+        filePath: this.currentState.filePath
       }
     );
     
-    // Assign the deeply cloned StateNode to the new service instance
-    (cloned as StateService).currentState = clonedNode;
-    
-    // Copy non-StateNode properties (like flags and transformation options)
-    // These are typically primitive values or simple objects safe for shallow copy
-    (cloned as StateService)._isImmutable = this._isImmutable;
+    // Copy transformation settings
     (cloned as StateService)._transformationEnabled = this._transformationEnabled;
-    // Ensure transformation options are copied correctly (current implementation in spec/IStateService uses object)
     (cloned as StateService)._transformationOptions = { ...this._transformationOptions };
+    (cloned as StateService)._isImmutable = this._isImmutable;
     
-    // Track cloning relationship
+    // Track cloning
+    // Ensure factory is initialized before trying to use it
     this.ensureFactoryInitialized();
-    const clonedId = cloned.getStateId();
-    const originalId = this.getStateId();
-
-    if (this.trackingClient && originalId && clonedId) {
+    
+    if (this.trackingClient) {
       try {
         // Register the clone-original relationship
         this.trackingClient.registerRelationship({
-          sourceId: originalId,
-          targetId: clonedId,
+          sourceId: this.getStateId()!,
+          targetId: cloned.getStateId()!,
           type: 'clone-original',
           timestamp: Date.now(),
           source: 'original'
@@ -796,11 +788,11 @@ export class StateService implements IStateService {
         // Register a "cloned" event for the state
         if (this.trackingClient.registerEvent) {
           this.trackingClient.registerEvent({
-            stateId: originalId,
+            stateId: this.getStateId()!,
             type: 'cloned',
             timestamp: Date.now(),
             details: {
-              cloneId: clonedId
+              cloneId: cloned.getStateId()!
             },
             source: 'original'
           });
@@ -808,13 +800,14 @@ export class StateService implements IStateService {
       } catch (error) {
         logger.warn('Failed to register clone with tracking client', { error });
       }
-    } else if (this.trackingService && originalId && clonedId) {
+    } else if (this.trackingService) {
       // Fall back to direct service
       try {
+        // Register the clone-original relationship with type assertion since it's valid in the client interface
         this.trackingService.addRelationship(
-          originalId,
-          clonedId,
-          'parent-child' // Using fallback type for direct service
+          this.getStateId()!,
+          cloned.getStateId()!,
+          'parent-child' // Use 'parent-child' as fallback for direct service
         );
       } catch (error) {
         logger.warn('Failed to register clone-original relationship with tracking service', { error });
