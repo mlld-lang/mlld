@@ -10,7 +10,7 @@ import { Service } from '@core/ServiceProvider.js';
 import { StateTrackingServiceClientFactory } from '@services/state/StateTrackingService/factories/StateTrackingServiceClientFactory.js';
 import type { IStateTrackingServiceClient } from '@services/state/StateTrackingService/interfaces/IStateTrackingServiceClient.js';
 import { randomUUID } from 'crypto';
-import cloneDeep from 'lodash.cloneDeep';
+import { cloneDeep } from 'lodash';
 import type {
   TextVariable,
   DataVariable,
@@ -22,7 +22,6 @@ import type {
   IUrlPathState,
   ICommandDefinition,
   MeldVariable,
-  VariableType
 } from '@core/types/index.js';
 import { 
   VariableOrigin,
@@ -31,6 +30,7 @@ import {
   createPathVariable,
   createCommandVariable
 } from '@core/types/index.js';
+import { VariableType } from '@core/types/index.js';
 
 // Helper function to get the container
 function getContainer() {
@@ -53,10 +53,9 @@ export class StateService implements IStateService {
   private _isImmutable: boolean = false;
   private _transformationEnabled: boolean = false;
   private _transformationOptions: TransformationOptions = {
-    variables: false,
-    directives: false,
-    commands: false,
-    imports: false
+    enabled: false, 
+    preserveOriginal: true,
+    transformNested: true
   };
   private eventService?: IStateEventService;
   private trackingService?: IStateTrackingService;
@@ -393,54 +392,40 @@ export class StateService implements IStateService {
     this.updateState({ nodes, transformedNodes }, 'addNode');
   }
 
-  transformNode(original: MeldNode, transformed: MeldNode): void {
+  transformNode(index: number, replacement: MeldNode | MeldNode[]): void {
     this.checkMutable();
     if (!this._transformationEnabled) {
+      logger.debug('Transformation is disabled, skipping node transformation.');
+      return; // No transformation if disabled
+    }
+
+    // Initialize transformed nodes if they don't exist
+    if (!this.currentState.transformedNodes) {
+      // Use updateState to initialize
+      this.updateState({ transformedNodes: [...this.currentState.nodes] }, 'transformNode:init');
+      // Note: currentState is updated by updateState, so we need to read it again if we proceed
+    }
+
+    // Re-read currentState as updateState modified it
+    const currentTransformedNodes = this.currentState.transformedNodes || [];
+    const transformedNodes = [...currentTransformedNodes];
+
+    if (index < 0 || index >= transformedNodes.length) {
+      // Log error and return, or throw error based on policy
+      logger.error('Invalid index provided for transformNode', { index, length: transformedNodes.length });
+      // Consider throwing an error: throw new RangeError('Index out of bounds for transformNode');
       return;
     }
 
-    // Initialize transformed nodes if needed
-    let transformedNodes = this.currentState.transformedNodes ? 
-      [...this.currentState.transformedNodes] : 
-      [...this.currentState.nodes];
-    
-    // First try direct reference comparison
-    let index = transformedNodes.findIndex(node => node === original);
-
-    // If not found by reference, try matching by location
-    if (index === -1 && original.location && transformed.location) {
-      index = transformedNodes.findIndex(node => 
-        node.location?.start?.line === original.location?.start?.line &&
-        node.location?.start?.column === original.location?.start?.column &&
-        node.location?.end?.line === original.location?.end?.line &&
-        node.location?.end?.column === original.location?.end?.column
-      );
-    }
-
-    if (index !== -1) {
-      // Replace the node at the found index
-      transformedNodes[index] = transformed;
+    // Replace node(s) at the specified index
+    if (Array.isArray(replacement)) {
+      transformedNodes.splice(index, 1, ...replacement);
     } else {
-      // If not found in transformed nodes, check original nodes
-      const originalIndex = this.currentState.nodes.findIndex(node => {
-        if (!node.location || !original.location) return false;
-        return (
-          node.location.start.line === original.location.start.line &&
-          node.location.start.column === original.location.start.column &&
-          node.location.end.line === original.location.end.line &&
-          node.location.end.column === original.location.end.column
-        );
-      });
-      
-      if (originalIndex === -1) {
-        throw new Error('Cannot transform node: original node not found');
-      }
-      
-      // Replace the node at the original index
-      transformedNodes[originalIndex] = transformed;
+      transformedNodes.splice(index, 1, replacement);
     }
-    
-    this.updateState({ transformedNodes }, 'transformNode');
+
+    // Update the state with the new transformed nodes array
+    this.updateState({ transformedNodes }, `transformNode:index-${index}`);
   }
 
   isTransformationEnabled(): boolean {
@@ -453,32 +438,40 @@ export class StateService implements IStateService {
    * @returns Whether the specified transformation type is enabled
    */
   shouldTransform(type: keyof TransformationOptions): boolean {
-    return this._transformationEnabled && Boolean(this._transformationOptions[type]);
+    return this._transformationEnabled;
   }
 
   /**
-   * Enable transformation with specific options
-   * @param options Options for selective transformation, or true/false for all
+   * Enable/disable transformation with specific options.
+   * Replaces the old enableTransformation.
+   * @param enabled - Whether transformation should be globally enabled.
    */
-  enableTransformation(options?: TransformationOptions | boolean): void {
-    if (typeof options === 'boolean') {
-      // Legacy behavior - all on or all off
-      this._transformationEnabled = options;
-      this._transformationOptions = options ? 
-        { variables: true, directives: true, commands: true, imports: true } : 
-        { variables: false, directives: false, commands: false, imports: false };
-    } else {
-      // Selective transformation
-      this._transformationEnabled = true;
-      this._transformationOptions = {
-        ...{ variables: true, directives: true, commands: true, imports: true },
-        ...options
-      };
-    }
+  setTransformationEnabled(enabled: boolean): void {
+    this.checkMutable();
+    this._transformationEnabled = enabled;
+    this._transformationOptions = { 
+      ...this._transformationOptions, 
+      enabled 
+    };
 
     if (this._transformationEnabled && !this.currentState.transformedNodes) {
-      // Initialize transformed nodes with current nodes when enabling transformation
-      this.updateState({ transformedNodes: [...this.currentState.nodes] }, 'enableTransformation');
+      this.updateState({ transformedNodes: [...this.currentState.nodes] }, 'setTransformationEnabled:init');
+    } else if (!this._transformationEnabled) {
+    }
+  }
+
+  /**
+   * Sets detailed transformation options.
+   * @param options - Options controlling transformation behavior.
+   */
+  setTransformationOptions(options: TransformationOptions): void {
+    this.checkMutable();
+    this._transformationEnabled = options.enabled;
+    this._transformationOptions = { ...options };
+
+    if (this._transformationEnabled && !this.currentState.transformedNodes) {
+      this.updateState({ transformedNodes: [...this.currentState.nodes] }, 'setTransformationOptions:init');
+    } else if (!this._transformationEnabled) {
     }
   }
 
@@ -575,34 +568,17 @@ export class StateService implements IStateService {
   createChildState(): IStateService {
     this.checkMutable();
     
-    // Create a new StateService instance that inherits from this one
     // Use factory pattern consistently - pass the trackingServiceClientFactory instead of service
     const childState = new StateService(
       this.stateFactory,
       this.eventService,
-      this.trackingServiceClientFactory
+      this.trackingServiceClientFactory,
+      this // Pass self as parent
     );
     
-    // Transfer parent variables to child
-    // Copy text variables
-    this.getAllTextVars().forEach((value, key) => {
-      childState.setTextVar(key, value);
-    });
-    
-    // Copy data variables
-    this.getAllDataVars().forEach((value, key) => {
-      childState.setDataVar(key, value);
-    });
-    
-    // Copy path variables
-    this.getAllPathVars().forEach((value, key) => {
-      childState.setPathVar(key, value);
-    });
-    
-    // Copy commands
-    this.getAllCommands().forEach((command, name) => {
-      childState.setCommandVar(name, command);
-    });
+    // No need to manually copy variables here anymore as the StateFactory
+    // handles initial state based on parent in createState.
+    // We rely on the options passed to createChildState if specific copying is needed.
     
     // Copy import info
     this.getImports().forEach(importPath => {
@@ -617,7 +593,8 @@ export class StateService implements IStateService {
     
     // Set child state to transform if parent is transforming
     if (this._transformationEnabled) {
-      childState.enableTransformation(this._transformationOptions);
+      childState.setTransformationEnabled(true); 
+      childState.setTransformationOptions(this._transformationOptions);
     }
     
     // Track child state creation
@@ -749,72 +726,67 @@ export class StateService implements IStateService {
    * Creates a deep clone of this state service
    */
   clone(): IStateService {
-    // Create a new StateService with the same factory, eventService and trackingServiceFactory
-    const cloned = new StateService(
-      this.stateFactory,
-      this.eventService,
-      this.trackingServiceClientFactory
-    );
-    
-    // Use the factory to create a cloned state with all properties correctly initialized
-    (cloned as StateService).currentState = this.stateFactory.createClonedState(
-      this.currentState,
-      {
-        source: 'clone',
-        filePath: this.currentState.filePath
-      }
-    );
-    
-    // Copy transformation settings
-    (cloned as StateService)._transformationEnabled = this._transformationEnabled;
-    (cloned as StateService)._transformationOptions = { ...this._transformationOptions };
-    (cloned as StateService)._isImmutable = this._isImmutable;
-    
-    // Track cloning
-    // Ensure factory is initialized before trying to use it
+    // Use the factory to create a deep clone of the internal StateNode
+    const clonedNode = this.stateFactory.createClonedState(this.currentState);
+
+    // Create a new StateService instance using the cloned node
+    // Note: We are bypassing the constructor logic that sets up parent inheritance,
+    // as this is a clone, not a child.
+    const clonedService = new StateService(); // Instantiate without constructor args
+
+    // Manually set the internal state and other properties
+    (clonedService as any).currentState = clonedNode; // Use 'as any' to set private property
+    (clonedService as any).stateFactory = this.stateFactory;
+    (clonedService as any).eventService = this.eventService;
+    (clonedService as any).trackingService = this.trackingService;
+    (clonedService as any).trackingServiceClientFactory = this.trackingServiceClientFactory;
+    (clonedService as any).trackingClient = this.trackingClient; // Copy existing client instance
+    (clonedService as any).factoryInitialized = this.factoryInitialized;
+
+    // Copy transformation state
+    clonedService._isImmutable = this._isImmutable; // Clones should inherit immutability status?
+    clonedService._transformationEnabled = this._transformationEnabled;
+    clonedService._transformationOptions = { ...this._transformationOptions };
+
+    // Track clone operation if tracking is enabled
     this.ensureFactoryInitialized();
-    
-    if (this.trackingClient) {
-      try {
-        // Register the clone-original relationship
-        this.trackingClient.registerRelationship({
-          sourceId: this.getStateId()!,
-          targetId: cloned.getStateId()!,
-          type: 'clone-original',
-          timestamp: Date.now(),
-          source: 'original'
-        });
-        
-        // Register a "cloned" event for the state
-        if (this.trackingClient.registerEvent) {
-          this.trackingClient.registerEvent({
-            stateId: this.getStateId()!,
-            type: 'cloned',
+    const originalId = this.getStateId();
+    const cloneId = clonedService.getStateId();
+
+    if (originalId && cloneId) {
+      if (this.trackingClient) {
+        try {
+          this.trackingClient.registerRelationship({
+            sourceId: originalId,
+            targetId: cloneId,
+            type: 'clone-original',
             timestamp: Date.now(),
-            details: {
-              cloneId: cloned.getStateId()!
-            },
-            source: 'original'
+            source: 'clone'
           });
+          if (this.trackingClient.registerEvent) {
+             this.trackingClient.registerEvent({
+                stateId: originalId,
+                type: 'cloned',
+                timestamp: Date.now(),
+                details: { cloneId },
+                source: 'clone'
+             });
+          }
+        } catch (error) {
+          logger.warn('Failed to register clone relationship with tracking client', { error });
         }
-      } catch (error) {
-        logger.warn('Failed to register clone with tracking client', { error });
-      }
-    } else if (this.trackingService) {
-      // Fall back to direct service
-      try {
-        // Register the clone-original relationship with type assertion since it's valid in the client interface
-        this.trackingService.addRelationship(
-          this.getStateId()!,
-          cloned.getStateId()!,
-          'parent-child' // Use 'parent-child' as fallback for direct service
-        );
-      } catch (error) {
-        logger.warn('Failed to register clone-original relationship with tracking service', { error });
+      } else if (this.trackingService) {
+        try {
+           // Commenting out the fallback call as 'clone-original' might not be supported directly
+           // this.trackingService.addRelationship(originalId, cloneId, 'clone-original'); 
+           logger.debug('Skipping direct trackingService.addRelationship for clone-original');
+        } catch (error) {
+           logger.warn('Failed to register clone relationship with tracking service', { error });
+        }
       }
     }
-    
-    return cloned;
+
+    return clonedService;
   }
 
   private checkMutable(): void {
@@ -935,10 +907,9 @@ export class StateService implements IStateService {
     this._isImmutable = false;
     this._transformationEnabled = false;
     this._transformationOptions = {
-      variables: false,
-      directives: false,
-      commands: false,
-      imports: false
+      enabled: false,
+      preserveOriginal: true,
+      transformNested: true
     };
   }
 
@@ -1015,26 +986,6 @@ export class StateService implements IStateService {
   }
 
   /**
-   * Checks if a variable with the given name and type exists
-   * 
-   * @param type - The type of variable ('text', 'data', or 'path')
-   * @param name - The name of the variable to check
-   * @returns true if the variable exists, false otherwise
-   */
-  hasVariable(type: string, name: string): boolean {
-    switch (type.toLowerCase()) {
-      case 'text':
-        return this.getTextVar(name) !== undefined;
-      case 'data':
-        return this.getDataVar(name) !== undefined;
-      case 'path':
-        return this.getPathVar(name) !== undefined;
-      default:
-        return false;
-    }
-  }
-
-  /**
    * Implement the new interface method
    */
   getInternalStateNode(): StateNode {
@@ -1043,24 +994,22 @@ export class StateService implements IStateService {
 
   // Implement generic getVariable
   getVariable(name: string, type?: VariableType): MeldVariable | undefined {
-    let variable: MeldVariable | undefined;
-    if (type === undefined || type === VariableType.TEXT) {
-      variable = this.getTextVar(name);
-      if (variable) return variable;
+    if (type) {
+      switch (type) {
+        case VariableType.TEXT: return this.getTextVar(name);
+        case VariableType.DATA: return this.getDataVar(name);
+        case VariableType.PATH: return this.getPathVar(name);
+        case VariableType.COMMAND: return this.getCommandVar(name);
+        default: return undefined;
+      }
+    } else {
+      // Check in order if type not specified
+      return this.getTextVar(name) 
+          ?? this.getDataVar(name) 
+          ?? this.getPathVar(name) 
+          ?? this.getCommandVar(name) 
+          ?? undefined;
     }
-    if (type === undefined || type === VariableType.DATA) {
-      variable = this.getDataVar(name);
-      if (variable) return variable;
-    }
-    if (type === undefined || type === VariableType.PATH) {
-      variable = this.getPathVar(name);
-      if (variable) return variable;
-    }
-    if (type === undefined || type === VariableType.COMMAND) {
-      variable = this.getCommandVar(name);
-      if (variable) return variable;
-    }
-    return undefined;
   }
 
   // Implement generic setVariable
@@ -1068,18 +1017,22 @@ export class StateService implements IStateService {
     this.checkMutable();
     switch (variable.type) {
       case VariableType.TEXT:
+        // Pass variable.value (string) to setTextVar
         return this.setTextVar(variable.name, variable.value, variable.metadata);
       case VariableType.DATA:
+        // Pass variable.value (JsonValue) to setDataVar
         return this.setDataVar(variable.name, variable.value, variable.metadata);
       case VariableType.PATH:
-        // Type assertion needed because setPathVar expects the union, not the full variable
-        return this.setPathVar(variable.name, variable.value as (IFilesystemPathState | IUrlPathState), variable.metadata);
+        // Pass variable.value (IFilesystemPathState | IUrlPathState) to setPathVar
+        return this.setPathVar(variable.name, variable.value, variable.metadata);
       case VariableType.COMMAND:
-        // Type assertion needed because setCommandVar expects ICommandDefinition, not the full variable
-        return this.setCommandVar(variable.name, variable.value as ICommandDefinition, variable.metadata);
+        // Pass variable.value (ICommandDefinition) to setCommandVar
+        return this.setCommandVar(variable.name, variable.value, variable.metadata);
       default:
-        // Should be unreachable due to discriminated union
-        throw new Error(`Unsupported variable type: ${(variable as any).type}`);
+        // Handle unexpected variable type if necessary, e.g., throw an error
+        // or log a warning. For exhaustive check, cast to `never`.
+        const exhaustiveCheck: never = variable;
+        throw new Error(`Unhandled variable type: ${(exhaustiveCheck as any)?.type}`);
     }
   }
 

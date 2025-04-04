@@ -154,23 +154,6 @@ interface IStateService {
   getCommandVar(name: string): CommandVariable | undefined;
 
   /**
-   * Gets a command by name.
-   * 
-   * @param name - The name of the command to retrieve
-   * @returns The command details, or undefined if not found
-   */
-  getCommand(name: string): { command: string; options?: Record<string, unknown> } | undefined;
-  
-  /**
-   * Sets a command with optional options.
-   * 
-   * @param name - The name of the command to set
-   * @param command - The command string or command object with options
-   * @throws {MeldStateError} If the state is immutable
-   */
-  setCommand(name: string, command: string | { command: string; options?: Record<string, unknown> }): void;
-  
-  /**
    * Gets all commands, including inherited ones from parent states.
    * 
    * @returns A map of all commands (name -> CommandVariable)
