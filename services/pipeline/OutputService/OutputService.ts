@@ -1,6 +1,7 @@
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IOutputService, OutputFormat, OutputOptions } from '@services/pipeline/OutputService/IOutputService.js';
-import type { IResolutionService, ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
+import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
+import type { ResolutionContext } from '@core/types'; // Try importing from @core/types directly
 import { formatWithPrettier } from '@core/utils/prettierUtils.js';
 
 /**
@@ -777,202 +778,6 @@ export class OutputService implements IOutputService {
   }
 
   /**
-   * Process a variable reference with context-aware formatting
-   * Uses the VariableReferenceResolverClient when available for enhanced field access
-   * 
-   * @param reference The variable reference to process (e.g., "user.name")
-   * @param context The formatting context
-   * @param state The state service
-   * @returns The resolved variable value with proper formatting
-   */
-  private async processVariableReference(
-    reference: string, 
-    context: FormattingContext, 
-    state: IStateService
-  ): Promise<string> {
-    try {
-      // Parse the reference
-      if (!reference) return '';
-      
-      // Split into variable name and field path
-      const parts = reference.split('.');
-      const varName = parts[0];
-      const fieldPath = parts.length > 1 ? parts.slice(1).join('.') : '';
-
-      // Try to use the VariableReferenceResolverClient for field access specifically
-      if (fieldPath) {
-        const resolver = this.getVariableResolver();
-        if (resolver) {
-          try {
-            // Create a resolution context for field access
-            const resolutionContext: ResolutionContext = ResolutionContextFactory.create(
-              undefined, // current file path not needed for this operation
-              state
-            );
-            
-            // Enhanced field access options with complete formatting context
-            const fieldOptions: FieldAccessOptions = {
-              preserveType: true, // Preserve type initially for proper processing
-              variableName: varName,
-              formattingContext: {
-                isBlock: context.contextType === 'block',
-                nodeType: context.nodeType,
-                linePosition: context.atLineStart ? 'start' : (context.atLineEnd ? 'end' : 'middle'),
-                isTransformation: context.transformationMode
-              }
-            };
-            
-            // Add special markdown context if applicable
-            if (context.specialMarkdown) {
-              (fieldOptions.formattingContext as any).specialMarkdown = context.specialMarkdown;
-            }
-            
-            // Use resolveFieldAccess for consistent field handling
-            const result = await resolver.resolveFieldAccess(varName, fieldPath, resolutionContext, fieldOptions);
-            
-            if (result !== undefined) {
-              // For string conversion, respect the formatting context
-              const stringResult = resolver.convertToString(result, {
-                ...fieldOptions,
-                preserveType: false // Convert to string for final output
-              });
-              
-              logger.debug('Field access resolved using variable resolver client', {
-                varName,
-                fieldPath,
-                resultType: typeof result,
-                stringResult
-              });
-              
-              return stringResult;
-            }
-          } catch (err) {
-            logger.warn('Error using variable resolver for field access, falling back to traditional handlers', {
-              error: err instanceof Error ? err.message : String(err)
-            });
-            // Fall through to traditional handling
-          }
-        }
-      }
-      
-      // Standard variable resolution approach if client is not available or fails
-      
-      // Try to get the variable value
-      let value;
-      
-      // Try text variable first
-      value = state.getTextVar(varName);
-      
-      logger.debug('Looking up variable in state', {
-        varName,
-        value: value !== undefined ? (typeof value === 'string' ? value : JSON.stringify(value)) : 'undefined',
-        type: 'text'
-      });
-      
-      // If not found as text variable, try data variable
-      if (value === undefined) {
-        value = state.getDataVar(varName);
-        logger.debug('Looking up data variable in state', {
-          varName,
-          value: value !== undefined ? (typeof value === 'string' ? value : JSON.stringify(value)) : 'undefined',
-          type: 'data'
-        });
-      }
-      
-      // If not found as data variable, try path variable
-      if (value === undefined && state.getPathVar) {
-        value = state.getPathVar(varName);
-        logger.debug('Looking up path variable in state', {
-          varName,
-          value: value !== undefined ? (typeof value === 'string' ? value : JSON.stringify(value)) : 'undefined',
-          type: 'path'
-        });
-      }
-      
-      // Variable not found
-      if (value === undefined) {
-        logger.warn('Variable not found', { varName, fieldPath });
-        return '';
-      }
-      
-      // Process field access
-      if (fieldPath) {
-        try {
-          // Create a resolution context for field access
-          const resolutionContext: ResolutionContext = ResolutionContextFactory.create(
-            undefined, // current file path not needed for this operation
-            state
-          );
-          
-          // Use field access handler to get the field value
-          value = await this.fieldAccessHandler.accessField(value, fieldPath, resolutionContext, {
-            strict: false,
-            defaultValue: '',
-            variableName: varName,
-            preserveType: false
-          });
-          
-          logger.debug('Field access result', {
-            varName,
-            fieldPath,
-            result: value !== undefined ? 
-              (typeof value === 'string' ? value : JSON.stringify(value)) : 
-              'undefined'
-          });
-        } catch (error) {
-          logger.error('Error accessing field', {
-            varName,
-            fieldPath,
-            error: error instanceof Error ? error.message : String(error)
-          });
-          return '';
-        }
-      }
-      
-      // Enhanced formatting options with complete context awareness
-      const formatOptions = {
-        pretty: context.contextType === 'block',
-        preserveType: false, // Convert to string for output
-        context: context.contextType,
-        // Include special markdown context if applicable
-        specialMarkdown: context.specialMarkdown,
-        // Add output-literal mode information
-        isOutputLiteral: context.isOutputLiteral ?? context.transformationMode,
-        preserveFormatting: context.preserveFormatting ?? (context.isOutputLiteral ?? context.transformationMode)
-      };
-      
-      // In output-literal mode, handle objects and arrays specially to maintain consistency
-      if ((context.isOutputLiteral ?? context.transformationMode) && typeof value === 'object' && value !== null) {
-        logger.debug('Processing object/array in output-literal mode', {
-          varName,
-          isArray: Array.isArray(value),
-          fieldPath,
-          contextType: context.contextType
-        });
-        
-        // For objects and arrays in output-literal mode, use JSON.stringify with consistent formatting
-        try {
-          return JSON.stringify(value, null, 2);
-        } catch (error) {
-          logger.warn('Error stringifying object in output-literal mode', { 
-            error: error instanceof Error ? error.message : String(error),
-            fallback: 'using fieldAccessHandler'
-          });
-          // Fall back to standard conversion if stringify fails
-        }
-      }
-      
-      return this.fieldAccessHandler.convertToString(value, formatOptions);
-    } catch (error) {
-      logger.error('Error processing variable reference', {
-        reference,
-        error: error instanceof Error ? error.message : String(error)
-      });
-      return '';
-    }
-  }
-
-  /**
    * Convert a value to string representation with context-aware formatting
    * Uses the VariableReferenceResolverClient when available for enhanced formatting
    * 
@@ -1398,7 +1203,6 @@ export class OutputService implements IOutputService {
             matches: (matches as RegExpMatchArray[]).map(m => m[0]),
             transformationEnabled: state.isTransformationEnabled(),
             transformationOptions: state.getTransformationOptions ? state.getTransformationOptions() : 'N/A',
-            shouldTransformVariables: state.shouldTransform ? state.shouldTransform('variables') : 'N/A'
           });
           
           // If no matches, return original content with proper newline handling
@@ -1408,35 +1212,36 @@ export class OutputService implements IOutputService {
           }
           
           // Only proceed with transformation if we're supposed to transform variables
-          if (!state.shouldTransform || state.shouldTransform('variables')) {
-            // Process each variable reference
-            for (const match of matches as RegExpMatchArray[]) {
-              const fullMatch = match[0]; // The entire match, e.g., {{variable}}
-              const reference = match[1].trim(); // The variable reference, e.g., variable
+
+          // Process each variable reference
+          for (const match of matches as RegExpMatchArray[]) {
+            const fullMatch = match[0]; // The entire match, e.g., {{variable}}
+            const reference = match[1].trim(); // The variable reference, e.g., variable
+            
+            try {
+              // Placeholder: Default to original match if resolution fails later
+              let resolvedValue = fullMatch; 
+
+              // TODO: Add calls to resolutionClient/resolutionService here later
               
-              try {
-                // Using our context-aware variable processor
-                const resolvedValue = await this.processVariableReference(reference, formattingContext, state);
-                
-                // Replace the variable reference while preserving formatting
-                transformedContent = transformedContent.replace(fullMatch, resolvedValue);
-                
-                logger.debug('Replaced variable reference in Text node', {
-                  reference,
-                  resolvedValue,
-                  fullMatch,
-                  before: content,
-                  after: transformedContent
-                });
-              } catch (error) {
-                // Handle errors during variable resolution
-                logger.error('Error resolving variable reference:', {
-                  fullMatch,
-                  reference,
-                  error: error instanceof Error ? error.message : String(error)
-                });
-                // Leave the variable reference unchanged on error
-              }
+              // Replace the variable reference while preserving formatting
+              transformedContent = transformedContent.replace(fullMatch, resolvedValue);
+              
+              logger.debug('Replaced variable reference in Text node', {
+                reference,
+                resolvedValue,
+                fullMatch,
+                before: content,
+                after: transformedContent
+              });
+            } catch (error) {
+              // Handle errors during variable resolution
+              logger.error('Error resolving variable reference:', {
+                fullMatch,
+                reference,
+                error: error instanceof Error ? error.message : String(error)
+              });
+              // Leave the variable reference unchanged on error
             }
             
             // Apply proper newline handling for transformation mode
@@ -1449,8 +1254,8 @@ export class OutputService implements IOutputService {
           try {
             // Create appropriate resolution context for text variables
             const context: ResolutionContext = ResolutionContextFactory.forTextDirective(
-              undefined, // current file path not needed here
-              state // state service to use
+              state, // Correct arg order
+              state.getCurrentFilePath() ?? undefined// Provide file path
             );
             
             // First try the resolution client if available
@@ -1493,8 +1298,10 @@ export class OutputService implements IOutputService {
               const fullMatch = match[0]; // The entire match, e.g., {{variable}}
               const reference = match[1].trim(); // The variable reference, e.g., variable
               
-              // Using our context-aware variable processor
-              const resolvedValue = await this.processVariableReference(reference, formattingContext, state);
+              // Placeholder: Default to original match if resolution fails later
+              let resolvedValue = fullMatch; 
+
+              // TODO: Add calls to resolutionClient/resolutionService here later
               
               // Replace the variable reference while preserving formatting
               processedContent = processedContent.replace(fullMatch, resolvedValue);
@@ -1514,181 +1321,67 @@ export class OutputService implements IOutputService {
         // Apply proper newline handling for the original content
         return this.handleNewlines(content, formattingContext);
       case 'VariableReference':
-        // Handle VariableReference nodes
+        // Handle VariableReference nodes using the new approach
         try {
-          // Validate the node is a VariableReference using the factory
-          if (this.variableNodeFactory && !this.variableNodeFactory.isVariableReferenceNode(node)) {
-            throw new Error('Invalid VariableReference node');
-          }
-          
           const varNode = node as IVariableReference;
-          const nodeType = varNode.valueType === 'text' ? 'TextVar' : 'DataVar';
           
-          // Create a formatting context for this node
-          const formattingContext = this.createFormattingContext(
-            nodeType, 
-            state.isTransformationEnabled()
-          );
-          
-          logger.debug('VariableReference node detailed view', {
-            type: varNode.type,
-            valueType: varNode.valueType,
-            identifier: varNode.identifier,
-            fields: varNode.fields,
-            format: varNode.format,
-            hasValue: 'value' in varNode,
-            valueValue: 'value' in varNode ? varNode.value : 'undefined',
-            hasContent: 'content' in varNode,
-            contentValue: 'content' in varNode ? (varNode as any).content : 'undefined',
-            nodeStr: JSON.stringify(node, null, 2)
-          });
-          
-          // Try various possible property names and resolve from state
-          let textVarContent = '';
-          let variableIdentifier = '';
-          
-          if ('id' in node) {
-            // Try to resolve from state using id
-            variableIdentifier = node.id as string;
-            textVarContent = state.getTextVar(variableIdentifier) || '';
-            logger.debug(`Trying to resolve TextVar with id ${variableIdentifier}`, {
-              resolved: textVarContent || 'NOT RESOLVED'
-            });
-          } else if ('identifier' in node) {
-            // Try to resolve from state using identifier
-            variableIdentifier = node.identifier as string;
-            textVarContent = state.getTextVar(variableIdentifier) || '';
-            logger.debug(`Trying to resolve TextVar with identifier ${variableIdentifier}`, {
-              resolved: textVarContent || 'NOT RESOLVED'
-            });
-          } else {
-            // Use the helper method to extract content safely
-            textVarContent = this.getTextContentFromNode(node);
-          }
-          
-          // Check if the TextVar has field access (obj.property) 
-          // If it does, we need to process field access explicitly
-          if ('fields' in node && Array.isArray(node.fields) && node.fields.length > 0 && variableIdentifier) {
-            try {
-              const dataValue = state.getDataVar(variableIdentifier);
-              if (dataValue !== undefined) {
-                // Build the field path
-                const fieldPath = node.fields
-                  .map((field: Field) => {
-                    if (field.type === 'index') {
-                      return String(field.value);
-                    } else if (field.type === 'field') {
-                      return String(field.value);
-                    }
-                    return '';
-                  })
-                  .filter(Boolean)
-                  .join('.');
-                
-                // Create a resolution context for field access
-          const resolutionContext: ResolutionContext = ResolutionContextFactory.create(
-            undefined, // current file path not needed for this operation
-            state
-          );
-          
-          // Use our field accessor to get the specific field value
-          const fieldValue = await this.fieldAccessHandler.accessField(dataValue, fieldPath, resolutionContext, {
-            strict: false,
-            defaultValue: '',
-            variableName: fieldPath,
-            preserveType: false
-          });
-                
-                logger.debug('Resolved field access in TextVar node', {
-                  variableIdentifier,
-                  fieldPath,
-                  resolvedValue: fieldValue
-                });
-                
-                // Convert to string with appropriate context
-                formattingContext.contextType = typeof fieldValue === 'string' && fieldValue.includes('\n') 
-                  ? 'block' 
-                  : 'inline';
-                
-                textVarContent = this.convertToString(fieldValue, {
-                  context: formattingContext.contextType,
-                  pretty: formattingContext.contextType === 'block'
-                });
+          // 1. Serialize the node back to its string representation
+          let serializedString = `{{${varNode.identifier}`;
+          if (varNode.fields && varNode.fields.length > 0) {
+            const fieldString = varNode.fields.map(field => {
+              if (field.type === 'field') {
+                // Check if field value needs quotes (e.g., contains spaces or special chars)
+                const needsQuotes = !/^[a-zA-Z0-9_]+$/.test(String(field.value));
+                return needsQuotes ? `['${String(field.value).replace(/'/g, "\\'")}']` : `.${field.value}`;
+              } else if (field.type === 'index') {
+                return `[${field.value}]`;
               }
-            } catch (fieldAccessError) {
-              logger.error('Error accessing fields in TextVar node', {
-                variableIdentifier,
-                fields: node.fields,
-                error: fieldAccessError instanceof Error ? fieldAccessError.message : String(fieldAccessError)
-              });
-            }
+              return '';
+            }).join('');
+            serializedString += fieldString; 
           }
-          
-          // Process template variables in the content if it's a string
-          if (typeof textVarContent === 'string' && textVarContent.includes('{{')) {
+          serializedString += '}}';
+
+          logger.debug(`Serializing VariableReferenceNode: ${varNode.identifier} -> ${serializedString}`);
+
+          // 2. Resolve using resolutionService.resolveText
+          let resolvedValue = serializedString; // Default to serialized string if resolution fails
+          if (this.resolutionService && state) { // Ensure both service and state are available
             try {
               // Create appropriate resolution context
-              const context: ResolutionContext = ResolutionContextFactory.forTextDirective(
-                undefined, // current file path not needed here
-                state // state service to use
+              const resolveContext: ResolutionContext = ResolutionContextFactory.forTextDirective(
+                state, // Correct argument order
+                state.getCurrentFilePath() ?? undefined // Provide file path
               );
-              
-              // Try client first if available
-              if (this.resolutionClient) {
-                try {
-                  textVarContent = await this.resolutionClient.resolveText(textVarContent, context);
-                  logger.debug('Processed template variables using ResolutionClient', {
-                    finalContent: textVarContent
-                  });
-                } catch (clientError) {
-                  logger.warn('Error using resolution client for TextVar, falling back', {
-                    error: clientError instanceof Error ? clientError.message : String(clientError)
-                  });
-                }
-              }
-              
-              // Try service if client failed or not available
-              if (textVarContent.includes('{{') && this.resolutionService) {
-                try {
-                  textVarContent = await this.resolutionService.resolveText(textVarContent, context);
-                  logger.debug('Processed template variables using ResolutionService', {
-                    finalContent: textVarContent
-                  });
-                } catch (serviceError) {
-                  logger.warn('Error using resolution service for TextVar, will not process nested variables', {
-                    error: serviceError instanceof Error ? serviceError.message : String(serviceError)
-                  });
-                }
-              }
-            } catch (resolutionError) {
-              logger.error('All variable resolution methods failed in TextVar', {
-                content: textVarContent,
-                error: resolutionError instanceof Error ? resolutionError.message : String(resolutionError)
+
+              resolvedValue = await this.resolutionService.resolveText(serializedString, resolveContext);
+              logger.debug(`Resolved VariableReferenceNode ${varNode.identifier} via resolveText to: ${resolvedValue}`);
+
+            } catch (error) {
+              logger.error('Error resolving VariableReference node via resolveText', { 
+                serializedString,
+                error: error instanceof Error ? error.message : String(error) 
               });
+              // Fallback to serializedString is handled by default value
             }
+          } else {
+             logger.warn('ResolutionService or StateService not available for VariableReference node processing');
           }
           
-          logger.debug('TextVar resolved content', {
-            content: textVarContent,
-            type: typeof textVarContent
+          // TODO: Apply formatting based on contextStack if needed.
+          // For now, directly return the resolved value.
+          return resolvedValue;
+        } catch (error) {
+          logger.error('Error processing VariableReference node', { 
+            node: JSON.stringify(node), 
+            error: error instanceof Error ? error.message : String(error) 
           });
-          
-          // Determine if this is block or inline context based on content
-          if (typeof textVarContent === 'string') {
-            formattingContext.contextType = textVarContent.includes('\n') ? 'block' : 'inline';
-          }
-          
-          // Apply proper newline handling
-          return this.handleNewlines(String(textVarContent), formattingContext);
-        } catch (e) {
-          logger.error('Error processing TextVar node', {
-            node: JSON.stringify(node),
-            error: e
-          });
-          throw e;
+          // In case of error, output the original reference or empty string
+          const identifier = (node as IVariableReference).identifier || 'error';
+          const fields = (node as IVariableReference).fields?.map(f => f.value).join('.') || '';
+          return `{{${identifier}${fields ? '.' + fields : ''}}}`; // Or return '' depending on desired error handling
         }
-      // Handle legacy DataVar nodes with type casting for backward compatibility
-      case ('DataVar' as any):
+      /* case 'DataVar':
         // Handle DataVar nodes
         try {
           // Create a formatting context for this node
@@ -1729,9 +1422,8 @@ export class OutputService implements IOutputService {
             const dataValue = state.getDataVar(variableIdentifier);
             
             if (dataValue !== undefined) {
-              // Build the field path from the fields array
-              const fieldArray = Array.isArray(node.fields) ? node.fields : [];
-              const fieldPath = fieldArray
+              // Build the field path
+              const fieldPath = node.fields
                 .map((field: Field) => {
                   if (field.type === 'index') {
                     return String(field.value);
@@ -1781,8 +1473,8 @@ export class OutputService implements IOutputService {
             try {
               // Create a resolution context
               const context: ResolutionContext = ResolutionContextFactory.forDataDirective(
-                undefined, // current file path not needed here
-                state // state service to use
+                state, // Correct arg order
+                state.getCurrentFilePath() ?? undefined// Provide file path
               );
               
               // Build the complete reference with all fields using dot notation
@@ -1879,8 +1571,8 @@ export class OutputService implements IOutputService {
             try {
               // Create appropriate resolution context
               const context: ResolutionContext = ResolutionContextFactory.forTextDirective(
-                undefined, // current file path not needed here
-                state // state service to use
+                state, // Correct arg order
+                state.getCurrentFilePath() ?? undefined // Provide file path
               );
               
               // Try client first if available
@@ -1952,6 +1644,7 @@ export class OutputService implements IOutputService {
           });
           throw e;
         }
+      */
       case 'CodeFence':
         const fence = node as CodeFenceNode;
         // The content already includes the codefence markers, so we use it as-is

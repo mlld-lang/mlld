@@ -1,20 +1,37 @@
 import * as path from 'path';
-import type { IStateService } from '@services/state/IStateService';
+import type { IStateService } from '@services/state/StateService/IStateService';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
-import type { 
+import { 
   ResolutionContext, 
   JsonValue, 
-  FieldAccessError, 
-  FieldAccess, 
   VariableType,
-  Result, 
-  PathPurpose 
-} from '@core/types/resolution-types';
-import type { MeldPath, StructuredPath, ValidatedResourcePath } from '@core/types/path-types';
-import type { MeldVariable, TextVariable, DataVariable, IPathVariable, CommandVariable, SourceLocation } from '@core/types/variables-spec';
-import type { MeldNode, VariableReferenceNode, DirectiveNode, TextNode, CodeFenceNode } from '@core/types/ast-types';
+  FormattingContext,
+  PathPurpose,
+  Result,
+  success,
+  failure,
+  FieldAccess, 
+  FieldAccessError, 
+  MeldPath, 
+  StructuredPath, 
+  ValidatedResourcePath, 
+  PathValidationContext, 
+  MeldVariable, 
+  TextVariable, 
+  DataVariable, 
+  IPathVariable, 
+  CommandVariable, 
+  SourceLocation, 
+  isDataVariable,
+  MeldFileNotFoundError, 
+  MeldResolutionError, 
+  PathValidationError, 
+  VariableResolutionError,
+  isFilesystemPath,
+  isUrlPath
+} from '@core/types';
+import type { MeldNode, VariableReferenceNode, DirectiveNode, TextNode, CodeFenceNode } from '@core/ast/ast/astTypes';
 import { ResolutionContextFactory } from './ResolutionContextFactory';
-import { MeldFileNotFoundError, MeldResolutionError, PathValidationError } from '@core/types/errors';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 import { TextResolver } from './resolvers/TextResolver.js';
 import { DataResolver } from './resolvers/DataResolver.js';
@@ -38,8 +55,6 @@ import type { IFileSystemServiceClient } from '@services/fs/FileSystemService/in
 import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/factories/FileSystemServiceClientFactory.js';
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 import { VariableResolutionErrorFactory } from './resolvers/error-factory.js';
-import { success, failure } from '@core/types/resolution-types';
-import { isFilesystemPath, isUrlPath } from '@core/types/variables-spec';
 
 /**
  * Internal type for heading nodes in the ResolutionService
@@ -331,14 +346,15 @@ export class ResolutionService implements IResolutionService {
    * Initialize the resolver components used by this service
    */
   private initializeResolvers(): void {
-    this.textResolver = new TextResolver(this.stateService, this);
-    this.dataResolver = new DataResolver(this.stateService, this);
-    this.pathResolver = new PathResolver(this.stateService, this.pathService, this);
-    this.commandResolver = new CommandResolver(this.stateService, this);
-    this.contentResolver = new ContentResolver(this.stateService, this);
+    this.textResolver = new TextResolver(this.stateService);
+    this.dataResolver = new DataResolver(this.stateService);
+    this.pathResolver = new PathResolver(this.stateService, this.pathService);
+    this.commandResolver = new CommandResolver(this.stateService, this.parserService);
+    this.contentResolver = new ContentResolver(this.stateService);
     this.variableReferenceResolver = new VariableReferenceResolver(
       this.stateService,
-      this
+      this,
+      this.parserService
     );
   }
 
@@ -347,13 +363,10 @@ export class ResolutionService implements IResolutionService {
    */
   private async parseForResolution(value: string, context?: ResolutionContext): Promise<MeldNode[]> {
     try {
-      // Ensure factory is initialized before trying to use it
       this.ensureFactoryInitialized();
-      
-      // Use the parser client if available
       if (this.parserClient) {
         try {
-          const nodes = await this.parserClient.parseString(value, context);
+          const nodes = await this.parserClient.parseString(value, { filePath: context?.state?.getCurrentFilePath() ?? undefined });
           return nodes || [];
         } catch (error) {
           logger.error('Error using parserClient.parseString', { 
@@ -363,22 +376,19 @@ export class ResolutionService implements IResolutionService {
           if (context?.strict) throw error;
         }
       }
-      
-      // Last resort fallback to direct parsing in tests
-      logger.warn('No parser client available - falling back to direct import or mock parser');
-      
-      // Try using directly injected parser service if available (for tests)
       if (this.parserService) {
         try {
-          const nodes = await this.parserService.parse(value, { context });
+          const nodes = await this.parserService.parse(value);
           return nodes || [];
         } catch (error) {
           logger.warn('Error using injected parser service', { error });
           if (context?.strict) throw error;
         }
       }
+      // Last resort fallback to direct parsing in tests
+      logger.warn('No parser client available - falling back to direct import or mock parser');
       
-      // Finally, try using require
+      // Try using require
       try {
         // Use require for better build compatibility
         const coreAst = require('@core/ast');
@@ -396,15 +406,79 @@ export class ResolutionService implements IResolutionService {
   }
 
   /**
-   * Resolve text variables in a string
+   * Core internal method to resolve an array of AST nodes into a string.
+   * Handles TextNodes directly and delegates VariableReferenceNodes to the appropriate resolver.
+   * 
+   * @param nodes - The array of MeldNodes to resolve.
+   * @param context - The resolution context.
+   * @returns The resolved string.
+   */
+  private async resolveNodes(nodes: MeldNode[], context: ResolutionContext): Promise<string> {
+    logger.debug(`resolveNodes called`, { nodeCount: nodes.length, contextFlags: context.flags });
+    const resolvedParts: string[] = [];
+    for (const node of nodes) {
+      if (node.type === 'Text') {
+        resolvedParts.push((node as TextNode).content);
+      } else if (node.type === 'VariableReference') {
+        try {
+          // Delegate VariableReferenceNode to the specialized resolver
+          const resolvedValue = await this.variableReferenceResolver.resolve(node as VariableReferenceNode, context);
+          resolvedParts.push(resolvedValue);
+        } catch (error) {
+           // Handle errors during individual variable resolution based on strict mode
+          logger.error(`resolveNodes: Error resolving individual node ${ (node as VariableReferenceNode).identifier }`, { error });
+          if (context.strict) {
+            // Use imported VariableResolutionError
+            throw VariableResolutionError.fromError(error, `Failed to resolve variable node: ${(node as VariableReferenceNode).identifier}`, context, node.location);
+          } else {
+            resolvedParts.push(''); // Append empty string in non-strict mode
+          }
+        }
+      } else if (node.type === 'Directive') {
+        // TODO: How should directives encountered during node resolution be handled?
+        // Option 1: Skip them (most likely for text-based resolution)
+        // Option 2: Attempt to resolve them (if context allows/makes sense)
+        // Option 3: Throw an error?
+        logger.warn(`resolveNodes: Skipping unexpected DirectiveNode during node resolution: ${(node as DirectiveNode).directive.kind}`);
+      } else {
+        // Handle other node types (e.g., CodeFence?) - Skip/ignore? Log?
+        logger.warn(`resolveNodes: Skipping unexpected node type during node resolution: ${node.type}`);
+      }
+    }
+    
+    const finalResult = resolvedParts.join('');
+    logger.debug(`resolveNodes: Final resolved string: ${finalResult.substring(0,100)}`);
+    return finalResult;
+  }
+
+  /**
+   * Resolve text, potentially containing multiple variables or plain text.
+   * Parses the string into AST nodes and resolves them using the internal resolveNodes method.
+   * Primarily used for resolving string values that might contain further variables.
    */
   async resolveText(text: string, context: ResolutionContext): Promise<string> {
     logger.debug(`resolveText called`, { text: text.substring(0, 50), contextFlags: context.flags });
+    
+    // Optimization: If no variable syntax, return text directly
+    if (!text.includes('{{') && !text.includes('$')) { // Added check for $ for potential path/command vars
+        logger.debug('resolveText: Input contains no variable markers, returning original text.');
+        return text; 
+    }
+
     try {
-      return await this.variableReferenceResolver.resolve(text, context);
+      // 1. Parse the input string into nodes
+      const nodes = await this.parseForResolution(text, context);
+      logger.debug(`resolveText: Parsed into ${nodes.length} nodes. Delegating to resolveNodes.`);
+      
+      // 2. Delegate node resolution to the core internal method
+      return await this.resolveNodes(nodes, context);
+
     } catch (error) {
+      // Catch errors from parsing or re-thrown strict errors from resolveNodes
       logger.error('resolveText failed', { error });
       if (context.strict) {
+          // Ensure the error is a MeldResolutionError or wrap it
+          if (error instanceof MeldResolutionError) throw error;
           throw MeldResolutionError.fromError(error, 'Failed to resolve text', { context });
       }
       return text; // Return original text if not strict
@@ -427,7 +501,8 @@ export class ResolutionService implements IResolutionService {
 
     const result = await this.resolveFieldAccess(varName, fieldAccess, context);
     if (result.success) {
-        return result.value;
+        // Handle potential undefined value from successful resolution
+        return result.value === undefined ? null : result.value; 
     } else {
         logger.error('resolveData failed', { error: result.error });
         if (context.strict) {
@@ -446,10 +521,12 @@ export class ResolutionService implements IResolutionService {
   async resolvePath(pathString: string, context: ResolutionContext): Promise<MeldPath> {
     logger.debug(`resolvePath called`, { pathString, contextFlags: context.flags, pathContext: context.pathContext });
     try {
-      const resolvedString = await this.pathResolver.resolveString(pathString, context);
+      const resolvedPathObject = await this.pathResolver.resolve(pathString, context);
       
-      const meldPath: MeldPath = await this.pathService.validatePath(resolvedString, context.pathContext);
-      return meldPath;
+      // Use IPathService.validatePath with PathValidationContext derived from ResolutionContext
+      const validationContext = this.createValidationContext(context);
+      await this.pathService.validatePath(resolvedPathObject, validationContext);
+      return resolvedPathObject;
     } catch (error) {
       logger.error('resolvePath failed', { error });
       if (context.strict) {
@@ -465,7 +542,8 @@ export class ResolutionService implements IResolutionService {
   async resolveCommand(commandName: string, args: string[], context: ResolutionContext): Promise<string> {
     logger.debug(`resolveCommand called`, { commandName, args, contextFlags: context.flags });
     try {
-      return await this.commandResolver.resolveByName(commandName, args, context);
+      const commandDef = await this.commandResolver.resolve(commandName, args, context);
+      return commandDef;
     } catch (error) {
        logger.error('resolveCommand failed', { error });
        if (context.strict) {
@@ -487,7 +565,7 @@ export class ResolutionService implements IResolutionService {
     }
     try {
         return await this.fileSystemService.readFile(path.value.validatedPath);
-    } catch (error) {
+        } catch (error) {
         throw MeldFileNotFoundError.fromError(error, `Failed to read file: ${path.value.validatedPath}`, { path });
     }
   }
@@ -499,7 +577,7 @@ export class ResolutionService implements IResolutionService {
     logger.debug(`resolveContent called`, { nodeCount: nodes.length, contextFlags: context.flags });
     try {
       return await this.contentResolver.resolve(nodes, context);
-    } catch (error) {
+      } catch (error) {
        logger.error('resolveContent failed', { error });
        if (context.strict) {
           throw MeldResolutionError.fromError(error, 'Failed to resolve content from nodes', { context });
@@ -534,7 +612,7 @@ export class ResolutionService implements IResolutionService {
         }
          logger.warn('resolveInContext: No allowed variable type matched, returning original value', { valueString });
          return valueString;
-    } catch (error) {
+        } catch (error) {
        logger.error('resolveInContext failed', { error });
        if (context.strict) {
           throw MeldResolutionError.fromError(error, 'Failed to resolve value in context', { context, value });
@@ -542,7 +620,7 @@ export class ResolutionService implements IResolutionService {
        return valueString;
     }
   }
-  
+
   /**
    * Validate that resolution is allowed in the given context
    */
@@ -553,8 +631,8 @@ export class ResolutionService implements IResolutionService {
         await this.resolveInContext(value, strictContext);
     } catch (error) {
         logger.warn('validateResolution failed', { error });
-        throw error; 
-    }
+            throw error;
+          }
   }
 
   /**
@@ -721,120 +799,6 @@ export class ResolutionService implements IResolutionService {
   }
 
   /**
-   * Resolve a structured path to an absolute path
-   * @private
-   */
-  private async resolveStructuredPath(path: StructuredPath, context?: ResolutionContext): Promise<string> {
-    // If no context is provided, create a default one
-    const resolveContext = context || {
-      allowedVariableTypes: {
-        text: true,
-        data: true,
-        path: true,
-        command: true
-      },
-      pathValidation: {
-        requireAbsolute: false,
-        allowedRoots: []
-      },
-      currentFilePath: undefined,
-      state: this.stateService
-    };
-    
-    const { structured, raw } = path;
-    
-    // Get base directory from context if available (use currentFilePath if available)
-    const baseDir = resolveContext.currentFilePath ? this.pathService.dirname(resolveContext.currentFilePath) : process.cwd();
-    
-    // Add detailed debug logging for path resolution
-    logger.debug('Resolving structured path', {
-      raw: path.raw,
-      structured: path.structured,
-      baseDir,
-      currentFilePath: resolveContext.currentFilePath,
-      home: process.env.HOME,
-      cwd: process.cwd()
-    });
-    
-    // Add specific logging for home path resolution
-    if (structured.variables?.special?.includes('HOMEPATH')) {
-      const homePath = this.pathService.getHomePath();
-      if (process.env.DEBUG === 'true') {
-        console.log('Resolving home path in structured path:', {
-          raw,
-          homePath,
-          segments: structured.segments,
-          baseDir
-        });
-      }
-    }
-    
-    try {
-      // Use the PathService to resolve the structured path
-      // This handles all special variables and path normalization
-      const resolvedPath = this.pathService.resolvePath(path, baseDir);
-      
-      // Log the final resolved path for debugging
-      if (process.env.DEBUG === 'true') {
-        console.log('Path resolved successfully:', {
-          raw,
-          resolvedPath,
-          exists: await this.fileSystemService.exists(resolvedPath)
-        });
-      }
-      
-      // Validate the resolved path if required by context
-      if (context.validatePath) { // Assuming context has such a flag
-          // TODO: Construct a proper PathValidationContext here based on ResolutionContext
-          const validationContext: PathValidationContext = {} as any; // Placeholder
-          try {
-              // Original call:
-              // await this.pathService.validatePath(resolvedPath, {
-              //   mustExist: context.mustExist,
-              //   mustBeFile: context.mustBeFile,
-              //   mustBeDirectory: context.mustBeDirectory,
-              //   location: variableReference.location
-              // });
-              
-              // TODO: Phase 3 - Remove cast and update context creation
-              validatedPathString = await this.pathService.validatePath(resolvedPath, validationContext) as unknown as string;
-          } catch (error) {
-              // Handle validation error
-              logger.error('Path validation failed during resolution', { error, resolvedPath });
-              // Throw a specific ResolutionError?
-              throw error; 
-          }
-      } else {
-          // If validation is not required, use the resolved path directly
-          // Ensure it's a string for downstream use
-          validatedPathString = resolvedPath as string;
-      }
-      
-      return resolvedPath;
-    } catch (error) {
-      // Log detailed error information
-      if (process.env.DEBUG === 'true') {
-        console.error('Path resolution failed:', {
-          raw,
-          structured,
-          baseDir,
-          error: (error as Error).message
-        });
-      }
-      
-      // Handle error based on severity
-      throw new MeldResolutionError(
-        `Failed to resolve path: ${(error as Error).message}`,
-        {
-          code: ResolutionErrorCode.INVALID_PATH,
-          details: { value: raw },
-          severity: ErrorSeverity.Recoverable
-        }
-      );
-    }
-  }
-
-  /**
    * Get the variable reference resolver
    */
   getVariableResolver(): VariableReferenceResolver {
@@ -847,8 +811,9 @@ export class ResolutionService implements IResolutionService {
    */
   enableResolutionTracking(config: Partial<ResolutionTrackingConfig>): void {
     if (!this.resolutionTracker) {
-      this.resolutionTracker = new VariableResolutionTracker(config);
+      this.resolutionTracker = new VariableResolutionTracker();
       logger.info('Resolution tracking enabled.');
+      this.resolutionTracker.configure(config);
       this.variableReferenceResolver?.setTracker(this.resolutionTracker);
     } else {
       this.resolutionTracker.configure(config);
@@ -872,14 +837,9 @@ export class ResolutionService implements IResolutionService {
    */
   async validatePath(path: string, context: ResolutionContext): Promise<boolean> {
     try {
-      // First resolve the path to handle any variables
       const resolvedPath = await this.resolvePath(path, context);
-      
-      // Then validate the resolved path using the PathService
-      await this.pathService.validatePath(resolvedPath, {
-        mustExist: true
-      });
-      
+      const validationContext = this.createValidationContext(context, { mustExist: true });
+      await this.pathService.validatePath(resolvedPath, validationContext);
       return true;
     } catch (error) {
       logger.debug('Path validation failed', { 
@@ -902,15 +862,40 @@ export class ResolutionService implements IResolutionService {
   async resolveFieldAccess(variableName: string, fieldPath: FieldAccess[], context: ResolutionContext): Promise<Result<JsonValue, FieldAccessError>> {
     logger.debug(`resolveFieldAccess called`, { variableName, fieldPath, contextFlags: context.flags });
     try {
-        const result = await this.variableReferenceResolver.accessFields(variableName, fieldPath, context);
-        return result;
+        // 1. Get the base variable directly from state
+        const variable = this.stateService.getDataVar(variableName);
+
+        // 2. Check if the variable exists and is a DataVariable
+        if (!variable) {
+            const error = new VariableResolutionError(`Variable '${variableName}' not found for field access.`, variableName, context);
+            logger.warn(error.message);
+            return failure(new FieldAccessError(error.message, null, fieldPath, 0, 'VARIABLE_NOT_FOUND'));
+        }
+        if (!isDataVariable(variable)) {
+            const error = new VariableResolutionError(`Cannot access fields on non-data variable: ${variableName} (type: ${variable.valueType})`, variableName, context);
+            logger.warn(error.message);
+             return failure(new FieldAccessError(error.message, variable.value, fieldPath, 0, 'INVALID_BASE_TYPE'));
+        }
+        
+        // 3. Call the public accessFields method on the VariableReferenceResolver instance
+        const result = await this.variableReferenceResolver.accessFields(variable.value, fieldPath, context);
+        
+        if(result.success) {
+            logger.debug('resolveFieldAccess successful', { variableName, finalValueType: typeof result.value });
+        } else {
+            logger.warn('resolveFieldAccess failed within variableReferenceResolver.accessFields', { variableName, error: result.error.message });
+        }
+      return result;
+
     } catch (error) {
-        logger.error('resolveFieldAccess failed', { error });
+        // Catch other unexpected issues
+        logger.error('resolveFieldAccess failed unexpectedly', { variableName, fieldPath, error });
         const fieldAccessError = new FieldAccessError(
-            error instanceof Error ? error.message : 'Field access failed', 
-            null,
+            error instanceof Error ? error.message : 'Field access failed unexpectedly', 
+            null, // Base value is unknown here
             fieldPath, 
-            0
+            0, // Field index is unknown here
+            'UNEXPECTED_ERROR'
         );
         return failure(fieldAccessError);
     }
@@ -928,16 +913,28 @@ export class ResolutionService implements IResolutionService {
     logger.debug(`convertToFormattedString called`, { valueType: typeof value, contextFlags: context.flags, formattingContext: context.formattingContext });
     try {
         if (typeof value === 'string') {
-            return value;
+      return value;
         } else if (value === null) {
             return 'null';
         } else if (typeof value === 'undefined') {
             return '';
         }
         return JSON.stringify(value, null, context.formattingContext?.indentationLevel ? 2 : undefined);
-    } catch (error) {
+      } catch (error) {
         logger.error('convertToFormattedString failed', { error });
         return String(value);
-    }
+      }
+  }
+
+  // Helper to create PathValidationContext from ResolutionContext
+  private createValidationContext(context: ResolutionContext, overrides: Partial<PathValidationContext> = {}): PathValidationContext {
+      const base: PathValidationContext = {
+          purpose: context.pathContext?.purpose ?? PathPurpose.READ,
+          baseDir: context.state.getCurrentFilePath() ? this.pathService.dirname(context.state.getCurrentFilePath()) : undefined,
+          allowTraversal: context.pathContext?.allowTraversal ?? false,
+          // Map other relevant flags from ResolutionContext to PathValidationContext
+          validation: context.pathContext?.validation 
+      };
+      return { ...base, ...overrides };
   }
 } 

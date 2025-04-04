@@ -1,337 +1,150 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { PathResolver } from '@services/resolution/ResolutionService/resolvers/PathResolver.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
-import { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
-import { ResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError.js';
-import type { MeldNode, DirectiveNode, TextNode, StructuredPath } from '@core/syntax/types.js';
-import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
+import type { IPathService } from '@services/fs/PathService/IPathService.js';
+import { 
+  ResolutionContext, 
+  VariableType, 
+  PathVariable, 
+  PathResolutionContext,
+  PathPurpose 
+} from '@core/types';
+import type { VariableReferenceNode } from '@core/types/ast-types';
+import { MeldPath, createMeldPath } from '@core/types/path-types';
+import { MeldResolutionError, PathValidationError } from '@core/types/errors';
+import { createMockStateService, createVariableReferenceNode } from '@tests/utils/testFactories.js';
+import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
 
 describe('PathResolver', () => {
   let resolver: PathResolver;
-  let stateService: IStateService;
+  let stateService: ReturnType<typeof createMockStateService>;
+  let pathService: IPathService;
   let context: ResolutionContext;
 
   beforeEach(() => {
-    stateService = {
-      getPathVar: vi.fn(),
-      setPathVar: vi.fn(),
-    } as unknown as IStateService;
+    stateService = createMockStateService();
+    
+    pathService = {
+      resolvePath: vi.fn().mockImplementation(async (p, purpose, base) => createMeldPath(typeof p === 'string' ? p : p.raw, base)),
+      normalizePath: vi.fn().mockImplementation(p => typeof p === 'string' ? createMeldPath(p) : p),
+      validatePath: vi.fn().mockResolvedValue(undefined),
+      getHomePath: vi.fn().mockReturnValue('/home/user'),
+      isAbsolute: vi.fn().mockImplementation(p => p.startsWith('/')),
+    } as unknown as IPathService;
 
-    resolver = new PathResolver(stateService);
-
-    context = {
-      currentFilePath: 'test.meld',
-      allowedVariableTypes: {
-        text: false,
-        data: false,
-        path: true,
-        command: false
-      },
-      pathValidation: {
-        requireAbsolute: true,
-        allowedRoots: ['HOMEPATH', 'PROJECTPATH']
-      }
-    };
-
-    // Mock root paths
-    vi.mocked(stateService.getPathVar)
-      .mockImplementation((name) => {
-        if (name === 'HOMEPATH') return '/home/user';
-        if (name === 'PROJECTPATH') return '/project';
+    vi.mocked(stateService.getPathVar).mockImplementation((name: string): PathVariable | undefined => {
+        if (name === 'HOMEPATH') return { name, valueType: 'path', value: createMeldPath('/home/user'), source: { type: 'system' } };
+        if (name === 'PROJECTPATH') return { name, valueType: 'path', value: createMeldPath('/project'), source: { type: 'system' } };
+        if (name === 'docs') return { name, valueType: 'path', value: createMeldPath('$./docs'), source: { type: 'definition', filePath: 'mock' } };
+        if (name === 'relativePath') return { name, valueType: 'path', value: createMeldPath('relative/path'), source: { type: 'definition', filePath: 'mock' } };
+        if (name === 'otherPath') return { name, valueType: 'path', value: createMeldPath('/other/root/file'), source: { type: 'definition', filePath: 'mock' } };
         return undefined;
       });
+
+    resolver = new PathResolver(stateService, pathService); 
+
+    context = ResolutionContextFactory.create(stateService, 'test.meld')
+      .withAllowedTypes([VariableType.PATH])
+      .withPathContext({ purpose: PathPurpose.READ });
+  });
+  
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   describe('resolve', () => {
-    it('should return content of text node unchanged', async () => {
-      const node: TextNode = {
-        type: 'Text',
-        content: '/home/user/file'
-      };
+    it('should resolve system path variable ($HOMEPATH)', async () => {
+      const node = createVariableReferenceNode('HOMEPATH', VariableType.PATH);
       const result = await resolver.resolve(node, context);
-      expect(result).toBe('/home/user/file');
-    });
-
-    it('should resolve path directive node', async () => {
-      const node: DirectiveNode = {
-        type: 'Directive',
-        directive: {
-          kind: 'path',
-          identifier: 'HOMEPATH'
-        }
-      };
-      const result = await resolver.resolve(node, context);
-      expect(result).toBe('/home/user');
-      expect(stateService.getPathVar).toHaveBeenCalledWith('HOMEPATH');
-    });
-
-    it('should handle $~ alias for HOMEPATH', async () => {
-      const node: DirectiveNode = {
-        type: 'Directive',
-        directive: {
-          kind: 'path',
-          identifier: '~'
-        }
-      };
-      const result = await resolver.resolve(node, context);
-      expect(result).toBe('/home/user');
-      expect(stateService.getPathVar).toHaveBeenCalledWith('HOMEPATH');
-    });
-
-    it('should handle $. alias for PROJECTPATH', async () => {
-      const node: DirectiveNode = {
-        type: 'Directive',
-        directive: {
-          kind: 'path',
-          identifier: '.'
-        }
-      };
-      const result = await resolver.resolve(node, context);
-      expect(result).toBe('/project');
-      expect(stateService.getPathVar).toHaveBeenCalledWith('PROJECTPATH');
-    });
-
-    it('should handle structured path objects', async () => {
-      const structuredPath: StructuredPath = {
-        raw: '$HOMEPATH/path/to/file.md',
-        normalized: '/home/user/path/to/file.md',
-        structured: {
-          base: 'HOMEPATH',
-          segments: ['path', 'to', 'file.md'],
-          variables: {
-            text: [],
-            special: ['HOMEPATH'],
-            path: []
-          },
-          cwd: false
-        }
-      };
-
-      const node: DirectiveNode = {
-        type: 'Directive',
-        directive: {
-          kind: 'path',
-          identifier: 'testPath'
-        }
-      };
-
-      vi.mocked(stateService.getPathVar).mockImplementation((name) => {
-        if (name === 'HOMEPATH') return '/home/user';
-        if (name === 'PROJECTPATH') return '/project';
-        if (name === 'testPath') return structuredPath;
-        return undefined;
-      });
       
+      expect(result).toBeInstanceOf(MeldPath);
+      expect(result.normalized).toBe('/home/user');
+      expect(pathService.validatePath).toHaveBeenCalledWith(expect.any(MeldPath), context.pathContext);
+    });
+
+    it('should resolve user-defined path variable ($docs)', async () => {
+      const node = createVariableReferenceNode('docs', VariableType.PATH);
+      vi.mocked(pathService.resolvePath).mockResolvedValueOnce(createMeldPath('/project/docs'));
+
       const result = await resolver.resolve(node, context);
-      expect(result).toBe('/home/user/path/to/file.md');
-    });
-
-    it('should handle structured path objects with variables', async () => {
-      const structuredPath: StructuredPath = {
-        raw: '$HOMEPATH/path/to/{{file}}.md',
-        normalized: '/home/user/path/to/example.md',
-        structured: {
-          base: 'HOMEPATH',
-          segments: ['path', 'to', '{{file}}.md'],
-          variables: {
-            text: ['file'],
-            special: ['HOMEPATH'],
-            path: []
-          },
-          cwd: false
-        }
-      };
-
-      const node: DirectiveNode = {
-        type: 'Directive',
-        directive: {
-          kind: 'path',
-          identifier: 'complexPath'
-        }
-      };
-
-      vi.mocked(stateService.getPathVar).mockImplementation((name) => {
-        if (name === 'HOMEPATH') return '/home/user';
-        if (name === 'PROJECTPATH') return '/project';
-        if (name === 'complexPath') return structuredPath;
-        return undefined;
-      });
       
-      const result = await resolver.resolve(node, context);
-      expect(result).toBe('/home/user/path/to/example.md');
-    });
-  });
-
-  describe('error handling', () => {
-    it('should throw when path variables are not allowed', async () => {
-      context.allowedVariableTypes.path = false;
-      const node: MeldNode = {
-        type: 'Directive',
-        directive: {
-          kind: 'path',
-          identifier: 'test'
-        }
-      };
-      await expect(resolver.resolve(node, context)).rejects.toThrow(MeldResolutionError);
+      expect(result).toBeInstanceOf(MeldPath);
+      expect(result.normalized).toBe('/project/docs');
+      expect(stateService.getPathVar).toHaveBeenCalledWith('docs');
+      expect(pathService.resolvePath).toHaveBeenCalledWith(expect.objectContaining({ raw: '$./docs' }), context.pathContext.purpose, context.currentFilePath);
+      expect(pathService.validatePath).toHaveBeenCalledWith(expect.any(MeldPath), context.pathContext);
     });
 
-    it('should handle undefined path variables appropriately', async () => {
-      const node: DirectiveNode = {
-        type: 'Directive',
-        directive: {
-          kind: 'path',
-          identifier: 'undefinedPath'
-        }
-      };
-      
+    it('should throw MeldResolutionError for undefined path variables in strict mode', async () => {
+      const node = createVariableReferenceNode('undefinedPath', VariableType.PATH);
+      context = context.withFlags({ ...context.flags, strict: true });
       vi.mocked(stateService.getPathVar).mockReturnValue(undefined);
-      
+
       await expect(resolver.resolve(node, context))
         .rejects
-        .toThrow('Undefined path variable: undefinedPath');
+        .toThrow(MeldResolutionError);
+      await expect(resolver.resolve(node, context))
+        .rejects
+        .toThrow("Path variable 'undefinedPath' not found");
     });
 
-    it('should throw when path is not absolute but required', async () => {
-      const node: DirectiveNode = {
-        type: 'Directive',
-        directive: {
-          kind: 'path',
-          identifier: 'path'
-        }
-      };
-      vi.mocked(stateService.getPathVar).mockReturnValue('relative/path');
+    it('should return default/empty MeldPath for undefined variables in non-strict mode', async () => {
+      const node = createVariableReferenceNode('undefinedPath', VariableType.PATH);
+      context = context.withFlags({ ...context.flags, strict: false });
+      vi.mocked(stateService.getPathVar).mockReturnValue(undefined);
+
+      const result = await resolver.resolve(node, context);
       
-      await expect(resolver.resolve(node, context))
+      expect(result).toBeInstanceOf(MeldPath);
+      expect(result.raw).toBe(''); 
+    });
+
+    it('should throw MeldResolutionError when path variables are not allowed', async () => {
+      const node = createVariableReferenceNode('docs', VariableType.PATH);
+      const modifiedContext = context.withAllowedTypes([VariableType.TEXT]);
+
+      await expect(resolver.resolve(node, modifiedContext))
+        .rejects
+        .toThrow(MeldResolutionError);
+       await expect(resolver.resolve(node, modifiedContext))
+        .rejects
+        .toThrow('Path variables are not allowed');
+    });
+
+    it('should throw PathValidationError when path validation fails (e.g., requires absolute)', async () => {
+      const node = createVariableReferenceNode('relativePath', VariableType.PATH);
+      const modifiedContext = context.withPathContext({ 
+        ...context.pathContext, 
+        validation: { required: true, allowAbsolute: true, allowRelative: false }
+      });
+      
+      const validationError = new PathValidationError('Path must be absolute', 'relative/path');
+      vi.mocked(pathService.validatePath).mockRejectedValue(validationError);
+
+      await expect(resolver.resolve(node, modifiedContext))
+        .rejects
+        .toThrow(PathValidationError);
+      await expect(resolver.resolve(node, modifiedContext))
         .rejects
         .toThrow('Path must be absolute');
     });
-
-    it('should throw when structured path is not absolute but required', async () => {
-      const structuredPath: StructuredPath = {
-        raw: 'relative/path',
-        normalized: './relative/path',
-        structured: {
-          base: '.',
-          segments: ['relative', 'path'],
-          variables: {
-            text: [],
-            special: [],
-            path: []
-          },
-          cwd: true
-        }
-      };
-
-      const node: DirectiveNode = {
-        type: 'Directive',
-        directive: {
-          kind: 'path',
-          identifier: 'relativePath'
-        }
-      };
-
-      vi.mocked(stateService.getPathVar).mockReturnValue(structuredPath);
+    
+    it('should throw PathValidationError when path validation fails (e.g., allowed roots)', async () => {
+      const node = createVariableReferenceNode('otherPath', VariableType.PATH);
+      const modifiedContext = context.withPathContext({ 
+        ...context.pathContext, 
+         validation: { required: true, allowAbsolute: true, allowedRoots: ['/project'] }
+      });
       
-      await expect(resolver.resolve(node, context))
-        .rejects
-        .toThrow('Path must be absolute');
-    });
-
-    it('should throw when path does not start with allowed root', async () => {
-      const node: DirectiveNode = {
-        type: 'Directive',
-        directive: {
-          kind: 'path',
-          identifier: 'path'
-        }
-      };
-      vi.mocked(stateService.getPathVar)
-        .mockImplementation((name) => {
-          if (name === 'HOMEPATH') return '/home/user';
-          if (name === 'PROJECTPATH') return '/project';
-          if (name === 'path') return '/other/path';
-          return undefined;
-        });
-
-      context.pathValidation = {
-        requireAbsolute: true,
-        allowedRoots: ['HOMEPATH', 'PROJECTPATH']
-      };
+      const validationError = new PathValidationError('Path must start with allowed root', '/other/root/file');
+      vi.mocked(pathService.validatePath).mockRejectedValue(validationError);
       
-      await expect(resolver.resolve(node, context))
+      await expect(resolver.resolve(node, modifiedContext))
         .rejects
-        .toThrow('Path must start with one of: HOMEPATH, PROJECTPATH');
-    });
-
-    it('should throw when structured path does not start with allowed root', async () => {
-      const structuredPath: StructuredPath = {
-        raw: '/other/path',
-        normalized: '/other/path',
-        structured: {
-          base: '/',
-          segments: ['other', 'path'],
-          variables: {
-            text: [],
-            special: [],
-            path: []
-          },
-          cwd: false
-        }
-      };
-
-      const node: DirectiveNode = {
-        type: 'Directive',
-        directive: {
-          kind: 'path',
-          identifier: 'otherPath'
-        }
-      };
-
-      vi.mocked(stateService.getPathVar)
-        .mockImplementation((name) => {
-          if (name === 'HOMEPATH') return '/home/user';
-          if (name === 'PROJECTPATH') return '/project';
-          if (name === 'otherPath') return structuredPath;
-          return undefined;
-        });
-
-      context.pathValidation = {
-        requireAbsolute: true,
-        allowedRoots: ['HOMEPATH', 'PROJECTPATH']
-      };
-      
-      await expect(resolver.resolve(node, context))
+        .toThrow(PathValidationError);
+       await expect(resolver.resolve(node, modifiedContext))
         .rejects
-        .toThrow('Path must start with one of: HOMEPATH, PROJECTPATH');
-    });
-
-    it('should throw on invalid node type', async () => {
-      const node: MeldNode = {
-        type: 'Directive',
-        directive: {
-          kind: 'data',
-          identifier: 'test',
-          value: ''
-        }
-      };
-      
-      await expect(resolver.resolve(node, context))
-        .rejects
-        .toThrow('Invalid node type for path resolution');
-    });
-
-    it('should throw on missing variable identifier', async () => {
-      const node: MeldNode = {
-        type: 'Directive',
-        directive: {
-          kind: 'path',
-          value: ''
-        }
-      };
-      
-      await expect(resolver.resolve(node, context))
-        .rejects
-        .toThrow('Path variable identifier is required');
+        .toThrow('Path must start with allowed root');
     });
   });
 

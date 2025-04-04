@@ -737,7 +737,7 @@ export function createMockPathService(): IPathService {
  */
 export function createVariableReferenceNode(
   identifier: string,
-  valueType: 'text' | 'data' | 'path',
+  valueType: 'text' | 'data' | 'path' | 'command',
   fields?: Array<{ type: 'field' | 'index', value: string | number }>,
   location: Location = DEFAULT_LOCATION
 ) {

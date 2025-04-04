@@ -86,6 +86,7 @@ export * from './paths.js';
 export * from './define.js';
 export * from './state.js';
 export * from './resolution.js';
+export * from '../errors/index.js';
 // export * from './embed.js'; // Add when created
 // export * from './run.js';   // Add when created
 // export * from './import.js'; // Add when created

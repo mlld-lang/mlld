@@ -1,290 +1,136 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { CommandResolver } from '@services/resolution/ResolutionService/resolvers/CommandResolver.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
-import { ResolutionContext, ResolutionErrorCode } from '@services/resolution/ResolutionService/IResolutionService.js';
-import { ResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError.js';
-import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
-import { MeldNode, DirectiveNode, TextNode } from '@core/syntax/types.js';
-import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
-import { ErrorSeverity } from '@core/errors/MeldError.js';
-import { createMockParserService, createDirectiveNode, createTextNode } from '@tests/utils/testFactories.js';
-import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
-import { expectThrowsWithSeverity } from '@tests/utils/ErrorTestUtils.js';
+import { 
+  ResolutionContext, 
+  VariableType, 
+  CommandVariable // If CommandVariable type exists
+} from '@core/types'; 
+import type { VariableReferenceNode } from '@core/types/ast-types';
+import { MeldResolutionError } from '@core/types/errors';
+import { createMockStateService, createVariableReferenceNode } from '@tests/utils/testFactories.js';
+import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
 
 describe('CommandResolver', () => {
   let resolver: CommandResolver;
-  let stateService: IStateService;
-  let parserService: ReturnType<typeof createMockParserService>;
+  let stateService: ReturnType<typeof createMockStateService>;
   let context: ResolutionContext;
-  let testContext: TestContextDI;
 
-  beforeEach(async () => {
-    // Create context with DI
-    testContext = TestContextDI.create({ isolatedContainer: true });
-    
-    // Create mock services
-    stateService = testContext.factory.createMockStateService();
-    parserService = createMockParserService();
-    
-    // Create the resolver directly
-    resolver = new CommandResolver(stateService, parserService);
+  beforeEach(() => {
+    // Use factory for mock state service
+    stateService = createMockStateService();
 
-    context = {
-      currentFilePath: 'test.meld',
-      allowedVariableTypes: {
-        text: true,
-        data: true,
-        path: true,
-        command: true
-      },
-      state: stateService
-    };
+    // Mock getCommand
+    vi.mocked(stateService.getCommand).mockImplementation((name: string) => {
+      if (name === 'simple') return { command: 'echo test' };
+      if (name === 'echo') return { command: 'echo ${arg1} ${arg2}' }; // Use simple numbered args
+      if (name === 'complex') return { command: 'echo -n "Hello World"' };
+      // Add other mocks as needed
+      return undefined;
+    });
+    
+    // Instantiate resolver - assuming no parser dependency
+    resolver = new CommandResolver(stateService); 
+
+    // Create context using Factory
+    context = ResolutionContextFactory.create(stateService, 'test.meld')
+               .withAllowedTypes([VariableType.COMMAND]); // Default to only allowing commands
   });
 
-  afterEach(async () => {
-    await testContext.cleanup();
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   describe('resolve', () => {
-    it('should return content of text node unchanged', async () => {
-      const node: TextNode = {
-        type: 'Text',
-        content: 'no commands here'
-      };
-      const result = await resolver.resolve(node, context);
-      expect(result).toBe('no commands here');
-    });
-
     it('should resolve command without parameters', async () => {
-      // Create a run directive node directly with the new syntax
-      const node: DirectiveNode = {
-        type: 'Directive',
-        directive: {
-          kind: 'run',
-          identifier: 'simple',
-          args: []
-        }
-      };
+      const node = createVariableReferenceNode('simple', VariableType.COMMAND);
+      // beforeEach mocks stateService.getCommand('simple') -> { command: 'echo test' }
       
-      vi.mocked(stateService.getCommand).mockReturnValue({
-        command: '@run [echo test]'
-      });
-
-      // Mock parser to parse the command
-      vi.mocked(parserService.parse).mockResolvedValue([
-        createDirectiveNode('run', {
-          identifier: 'echo',
-          value: 'test',
-          args: []
-        })
-      ]);
-
       const result = await resolver.resolve(node, context);
-      expect(result).toBe('echo test');
+      
+      expect(result).toBe('echo test'); // Expect the definition string
       expect(stateService.getCommand).toHaveBeenCalledWith('simple');
-      expect(parserService.parse).toHaveBeenCalled();
     });
 
-    it('should resolve command with parameters', async () => {
-      // Create a run directive node directly with the new syntax
-      const node: DirectiveNode = {
-        type: 'Directive',
-        directive: {
-          kind: 'run',
-          identifier: 'echo',
-          args: ['hello', 'world']
-        }
-      };
+    it('should resolve command with parameters and substitute args', async () => {
+      // Node provides arguments
+      const node = createVariableReferenceNode('echo', VariableType.COMMAND, undefined, undefined, ['hello', 'world']);
+      // beforeEach mocks stateService.getCommand('echo') -> { command: 'echo ${arg1} ${arg2}' }
+
+      const result = await resolver.resolve(node, context);
       
-      vi.mocked(stateService.getCommand).mockReturnValue({
-        command: '@run [echo {{param1}} {{param2}}]'
-      });
-
-      // Mock parser to parse the command and the parameter template
-      vi.mocked(parserService.parse)
-        .mockResolvedValueOnce([
-          createDirectiveNode('run', {
-            identifier: 'echo',
-            value: '{{param1}} {{param2}}',
-            args: []
-          })
-        ]);
-
-      const result = await resolver.resolve(node, context);
-      expect(result).toBe('echo hello world');
+      // Expect definition string with args substituted
+      expect(result).toBe('echo hello world'); 
       expect(stateService.getCommand).toHaveBeenCalledWith('echo');
-      expect(parserService.parse).toHaveBeenCalled();
     });
 
-    it('should handle commands with options', async () => {
-      const node: DirectiveNode = {
-        type: 'Directive',
-        directive: {
-          kind: 'run',
-          identifier: 'complex',
-          args: []
-        }
-      };
-
-      vi.mocked(stateService.getCommand).mockReturnValue({
-        command: '@run [echo -n "Hello World"]'
-      });
-
-      // Mock parser to parse the command
-      vi.mocked(parserService.parse).mockResolvedValue([
-        createDirectiveNode('run', {
-          identifier: 'echo',
-          value: '-n "Hello World"',
-          args: []
-        })
-      ]);
-
+    it('should handle commands with options (no substitution needed)', async () => {
+      const node = createVariableReferenceNode('complex', VariableType.COMMAND);
+      // beforeEach mocks stateService.getCommand('complex') -> { command: 'echo -n "Hello World"' }
+      
       const result = await resolver.resolve(node, context);
-      expect(result).toBe('-n "Hello World"');
+      expect(result).toBe('echo -n "Hello World"');
       expect(stateService.getCommand).toHaveBeenCalledWith('complex');
-      expect(parserService.parse).toHaveBeenCalled();
     });
 
-    it('should handle parsing errors gracefully by falling back to regex', async () => {
-      const node: DirectiveNode = {
-        type: 'Directive',
-        directive: {
-          kind: 'run',
-          identifier: 'fallback',
-          args: []
-        }
-      };
+    // Remove parsing error fallback test - resolver likely doesn't parse now
 
-      vi.mocked(stateService.getCommand).mockReturnValue({
-        command: '@run [echo test]'
-      });
+    // --- Error Handling --- 
+    it('should throw MeldResolutionError when command not found (strict mode)', async () => {
+      const node = createVariableReferenceNode('missing', VariableType.COMMAND);
+      vi.mocked(stateService.getCommand).mockReturnValue(undefined); // Ensure undefined
+      context = context.withFlags({ ...context.flags, strict: true });
 
-      // Mock parser to throw an error
-      vi.mocked(parserService.parse).mockRejectedValue(new Error('Parse error'));
+      await expect(resolver.resolve(node, context))
+        .rejects
+        .toThrow(MeldResolutionError);
+      await expect(resolver.resolve(node, context))
+        .rejects
+        .toThrow("Command 'missing' not found");
+      expect(stateService.getCommand).toHaveBeenCalledWith('missing');
+    });
+    
+    it('should return empty string when command not found (non-strict mode)', async () => {
+      const node = createVariableReferenceNode('missing', VariableType.COMMAND);
+      vi.mocked(stateService.getCommand).mockReturnValue(undefined);
+      context = context.withFlags({ ...context.flags, strict: false });
 
       const result = await resolver.resolve(node, context);
-      expect(result).toBe('echo');
-      expect(stateService.getCommand).toHaveBeenCalledWith('fallback');
-      expect(parserService.parse).toHaveBeenCalled();
-    });
-  });
-
-  describe('error handling', () => {
-    it('should throw when command not found', async () => {
-      const node: DirectiveNode = {
-        type: 'Directive',
-        directive: {
-          kind: 'run',
-          identifier: 'missing',
-          args: []
-        }
-      };
-
-      vi.mocked(stateService.getCommand).mockReturnValue(undefined);
-
-      await expectThrowsWithSeverity(
-        () => resolver.resolve(node, context),
-        MeldResolutionError,
-        ErrorSeverity.Recoverable
-      );
+      expect(result).toBe('');
       expect(stateService.getCommand).toHaveBeenCalledWith('missing');
     });
 
-    it('should throw when command has no command property', async () => {
-      const node: DirectiveNode = {
-        type: 'Directive',
-        directive: {
-          kind: 'run',
-          identifier: 'invalid',
-          args: []
-        }
-      };
+    it('should throw MeldResolutionError when command definition is invalid (e.g., missing command property)', async () => {
+       const node = createVariableReferenceNode('invalidDef', VariableType.COMMAND);
+       vi.mocked(stateService.getCommand).mockReturnValue({} as any); // Invalid definition
+       context = context.withFlags({ ...context.flags, strict: true });
 
-      vi.mocked(stateService.getCommand).mockReturnValue({ command: '' } as any);
+       await expect(resolver.resolve(node, context))
+        .rejects
+        .toThrow(MeldResolutionError);
+       await expect(resolver.resolve(node, context))
+        .rejects
+        .toThrow("Invalid command definition found for 'invalidDef'");
+    });
+    
+    it('should throw MeldResolutionError when command variables are not allowed', async () => {
+      const node = createVariableReferenceNode('simple', VariableType.COMMAND);
+      const modifiedContext = context.withAllowedTypes([VariableType.TEXT]); // Disallow COMMAND
 
-      await expectThrowsWithSeverity(
-        () => resolver.resolve(node, context),
-        MeldResolutionError,
-        ErrorSeverity.Fatal
-      );
-      expect(stateService.getCommand).toHaveBeenCalledWith('invalid');
+      await expect(resolver.resolve(node, modifiedContext))
+        .rejects
+        .toThrow(MeldResolutionError);
+      await expect(resolver.resolve(node, modifiedContext))
+        .rejects
+        .toThrow('Command variables are not allowed');
     });
 
-    it('should throw when command has empty command property', async () => {
-      const node: DirectiveNode = {
-        type: 'Directive',
-        directive: {
-          kind: 'run',
-          identifier: 'empty',
-          args: []
-        }
-      };
-
-      vi.mocked(stateService.getCommand).mockReturnValue({ command: '' });
-
-      await expectThrowsWithSeverity(
-        () => resolver.resolve(node, context),
-        MeldResolutionError,
-        ErrorSeverity.Fatal
-      );
-      expect(stateService.getCommand).toHaveBeenCalledWith('empty');
-    });
-
-    it('should throw when command has invalid command property', async () => {
-      const node: DirectiveNode = {
-        type: 'Directive',
-        directive: {
-          kind: 'run',
-          identifier: 'badformat',
-          args: []
-        }
-      };
-
-      vi.mocked(stateService.getCommand).mockReturnValue({ command: 'not a valid command format' });
-
-      await expectThrowsWithSeverity(
-        () => resolver.resolve(node, context),
-        MeldResolutionError,
-        ErrorSeverity.Fatal
-      );
-      expect(stateService.getCommand).toHaveBeenCalledWith('badformat');
-    });
-  });
-
+  }); // End describe resolve
+  
+  // Remove extractReferences suite
+  /*
   describe('extractReferences', () => {
-    it('should extract command reference from run directive', async () => {
-      const node = {
-        type: 'Directive',
-        directive: {
-          kind: 'run',
-          identifier: 'test',
-          value: ''
-        }
-      } as DirectiveNode;
-      const refs = resolver.extractReferences(node);
-      expect(refs).toEqual(['test']);
-    });
-
-    it('should return empty array for non-command directive', async () => {
-      const node = {
-        type: 'Directive',
-        directive: {
-          kind: 'text',
-          identifier: 'test',
-          value: ''
-        }
-      } as DirectiveNode;
-      const refs = resolver.extractReferences(node);
-      expect(refs).toEqual([]);
-    });
-
-    it('should return empty array for text node', async () => {
-      const node = {
-        type: 'Text',
-        content: 'no references here'
-      } as TextNode;
-      const refs = resolver.extractReferences(node);
-      expect(refs).toEqual([]);
-    });
+    // ... old tests ...
   });
+  */
 }); 

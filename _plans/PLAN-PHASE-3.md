@@ -43,6 +43,7 @@ This plan details the steps to refactor `ResolutionService` and its components t
     *   Ensure `ResolutionContext` is properly instantiated (likely via a factory or helper) and propagated through internal calls, incrementing depth (`context.withIncreasedDepth()`) for recursion/nesting control. Consider creating/using a dedicated `ResolutionContextFactory` or helper functions for consistent context creation and modification.
     *   Update internal helper methods and potentially delegate more specific logic to sub-resolvers (`TextResolver`, `DataResolver`, `PathResolver`, `VariableReferenceResolver`).
     *   **Refactor Sub-Resolvers (Iterative Focus):** Following the initial interface alignment in `ResolutionService.ts`, the primary focus should shift to refactoring `VariableReferenceResolver.ts`. This resolver is key to handling the unified `VariableReferenceNode`. Updates to other resolvers (`TextResolver`, `DataResolver`, `PathResolver`, etc.) will follow as needed based on the changes in `VariableReferenceResolver` and the main service.
+    *   **Prioritize AST Node Resolution:** Implement a core internal method (e.g., `resolveNodes`) that operates directly on `MeldNode[]` arrays from the AST. Refactor existing methods like `resolveText` to primarily use this node-based approach, minimizing string serialization and re-parsing. Identify and refactor key callers (e.g., directive handlers) to pass nodes directly, adding TODOs for less critical callers.
 *   **Files:**
     *   `services/resolution/ResolutionService/ResolutionService.ts`
     *   `services/resolution/ResolutionService/resolvers/VariableReferenceResolver.ts` (major changes likely here - **PRIORITY AFTER SERVICE INTERFACE ALIGNMENT**)
@@ -58,6 +59,7 @@ This plan details the steps to refactor `ResolutionService` and its components t
     *   Error handling (`MeldResolutionError`) should be updated to use codes and details consistent with the new structure and context.
     *   Pay attention to how the `ResolutionContext` flags (e.g., `isVariableEmbed`, `isTransformation`) influence behavior in different resolution paths.
     *   Ensure interaction with the ParserService client/interface remains compatible or update as needed (though ParserService changes are mostly outside this phase).
+    *   **Architectural Refinement:** The shift towards `resolveNodes` and minimizing string re-parsing is crucial. Avoid patterns where components serialize AST nodes back to strings only for the `ResolutionService` to re-parse them. This maintains the integrity of the AST and avoids context loss during resolution.
 *   **Testing:** See step 3. **Note:** Comprehensive testing in Step 3 should ideally follow the significant refactoring of `VariableReferenceResolver.ts`.
 
 ### 3. Update Unit Tests (`services/resolution/ResolutionService/ResolutionService.test.ts` and sub-resolver tests)

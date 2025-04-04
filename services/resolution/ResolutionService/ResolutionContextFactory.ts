@@ -4,7 +4,7 @@ import {
   PathResolutionContext, 
   PathPurpose, 
   VariableType 
-} from '@core/types/resolution-types'; // Assuming centralized types
+} from '@core/types'; // CORRECTED PATH
 import type { IStateService } from '@services/state/IStateService'; // Use the actual IStateService type
 
 /**

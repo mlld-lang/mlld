@@ -1,14 +1,15 @@
-import type { MeldNode } from '@core/types/ast-types';
+import type { MeldNode } from '@core/ast/ast/astTypes';
 import type { 
   ResolutionContext, 
   JsonValue, 
   FieldAccessError,
-  Result
-} from '@core/types/resolution-types';
-import type { MeldPath, StructuredPath } from '@core/types/path-types';
-import type { IStateService } from '@services/state/IStateService';
+  Result,
+  FieldAccess
+} from '@core/types';
+import type { MeldPath, StructuredPath } from '@core/types/paths';
+import type { IStateService } from '@services/state/StateService/IStateService';
 import { VariableResolutionTracker, ResolutionTrackingConfig } from '@tests/utils/debug/VariableResolutionTracker/index.js';
-import { MeldResolutionError, PathValidationError } from '@core/types/errors';
+import type { MeldResolutionError, PathValidationError } from '@core/types';
 
 /**
  * Service responsible for resolving variables, commands, and paths in Meld content.
@@ -222,5 +223,4 @@ export type { IResolutionService };
 export { VariableResolutionTracker, ResolutionTrackingConfig };
 export { MeldResolutionError, PathValidationError, FieldAccessError };
 
-import type { FieldAccess } from '@core/types/resolution-types';
 import type { StateServiceLike } from '@core/shared-service-types'; 

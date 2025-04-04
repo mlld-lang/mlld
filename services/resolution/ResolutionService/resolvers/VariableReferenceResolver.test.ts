@@ -1,89 +1,79 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { VariableReferenceResolver } from '@services/resolution/ResolutionService/resolvers/VariableReferenceResolver.js';
+
+// Import NEW Types
+import type { 
+  ResolutionContext, 
+  VariableType, 
+  FieldAccess,
+  FieldAccessType
+} from '@core/types';
+import type { TextVariable, DataVariable, PathVariable, CommandVariable, MeldVariable } from '@core/types/variables-spec';
+import type { VariableReferenceNode } from '@core/types/ast-types';
+import { MeldResolutionError, FieldAccessError, VariableResolutionError } from '@core/types/errors';
+import { VariableResolutionError as OldVariableResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError.js';
+import { FieldAccessType as OldFieldAccessType } from '@services/resolution/ResolutionService/IResolutionService.js';
+
+// Import Test Utils
 import { 
   createMockStateService, 
-  createMockParserService, 
-  createTextNode,
-  // Legacy helper function still available during transition
   createVariableReferenceNode
 } from '@tests/utils/testFactories.js';
-import { ResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError.js';
-import type { ResolutionContext, ResolutionErrorCode } from '@services/resolution/ResolutionService/IResolutionService.js';
-import type { MeldNode, TextNode } from '@core/syntax/types.js';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
-import { VariableNodeFactory } from '@core/syntax/types/factories/index.js';
-import { container } from 'tsyringe';
+
+// Remove Old Types/Imports
+// import { ResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError.js';
+// import type { ResolutionContext as OldResolutionContext, ResolutionErrorCode } from '@services/resolution/ResolutionService/IResolutionService.js';
+// import type { MeldNode, TextNode } from '@core/syntax/types.js';
+import type { IStateService } from '@services/state/IStateService.js'; // Keep for mock typing
+// import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
+// import { VariableNodeFactory } from '@core/syntax/types/factories/index.js';
+// import { container } from 'tsyringe';
 
 describe('VariableReferenceResolver', () => {
   let resolver: VariableReferenceResolver;
   let stateService: ReturnType<typeof createMockStateService>;
-  let parserService: ReturnType<typeof createMockParserService>;
   let context: ResolutionContext;
 
-  let mockVariableNodeFactory: VariableNodeFactory;
-  
   beforeEach(() => {
     stateService = createMockStateService();
-    parserService = createMockParserService();
     
-    // Create a mock VariableNodeFactory
-    mockVariableNodeFactory = {
-      createVariableReferenceNode: vi.fn().mockImplementation((identifier, valueType, fields, format, location) => {
-        // This matches the legacy function behavior
-        return {
-          type: 'VariableReference',
-          identifier,
-          valueType,
-          fields,
-          isVariableReference: true,
-          ...(format && { format }),
-          ...(location && { location })
-        };
-      }),
-      isValidFieldArray: vi.fn().mockImplementation((fields) => {
-        return fields.every(
-          field =>
-            field &&
-            (field.type === 'field' || field.type === 'index') &&
-            (typeof field.value === 'string' || typeof field.value === 'number')
-        );
-      }),
-      isVariableReferenceNode: vi.fn().mockImplementation((node) => {
-        return (
-          node.type === 'VariableReference' &&
-          typeof node.identifier === 'string' &&
-          typeof node.valueType === 'string'
-        );
-      })
-    } as any;
-    
-    // Mock container.resolve to return our mock factory
-    vi.spyOn(container, 'resolve').mockImplementation((token) => {
-      if (token === VariableNodeFactory) {
-        return mockVariableNodeFactory;
-      }
-      throw new Error(`Unexpected token: ${String(token)}`);
-    });
-    
-    // Create resolver with the mock factory
+    // Create resolver - REMOVE factory injection
     resolver = new VariableReferenceResolver(
       stateService, 
-      undefined, 
-      parserService,
-      mockVariableNodeFactory
     );
     
+    // Define the NEW ResolutionContext
     context = {
-      allowedVariableTypes: {
-        text: true,
-        data: true,
-        path: true,
-        command: true
+      // Default flags, customize per test if needed
+      flags: {
+        strict: true,
+        isLeftHandAssignment: false,
+        isDirective: false,
+        isTransformation: false,
+        isVariableEmbed: false, // Assume default context is not specific embed
+        disableRecursion: false,
       },
+      allowedVariableTypes: [ // Array of VariableType
+        VariableType.TEXT,
+        VariableType.DATA,
+        VariableType.PATH,
+        VariableType.COMMAND
+      ],
       currentFilePath: 'test.meld',
-      state: stateService,
-      strict: true
+      pathContext: { // Default path context
+        validation: { required: false },
+        createDirectory: false,
+        defaultAccessLevel: 'workspace',
+      },
+      formattingContext: { // Default formatting context
+        isBlock: false,
+      },
+      sourceMap: { file: 'test.meld' }, // Minimal source map info
+      depth: 0,
+      // Helper method (real implementation needed if complex tests require it)
+      withIncreasedDepth: () => ({ ...context, depth: (context.depth || 0) + 1 } as ResolutionContext),
+      // Strict mode is now within flags
+      get strict() { return this.flags.strict; }, 
     };
   });
   
@@ -92,209 +82,165 @@ describe('VariableReferenceResolver', () => {
   });
 
   describe('resolve', () => {
-    it('should resolve text variables', async () => {
-      vi.mocked(parserService.parse).mockResolvedValue([
-        createVariableReferenceNode('greeting', 'text')
-      ]);
+    it('should resolve text variables using node.valueType', async () => {
+      // Create the specific node
+      const node = createVariableReferenceNode('greeting', VariableType.TEXT);
       
-      vi.mocked(stateService.getTextVar).mockReturnValue('Hello World');
-      const result = await resolver.resolve('{{greeting}}', context);
+      // Mock stateService to return TextVariable object
+      const mockVar: TextVariable = { name: 'greeting', type: VariableType.TEXT, value: 'Hello World' };
+      vi.mocked(stateService.getTextVar).mockReturnValue(mockVar);
+      
+      // Call resolve with the NODE
+      const result = await resolver.resolve(node, context);
+      
       expect(result).toBe('Hello World');
       expect(stateService.getTextVar).toHaveBeenCalledWith('greeting');
+      expect(stateService.getDataVar).not.toHaveBeenCalled(); // Ensure only correct type was checked
     });
 
-    it('should resolve data variables when text variable not found', async () => {
-      vi.mocked(parserService.parse).mockResolvedValue([
-        createVariableReferenceNode('data', 'data')
-      ]);
+    it('should resolve data variables using node.valueType', async () => {
+      const node = createVariableReferenceNode('dataVar', VariableType.DATA);
+      const mockData = { key: 'value' };
+      const mockVar: DataVariable = { name: 'dataVar', type: VariableType.DATA, value: mockData };
       
-      vi.mocked(stateService.getTextVar).mockReturnValue(undefined);
-      vi.mocked(stateService.getDataVar).mockReturnValue('Data Value');
-      const result = await resolver.resolve('{{data}}', context);
-      expect(result).toBe('Data Value');
-      expect(stateService.getTextVar).toHaveBeenCalledWith('data');
-      expect(stateService.getDataVar).toHaveBeenCalledWith('data');
-    });
-
-    it('should handle multiple variable references', async () => {
-      vi.mocked(parserService.parse).mockResolvedValue([
-        createTextNode(''),
-        createVariableReferenceNode('greeting1', 'text'),
-        createTextNode(' '),
-        createVariableReferenceNode('greeting2', 'text'),
-        createTextNode('!')
-      ]);
+      vi.mocked(stateService.getDataVar).mockReturnValue(mockVar);
       
-      vi.mocked(stateService.getTextVar)
-        .mockReturnValueOnce('Hello')
-        .mockReturnValueOnce('World');
-      const result = await resolver.resolve('{{greeting1}} {{greeting2}}!', context);
-      expect(result).toBe('Hello World!');
+      const result = await resolver.resolve(node, context);
+      
+      // Default conversion is JSON.stringify
+      expect(result).toBe(JSON.stringify(mockData)); 
+      expect(stateService.getDataVar).toHaveBeenCalledWith('dataVar');
+      expect(stateService.getTextVar).not.toHaveBeenCalled();
     });
 
     it('should handle field access in data variables', async () => {
-      // Mock a data object with user structure
       const mockData = { user: { name: 'Alice' } };
+      const mockVar: DataVariable = { name: 'dataObj', type: VariableType.DATA, value: mockData };
       
-      vi.mocked(parserService.parse).mockResolvedValue([
-        createVariableReferenceNode('data', 'data', [
-          { type: 'field', value: 'user' },
-          { type: 'field', value: 'name' }
-        ])
-      ]);
+      // Define fields matching FieldAccess structure
+      const fields: FieldAccess[] = [
+        { type: FieldAccessType.PROPERTY, key: 'user' },
+        { type: FieldAccessType.PROPERTY, key: 'name' }
+      ];
+      const node = createVariableReferenceNode('dataObj', VariableType.DATA, fields);
+
+      vi.mocked(stateService.getDataVar).mockReturnValue(mockVar);
       
-      vi.mocked(stateService.getTextVar).mockReturnValue(undefined);
-      vi.mocked(stateService.getDataVar).mockReturnValue(mockData);
-      const result = await resolver.resolve('{{data.user.name}}', context);
+      const result = await resolver.resolve(node, context);
       expect(result).toBe('Alice');
-      expect(stateService.getDataVar).toHaveBeenCalledWith('data');
+      expect(stateService.getDataVar).toHaveBeenCalledWith('dataObj');
     });
 
-    it('should handle environment variables', async () => {
-      vi.mocked(parserService.parse).mockResolvedValue([
-        createVariableReferenceNode('ENV_TEST', 'text')
-      ]);
+    it('should handle array index access in data variables', async () => {
+      const mockData = { users: ['Alice', 'Bob'] };
+      const mockVar: DataVariable = { name: 'dataObj', type: VariableType.DATA, value: mockData };
+      const fields: FieldAccess[] = [
+        { type: FieldAccessType.PROPERTY, key: 'users' },
+        { type: FieldAccessType.INDEX, key: '1' } // Access index 1
+      ];
+      const node = createVariableReferenceNode('dataObj', VariableType.DATA, fields);
+
+      vi.mocked(stateService.getDataVar).mockReturnValue(mockVar);
       
+      const result = await resolver.resolve(node, context);
+      expect(result).toBe('Bob');
+      expect(stateService.getDataVar).toHaveBeenCalledWith('dataObj');
+    });
+
+    it('should throw VariableResolutionError for undefined variables in strict mode', async () => {
+      const node = createVariableReferenceNode('missing', VariableType.TEXT);
+      
+      // Mock specific type getter to return undefined
       vi.mocked(stateService.getTextVar).mockReturnValue(undefined);
-      vi.mocked(stateService.getDataVar).mockReturnValue(undefined);
-      vi.mocked(stateService.getPathVar).mockReturnValue(undefined);
       
-      await expect(resolver.resolve('{{ENV_TEST}}', context))
+      context.flags.strict = true; // Ensure strict mode
+      
+      await expect(resolver.resolve(node, context))
         .rejects
-        .toThrow('Variable ENV_TEST not found');
+        .toThrow(VariableResolutionError);
+      await expect(resolver.resolve(node, context))
+        .rejects
+        .toThrow("Text variable 'missing' not found in state."); // Check specific message if needed
     });
 
-    it('should throw for undefined variables', async () => {
-      vi.mocked(parserService.parse).mockResolvedValue([
-        createVariableReferenceNode('missing', 'text')
-      ]);
-      
+    it('should return empty string for undefined variables in non-strict mode', async () => {
+      const node = createVariableReferenceNode('missing', VariableType.TEXT);
       vi.mocked(stateService.getTextVar).mockReturnValue(undefined);
-      vi.mocked(stateService.getDataVar).mockReturnValue(undefined);
-      vi.mocked(stateService.getPathVar).mockReturnValue(undefined);
       
-      await expect(resolver.resolve('{{missing}}', context))
+      context.flags.strict = false; // Ensure non-strict mode
+      
+      const result = await resolver.resolve(node, context);
+      expect(result).toBe('');
+    });
+
+    it('should throw FieldAccessError on invalid field access in strict mode', async () => {
+      const mockData = { user: { name: 'Alice' } };
+      const mockVar: DataVariable = { name: 'dataObj', type: VariableType.DATA, value: mockData };
+      const fields: FieldAccess[] = [
+        { type: FieldAccessType.PROPERTY, key: 'user' },
+        { type: FieldAccessType.PROPERTY, key: 'age' } // Non-existent field
+      ];
+      const node = createVariableReferenceNode('dataObj', VariableType.DATA, fields);
+
+      vi.mocked(stateService.getDataVar).mockReturnValue(mockVar);
+      context.flags.strict = true;
+
+      await expect(resolver.resolve(node, context))
         .rejects
-        .toThrow('Variable missing not found');
+        .toThrow(FieldAccessError); // Expecting specific FieldAccessError
+      await expect(resolver.resolve(node, context))
+        .rejects
+        .toThrow("Field 'age' not found in object.");
     });
 
-    it('should preserve text without variables', async () => {
-      vi.mocked(parserService.parse).mockResolvedValue([
-        createTextNode('Hello, world!')
-      ]);
-      
-      const result = await resolver.resolve('Hello, world!', context);
-      expect(result).toBe('Hello, world!');
+    it('should return empty string on invalid field access in non-strict mode', async () => {
+      const mockData = { user: { name: 'Alice' } };
+      const mockVar: DataVariable = { name: 'dataObj', type: VariableType.DATA, value: mockData };
+      const fields: FieldAccess[] = [
+        { type: FieldAccessType.PROPERTY, key: 'user' },
+        { type: FieldAccessType.PROPERTY, key: 'age' } // Non-existent field
+      ];
+      const node = createVariableReferenceNode('dataObj', VariableType.DATA, fields);
+
+      vi.mocked(stateService.getDataVar).mockReturnValue(mockVar);
+      context.flags.strict = false;
+
+      const result = await resolver.resolve(node, context);
+      expect(result).toBe('');
     });
 
-    it('should handle mixed content with variables', async () => {
-      vi.mocked(parserService.parse).mockResolvedValue([
-        createTextNode('Hello, '),
-        createVariableReferenceNode('name', 'text'),
-        createTextNode('!')
-      ]);
+    // ADD PATH VARIABLE TEST
+    it('should resolve path variables using node.valueType', async () => {
+      const node = createVariableReferenceNode('docsPath', VariableType.PATH);
+      const mockPath = createMeldPath('$./docs'); // Use helper from path-types
+      const mockVar: PathVariable = { name: 'docsPath', type: VariableType.PATH, value: mockPath };
       
-      vi.mocked(stateService.getTextVar).mockReturnValue('Alice');
-      const result = await resolver.resolve('Hello, {{name}}!', context);
-      expect(result).toBe('Hello, Alice!');
-    });
-
-    it('should fall back to regex resolution when parser fails', async () => {
-      vi.mocked(parserService.parse).mockRejectedValue(new Error('Parser error'));
+      vi.mocked(stateService.getPathVar).mockReturnValue(mockVar);
       
-      vi.mocked(stateService.getTextVar).mockReturnValueOnce('Alice');
+      // Path resolution often involves normalization/validation via PathService
+      // For this test, assume the resolver returns the raw path string by default
+      // or mock PathService if the resolver interacts with it directly.
+      const result = await resolver.resolve(node, context);
       
-      const result = await resolver.resolve('Hello, {{name}}!', context);
-      expect(result).toBe('Hello, Alice!');
-    });
-  });
-
-  describe('extractReferences', () => {
-    it('should extract all variable references', async () => {
-      const refs = resolver.extractReferences('{{var1}} and {{var2}} and {{var3}}');
-      expect(refs).toEqual(['var1', 'var2', 'var3']);
-    });
-
-    it('should handle field access in references', async () => {
-      const refs = resolver.extractReferences('{{data.field1}} and {{data.field2}}');
-      expect(refs).toEqual(['data']);
-    });
-
-    it('should return empty array for no references', async () => {
-      const refs = resolver.extractReferences('No variables here');
-      expect(refs).toEqual([]);
-    });
-
-    it('should handle duplicate references', async () => {
-      const refs = resolver.extractReferences('{{var1}} and {{var1}} and {{var1}}');
-      expect(refs).toEqual(['var1']);
-    });
-  });
-  
-  describe('extractReferencesAsync', () => {
-    it('should extract all variable references using AST when available', async () => {
-      // Skip this test for now - it's passing in the overall test suite
-      // but has issues with the mock setup in isolation
-      return;
-      
-      // The test will be fixed in a future PR
-    });
-
-    it('should fall back to regex when parser fails', async () => {
-      vi.mocked(parserService.parse).mockRejectedValue(new Error('Parser error'));
-      
-      const refs = await resolver.extractReferencesAsync('{{var1}} and {{var2}}');
-      expect(refs).toEqual(['var1', 'var2']);
-    });
-  });
-  
-  describe('Factory Pattern Usage', () => {
-    it('should use VariableNodeFactory when available', async () => {
-      // Set up a test string with variable reference
-      const testContent = '{{testVar}}';
-      
-      // Create a simple text node for return
-      const textVarNode = {
-        type: 'VariableReference',
-        identifier: 'testVar',
-        valueType: 'text',
-        isVariableReference: true
-      };
-      
-      // Mock the parser to return our test node
-      vi.mocked(parserService.parse).mockResolvedValue([textVarNode]);
-      
-      // Mock the variable value
-      vi.mocked(stateService.getTextVar).mockReturnValue('Hello Factory!');
-      
-      // Resolve the variable
-      const result = await resolver.resolve(testContent, context);
-      
-      // Verify factory method for type check was called
-      expect(mockVariableNodeFactory.isVariableReferenceNode).toHaveBeenCalledWith(textVarNode);
-      
-      // Verify the variable was resolved
-      expect(result).toBe('Hello Factory!');
+      // Expect the raw string representation of the path by default
+      expect(result).toBe('$./docs'); 
+      expect(stateService.getPathVar).toHaveBeenCalledWith('docsPath');
     });
     
-    it('should use factory for variable creation in regex fallback', async () => {
-      // Set up content that will trigger regex fallback
-      const content = '{{testVar}}';
+    // ADD COMMAND VARIABLE TEST
+    it('should resolve command variables using node.valueType', async () => {
+      // Assuming command resolution retrieves the definition string
+      const node = createVariableReferenceNode('myCmd', VariableType.COMMAND);
+      const mockCmdDef = { command: '@run echo Hello' };
+      // Mock getCommand instead of a specific variable type getter
+      vi.mocked(stateService.getCommand).mockReturnValue(mockCmdDef);
       
-      // Force parser failure to trigger regex fallback
-      vi.mocked(parserService.parse).mockRejectedValue(new Error('Parser failed'));
+      const result = await resolver.resolve(node, context);
       
-      // Mock variable value
-      vi.mocked(stateService.getTextVar).mockReturnValue('Regex Fallback Value');
-      
-      // Resolve the variable
-      const result = await resolver.resolve(content, context);
-      
-      // Verify factory was used for node creation
-      expect(mockVariableNodeFactory.createVariableReferenceNode).toHaveBeenCalled();
-      
-      // Verify the result is correct
-      expect(result).toBe('Regex Fallback Value');
+      // Expect the raw command definition string (or adjust if behavior differs)
+      expect(result).toBe('@run echo Hello'); 
+      expect(stateService.getCommand).toHaveBeenCalledWith('myCmd');
     });
-  });
+
+  }); // End of resolve describe block
 }); 
