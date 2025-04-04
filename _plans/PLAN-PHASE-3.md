@@ -1,18 +1,18 @@
 # Plan: Phase 3 - Resolution Service Refactor
 
 ## Context:
-- Overall Architecture: @docs/dev/DI-ARCHITECTURE.md
-- Pipeline Flow: @docs/dev/PIPELINE.md
+- Overall Architecture: docs/dev/DI-ARCHITECTURE.md
+- Pipeline Flow: docs/dev/PIPELINE.md
 
 *   **High-Level Plan:** `_plans/PLAN-TYPES.md`
-*   **Relevant Specs:** `@_spec/types/variables-spec.md` (esp. `MeldVariable`, `ResolutionContext`, `VariableReferenceNode`), `@_spec/types/import-spec.md` (esp. `MeldPath`)
+*   **Relevant Specs:** `_spec/types/variables-spec.md` (esp. `MeldVariable`, `ResolutionContext`, `VariableReferenceNode`), `_spec/types/import-spec.md` (esp. `MeldPath`)
 *   **AST:** `docs/dev/AST.md` (esp. `VariableReferenceNode`)
 *   **Code:** `services/resolution/ResolutionService/*`, `services/resolution/IResolutionService.ts`
 *   **Assumptions:** Phase 1 (`StateService`) and Phase 2 (`PathService`) refactors are complete or planned, providing strictly typed inputs/outputs.
 
 ## A. Type Refinement Proposals
 
-No type refinements are proposed for this phase. The existing definitions in `@_spec/types/variables-spec.md` for `ResolutionContext` and related types appear sufficient.
+No type refinements are proposed for this phase. The existing definitions in `_spec/types/variables-spec.md` for `ResolutionContext` and related types appear sufficient.
 
 ## B. Detailed Implementation Plan
 
@@ -26,7 +26,7 @@ This plan details the steps to refactor `ResolutionService` and its components t
     *   Remove redundant or outdated context fields from the old `ResolutionContext` definition (e.g., `allowedVariableTypes`, `pathValidation` as these are now within the spec's `ResolutionContext`).
 *   **Files:** `services/resolution/ResolutionService/IResolutionService.ts`
 *   **Details/Considerations:**
-    *   Ensure the interface aligns with the type definitions in `@_spec/types/variables-spec.md`.
+    *   Ensure the interface aligns with the type definitions in `_spec/types/variables-spec.md`.
     *   The `StateServiceLike` import might need adjustment if `IStateService` itself was refactored in Phase 1.
     *   Deprecate or remove methods if their functionality is fully subsumed by `resolveInContext` or `resolveVariables` combined with `ResolutionContext`.
 *   **Testing:** No direct tests for the interface, but dependent implementation tests will cover changes.

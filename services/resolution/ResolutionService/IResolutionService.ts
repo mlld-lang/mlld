@@ -1,91 +1,14 @@
-import type { MeldNode } from '@core/syntax/types/index.js';
-import type { StateServiceLike, StructuredPath } from '@core/shared-service-types.js';
+import type { MeldNode } from '@core/types/ast-types';
+import type { 
+  ResolutionContext, 
+  JsonValue, 
+  FieldAccessError,
+  Result
+} from '@core/types/resolution-types';
+import type { MeldPath, StructuredPath } from '@core/types/path-types';
+import type { IStateService } from '@services/state/IStateService';
 import { VariableResolutionTracker, ResolutionTrackingConfig } from '@tests/utils/debug/VariableResolutionTracker/index.js';
-
-/**
- * Context for variable resolution, specifying what types of variables and operations are allowed.
- * Controls the behavior of resolution operations for security and validation.
- */
-interface ResolutionContext {
-  /** Current file being processed, for error reporting */
-  currentFilePath?: string;
-  
-  /** What types of variables are allowed in this context */
-  allowedVariableTypes: {
-    /** Allow text variables {{var}} (formerly ${var}) */
-    text: boolean;    
-    /** Allow data variables {{data}} (formerly #{data}) */
-    data: boolean;    
-    /** Allow path variables $path */
-    path: boolean;    
-    /** Allow command interpolation $command */
-    command: boolean; 
-  };
-  
-  /** Path validation rules when resolving paths */
-  pathValidation?: {
-    /** Whether paths must be absolute */
-    requireAbsolute: boolean;
-    /** List of allowed path roots e.g. [$HOMEPATH, $PROJECTPATH] */
-    allowedRoots: string[]; 
-  };
-
-  /** Whether field access is allowed for data variables (e.g., data.field) */
-  allowDataFields?: boolean;
-
-  /** Whether to throw errors on resolution failures (true) or attempt to recover (false) */
-  strict?: boolean;
-
-  /** Whether nested variable references are allowed */
-  allowNested?: boolean;
-
-  /** The state service to use for variable resolution */
-  state: StateServiceLike;
-}
-
-/**
- * Error codes for resolution failures to enable precise error handling
- */
-enum ResolutionErrorCode {
-  /** Variable is undefined in the current context */
-  UNDEFINED_VARIABLE = 'UNDEFINED_VARIABLE',
-  /** Circular reference detected in variable resolution */
-  CIRCULAR_REFERENCE = 'CIRCULAR_REFERENCE',
-  /** Resolution context is invalid or missing required properties */
-  INVALID_CONTEXT = 'INVALID_CONTEXT',
-  /** Variable type is not allowed in the current context */
-  INVALID_VARIABLE_TYPE = 'INVALID_VARIABLE_TYPE',
-  /** Path format is invalid or violates path security rules */
-  INVALID_PATH = 'INVALID_PATH',
-  /** Maximum iteration count exceeded during resolution */
-  MAX_ITERATIONS_EXCEEDED = 'MAX_ITERATIONS_EXCEEDED',
-  /** Variable reference has invalid syntax */
-  SYNTAX_ERROR = 'SYNTAX_ERROR',
-  /** Error accessing fields in a data variable */
-  FIELD_ACCESS_ERROR = 'FIELD_ACCESS_ERROR',
-  /** Maximum recursion depth exceeded during resolution */
-  MAX_DEPTH_EXCEEDED = 'MAX_DEPTH_EXCEEDED',
-  /** General resolution failure */
-  RESOLUTION_FAILED = 'RESOLUTION_FAILED',
-  /** Node type is invalid for the requested operation */
-  INVALID_NODE_TYPE = 'INVALID_NODE_TYPE',
-  /** Command reference is invalid */
-  INVALID_COMMAND = 'INVALID_COMMAND',
-  /** Variable not found in the current state */
-  VARIABLE_NOT_FOUND = 'VARIABLE_NOT_FOUND',
-  /** Field does not exist in the data variable */
-  INVALID_FIELD = 'INVALID_FIELD',
-  /** Command not found in the current state */
-  COMMAND_NOT_FOUND = 'COMMAND_NOT_FOUND',
-  /** Section not found in the content */
-  SECTION_NOT_FOUND = 'SECTION_NOT_FOUND',
-  /** Section extraction failed */
-  SECTION_EXTRACTION_FAILED = 'SECTION_EXTRACTION_FAILED',
-  /** Specific field not found in variable */
-  FIELD_NOT_FOUND = 'FIELD_NOT_FOUND',
-  /** Invalid access pattern (e.g., array access on non-array) */
-  INVALID_ACCESS = 'INVALID_ACCESS'
-}
+import { MeldResolutionError, PathValidationError } from '@core/types/errors';
 
 /**
  * Service responsible for resolving variables, commands, and paths in Meld content.
@@ -111,194 +34,193 @@ interface IResolutionService {
    * Resolve text variables ({{var}}) in a string.
    * 
    * @param text - The string containing text variables to resolve
-   * @param context - The resolution context with state and allowed variable types
+   * @param context - The resolution context with state and configuration flags
    * @returns The string with all variables resolved
-   * @throws {MeldResolutionError} If resolution fails and strict mode is enabled
+   * @throws {MeldResolutionError} If resolution fails and context.strict is true
    * 
    * @example
    * ```ts
    * const resolved = await resolutionService.resolveText(
    *   "Hello, {{name}}! Welcome to {{company}}.",
-   *   { allowedVariableTypes: { text: true, data: false, path: false, command: false }, state }
+   *   createResolutionContext(state, { allowedVariableTypes: [VariableType.TEXT] })
    * );
    * ```
    */
   resolveText(text: string, context: ResolutionContext): Promise<string>;
 
   /**
-   * Resolve data variables and fields ({{data.field}}) to their values.
+   * Resolve data variables and fields ({{data.field}}) to their JSON values.
    * 
-   * @param ref - The data variable reference to resolve
-   * @param context - The resolution context with state and allowed variable types
-   * @returns The resolved data value
-   * @throws {MeldResolutionError} If resolution fails and strict mode is enabled
+   * @param ref - The data variable reference string (e.g., "user.profile.name") to resolve
+   * @param context - The resolution context with state and configuration flags
+   * @returns The resolved data value (JSON primitive, object, or array)
+   * @throws {MeldResolutionError} If resolution fails and context.strict is true
    * 
    * @example
    * ```ts
-   * const data = await resolutionService.resolveData(
+   * const name = await resolutionService.resolveData(
    *   "user.profile.name",
-   *   { allowedVariableTypes: { text: false, data: true, path: false, command: false }, 
-   *     allowDataFields: true, state }
+   *   createResolutionContext(state, { allowedVariableTypes: [VariableType.DATA] })
    * );
    * ```
    */
-  resolveData(ref: string, context: ResolutionContext): Promise<any>;
+  resolveData(ref: string, context: ResolutionContext): Promise<JsonValue>;
 
   /**
-   * Resolve path variables ($path) to absolute paths.
-   * Handles $HOMEPATH/$~ and $PROJECTPATH/$. resolution.
+   * Resolve path variables ($path) and constructs to MeldPath objects.
+   * Handles special paths like $HOMEPATH, $PROJECTPATH, etc.
    * 
-   * @param path - The path with variables to resolve
-   * @param context - The resolution context with state and allowed variable types
-   * @returns The resolved absolute path
-   * @throws {MeldResolutionError} If resolution fails and strict mode is enabled
-   * @throws {PathValidationError} If the path violates path security rules
+   * @param pathString - The path string with potential variables to resolve
+   * @param context - The resolution context with state and path validation rules
+   * @returns The resolved MeldPath object (which could be Normalized or Raw, File or Directory)
+   * @throws {MeldResolutionError} If resolution fails and context.strict is true
+   * @throws {PathValidationError} If the path violates security rules specified in context.pathContext
    * 
    * @example
    * ```ts
-   * const absPath = await resolutionService.resolvePath(
+   * const configPath = await resolutionService.resolvePath(
    *   "$./src/config/$environment.json",
-   *   { allowedVariableTypes: { text: true, data: false, path: true, command: false }, state }
+   *   createResolutionContext(state, { 
+   *     allowedVariableTypes: [VariableType.TEXT, VariableType.PATH],
+   *     pathContext: { purpose: PathPurpose.READ } 
+   *   })
    * );
    * ```
    */
-  resolvePath(path: string, context: ResolutionContext): Promise<string>;
+  resolvePath(pathString: string, context: ResolutionContext): Promise<MeldPath>;
 
   /**
-   * Resolve command references ($command(args)) to their results.
+   * Resolve command references ($command(args)) to their execution results.
    * 
-   * @param cmd - The command name to resolve
-   * @param args - The arguments to pass to the command
-   * @param context - The resolution context with state and allowed variable types
-   * @returns The command execution result
-   * @throws {MeldResolutionError} If resolution fails and strict mode is enabled
+   * @param commandName - The command name to resolve
+   * @param args - The arguments passed to the command (already resolved)
+   * @param context - The resolution context providing state and execution environment
+   * @returns The command execution result as a string (standard behavior)
+   * @throws {MeldResolutionError} If command resolution or execution fails and context.strict is true
    * 
    * @example
    * ```ts
    * const result = await resolutionService.resolveCommand(
    *   "listFiles",
    *   ["*.js", "--recursive"],
-   *   { allowedVariableTypes: { text: true, data: true, path: true, command: true }, state }
+   *   createResolutionContext(state, { allowedVariableTypes: [VariableType.COMMAND] })
    * );
    * ```
    */
-  resolveCommand(cmd: string, args: string[], context: ResolutionContext): Promise<string>;
+  resolveCommand(commandName: string, args: string[], context: ResolutionContext): Promise<string>;
 
   /**
-   * Resolve content from a file path.
+   * Resolve content from a file path (represented by MeldPath).
+   * Note: Direct file reading might be better suited for FileSystemService.
+   * This method assumes the path is already resolved and validated appropriately.
    * 
-   * @param path - The path to the file to read
+   * @param path - The MeldPath object representing the file to read
    * @returns The file content as a string
    * @throws {MeldFileSystemError} If the file cannot be read
    */
-  resolveFile(path: string): Promise<string>;
+  resolveFile(path: MeldPath): Promise<string>;
 
   /**
-   * Resolve raw content nodes, preserving formatting but skipping comments.
+   * Resolve raw content nodes (TextNode, CodeFenceNode, etc.), preserving formatting but skipping comments.
+   * Applies variable resolution within TextNodes based on the context.
    * 
    * @param nodes - The AST nodes to convert to text
-   * @param context - The resolution context with state and allowed variable types
+   * @param context - The resolution context with state and flags
    * @returns The resolved content as a string
-   * @throws {MeldResolutionError} If resolution fails and strict mode is enabled
+   * @throws {MeldResolutionError} If variable resolution within text fails and context.strict is true
    */
   resolveContent(nodes: MeldNode[], context: ResolutionContext): Promise<string>;
 
   /**
    * Resolve any value based on the provided context rules.
-   * This is a general-purpose resolution method that handles different types of values.
+   * This is a general-purpose resolution method that routes based on allowed types in context.
    * 
-   * @param value - The string or structured path to resolve
-   * @param context - The resolution context with state and allowed variable types
+   * @param value - The string or structured path representation to resolve
+   * @param context - The resolution context defining allowed types and rules
    * @returns The resolved value as a string
-   * @throws {MeldResolutionError} If resolution fails and strict mode is enabled
+   * @throws {MeldResolutionError} If resolution fails and context.strict is true
    */
-  resolveInContext(value: string | StructuredPath, context?: ResolutionContext): Promise<string>;
+  resolveInContext(value: string | StructuredPath, context: ResolutionContext): Promise<string>;
 
   /**
-   * Resolves a field access on a variable (e.g., variable.field.subfield)
+   * Resolves a field access path on a data variable (e.g., variable.field[0].subfield).
+   * Uses the FieldAccess types defined in the spec.
    * 
-   * @param variableName - The base variable name
-   * @param fieldPath - The path to the specific field
-   * @param context - The resolution context with state and allowed variable types
-   * @returns The resolved field value
-   * @throws {MeldResolutionError} If field access fails
+   * @param variableName - The base data variable name
+   * @param fieldPath - An array of FieldAccess objects representing the path
+   * @param context - The resolution context providing state and rules
+   * @returns A Result object containing the resolved field value (JsonValue) or a FieldAccessError
    */
-  resolveFieldAccess(variableName: string, fieldPath: string, context?: ResolutionContext): Promise<any>;
+  resolveFieldAccess(variableName: string, fieldPath: FieldAccess[], context: ResolutionContext): Promise<Result<JsonValue, FieldAccessError>>;
 
   /**
-   * Validate that a value can be resolved with the given context
-   * @throws {MeldResolutionError} If validation fails
+   * Validate that a value can be resolved successfully within the given context.
+   * Performs a dry run of resolution without returning the value.
+   * 
+   * @param value - The string or structured path to validate
+   * @param context - The resolution context defining rules and state
+   * @throws {MeldResolutionError | PathValidationError} If validation fails based on context rules
    */
-  validateResolution(value: string | StructuredPath, context?: ResolutionContext): Promise<void>;
+  validateResolution(value: string | StructuredPath, context: ResolutionContext): Promise<void>;
 
   /**
-   * Extract a section from content by its heading.
-   * Useful for retrieving specific parts of markdown or other structured text.
+   * Extract a section from content based on its heading text.
    * 
-   * @param content - The content to extract the section from
-   * @param section - The heading text to search for
-   * @param fuzzy - Optional fuzzy matching threshold (0-1, where 1 is exact match, defaults to 0.7)
-   * @returns The extracted section content
-   * @throws {MeldResolutionError} With code SECTION_NOT_FOUND if the section cannot be found
-   * 
-   * @example
-   * ```ts
-   * const apiDocs = await resolutionService.extractSection(
-   *   readme,
-   *   "API Documentation",
-   *   0.8 // 80% match threshold
-   * );
-   * ```
+   * @param content - The content string to extract from
+   * @param sectionHeading - The heading text to locate the section
+   * @param fuzzyThreshold - Optional fuzzy matching threshold (0-1, default 0.7)
+   * @returns The extracted section content as a string
+   * @throws {MeldResolutionError} If the section cannot be found
    */
-  extractSection(content: string, section: string, fuzzy?: number): Promise<string>;
+  extractSection(content: string, sectionHeading: string, fuzzyThreshold?: number): Promise<string>;
 
   /**
-   * Check for circular variable references.
+   * Detect potential circular variable references within a string.
+   * Note: Comprehensive circularity detection might involve CircularityService.
    * 
-   * @param value - The string to check for circular references
-   * @throws {MeldResolutionError} With code CIRCULAR_REFERENCE if circular references are detected
+   * @param value - The string containing potential variable references
+   * @param context - The resolution context (needed to resolve initial variable)
+   * @throws {MeldResolutionError} If a circular reference is detected
    */
-  detectCircularReferences(value: string): Promise<void>;
+  detectCircularReferences(value: string, context: ResolutionContext): Promise<void>;
   
   /**
-   * Convert a value to a formatted string based on the provided formatting context.
-   * This is particularly useful for handling data variables in different output contexts.
+   * Convert a resolved value (typically JsonValue) to a formatted string based on context.
+   * Uses FormattingContext potentially embedded within ResolutionContext.
    * 
-   * @param value - The value to convert to a string
-   * @param options - Formatting options including context information
-   * @returns The formatted string representation of the value
+   * @param value - The value to convert (e.g., from resolveData)
+   * @param context - The resolution context containing formatting rules
+   * @returns The formatted string representation
    * 
    * @example
    * ```ts
+   * const dataValue = await resolutionService.resolveData("config", context);
    * const formatted = await resolutionService.convertToFormattedString(
    *   dataValue,
-   *   { 
-   *     formattingContext: { 
-   *       isBlock: true, 
-   *       nodeType: 'embed',
-   *       isTransformation: true 
-   *     }
-   *   }
+   *   context.withFormattingContext({ isBlock: true }) 
    * );
    * ```
    */
-  convertToFormattedString(value: any, options?: any): Promise<string>;
+  convertToFormattedString(value: JsonValue, context: ResolutionContext): Promise<string>;
   
   /**
-   * Enable tracking of variable resolution attempts.
-   * This is primarily used for debugging and visualization.
+   * Enable tracking of variable resolution attempts for debugging.
    * 
    * @param config - Configuration for the resolution tracker
    */
   enableResolutionTracking(config: Partial<ResolutionTrackingConfig>): void;
   
   /**
-   * Get the resolution tracker for debugging.
+   * Get the resolution tracker instance if enabled.
    * 
-   * @returns The current resolution tracker or undefined if not enabled
+   * @returns The VariableResolutionTracker instance or undefined
    */
   getResolutionTracker(): VariableResolutionTracker | undefined;
 }
 
-export type { ResolutionContext, IResolutionService };
-export { ResolutionErrorCode }; 
+export type { IResolutionService };
+export { VariableResolutionTracker, ResolutionTrackingConfig };
+export { MeldResolutionError, PathValidationError, FieldAccessError };
+
+import type { FieldAccess } from '@core/types/resolution-types';
+import type { StateServiceLike } from '@core/shared-service-types'; 
