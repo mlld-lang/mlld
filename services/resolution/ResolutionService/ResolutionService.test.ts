@@ -6,7 +6,7 @@ import type { IParserService } from '@services/pipeline/ParserService/IParserSer
 import type { IPathService } from '@services/fs/PathService/IPathService.js';
 // Import SPECIFIC types needed from ResolutionService exports
 import type { IResolutionService, FieldAccessError } from '@services/resolution/ResolutionService/IResolutionService.js';
-import { MeldResolutionError, PathValidationError } from '@core/types/errors';
+import { MeldResolutionError, PathValidationError } from '@core/errors/index.js';
 import { 
   ResolutionContext, 
   VariableType, 
@@ -17,7 +17,16 @@ import {
   FieldAccess
 } from '@core/types'; // Import core types
 import type { MeldNode, VariableReferenceNode } from '@core/types/ast-types';
-import { MeldPath, PathPurpose, createMeldPath } from '@core/types/path-types';
+// Import correct path types and unsafe creators
+import { 
+  MeldPath, 
+  PathPurpose, 
+  PathContentType, 
+  ValidatedResourcePath, 
+  unsafeCreateValidatedResourcePath, 
+  unsafeCreateAbsolutePath, 
+  unsafeCreateUrlPath 
+} from '@core/types/paths.js'; 
 
 // Import centralized syntax examples and helpers - KEEP THESE
 import { 
@@ -72,13 +81,32 @@ const createMockDataVariable = (name: string, value: any): DataVariable => ({
   source: { type: 'definition', filePath: 'mock.meld' }
 });
 
-// Helper function to create mock PathVariable
-const createMockPathVariable = (name: string, value: MeldPath): PathVariable => ({
-  name,
-  valueType: VariableType.PATH,
-  value,
-  source: { type: 'definition', filePath: 'mock.meld' }
-});
+// Updated helper to create mock PathVariable using unsafe creators
+const createMockPathVariable = (name: string, rawPath: string, contentType: PathContentType = PathContentType.FILESYSTEM): PathVariable => {
+  let validatedPath: ValidatedResourcePath;
+  let isAbsolute = false;
+  if (contentType === PathContentType.FILESYSTEM) {
+    validatedPath = unsafeCreateValidatedResourcePath(rawPath); // Or use unsafeCreateAbsolutePath if needed
+    isAbsolute = rawPath.startsWith('/') || rawPath.startsWith('$HOMEPATH');
+  } else { // URL
+    validatedPath = unsafeCreateUrlPath(rawPath); 
+  }
+  
+  const value: MeldPath = {
+    contentType: contentType,
+    originalValue: rawPath,
+    validatedPath: validatedPath,
+    isAbsolute: isAbsolute,
+    isSecure: true // Assume secure for mock
+  };
+  
+  return {
+    name,
+    valueType: VariableType.PATH,
+    value,
+    source: { type: 'definition', filePath: 'mock.meld' }
+  };
+};
 
 
 describe('ResolutionService', () => {
@@ -118,8 +146,8 @@ describe('ResolutionService', () => {
         return undefined;
       }),
       getPathVar: vi.fn().mockImplementation((name: string): PathVariable | undefined => {
-        if (name === 'home') return createMockPathVariable('home', createMeldPath('$HOMEPATH/meld'));
-        if (name === 'docs') return createMockPathVariable('docs', createMeldPath('$./docs'));
+        if (name === 'home') return createMockPathVariable('home', '$HOMEPATH/meld');
+        if (name === 'docs') return createMockPathVariable('docs', '$./docs');
         return undefined;
       }),
       getCommand: vi.fn().mockImplementation((name: string) => {
@@ -135,7 +163,7 @@ describe('ResolutionService', () => {
         ['user', createMockDataVariable('user', { name: 'Alice', id: 123 })],
       ])),
       getAllPathVars: vi.fn().mockReturnValue(new Map<string, PathVariable>([
-         ['home', createMockPathVariable('home', createMeldPath('$HOMEPATH/meld'))]
+         ['home', createMockPathVariable('home', '$HOMEPATH/meld')]
       ])),
       // Add other necessary IStateService methods if needed by ResolutionService
       getCurrentFilePath: vi.fn().mockReturnValue('test.meld'),
@@ -179,22 +207,55 @@ describe('ResolutionService', () => {
       parseWithLocations: vi.fn().mockResolvedValue([{ type: 'Text', content: 'parsed content', location: {} }]),
     } as unknown as IParserService;
 
-    // Update PathService mock to handle MeldPath potentially
+    // Update PathService mock to return MeldPath objects constructed with unsafe creators
     pathService = {
       getHomePath: vi.fn().mockReturnValue('/home/user'),
-      dirname: vi.fn(p => typeof p === 'string' ? p.substring(0, p.lastIndexOf('/') || 0) : ''), // Handle MeldPath if needed
+      dirname: vi.fn(p => typeof p === 'string' ? p.substring(0, p.lastIndexOf('/') || 0) : ''),
       resolvePath: vi.fn().mockImplementation(async (p: string | MeldPath, purpose: PathPurpose, baseDir?: string): Promise<MeldPath> => {
-         const rawPath = typeof p === 'string' ? p : p.raw;
-         if (rawPath === '$HOMEPATH') return createMeldPath('/home/user');
-         if (rawPath === '$HOMEPATH/meld') return createMeldPath('/home/user/meld');
-         // Simple resolution for testing
-         return createMeldPath(rawPath, baseDir);
+         const rawPath = typeof p === 'string' ? p : p.originalValue; // Use originalValue from MeldPath
+         let resolvedRaw = rawPath;
+         let contentType = PathContentType.FILESYSTEM;
+         if (rawPath === '$HOMEPATH') resolvedRaw = '/home/user';
+         else if (rawPath === '$HOMEPATH/meld') resolvedRaw = '/home/user/meld';
+         else if (rawPath === '$./docs' && baseDir) resolvedRaw = '/project/root/docs'; // Example baseDir usage
+         else if (baseDir && !rawPath.startsWith('/') && !rawPath.startsWith('$')) resolvedRaw = baseDir + '/' + rawPath; // Simplistic relative path join
+         // Assume URL if starts with http
+         if (resolvedRaw.startsWith('http')) contentType = PathContentType.URL;
+
+         // Create mock MeldPath using unsafe creators
+         let validatedPath: ValidatedResourcePath;
+         let isAbsolute = false;
+         if (contentType === PathContentType.FILESYSTEM) {
+           validatedPath = unsafeCreateValidatedResourcePath(resolvedRaw);
+           isAbsolute = resolvedRaw.startsWith('/');
+         } else { // URL
+           validatedPath = unsafeCreateUrlPath(resolvedRaw);
+         }
+         const value: MeldPath = {
+           contentType,
+           originalValue: rawPath,
+           validatedPath,
+           isAbsolute,
+           isSecure: true // Assume secure for mock
+         };
+         return value;
       }),
       normalizePath: vi.fn().mockImplementation((p: string | MeldPath): MeldPath => {
-        return typeof p === 'string' ? createMeldPath(p) : p; // Return MeldPath
+         // If already MeldPath, return it. If string, create a mock one.
+         if (typeof p === 'string') { 
+           const isAbsolute = p.startsWith('/');
+           const validatedPath = isAbsolute ? unsafeCreateAbsolutePath(p) : unsafeCreateRelativePath(p);
+           return { 
+             contentType: PathContentType.FILESYSTEM, 
+             originalValue: p, 
+             validatedPath: validatedPath, 
+             isAbsolute: isAbsolute, 
+             isSecure: true 
+           };
+         }
+         return p;
       }),
-      // Add other necessary IPathService methods
-      validatePath: vi.fn().mockResolvedValue(undefined), // Assume paths are valid for most tests
+      validatePath: vi.fn().mockResolvedValue(undefined), 
     } as unknown as IPathService;
     
     // Mock VariableResolverClient - Keep simple for now
@@ -300,34 +361,23 @@ describe('ResolutionService', () => {
     });
 
     it('should resolve system path variables', async () => {
-      // The beforeEach setup handles mocking:
-      // - pathService.resolvePath('$HOMEPATH') returns MeldPath({ raw: '/home/user' })
-      // - mockParserClient.parseString('$HOMEPATH') returns VariableReferenceNode({ identifier: 'HOMEPATH', isSpecial: true })
-
-      // Call the service method with the default context
       const result: MeldPath = await service.resolvePath('$HOMEPATH', defaultContext);
 
-      // Assert the resolved MeldPath object
-      // We might need to adjust the expected object based on createMeldPath implementation
-      expect(result).toBeInstanceOf(MeldPath);
-      expect(result.raw).toBe('/home/user');
-      expect(result.normalized).toBe('/home/user'); // Assuming simple normalization for this test
-      // Add more specific checks if needed (isAbsolute, etc.)
+      expect(result).toBeInstanceOf(Object); // Check it's an object
+      expect(result.contentType).toBe(PathContentType.FILESYSTEM);
+      expect(result.originalValue).toBe('$HOMEPATH');
+      expect(result.validatedPath).toBe('/home/user'); 
+      expect(result.isAbsolute).toBe(true);
     });
 
     it('should resolve user-defined path variables', async () => {
-      // The beforeEach setup handles mocking:
-      // - stateService.getPathVar('home') returns PathVariable({ value: MeldPath('$HOMEPATH/meld') })
-      // - pathService.resolvePath('$HOMEPATH/meld') returns MeldPath('/home/user/meld')
-      // - mockParserClient.parseString('$home') returns VariableReferenceNode({ identifier: 'home' })
-
-      // Call the service method with the default context
       const result: MeldPath = await service.resolvePath('$home', defaultContext);
 
-      // Assert the resolved MeldPath object
-      expect(result).toBeInstanceOf(MeldPath);
-      expect(result.raw).toBe('/home/user/meld'); // pathService mock should resolve this
-      expect(result.normalized).toBe('/home/user/meld');
+      expect(result).toBeInstanceOf(Object); 
+      expect(result.contentType).toBe(PathContentType.FILESYSTEM);
+      expect(result.originalValue).toBe('$HOMEPATH/meld'); // originalValue from state mock
+      expect(result.validatedPath).toBe('/home/user/meld'); // resolved value from pathService mock
+      expect(result.isAbsolute).toBe(true);
     });
 
     it('should resolve command references', async () => {
@@ -382,32 +432,39 @@ describe('ResolutionService', () => {
   describe('resolveFile', () => { 
     it('should read file content', async () => {
       const filePathString = '/path/to/file';
-      const filePath = createMeldPath(filePathString);
+      // Create a mock MeldPath object for input
+      const filePath: MeldPath = { 
+        contentType: PathContentType.FILESYSTEM, 
+        originalValue: filePathString, 
+        validatedPath: unsafeCreateAbsolutePath(filePathString), 
+        isAbsolute: true, 
+        isSecure: true 
+      };
       
-      // Mock the underlying FileSystemService readFile
       vi.mocked(fileSystemService.readFile).mockResolvedValue('file content');
 
-      // Call resolveFile with the MeldPath object
       const result = await service.resolveFile(filePath);
       
       expect(result).toBe('file content');
-      // Verify the correct method was called on the underlying service
-      expect(fileSystemService.readFile).toHaveBeenCalledWith(filePathString); // Assuming readFile still takes string internally
+      expect(fileSystemService.readFile).toHaveBeenCalledWith(filePathString); 
     });
 
     it('should throw when file does not exist', async () => {
       const filePathString = '/missing/file';
-      const filePath = createMeldPath(filePathString);
+      const filePath: MeldPath = { 
+        contentType: PathContentType.FILESYSTEM, 
+        originalValue: filePathString, 
+        validatedPath: unsafeCreateAbsolutePath(filePathString), 
+        isAbsolute: true, 
+        isSecure: true 
+      };
       
-      // Mock the underlying FileSystemService readFile to reject
       const error = new Error('File not found');
       vi.mocked(fileSystemService.readFile).mockRejectedValue(error);
 
-      // Call resolveFile with the MeldPath object and expect rejection
       await expect(service.resolveFile(filePath))
         .rejects
-        .toThrowError(MeldResolutionError); // Check for MeldResolutionError or specific file error type
-        // .toThrow('Failed to read file: /missing/file'); // Check specific message if needed
+        .toThrowError(MeldResolutionError); 
     });
   });
 

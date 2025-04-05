@@ -5,6 +5,10 @@
 import type { VariableType } from './variables.js';
 import type { IStateService } from './state.js';
 import type { StringLiteralType } from './common.js';
+import type { MeldNode } from './ast-types';
+import type { MeldValue } from './variables.js';
+import type { Result } from './common.js';
+import type { MeldPath, PathContentType, PathPurpose } from './paths.js';
 
 /**
  * Context passed during variable resolution.
@@ -203,4 +207,23 @@ export interface ParserFlags {
   
   /** Types of literals to parse */
   parseLiteralTypes: StringLiteralType[];
+}
+
+// Define FieldAccessType enum here
+export enum FieldAccessType {
+  PROPERTY = 'property',
+  INDEX = 'index'
+}
+
+// Define FieldAccess interface here (or ensure it exists)
+export interface FieldAccess {
+  type: FieldAccessType; // Use the enum
+  key: string | number;
+}
+
+/**
+ * Defines the type of variable being referenced or resolved.
+ */
+export interface VariableReference {
+  // Add any necessary properties for a variable reference
 } 

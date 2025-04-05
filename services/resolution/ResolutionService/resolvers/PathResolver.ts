@@ -1,4 +1,5 @@
 import type { IStateService } from '@services/state/StateService/IStateService.js';
+import type { IPathService } from '@services/fs/PathService/IPathService.js';
 import { ResolutionContext, ResolutionErrorCode } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { ResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError.js';
 import type { MeldNode, DirectiveNode, TextNode, StructuredPath, VariableReferenceNode } from '@core/syntax/types.js';
@@ -11,12 +12,17 @@ import type { VariableReference } from '@core/syntax/types/index.js';
 import { VariableResolutionError } from '@core/errors/VariableResolutionError.js';
 import { VariableType } from '@core/types/variables.js';
 import { PathValidationError } from '@core/errors/PathValidationError.js';
+import { inject, injectable } from 'tsyringe';
 
 /**
  * Handles resolution of path variables ($path)
  */
+@injectable()
 export class PathResolver {
-  constructor(private stateService: IStateService) {}
+  constructor(
+    @inject('IStateService') private stateService: IStateService,
+    @inject('IPathService') private pathService: IPathService 
+  ) {}
 
   /**
    * Resolve path variables in a node

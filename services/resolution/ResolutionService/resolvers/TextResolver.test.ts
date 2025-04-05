@@ -6,7 +6,7 @@ import {
   VariableType, 
   TextVariable 
 } from '@core/types';
-import { MeldResolutionError } from '@core/types/errors';
+import { MeldResolutionError } from '@core/errors/index.js';
 import { createMockStateService } from '@tests/utils/testFactories.js';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';

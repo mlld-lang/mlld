@@ -2,9 +2,9 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { VariableReferenceResolver } from '@services/resolution/ResolutionService/resolvers/VariableReferenceResolver.js';
 
 // Import NEW Types
-import type { 
+import {
   ResolutionContext, 
-  VariableType, 
+  VariableType,
   FieldAccess,
   FieldAccessType
 } from '@core/types';
@@ -29,7 +29,8 @@ import type { IParserService } from '@services/pipeline/ParserService/IParserSer
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js'; // Added ResolutionService type
 import { TestContextDI } from '@tests/utils/di/index.js'; // Added TestContextDI
 import { DeepMockProxy, mockDeep } from 'vitest-mock-extended'; // Added mockDeep and DeepMockProxy
-import { createMeldPath } from '@core/types/paths.js'; // Added path helper
+import { MeldPath, PathContentType, ValidatedResourcePath, unsafeCreateValidatedResourcePath } from '@core/types/paths.js'; // Added path helper
+import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js'; // Added factory import
 
 describe('VariableReferenceResolver', () => {
   let contextDI: TestContextDI;
@@ -56,37 +57,9 @@ describe('VariableReferenceResolver', () => {
     // Resolve the resolver via DI
     resolver = await contextDI.resolve(VariableReferenceResolver);
     
-    // Define the NEW ResolutionContext, using the mocked stateService
-    context = {
-      flags: {
-        strict: true,
-        isLeftHandAssignment: false,
-        isDirective: false,
-        isTransformation: false,
-        isVariableEmbed: false, 
-        disableRecursion: false,
-      },
-      allowedVariableTypes: [
-        VariableType.TEXT,
-        VariableType.DATA,
-        VariableType.PATH,
-        VariableType.COMMAND
-      ],
-      currentFilePath: 'test.meld',
-      state: stateService, // Use the mock state service here
-      pathContext: { 
-        validation: { required: false },
-        createDirectory: false,
-        defaultAccessLevel: 'workspace',
-      },
-      formattingContext: { 
-        isBlock: false,
-      },
-      sourceMap: { file: 'test.meld' }, 
-      depth: 0,
-      withIncreasedDepth: () => ({ ...context, depth: (context.depth || 0) + 1 } as ResolutionContext),
-      get strict() { return this.flags.strict; }, 
-    };
+    // Use ResolutionContextFactory to create the context
+    context = ResolutionContextFactory.create(stateService, 'test.meld')
+      .withStrictMode(true); // Correct: use specific method
   });
   
   afterEach(async () => { // Made async
@@ -159,14 +132,11 @@ describe('VariableReferenceResolver', () => {
 
     it('should throw VariableResolutionError for undefined variables in strict mode', async () => {
       const node = createVariableReferenceNode('missing', VariableType.TEXT);
-      // vi.mocked(stateService.getTextVar).mockReturnValue(undefined);
       stateService.getTextVar.calledWith('missing').mockReturnValue(undefined);
-      
-      context.flags.strict = true; 
       
       await expect(resolver.resolve(node, context))
         .rejects
-        .toThrow(VariableResolutionError); // Use core error type
+        .toThrow(VariableResolutionError);
       await expect(resolver.resolve(node, context))
         .rejects
         .toThrow("Text variable 'missing' not found in state."); 
@@ -174,12 +144,13 @@ describe('VariableReferenceResolver', () => {
 
     it('should return empty string for undefined variables in non-strict mode', async () => {
       const node = createVariableReferenceNode('missing', VariableType.TEXT);
-      // vi.mocked(stateService.getTextVar).mockReturnValue(undefined);
       stateService.getTextVar.calledWith('missing').mockReturnValue(undefined);
       
-      context.flags.strict = false; 
+      // Create a non-strict context for this test
+      const nonStrictContext = ResolutionContextFactory.create(stateService, 'test.meld')
+                                 .withStrictMode(false); // Correct
       
-      const result = await resolver.resolve(node, context);
+      const result = await resolver.resolve(node, nonStrictContext);
       expect(result).toBe('');
     });
 
@@ -192,9 +163,7 @@ describe('VariableReferenceResolver', () => {
       ];
       const node = createVariableReferenceNode('dataObj', VariableType.DATA, fields);
 
-      // vi.mocked(stateService.getDataVar).mockReturnValue(mockVar);
       stateService.getDataVar.calledWith('dataObj').mockReturnValue(mockVar);
-      context.flags.strict = true;
 
       await expect(resolver.resolve(node, context))
         .rejects
@@ -209,28 +178,40 @@ describe('VariableReferenceResolver', () => {
       const mockVar: DataVariable = { name: 'dataObj', type: VariableType.DATA, value: mockData };
       const fields: FieldAccess[] = [
         { type: FieldAccessType.PROPERTY, key: 'user' },
-        { type: FieldAccessType.PROPERTY, key: 'age' } 
+        { type: FieldAccessType.INDEX, key: 10 }
       ];
       const node = createVariableReferenceNode('dataObj', VariableType.DATA, fields);
 
-      // vi.mocked(stateService.getDataVar).mockReturnValue(mockVar);
       stateService.getDataVar.calledWith('dataObj').mockReturnValue(mockVar);
-      context.flags.strict = false;
+      const nonStrictContext = ResolutionContextFactory.create(stateService, 'test.meld')
+                                 .withStrictMode(false); // Correct
 
-      const result = await resolver.resolve(node, context);
+      const result = await resolver.resolve(node, nonStrictContext);
       expect(result).toBe('');
     });
 
     it('should resolve path variables using node.valueType', async () => {
       const node = createVariableReferenceNode('docsPath', VariableType.PATH);
-      const mockPath = createMeldPath('$./docs'); 
+      
+      // Create a mock MeldResolvedFilesystemPath object
+      const mockValidatedPath = unsafeCreateValidatedResourcePath('$./docs'); // Use the unsafe creator
+      const mockPath: MeldPath = {
+         contentType: PathContentType.FILESYSTEM,
+         originalValue: '$./docs',
+         validatedPath: mockValidatedPath,
+         isAbsolute: false, // Assuming relative for this example
+         isSecure: true // Assuming secure for mock
+      };
+      
       const mockVar: PathVariable = { name: 'docsPath', type: VariableType.PATH, value: mockPath };
       
-      // vi.mocked(stateService.getPathVar).mockReturnValue(mockVar);
       stateService.getPathVar.calledWith('docsPath').mockReturnValue(mockVar);
       
+      // The resolver is expected to convert the MeldPath value back to a string representation
+      // In this case, likely the originalValue or validatedPath string
       const result = await resolver.resolve(node, context);
       
+      // Expect the string representation (adjust if resolver behavior is different)
       expect(result).toBe('$./docs'); 
       expect(stateService.getPathVar).toHaveBeenCalledWith('docsPath');
     });

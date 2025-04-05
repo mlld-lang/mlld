@@ -9,7 +9,8 @@ import {
   FieldAccessType,
   JsonValue
 } from '@core/types';
-import { MeldResolutionError, FieldAccessError } from '@core/types/errors';
+import type { DataVariable as DataVariableSpec } from '@core/types/variables-spec';
+import { MeldResolutionError, FieldAccessError } from '@core/errors/index.js';
 import { createMockStateService } from '@tests/utils/testFactories.js';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
 

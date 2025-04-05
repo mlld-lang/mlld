@@ -7,7 +7,7 @@ import {
   CommandVariable // If CommandVariable type exists
 } from '@core/types'; 
 import type { VariableReferenceNode } from '@core/types/ast-types';
-import { MeldResolutionError } from '@core/types/errors';
+import { MeldResolutionError } from '@core/errors/index.js';
 import { createMockStateService, createVariableReferenceNode } from '@tests/utils/testFactories.js';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
 

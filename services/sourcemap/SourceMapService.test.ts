@@ -5,7 +5,7 @@ import { MeldError } from '@core/errors/MeldError.js';
 import { enhanceMeldErrorWithSourceInfo } from '@core/utils/sourceMapUtils.js';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { container } from 'tsyringe';
-import { ErrorSeverity } from '@core/errors/ErrorSeverity.js';
+import { ErrorSeverity } from '@core/errors/MeldError.js';
 
 describe('SourceMapService', () => {
   // Test for non-DI mode

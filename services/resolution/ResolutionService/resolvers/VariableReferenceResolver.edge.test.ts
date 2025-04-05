@@ -4,15 +4,12 @@ import {
   createTextNode,
   createVariableReferenceNode
 } from '@tests/utils/testFactories.js';
-import type { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
-import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
+import type { ResolutionContext, IStateService, IParserService, IResolutionService, MeldNode } from '@core/types';
 import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
-import type { MeldNode } from '@core/syntax/types/index.js';
 import { VariableNodeFactory } from '@core/syntax/types/factories/index.js';
 import { DeepMockProxy, mockDeep } from 'vitest-mock-extended';
 import { TestContextDI } from '@tests/utils/di/index.js';
+import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
 
 describe('VariableReferenceResolver Edge Cases', () => {
   let contextDI: TestContextDI;
@@ -48,17 +45,8 @@ describe('VariableReferenceResolver Edge Cases', () => {
     
     resolver = await contextDI.resolve(VariableReferenceResolver);
     
-    resolutionContext = {
-      allowedVariableTypes: {
-        text: true,
-        data: true,
-        path: true,
-        command: true
-      },
-      currentFilePath: 'test.meld',
-      state: stateService,
-      strict: true
-    };
+    resolutionContext = ResolutionContextFactory.create(stateService, 'test.meld')
+                          .withStrictMode(true);
   });
   
   afterEach(async () => {
@@ -140,19 +128,16 @@ describe('VariableReferenceResolver Edge Cases', () => {
   });
 
   it('should return empty string for missing fields when strict mode is off', async () => {
-    const nonStrictContext = {
-      ...resolutionContext,
-      strict: false
-    };
+    const nonStrictContext = ResolutionContextFactory.create(stateService, 'test.meld')
+                               .withStrictMode(false);
     
     const mockData = { user: { name: 'John' } };
-    
     stateService.getDataVar.calledWith('data').mockReturnValue(mockData);
     
     parserService.parse.mockResolvedValue([
       createVariableReferenceNode('data', 'data', [
         { type: 'field', value: 'user' },
-        { type: 'field', value: 'email' }
+        { type: 'field', value: 'email' } 
       ])
     ]);
     
@@ -163,19 +148,19 @@ describe('VariableReferenceResolver Edge Cases', () => {
   it('should handle errors in nested variable resolution', async () => {
     vi.mocked(resolutionService.resolveInContext).mockImplementation(async (value, ctx) => {
       if (typeof value === 'string' && value.includes('{{nested}}')) {
-        return '';
+        return ''; 
       }
       if (typeof value === 'string' && value.startsWith('var_')) {
          const varName = value.substring(4);
          return stateService.getTextVar(varName);
       }
-      return value;
+      return value; 
     });
     
     stateService.getTextVar.calledWith('').mockReturnValue('');
-    
+        
     const result = await resolver.resolve('{{var_{{nested}}}}', resolutionContext);
-    
+        
     expect(result).toBe('');
   });
 });

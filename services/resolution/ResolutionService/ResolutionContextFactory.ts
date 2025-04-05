@@ -3,9 +3,21 @@ import {
   ResolutionFlags, 
   PathResolutionContext, 
   PathPurpose, 
-  VariableType 
-} from '@core/types'; // CORRECTED PATH
-import type { IStateService } from '@services/state/IStateService'; // Use the actual IStateService type
+  VariableType, 
+  FormattingContext
+} from '@core/types';
+import type { IStateService } from '@services/state/IStateService';
+
+// Define the type for the context methods more explicitly
+type ContextMethods = {
+  withIncreasedDepth: () => ResolutionContext;
+  withStrictMode: (strict: boolean) => ResolutionContext;
+  withAllowedTypes: (types: VariableType[]) => ResolutionContext;
+  withFlags: (flags: Partial<ResolutionFlags>) => ResolutionContext;
+  withFormattingContext: (formatting: Partial<FormattingContext>) => ResolutionContext;
+  withPathContext: (pathContext: Partial<PathResolutionContext>) => ResolutionContext;
+  withParserFlags: (flags: any) => ResolutionContext; // Keeping any for now
+};
 
 /**
  * Factory for creating resolution contexts appropriate for different directives
@@ -40,10 +52,11 @@ export class ResolutionContextFactory {
    * Assumes a generic read purpose for paths if not specified.
    */
   static create(state: IStateService, filePath?: string): ResolutionContext {
-    const baseContext = {
+    // Define the base properties without methods first
+    const baseProps = {
       state,
-      strict: false, // Default strictness
-      depth: 0,      // Initial depth
+      strict: false, 
+      depth: 0,      
       allowedVariableTypes: [
         VariableType.TEXT,
         VariableType.DATA,
@@ -51,98 +64,47 @@ export class ResolutionContextFactory {
         VariableType.COMMAND
       ],
       flags: this.createDefaultFlags(),
-      pathContext: this.createDefaultPathContext(PathPurpose.READ, filePath), // Generic read purpose
-      currentFilePath: filePath, // Store the initial file path
+      pathContext: this.createDefaultPathContext(PathPurpose.READ, filePath),
+      currentFilePath: filePath,
+      formattingContext: { isBlock: false }, // Added default formatting context
+      parserFlags: {}, // Added default parser flags
     };
 
-    // Add helper methods dynamically
-    return {
-      ...baseContext,
-      withIncreasedDepth: () => ({ 
-        ...baseContext, 
-        depth: baseContext.depth + 1, 
-        // Re-attach methods to the new object
-        withIncreasedDepth: (baseContext as any).withIncreasedDepth,
-        withStrictMode: (baseContext as any).withStrictMode,
-        withAllowedTypes: (baseContext as any).withAllowedTypes,
-        withFlags: (baseContext as any).withFlags,
-        withFormattingContext: (baseContext as any).withFormattingContext,
-        withPathContext: (baseContext as any).withPathContext,
-        withParserFlags: (baseContext as any).withParserFlags,
-      }),
-      withStrictMode: (strict: boolean) => ({ 
-         ...(baseContext as ResolutionContext), // Cast needed initially
-         strict, 
-         // Re-attach methods 
-         withIncreasedDepth: (baseContext as any).withIncreasedDepth,
-         withStrictMode: (baseContext as any).withStrictMode,
-         withAllowedTypes: (baseContext as any).withAllowedTypes,
-         withFlags: (baseContext as any).withFlags,
-         withFormattingContext: (baseContext as any).withFormattingContext,
-         withPathContext: (baseContext as any).withPathContext,
-         withParserFlags: (baseContext as any).withParserFlags,
-      }),
-      withAllowedTypes: (types: VariableType[]) => ({ 
-         ...(baseContext as ResolutionContext), 
-         allowedVariableTypes: types, 
-         // Re-attach methods 
-         withIncreasedDepth: (baseContext as any).withIncreasedDepth,
-         withStrictMode: (baseContext as any).withStrictMode,
-         withAllowedTypes: (baseContext as any).withAllowedTypes,
-         withFlags: (baseContext as any).withFlags,
-         withFormattingContext: (baseContext as any).withFormattingContext,
-         withPathContext: (baseContext as any).withPathContext,
-         withParserFlags: (baseContext as any).withParserFlags,
-      }),
-       withFlags: (flags: Partial<ResolutionFlags>) => ({ 
-         ...(baseContext as ResolutionContext), 
-         flags: { ...baseContext.flags, ...flags },
-         // Re-attach methods 
-         withIncreasedDepth: (baseContext as any).withIncreasedDepth,
-         withStrictMode: (baseContext as any).withStrictMode,
-         withAllowedTypes: (baseContext as any).withAllowedTypes,
-         withFlags: (baseContext as any).withFlags,
-         withFormattingContext: (baseContext as any).withFormattingContext,
-         withPathContext: (baseContext as any).withPathContext,
-         withParserFlags: (baseContext as any).withParserFlags,
-      }),
-       withFormattingContext: (formatting: any) => ({ 
-         ...(baseContext as ResolutionContext), 
-         formattingContext: { ...(baseContext.formattingContext || {}), ...formatting },
-         // Re-attach methods 
-         withIncreasedDepth: (baseContext as any).withIncreasedDepth,
-         withStrictMode: (baseContext as any).withStrictMode,
-         withAllowedTypes: (baseContext as any).withAllowedTypes,
-         withFlags: (baseContext as any).withFlags,
-         withFormattingContext: (baseContext as any).withFormattingContext,
-         withPathContext: (baseContext as any).withPathContext,
-         withParserFlags: (baseContext as any).withParserFlags,
-       }),
-       withPathContext: (pathContext: Partial<PathResolutionContext>) => ({ 
-         ...(baseContext as ResolutionContext), 
-         pathContext: { ...(baseContext.pathContext || this.createDefaultPathContext(PathPurpose.READ)), ...pathContext },
-         // Re-attach methods 
-         withIncreasedDepth: (baseContext as any).withIncreasedDepth,
-         withStrictMode: (baseContext as any).withStrictMode,
-         withAllowedTypes: (baseContext as any).withAllowedTypes,
-         withFlags: (baseContext as any).withFlags,
-         withFormattingContext: (baseContext as any).withFormattingContext,
-         withPathContext: (baseContext as any).withPathContext,
-         withParserFlags: (baseContext as any).withParserFlags,
-       }),
-       withParserFlags: (flags: any) => ({ 
-         ...(baseContext as ResolutionContext), 
-         parserFlags: { ...(baseContext.parserFlags || {}), ...flags },
-          // Re-attach methods 
-         withIncreasedDepth: (baseContext as any).withIncreasedDepth,
-         withStrictMode: (baseContext as any).withStrictMode,
-         withAllowedTypes: (baseContext as any).withAllowedTypes,
-         withFlags: (baseContext as any).withFlags,
-         withFormattingContext: (baseContext as any).withFormattingContext,
-         withPathContext: (baseContext as any).withPathContext,
-         withParserFlags: (baseContext as any).withParserFlags,
-       }),
-    } as ResolutionContext; // Assert final type
+    // Define the methods. These will close over the `methods` object itself.
+    const methods: ContextMethods = {
+      withIncreasedDepth: function() {
+        // `this` refers to the current context object
+        return { ...this, depth: this.depth + 1, ...methods }; 
+      },
+      withStrictMode: function(strict: boolean) {
+        return { ...this, strict, ...methods };
+      },
+      withAllowedTypes: function(types: VariableType[]) {
+        return { ...this, allowedVariableTypes: types, ...methods };
+      },
+      withFlags: function(flags: Partial<ResolutionFlags>) {
+        return { ...this, flags: { ...this.flags, ...flags }, ...methods };
+      },
+      withFormattingContext: function(formatting: Partial<FormattingContext>) {
+        return { ...this, formattingContext: { ...this.formattingContext, ...formatting }, ...methods };
+      },
+      withPathContext: function(pathContext: Partial<PathResolutionContext>) {
+        return { 
+          ...this, 
+          pathContext: { 
+            ...(this.pathContext || ResolutionContextFactory.createDefaultPathContext(PathPurpose.READ)), 
+            ...pathContext 
+          }, 
+          ...methods 
+        };
+      },
+      withParserFlags: function(flags: any) {
+        return { ...this, parserFlags: { ...this.parserFlags, ...flags }, ...methods };
+      },
+    };
+
+    // Combine base properties and methods
+    return { ...baseProps, ...methods } as ResolutionContext;
   }
 
   /**
@@ -151,18 +113,16 @@ export class ResolutionContextFactory {
    */
   static forTextDirective(state: IStateService, filePath?: string): ResolutionContext {
     const baseContext = this.create(state, filePath);
-    return {
-      ...baseContext,
-      // Text directives are generally flexible
-      allowedVariableTypes: [
+    // Use the 'with' methods to modify the base context
+    return baseContext
+      .withAllowedTypes([
         VariableType.TEXT,
         VariableType.DATA,
         VariableType.PATH,
         VariableType.COMMAND
-      ],
-      flags: { ...baseContext.flags, isDirectiveHandler: true, processNestedVariables: true },
-      pathContext: this.createDefaultPathContext(PathPurpose.READ, filePath) // Assuming paths used here are for reading
-    };
+      ])
+      .withFlags({ isDirectiveHandler: true, processNestedVariables: true })
+      .withPathContext({ purpose: PathPurpose.READ }); // Assuming paths used here are for reading
   }
 
   /**
@@ -171,17 +131,14 @@ export class ResolutionContextFactory {
    */
   static forRunDirective(state: IStateService, filePath?: string): ResolutionContext {
     const baseContext = this.create(state, filePath);
-    return {
-      ...baseContext,
-      allowedVariableTypes: [
+    return baseContext
+      .withAllowedTypes([
         VariableType.TEXT, 
-        // VariableType.DATA, // Data vars typically not used directly in command strings
         VariableType.PATH, 
         VariableType.COMMAND
-      ],
-      flags: { ...baseContext.flags, isDirectiveHandler: true, processNestedVariables: false },
-      pathContext: this.createDefaultPathContext(PathPurpose.EXECUTE, filePath) // Paths might be for execution
-    };
+      ])
+      .withFlags({ isDirectiveHandler: true, processNestedVariables: false })
+      .withPathContext({ purpose: PathPurpose.EXECUTE }); // Paths might be for execution
   }
 
   /**
@@ -190,13 +147,10 @@ export class ResolutionContextFactory {
    */
   static forPathDirective(state: IStateService, filePath?: string): ResolutionContext {
      const baseContext = this.create(state, filePath);
-     return {
-       ...baseContext,
-       allowedVariableTypes: [VariableType.PATH], // Only path variables allowed for RHS
-       flags: { ...baseContext.flags, isDirectiveHandler: true, processNestedVariables: false },
-       pathContext: this.createDefaultPathContext(PathPurpose.READ, filePath), // Defining a path is like reading/referencing
-       // pathContext.constraints could potentially be added here if paths need to exist
-     };
+     return baseContext
+       .withAllowedTypes([VariableType.PATH]) // Only path variables allowed for RHS
+       .withFlags({ isDirectiveHandler: true, processNestedVariables: false })
+       .withPathContext({ purpose: PathPurpose.READ }); // Defining a path is like reading/referencing
   }
 
   /**
@@ -205,18 +159,15 @@ export class ResolutionContextFactory {
    */
   static forDataDirective(state: IStateService, filePath?: string): ResolutionContext {
     const baseContext = this.create(state, filePath);
-    return {
-      ...baseContext,
-      allowedVariableTypes: [
+    return baseContext
+      .withAllowedTypes([
         VariableType.TEXT,
         VariableType.DATA,
         VariableType.PATH,
         VariableType.COMMAND
-      ],
-      flags: { ...baseContext.flags, isDirectiveHandler: true, processNestedVariables: true },
-      // Paths used in data def might be for reading content
-      pathContext: this.createDefaultPathContext(PathPurpose.READ, filePath) 
-    };
+      ])
+      .withFlags({ isDirectiveHandler: true, processNestedVariables: true })
+      .withPathContext({ purpose: PathPurpose.READ }); // Paths used in data def might be for reading content
   }
 
   /**
@@ -225,18 +176,14 @@ export class ResolutionContextFactory {
    */
   static forImportDirective(state: IStateService, filePath?: string): ResolutionContext {
      const baseContext = this.create(state, filePath);
-     return {
-       ...baseContext,
-       allowedVariableTypes: [VariableType.PATH], // Only path vars allowed in import path itself
-       flags: { 
-         ...baseContext.flags, 
+     return baseContext
+       .withAllowedTypes([VariableType.PATH]) // Only path vars allowed in import path itself
+       .withFlags({ 
          isDirectiveHandler: true, 
          processNestedVariables: false,
          isImportContext: true 
-       },
-       pathContext: this.createDefaultPathContext(PathPurpose.IMPORT, filePath),
-       // Consider adding constraints: allowedRoots based on project structure?
-     };
+       })
+       .withPathContext({ purpose: PathPurpose.IMPORT });
   }
 
   /**
@@ -245,13 +192,10 @@ export class ResolutionContextFactory {
    */
   static forCommandParameters(state: IStateService, filePath?: string): ResolutionContext {
      const baseContext = this.create(state, filePath);
-     return {
-       ...baseContext,
-       // Parameters are usually simple values
-       allowedVariableTypes: [VariableType.TEXT, VariableType.DATA], 
-       flags: { ...baseContext.flags, processNestedVariables: false }, // No deep nesting in params typically
-       pathContext: this.createDefaultPathContext(PathPurpose.READ, filePath) // Minimal path context
-     };
+     return baseContext
+       .withAllowedTypes([VariableType.TEXT, VariableType.DATA]) 
+       .withFlags({ processNestedVariables: false }) // No deep nesting in params typically
+       .withPathContext({ purpose: PathPurpose.READ }); // Minimal path context
   }
 
   /**
@@ -260,11 +204,9 @@ export class ResolutionContextFactory {
    */
   static forPathResolution(state: IStateService, purpose: PathPurpose, filePath?: string): ResolutionContext {
      const baseContext = this.create(state, filePath);
-     return {
-       ...baseContext,
-       allowedVariableTypes: [VariableType.PATH, VariableType.TEXT], // Allow text vars within paths ($project/{{sub}}/file)
-       flags: { ...baseContext.flags, processNestedVariables: false },
-       pathContext: this.createDefaultPathContext(purpose, filePath)
-     };
+     return baseContext
+       .withAllowedTypes([VariableType.PATH, VariableType.TEXT]) // Allow text vars within paths ($project/{{sub}}/file)
+       .withFlags({ processNestedVariables: false })
+       .withPathContext({ purpose }); // Use the provided purpose
   }
 } 
