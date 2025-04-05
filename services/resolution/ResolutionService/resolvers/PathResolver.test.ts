@@ -6,33 +6,42 @@ import {
   ResolutionContext, 
   VariableType, 
   PathVariable, 
-  PathResolutionContext,
   PathPurpose 
 } from '@core/types';
-import type { VariableReferenceNode } from '@core/types/ast-types';
-import { MeldPath, createMeldPath } from '@core/types/path-types';
-import { MeldResolutionError, PathValidationError } from '@core/types/errors';
-import { createMockStateService, createVariableReferenceNode } from '@tests/utils/testFactories.js';
+import type { VariableReferenceNode, MeldNode, StructuredPath } from '@core/syntax/types.js';
+import { MeldPath, PathContentType } from '@core/types/paths.js';
+import { MeldResolutionError, PathValidationError } from '@core/errors/index.js';
+import { createVariableReferenceNode } from '@tests/utils/testFactories.js';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
+import { TestContextDI } from '@tests/utils/di/index.js';
+import { DeepMockProxy, mockDeep } from 'vitest-mock-extended';
+import { createMeldPath } from '@core/types/paths.js';
 
 describe('PathResolver', () => {
+  let contextDI: TestContextDI;
   let resolver: PathResolver;
-  let stateService: ReturnType<typeof createMockStateService>;
-  let pathService: IPathService;
+  let stateService: DeepMockProxy<IStateService>;
+  let pathService: DeepMockProxy<IPathService>;
   let context: ResolutionContext;
 
-  beforeEach(() => {
-    stateService = createMockStateService();
-    
-    pathService = {
-      resolvePath: vi.fn().mockImplementation(async (p, purpose, base) => createMeldPath(typeof p === 'string' ? p : p.raw, base)),
-      normalizePath: vi.fn().mockImplementation(p => typeof p === 'string' ? createMeldPath(p) : p),
-      validatePath: vi.fn().mockResolvedValue(undefined),
-      getHomePath: vi.fn().mockReturnValue('/home/user'),
-      isAbsolute: vi.fn().mockImplementation(p => p.startsWith('/')),
-    } as unknown as IPathService;
+  beforeEach(async () => {
+    contextDI = TestContextDI.createIsolated();
 
-    vi.mocked(stateService.getPathVar).mockImplementation((name: string): PathVariable | undefined => {
+    stateService = mockDeep<IStateService>();
+    pathService = mockDeep<IPathService>();
+
+    contextDI.registerMock<IStateService>('IStateService', stateService);
+    contextDI.registerMock<IPathService>('IPathService', pathService);
+
+    pathService.resolvePath.mockImplementation(async (p, purpose, base) => 
+      createMeldPath(typeof p === 'string' ? p : p.raw, base)
+    );
+    pathService.normalizePath.mockImplementation(p => typeof p === 'string' ? createMeldPath(p) : p);
+    pathService.validatePath.mockResolvedValue(undefined);
+    pathService.getHomePath.mockReturnValue('/home/user');
+    pathService.isAbsolute.mockImplementation(p => p.startsWith('/'));
+
+    stateService.getPathVar.mockImplementation((name: string): PathVariable | undefined => {
         if (name === 'HOMEPATH') return { name, valueType: 'path', value: createMeldPath('/home/user'), source: { type: 'system' } };
         if (name === 'PROJECTPATH') return { name, valueType: 'path', value: createMeldPath('/project'), source: { type: 'system' } };
         if (name === 'docs') return { name, valueType: 'path', value: createMeldPath('$./docs'), source: { type: 'definition', filePath: 'mock' } };
@@ -41,30 +50,35 @@ describe('PathResolver', () => {
         return undefined;
       });
 
-    resolver = new PathResolver(stateService, pathService); 
+    resolver = await contextDI.resolve(PathResolver);
 
     context = ResolutionContextFactory.create(stateService, 'test.meld')
       .withAllowedTypes([VariableType.PATH])
       .withPathContext({ purpose: PathPurpose.READ });
   });
   
-  afterEach(() => {
-    vi.restoreAllMocks();
+  afterEach(async () => {
+    await contextDI?.cleanup();
   });
 
   describe('resolve', () => {
     it('should resolve system path variable ($HOMEPATH)', async () => {
       const node = createVariableReferenceNode('HOMEPATH', VariableType.PATH);
+      
+      const expectedPath = createMeldPath('/home/user');
+      pathService.resolvePath.calledWith(expect.objectContaining({ raw: '/home/user' })).mockResolvedValue(expectedPath);
+
       const result = await resolver.resolve(node, context);
       
       expect(result).toBeInstanceOf(MeldPath);
       expect(result.normalized).toBe('/home/user');
-      expect(pathService.validatePath).toHaveBeenCalledWith(expect.any(MeldPath), context.pathContext);
+      expect(pathService.validatePath).toHaveBeenCalledWith(expectedPath, context.pathContext);
     });
 
     it('should resolve user-defined path variable ($docs)', async () => {
       const node = createVariableReferenceNode('docs', VariableType.PATH);
-      vi.mocked(pathService.resolvePath).mockResolvedValueOnce(createMeldPath('/project/docs'));
+      const resolvedPath = createMeldPath('/project/docs');
+      pathService.resolvePath.calledWith(expect.objectContaining({ raw: '$./docs' }), context.pathContext.purpose, context.currentFilePath).mockResolvedValue(resolvedPath);
 
       const result = await resolver.resolve(node, context);
       
@@ -72,13 +86,13 @@ describe('PathResolver', () => {
       expect(result.normalized).toBe('/project/docs');
       expect(stateService.getPathVar).toHaveBeenCalledWith('docs');
       expect(pathService.resolvePath).toHaveBeenCalledWith(expect.objectContaining({ raw: '$./docs' }), context.pathContext.purpose, context.currentFilePath);
-      expect(pathService.validatePath).toHaveBeenCalledWith(expect.any(MeldPath), context.pathContext);
+      expect(pathService.validatePath).toHaveBeenCalledWith(resolvedPath, context.pathContext);
     });
 
     it('should throw MeldResolutionError for undefined path variables in strict mode', async () => {
       const node = createVariableReferenceNode('undefinedPath', VariableType.PATH);
       context = context.withFlags({ ...context.flags, strict: true });
-      vi.mocked(stateService.getPathVar).mockReturnValue(undefined);
+      stateService.getPathVar.calledWith('undefinedPath').mockReturnValue(undefined);
 
       await expect(resolver.resolve(node, context))
         .rejects
@@ -91,7 +105,7 @@ describe('PathResolver', () => {
     it('should return default/empty MeldPath for undefined variables in non-strict mode', async () => {
       const node = createVariableReferenceNode('undefinedPath', VariableType.PATH);
       context = context.withFlags({ ...context.flags, strict: false });
-      vi.mocked(stateService.getPathVar).mockReturnValue(undefined);
+      stateService.getPathVar.calledWith('undefinedPath').mockReturnValue(undefined);
 
       const result = await resolver.resolve(node, context);
       
@@ -114,12 +128,14 @@ describe('PathResolver', () => {
     it('should throw PathValidationError when path validation fails (e.g., requires absolute)', async () => {
       const node = createVariableReferenceNode('relativePath', VariableType.PATH);
       const modifiedContext = context.withPathContext({ 
-        ...context.pathContext, 
+        purpose: PathPurpose.READ,
         validation: { required: true, allowAbsolute: true, allowRelative: false }
       });
       
       const validationError = new PathValidationError('Path must be absolute', 'relative/path');
-      vi.mocked(pathService.validatePath).mockRejectedValue(validationError);
+      const relativeMeldPath = createMeldPath('relative/path'); 
+      pathService.resolvePath.calledWith(expect.objectContaining({ raw: 'relative/path' })).mockResolvedValue(relativeMeldPath);
+      pathService.validatePath.calledWith(relativeMeldPath, modifiedContext.pathContext).mockRejectedValue(validationError);
 
       await expect(resolver.resolve(node, modifiedContext))
         .rejects
@@ -132,12 +148,14 @@ describe('PathResolver', () => {
     it('should throw PathValidationError when path validation fails (e.g., allowed roots)', async () => {
       const node = createVariableReferenceNode('otherPath', VariableType.PATH);
       const modifiedContext = context.withPathContext({ 
-        ...context.pathContext, 
+        purpose: PathPurpose.READ,
          validation: { required: true, allowAbsolute: true, allowedRoots: ['/project'] }
       });
       
       const validationError = new PathValidationError('Path must start with allowed root', '/other/root/file');
-      vi.mocked(pathService.validatePath).mockRejectedValue(validationError);
+      const otherMeldPath = createMeldPath('/other/root/file');
+      pathService.resolvePath.calledWith(expect.objectContaining({ raw: '/other/root/file' })).mockResolvedValue(otherMeldPath);
+      pathService.validatePath.calledWith(otherMeldPath, modifiedContext.pathContext).mockRejectedValue(validationError);
       
       await expect(resolver.resolve(node, modifiedContext))
         .rejects

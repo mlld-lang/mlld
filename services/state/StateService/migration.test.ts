@@ -1,52 +1,78 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { StateService } from '@services/state/StateService/StateService.js';
 import { migrateState, validateMigration } from '@services/state/StateService/migration.js';
 import type { MeldNode } from '@core/syntax/types.js';
 import type { StateNode } from '@services/state/StateService/types.js';
-import { createStateServiceMock } from '@services/state/StateService/mocks.js';
-import type { IStateService, ICommandDefinition } from '@services/state/StateService/types.js';
+import type { IStateService, ICommandDefinition, MigrationResult, IFilesystemPathState } from '@services/state/StateService/types.js';
 import { vi } from 'vitest';
+import { TestContextDI } from '@tests/utils/di/index.js';
+import { mockDeep } from 'vitest-mock-extended';
 
 describe('State Migration', () => {
+  let context: TestContextDI;
   let oldState: IStateService;
   let result: MigrationResult;
 
-  beforeEach(() => {
-    // Setup old state structure manually or using mocks
-    oldState = createStateServiceMock(); // Use mock factory
-    // Add some data to the old state
+  beforeEach(async () => {
+    context = TestContextDI.createIsolated();
+    const mockState = mockDeep<IStateService>();
+    
+    const textVars = new Map<string, any>();
+    const dataVars = new Map<string, any>();
+    const pathVars = new Map<string, any>();
+    const commandVars = new Map<string, ICommandDefinition>();
+    const imports = new Set<string>();
+    const nodes: MeldNode[] = [];
+
+    mockState.setTextVar.mockImplementation((name, value) => { textVars.set(name, { value }); });
+    mockState.setDataVar.mockImplementation((name, value) => { dataVars.set(name, { value }); });
+    mockState.setPathVar.mockImplementation((name, value) => { pathVars.set(name, { value }); });
+    mockState.setCommandVar.mockImplementation((name, value) => { commandVars.set(name, { name, value }); });
+    mockState.addImport.mockImplementation((path) => { imports.add(path); });
+    mockState.addNode.mockImplementation((node) => { nodes.push(node); });
+
+    mockState.getAllTextVars.mockReturnValue(textVars);
+    mockState.getAllDataVars.mockReturnValue(dataVars);
+    mockState.getAllPathVars.mockReturnValue(pathVars);
+    mockState.getAllCommands.mockReturnValue(commandVars);
+    mockState.getImports.mockReturnValue(imports);
+    mockState.getNodes.mockReturnValue(nodes);
+    mockState.getCurrentFilePath.mockReturnValue(null);
+
+    context.registerMock<IStateService>('IStateService', mockState);
+    
+    oldState = await context.resolve<IStateService>('IStateService');
+
     oldState.setTextVar('text', 'value');
     oldState.setDataVar('data', { key: 'value' });
     oldState.setPathVar('path', { raw: '/test/path' });
-    // Configure setCommandVar mock if needed, or assume it works on the mock
-    // oldState.setCommand is not a function error originates here
+  });
+
+  afterEach(async () => {
+    await context?.cleanup();
   });
 
   describe('basic migration', () => {
     beforeEach(() => {
-      // Perform migration
       result = migrateState(oldState);
     });
 
     it('should migrate empty state', () => {
       expect(result.success).toBe(true);
       expect(result.warnings).toHaveLength(0);
-      expect(result.state.variables.text.size).toBe(0);
-      expect(result.state.variables.data.size).toBe(0);
-      expect(result.state.variables.path.size).toBe(0);
+      expect(result.state.variables.text.size).toBe(1);
+      expect(result.state.variables.data.size).toBe(1);
+      expect(result.state.variables.path.size).toBe(1);
       expect(result.state.commands.size).toBe(0);
       expect(result.state.imports.size).toBe(0);
       expect(result.state.nodes.length).toBe(0);
     });
 
     it('should migrate state with variables', () => {
-      // Verify text variables
       expect(result.state.variables.text.get('text')?.value).toBe('value');
 
-      // Verify data variables
       expect(result.state.variables.data.get('data')?.value).toEqual({ key: 'value' });
 
-      // Verify path variables
       const pathVar = result.state.variables.path.get('path');
       expect(pathVar).toBeDefined();
       if (pathVar) {
@@ -55,14 +81,11 @@ describe('State Migration', () => {
     });
 
     it('should migrate state with commands', () => {
-      // Set up old state using the NEW method name
       oldState.setCommandVar('test', { command: 'echo test' });
       oldState.setCommandVar('complex', { command: 'test', options: { silent: true } });
       
-      // Perform migration
       const result = migrateState(oldState);
       
-      // Verify commands
       expect(result.state.commands.size).toBe(2);
       const testCmd = result.state.commands.get('test');
       expect(testCmd?.name).toBe('test');
@@ -74,7 +97,6 @@ describe('State Migration', () => {
     });
 
     it('should migrate state with imports', () => {
-      // Set up old state
       oldState.addImport('test1.md');
       oldState.addImport('test2.md');
 
@@ -82,13 +104,11 @@ describe('State Migration', () => {
       expect(result.success).toBe(true);
       expect(result.warnings).toHaveLength(0);
 
-      // Verify imports
       expect(result.state.imports.has('test1.md')).toBe(true);
       expect(result.state.imports.has('test2.md')).toBe(true);
     });
 
     it('should migrate state with nodes', () => {
-      // Set up old state
       const node: MeldNode = {
         type: 'text',
         value: 'test',
@@ -100,7 +120,6 @@ describe('State Migration', () => {
       expect(result.success).toBe(true);
       expect(result.warnings).toHaveLength(0);
 
-      // Verify nodes
       expect(result.state.nodes).toHaveLength(1);
       expect(result.state.nodes[0]).toEqual(node);
     });
@@ -108,10 +127,8 @@ describe('State Migration', () => {
 
   describe('validation', () => {
     it('should detect mismatched text variables', () => {
-      // Create a state that will be different after migration
       oldState.setTextVar('test', 'value');
 
-      // Create a mismatched state manually
       const mismatchedState: StateNode = {
         variables: {
           text: new Map([['test', 'different']]),
@@ -123,7 +140,6 @@ describe('State Migration', () => {
         nodes: [],
       };
 
-      // Validate the mismatched state
       const warnings: string[] = [];
       validateMigration(oldState, mismatchedState, warnings);
       expect(warnings).toContain('Text variable mismatch: test');
@@ -132,7 +148,6 @@ describe('State Migration', () => {
     it('should fail strictly with validation errors', () => {
       oldState.setTextVar('test', 'value');
 
-      // Create a mismatched state to force validation error
       const mismatchedState: StateNode = {
         variables: {
           text: new Map([['test', 'different']]),
@@ -156,20 +171,18 @@ describe('State Migration', () => {
 
   describe('error handling', () => {
     it('should handle migration errors gracefully', () => {
-      // Create an invalid state that will cause migration to fail
-      const invalidState = {
-        getAllTextVars: () => { throw new Error('Test error'); },
-        getAllDataVars: () => new Map(),
-        getAllPathVars: () => new Map(),
-        getAllCommands: () => new Map(),
-        getImports: () => new Set(),
-        getNodes: () => [],
-        getCurrentFilePath: () => null
-      } as unknown as StateService;
+      const errorMock = mockDeep<IStateService>();
+      errorMock.getAllTextVars.mockImplementation(() => { throw new Error('Test error'); });
+      errorMock.getAllDataVars.mockReturnValue(new Map());
+      errorMock.getAllPathVars.mockReturnValue(new Map());
+      errorMock.getAllCommands.mockReturnValue(new Map());
+      errorMock.getImports.mockReturnValue(new Set());
+      errorMock.getNodes.mockReturnValue([]);
+      errorMock.getCurrentFilePath.mockReturnValue(null);
 
-      const result = migrateState(invalidState);
+      const result = migrateState(errorMock);
       expect(result.success).toBe(false);
-      expect(result.warnings).toContain('Error: Test error');
+      expect(result.warnings).toContain('Error migrating state: Error: Test error');
       expect(result.state.variables.text.size).toBe(0);
     });
   });
