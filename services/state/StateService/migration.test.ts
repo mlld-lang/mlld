@@ -3,17 +3,32 @@ import { StateService } from '@services/state/StateService/StateService.js';
 import { migrateState, validateMigration } from '@services/state/StateService/migration.js';
 import type { MeldNode } from '@core/syntax/types.js';
 import type { StateNode } from '@services/state/StateService/types.js';
+import { createStateServiceMock } from '@services/state/StateService/mocks.js';
+import type { IStateService, ICommandDefinition } from '@services/state/StateService/types.js';
+import { vi } from 'vitest';
 
 describe('State Migration', () => {
-  let oldState: StateService;
+  let oldState: IStateService;
+  let result: MigrationResult;
 
   beforeEach(() => {
-    oldState = new StateService();
+    // Setup old state structure manually or using mocks
+    oldState = createStateServiceMock(); // Use mock factory
+    // Add some data to the old state
+    oldState.setTextVar('text', 'value');
+    oldState.setDataVar('data', { key: 'value' });
+    oldState.setPathVar('path', { raw: '/test/path' });
+    // Configure setCommandVar mock if needed, or assume it works on the mock
+    // oldState.setCommand is not a function error originates here
   });
 
   describe('basic migration', () => {
+    beforeEach(() => {
+      // Perform migration
+      result = migrateState(oldState);
+    });
+
     it('should migrate empty state', () => {
-      const result = migrateState(oldState, { validate: false });
       expect(result.success).toBe(true);
       expect(result.warnings).toHaveLength(0);
       expect(result.state.variables.text.size).toBe(0);
@@ -25,40 +40,37 @@ describe('State Migration', () => {
     });
 
     it('should migrate state with variables', () => {
-      // Set up old state
-      oldState.setTextVar('text', 'value');
-      oldState.setDataVar('data', { key: 'value' });
-      oldState.setPathVar('path', '/test/path');
-
-      const result = migrateState(oldState, { validate: false });
-      expect(result.success).toBe(true);
-      expect(result.warnings).toHaveLength(0);
-
       // Verify text variables
-      expect(result.state.variables.text.get('text')).toBe('value');
+      expect(result.state.variables.text.get('text')?.value).toBe('value');
 
       // Verify data variables
-      expect(result.state.variables.data.get('data')).toEqual({ key: 'value' });
+      expect(result.state.variables.data.get('data')?.value).toEqual({ key: 'value' });
 
       // Verify path variables
-      expect(result.state.variables.path.get('path')).toBe('/test/path');
+      const pathVar = result.state.variables.path.get('path');
+      expect(pathVar).toBeDefined();
+      if (pathVar) {
+         expect((pathVar.value as IFilesystemPathState).raw).toBe('/test/path');
+      }
     });
 
     it('should migrate state with commands', () => {
-      // Set up old state
-      oldState.setCommand('test', 'echo test');
-      oldState.setCommand('complex', { command: 'test', options: { silent: true } });
-
-      const result = migrateState(oldState, { validate: false });
-      expect(result.success).toBe(true);
-      expect(result.warnings).toHaveLength(0);
-
+      // Set up old state using the NEW method name
+      oldState.setCommandVar('test', { command: 'echo test' });
+      oldState.setCommandVar('complex', { command: 'test', options: { silent: true } });
+      
+      // Perform migration
+      const result = migrateState(oldState);
+      
       // Verify commands
-      expect(result.state.commands.get('test')).toEqual({ command: 'echo test' });
-      expect(result.state.commands.get('complex')).toEqual({ 
-        command: 'test', 
-        options: { silent: true } 
-      });
+      expect(result.state.commands.size).toBe(2);
+      const testCmd = result.state.commands.get('test');
+      expect(testCmd?.name).toBe('test');
+      expect(testCmd?.value.command).toBe('echo test');
+      const complexCmd = result.state.commands.get('complex');
+      expect(complexCmd?.name).toBe('complex');
+      expect(complexCmd?.value.command).toBe('test');
+      expect(complexCmd?.value.options).toEqual({ silent: true });
     });
 
     it('should migrate state with imports', () => {

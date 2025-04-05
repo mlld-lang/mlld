@@ -376,9 +376,11 @@ export class TestContext {
    * @param options Options for selective transformation, or true/false for all
    */
   enableTransformation(options: any = true): void {
-    this.services.state.setTransformationEnabled(options === true);
-    if (options !== false && options !== true) {
-        this.services.state.setTransformationOptions(options as TransformationOptions);
+    if (typeof options === 'boolean') {
+      this.services.state.setTransformationEnabled(options);
+    } else {
+      this.services.state.setTransformationEnabled(true);
+      this.services.state.setTransformationOptions(options);
     }
   }
 

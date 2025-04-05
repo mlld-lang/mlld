@@ -87,6 +87,12 @@ export class MockStateService implements IStateService {
   getCurrentStateId = vi.fn();
   getState = vi.fn();
   reset = vi.fn();
+  setTransformationEnabled = vi.fn();
+  setTransformationOptions = vi.fn();
+  getTransformationOptions = vi.fn();
+  shouldTransform = vi.fn();
+  hasTransformationSupport = vi.fn();
+  setTransformedNodes = vi.fn();
 
   constructor() {
     // Default implementations
@@ -126,11 +132,21 @@ export class MockStateService implements IStateService {
     this.getCurrentStateId.mockImplementation(() => 'mock-state-id');
     this.getState.mockImplementation(() => null);
     this.reset.mockImplementation(() => {});
+    this.setTransformationEnabled.mockImplementation(() => {});
+    this.setTransformationOptions.mockImplementation(() => {});
+    this.getTransformationOptions.mockImplementation(() => ({
+      enabled: false,
+      preserveOriginal: true,
+      transformNested: true
+    }));
+    this.shouldTransform.mockImplementation(() => false);
+    this.hasTransformationSupport.mockImplementation(() => true);
+    this.setTransformedNodes.mockImplementation(() => {});
+    this.transformNode.mockImplementation(() => {});
 
     // Enhanced implementations
     this.clone.mockImplementation(() => this);
     this.mergeChildState.mockImplementation((childState) => {});
-    this.transformNode.mockImplementation((original, transformed) => {});
   }
 }
 

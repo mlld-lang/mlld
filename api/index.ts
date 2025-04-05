@@ -364,7 +364,7 @@ export async function main(filePath: string, options: ProcessOptions = {}): Prom
     // This is maintained for backward compatibility, but transformation is now always enabled
     {
       // Ensure transformation is always enabled, regardless of what was passed in options
-      resultState.enableTransformation(true);
+      resultState.setTransformationEnabled(true);
       
       // Add debugging for resultState transformation settings
       logger.debug('ResultState transformation settings (always enabled)', {

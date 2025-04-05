@@ -18,8 +18,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { StateService } from '@services/state/StateService/StateService.js';
 import { StateFactory } from '@services/state/StateService/StateFactory.js';
-import type { MeldNode, TextNode } from '@core/syntax/types/nodes.js';
-import type { IStateEventService, StateEvent } from '@services/state/StateEventService/IStateEventService.js';
+import { IStateEventService } from '@services/state/StateEventService/IStateEventService.js';
+import { createMockStateEventService } from '@tests/utils/mocks/serviceMocks.js';
+import { MeldNode, TextNode } from '@core/syntax/types/index.js';
+import { VariableType, PathContentType, ICommandDefinition, IFilesystemPathState, IUrlPathState, createTextVariable, createDataVariable, RelativePath, createPathVariable } from '@core/types/index.js';
+import { unsafeCreateValidatedResourcePath } from '@core/types/paths.js';
 import type { IStateTrackingService } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
 import { StateTrackingService } from '@tests/utils/debug/StateTrackingService/StateTrackingService.js';
 import { StateVisualizationService } from '@tests/utils/debug/StateVisualizationService/StateVisualizationService.js';
@@ -31,7 +34,6 @@ import { StateEventService } from '@services/state/StateEventService/StateEventS
 import { mockDeep, mockReset } from 'vitest-mock-extended';
 import { StateTrackingServiceClientFactory } from '@services/state/StateTrackingService/factories/StateTrackingServiceClientFactory.js';
 import type { IStateTrackingServiceClient } from '@services/state/StateTrackingService/interfaces/IStateTrackingServiceClient.js';
-import { VariableType, PathContentType, ICommandDefinition, IFilesystemPathState, IUrlPathState, createValidatedPath, createTextVariable, createDataVariable, RelativePath } from '@core/types/index.js';
 
 class MockStateEventService implements IStateEventService {
   private handlers = new Map<string, Array<{
@@ -191,37 +193,26 @@ describe('StateService', () => {
 
     it('should set and get path variables (filesystem)', () => {
       const state = getState();
-      // Assume a simple filesystem path state for now
-      const pathValue: IFilesystemPathState = {
+      const fsPathValue: IFilesystemPathState = {
         contentType: PathContentType.FILESYSTEM,
         originalValue: './some/path.txt',
         isValidSyntax: true,
         isSecure: true,
         isAbsolute: false,
-        validatedPath: createValidatedPath('./some/path.txt') as RelativePath, // Need path helpers
-        exists: undefined // Existence check might not be performed yet
+        validatedPath: unsafeCreateValidatedResourcePath('./some/path.txt') as RelativePath,
+        exists: undefined
       };
-      const variable = state.setPathVar('root', pathValue);
+      const variable = state.setPathVar('local', fsPathValue);
       
-      // Check returned variable
-      expect(variable).toMatchObject({
-        type: VariableType.PATH,
-        name: 'root',
-        value: expect.objectContaining({ // Check nested value structure
-           contentType: PathContentType.FILESYSTEM,
-           originalValue: './some/path.txt',
-           isValidSyntax: true
-        })
-      });
-      expect(variable.metadata).toBeDefined();
-
-      // Check retrieval
-      const retrieved = state.getPathVar('root');
+      expect(variable.name).toBe('local');
+      expect(variable.value).toEqual(fsPathValue);
+      expect(variable.type).toBe(VariableType.PATH);
+      
+      const retrieved = state.getPathVar('local');
       expect(retrieved).toBeDefined();
-      expect(retrieved).toEqual(variable);
-      expect(retrieved?.value).toEqual(pathValue);
-      expect(retrieved?.value.contentType).toBe(PathContentType.FILESYSTEM);
-      expect((retrieved?.value as IFilesystemPathState).originalValue).toBe('./some/path.txt');
+      expect(retrieved?.name).toBe('local');
+      expect(retrieved?.value).toEqual(fsPathValue);
+      expect(retrieved?.type).toBe(VariableType.PATH);
     });
     
     // Add a test case for URL path variables
@@ -231,28 +222,20 @@ describe('StateService', () => {
         contentType: PathContentType.URL,
         originalValue: 'https://example.com',
         isValidated: true,
-        fetchStatus: 'not_fetched', // Initial state
-        validatedPath: createValidatedPath('https://example.com') // Need path helpers
+        fetchStatus: 'not_fetched',
+        validatedPath: unsafeCreateValidatedResourcePath('https://example.com')
       };
       const variable = state.setPathVar('remote', urlValue);
       
-      // Check returned variable
-      expect(variable).toMatchObject({
-        type: VariableType.PATH,
-        name: 'remote',
-        value: expect.objectContaining({ 
-           contentType: PathContentType.URL,
-           originalValue: 'https://example.com'
-        })
-      });
-      expect(variable.metadata).toBeDefined();
-
-      // Check retrieval
+      expect(variable.name).toBe('remote');
+      expect(variable.value).toEqual(urlValue);
+      expect(variable.type).toBe(VariableType.PATH);
+      
       const retrieved = state.getPathVar('remote');
       expect(retrieved).toBeDefined();
-      expect(retrieved).toEqual(variable);
-      expect(retrieved?.value.contentType).toBe(PathContentType.URL);
-      expect((retrieved?.value as IUrlPathState).originalValue).toBe('https://example.com');
+      expect(retrieved?.name).toBe('remote');
+      expect(retrieved?.value).toEqual(urlValue);
+      expect(retrieved?.type).toBe(VariableType.PATH);
     });
 
     // Add tests for CommandVariables

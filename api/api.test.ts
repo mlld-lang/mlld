@@ -60,6 +60,20 @@ describe('SDK Integration Tests', () => {
       );
     });
 
+    // TODO(transformation-removal): Add tests for new default behavior
+    // - Test directive processing without transformation mode
+    // - Verify directive output in default state
+    // - Test state management with new behavior
+    it('should process content with default behavior', async () => {
+      const content = '@text greeting = "Hello"';
+      await context.services.filesystem.writeFile(testFilePath, content);
+      const result = await main(testFilePath, { 
+        fs: context.services.filesystem,
+        services: context.services as any
+      });
+      expect(result).toBe(content);
+    });
+
     it('should allow service injection through options', async () => {
       const customState = context.services.state;
       const spy = vi.spyOn(customState, 'enableTransformation');

@@ -334,7 +334,12 @@ export function createMockStateService(): IStateService {
     getTransformedNodes: vi.fn(),
     transformNode: vi.fn(),
     isTransformationEnabled: vi.fn(),
-    enableTransformation: vi.fn(),
+    setTransformationEnabled: vi.fn(),
+    setTransformationOptions: vi.fn(),
+    getTransformationOptions: vi.fn(),
+    shouldTransform: vi.fn(),
+    hasTransformationSupport: vi.fn(),
+    setTransformedNodes: vi.fn(),
     addImport: vi.fn(),
     removeImport: vi.fn(),
     hasImport: vi.fn(),
@@ -493,10 +498,10 @@ export function createMockStateService(): IStateService {
       index = transformedNodes.findIndex(node => 
         node.type === original.type &&
         node.content === original.content &&
-        node.location.start.line === original.location.start.line &&
-        node.location.start.column === original.location.start.column &&
-        node.location.end.line === original.location.end.line &&
-        node.location.end.column === original.location.end.column
+        node.location?.start?.line === original.location?.start?.line &&
+        node.location?.start?.column === original.location?.start?.column &&
+        node.location?.end?.line === original.location?.end?.line &&
+        node.location?.end?.column === original.location?.end?.column
       );
     }
 
@@ -515,7 +520,17 @@ export function createMockStateService(): IStateService {
   });
 
   mockService.isTransformationEnabled.mockImplementation(() => false);
-  mockService.enableTransformation.mockImplementation(() => {});
+  mockService.setTransformationEnabled.mockImplementation(() => {});
+  mockService.setTransformationOptions.mockImplementation(() => {});
+  mockService.getTransformationOptions.mockImplementation(() => ({
+    enabled: false,
+    preserveOriginal: true,
+    transformNested: true
+  }));
+  mockService.shouldTransform.mockImplementation(() => false);
+  mockService.hasTransformationSupport.mockImplementation(() => true);
+  mockService.setTransformedNodes.mockImplementation(() => {});
+  mockService.getTransformedNodes.mockImplementation(() => []);
   mockService.addImport.mockImplementation(() => {});
   mockService.removeImport.mockImplementation(() => {});
   mockService.hasImport.mockImplementation(() => false);

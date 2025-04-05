@@ -55,8 +55,8 @@ export class DefineDirectiveHandler implements IDirectiveHandler {
       // 4. Create new state for modifications
       const newState = context.state.clone();
 
-      // 5. Store command with metadata
-      newState.setCommand(nameMetadata.name, {
+      // 5. Store command with metadata using the correct method
+      newState.setCommandVar(nameMetadata.name, {
         ...commandDef,
         ...(nameMetadata.metadata && { metadata: nameMetadata.metadata })
       });

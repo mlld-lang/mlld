@@ -1,15 +1,50 @@
-  it('should initialize transformed nodes when enabling transformation', () => {
-    const node: MeldNode = { type: 'Text', content: 'test' };
+import { describe, it, expect, beforeEach } from 'vitest';
+import { StateService } from '@services/state/StateService/StateService.js';
+import type { IStateService } from '@services/state/StateService/IStateService.js';
+import type { MeldNode } from '@core/syntax/types/index.js';
+
+let service: IStateService;
+
+describe('StateService node transformation', () => {
+  beforeEach(() => {
+    service = new StateService();
+  });
+
+  it('should have transformation disabled by default', () => {
+    expect(service.isTransformationEnabled()).toBe(false);
+  });
+
+  it('should return original nodes when transformation is disabled', () => {
+    const node: MeldNode = {
+      type: 'Text',
+      content: 'test',
+      location: { start: { line: 1, column: 1 }, end: { line: 1, column: 4 } }
+    };
     service.addNode(node);
-    expect(service.getTransformedNodes()).toEqual([node]); // Transformed should equal original initially
+    expect(service.getTransformedNodes()).toEqual([node]);
+  });
+
+  it('should initialize transformed nodes when enabling transformation', () => {
+    const node: MeldNode = {
+      type: 'Text',
+      content: 'test',
+      location: { start: { line: 1, column: 1 }, end: { line: 1, column: 4 } }
+    };
+    service.addNode(node);
+    service.setTransformationEnabled(true);
+    expect(service.getTransformedNodes()).toEqual([node]);
   });
 
   it('should add nodes to both arrays when transformation is enabled', () => {
-    const node: MeldNode = { type: 'Text', content: 'test content' }; // Added content
+    service.setTransformationEnabled(true);
+    const node: MeldNode = {
+      type: 'Text',
+      content: 'test',
+      location: { start: { line: 1, column: 1 }, end: { line: 1, column: 4 } }
+    };
     service.addNode(node);
     expect(service.getNodes()).toEqual([node]);
-    // Check transformed nodes immediately after adding, should match
-    expect(service.getTransformedNodes()).toEqual([node]); 
+    expect(service.getTransformedNodes()).toEqual([node]);
   });
 
   it('should transform nodes only when enabled', () => {
@@ -31,13 +66,18 @@
   });
 
   it('should preserve transformation state when cloning', () => {
-    const node: MeldNode = { type: 'Text', content: 'clone test' }; // Added content
+    const node: MeldNode = {
+      type: 'Text',
+      content: 'test',
+      location: { start: { line: 1, column: 1 }, end: { line: 1, column: 4 } }
+    };
     service.addNode(node);
-    service.transformNode(node, { type: 'Text', content: 'transformed clone' });
+    service.setTransformationEnabled(true);
+    service.transformNode(0, { type: 'Text', content: 'transformed', location: node.location });
 
     const clone = service.clone();
     expect(clone.isTransformationEnabled()).toBe(true);
-    expect(clone.getTransformedNodes()).toEqual([{ type: 'Text', content: 'transformed clone' }]);
+    expect(clone.getTransformedNodes()).toEqual([{ type: 'Text', content: 'transformed', location: node.location }]);
   });
 
   it('should handle immutability correctly with transformations', () => {
@@ -48,4 +88,19 @@
     const transformed: MeldNode = { type: 'Text', content: 'transformed immutable' };
     // Expect transformNode on immutable state to throw or handle appropriately
     expect(() => service.transformNode(original, transformed)).toThrow(/Cannot modify immutable state/);
-  }); 
+  });
+
+  it('should support transformation options', () => {
+    service.setTransformationOptions({
+      enabled: true,
+      preserveOriginal: true,
+      transformNested: true
+    });
+    expect(service.isTransformationEnabled()).toBe(true);
+    expect(service.getTransformationOptions()).toEqual({
+      enabled: true,
+      preserveOriginal: true,
+      transformNested: true
+    });
+  });
+}); 
