@@ -25,6 +25,8 @@ import {
   ValidatedResourcePath, 
   unsafeCreateValidatedResourcePath, 
   unsafeCreateAbsolutePath, 
+  unsafeCreateUrlPath, 
+  unsafeCreateRelativePath
   unsafeCreateUrlPath 
 } from '@core/types/paths.js'; 
 
@@ -86,8 +88,9 @@ const createMockPathVariable = (name: string, rawPath: string, contentType: Path
   let validatedPath: ValidatedResourcePath;
   let isAbsolute = false;
   if (contentType === PathContentType.FILESYSTEM) {
-    validatedPath = unsafeCreateValidatedResourcePath(rawPath); // Or use unsafeCreateAbsolutePath if needed
     isAbsolute = rawPath.startsWith('/') || rawPath.startsWith('$HOMEPATH');
+    // Use more specific unsafe creator based on isAbsolute guess
+    validatedPath = isAbsolute ? unsafeCreateAbsolutePath(rawPath) : unsafeCreateRelativePath(rawPath);
   } else { // URL
     validatedPath = unsafeCreateUrlPath(rawPath); 
   }
@@ -212,36 +215,36 @@ describe('ResolutionService', () => {
       getHomePath: vi.fn().mockReturnValue('/home/user'),
       dirname: vi.fn(p => typeof p === 'string' ? p.substring(0, p.lastIndexOf('/') || 0) : ''),
       resolvePath: vi.fn().mockImplementation(async (p: string | MeldPath, purpose: PathPurpose, baseDir?: string): Promise<MeldPath> => {
-         const rawPath = typeof p === 'string' ? p : p.originalValue; // Use originalValue from MeldPath
+         const rawPath = typeof p === 'string' ? p : p.originalValue; 
          let resolvedRaw = rawPath;
          let contentType = PathContentType.FILESYSTEM;
+         // Simplified resolution logic for mock
          if (rawPath === '$HOMEPATH') resolvedRaw = '/home/user';
          else if (rawPath === '$HOMEPATH/meld') resolvedRaw = '/home/user/meld';
-         else if (rawPath === '$./docs' && baseDir) resolvedRaw = '/project/root/docs'; // Example baseDir usage
-         else if (baseDir && !rawPath.startsWith('/') && !rawPath.startsWith('$')) resolvedRaw = baseDir + '/' + rawPath; // Simplistic relative path join
-         // Assume URL if starts with http
+         else if (rawPath === '$./docs' && baseDir?.includes('test.meld')) resolvedRaw = (baseDir?.substring(0, baseDir.lastIndexOf('/')) || '') + '/docs'; // More robust baseDir handling
+         else if (baseDir && !rawPath.startsWith('/') && !rawPath.startsWith('$') && !rawPath.startsWith('http')) resolvedRaw = (baseDir?.substring(0, baseDir.lastIndexOf('/')) || '') + '/' + rawPath;
+         
          if (resolvedRaw.startsWith('http')) contentType = PathContentType.URL;
 
          // Create mock MeldPath using unsafe creators
          let validatedPath: ValidatedResourcePath;
          let isAbsolute = false;
          if (contentType === PathContentType.FILESYSTEM) {
-           validatedPath = unsafeCreateValidatedResourcePath(resolvedRaw);
            isAbsolute = resolvedRaw.startsWith('/');
+           validatedPath = isAbsolute ? unsafeCreateAbsolutePath(resolvedRaw) : unsafeCreateRelativePath(resolvedRaw);
          } else { // URL
            validatedPath = unsafeCreateUrlPath(resolvedRaw);
          }
          const value: MeldPath = {
            contentType,
-           originalValue: rawPath,
+           originalValue: rawPath, // Keep original raw path
            validatedPath,
            isAbsolute,
-           isSecure: true // Assume secure for mock
+           isSecure: true
          };
          return value;
       }),
       normalizePath: vi.fn().mockImplementation((p: string | MeldPath): MeldPath => {
-         // If already MeldPath, return it. If string, create a mock one.
          if (typeof p === 'string') { 
            const isAbsolute = p.startsWith('/');
            const validatedPath = isAbsolute ? unsafeCreateAbsolutePath(p) : unsafeCreateRelativePath(p);
@@ -253,7 +256,7 @@ describe('ResolutionService', () => {
              isSecure: true 
            };
          }
-         return p;
+         return p; 
       }),
       validatePath: vi.fn().mockResolvedValue(undefined), 
     } as unknown as IPathService;
