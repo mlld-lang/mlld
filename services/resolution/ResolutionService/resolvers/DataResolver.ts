@@ -1,13 +1,11 @@
-import { MeldNode, DirectiveNode, TextNode } from '@core/syntax/types.js';
+import type { MeldNode, DirectiveNode, TextNode } from '@core/ast/ast/astTypes.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
-import { ResolutionContext, ResolutionErrorCode } from '@services/resolution/ResolutionService/IResolutionService.js';
-import { ResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError.js';
+import { ResolutionContext } from '@core/types/resolution.js';
+import { VariableType, JsonObject } from '@core/types/index.js';
 import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 import { VariableResolutionError } from '@core/errors/VariableResolutionError.js';
 import { FieldAccessError } from '@core/errors/FieldAccessError.js';
-import { VariableType } from '@core/syntax/types.js';
-import { JsonObject } from '@core/syntax/types.js';
 
 /**
  * Handles resolution of data variables ($data)

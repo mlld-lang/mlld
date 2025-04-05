@@ -44,7 +44,7 @@ import {
   isUrlPath,
   isValidatedResourcePath
 } from '@core/types/paths.js';
-import { ErrorSeverity } from '@core/errors/ErrorSeverity.js';
+import { ErrorSeverity } from '@core/errors/index.js';
 
 /**
  * Service for validating and normalizing paths

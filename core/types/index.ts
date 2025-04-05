@@ -80,18 +80,29 @@ export interface ProcessOptions {
  * Centralized export point for core Meld types.
  */
 
-export * from './common.js';
+// Fix: Explicitly export from common.js, excluding SourceLocation
+export {
+  type JsonValue,
+  type JsonObject,
+  type JsonArray,
+  type Result,
+  success,
+  failure,
+  type DirectiveReplacement,
+  StringLiteralType
+} from './common.js';
+
 export * from './variables.js';
 export * from './paths.js';
 export * from './define.js';
 export * from './state.js';
 export * from './resolution.js';
 export * from '../errors/index.js';
-export * from './embed.js'; // Add when created
-// export * from './run.js';   // Add when created
-// export * from './import.js'; // Add when created
+export * from './embed.js'; 
+// export * from './run.js';   
+// export * from './import.js'; 
 
-// Existing exports (if needed, or remove if covered by new files)
+// Restore original wildcard export for dependencies
 export * from './dependencies.js';
 
 // Note: Ensure all necessary types are exported from their respective files.
