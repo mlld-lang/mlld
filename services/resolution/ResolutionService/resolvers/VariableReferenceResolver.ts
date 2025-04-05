@@ -16,6 +16,7 @@ import type { IParserServiceClient } from '@services/pipeline/ParserService/inte
 import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory.js';
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 import { MeldPath } from '@core/types/paths';
+import { FieldAccessType } from '@core/types';
 
 /**
  * Handles resolution of variable references based on VariableReferenceNode AST.
@@ -147,68 +148,97 @@ export class VariableReferenceResolver {
     }
     */
    
-    logger.debug(`Resolving VariableReferenceNode: ${node.identifier}`, { fields: node.fields, depth: currentDepth });
+    console.log(`[RESOLVE] Start: Resolving ${node.identifier}`, { fields: node.fields, typeHint: node.valueType, depth: currentDepth });
 
     try {
-      // Use node.valueType to fetch the specific variable type
-      const variable = await this.getVariable(node, newContext); // Pass the whole node
+      const variable = await this.getVariable(node, newContext); 
+      console.log(`[RESOLVE] getVariable result for ${node.identifier}:`, variable ? { type: variable.type, valuePreview: JSON.stringify(variable.value)?.substring(0,50) } : 'undefined');
       
       if (!variable) {
         // Handle not found based on strict mode
         if (newContext.strict) {
+          console.error(`[RESOLVE] Strict mode: Variable not found: ${node.identifier}`);
           throw new VariableResolutionError(`Variable not found: ${node.identifier}`, node.identifier, newContext);
         }
+        console.warn(`[RESOLVE] Non-strict mode: Variable not found: ${node.identifier}, returning empty string.`);
         return ''; // Return empty string if not found and not strict
       }
 
-      let resolvedValue: JsonValue = variable.value; // Start with the base variable value
+      let resolvedValue: JsonValue = variable.value; 
 
-      // Handle field access if fields are present and variable is DataVariable
       if (node.fields && node.fields.length > 0) {
+        console.log(`[RESOLVE] Attempting field access for ${node.identifier}:`, node.fields);
+        let dataForAccess: JsonValue | undefined = undefined;
+        let isVariableData = false;
+
         if (isDataVariable(variable)) {
-          const fieldAccessResult = await this.accessFields(variable.value, node.fields, newContext);
-          if (fieldAccessResult.success) {
-            resolvedValue = fieldAccessResult.value;
+          console.log(`[RESOLVE] Variable ${node.identifier} is DataVariable.`);
+          dataForAccess = variable.value;
+          isVariableData = true;
+        } else if (isTextVariable(variable) && typeof variable.value === 'string') {
+           console.log(`[RESOLVE] Variable ${node.identifier} is TextVariable, attempting JSON parse.`);
+           try {
+               dataForAccess = JSON.parse(variable.value);
+               console.log(`[RESOLVE] Successfully parsed TextVariable value for field access.`);
+               isVariableData = true; // Treat parsed string as data
+           } catch (parseError) {
+               console.warn(`[RESOLVE] Failed to parse TextVariable value as JSON for field access: ${variable.value.substring(0,100)}`);
+               // dataForAccess remains undefined
+           }
             } else {
-            // Field access failed
-            if (newContext.strict) {
-              throw fieldAccessResult.error; // Throw the specific FieldAccessError
-            }
-            resolvedValue = ''; // Return empty string if not strict
-          }
-        } else {
-          // Fields accessed on a non-data variable
-          if (newContext.strict) {
-             throw new VariableResolutionError(`Cannot access fields on non-data variable: ${node.identifier}`, node.identifier, newContext, { fieldAccessAttempted: true });
-          }
-          resolvedValue = ''; // Return empty string if not strict
+             console.log(`[RESOLVE] Variable ${node.identifier} is neither DataVariable nor parseable TextVariable (type: ${variable.type}).`);
+             // dataForAccess remains undefined
         }
+
+        // Proceed with field access ONLY if we have valid data (original or parsed)
+        if (isVariableData && dataForAccess !== undefined) {
+             console.log(`[RESOLVE] Proceeding with accessFields.`);
+             const fieldAccessResult = await this.accessFields(dataForAccess, node.fields, newContext);
+             if (fieldAccessResult.success) {
+                 resolvedValue = fieldAccessResult.value;
+                 console.log(`[RESOLVE] Field access successful for ${node.identifier}. New value preview:`, JSON.stringify(resolvedValue)?.substring(0,50));
+          } else {
+                 console.warn(`[RESOLVE] Field access failed for ${node.identifier}:`, fieldAccessResult.error.message);
+                 if (newContext.strict) {
+                     throw fieldAccessResult.error; 
+                 }
+                 resolvedValue = ''; 
+            }
+          } else {
+            // Handle cases where field access is attempted on incompatible types
+            const errorMsg = `Cannot access fields on variable: ${node.identifier} (type: ${variable.type}, not valid data for access)`;
+            console.warn(`[RESOLVE] ${errorMsg}`);
+            if (newContext.strict) {
+                 throw new VariableResolutionError(errorMsg, node.identifier, newContext, { fieldAccessAttempted: true });
+            }
+             resolvedValue = ''; 
+        }
+      } else {
+          console.log(`[RESOLVE] No fields to access for ${node.identifier}.`);
       }
       
-      // Convert the final resolved value to string
       const stringValue = this.convertToString(resolvedValue, newContext);
+      console.log(`[RESOLVE] Converted value to string for ${node.identifier}:`, stringValue.substring(0,100));
       
-      // Check for nested references *after* initial resolution and field access
-      // Use the main resolution service for this to handle complex text.
       if (stringValue.includes('{{') && this.resolutionService) {
-           logger.debug(`Result contains nested variables, resolving recursively: ${stringValue}`);
-           // Pass the potentially modified context (increased depth)
+           console.log(`[RESOLVE] Result contains nested variables, resolving recursively: ${stringValue.substring(0,100)}`);
            return await this.resolutionService.resolveText(stringValue, newContext);
       }
 
-      logger.debug(`Resolved ${node.identifier} to: ${stringValue.substring(0,100)}`);
+      console.log(`[RESOLVE] Final resolved value for ${node.identifier}: ${stringValue.substring(0,100)}`);
       return stringValue;
 
       } catch (error) {
-      logger.error(`Error resolving variable ${node.identifier}`, { error });
-      if (error instanceof FieldAccessError && !newContext.strict) {
-           return ''; // Non-strict field access error results in empty string
+      console.error(`[RESOLVE] Error during resolution for ${node.identifier}:`, error);
+      if (error instanceof CoreFieldAccessError && !newContext.strict) {
+           console.warn(`[RESOLVE] Non-strict mode, suppressing FieldAccessError for ${node.identifier}`);
+           return ''; 
       }
       if (newContext.strict) {
-          // Re-throw original error or wrap it
           throw VariableResolutionError.fromError(error, `Failed to resolve variable: ${node.identifier}`, newContext);
       }
-      return ''; // Non-strict mode: return empty string on error
+      console.warn(`[RESOLVE] Non-strict mode, suppressing error for ${node.identifier}, returning empty string.`);
+      return '';
     }
   }
   
@@ -291,63 +321,75 @@ export class VariableReferenceResolver {
       fields: FieldAccess[],
       context: ResolutionContext
   ): Promise<Result<JsonValue, FieldAccessError>> {
-      logger.debug('Accessing fields', { fields, baseValueType: typeof baseValue });
+      // Force logs with console.log for visibility
+      console.log('[ACCESS_FIELDS] Start:', { fields, baseValueType: typeof baseValue, baseValuePreview: JSON.stringify(baseValue)?.substring(0, 50) }); 
       let current: JsonValue = baseValue;
 
     for (let i = 0; i < fields.length; i++) {
       const field = fields[i];
-          const currentPath = fields.slice(0, i + 1);
+      const currentPathString = fields.slice(0, i + 1).map(f => f.type === FieldAccessType.INDEX ? `[${f.key}]` : `.${f.key}`).join('');
+      console.log(`[ACCESS_FIELDS] Step ${i+1}/${fields.length}: Accessing field`, { 
+          type: field.type, 
+          key: field.key, 
+          currentValueType: typeof current, 
+          currentValuePreview: JSON.stringify(current)?.substring(0, 50), 
+          pathSoFar: currentPathString 
+      });
 
-          if (current === null || typeof current !== 'object') {
-              const error = new FieldAccessError(
-                  `Cannot access field '${field.key}' on non-object value: ${typeof current}`,
-                  baseValue, fields, i
-              );
-              return failure(error);
-          }
-
-          if (field.type === FieldAccessType.PROPERTY) {
-              if (!Array.isArray(current)) {
-                  if (Object.prototype.hasOwnProperty.call(current, field.key)) {
-                      current = (current as Record<string, JsonValue>)[field.key];
-                  } else {
-                      const error = new FieldAccessError(
-                          `Field '${field.key}' not found in object.`,
-                          baseValue, fields, i
-                      );
-                      return failure(error);
-                  }
-              } else {
-                   const error = new FieldAccessError(
-                      `Cannot access property '${field.key}' on an array.`,
-                      baseValue, fields, i
-                  );
-                  return failure(error);
-              }
-          } else if (field.type === FieldAccessType.INDEX) {
-              if (Array.isArray(current)) {
-                  const index = Number(field.key);
-                  if (Number.isInteger(index) && index >= 0 && index < current.length) {
-        current = current[index];
-      } else {
-                       const error = new FieldAccessError(
-                          `Index '${field.key}' out of bounds for array of length ${current.length}.`,
-                          baseValue, fields, i
-                      );
-                      return failure(error);
-                  }
-          } else {
-                   const error = new FieldAccessError(
-                      `Cannot access index '${field.key}' on non-array value.`,
-                      baseValue, fields, i
-                  );
-                  return failure(error);
-              }
-          }
+      if (current === null || typeof current !== 'object') {
+        const errorMsg = `Cannot access field '${field.key}' on non-object value: ${typeof current} (path: ${currentPathString})`;
+        console.warn('[ACCESS_FIELDS] WARN:', errorMsg); // Use console.warn
+        const error = new FieldAccessError(errorMsg, baseValue, fields, i);
+        return failure(error);
       }
+
+      if (field.type === FieldAccessType.PROPERTY) {
+        const key = String(field.key); 
+        if (!Array.isArray(current)) {
+          if (Object.prototype.hasOwnProperty.call(current, key)) {
+            current = (current as Record<string, JsonValue>)[key];
+            console.log(`[ACCESS_FIELDS] Accessed property '${key}', new value type: ${typeof current}`);
+          } else {
+            const availableKeys = Object.keys(current).join(', ') || '(none)';
+            const errorMsg = `Field '${key}' not found in object (path: ${currentPathString}). Available keys: ${availableKeys}`;
+            console.warn('[ACCESS_FIELDS] WARN:', errorMsg);
+            const error = new FieldAccessError(errorMsg, baseValue, fields, i);
+            return failure(error);
+          }
+        } else {
+          const errorMsg = `Cannot access property '${key}' on an array (path: ${currentPathString}).`;
+          console.warn('[ACCESS_FIELDS] WARN:', errorMsg);
+          const error = new FieldAccessError(errorMsg, baseValue, fields, i);
+          return failure(error);
+        }
+      } else if (field.type === FieldAccessType.INDEX) {
+        if (Array.isArray(current)) {
+          const index = Number(field.key);
+          if (Number.isInteger(index) && index >= 0 && index < current.length) {
+        current = current[index];
+            console.log(`[ACCESS_FIELDS] Accessed index [${index}], new value type: ${typeof current}`);
+      } else {
+            const errorMsg = `Index '${field.key}' out of bounds for array of length ${current.length} (path: ${currentPathString}).`;
+            console.warn('[ACCESS_FIELDS] WARN:', errorMsg);
+            const error = new FieldAccessError(errorMsg, baseValue, fields, i);
+            return failure(error);
+          }
+        } else {
+          const errorMsg = `Cannot access index '${field.key}' on non-array value (path: ${currentPathString}).`;
+          console.warn('[ACCESS_FIELDS] WARN:', errorMsg);
+          const error = new FieldAccessError(errorMsg, baseValue, fields, i);
+          return failure(error);
+        }
+          } else {
+          const errorMsg = `Unknown field access type: '${(field as any).type}' (path: ${currentPathString}).`;
+          console.error('[ACCESS_FIELDS] ERROR:', errorMsg); // Use console.error
+          const error = new FieldAccessError(errorMsg, baseValue, fields, i);
+          return failure(error);
+      }
+    }
       
-      logger.debug('Field access successful', { finalValueType: typeof current });
-      return success(current);
+    console.log('[ACCESS_FIELDS] Success:', { finalValueType: typeof current, finalValuePreview: JSON.stringify(current)?.substring(0, 50) }); 
+    return success(current);
   }
 
   /**
@@ -364,15 +406,12 @@ export class VariableReferenceResolver {
       if (typeof value === 'string') {
           return value;
       }
-      // TODO: Implement sophisticated formatting based on context.formattingContext
-      // For now, simple JSON.stringify
       try {
-          // Basic pretty printing if it's an object/array and block context indicated
           const indent = context.formattingContext?.isBlock ? 2 : undefined;
           return JSON.stringify(value, null, indent);
       } catch (e) {
           logger.error('Error stringifying value for conversion', { e });
-          return String(value); // Fallback
+          return String(value);
       }
   }
 }

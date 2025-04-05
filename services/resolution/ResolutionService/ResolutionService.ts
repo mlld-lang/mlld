@@ -406,44 +406,40 @@ export class ResolutionService implements IResolutionService {
   }
 
   /**
-   * Core internal method to resolve an array of AST nodes into a string.
-   * Handles TextNodes directly and delegates VariableReferenceNodes to the appropriate resolver.
-   * 
-   * @param nodes - The array of MeldNodes to resolve.
-   * @param context - The resolution context.
-   * @returns The resolved string.
+   * Internal helper to resolve an array of AST nodes into a single string.
+   * Handles TextNodes and delegates VariableReferenceNodes to the appropriate resolver.
+   * Skips/ignores other node types encountered during simple text resolution.
    */
   private async resolveNodes(nodes: MeldNode[], context: ResolutionContext): Promise<string> {
+    // Restore original logic, just add logging
     logger.debug(`resolveNodes called`, { nodeCount: nodes.length, contextFlags: context.flags });
     const resolvedParts: string[] = [];
     for (const node of nodes) {
+      // Add logging here
+      console.log(`[resolveNodes] Processing node: type=${node.type}`); 
       if (node.type === 'Text') {
         resolvedParts.push((node as TextNode).content);
       } else if (node.type === 'VariableReference') {
         try {
-          // Delegate VariableReferenceNode to the specialized resolver
+          // Add logging before calling resolver
+          console.log(`[resolveNodes] Found VariableReferenceNode:`, JSON.stringify(node)); 
           const resolvedValue = await this.variableReferenceResolver.resolve(node as VariableReferenceNode, context);
+          // Add logging after calling resolver
+          console.log(`[resolveNodes] Resolved value for ${node.identifier}:`, resolvedValue.substring(0,100)); 
           resolvedParts.push(resolvedValue);
         } catch (error) {
-           // Handle errors during individual variable resolution based on strict mode
-          logger.error(`resolveNodes: Error resolving individual node ${ (node as VariableReferenceNode).identifier }`, { error });
-          if (context.strict) {
-            // Use imported VariableResolutionError
-            throw VariableResolutionError.fromError(error, `Failed to resolve variable node: ${(node as VariableReferenceNode).identifier}`, context, node.location);
-          } else {
-            resolvedParts.push(''); // Append empty string in non-strict mode
-          }
-        }
-      } else if (node.type === 'Directive') {
-        // TODO: How should directives encountered during node resolution be handled?
-        // Option 1: Skip them (most likely for text-based resolution)
-        // Option 2: Attempt to resolve them (if context allows/makes sense)
-        // Option 3: Throw an error?
-        logger.warn(`resolveNodes: Skipping unexpected DirectiveNode during node resolution: ${(node as DirectiveNode).directive.kind}`);
-      } else {
-        // Handle other node types (e.g., CodeFence?) - Skip/ignore? Log?
-        logger.warn(`resolveNodes: Skipping unexpected node type during node resolution: ${node.type}`);
-      }
+           logger.error(`resolveNodes: Error resolving individual node ${ (node as VariableReferenceNode).identifier }`, { error });
+           if (context.strict) {
+             throw VariableResolutionError.fromError(error, `Failed to resolve variable node: ${(node as VariableReferenceNode).identifier}`, context, node.location);
+           } else {
+             resolvedParts.push(''); // Append empty string in non-strict mode
+           }
+         }
+       } else {
+          // Add logging for skipped nodes
+          console.log(`[resolveNodes] Skipping node type: ${node.type}`); 
+          logger.warn(`resolveNodes: Skipping unexpected node type during node resolution: ${node.type}`);
+       }
     }
     
     const finalResult = resolvedParts.join('');

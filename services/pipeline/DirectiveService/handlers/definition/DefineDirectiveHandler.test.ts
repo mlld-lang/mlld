@@ -15,6 +15,7 @@ import {
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import type { ICommandDefinition } from '@core/types/definitions.js';
 import type { DirectiveContext } from '@services/pipeline/DirectiveService/IDirectiveService.js';
+import type { DirectiveNode, DefineDirectiveData } from '@core/syntax/types.js'; // Ensure DefineDirectiveData is imported
 
 // NOTE: The createMockState helper is NOT used here, setup is simpler
 
@@ -54,59 +55,72 @@ describe('DefineDirectiveHandler', () => {
     vi.clearAllMocks(); // Clear mocks
   });
 
+  // Helper to ensure test nodes have the expected structure
+  const createValidDefineNode = (name: string, command: string, parameters: string[] = []): DirectiveNode => {
+      // Use the actual test factory if available and correct, otherwise build manually
+      // const nodeFromFactory = createDefineDirectiveNode({ name, command, parameters });
+      // return nodeFromFactory;
+      
+      // Manual creation ensuring structure:
+      return {
+          type: 'Directive',
+          directive: {
+              kind: 'define',
+              name: name, // Ensure name is always a string
+              command: { kind: 'run', command: command },
+              parameters: parameters
+          } as DefineDirectiveData,
+          location: createLocation(1,1) // Add location
+      };
+  };
+
   describe('command definition', () => {
     it('should handle basic command definition without parameters', async () => {
-      const node = createDefineDirective('greet', 'echo "Hello"');
-      const executeContext = { state: stateService, currentFilePath: 'test.meld' } as DirectiveContext;
-      const result = await handler.execute(node, executeContext);
+      const node = createValidDefineNode('cmd1', 'echo hello'); // Use helper
+      const result = await handler.execute(node, { state: stateService } as DirectiveContext);
       expect(stateService.clone).toHaveBeenCalled();
-      expect(clonedState.setCommandVar).toHaveBeenCalledWith('greet', expect.objectContaining({ command: 'echo "Hello"', parameters: [] }));
+      expect(clonedState.setCommandVar).toHaveBeenCalledWith('cmd1', expect.objectContaining({ command: 'echo hello', parameters: [] }));
       expect(result).toBe(clonedState);
     });
 
     it('should handle command definition with parameters', async () => {
-      const node = createDefineDirective('greet', 'echo "Hello {{name}}"', ['name']);
-      const executeContext = { state: stateService, currentFilePath: 'test.meld' } as DirectiveContext;
-       vi.spyOn(handler as any, 'extractParameterReferences').mockReturnValueOnce(['name']); // Mock private method if needed
-      const result = await handler.execute(node, executeContext);
+      const node = createValidDefineNode('cmd2', 'echo $p1 $p2', ['p1', 'p2']); // Use helper
+      const result = await handler.execute(node, { state: stateService } as DirectiveContext);
       expect(stateService.clone).toHaveBeenCalled();
-      expect(clonedState.setCommandVar).toHaveBeenCalledWith('greet', expect.objectContaining({ command: 'echo "Hello {{name}}"', parameters: ['name'] }));
+      expect(clonedState.setCommandVar).toHaveBeenCalledWith('cmd2', expect.objectContaining({ command: 'echo $p1 $p2', parameters: ['p1', 'p2'] }));
       expect(result).toBe(clonedState);
     });
 
-     it('should handle command definition with multiple parameters', async () => {
-       const node = createDefineDirective('greet', 'echo "Hello {{first}} {{last}}"', ['first', 'last']);
-       const executeContext = { state: stateService, currentFilePath: 'test.meld' } as DirectiveContext;
-       vi.spyOn(handler as any, 'extractParameterReferences').mockReturnValueOnce(['first', 'last']);
-       const result = await handler.execute(node, executeContext);
-       expect(stateService.clone).toHaveBeenCalled();
-       expect(clonedState.setCommandVar).toHaveBeenCalledWith('greet', expect.objectContaining({ command: 'echo "Hello {{first}} {{last}}"', parameters: ['first', 'last'] }));
-       expect(result).toBe(clonedState);
-     });
+    it('should handle command definition with multiple parameters', async () => {
+      const node = createValidDefineNode('cmd3', 'echo $a $b $c', ['a', 'b', 'c']); // Use helper
+      const result = await handler.execute(node, { state: stateService } as DirectiveContext);
+      expect(stateService.clone).toHaveBeenCalled();
+      expect(clonedState.setCommandVar).toHaveBeenCalledWith('cmd3', expect.objectContaining({ command: 'echo $a $b $c', parameters: ['a', 'b', 'c'] }));
+      expect(result).toBe(clonedState);
+    });
   });
 
   describe('metadata handling', () => {
     it('should handle command risk metadata', async () => {
-      const node = createDefineDirective('risky.risk.high', 'rm -rf /');
-      const executeContext = { state: stateService, currentFilePath: 'test.meld' } as DirectiveContext;
-      await handler.execute(node, executeContext);
-      expect(clonedState.setCommandVar).toHaveBeenCalledWith('risky', expect.objectContaining({ metadata: { risk: 'high' } }));
+      const node = createValidDefineNode('cmdRisk.risk.high', 'rm -rf /'); // Use helper
+      await handler.execute(node, { state: stateService } as DirectiveContext);
+      expect(clonedState.setCommandVar).toHaveBeenCalledWith('cmdRisk', expect.objectContaining({ metadata: { risk: 'high' } }));
     });
 
     it('should handle command about metadata', async () => {
-      const node = createDefineDirective('cmd.about', 'echo "test"');
-      const executeContext = { state: stateService, currentFilePath: 'test.meld' } as DirectiveContext;
-       vi.spyOn(handler as any, 'parseIdentifier').mockReturnValueOnce({ name: 'cmd', metadata: { about: 'This is a description' } }); // Mock specific part if needed
-      await handler.execute(node, executeContext);
-      expect(clonedState.setCommandVar).toHaveBeenCalledWith('cmd', expect.objectContaining({ metadata: { about: 'This is a description' } }));
+       // Need to adjust parseIdentifier mock or test node name if parseIdentifier logic changed
+      const node = createValidDefineNode('cmdAbout.about.desc', 'ls'); // Use helper, ensure name format matches parseIdentifier logic
+       // Mock the private parseIdentifier if its logic is complex or changed
+       vi.spyOn(handler as any, 'parseIdentifier').mockReturnValueOnce({ name: 'cmdAbout', metadata: { about: 'This is a description' } }); 
+      await handler.execute(node, { state: stateService } as DirectiveContext);
+      expect(clonedState.setCommandVar).toHaveBeenCalledWith('cmdAbout', expect.objectContaining({ metadata: { about: 'This is a description' } }));
     });
   });
 
   describe('validation', () => {
     it('should validate command structure through ValidationService', async () => {
-      const node = createDefineDirective('cmd', 'echo "test"');
-      const executeContext = { state: stateService, currentFilePath: 'test.meld' } as DirectiveContext;
-      await handler.execute(node, executeContext);
+      const node = createValidDefineNode('cmd4', 'test'); // Use helper
+      await handler.execute(node, { state: stateService } as DirectiveContext);
       expect(validationService.validate).toHaveBeenCalledWith(node);
     });
 
@@ -115,34 +129,37 @@ describe('DefineDirectiveHandler', () => {
 
   describe('state management', () => {
     it('should create new state for command storage', async () => {
-      const node = createDefineDirective('cmd5', 'test');
-      const executeContext = { state: stateService, currentFilePath: 'test.meld' } as DirectiveContext;
-      await handler.execute(node, executeContext);
+      const node = createValidDefineNode('cmd5', 'test'); // Use helper
+      await handler.execute(node, { state: stateService } as DirectiveContext);
       expect(stateService.clone).toHaveBeenCalled();
     });
 
     it('should store command in new state', async () => {
-      const node = createDefineDirective('cmd6', 'echo test');
-      const executeContext = { state: stateService, currentFilePath: 'test.meld' } as DirectiveContext;
-      await handler.execute(node, executeContext);
+      const node = createValidDefineNode('cmd6', 'echo test'); // Use helper
+      await handler.execute(node, { state: stateService } as DirectiveContext);
       expect(clonedState.setCommandVar).toHaveBeenCalledWith('cmd6', expect.any(Object));
     });
   });
   
   describe('error handling', () => {
     it('should handle state errors', async () => {
-      const node = createDefineDirective('cmdError', 'test');
+      const node = createValidDefineNode('cmdError', 'test'); // Use helper
       const executeContext = { state: stateService } as DirectiveContext;
       const stateError = new Error('State error');
 
-      // Mock the clone's method directly
-      vi.mocked(clonedState.setCommandVar).mockImplementation(() => {
-        throw stateError;
-      });
+      // Mock the clone's setCommandVar method
+      // Ensure mockStateClone exists before mocking (it should from beforeEach)
+      if(clonedState) {
+         vi.mocked(clonedState.setCommandVar).mockImplementation(() => {
+           throw stateError;
+         });
+      } else {
+         throw new Error("Test setup error: mockStateClone was not initialized");
+      }
 
       await expect(handler.execute(node, executeContext))
             .rejects
-            .toThrow(DirectiveError);
+            .toThrow(DirectiveError); 
       await expect(handler.execute(node, executeContext))
             .rejects
             .toThrow(stateError); 

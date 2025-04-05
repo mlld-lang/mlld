@@ -417,36 +417,7 @@ export async function main(filePath: string, options: ProcessOptions = {}): Prom
     
     // Convert to desired format using the updated state
     // Cast resultState to IStateService since it has all the required methods but TypeScript doesn't recognize it
-    let converted = await services.output.convert(nodesToProcess, resultState as unknown as IStateService, options.format || 'xml');
-    
-    // Always check for unresolved variables (transformation is always enabled)
-    // Check for any remaining unresolved variable references
-    const variableRegex = /\{\{([^{}]+)\}\}/g;
-    const matches = Array.from(converted.matchAll(variableRegex));
-    
-    // Only process if there are actual unresolved variables
-    if (matches.length > 0) {
-      for (const match of matches) {
-        const fullMatch = match[0]; // The entire match, e.g., {{variable}}
-        const variableName = match[1].trim(); // The variable name, e.g., variable
-        
-        // Try to get the variable value from the state
-        let value;
-        // Try text variable first
-        value = resultState.getTextVar(variableName);
-        
-        // If not found as text variable, try data variable
-        if (value === undefined) {
-          value = resultState.getDataVar(variableName);
-        }
-        
-        // If a value was found, replace the variable reference with its value
-        if (value !== undefined) {
-          const stringValue = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
-          converted = converted.replace(fullMatch, stringValue);
-        }
-      }
-    }
+    const converted = await services.output.convert(nodesToProcess, resultState as unknown as IStateService, options.format || 'xml');
     
     return converted;
   } catch (error) {
