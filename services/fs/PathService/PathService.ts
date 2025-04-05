@@ -2,7 +2,7 @@ import type { IPathService, URLValidationOptions } from '@services/fs/PathServic
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import { PathValidationError, PathErrorCode, PathValidationErrorDetails } from '@services/fs/PathService/errors/PathValidationError.js';
 import { ProjectPathResolver } from '@services/fs/ProjectPathResolver.js';
-import type { Location } from '@core/types/index.js';
+import type { Location, Position } from '@core/types';
 import * as path from 'path';
 import * as os from 'os';
 import type { MeldNode } from '@core/syntax/types/index.js';
@@ -42,9 +42,15 @@ import {
   isAbsolutePath,
   isRelativePath,
   isUrlPath,
-  isValidatedResourcePath
+  isValidatedResourcePath,
+  PathContentType,
+  type MeldPath,
+  type AnyPath,
+  createRawPath
 } from '@core/types/paths.js';
 import { ErrorSeverity } from '@core/errors/index.js';
+import { type Position } from '@core/types';
+import { type IFileSystemClient } from '../FileSystemService/IFileSystemClient.js';
 
 /**
  * Service for validating and normalizing paths
@@ -568,7 +574,7 @@ export class PathService implements IPathService {
       });
     }
 
-    // 1. Handle empty path
+    // 1. Basic non-empty check
     if (!rawInputPath) {
       throw new PathValidationError(
         PathErrorMessages.EMPTY_PATH,

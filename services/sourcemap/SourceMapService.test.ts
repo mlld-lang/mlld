@@ -5,6 +5,7 @@ import { MeldError } from '@core/errors/MeldError.js';
 import { enhanceMeldErrorWithSourceInfo } from '@core/utils/sourceMapUtils.js';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { container } from 'tsyringe';
+import { ErrorSeverity } from '@core/errors/ErrorSeverity.js';
 
 describe('SourceMapService', () => {
   // Test for non-DI mode
@@ -281,7 +282,10 @@ describe('sourceMapUtils', () => {
     addMapping('/path/to/source.md', 1, 0, 10, 0);
     
     // Create error with location in message
-    const error = new MeldError('Error at line 10, column 5');
+    const error = new MeldError('Error at line 10, column 5', {
+      code: 'TEST_ERROR',
+      severity: ErrorSeverity.Fatal
+    });
     
     // Enhance error
     const enhanced = enhanceMeldErrorWithSourceInfo(error);

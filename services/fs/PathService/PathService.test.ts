@@ -22,7 +22,8 @@ import {
   unsafeCreateUrlPath,
   unsafeCreateNormalizedAbsoluteDirectoryPath,
   isAbsolutePath,
-  isRelativePath
+  isRelativePath,
+  PathContentType
 } from '@core/types/paths.js';
 
 const createTestValidationContext = (overrides: Partial<PathValidationContext> = {}): PathValidationContext => {
@@ -179,7 +180,7 @@ describe('PathService', () => {
       expect(() => service.resolvePath(input)).toThrowError(
         expect.objectContaining({ 
             name: 'PathValidationError',
-            code: PathErrorCode.EXPECTED_FILESYSTEM_PATH 
+            code: 'E_PATH_EXPECTED_FS'
         })
       );
     });
@@ -208,22 +209,26 @@ describe('PathService', () => {
     it('should validate a simple relative path and return AbsolutePath', async () => {
       const input = createRawPath('file.txt');
       const context = createTestValidationContext();
-      const expected = unsafeCreateAbsolutePath('/project/file.txt');
-      await expect(service.validatePath(input, context)).resolves.toEqual(expected);
+      const expectedPath = '/project/file.txt';
+      const result = await service.validatePath(input, context);
+      expect(result.contentType).toBe(PathContentType.FILESYSTEM);
+      expect(result.validatedPath).toEqual(expectedPath);
     });
 
     it('should validate an absolute path and return AbsolutePath', async () => {
       const input = createRawPath('/project/src/app.js');
       const context = createTestValidationContext();
-      const expected = unsafeCreateAbsolutePath('/project/src/app.js');
-      await expect(service.validatePath(input, context)).resolves.toEqual(expected);
+      const expectedPath = '/project/src/app.js';
+      const result = await service.validatePath(input, context);
+      expect(result.contentType).toBe(PathContentType.FILESYSTEM);
+      expect(result.validatedPath).toEqual(expectedPath);
     });
 
     it('should reject empty path string', async () => {
       const input = createRawPath('');
       const context = createTestValidationContext();
       await expect(service.validatePath(input, context)).rejects.toThrowError(
-        expect.objectContaining({ code: PathErrorCode.EMPTY_PATH })
+        expect.objectContaining({ code: 'E_PATH_EMPTY' })
       );
     });
 
@@ -231,7 +236,7 @@ describe('PathService', () => {
       const input = createRawPath('http://example.com');
       const context = createTestValidationContext();
       await expect(service.validatePath(input, context)).rejects.toThrowError(
-        expect.objectContaining({ code: PathErrorCode.EXPECTED_FILESYSTEM_PATH })
+        expect.objectContaining({ code: 'E_PATH_EXPECTED_FS' })
       );
     });
 
@@ -239,7 +244,7 @@ describe('PathService', () => {
       const input = createRawPath('file\0withnull.txt');
       const context = createTestValidationContext();
       await expect(service.validatePath(input, context)).rejects.toThrowError(
-        expect.objectContaining({ code: PathErrorCode.NULL_BYTE })
+        expect.objectContaining({ code: 'E_PATH_NULL_BYTE' })
       );
     });
 
@@ -247,17 +252,17 @@ describe('PathService', () => {
       const input = createRawPath('/other/root/file.txt');
       const context = createTestValidationContext({ allowExternalPaths: false });
       await expect(service.validatePath(input, context)).rejects.toThrowError(
-        expect.objectContaining({ code: PathErrorCode.OUTSIDE_PROJECT_ROOT })
+        expect.objectContaining({ code: 'E_PATH_OUTSIDE_ROOT' })
       );
     });
 
     it('should allow path outside project root when allowExternalPaths is true (default)', async () => {
-      mockFileSystemClient.exists.mockResolvedValue(true);
-      mockFileSystemClient.isDirectory.mockResolvedValue(false);
       const input = createRawPath('/other/root/file.txt');
       const context = createTestValidationContext({ allowExternalPaths: true });
-      const expected = unsafeCreateAbsolutePath('/other/root/file.txt');
-      await expect(service.validatePath(input, context)).resolves.toEqual(expected);
+      const expectedPath = '/other/root/file.txt';
+      const result = await service.validatePath(input, context);
+      expect(result.contentType).toBe(PathContentType.FILESYSTEM);
+      expect(result.validatedPath).toEqual(expectedPath);
     });
 
     it('should reject path if mustExist is true and file does not exist', async () => {
@@ -265,7 +270,7 @@ describe('PathService', () => {
       const input = createRawPath('nonexistent.txt');
       const context = createTestValidationContext({ rules: { mustExist: true } });
       await expect(service.validatePath(input, context)).rejects.toThrowError(
-        expect.objectContaining({ code: PathErrorCode.FILE_NOT_FOUND })
+        expect.objectContaining({ code: 'E_FILE_NOT_FOUND' })
       );
       expect(mockFileSystemClient.exists).toHaveBeenCalledWith('/project/nonexistent.txt');
     });
@@ -274,8 +279,11 @@ describe('PathService', () => {
       mockFileSystemClient.exists.mockResolvedValue(true);
       const input = createRawPath('exists.txt');
       const context = createTestValidationContext({ rules: { mustExist: true } });
-      const expected = unsafeCreateAbsolutePath('/project/exists.txt');
-      await expect(service.validatePath(input, context)).resolves.toEqual(expected);
+      const expectedPath = '/project/exists.txt';
+      const result = await service.validatePath(input, context);
+      expect(result.contentType).toBe(PathContentType.FILESYSTEM);
+      expect(result.validatedPath).toEqual(expectedPath);
+      expect(result.exists).toBe(true);
       expect(mockFileSystemClient.exists).toHaveBeenCalledWith('/project/exists.txt');
     });
 
@@ -285,7 +293,7 @@ describe('PathService', () => {
       const input = createRawPath('some_dir');
       const context = createTestValidationContext({ rules: { mustExist: true, mustBeFile: true } });
       await expect(service.validatePath(input, context)).rejects.toThrowError(
-        expect.objectContaining({ code: PathErrorCode.NOT_A_FILE })
+        expect.objectContaining({ code: 'E_PATH_NOT_A_FILE' })
       );
       expect(mockFileSystemClient.exists).toHaveBeenCalledWith('/project/some_dir');
       expect(mockFileSystemClient.isDirectory).toHaveBeenCalledWith('/project/some_dir');
@@ -297,7 +305,7 @@ describe('PathService', () => {
       const input = createRawPath('some_file.txt');
       const context = createTestValidationContext({ rules: { mustExist: true, mustBeDirectory: true } });
       await expect(service.validatePath(input, context)).rejects.toThrowError(
-        expect.objectContaining({ code: PathErrorCode.NOT_A_DIRECTORY })
+        expect.objectContaining({ code: 'E_PATH_NOT_A_DIRECTORY' })
       );
       expect(mockFileSystemClient.exists).toHaveBeenCalledWith('/project/some_file.txt');
       expect(mockFileSystemClient.isDirectory).toHaveBeenCalledWith('/project/some_file.txt');
@@ -308,8 +316,11 @@ describe('PathService', () => {
       mockFileSystemClient.isDirectory.mockResolvedValue(false);
       const input = createRawPath('actual_file.txt');
       const context = createTestValidationContext({ rules: { mustExist: true, mustBeFile: true } });
-      const expected = unsafeCreateAbsolutePath('/project/actual_file.txt');
-      await expect(service.validatePath(input, context)).resolves.toEqual(expected);
+      const expectedPath = '/project/actual_file.txt';
+      const result = await service.validatePath(input, context);
+      expect(result.contentType).toBe(PathContentType.FILESYSTEM);
+      expect(result.validatedPath).toEqual(expectedPath);
+      expect(result.exists).toBe(true);
       expect(mockFileSystemClient.exists).toHaveBeenCalledWith('/project/actual_file.txt');
       expect(mockFileSystemClient.isDirectory).toHaveBeenCalledWith('/project/actual_file.txt');
     });
@@ -319,8 +330,11 @@ describe('PathService', () => {
       mockFileSystemClient.isDirectory.mockResolvedValue(true);
       const input = createRawPath('actual_dir');
       const context = createTestValidationContext({ rules: { mustExist: true, mustBeDirectory: true } });
-      const expected = unsafeCreateAbsolutePath('/project/actual_dir');
-      await expect(service.validatePath(input, context)).resolves.toEqual(expected);
+      const expectedPath = '/project/actual_dir';
+      const result = await service.validatePath(input, context);
+      expect(result.contentType).toBe(PathContentType.FILESYSTEM);
+      expect(result.validatedPath).toEqual(expectedPath);
+      expect(result.exists).toBe(true);
       expect(mockFileSystemClient.exists).toHaveBeenCalledWith('/project/actual_dir');
       expect(mockFileSystemClient.isDirectory).toHaveBeenCalledWith('/project/actual_dir');
     });

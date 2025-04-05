@@ -662,7 +662,7 @@ Content 2`;
       if (!result.ok) {
         expect(result.error).toBeInstanceOf(FieldAccessError);
         expect(result.error.code).toBe('INVALID_BASE_TYPE'); // Or similar code
-        expect(result.error.message).toContain('Cannot access field 'length' on type 'string'');
+        expect(result.error.message).toContain("Cannot access field 'length' on type 'string'");
       }
     });
   });

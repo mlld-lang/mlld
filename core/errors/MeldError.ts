@@ -68,6 +68,20 @@ export class MeldError extends Error {
   }
 
   /**
+   * Determines if the error represents a condition that could potentially be
+   * treated as a warning rather than a fatal error, based on its severity.
+   * Recoverable errors and explicit warnings can potentially be warnings.
+   * 
+   * @returns {boolean} True if the error severity allows it to be a warning, false otherwise.
+   */
+  public canBeWarning(): boolean {
+    return (
+      this.severity === ErrorSeverity.Recoverable || 
+      this.severity === ErrorSeverity.Warning
+    );
+  }
+
+  /**
    * Provides a string representation including code and severity.
    */
   public toString(): string {
