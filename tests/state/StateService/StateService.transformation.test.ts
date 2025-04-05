@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { StateService } from '@services/state/StateService/StateService.js';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
+import type { IStateService, TransformationOptions } from '@services/state/StateService/IStateService.js';
 import type { MeldNode } from '@core/syntax/types/index.js';
 
 let service: IStateService;

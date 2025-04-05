@@ -138,9 +138,18 @@ describe('ImportDirectiveHandler', () => {
     context.registerMock('IURLContentResolver', urlContentResolver);
 
     // Configure default mock behaviors
-    childState = createStateServiceMock(); 
+    childState = mock<IStateService>();
+    vi.mocked(childState.getAllTextVars).mockReturnValue(new Map());
+    vi.mocked(childState.getAllDataVars).mockReturnValue(new Map());
+    vi.mocked(childState.getAllPathVars).mockReturnValue(new Map());
+    vi.mocked(childState.getAllCommands).mockReturnValue(new Map());
+    vi.mocked(childState.getTextVar).mockReturnValue(undefined);
+    vi.mocked(childState.getDataVar).mockReturnValue(undefined);
+    vi.mocked(childState.getPathVar).mockReturnValue(undefined);
+    vi.mocked(childState.getCommandVar).mockReturnValue(undefined);
+    vi.mocked(childState.getCurrentFilePath).mockReturnValue('imported.meld');
+
     stateService.createChildState.mockReturnValue(childState);
-    // Mock the client returned by the factory
     const mockInterpreterClient = mock<IInterpreterServiceClient>();
     mockInterpreterClient.interpret.mockResolvedValue(childState);
     mockInterpreterClient.createChildContext.mockResolvedValue(childState);
@@ -150,10 +159,10 @@ describe('ImportDirectiveHandler', () => {
     fileSystemService.exists.mockResolvedValue(true);
     fileSystemService.readFile.mockResolvedValue(''); 
     parserService.parse.mockResolvedValue({ nodes: [] }); 
-    circularityService.beginImport.mockImplementation(() => {}); // Add basic mock implementation
-    circularityService.endImport.mockImplementation(() => {});   // Add basic mock implementation
-    urlContentResolver.validateURL.mockResolvedValue(undefined); // Add mock implementation
-    urlContentResolver.fetchURL.mockResolvedValue({ content: '', url: '', fromCache: false }); // Add mock implementation
+    circularityService.beginImport.mockImplementation(() => {});
+    circularityService.endImport.mockImplementation(() => {});
+    urlContentResolver.validateURL.mockResolvedValue(undefined);
+    urlContentResolver.fetchURL.mockResolvedValue({ content: '', url: '', fromCache: false });
 
     // Use registerMockClass to register the handler
     context.registerMockClass('ImportDirectiveHandler', ImportDirectiveHandler);

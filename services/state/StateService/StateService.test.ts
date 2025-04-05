@@ -18,9 +18,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { StateService } from '@services/state/StateService/StateService.js';
 import { StateFactory } from '@services/state/StateService/StateFactory.js';
-import { IStateEventService } from '@services/state/StateEventService/IStateEventService.js';
-import { createMockStateEventService } from '@tests/utils/mocks/serviceMocks.js';
-import { MeldNode, TextNode } from '@core/syntax/types/index.js';
+import type { IStateEventService, StateEvent } from '@services/state/StateEventService/IStateEventService.js';
+import { createMockStateEventService } from '@tests/utils/mocks/serviceMocks.ts';
+import type { MeldNode, TextNode } from '@core/syntax/types/index.js';
 import { VariableType, PathContentType, ICommandDefinition, IFilesystemPathState, IUrlPathState, createTextVariable, createDataVariable, RelativePath, createPathVariable } from '@core/types/index.js';
 import { unsafeCreateValidatedResourcePath } from '@core/types/paths.js';
 import type { IStateTrackingService } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
@@ -34,6 +34,7 @@ import { StateEventService } from '@services/state/StateEventService/StateEventS
 import { mockDeep, mockReset } from 'vitest-mock-extended';
 import { StateTrackingServiceClientFactory } from '@services/state/StateTrackingService/factories/StateTrackingServiceClientFactory.js';
 import type { IStateTrackingServiceClient } from '@services/state/StateTrackingService/interfaces/IStateTrackingServiceClient.js';
+import { mock } from 'vitest-mock-extended';
 
 class MockStateEventService implements IStateEventService {
   private handlers = new Map<string, Array<{
