@@ -1,7 +1,6 @@
 import * as path from 'path';
 import type { IStateService } from '@services/state/StateService/IStateService';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
-import type { FieldAccess } from '@core/types/embed.js';
 import { 
   ResolutionContext, 
   JsonValue, 
@@ -32,7 +31,9 @@ import {
   isFilesystemPath,
   isUrlPath,
   unsafeCreateNormalizedAbsoluteDirectoryPath,
-  NormalizedAbsoluteDirectoryPath
+  NormalizedAbsoluteDirectoryPath,
+  FieldAccess,
+  FieldAccessType
 } from '@core/types';
 import type { MeldNode, VariableReferenceNode, DirectiveNode, TextNode, CodeFenceNode } from '@core/ast/ast/astTypes';
 import { ResolutionContextFactory } from './ResolutionContextFactory';
@@ -508,8 +509,8 @@ export class ResolutionService implements IResolutionService {
     // TODO: Properly parse fieldPathString into FieldAccess[] considering array indices etc.
     const fieldAccess: FieldAccess[] = fieldPathString 
         ? fieldPathString.split('.').map(key => ({
-            type: 'dot', // Assuming dot access for now
-            field: key
+            type: FieldAccessType.PROPERTY,
+            key: key
         }))
         : [];
 
@@ -938,8 +939,10 @@ export class ResolutionService implements IResolutionService {
    */
   async resolveFieldAccess(variableName: string, fieldPath: FieldAccess[], context: ResolutionContext): Promise<Result<JsonValue, FieldAccessError>> {
     logger.debug('Resolving field access', { variableName, fieldPath: JSON.stringify(fieldPath) });
-    const variable = this.stateService.getDataVar(variableName); // Example: Assume getting DataVar
-    if (!variable) {
+    const variableResult = this.stateService.getDataVar(variableName); // Ensure correct method call if stateService returns Result
+    
+    // Handle potential undefined result from state service more robustly
+    if (!variableResult) { 
       return failure(new VariableResolutionError(
         `Variable not found: ${variableName}`,
         {
@@ -949,20 +952,29 @@ export class ResolutionService implements IResolutionService {
         }
       ));
     }
-    // Placeholder for actual field access logic using VariableReferenceResolver or similar
-    // return await this.variableReferenceResolver.accessFields(variable.value, fieldPath, context);
-    return failure(new FieldAccessError(
-      'Field access resolution not implemented',
-      {
-        details: { 
-          variableName,
-          fieldAccessChain: fieldPath,
-          failedAtIndex: 0, // Placeholder
-          targetValue: variable.value // Placeholder
+    
+    // Assuming getDataVar returns the variable object directly (adjust if it returns Result<DataVariable>)
+    const variable = variableResult; // Adjust if variableResult is a Result object
+
+    if (!variable || variable.value === undefined) { // Check if variable exists and has a value
+       return failure(new VariableResolutionError(
+        `Variable not found or has no value: ${variableName}`,
+        {
+          code: 'E_VAR_NOT_FOUND',
+          severity: context.strict ? ErrorSeverity.Fatal : ErrorSeverity.Recoverable,
+          details: { variableName, context }
         }
-        // Add sourceLocation if available
-      }
-    ));
+      ));
+    }
+
+    // Ensure variableReferenceResolver is initialized (might need this check)
+    if (!this.variableReferenceResolver) {
+        throw new Error('Internal Error: variableReferenceResolver not initialized before call to resolveFieldAccess');
+    }
+
+    // Delegate to VariableReferenceResolver for actual field access logic
+    // Ensure variable.value is passed, as accessFields expects the base value
+    return await this.variableReferenceResolver.accessFields(variable.value, fieldPath, context);
   }
 
   /**

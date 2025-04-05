@@ -206,6 +206,22 @@ export const unsafeCreateUrlPath = (path: string): UrlPath => path as UrlPath;
 /** Unsafely creates a NormalizedAbsoluteDirectoryPath (bypasses validation). */
 export const unsafeCreateNormalizedAbsoluteDirectoryPath = (path: string): NormalizedAbsoluteDirectoryPath => path as NormalizedAbsoluteDirectoryPath;
 
+// Helper function to create a basic MeldResolvedFilesystemPath for testing mocks
+export const createMeldPath = (
+  originalValue: string,
+  validated?: ValidatedResourcePath,
+  isAbsolute: boolean = false,
+  isSecure: boolean = true,
+  exists?: boolean
+): MeldResolvedFilesystemPath => ({
+  contentType: PathContentType.FILESYSTEM,
+  originalValue,
+  validatedPath: validated ?? unsafeCreateValidatedResourcePath(originalValue), // Use unsafe for mocks
+  isAbsolute,
+  isSecure,
+  exists,
+});
+
 // =========================================================================
 // TYPE GUARDS
 // =========================================================================

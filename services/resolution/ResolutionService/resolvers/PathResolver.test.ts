@@ -12,7 +12,7 @@ import type { VariableReferenceNode, MeldNode, StructuredPath } from '@core/synt
 import { 
   MeldPath, 
   PathContentType, 
-  PathPurpose, 
+  PathPurpose,
   ValidatedResourcePath, 
   unsafeCreateValidatedResourcePath, 
   unsafeCreateAbsolutePath 
@@ -115,9 +115,9 @@ describe('PathResolver', () => {
 
     resolver = await contextDI.resolve(PathResolver);
 
+    // Simplify context creation - rely on factory defaults (should include READ purpose)
     context = ResolutionContextFactory.create(stateService, '/project/test.meld') // Provide base path
-      .withAllowedTypes([VariableType.PATH])
-      .withPathContext({ purpose: PathPurpose.READ });
+      .withAllowedTypes([VariableType.PATH]);
   });
   
   afterEach(async () => {

@@ -2,10 +2,10 @@ import type { IStateService } from '@services/state/StateService/IStateService.j
 import { ResolutionContext, ResolutionErrorCode } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { ResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError.js';
 import { MeldNode, TextNode, DirectiveNode } from '@core/syntax/types.js';
-import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
+import { MeldResolutionError } from '@core/errors/index.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 import { VariableResolutionError } from '@core/errors/VariableResolutionError.js';
-import { VariableType } from '@core/errors/MeldError.js';
+import { VariableType } from '@core/types';
 
 /**
  * Handles resolution of text variables ({{var}})

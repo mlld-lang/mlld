@@ -6,7 +6,8 @@ import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 import { VariableResolutionError } from '@core/errors/VariableResolutionError.js';
-import { VariableType } from '@core/errors/MeldError.js';
+import { VariableType } from '@core/types';
+import type { VariableReferenceNode } from '@core/types/ast-types';
 
 /**
  * Handles resolution of command references ($run)

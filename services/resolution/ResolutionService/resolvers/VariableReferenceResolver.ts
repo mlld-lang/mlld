@@ -3,7 +3,7 @@ import type { ResolutionContext, JsonValue, FieldAccessError, FieldAccess, Resul
 import { VariableType } from '@core/types';
 import type { MeldVariable, TextVariable, DataVariable, IPathVariable, CommandVariable, SourceLocation } from '@core/types/variables';
 import type { MeldNode, VariableReferenceNode, TextNode, DirectiveNode, NodeType } from '@core/types/ast-types';
-import { isTextVariable, isDataVariable, isPathVariable, isCommandVariable } from '@core/types/variables';
+import { isTextVariable, isDataVariable, isPathVariable, isCommandVariable } from '@core/types/guards.js';
 import { success, failure } from '@core/types';
 import { FieldAccessError as CoreFieldAccessError, VariableResolutionError } from '@core/errors';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
@@ -317,5 +317,72 @@ export class VariableReferenceResolver {
         console.log(`[getVariable] Variable '${name}' of type ${type} NOT FOUND.`);
         return undefined;
     }
+  }
+
+  // Add placeholder/basic implementation for accessFields
+  public async accessFields(
+    baseValue: JsonValue,
+    fields: FieldAccess[],
+    context: ResolutionContext
+  ): Promise<Result<JsonValue, FieldAccessError>> {
+    console.log('[ACCESS_FIELDS] Start:', { fields, baseValueType: typeof baseValue, baseValuePreview: JSON.stringify(baseValue)?.substring(0, 50) }); 
+    let current: JsonValue = baseValue;
+
+    for (let i = 0; i < fields.length; i++) {
+      const field = fields[i];
+      const currentPathString = fields.slice(0, i + 1).map(f => f.type === FieldAccessType.INDEX ? `[${f.key}]` : `.${f.key}`).join('');
+      console.log(`[ACCESS_FIELDS] Step ${i+1}/${fields.length}: Accessing field`, { type: field.type, key: field.key });
+
+      if (current === null || typeof current !== 'object') {
+        const errorMsg = `Cannot access field '${field.key}' on non-object value: ${typeof current}`;
+        return failure(new CoreFieldAccessError(errorMsg, baseValue, fields, i));
+      }
+
+      if (field.type === FieldAccessType.PROPERTY) {
+        const key = String(field.key);
+        if (!Array.isArray(current)) {
+          if (Object.prototype.hasOwnProperty.call(current, key)) {
+            current = (current as Record<string, JsonValue>)[key];
+          } else {
+            const availableKeys = Object.keys(current).join(', ') || '(none)';
+            const errorMsg = `Field '${key}' not found in object. Available keys: ${availableKeys}`;
+            return failure(new CoreFieldAccessError(errorMsg, baseValue, fields, i));
+          }
+        } else {
+          return failure(new CoreFieldAccessError(`Cannot access property '${key}' on an array`, baseValue, fields, i));
+        }
+      } else if (field.type === FieldAccessType.INDEX) {
+        if (Array.isArray(current)) {
+          const index = Number(field.key);
+          if (Number.isInteger(index) && index >= 0 && index < current.length) {
+            current = current[index];
+          } else {
+            return failure(new CoreFieldAccessError(`Index '${field.key}' out of bounds for array of length ${current.length}`, baseValue, fields, i));
+          }
+        } else {
+          return failure(new CoreFieldAccessError(`Cannot access index '${field.key}' on non-array value`, baseValue, fields, i));
+        }
+      } else {
+        return failure(new CoreFieldAccessError(`Unknown field access type: '${(field as any).type}'`, baseValue, fields, i));
+      }
+    }
+    return success(current);
+  }
+
+  // Add placeholder/basic implementation for convertToString
+  private convertToString(value: JsonValue | undefined, context: ResolutionContext): string {
+      if (value === undefined || value === null) {
+          return '';
+      }
+      if (typeof value === 'string') {
+          return value;
+      }
+      try {
+          const indent = context.formattingContext?.isBlock ? 2 : undefined;
+          return JSON.stringify(value, null, indent);
+      } catch (e) {
+          logger.error('Error stringifying value for conversion', { e });
+          return String(value);
+      }
   }
 }

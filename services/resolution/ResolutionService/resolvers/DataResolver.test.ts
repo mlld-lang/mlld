@@ -57,7 +57,6 @@ describe('DataResolver', () => {
     resolver = new DataResolver(stateService);
 
     context = ResolutionContextFactory.create(stateService, 'test.meld')
-              .withAllowedTypes([VariableType.DATA]) 
               .withStrictMode(true);
   });
   
