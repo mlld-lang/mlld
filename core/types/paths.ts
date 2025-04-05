@@ -15,6 +15,16 @@ export enum PathContentType {
 }
 
 /**
+ * Defines the intended purpose of a path operation, influencing validation rules.
+ * Simplified to only include READ for now, as that's the primary use case in the core pipeline.
+ */
+export enum PathPurpose {
+  /** Path is intended for reading content or checking existence. */
+  READ = 'read'
+  // Removed WRITE and UNKNOWN for simplification during refactor - can be re-added later if needed.
+}
+
+/**
  * Branded types for path handling with validation guarantees.
  *
  * @remarks Added based on ResolutionCore and FileSystemCore service lead feedback

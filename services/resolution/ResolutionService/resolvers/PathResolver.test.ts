@@ -5,18 +5,10 @@ import type { IPathService } from '@services/fs/PathService/IPathService.js';
 import { 
   ResolutionContext, 
   VariableType, 
-  PathVariable, 
-  PathPurpose 
+  PathVariable 
 } from '@core/types';
 import type { VariableReferenceNode, MeldNode, StructuredPath } from '@core/syntax/types.js';
-import { 
-  MeldPath, 
-  PathContentType, 
-  PathPurpose,
-  ValidatedResourcePath, 
-  unsafeCreateValidatedResourcePath, 
-  unsafeCreateAbsolutePath 
-} from '@core/types/paths.js';
+import * as pathTypes from '@core/types/paths.js';
 import { MeldResolutionError, PathValidationError } from '@core/errors/index.js';
 import { createVariableReferenceNode } from '@tests/utils/testFactories.js';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
@@ -24,17 +16,17 @@ import { TestContextDI } from '@tests/utils/di/index.js';
 import { DeepMockProxy, mockDeep } from 'vitest-mock-extended';
 
 // Helper function to create mock PathVariable using unsafe creators
-const createMockPathVariable = (name: string, rawPath: string, contentType: PathContentType = PathContentType.FILESYSTEM): PathVariable => {
-  let validatedPath: ValidatedResourcePath;
+const createMockPathVariable = (name: string, rawPath: string, contentType: pathTypes.PathContentType = pathTypes.PathContentType.FILESYSTEM): PathVariable => {
+  let validatedPath: pathTypes.ValidatedResourcePath;
   let isAbsolute = false;
-  if (contentType === PathContentType.FILESYSTEM) {
-    validatedPath = unsafeCreateValidatedResourcePath(rawPath);
+  if (contentType === pathTypes.PathContentType.FILESYSTEM) {
+    validatedPath = pathTypes.unsafeCreateValidatedResourcePath(rawPath);
     isAbsolute = rawPath.startsWith('/') || rawPath.startsWith('$HOMEPATH');
   } else { // Assuming URL (though not used in these tests)
-    validatedPath = unsafeCreateValidatedResourcePath(rawPath); // Placeholder for URL
+    validatedPath = pathTypes.unsafeCreateValidatedResourcePath(rawPath); // Placeholder for URL
   }
   
-  const value: MeldPath = {
+  const value: pathTypes.MeldPath = {
     contentType: contentType,
     originalValue: rawPath,
     validatedPath,
@@ -75,10 +67,10 @@ describe('PathResolver', () => {
          else if (rawPath === '/other/root/file') resolvedRaw = '/other/root/file';
          // Add more cases as needed
 
-         const validatedPath = unsafeCreateValidatedResourcePath(resolvedRaw);
+         const validatedPath = pathTypes.unsafeCreateValidatedResourcePath(resolvedRaw);
          const isAbsolute = resolvedRaw.startsWith('/');
-         const value: MeldPath = {
-           contentType: PathContentType.FILESYSTEM,
+         const value: pathTypes.MeldPath = {
+           contentType: pathTypes.PathContentType.FILESYSTEM,
            originalValue: rawPath,
            validatedPath,
            isAbsolute,
@@ -86,12 +78,12 @@ describe('PathResolver', () => {
          };
          return value;
     });
-    pathService.normalizePath.mockImplementation((p: string | MeldPath): MeldPath => {
+    pathService.normalizePath.mockImplementation((p: string | pathTypes.MeldPath): pathTypes.MeldPath => {
         if (typeof p === 'string') { 
            const isAbsolute = p.startsWith('/');
-           const validatedPath = isAbsolute ? unsafeCreateAbsolutePath(p) : unsafeCreateValidatedResourcePath(p);
+           const validatedPath = isAbsolute ? pathTypes.unsafeCreateAbsolutePath(p) : pathTypes.unsafeCreateValidatedResourcePath(p);
            return { 
-             contentType: PathContentType.FILESYSTEM, 
+             contentType: pathTypes.PathContentType.FILESYSTEM, 
              originalValue: p, 
              validatedPath: validatedPath, 
              isAbsolute: isAbsolute, 
@@ -150,7 +142,7 @@ describe('PathResolver', () => {
       
       // Mock the specific resolvePath call if PathResolver calls it directly AFTER getting the var
       // Assuming PathResolver relies on the PathVariable's pre-resolved value for now
-      const fullyResolvedPath = await pathService.resolvePath(expectedMeldPath!, PathPurpose.READ, '/project/test.meld');
+      const fullyResolvedPath = await pathService.resolvePath(expectedMeldPath!, pathTypes.PathPurpose.READ, '/project/test.meld');
       pathService.validatePath.calledWith(fullyResolvedPath, context.pathContext).mockResolvedValue(undefined);
 
       const result = await resolver.resolve(node, context);
@@ -199,7 +191,7 @@ describe('PathResolver', () => {
     it('should throw PathValidationError when path validation fails (e.g., requires absolute)', async () => {
       const node = createVariableReferenceNode('relativePath', VariableType.PATH);
       const modifiedContext = context.withPathContext({ 
-        purpose: PathPurpose.READ,
+        purpose: pathTypes.PathPurpose.READ,
         validation: { required: true, allowAbsolute: true, allowRelative: false }
       });
       
@@ -223,7 +215,7 @@ describe('PathResolver', () => {
     it('should throw PathValidationError when path validation fails (e.g., allowed roots)', async () => {
       const node = createVariableReferenceNode('otherPath', VariableType.PATH);
       const modifiedContext = context.withPathContext({ 
-        purpose: PathPurpose.READ,
+        purpose: pathTypes.PathPurpose.READ,
          validation: { required: true, allowAbsolute: true, allowedRoots: ['/project'] }
       });
       

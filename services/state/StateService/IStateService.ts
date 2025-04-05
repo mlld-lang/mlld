@@ -70,7 +70,7 @@ interface IStateService {
    * @returns The created TextVariable object
    * @throws {MeldStateError} If the state is immutable
    */
-  setTextVar(name: string, value: string, metadata?: Partial<VariableMetadata>): TextVariable;
+  setTextVar(name: string, value: string, metadata?: Partial<VariableMetadata>): Promise<TextVariable>;
   
   /**
    * Gets all text variables, including inherited ones from parent states.
@@ -103,7 +103,7 @@ interface IStateService {
    * @returns The created DataVariable object
    * @throws {MeldStateError} If the state is immutable
    */
-  setDataVar(name: string, value: JsonValue, metadata?: Partial<VariableMetadata>): DataVariable;
+  setDataVar(name: string, value: JsonValue, metadata?: Partial<VariableMetadata>): Promise<DataVariable>;
   
   /**
    * Gets all data variables, including inherited ones from parent states.
@@ -136,7 +136,7 @@ interface IStateService {
    * @returns The created IPathVariable object
    * @throws {MeldStateError} If the state is immutable
    */
-  setPathVar(name: string, value: IFilesystemPathState | IUrlPathState, metadata?: Partial<VariableMetadata>): IPathVariable;
+  setPathVar(name: string, value: IFilesystemPathState | IUrlPathState, metadata?: Partial<VariableMetadata>): Promise<IPathVariable>;
   
   /**
    * Gets all path variables, including inherited ones from parent states.
@@ -350,7 +350,7 @@ interface IStateService {
    * @returns The set MeldVariable object.
    * @throws {MeldStateError} If the state is immutable.
    */
-  setVariable(variable: MeldVariable): MeldVariable;
+  setVariable(variable: MeldVariable): Promise<MeldVariable>;
 
   /**
    * Checks if a variable exists, optionally specifying the type.
@@ -369,7 +369,7 @@ interface IStateService {
    * @returns True if a variable was removed.
    * @throws {MeldStateError} If the state is immutable.
    */
-  removeVariable(name: string, type?: VariableType): boolean;
+  removeVariable(name: string, type?: VariableType): Promise<boolean>;
 
   /**
    * Gets the output of a previously executed command.

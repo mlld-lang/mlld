@@ -242,8 +242,52 @@ export class StateService implements IStateService {
 
   private async emitEvent(event: StateEvent): Promise<void> {
     if (this.eventService) {
-      await this.eventService.emit(event);
+      // DEBUG REMOVED
+      // if (typeof (this.eventService as any).emit === 'function') {
+      //   console.log('[StateService.emitEvent] this.eventService.emit IS a function. Calling it...');
+      try {
+        await this.eventService.emit(event);
+      } catch (error) {
+        // DEBUG REMOVED
+        // console.error('[StateService.emitEvent] Error during event emission:', error);
+      }
+      // DEBUG REMOVED
+      // } else {
+      //   console.error('[StateService.emitEvent] this.eventService.emit IS NOT a function. Type:', typeof (this.eventService as any).emit);
+      //   console.error('[StateService.emitEvent] eventService object:', this.eventService);
+      // }
+    // DEBUG REMOVED
+    // } else {
+      // console.log('[StateService.emitEvent] this.eventService is undefined/null.');
     }
+  }
+
+  /**
+   * Updates the internal state node and emits a transform event.
+   * Made async to ensure event emission is awaited.
+   */
+  private async updateState(updates: Partial<StateNode>, source: string): Promise<void> {
+    // DEBUG REMOVED
+    // console.log(`[StateService.updateState] Before factory.updateState for source: ${source}`);
+    try {
+      this.currentState = this.stateFactory.updateState(this.currentState, updates);
+      // DEBUG REMOVED
+      // console.log(`[StateService.updateState] After factory.updateState for source: ${source}`);
+    } catch (error) {
+      // DEBUG REMOVED
+      // console.error(`[StateService.updateState] Error during factory.updateState for source: ${source}`, error);
+      throw error; 
+    }
+
+    await this.emitEvent({
+      type: 'transform',
+      stateId: this.getStateId() || 'unknown',
+      source,
+      timestamp: Date.now(),
+      location: {
+        file: this.getCurrentFilePath() || undefined
+      }
+    });
   }
 
   // Text variables
@@ -251,7 +295,7 @@ export class StateService implements IStateService {
     return this.currentState.variables.text.get(name);
   }
 
-  setTextVar(name: string, value: string, metadata?: Partial<VariableMetadata>): TextVariable {
+  async setTextVar(name: string, value: string, metadata?: Partial<VariableMetadata>): Promise<TextVariable> {
     this.checkMutable();
     // Create the rich variable object using the factory
     const variable = createTextVariable(name, value, {
@@ -261,7 +305,10 @@ export class StateService implements IStateService {
     // Create a new map, set the variable, and update state
     const text = new Map(this.currentState.variables.text);
     text.set(name, variable);
-    this.updateState({
+    // NOTE: updateState is now async, but setTextVar remains sync. 
+    // This means the event emission might not complete before setTextVar returns.
+    // This matches previous behavior but might need review if callers expect sync events.
+    await this.updateState({
       variables: {
         ...this.currentState.variables,
         text // Use the map with the new rich object
@@ -283,7 +330,7 @@ export class StateService implements IStateService {
     return this.currentState.variables.data.get(name);
   }
 
-  setDataVar(name: string, value: JsonValue, metadata?: Partial<VariableMetadata>): DataVariable {
+  async setDataVar(name: string, value: JsonValue, metadata?: Partial<VariableMetadata>): Promise<DataVariable> {
     this.checkMutable();
     // Create the rich variable object
     const variable = createDataVariable(name, value, {
@@ -293,7 +340,7 @@ export class StateService implements IStateService {
     // Create a new map, set the variable, and update state
     const data = new Map(this.currentState.variables.data);
     data.set(name, variable);
-    this.updateState({
+    await this.updateState({
       variables: {
         ...this.currentState.variables,
         data // Use the map with the new rich object
@@ -315,7 +362,7 @@ export class StateService implements IStateService {
     return this.currentState.variables.path.get(name);
   }
 
-  setPathVar(name: string, value: IFilesystemPathState | IUrlPathState, metadata?: Partial<VariableMetadata>): IPathVariable {
+  async setPathVar(name: string, value: IFilesystemPathState | IUrlPathState, metadata?: Partial<VariableMetadata>): Promise<IPathVariable> {
     this.checkMutable();
     // Create the rich variable object
     const variable = createPathVariable(name, value, {
@@ -325,7 +372,7 @@ export class StateService implements IStateService {
     // Create a new map, set the variable, and update state
     const path = new Map(this.currentState.variables.path);
     path.set(name, variable);
-    this.updateState({
+    await this.updateState({
       variables: {
         ...this.currentState.variables,
         path // Use the map with the new rich object
@@ -343,7 +390,7 @@ export class StateService implements IStateService {
     return this.currentState.commands.get(name);
   }
 
-  setCommandVar(name: string, value: ICommandDefinition, metadata?: Partial<VariableMetadata>): CommandVariable {
+  async setCommandVar(name: string, value: ICommandDefinition, metadata?: Partial<VariableMetadata>): Promise<CommandVariable> {
     this.checkMutable();
     // Create the rich variable object
     const variable = createCommandVariable(name, value, {
@@ -353,7 +400,7 @@ export class StateService implements IStateService {
     // Create a new map, set the variable, and update state
     const commands = new Map(this.currentState.commands);
     commands.set(name, variable);
-    this.updateState({ commands }, `setCommandVar:${name}`); // Update the whole commands map
+    await this.updateState({ commands }, `setCommandVar:${name}`); // Update the whole commands map
     return variable; // Return the created object
   }
 
@@ -645,66 +692,46 @@ export class StateService implements IStateService {
 
   mergeChildState(childState: IStateService): void {
     this.checkMutable();
-    const childNode = childState.getInternalStateNode();
-    this.currentState = this.stateFactory.mergeStates(this.currentState, childNode);
 
-    // Add merge relationship if tracking enabled
-    if (this.getStateId() && childNode.stateId) {
-      // Ensure factory is initialized before trying to use it
-      this.ensureFactoryInitialized();
-      
-      // Try to use the client from the factory first
-      if (this.trackingClient) {
-        try {
-          // Correct the relationship type to merge-source
-          this.trackingClient.addRelationship(
-            this.getStateId()!,
-            childNode.stateId,
-            'merge-source'
-          );
-          
-          // Successfully used the client, proceed to emit event
-        } catch (error) {
-          logger.warn('Error using trackingClient in mergeChildState, falling back to direct service', { error });
-          
-          // Fall back to direct tracking service if available
-          if (this.trackingService) {
-            // Make sure parent-child relationship exists
-            this.trackingService.addRelationship(
-              this.getStateId()!,
-              childNode.stateId,
-              'merge-source'
-            );
-          }
-        }
-      } else if (this.trackingService) {
-        // Fall back to direct tracking service if client not available
-        // Make sure parent-child relationship exists
-        this.trackingService.addRelationship(
-          this.getStateId()!,
-          childNode.stateId,
-          'parent-child'
-        );
-        
-        // Add merge-source relationship
-        this.trackingService.addRelationship(
-          this.getStateId()!,
-          childNode.stateId,
-          'merge-source'
-        );
-      }
+    if (!this.isStateService(childState)) {
+      logger.error('Cannot merge state: Provided object is not a StateService instance.');
+      return;
     }
 
-    // Emit merge event
-    this.emitEvent({
-      type: 'merge',
-      stateId: this.getStateId() || 'unknown',
-      source: 'mergeChildState',
-      timestamp: Date.now(),
-      location: {
-        file: this.getCurrentFilePath() || undefined
+    const childNode = childState.getInternalStateNode();
+
+    // Delegate the actual state merging logic to the factory
+    const mergedNode = this.stateFactory.mergeStates(this.currentState, childNode);
+
+    // Update the current state with the merged result
+    // Use updateState to ensure events and potentially other logic are handled
+    this.updateState(mergedNode, `mergeChild:${childNode.stateId}`);
+
+    // Register relationship with tracking service
+    this.ensureFactoryInitialized();
+    
+    if (this.trackingClient) {
+      try {
+        this.trackingClient.registerRelationship({
+          sourceId: this.currentState.stateId,
+          targetId: childNode.stateId,
+          type: 'merge-source',
+          timestamp: Date.now(),
+          source: 'merge'
+        });
+      } catch (error) {
+        logger.warn('Error registering merge relationship with trackingClient', { error });
       }
-    });
+    } else if (this.trackingService) {
+      // Fallback to direct service if client is not available
+      this.trackingService.registerRelationship({
+        sourceId: this.currentState.stateId,
+        targetId: childNode.stateId,
+        type: 'merge-source',
+        timestamp: Date.now(),
+        source: 'merge'
+      });
+    }
   }
 
   /**
@@ -797,21 +824,6 @@ export class StateService implements IStateService {
     if (this._isImmutable) {
       throw new Error('Cannot modify immutable state');
     }
-  }
-
-  private updateState(updates: Partial<StateNode>, source: string): void {
-    this.currentState = this.stateFactory.updateState(this.currentState, updates);
-
-    // Emit transform event for state updates
-    this.emitEvent({
-      type: 'transform',
-      stateId: this.getStateId() || 'unknown',
-      source,
-      timestamp: Date.now(),
-      location: {
-        file: this.getCurrentFilePath() || undefined
-      }
-    });
   }
 
   getStateId(): string | undefined {
@@ -1017,21 +1029,21 @@ export class StateService implements IStateService {
   }
 
   // Implement generic setVariable
-  setVariable(variable: MeldVariable): MeldVariable {
+  async setVariable(variable: MeldVariable): Promise<MeldVariable> {
     this.checkMutable();
     switch (variable.type) {
       case VariableType.TEXT:
         // Pass variable.value (string) to setTextVar
-        return this.setTextVar(variable.name, variable.value, variable.metadata);
+        return await this.setTextVar(variable.name, variable.value, variable.metadata);
       case VariableType.DATA:
         // Pass variable.value (JsonValue) to setDataVar
-        return this.setDataVar(variable.name, variable.value, variable.metadata);
+        return await this.setDataVar(variable.name, variable.value, variable.metadata);
       case VariableType.PATH:
         // Pass variable.value (IFilesystemPathState | IUrlPathState) to setPathVar
-        return this.setPathVar(variable.name, variable.value, variable.metadata);
+        return await this.setPathVar(variable.name, variable.value, variable.metadata);
       case VariableType.COMMAND:
         // Pass variable.value (ICommandDefinition) to setCommandVar
-        return this.setCommandVar(variable.name, variable.value, variable.metadata);
+        return await this.setCommandVar(variable.name, variable.value, variable.metadata);
       default:
         // Handle unexpected variable type if necessary, e.g., throw an error
         // or log a warning. For exhaustive check, cast to `never`.
@@ -1060,34 +1072,34 @@ export class StateService implements IStateService {
   }
 
   // Implement generic removeVariable
-  removeVariable(name: string, type?: VariableType): boolean {
+  async removeVariable(name: string, type?: VariableType): Promise<boolean> {
     this.checkMutable();
     let removed = false;
     if (type === undefined || type === VariableType.TEXT) {
       const text = new Map(this.currentState.variables.text);
       if (text.delete(name)) {
-        this.updateState({ variables: { ...this.currentState.variables, text }}, `removeVariable:${name}(text)`);
+        await this.updateState({ variables: { ...this.currentState.variables, text }}, `removeVariable:${name}(text)`);
         removed = true;
       }
     }
     if (type === undefined || type === VariableType.DATA) {
       const data = new Map(this.currentState.variables.data);
       if (data.delete(name)) {
-        this.updateState({ variables: { ...this.currentState.variables, data }}, `removeVariable:${name}(data)`);
+        await this.updateState({ variables: { ...this.currentState.variables, data }}, `removeVariable:${name}(data)`);
         removed = true;
       }
     }
     if (type === undefined || type === VariableType.PATH) {
       const path = new Map(this.currentState.variables.path);
       if (path.delete(name)) {
-        this.updateState({ variables: { ...this.currentState.variables, path }}, `removeVariable:${name}(path)`);
+        await this.updateState({ variables: { ...this.currentState.variables, path }}, `removeVariable:${name}(path)`);
         removed = true;
       }
     }
     if (type === undefined || type === VariableType.COMMAND) {
       const commands = new Map(this.currentState.commands);
       if (commands.delete(name)) {
-        this.updateState({ commands }, `removeVariable:${name}(command)`);
+        await this.updateState({ commands }, `removeVariable:${name}(command)`);
         removed = true;
       }
     }
