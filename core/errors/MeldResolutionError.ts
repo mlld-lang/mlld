@@ -1,5 +1,13 @@
-import { MeldError, ErrorSeverity } from '@core/errors/MeldError.js';
+import { MeldError, ErrorSeverity, BaseErrorDetails, ErrorSourceLocation } from './MeldError.js';
 import { Location } from '@core/types/index.js';
+
+/**
+ * Represents details specific to general resolution errors.
+ */
+export interface MeldResolutionErrorDetails extends BaseErrorDetails {
+  value?: any; // The value being resolved
+  context?: any; // The resolution context or relevant parts
+}
 
 export interface ResolutionErrorDetails {
   value?: string;
@@ -30,28 +38,27 @@ export interface MeldResolutionErrorOptions {
 }
 
 /**
- * Error thrown when variable resolution fails
+ * General error thrown during the resolution process for various reasons
+ * not covered by more specific error types (like VariableResolutionError or PathValidationError).
  */
 export class MeldResolutionError extends MeldError {
-  public readonly details?: ResolutionErrorDetails;
-
   constructor(
     message: string,
-    options: MeldResolutionErrorOptions = {}
+    options: {
+      code: string; // e.g., E_RESOLVE_FAIL, E_INVALID_CONTEXT, E_TYPE_NOT_ALLOWED
+      details?: MeldResolutionErrorDetails;
+      severity?: ErrorSeverity;
+      sourceLocation?: ErrorSourceLocation;
+      cause?: unknown;
+    }
   ) {
-    // Resolution errors are typically recoverable by default
-    const severity = options.severity || ErrorSeverity.Recoverable;
-    
     super(message, {
-      code: options.code || 'RESOLUTION_FAILED',
-      filePath: options.filePath || options.details?.location?.filePath,
+      code: options.code,
+      severity: options.severity || ErrorSeverity.Recoverable,
+      details: options.details,
+      sourceLocation: options.sourceLocation,
       cause: options.cause,
-      severity,
-      context: options.details
     });
-    
-    this.name = 'MeldResolutionError';
-    this.details = options.details;
   }
 
   /**

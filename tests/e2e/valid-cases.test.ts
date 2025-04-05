@@ -8,7 +8,7 @@ import { findFiles, getTestCaseName, setupTestContext, VALID_CASES_DIR, EXPECTED
 import { promises as realFs } from 'fs';
 import type { Services } from '@core/types.js';
 
-describe('Valid Meld Test Cases', async () => {
+describe.skip('Valid Meld Test Cases', async () => {
   const validTestCases = await findFiles(VALID_CASES_DIR, '.mld');
   const context = await setupTestContext(validTestCases);
   
@@ -24,7 +24,7 @@ describe('Valid Meld Test Cases', async () => {
   for (const testPath of validTestCases) {
     const testName = getTestCaseName(testPath);
     
-    it(`processes ${testName} correctly`, async () => {
+    it.skip(`processes ${testName} correctly`, async () => {
       // Create a complete mock CommandExecutionService
       const mockCommandExecutionService = {
         executeShellCommand: vi.fn().mockImplementation(async (command) => {

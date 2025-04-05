@@ -1,3 +1,7 @@
+/**
+ * Central export point for Meld error types.
+ */
+
 // Export all error types from the errors directory
 export { MeldError, ErrorSeverity } from './MeldError.js';
 export { MeldParseError } from './MeldParseError.js';
@@ -13,3 +17,11 @@ export { ServiceInitializationError } from './ServiceInitializationError.js';
 
 // Export error message collections
 export * from './messages/index.js'; 
+
+// Add exports for specific errors as they are created:
+export * from './FieldAccessError.js';
+export * from './VariableResolutionError.js';
+export * from './PathValidationError.js';
+export * from './MeldResolutionError.js';
+export * from './MeldFileNotFoundError.js';
+// ... other specific errors 

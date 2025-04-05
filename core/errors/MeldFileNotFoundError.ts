@@ -1,5 +1,13 @@
-import { MeldError, ErrorSeverity } from '@core/errors/MeldError.js';
+import { MeldError, ErrorSeverity, BaseErrorDetails, ErrorSourceLocation } from './MeldError.js';
 import { PathErrorMessages } from '@core/errors/messages/index.js';
+
+/**
+ * Represents details specific to file not found errors.
+ */
+export interface MeldFileNotFoundErrorDetails extends BaseErrorDetails {
+  filePath: string; // The path that was not found
+  operation?: string; // e.g., 'read', 'write', 'import'
+}
 
 export interface MeldFileNotFoundErrorOptions {
   cause?: Error;
@@ -7,31 +15,25 @@ export interface MeldFileNotFoundErrorOptions {
   context?: any;
 }
 
+/**
+ * Error thrown when a required file cannot be found.
+ */
 export class MeldFileNotFoundError extends MeldError {
   constructor(
-    filePath: string, 
-    options: MeldFileNotFoundErrorOptions = {}
+    message: string,
+    options: {
+      details: MeldFileNotFoundErrorDetails;
+      severity?: ErrorSeverity;
+      sourceLocation?: ErrorSourceLocation;
+      cause?: unknown; // Often wraps a system error like ENOENT
+    }
   ) {
-    // File not found errors are typically recoverable by default
-    const severity = options.severity || ErrorSeverity.Recoverable;
-    
-    // Format the message using the centralized error message template
-    const message = PathErrorMessages.fileAccess.fileNotFound.message.replace('{filePath}', filePath);
-    
     super(message, {
-      code: PathErrorMessages.fileAccess.fileNotFound.code,
-      filePath,
+      code: 'E_FILE_NOT_FOUND', // Standard error code
+      severity: options.severity || ErrorSeverity.Fatal, // Usually fatal if the file is required
+      details: options.details,
+      sourceLocation: options.sourceLocation,
       cause: options.cause,
-      severity,
-      context: {
-        ...options.context,
-        filePath
-      }
     });
-    
-    this.name = 'MeldFileNotFoundError';
-    
-    // Ensure proper prototype chain for instanceof checks
-    Object.setPrototypeOf(this, MeldFileNotFoundError.prototype);
   }
 } 

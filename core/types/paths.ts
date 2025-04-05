@@ -148,6 +148,45 @@ export interface IUrlPathState {
   validatedPath?: ValidatedResourcePath; // Use branded type for the URL string
 }
 
+// === NEWLY ADDED DEFINITIONS ===
+
+// Placeholder interface representing a successfully resolved and validated filesystem path.
+export interface MeldResolvedFilesystemPath {
+  contentType: PathContentType.FILESYSTEM;
+  /** The original input string that was resolved */
+  originalValue: string;
+  /** The validated and normalized path string */
+  validatedPath: ValidatedResourcePath; // Could be AbsolutePath or RelativePath
+  /** Was the original path determined to be absolute? */
+  isAbsolute: boolean;
+  /** Did the validated path exist at the time of checking? (If checked) */
+  exists?: boolean;
+  /** Security status based on validation rules */
+  isSecure: boolean;
+}
+
+// Placeholder interface representing a successfully resolved and validated URL.
+export interface MeldResolvedUrlPath {
+  contentType: PathContentType.URL;
+  /** The original input string that was resolved */
+  originalValue: string;
+  /** The validated URL string */
+  validatedPath: UrlPath; // Specific branded type for URLs
+  /** Status of the last fetch attempt (if performed) */
+  fetchStatus?: 'pending' | 'fetched' | 'error' | 'not_fetched';
+  /** Any error encountered during validation or fetching */
+  error?: string;
+}
+
+/**
+ * Represents a fully resolved and validated path or URL, ready for use.
+ * This is the typical result type expected from path resolution services.
+ * It's a discriminated union based on the contentType.
+ */
+export type MeldPath = MeldResolvedFilesystemPath | MeldResolvedUrlPath;
+
+// === END OF NEWLY ADDED DEFINITIONS ===
+
 /** Creates a RawPath type from a string. */
 export const createRawPath = (path: string): RawPath => path as RawPath;
 

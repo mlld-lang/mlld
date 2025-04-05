@@ -711,32 +711,32 @@ export class StateService implements IStateService {
    * Creates a deep clone of this state service
    */
   clone(): IStateService {
-    // Use the factory to create a deep clone of the internal StateNode
+    // Fix: Use the StateFactory to create the cloned StateNode
     const clonedNode = this.stateFactory.createClonedState(this.currentState);
 
-    // Create a new StateService instance using the cloned node
-    // Note: We are bypassing the constructor logic that sets up parent inheritance,
-    // as this is a clone, not a child.
-    const clonedService = new StateService(); // Instantiate without constructor args
+    // Fix: Create a new StateService instance using the constructor, 
+    // passing the factory and event service, but *not* a parent state.
+    // This ensures the new service is properly initialized but independent.
+    const clonedService = new StateService(
+      this.stateFactory, 
+      this.eventService, 
+      this.trackingServiceClientFactory
+      // No parentState argument here
+    );
 
-    // Manually set the internal state and other properties
+    // Fix: Manually overwrite the internally created state with the cloned one.
+    // This is necessary because the constructor initializes its own state.
     (clonedService as any).currentState = clonedNode; // Use 'as any' to set private property
-    (clonedService as any).stateFactory = this.stateFactory;
-    (clonedService as any).eventService = this.eventService;
-    (clonedService as any).trackingService = this.trackingService;
-    (clonedService as any).trackingServiceClientFactory = this.trackingServiceClientFactory;
-    (clonedService as any).trackingClient = this.trackingClient; // Copy existing client instance
-    (clonedService as any).factoryInitialized = this.factoryInitialized;
 
     // Copy transformation state
-    clonedService._isImmutable = this._isImmutable; // Clones should inherit immutability status?
+    clonedService._isImmutable = this._isImmutable; // Clones should inherit immutability status
     clonedService._transformationEnabled = this._transformationEnabled;
     clonedService._transformationOptions = { ...this._transformationOptions };
 
     // Track clone operation if tracking is enabled
     this.ensureFactoryInitialized();
     const originalId = this.getStateId();
-    const cloneId = clonedService.getStateId();
+    const cloneId = clonedService.getStateId(); // Get ID from the cloned service
 
     if (originalId && cloneId) {
       if (this.trackingClient) {
@@ -744,14 +744,13 @@ export class StateService implements IStateService {
           // Explicitly register the CLONED state
           this.trackingClient.registerState({
             id: cloneId,
+            parentId: undefined, // Clones have no parent
             source: clonedNode.source || 'clone', // Use source from cloned node
             filePath: clonedService.getCurrentFilePath() || undefined,
             transformationEnabled: clonedService.isTransformationEnabled(),
             createdAt: Date.now(), // Use current time for clone creation
-            parentId: undefined // Clones don't have parents in tracking
           });
-          
-          // Register the relationship
+          // Register clone relationship
           this.trackingClient.registerRelationship({
             sourceId: originalId,
             targetId: cloneId,
@@ -759,26 +758,34 @@ export class StateService implements IStateService {
             timestamp: Date.now(),
             source: 'clone'
           });
-          
-          if (this.trackingClient.registerEvent) {
-             this.trackingClient.registerEvent({
-                stateId: originalId,
-                type: 'cloned',
-                timestamp: Date.now(),
-                details: { cloneId },
-                source: 'clone'
-             });
-          }
         } catch (error) {
-          logger.warn('Failed to register clone relationship with tracking client', { error });
+          logger.warn('Failed to register clone operation with tracking client', { error });
         }
       } else if (this.trackingService) {
+        // Fallback to direct service
         try {
-           // Commenting out the fallback call as 'clone-original' might not be supported directly
-           // this.trackingService.addRelationship(originalId, cloneId, 'clone-original'); 
-           logger.debug('Skipping direct trackingService.addRelationship for clone-original');
+          // Register cloned state if method exists
+          if (this.trackingService.registerState) {
+             this.trackingService.registerState({
+                id: cloneId,
+                parentId: undefined,
+                source: clonedNode.source || 'clone',
+                filePath: clonedService.getCurrentFilePath() || undefined,
+                transformationEnabled: clonedService.isTransformationEnabled(),
+                createdAt: Date.now(),
+                // Fix: Remove clonedFrom as it's not in StateMetadata
+                // clonedFrom: originalId
+             });
+          }
+          // Add clone relationship
+          // Fix: Use 'clone-original' relationship type if supported by addRelationship
+          // Assuming direct service might not support 'clone-original', use parent-child as fallback?
+          // OR rely on the registerState call potentially setting the clonedFrom implicitly?
+          // For now, let's assume addRelationship takes the standard types and comment out direct setting
+          // this.trackingService.addRelationship(originalId, cloneId, 'clone'); 
+          logger.debug('Tracking service fallback for clone relationship might need review based on addRelationship capabilities.')
         } catch (error) {
-           logger.warn('Failed to register clone relationship with tracking service', { error });
+          logger.warn('Failed to register clone operation with tracking service', { error });
         }
       }
     }

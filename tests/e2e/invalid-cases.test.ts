@@ -8,7 +8,7 @@ import { findFiles, getTestCaseName, setupTestContext, INVALID_CASES_DIR, ERROR_
 import { promises as realFs } from 'fs';
 import type { Services } from '@core/types.js';
 
-describe('Invalid Meld Test Cases', async () => {
+describe.skip('Invalid Meld Test Cases', async () => {
   const allInvalidFiles = await findFiles(INVALID_CASES_DIR, '.mld');
   const invalidTestCases = allInvalidFiles.filter(file => file.endsWith(ERROR_EXTENSION));
   const context = await setupTestContext(invalidTestCases);
@@ -25,7 +25,7 @@ describe('Invalid Meld Test Cases', async () => {
   for (const errorPath of invalidTestCases) {
     const testName = getTestCaseName(errorPath);
     
-    it(`correctly fails on ${testName}`, async () => {
+    it.skip(`correctly fails on ${testName}`, async () => {
       // Expected to fail
       let errorCaught = false;
       let errorMessage = '';

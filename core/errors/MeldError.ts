@@ -1,90 +1,76 @@
+/**
+ * Defines the severity levels for Meld errors.
+ */
 export enum ErrorSeverity {
-  // Must halt execution
-  Fatal = 'fatal',    
-  // Can be converted to warning in permissive mode
-  Recoverable = 'recoverable',  
-  // Always just a warning
-  Warning = 'warning'   
-}
-
-export interface MeldErrorOptions {
-  cause?: Error;
-  code?: string;
-  filePath?: string;
-  severity?: ErrorSeverity;
-  context?: any;
-}
-
-interface SerializedMeldError {
-  name: string;
-  message: string;
-  code?: string;
-  filePath?: string;
-  cause?: string;
-  severity: ErrorSeverity;
-  context?: any;
+  /** The operation can potentially continue */
+  Recoverable = 'recoverable',
+  /** The operation cannot continue */
+  Fatal = 'fatal',
+  /** Informational message, not strictly an error */
+  Info = 'info',
+  /** Warning message */
+  Warning = 'warning',
 }
 
 /**
- * Base class for all Meld errors
+ * Represents the source location related to an error.
+ */
+export interface ErrorSourceLocation {
+  filePath?: string;
+  line?: number;
+  column?: number;
+  offset?: number;
+}
+
+/**
+ * Base interface for Meld error details.
+ * Specific error types should extend this.
+ */
+export interface BaseErrorDetails {
+  [key: string]: any; // Allow arbitrary context
+}
+
+/**
+ * Base class for all custom Meld errors.
+ * Provides structure for error codes, severity, details, and source location.
  */
 export class MeldError extends Error {
-  public readonly code?: string;
-  public readonly filePath?: string;
-  private readonly errorCause?: Error;
+  /** A unique code identifying the type of error */
+  public readonly code: string;
+  /** The severity level of the error */
   public readonly severity: ErrorSeverity;
-  public readonly context?: any;
+  /** Additional context-specific details about the error */
+  public readonly details?: BaseErrorDetails;
+  /** Optional source location where the error occurred */
+  public readonly sourceLocation?: ErrorSourceLocation;
 
-  constructor(message: string, options: MeldErrorOptions = {}) {
-    super(message);
-    this.name = 'MeldError';
-    this.code = options.code;
-    this.errorCause = options.cause;
-    this.filePath = options.filePath;
-    this.severity = options.severity || ErrorSeverity.Fatal;
-    this.context = options.context;
-
-    // Ensure proper prototype chain for instanceof checks
-    Object.setPrototypeOf(this, new.target.prototype);
-  }
-
-  /**
-   * Custom serialization to avoid circular references and include only essential info
-   */
-  toJSON(): SerializedMeldError {
-    return {
-      name: this.name,
-      message: this.message,
-      code: this.code,
-      filePath: this.filePath,
-      cause: this.errorCause?.message,
-      severity: this.severity,
-      context: this.context
-    };
-  }
-
-  /**
-   * Check if this error can be treated as a warning in permissive mode
-   */
-  canBeWarning(): boolean {
-    return this.severity === ErrorSeverity.Recoverable 
-        || this.severity === ErrorSeverity.Warning;
-  }
-
-  /**
-   * Wrap an unknown error in a MeldError
-   */
-  public static wrap(error: unknown, message?: string, severity: ErrorSeverity = ErrorSeverity.Fatal): MeldError {
-    if (error instanceof MeldError) {
-      return error;
+  constructor(
+    message: string,
+    options: {
+      code: string;
+      severity: ErrorSeverity;
+      details?: BaseErrorDetails;
+      sourceLocation?: ErrorSourceLocation;
+      cause?: unknown; // Allow chaining errors
     }
-    
-    return new MeldError(
-      message || (error instanceof Error ? error.message : String(error)),
-      { 
-        cause: error instanceof Error ? error : undefined,
-        severity
-      }
-    );
+  ) {
+    super(message, { cause: options.cause });
+    this.name = this.constructor.name; // Set the error name to the class name
+    this.code = options.code;
+    this.severity = options.severity;
+    this.details = options.details;
+    this.sourceLocation = options.sourceLocation;
+
+    // Standard way to maintain stack trace in V8
+    if (Error.captureStackTrace) {
+      Error.captureStackTrace(this, this.constructor);
+    }
+  }
+
+  /**
+   * Provides a string representation including code and severity.
+   */
+  public toString(): string {
+    return `${this.name} [${this.code}, ${this.severity}]: ${this.message}`;
   }
 } 

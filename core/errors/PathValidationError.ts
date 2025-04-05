@@ -1,4 +1,5 @@
-import { MeldError, ErrorSeverity } from '@core/errors/MeldError.js';
+import { MeldError, ErrorSeverity, BaseErrorDetails, ErrorSourceLocation } from './MeldError.js';
+import type { PathValidationContext } from '@core/types/paths.js';
 
 export enum PathErrorCode {
   INVALID_PATH = 'INVALID_PATH',
@@ -17,34 +18,36 @@ export interface PathValidationErrorOptions {
   context?: any;
 }
 
-export class PathValidationError extends MeldError {
-  public readonly path: string;
-  public readonly code: PathErrorCode;
+/**
+ * Represents details specific to path validation errors.
+ */
+export interface PathValidationErrorDetails extends BaseErrorDetails {
+  pathString: string; // The original path string that failed validation
+  validationContext?: Partial<PathValidationContext>;
+  ruleFailed?: string; // e.g., 'allowAbsolute', 'maxLength', 'pattern', 'mustExist'
+  reason?: string; // More specific reason, e.g., "Path traversal detected"
+}
 
+/**
+ * Error thrown when path validation fails according to specified rules.
+ */
+export class PathValidationError extends MeldError {
   constructor(
     message: string,
-    path: string,
-    code: PathErrorCode,
-    options: PathValidationErrorOptions = {}
+    options: {
+      code: string; // e.g., E_PATH_INVALID, E_PATH_FORBIDDEN, E_PATH_NOT_FOUND
+      details: PathValidationErrorDetails;
+      severity?: ErrorSeverity;
+      sourceLocation?: ErrorSourceLocation;
+      cause?: unknown;
+    }
   ) {
-    // Path validation errors are typically fatal by default
-    const severity = options.severity || ErrorSeverity.Fatal;
-    
-    super(`Path validation error: ${message} (path: ${path})`, {
-      code,
-      severity,
+    super(message, {
+      code: options.code,
+      severity: options.severity || ErrorSeverity.Fatal, // Path errors are often fatal
+      details: options.details,
+      sourceLocation: options.sourceLocation,
       cause: options.cause,
-      context: {
-        ...options.context,
-        path
-      }
     });
-    
-    this.name = 'PathValidationError';
-    this.path = path;
-    this.code = code;
-    
-    // Ensure proper prototype chain for instanceof checks
-    Object.setPrototypeOf(this, PathValidationError.prototype);
   }
 } 

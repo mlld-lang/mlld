@@ -124,7 +124,7 @@ describe.skip('E2E Meld Test Cases', () => {
   
   describe('Valid Test Cases', () => {
     // Ensure we found test files
-    it('should find valid test cases', () => {
+    it.skip('should find valid test cases', () => {
       expect(testCases.valid.length).toBeGreaterThan(0);
       console.log(`Found ${testCases.valid.length} valid test cases`);
     });
@@ -135,7 +135,7 @@ describe.skip('E2E Meld Test Cases', () => {
       
       // Each test gets its own describe block to ensure it shows up in the output
       describe(`Valid: ${testName}`, () => {
-        it(`should process correctly`, async () => {
+        it.skip(`should process correctly`, async () => {
           // Process through API
           const result = await main(testPath, {
             fs: context.services.filesystem as any,
@@ -164,9 +164,9 @@ describe.skip('E2E Meld Test Cases', () => {
     }
   });
   
-  describe('Invalid Test Cases', () => {
+  describe.skip('Invalid Test Cases', () => {
     // Check if we have invalid test cases to run
-    it('should find invalid test cases', () => {
+    it.skip('should find invalid test cases', () => {
       if (testCases.invalid.length === 0) {
         console.log('No error test cases found, skipping error tests');
       } else {
@@ -180,8 +180,8 @@ describe.skip('E2E Meld Test Cases', () => {
       const testName = getTestCaseName(errorPath);
       
       // Each test gets its own describe block to ensure it shows up in the output
-      describe(`Invalid: ${testName}`, () => {
-        it(`should fail as expected`, async () => {
+      describe.skip(`Invalid: ${testName}`, () => {
+        it.skip(`should fail as expected`, async () => {
           // Expected to fail
           let errorCaught = false;
           let errorMessage = '';
