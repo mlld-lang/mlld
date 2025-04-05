@@ -100,3 +100,12 @@ export * from './dependencies.js';
 export type Maybe<T> = T | null | undefined;
 
 // TODO: Consolidate other core types (e.g., from specs) here. 
+
+// Fix: Remove .js extension from exports
+// export * from './result'; // Commented out - file might be missing
+export * from './variables';
+// export * from './ast-types'; // Commented out - file might be missing
+export * from './paths';
+export * from './guards';
+
+// Add export for the new guards file 

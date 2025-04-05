@@ -251,6 +251,9 @@ export class VariableReferenceResolver {
    * @returns The MeldVariable or undefined if not found.
    */
   private async getVariable(node: VariableReferenceNode, context: ResolutionContext): Promise<MeldVariable | undefined> {
+    // Add logging: Entry point
+    console.log(`[getVariable] Entered for identifier: ${node.identifier}, typeHint: ${node.valueType}`);
+    
     const name = node.identifier;
     const type = node.valueType || VariableType.TEXT; // Default to TEXT if not specified
     this.resolutionTracker?.trackAttemptStart(name, `getVariable (type: ${type})`);
@@ -260,15 +263,23 @@ export class VariableReferenceResolver {
     // Use node.valueType for targeted lookup
     switch(type) {
         case VariableType.TEXT:
+            // Add logging: Calling stateService method
+            console.log(`[getVariable] Calling stateService.getTextVar('${name}')`);
             variable = this.stateService.getTextVar(name);
             break;
         case VariableType.DATA:
+            // Add logging: Calling stateService method
+            console.log(`[getVariable] Calling stateService.getDataVar('${name}')`);
             variable = this.stateService.getDataVar(name);
             break;
         case VariableType.PATH:
+            // Add logging: Calling stateService method
+            console.log(`[getVariable] Calling stateService.getPathVar('${name}')`);
             variable = this.stateService.getPathVar(name);
             break;
         case VariableType.COMMAND:
+            // Add logging: Calling stateService method
+            console.log(`[getVariable] Calling stateService.getCommandVar('${name}')`);
             variable = this.stateService.getCommandVar(name);
             break;
         default:
@@ -279,11 +290,15 @@ export class VariableReferenceResolver {
     if (variable) {
         this.resolutionTracker?.trackResolutionAttempt(name, `${type}-variable`, true, variable.value);
         logger.debug(`Found ${type} variable '${name}'.`);
+        // Add logging: Variable found
+        console.log(`[getVariable] Found variable '${name}':`, JSON.stringify(variable, null, 2));
         return variable;
     } else {
         // Variable of the specific type not found
         logger.warn(`${type.charAt(0).toUpperCase() + type.slice(1)} variable '${name}' not found in state.`);
         this.resolutionTracker?.trackResolutionAttempt(name, `variable-not-found (type: ${type})`, false);
+        // Add logging: Variable not found
+        console.log(`[getVariable] Variable '${name}' of type ${type} NOT FOUND.`);
         return undefined;
     }
     
