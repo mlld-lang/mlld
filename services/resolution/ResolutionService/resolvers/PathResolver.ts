@@ -8,6 +8,9 @@ import type { ResolutionContext as CoreResolutionContext } from '@core/types/res
 import type { PathValidationContext } from '@core/types/paths.js';
 import type { MeldValue } from '@core/types/variables.js';
 import type { VariableReference } from '@core/syntax/types/index.js';
+import { VariableResolutionError } from '@core/errors/VariableResolutionError.js';
+import { VariableType } from '@core/types/variables.js';
+import { PathValidationError } from '@core/errors/PathValidationError.js';
 
 /**
  * Handles resolution of path variables ($path)
@@ -31,10 +34,11 @@ export class PathResolver {
       throw new MeldResolutionError(
         'Path variables are not allowed in this context',
         {
-          code: ResolutionErrorCode.INVALID_CONTEXT,
+          code: 'E_RESOLVE_TYPE_NOT_ALLOWED',
           severity: ErrorSeverity.Fatal,
           details: {
-            value: directiveNode.directive.value,
+            variableType: VariableType.PATH,
+            directiveValue: directiveNode.directive.value,
             context: JSON.stringify(context)
           }
         }
@@ -46,10 +50,12 @@ export class PathResolver {
       throw new MeldResolutionError(
         'Invalid node type for path resolution',
         {
-          code: ResolutionErrorCode.INVALID_NODE_TYPE,
+          code: 'E_RESOLVE_INVALID_NODE',
           severity: ErrorSeverity.Fatal,
           details: {
-            value: directiveNode.directive.kind
+            nodeType: node.type,
+            expectedKind: 'path',
+            actualKind: directiveNode.directive.kind
           }
         }
       );
@@ -61,10 +67,10 @@ export class PathResolver {
       throw new MeldResolutionError(
         'Path variable identifier is required',
         {
-          code: ResolutionErrorCode.SYNTAX_ERROR,
+          code: 'E_SYNTAX_MISSING_IDENTIFIER',
           severity: ErrorSeverity.Fatal,
           details: {
-            value: JSON.stringify(directiveNode.directive)
+            directive: JSON.stringify(directiveNode.directive)
           }
         }
       );
@@ -72,49 +78,50 @@ export class PathResolver {
 
     // Handle special path variables
     if (identifier === '~' || identifier === 'HOMEPATH') {
-      return this.stateService.getPathVar('HOMEPATH') || '';
+      const homePathResult = await this.stateService.getPathVar('HOMEPATH');
+      if (!homePathResult?.success || !homePathResult.value.value.validatedPath) {
+        throw new VariableResolutionError('Could not resolve special variable HOMEPATH', { 
+            code: 'E_VAR_SPECIAL_NOT_FOUND', 
+            details: { variableName: 'HOMEPATH' }, 
+            severity: ErrorSeverity.Fatal
+        }); 
+      }
+      return homePathResult.value.value.validatedPath as string;
     }
     if (identifier === '.' || identifier === 'PROJECTPATH') {
-      return this.stateService.getPathVar('PROJECTPATH') || '';
+      const projectPathResult = await this.stateService.getPathVar('PROJECTPATH');
+      if (!projectPathResult?.success || !projectPathResult.value.value.validatedPath) {
+        throw new VariableResolutionError('Could not resolve special variable PROJECTPATH', { 
+            code: 'E_VAR_SPECIAL_NOT_FOUND', 
+            details: { variableName: 'PROJECTPATH' }, 
+            severity: ErrorSeverity.Fatal 
+        }); 
+      }
+      return projectPathResult.value.value.validatedPath as string;
     }
 
     // For regular path variables, get value from state
-    const value = this.stateService.getPathVar(identifier);
+    const valueResult = await this.stateService.getPathVar(identifier);
 
-    if (value === undefined) {
-      throw new MeldResolutionError(
+    if (!valueResult?.success) {
+      throw new VariableResolutionError(
         `Undefined path variable: ${identifier}`,
         {
-          code: ResolutionErrorCode.UNDEFINED_VARIABLE,
+          code: 'E_VAR_NOT_FOUND',
           severity: ErrorSeverity.Recoverable,
           details: {
             variableName: identifier,
-            variableType: 'path'
-          }
+            variableType: VariableType.PATH
+          },
+          cause: valueResult?.error
         }
       );
     }
+    
+    const pathValue = valueResult.value.value;
+    const resolvedPathString = pathValue.validatedPath as string;
 
-    // Handle structured path objects
-    if (typeof value === 'object' && value !== null && 'raw' in value) {
-      const structuredPath = value as StructuredPath;
-
-      // Validate path if required
-      if (context.pathValidation) {
-        return this.validatePath(structuredPath, context);
-      }
-
-      // Use normalized path if available, otherwise use raw
-      return structuredPath.normalized || structuredPath.raw;
-    }
-
-    // Handle string paths (legacy support)
-    // Validate path if required
-    if (context.pathValidation) {
-      return this.validatePath(value as string, context);
-    }
-
-    return value as string;
+    return resolvedPathString;
   }
 
   /**
@@ -187,15 +194,15 @@ export class PathResolver {
 
     if (context.pathValidation) {
       // Check if path is absolute or starts with a special variable
-      if (context.pathValidation.requireAbsolute && !pathStr.startsWith('/')) {
-        throw new MeldResolutionError(
+      if (context.pathValidation.requireAbsolute && !pathStr.startsWith('/') && !this.pathHasSpecialPrefix(pathStr)) {
+        throw new PathValidationError(
           'Path must be absolute',
           {
-            code: ResolutionErrorCode.INVALID_PATH,
+            code: 'E_PATH_MUST_BE_ABSOLUTE',
             severity: ErrorSeverity.Fatal,
-            details: {
-              value: pathStr,
-              context: JSON.stringify(context.pathValidation)
+            details: { 
+              pathString: pathStr, 
+              validationContext: context.pathValidation 
             }
           }
         );
@@ -203,23 +210,17 @@ export class PathResolver {
 
       // Check if path starts with an allowed root
       if (context.pathValidation.allowedRoots?.length) {
-        const hasAllowedRoot = context.pathValidation.allowedRoots.some(root => {
-          const rootVar = this.stateService.getPathVar(root);
-          return rootVar && (
-            pathStr.startsWith(rootVar + '/') ||
-            pathStr === rootVar
-          );
-        });
-
+        const hasAllowedRoot = this.checkAllowedRoot(pathStr, context.pathValidation.allowedRoots);
         if (!hasAllowedRoot) {
-          throw new MeldResolutionError(
-            `Path must start with one of: ${context.pathValidation.allowedRoots.join(', ')}`,
+          throw new PathValidationError(
+            `Path must start with one of allowed roots`,
             {
-              code: ResolutionErrorCode.INVALID_PATH,
+              code: 'E_PATH_INVALID_ROOT',
               severity: ErrorSeverity.Fatal,
-              details: {
-                value: pathStr,
-                context: JSON.stringify(context.pathValidation)
+              details: { 
+                pathString: pathStr, 
+                allowedRoots: context.pathValidation.allowedRoots, 
+                validationContext: context.pathValidation 
               }
             }
           );
@@ -228,6 +229,30 @@ export class PathResolver {
     }
 
     return pathStr;
+  }
+
+  /**
+   * Helper to check special prefix
+   */
+  private pathHasSpecialPrefix(pathStr: string): boolean {
+       return pathStr.startsWith('$PROJECTPATH/') || 
+              pathStr.startsWith('$./') || 
+              pathStr.startsWith('$HOMEPATH/') || 
+              pathStr.startsWith('$~/');
+  }
+  
+  /**
+   * Helper to check allowed root (async due to state access)
+   */
+  private checkAllowedRoot(pathStr: string, allowedRoots: string[]): boolean {
+    for (const root of allowedRoots) {
+      const rootVarResult = this.stateService.getPathVar(root);
+      const rootPath = rootVarResult?.success ? rootVarResult.value.value.validatedPath as string : undefined;
+      if (rootPath && (pathStr.startsWith(rootPath + '/') || pathStr === rootPath)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**

@@ -4,6 +4,10 @@ import { ResolutionContext, ResolutionErrorCode } from '@services/resolution/Res
 import { ResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError.js';
 import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
+import { VariableResolutionError } from '@core/errors/VariableResolutionError.js';
+import { FieldAccessError } from '@core/errors/FieldAccessError.js';
+import { VariableType } from '@core/syntax/types.js';
+import { JsonObject } from '@core/syntax/types.js';
 
 /**
  * Handles resolution of data variables ($data)
@@ -25,11 +29,13 @@ export class DataResolver {
       throw new MeldResolutionError(
         'Invalid node type for data resolution',
         {
-          code: ResolutionErrorCode.INVALID_NODE_TYPE,
+          code: 'E_RESOLVE_INVALID_NODE',
           severity: ErrorSeverity.Fatal,
-          details: { 
-            value: node.type,
-            context: JSON.stringify(context)
+          details: {
+            nodeType: node.type,
+            expectedKind: 'data',
+            actualKind: node.type === 'Directive' ? (node as DirectiveNode).directive.kind : undefined,
+            context
           }
         }
       );
@@ -41,11 +47,12 @@ export class DataResolver {
       throw new MeldResolutionError(
         'Data variables are not allowed in this context',
         {
-          code: ResolutionErrorCode.INVALID_VARIABLE_TYPE,
+          code: 'E_RESOLVE_TYPE_NOT_ALLOWED',
           severity: ErrorSeverity.Fatal,
-          details: { 
-            value: directiveNode.directive.value,
-            context: JSON.stringify(context)
+          details: {
+            variableType: VariableType.DATA,
+            directiveValue: directiveNode.directive.value,
+            context
           }
         }
       );
@@ -56,44 +63,52 @@ export class DataResolver {
       throw new MeldResolutionError(
         'Data variable identifier is required',
         {
-          code: ResolutionErrorCode.SYNTAX_ERROR,
+          code: 'E_SYNTAX_MISSING_IDENTIFIER',
           severity: ErrorSeverity.Fatal,
-          details: { 
-            value: JSON.stringify(directiveNode)
+          details: {
+            directive: JSON.stringify(directiveNode)
           }
         }
       );
     }
 
-    const value = await this.stateService.getDataVar(identifier);
-    if (value === undefined) {
-      throw new MeldResolutionError(
+    const valueResult = await this.stateService.getDataVar(identifier);
+    if (!valueResult || !valueResult.success) {
+      throw new VariableResolutionError(
         `Data variable '${identifier}' not found`,
         {
-          code: ResolutionErrorCode.UNDEFINED_VARIABLE,
+          code: 'E_VAR_NOT_FOUND',
           severity: ErrorSeverity.Recoverable,
-          details: { 
+          details: {
             variableName: identifier,
-            variableType: 'data'
-          }
+            variableType: VariableType.DATA
+          },
+          cause: valueResult?.error
         }
       );
     }
+    const value = valueResult.value.value;
 
     // Handle field access
     if (directiveNode.directive.field) {
       const field = directiveNode.directive.field;
-      const fieldValue = value[field];
+      
+      let fieldValue: any;
+      if (typeof value === 'object' && value !== null && field in value) {
+         fieldValue = (value as JsonObject)[field];
+      } else {
+         fieldValue = undefined;
+      }
+
       if (fieldValue === undefined) {
-        throw new MeldResolutionError(
+        throw new FieldAccessError(
           `Field '${field}' not found in data variable '${identifier}'`,
           {
-            code: ResolutionErrorCode.UNDEFINED_FIELD,
-            severity: ErrorSeverity.Recoverable,
-            details: { 
+            details: {
               variableName: identifier,
-              variableType: 'data',
-              fieldPath: field
+              fieldAccessChain: [{ type: 'dot', field: field }],
+              failedAtIndex: 0,
+              targetValue: value
             }
           }
         );

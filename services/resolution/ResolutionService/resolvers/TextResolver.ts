@@ -4,6 +4,8 @@ import { ResolutionError } from '@services/resolution/ResolutionService/errors/R
 import { MeldNode, TextNode, DirectiveNode } from '@core/syntax/types.js';
 import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
+import { VariableResolutionError } from '@core/errors/VariableResolutionError.js';
+import { VariableType } from '@core/errors/MeldError.js';
 
 /**
  * Handles resolution of text variables ({{var}})
@@ -28,10 +30,11 @@ export class TextResolver {
       throw new MeldResolutionError(
         'Text variables are not allowed in this context',
         {
-          code: ResolutionErrorCode.INVALID_CONTEXT,
+          code: 'E_RESOLVE_TYPE_NOT_ALLOWED',
           severity: ErrorSeverity.Fatal,
-          details: { 
-            value: directiveNode.directive.value,
+          details: {
+            variableType: VariableType.TEXT,
+            directiveValue: directiveNode.directive.value,
             context: JSON.stringify(context)
           }
         }
@@ -42,37 +45,27 @@ export class TextResolver {
     const { identifier, format } = this.parseDirective(directiveNode);
 
     // Get variable value
-    const value = this.stateService.getTextVar(identifier);
+    const valueResult = await this.stateService.getTextVar(identifier);
 
-    if (value === undefined) {
-      // Special handling for ENV variables
-      if (identifier.startsWith('ENV_')) {
-        throw new MeldResolutionError(
-          `Environment variable not set: ${identifier}`,
-          {
-            code: ResolutionErrorCode.UNDEFINED_VARIABLE,
-            severity: ErrorSeverity.Recoverable,
-            details: { 
-              variableName: identifier,
-              variableType: 'text',
-              context: 'environment variable'
-            }
-          }
-        );
-      }
+    if (!valueResult?.success) {
+      const isEnvVar = identifier.startsWith('ENV_');
+      const message = isEnvVar
+        ? `Environment variable not set: ${identifier}`
+        : `Undefined text variable: ${identifier}`;
       
-      throw new MeldResolutionError(
-        `Undefined text variable: ${identifier}`,
-        {
-          code: ResolutionErrorCode.UNDEFINED_VARIABLE,
-          severity: ErrorSeverity.Recoverable,
-          details: { 
-            variableName: identifier,
-            variableType: 'text'
-          }
-        }
-      );
+      throw new VariableResolutionError(message, {
+        code: 'E_VAR_NOT_FOUND',
+        severity: ErrorSeverity.Recoverable,
+        details: { 
+          variableName: identifier,
+          variableType: VariableType.TEXT,
+          context: isEnvVar ? 'environment variable' : undefined
+        },
+        cause: valueResult?.error
+      });
     }
+
+    const value = valueResult.value.value;
 
     // Apply format if present
     return format ? this.applyFormat(value, format) : value;
@@ -101,10 +94,13 @@ export class TextResolver {
       throw new MeldResolutionError(
         'Invalid node type for text resolution',
         {
-          code: ResolutionErrorCode.SYNTAX_ERROR,
+          code: 'E_RESOLVE_INVALID_NODE',
           severity: ErrorSeverity.Fatal,
-          details: { 
-            value: JSON.stringify(node)
+          details: {
+            nodeType: node.type,
+            expectedKind: 'text',
+            actualKind: node.directive.kind,
+            nodeValue: JSON.stringify(node)
           }
         }
       );
@@ -115,10 +111,10 @@ export class TextResolver {
       throw new MeldResolutionError(
         'Text variable identifier is required',
         {
-          code: ResolutionErrorCode.SYNTAX_ERROR,
+          code: 'E_SYNTAX_MISSING_IDENTIFIER',
           severity: ErrorSeverity.Fatal,
-          details: { 
-            value: JSON.stringify(node)
+          details: {
+            directive: JSON.stringify(node)
           }
         }
       );

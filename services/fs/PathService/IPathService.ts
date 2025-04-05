@@ -15,7 +15,8 @@ import type {
   RawPath,
   ValidatedResourcePath, // May use this as a more general validated return type
   StructuredPath, // Import the one from core/types
-  PathValidationContext // Import the new context
+  PathValidationContext, // Import the new context
+  MeldPath
 } from '@core/types/paths.js';
 
 /**
@@ -173,14 +174,17 @@ interface IPathService extends PathServiceBase {
   resolvePath(filePath: RawPath | StructuredPath, baseDir?: RawPath): AbsolutePath | RelativePath;
 
   /**
-   * Validate a path according to Meld's rules and the provided context.
+   * Validate a filesystem path according to Meld rules and context.
    *
-   * @param filePath - The path to validate (RawPath or StructuredPath)
-   * @param context - Context containing validation rules and environment info.
-   * @returns A promise resolving to the validated path (AbsolutePath or RelativePath).
+   * @param filePath - The path to validate (string or MeldPath object).
+   * @param context - Context containing validation rules.
+   * @returns A promise resolving to the validated MeldPath object.
    * @throws {PathValidationError} If validation fails.
    */
-  validatePath(filePath: RawPath | StructuredPath, context: PathValidationContext): Promise<AbsolutePath | RelativePath>;
+  validatePath(
+    filePath: string | MeldPath, // Updated input type
+    context: PathValidationContext
+  ): Promise<MeldPath>; // Updated return type
 
   /**
    * Join multiple path segments together.
