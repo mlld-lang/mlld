@@ -50,35 +50,19 @@ export class PathResolver {
       );
     }
 
-    // --- Special Variable Handling (Keep as is for now) ---
-    if (identifier === '~' || identifier === 'HOMEPATH') {
-      const homePathVar = await this.stateService.getPathVar('HOMEPATH');
-      if (!homePathVar?.value?.validatedPath) { // Check new structure
-        throw new VariableResolutionError('Could not resolve special variable HOMEPATH', { 
-            code: 'E_VAR_SPECIAL_NOT_FOUND', 
-            details: { variableName: 'HOMEPATH' }, 
-            severity: ErrorSeverity.Fatal
-        }); 
-      }
-      // TODO: Re-validate special variables against context?
-      return homePathVar.value.validatedPath as string;
+    // --- Special Variable Handling (Modified) ---
+    let effectiveIdentifier = identifier;
+    if (identifier === '~') {
+      effectiveIdentifier = 'HOMEPATH';
     }
-    if (identifier === '.' || identifier === 'PROJECTPATH') {
-      const projectPathVar = await this.stateService.getPathVar('PROJECTPATH');
-      if (!projectPathVar?.value?.validatedPath) { // Check new structure
-        throw new VariableResolutionError('Could not resolve special variable PROJECTPATH', { 
-            code: 'E_VAR_SPECIAL_NOT_FOUND', 
-            details: { variableName: 'PROJECTPATH' }, 
-            severity: ErrorSeverity.Fatal 
-        }); 
-      }
-      // TODO: Re-validate special variables against context?
-      return projectPathVar.value.validatedPath as string;
+    if (identifier === '.') {
+      effectiveIdentifier = 'PROJECTPATH';
     }
+    // Let special variables fall through to the main logic for consistent fetching and validation
     // --- End Special Variable Handling ---
 
     // Get the variable from state using the new signature
-    const pathVariable = await this.stateService.getPathVar(identifier);
+    const pathVariable = await this.stateService.getPathVar(effectiveIdentifier);
 
     // Handle undefined variable based on strict mode
     if (!pathVariable) {
@@ -100,22 +84,18 @@ export class PathResolver {
     const meldPath = pathVariable.value;
 
     try {
-      // Perform validation using PathService - Assumes validatePath returns the validated path or throws
-      // We need the PathValidationContext from the CoreResolutionContext
-      // Note: PathService likely needs updating in Phase 2 to accept/use PathValidationContext
-      // For now, pass the context object; PathService mock handles it.
-      const validatedMeldPath = await this.pathService.validatePath(meldPath, context.pathContext as any); // Use context.pathContext
+      // Step 1: Resolve the path based on context (e.g., relative to current file)
+      const resolvedMeldPath = await this.pathService.resolvePath(meldPath, context.pathContext.purpose, context.currentFilePath);
+
+      // Step 2: Validate the *resolved* path against context rules
+      const validatedMeldPath = await this.pathService.validatePath(resolvedMeldPath, context.pathContext); 
       
       // Ensure validatedMeldPath is not undefined/null before accessing validatedPath
       if (!validatedMeldPath?.validatedPath) {
-           // This case might happen if validatePath mock is changed or if validation logic could return undefined
-           // Handle appropriately, maybe throw or return empty string based on strictness?
-           // For now, aligning with previous behavior, return empty string might be safest.
-           // Consider throwing a more specific error here in the future.
            return '';
       }
       
-      // Return the validated path string
+      // Return the validated path string from the final validated object
       return validatedMeldPath.validatedPath as string; 
 
     } catch (error) {
@@ -124,7 +104,13 @@ export class PathResolver {
         throw error;
       }
       // Wrap other errors if needed, or re-throw
-      // For now, just re-throw to see what kind of errors occur
+      // Check if it's a VariableResolutionError from getPathVar that wasn't caught by strict check (shouldn't happen often)
+      if (error instanceof VariableResolutionError && !context.flags.strict) {
+          // In non-strict mode, errors during fetching (like special vars not found) should resolve to empty string?
+          // This aligns with the 'undefined variables in non-strict mode' test.
+          return ''; 
+      }
+      // Otherwise, re-throw unknown errors
       throw error; 
     }
   }
