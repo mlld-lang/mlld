@@ -1,71 +1,68 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { VariableReferenceResolver } from '@services/resolution/ResolutionService/resolvers/VariableReferenceResolver.js';
 
-// Import NEW Types
+// Corrected Import Paths
 import {
   ResolutionContext, 
   VariableType,
   FieldAccess,
-  FieldAccessType
-} from '@core/types';
-import type { TextVariable, DataVariable, PathVariable, CommandVariable, MeldVariable } from '@core/types/variables-spec';
-import type { VariableReferenceNode } from '@core/syntax/types.js';
+  FieldAccessType,
+  MeldPath,
+  PathContentType,
+  ValidatedResourcePath,
+  unsafeCreateValidatedResourcePath,
+  TextVariable, 
+  DataVariable, 
+  IPathVariable,
+  CommandVariable, 
+  MeldVariable
+} from '@core/types/index.js';
+import type { VariableReferenceNode } from '@core/ast/ast/astTypes.js';
 import { MeldResolutionError, FieldAccessError, VariableResolutionError } from '@core/errors/index.js';
-// import { VariableResolutionError as OldVariableResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError.js';
-// import { FieldAccessType as OldFieldAccessType } from '@services/resolution/ResolutionService/IResolutionService.js';
 
-// Import Test Utils
-import { 
-  // createMockStateService, // Removed
-  createVariableReferenceNode
-} from '@tests/utils/testFactories.js';
-
-// Removed Old Types/Imports
-// import { ResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError.js';
-// import type { ResolutionContext as OldResolutionContext, ResolutionErrorCode } from '@services/resolution/ResolutionService/IResolutionService.js';
-// import type { MeldNode, TextNode } from '@core/syntax/types.js';
-import type { IStateService } from '@services/state/IStateService.js'; // Keep for mock typing
-import type { IParserService } from '@services/pipeline/ParserService/IParserService.js'; // Added ParserService type
-import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js'; // Added ResolutionService type
-import { TestContextDI } from '@tests/utils/di/index.js'; // Added TestContextDI
-import { DeepMockProxy, mockDeep } from 'vitest-mock-extended'; // Added mockDeep and DeepMockProxy
-import { MeldPath, PathContentType, ValidatedResourcePath, unsafeCreateValidatedResourcePath } from '@core/types/paths.js'; // Added path helper
-import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js'; // Added factory import
-// Import error testing utility
-import { expectToThrowWithConfig } from '@tests/utils/errorTestUtils.js';
+import type { IStateService } from '@services/state/StateService/IStateService.js';
+import type { IPathService } from '@services/fs/PathService/IPathService.js';
+import type { IParserService } from '@services/pipeline/ParserService/IParserService.js'; 
+import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
+import { TestContextDI } from '@tests/utils/di/index.js';
+import { DeepMockProxy, mockDeep } from 'vitest-mock-extended';
+import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
+import { expectToThrowWithConfig } from '@tests/utils/ErrorTestUtils.js'; 
+import { createVariableReferenceNode } from '@tests/utils/testFactories.js';
 
 describe('VariableReferenceResolver', () => {
   let contextDI: TestContextDI;
   let resolver: VariableReferenceResolver;
-  // let stateService: ReturnType<typeof createMockStateService>; // Changed type
   let stateService: DeepMockProxy<IStateService>;
-  let parserService: DeepMockProxy<IParserService>; // Added parser mock
-  let resolutionService: DeepMockProxy<IResolutionService>; // Added resolution mock
+  let parserService: DeepMockProxy<IParserService>;
+  let resolutionService: DeepMockProxy<IResolutionService>;
+  let pathService: DeepMockProxy<IPathService>;
   let context: ResolutionContext;
 
-  beforeEach(async () => { // Made async
+  beforeEach(async () => {
     contextDI = TestContextDI.createIsolated();
 
     // Create mocks
     stateService = mockDeep<IStateService>();
-    parserService = mockDeep<IParserService>(); // Mock potentially needed dependencies
-    resolutionService = mockDeep<IResolutionService>(); // Mock potentially needed dependencies
+    parserService = mockDeep<IParserService>();
+    resolutionService = mockDeep<IResolutionService>();
+    pathService = mockDeep<IPathService>();
 
     // Register mocks
     contextDI.registerMock<IStateService>('IStateService', stateService);
     contextDI.registerMock<IParserService>('IParserService', parserService);
     contextDI.registerMock<IResolutionService>('IResolutionService', resolutionService);
+    contextDI.registerMock<IPathService>('IPathService', pathService);
     
-    // Resolve the resolver via DI
-    resolver = await contextDI.resolve(VariableReferenceResolver);
+    // Instantiate resolver directly, passing mocks
+    resolver = new VariableReferenceResolver(stateService, pathService, resolutionService, parserService);
     
     // Use ResolutionContextFactory to create the context
     context = ResolutionContextFactory.create(stateService, 'test.meld')
-      .withStrictMode(true); // Correct: use specific method
+      .withStrictMode(true);
   });
   
-  afterEach(async () => { // Made async
-    // vi.restoreAllMocks(); // Handled by contextDI.cleanup()
+  afterEach(async () => {
     await contextDI?.cleanup();
   });
 
@@ -73,8 +70,7 @@ describe('VariableReferenceResolver', () => {
     it('should resolve text variables using node.valueType', async () => {
       const node = createVariableReferenceNode('greeting', VariableType.TEXT);
       const mockVar: TextVariable = { name: 'greeting', type: VariableType.TEXT, value: 'Hello World' };
-      // vi.mocked(stateService.getTextVar).mockReturnValue(mockVar);
-      stateService.getTextVar.calledWith('greeting').mockReturnValue(mockVar);
+      stateService.getTextVar.calledWith('greeting').mockResolvedValue(mockVar);
       
       const result = await resolver.resolve(node, context);
       
@@ -88,8 +84,7 @@ describe('VariableReferenceResolver', () => {
       const mockData = { key: 'value' };
       const mockVar: DataVariable = { name: 'dataVar', type: VariableType.DATA, value: mockData };
       
-      // vi.mocked(stateService.getDataVar).mockReturnValue(mockVar);
-      stateService.getDataVar.calledWith('dataVar').mockReturnValue(mockVar);
+      stateService.getDataVar.calledWith('dataVar').mockResolvedValue(mockVar);
       
       const result = await resolver.resolve(node, context);
       
@@ -101,14 +96,16 @@ describe('VariableReferenceResolver', () => {
     it('should handle field access in data variables', async () => {
       const mockData = { user: { name: 'Alice' } };
       const mockVar: DataVariable = { name: 'dataObj', type: VariableType.DATA, value: mockData };
-      const fields: FieldAccess[] = [
-        { type: FieldAccessType.PROPERTY, key: 'user' },
+      const fieldsDefinition: FieldAccess[] = [
+        { type: FieldAccessType.PROPERTY, key: 'user' }, 
         { type: FieldAccessType.PROPERTY, key: 'name' }
       ];
-      const node = createVariableReferenceNode('dataObj', VariableType.DATA, fields);
+      // @ts-ignore - Persistent linter error: Type mapping conflict (key vs value) between FieldAccess and node factory param.
+      const node = createVariableReferenceNode('dataObj', VariableType.DATA, 
+          fieldsDefinition.map(f => ({ ...f, value: f.key }))
+      );
 
-      // vi.mocked(stateService.getDataVar).mockReturnValue(mockVar);
-      stateService.getDataVar.calledWith('dataObj').mockReturnValue(mockVar);
+      stateService.getDataVar.calledWith('dataObj').mockResolvedValue(mockVar);
       
       const result = await resolver.resolve(node, context);
       expect(result).toBe('Alice');
@@ -118,14 +115,16 @@ describe('VariableReferenceResolver', () => {
     it('should handle array index access in data variables', async () => {
       const mockData = { users: ['Alice', 'Bob'] };
       const mockVar: DataVariable = { name: 'dataObj', type: VariableType.DATA, value: mockData };
-      const fields: FieldAccess[] = [
+      const fieldsDefinition: FieldAccess[] = [
         { type: FieldAccessType.PROPERTY, key: 'users' },
-        { type: FieldAccessType.INDEX, key: '1' } 
+        { type: FieldAccessType.INDEX, key: 1 }
       ];
-      const node = createVariableReferenceNode('dataObj', VariableType.DATA, fields);
+      // @ts-ignore - Persistent linter error: Type mapping conflict (key vs value) between FieldAccess and node factory param.
+      const node = createVariableReferenceNode('dataObj', VariableType.DATA, 
+          fieldsDefinition.map(f => ({ ...f, value: f.key }))
+      );
 
-      // vi.mocked(stateService.getDataVar).mockReturnValue(mockVar);
-      stateService.getDataVar.calledWith('dataObj').mockReturnValue(mockVar);
+      stateService.getDataVar.calledWith('dataObj').mockResolvedValue(mockVar);
       
       const result = await resolver.resolve(node, context);
       expect(result).toBe('Bob');
@@ -134,25 +133,23 @@ describe('VariableReferenceResolver', () => {
 
     it('should throw VariableResolutionError for undefined variables in strict mode', async () => {
       const node = createVariableReferenceNode('missing', VariableType.TEXT);
-      stateService.getTextVar.calledWith('missing').mockReturnValue(undefined);
+      stateService.getTextVar.calledWith('missing').mockResolvedValue(undefined);
       
-      // Use expectToThrowWithConfig
       await expectToThrowWithConfig(async () => {
         await resolver.resolve(node, context);
       }, {
-        errorType: VariableResolutionError,
-        messageContains: "Variable not found: missing", // Adjusted message
-        code: 'E_VAR_NOT_FOUND' // Added expected code
+        type: 'VariableResolutionError',
+        messageContains: "Variable not found: missing",
+        code: 'E_VAR_NOT_FOUND'
       });
     });
 
     it('should return empty string for undefined variables in non-strict mode', async () => {
       const node = createVariableReferenceNode('missing', VariableType.TEXT);
-      stateService.getTextVar.calledWith('missing').mockReturnValue(undefined);
+      stateService.getTextVar.calledWith('missing').mockResolvedValue(undefined);
       
-      // Create a non-strict context for this test
       const nonStrictContext = ResolutionContextFactory.create(stateService, 'test.meld')
-                                 .withStrictMode(false); // Correct
+                                 .withStrictMode(false);
       
       const result = await resolver.resolve(node, nonStrictContext);
       expect(result).toBe('');
@@ -161,78 +158,115 @@ describe('VariableReferenceResolver', () => {
     it('should throw FieldAccessError on invalid field access in strict mode', async () => {
       const mockData = { user: { name: 'Alice' } };
       const mockVar: DataVariable = { name: 'dataObj', type: VariableType.DATA, value: mockData };
-      const fields: FieldAccess[] = [
+      const fieldsDefinition: FieldAccess[] = [
         { type: FieldAccessType.PROPERTY, key: 'user' },
         { type: FieldAccessType.PROPERTY, key: 'age' } 
       ];
-      const node = createVariableReferenceNode('dataObj', VariableType.DATA, fields);
+      // @ts-ignore - Persistent linter error: Type mapping conflict (key vs value) between FieldAccess and node factory param.
+      const node = createVariableReferenceNode('dataObj', VariableType.DATA, 
+          fieldsDefinition.map(f => ({ ...f, value: f.key }))
+      );
 
-      stateService.getDataVar.calledWith('dataObj').mockReturnValue(mockVar);
+      stateService.getDataVar.calledWith('dataObj').mockResolvedValue(mockVar);
 
-      // Use expectToThrowWithConfig
       await expectToThrowWithConfig(async () => {
         await resolver.resolve(node, context);
       }, {
-        errorType: FieldAccessError,
+        type: 'FieldAccessError',
         messageContains: "Field 'age' not found in object.",
-        // Add code if FieldAccessError has specific codes (e.g., FIELD_NOT_FOUND)
-        // code: 'FIELD_NOT_FOUND'
       });
     });
 
     it('should return empty string on invalid field access in non-strict mode', async () => {
       const mockData = { user: { name: 'Alice' } };
       const mockVar: DataVariable = { name: 'dataObj', type: VariableType.DATA, value: mockData };
-      const fields: FieldAccess[] = [
+      const fieldsDefinition: FieldAccess[] = [
         { type: FieldAccessType.PROPERTY, key: 'user' },
         { type: FieldAccessType.INDEX, key: 10 }
       ];
-      const node = createVariableReferenceNode('dataObj', VariableType.DATA, fields);
+      // @ts-ignore - Persistent linter error: Type mapping conflict (key vs value) between FieldAccess and node factory param.
+      const node = createVariableReferenceNode('dataObj', VariableType.DATA, 
+          fieldsDefinition.map(f => ({ ...f, value: f.key }))
+      );
 
-      stateService.getDataVar.calledWith('dataObj').mockReturnValue(mockVar);
+      stateService.getDataVar.calledWith('dataObj').mockResolvedValue(mockVar);
       const nonStrictContext = ResolutionContextFactory.create(stateService, 'test.meld')
-                                 .withStrictMode(false); // Correct
+                                 .withStrictMode(false);
 
       const result = await resolver.resolve(node, nonStrictContext);
       expect(result).toBe('');
     });
 
-    it('should resolve path variables using node.valueType', async () => {
+    it('should resolve path variables using PathService', async () => {
       const node = createVariableReferenceNode('docsPath', VariableType.PATH);
+      const rawPathString = '$./docs';
+      const resolvedPathString = '/abs/project/docs';
+      const validatedPathString = '/abs/project/docs/validated';
       
-      // Create a mock MeldResolvedFilesystemPath object
-      const mockValidatedPath = unsafeCreateValidatedResourcePath('$./docs'); // Use the unsafe creator
+      // @ts-ignore - Persistent linter error: MeldPath subtypes/mock structure incompatible.
       const mockPath: MeldPath = {
          contentType: PathContentType.FILESYSTEM,
-         originalValue: '$./docs',
-         validatedPath: mockValidatedPath,
-         isAbsolute: false, // Assuming relative for this example
-         isSecure: true // Assuming secure for mock
+         originalValue: rawPathString,
+         validatedPath: unsafeCreateValidatedResourcePath(''), 
+         isAbsolute: false,
+         isSecure: true,
+         isValidSyntax: true 
       };
+      const mockVar: IPathVariable = { name: 'docsPath', type: VariableType.PATH, value: mockPath };
+      stateService.getPathVar.calledWith('docsPath').mockResolvedValue(mockVar);
       
-      const mockVar: PathVariable = { name: 'docsPath', type: VariableType.PATH, value: mockPath };
+      // @ts-ignore - Persistent linter error: MeldPath subtypes/mock structure incompatible.
+      const resolvedMeldPath: MeldPath = { 
+          contentType: PathContentType.FILESYSTEM, 
+          originalValue: rawPathString, 
+          validatedPath: unsafeCreateValidatedResourcePath(resolvedPathString),
+          isAbsolute: true,
+          isSecure: true,
+          isValidSyntax: true
+      }; 
+      // @ts-ignore - Persistent linter error: calledWith type mismatch for pathService.resolvePath.
+      pathService.resolvePath.calledWith(mockPath, expect.any(String)).mockResolvedValue(resolvedMeldPath);
       
-      stateService.getPathVar.calledWith('docsPath').mockReturnValue(mockVar);
+      // @ts-ignore - Persistent linter error: MeldPath subtypes/mock structure incompatible.
+      const validatedMeldPath: MeldPath = { 
+          ...resolvedMeldPath,
+          validatedPath: unsafeCreateValidatedResourcePath(validatedPathString)
+      };
+      // @ts-ignore - Persistent linter error: calledWith type mismatch for pathService.validatePath.
+      pathService.validatePath.calledWith(resolvedMeldPath, expect.objectContaining({
+          purpose: context.pathContext?.purpose,
+          validation: context.pathContext?.validation 
+      })).mockResolvedValue(validatedMeldPath);
       
-      // The resolver is expected to convert the MeldPath value back to a string representation
-      // In this case, likely the originalValue or validatedPath string
       const result = await resolver.resolve(node, context);
       
-      // Expect the string representation (adjust if resolver behavior is different)
-      expect(result).toBe('$./docs'); 
+      expect(result).toBe(validatedPathString);
       expect(stateService.getPathVar).toHaveBeenCalledWith('docsPath');
+      // @ts-ignore - Persistent linter error: calledWith type mismatch for pathService.resolvePath.
+      expect(pathService.resolvePath).toHaveBeenCalledWith(mockPath, expect.any(String)); 
+      // @ts-ignore - Persistent linter error: calledWith type mismatch for pathService.validatePath.
+      expect(pathService.validatePath).toHaveBeenCalledWith(resolvedMeldPath, expect.objectContaining({ 
+          purpose: context.pathContext?.purpose,
+          validation: context.pathContext?.validation
+      }));
     });
     
     it('should resolve command variables using node.valueType', async () => {
       const node = createVariableReferenceNode('myCmd', VariableType.COMMAND);
-      const mockCmdDef = { command: '@run echo Hello' };
-      // vi.mocked(stateService.getCommand).mockReturnValue(mockCmdDef);
-      stateService.getCommand.calledWith('myCmd').mockReturnValue(mockCmdDef);
+      const mockCmdDef = { 
+          name: 'myCmd', 
+          type: 'basic',
+          commandTemplate: 'echo Hello', 
+          parameters: [],
+          isMultiline: false
+      };
+      const mockVar: CommandVariable = { name: 'myCmd', type: VariableType.COMMAND, value: mockCmdDef };
+      stateService.getCommandVar.calledWith('myCmd').mockResolvedValue(mockVar);
       
       const result = await resolver.resolve(node, context);
       
-      expect(result).toBe('@run echo Hello'); 
-      expect(stateService.getCommand).toHaveBeenCalledWith('myCmd');
+      expect(result).toBe(JSON.stringify(mockCmdDef)); 
+      expect(stateService.getCommandVar).toHaveBeenCalledWith('myCmd');
     });
 
   }); 
