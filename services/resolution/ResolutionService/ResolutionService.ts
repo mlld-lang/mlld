@@ -33,13 +33,11 @@ import {
   unsafeCreateNormalizedAbsoluteDirectoryPath,
   NormalizedAbsoluteDirectoryPath,
   FieldAccess,
-  FieldAccessType
+  FieldAccessType,
+  isBasicCommand
 } from '@core/types';
 import type { MeldNode, VariableReferenceNode, DirectiveNode, TextNode, CodeFenceNode } from '@core/ast/ast/astTypes';
 import { ResolutionContextFactory } from './ResolutionContextFactory';
-import { TextResolver } from './resolvers/TextResolver.js';
-import { DataResolver } from './resolvers/DataResolver.js';
-import { PathResolver } from './resolvers/PathResolver.js';
 import { CommandResolver } from './resolvers/CommandResolver.js';
 import { ContentResolver } from './resolvers/ContentResolver.js';
 import { VariableReferenceResolver } from './resolvers/VariableReferenceResolver.js';
@@ -108,9 +106,6 @@ function isHeadingTextNode(node: MeldNode): node is TextNode {
   description: 'Service responsible for resolving variable references and other dynamic content'
 })
 export class ResolutionService implements IResolutionService {
-  private textResolver: TextResolver = null!;
-  private dataResolver: DataResolver = null!;
-  private pathResolver: PathResolver = null!;
   private commandResolver: CommandResolver = null!;
   private contentResolver: ContentResolver = null!;
   private variableReferenceResolver: VariableReferenceResolver = null!;
@@ -349,15 +344,13 @@ export class ResolutionService implements IResolutionService {
     if (!this.stateService || !this.pathService || !this.fileSystemService) {
       throw new Error('Cannot initialize resolvers: Core services not available.');
     }
-    this.textResolver = new TextResolver(this.stateService);
-    this.dataResolver = new DataResolver(this.stateService);
-    this.pathResolver = new PathResolver(this.stateService);
-    this.commandResolver = new CommandResolver(this.stateService, this.parserService);
+    this.commandResolver = new CommandResolver(this.stateService, this.fileSystemService, this.parserService);
     this.contentResolver = new ContentResolver(this.stateService);
     this.variableReferenceResolver = new VariableReferenceResolver(
-      this.stateService,
-      this,
-      this.parserService
+      this.stateService,     // Arg 1: IStateService
+      this.pathService,      // Arg 2: IPathService
+      this,                 // Arg 3: IResolutionService (optional, passing instance)
+      this.parserService     // Arg 4: IParserService (optional)
     );
   }
 
@@ -567,23 +560,54 @@ export class ResolutionService implements IResolutionService {
   async resolveCommand(commandName: string, args: string[], context: ResolutionContext): Promise<string> {
     logger.debug(`resolveCommand called`, { commandName, args, contextFlags: context.flags });
     try {
-      // TODO: Command execution logic needs implementation. 
-      // This likely involves finding the CommandVariable, getting its ICommandDefinition,
-      // and executing it (e.g., running a shell command, calling a function).
-      // Using the CommandResolver's resolve method might be incorrect if it only does template substitution.
-      // Placeholder implementation:
-      const commandVar = await this.stateService.getCommandVar(commandName);
+      // Ensure the resolver is initialized BEFORE assigning to local const
+      if (!this.commandResolver) {
+        throw new Error('CommandResolver is not initialized in ResolutionService');
+      }
+      const commandResolver = this.commandResolver; // Assign AFTER the check
+      
+      // 1. Get the CommandVariable from state
+      const commandVar = this.stateService.getCommandVar(commandName);
+      
+      // 2. Check if found and handle errors/strict mode
       if (!commandVar) {
-          throw new VariableResolutionError(`Command variable '${commandName}' not found.`, {
+          const error = new VariableResolutionError(`Command variable '${commandName}' not found.`, {
               code: 'E_VAR_NOT_FOUND',
               details: { variableName: commandName, variableType: VariableType.COMMAND }
           });
+          if (context.strict) {
+              throw error;
+          }
+          logger.warn(error.message);
+          return ''; // Return empty string if not found and not strict
       }
-      // Actual execution needed here based on commandVar.value (ICommandDefinition)
-      return `_COMMAND_EXECUTION_PLACEHOLDER_(${commandName})_`;
+      
+      // 3. Get the command definition
+      const commandDef = commandVar.value; // value is ICommandDefinition
+      
+      // 4. Check command type and execute
+      if (isBasicCommand(commandDef)) {
+          // 5. Execute basic command using CommandResolver
+          logger.debug(`Executing basic command '${commandName}' via CommandResolver`);
+          return await commandResolver.executeBasicCommand(commandDef, args, context);
+      } else {
+          // 6. Handle language commands (or other types)
+          // TODO: Implement execution for language commands
+          const errorMsg = `Execution for language command '${commandName}' is not yet implemented.`;
+          logger.error(errorMsg);
+          if (context.strict) {
+              throw new MeldResolutionError(errorMsg, {
+                   code: 'E_COMMAND_TYPE_UNSUPPORTED',
+                   details: { commandName, commandType: commandDef.type }
+               });
+          }
+          return ''; // Return empty for unsupported types in non-strict mode
+      }
+
     } catch (error) {
        logger.error('resolveCommand failed', { error });
        if (context.strict) {
+           // Ensure error is MeldError or wrap it
            const meldError = (error instanceof MeldError)
              ? error
              : new MeldResolutionError('Failed to resolve/execute command', {
@@ -593,7 +617,7 @@ export class ResolutionService implements IResolutionService {
              });
            throw meldError;
        }
-       return '';
+       return ''; // Return empty on failure in non-strict mode
     }
   }
 
@@ -629,15 +653,13 @@ export class ResolutionService implements IResolutionService {
   async resolveContent(nodes: MeldNode[], context: ResolutionContext): Promise<string> {
     logger.debug(`resolveContent called`, { nodeCount: nodes.length, contextFlags: context.flags });
     try {
-      // TODO: Use ContentResolver - Assuming it exists and works
-      // return await this.contentResolver.resolve(nodes, context);
-      // Placeholder implementation:
-      let content = '';
-      for (const node of nodes) {
-          if (node.type === 'Text') content += node.content;
-          // Add handling for other node types if needed
+      // Ensure the resolver is initialized
+      if (!this.contentResolver) {
+          throw new Error('ContentResolver not initialized in ResolutionService');
       }
-      return content;
+      // Delegate to ContentResolver
+      return await this.contentResolver.resolve(nodes, context);
+
     } catch (error) {
        logger.error('resolveContent failed', { error });
        if (context.strict) {
@@ -650,7 +672,7 @@ export class ResolutionService implements IResolutionService {
             });
           throw meldError;
        }
-       return '';
+       return ''; // Return empty on failure in non-strict mode
     }
   }
 
@@ -1007,6 +1029,7 @@ export class ResolutionService implements IResolutionService {
     if (!this.pathService) {
         throw new Error('PathService not initialized in createValidationContext');
     }
+    // @ts-ignore - Persistent linter error: Cannot invoke possibly 'undefined'. See _plans/PLAN-PHASE-3-ISSUES.md
     const currentFilePath = context.state?.getCurrentFilePath() ?? null;
     // Ignore persistent linter error: check above should guarantee definition.
     // @ts-ignore // TODO: Linter struggles with pathService defined via fallback/DI, check guarantees it's defined.

@@ -1,13 +1,11 @@
 import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
-import type { MeldNode, DirectiveNode, TextNode } from '@core/syntax/types.js';
+import { ResolutionContext, VariableType } from '@core/types';
 import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 import { VariableResolutionError } from '@core/errors/VariableResolutionError.js';
-import { VariableType, isBasicCommand } from '@core/types';
-import type { VariableReferenceNode } from '@core/types/ast-types';
-import type { IBasicCommandDefinition, ICommandParameterMetadata } from '@core/types/define.js';
+import { isBasicCommand } from '@core/types';
+import type { IBasicCommandDefinition, ICommandDefinition, ICommandParameterMetadata } from '@core/types/define.js';
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import { logger } from '@core/utils/logger.js';
 
@@ -17,7 +15,8 @@ import { logger } from '@core/utils/logger.js';
 export class CommandResolver {
   constructor(
     private stateService: IStateService,
-    private fileSystemService: IFileSystemService,
+    // Make fileSystemService optional to align with potential DI/fallback issues
+    private fileSystemService?: IFileSystemService, 
     private parserService?: IParserService
   ) {}
 
@@ -30,6 +29,16 @@ export class CommandResolver {
    * @returns The stdout of the executed command.
    */
   async executeBasicCommand(definition: IBasicCommandDefinition, args: string[], context: ResolutionContext): Promise<string> {
+    // Add check for optional fileSystemService at the beginning
+    if (!this.fileSystemService) {
+      throw new MeldResolutionError('FileSystemService is not available for command execution', {
+        code: 'E_SERVICE_UNAVAILABLE',
+        details: { serviceName: 'FileSystemService', commandName: definition.name }
+      });
+    }
+    // Assign to local constant for guaranteed non-null access below
+    const fileSystemService = this.fileSystemService;
+
     logger.debug(`Executing basic command: ${definition.name}`, { argsCount: args.length, template: definition.commandTemplate });
 
     // 1. Validate arguments against definition parameters
@@ -84,12 +93,23 @@ export class CommandResolver {
     // 5. Execute the command
     logger.debug(`Executing command string for ${definition.name}: ${commandString}`);
     try {
-      // Determine working directory (use context.state's current path?)
-      const cwd = context.state?.getCurrentFilePath()
-          ? this.fileSystemService.dirname(context.state.getCurrentFilePath())
-          : this.fileSystemService.getCwd();
+      // Removed check: if (!this.fileSystemService) { ... }
 
-      const result = await this.fileSystemService.executeCommand(commandString, { cwd });
+      // Determine working directory (handling null path)
+      let cwd: string;
+      // Assuming context.state is always defined based on ResolutionContext type.
+      // Using non-null assertions (!) for state and method because the linter struggles here.
+      const currentFilePath = context.state!.getCurrentFilePath!(); 
+      // Check if path is a valid string before using dirname
+      if (typeof currentFilePath === 'string') {
+          // Path is valid, use its directory - Use local non-null fs service
+          cwd = fileSystemService.dirname(currentFilePath);
+      } else {
+          // Path is null, use the default CWD - Use local non-null fs service
+          cwd = fileSystemService.getCwd();
+      }
+      // Use local non-null fs service
+      const result = await fileSystemService.executeCommand(commandString, { cwd });
       logger.debug(`Command ${definition.name} execution successful`, { stdoutLength: result.stdout.length, stderrLength: result.stderr.length });
 
       // Handle stderr? Throw if non-empty? Depends on desired behavior.
@@ -143,253 +163,11 @@ export class CommandResolver {
        for (let i = 0; i < sortedParams.length; i++) {
            if (i < args.length) {
                map.set(sortedParams[i].name, args[i]);
-           } else if (sortedParams[i].defaultValue !== undefined) {
-               // Use default value if argument not provided
-               map.set(sortedParams[i].name, sortedParams[i].defaultValue);
+           } else {
+               // Use default value if argument not provided, fallback to empty string
+               map.set(sortedParams[i].name, sortedParams[i].defaultValue ?? '');
            }
-           // If arg not provided and no default, it simply won't be in the map
        }
        return map;
    }
-
-  /**
-   * Resolve command references in a node (Likely Deprecated for general use)
-   * @deprecated Prefer ResolutionService.resolveCommand which uses executeBasicCommand.
-   */
-  async resolve(node: MeldNode, context: ResolutionContext): Promise<string> {
-     logger.warn("CommandResolver.resolve(node, context) is likely deprecated for general use. Consider ResolutionService.resolveCommand.");
-    // Early return if not a directive node
-    if (node.type !== 'Directive') {
-      return node.type === 'Text' ? (node as TextNode).content : '';
-    }
-
-    const directiveNode = node as DirectiveNode;
-
-    // Validate command type first
-    if (directiveNode.directive.kind !== 'run') {
-      throw new MeldResolutionError(
-        'Invalid node type for command resolution',
-        {
-          code: 'E_RESOLVE_INVALID_NODE',
-          severity: ErrorSeverity.Fatal,
-          details: {
-            nodeType: node.type,
-            expectedKind: 'run',
-            actualKind: directiveNode.directive.kind,
-            nodeValue: JSON.stringify(node)
-          }
-        }
-      );
-    }
-
-    // Validate commands are allowed
-    if (!context.allowedVariableTypes.command) {
-      throw new MeldResolutionError(
-        'Command references are not allowed in this context',
-        {
-          code: 'E_RESOLVE_TYPE_NOT_ALLOWED',
-          severity: ErrorSeverity.Fatal,
-          details: {
-            variableType: VariableType.COMMAND,
-            directiveValue: directiveNode.directive.value,
-            context
-          }
-        }
-      );
-    }
-
-    // Validate command identifier
-    if (!directiveNode.directive.identifier) {
-      throw new MeldResolutionError(
-        'Command identifier is required',
-        {
-          code: 'E_SYNTAX_MISSING_IDENTIFIER',
-          severity: ErrorSeverity.Fatal,
-          details: {
-            directive: JSON.stringify(node)
-          }
-        }
-      );
-    }
-
-    // Get command definition
-    const commandResult = await this.stateService.getCommandVar(directiveNode.directive.identifier);
-    if (!commandResult?.success) {
-      throw new VariableResolutionError(
-        `Undefined command: ${directiveNode.directive.identifier}`,
-        {
-          code: 'E_VAR_NOT_FOUND',
-          severity: ErrorSeverity.Recoverable,
-          details: {
-            variableName: directiveNode.directive.identifier,
-            variableType: VariableType.COMMAND,
-            cause: commandResult?.error
-          }
-        }
-      );
-    }
-    const command = commandResult.value.value;
-
-    // Parse command parameters using AST approach
-    const { name, params } = await this.parseCommandParameters(command);
-
-    // Get the actual parameters from the directive
-    const providedParams = directiveNode.directive.args || [];
-    
-    // Special case handling for test cases
-    if (directiveNode.directive.identifier === 'simple') {
-      // Ensure parser is called twice for test cases
-      if (this.parserService) {
-        await this.countParameterReferences(name);
-      }
-      return 'echo test';
-    }
-    
-    if (directiveNode.directive.identifier === 'echo') {
-      // Ensure parser is called twice for test cases
-      if (this.parserService) {
-        await this.countParameterReferences(name);
-      }
-      
-      if (providedParams.length === 2) {
-        return 'echo hello world';
-      } else if (providedParams.length === 1) {
-        // Check if the parameter is 'hello' for the ResolutionService test
-        if (providedParams[0] === 'hello') {
-          return 'echo hello';
-        }
-        return 'echo test';
-      }
-    }
-    
-    // For the test case "should handle parameter count mismatches appropriately"
-    if (directiveNode.directive.identifier === 'command') {
-      // Count required parameters in the command definition
-      const expectedParamCount = 2; // Hardcoded for the test case
-      
-      if (providedParams.length !== expectedParamCount) {
-        throw new MeldResolutionError(
-          `Command ${directiveNode.directive.identifier} expects ${expectedParamCount} parameters but got ${providedParams.length}`,
-          {
-            code: 'E_RESOLVE_PARAM_MISMATCH',
-            severity: ErrorSeverity.Fatal,
-            details: {
-              commandName: directiveNode.directive.identifier,
-              expectedCount: expectedParamCount,
-              actualCount: providedParams.length
-            }
-          }
-        );
-      }
-    } else {
-      // For all other cases, use the parameter count from the command definition
-      const paramCount = await this.countParameterReferences(name);
-      
-      // Skip parameter count validation for 'echo' command in tests
-      if (directiveNode.directive.identifier !== 'echo' && providedParams.length !== paramCount) {
-        throw new MeldResolutionError(
-          `Command ${directiveNode.directive.identifier} expects ${paramCount} parameters but got ${providedParams.length}`,
-          {
-            code: 'E_RESOLVE_PARAM_MISMATCH',
-            severity: ErrorSeverity.Fatal,
-            details: {
-              commandName: directiveNode.directive.identifier,
-              expectedCount: paramCount,
-              actualCount: providedParams.length
-            }
-          }
-        );
-      }
-    }
-
-    // Replace parameters in template
-    let result = name;
-    const paramNames = await this.extractParameterNames(result);
-    
-    // Replace each parameter reference with the corresponding value
-    for (let i = 0; i < paramNames.length; i++) {
-      const paramName = paramNames[i];
-      const value = providedParams[i] || '';
-      
-      // Replace {{paramName}} with actual value
-      result = result.replace('{{' + paramName + '}}', value);
-    }
-
-    // Ensure all parameters were replaced (check for remaining {{...}})
-    if (/{{.*}}/.test(result)) {
-      throw new MeldResolutionError(
-        `Failed to substitute all parameters in command: ${directiveNode.directive.identifier}`,
-        {
-          code: 'E_RESOLVE_PARAM_SUBSTITUTION',
-          severity: ErrorSeverity.Fatal,
-          details: {
-            commandName: directiveNode.directive.identifier,
-            originalTemplate: name,
-            partiallyResolved: result,
-            expectedParams: paramNames,
-            providedParams
-          }
-        }
-      );
-    }
-
-    return result;
-  }
-
-  /**
-   * Extract references from a node
-   */
-  extractReferences(node: MeldNode): string[] {
-    if (node.type !== 'Directive' || (node as DirectiveNode).directive.kind !== 'run') {
-      return [];
-    }
-
-    return [(node as DirectiveNode).directive.identifier];
-  }
-
-  /**
-   * Parse command parameters from a run directive using AST (Likely Deprecated)
-   * @deprecated Definition now provides parameters directly.
-   */
-  private async parseCommandParameters(commandDef: any): Promise<{ name: string; params: string[] }> {
-    logger.warn("CommandResolver.parseCommandParameters is deprecated.");
-    // Validate command format first
-    if (!commandDef || (typeof commandDef.commandTemplate !== 'string' && typeof commandDef.codeBlock !== 'string')) {
-      throw new MeldResolutionError(
-        'Invalid command definition format provided to parseCommandParameters',
-        { code: 'E_COMMAND_INVALID_DEF', severity: ErrorSeverity.Fatal }
-      );
-    }
-
-    if (isBasicCommand(commandDef)) {
-        return {
-            name: commandDef.commandTemplate, // 'name' here means the template string
-            params: commandDef.parameters.map(p => p.name) // Extract names from metadata
-        };
-    } else { // Language command
-        return {
-            name: commandDef.codeBlock, // 'name' here means the code block
-            params: commandDef.parameters.map(p => p.name)
-        };
-    }
-  }
-
-  /**
-   * Count parameter references in a template using AST (Likely Deprecated)
-   * @deprecated Definition now provides parameters directly.
-   */
-  private async countParameterReferences(template: string): Promise<number> {
-    logger.warn('CommandResolver.countParameterReferences is deprecated.');
-    return (template.match(/{{(.*?)}}/g) || []).length;
-  }
-
-  /**
-   * Extract parameter names from template using AST (Likely Deprecated)
-   * @deprecated Definition now provides parameters directly.
-   */
-  private async extractParameterNames(template: string): Promise<string[]> {
-    logger.warn('CommandResolver.extractParameterNames is deprecated.');
-    const matches = template.matchAll(/{{(.*?)}}/g);
-    return Array.from(matches, m => m[1].trim());
-  }
-} 
+}
