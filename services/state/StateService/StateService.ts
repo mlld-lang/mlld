@@ -690,7 +690,8 @@ export class StateService implements IStateService {
     return childState;
   }
 
-  mergeChildState(childState: IStateService): void {
+  // Make the method async and await the updateState call
+  async mergeChildState(childState: IStateService): Promise<void> {
     this.checkMutable();
 
     if (!this.isStateService(childState)) {
@@ -705,7 +706,7 @@ export class StateService implements IStateService {
 
     // Update the current state with the merged result
     // Use updateState to ensure events and potentially other logic are handled
-    this.updateState(mergedNode, `mergeChild:${childNode.stateId}`);
+    await this.updateState(mergedNode, `mergeChild:${childNode.stateId}`);
 
     // Register relationship with tracking service
     this.ensureFactoryInitialized();

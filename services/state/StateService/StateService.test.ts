@@ -440,8 +440,7 @@ describe('StateService', () => {
       const childState = state.createChildState();
       await childState.setTextVar('childVar', 'childValue');
       vi.clearAllMocks();
-      state.mergeChildState(childState);
-      await Promise.resolve();
+      await state.mergeChildState(childState);
       expect(trackingClient.registerRelationship).toHaveBeenCalledTimes(1);
       expect(trackingClient.registerRelationship).toHaveBeenCalledWith(
         expect.objectContaining({ 
@@ -460,7 +459,7 @@ describe('StateService', () => {
       await childState.setTextVar('parentVar', 'childOverwritesParent');
       
       // Action: Merge child into parent
-      state.mergeChildState(childState);
+      await state.mergeChildState(childState);
       
       // Assertions: Check parent state after merge
       const childVarAfterMerge = state.getTextVar('childVar');
@@ -478,8 +477,7 @@ describe('StateService', () => {
       const childState = state.createChildState();
       await childState.setTextVar('childVar', 'childValue');
       vi.clearAllMocks();
-      state.mergeChildState(childState);
-      await Promise.resolve();
+      await state.mergeChildState(childState);
       expect(trackingClient.registerRelationship).toHaveBeenCalledTimes(1);
       expect(trackingClient.registerRelationship).toHaveBeenCalledWith(
         expect.objectContaining({ 
