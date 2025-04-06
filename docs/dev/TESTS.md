@@ -192,3 +192,21 @@ When migrating existing tests:
 5. ✅ Add proper cleanup in afterEach blocks
 6. ✅ Update error testing to use `expectToThrowWithConfig`
 7. ✅ Replace manual mocking with `registerMock`
+
+## Known Issues & Troubleshooting
+
+### Console Logging in Tests
+
+**Issue:** Standard `console.log`, `console.warn`, etc., calls may be suppressed in the test environment output, even when using flags like `--disable-console-intercept` or `--silent=false`. The exact cause in this project setup is unclear but seems related to the Vitest environment or configuration.
+
+**Workaround:** For temporary debugging output within tests or mocks, use `process.stdout.write('My debug message\n');` or `process.stderr.write('My error message\n');`. Remember to include the newline character (`\n`) manually.
+
+**Note:** Remove these `stdout/stderr.write` calls once debugging is complete.
+
+### Async Mock Rejections
+
+**Issue:** There have been observed difficulties with standard Vitest `expect().rejects` assertions reliably detecting promise rejections originating from async mock implementations, particularly when using `mockImplementation` returning `Promise.reject` or even `vi.spyOn().mockRejectedValueOnce()`. The promise may incorrectly resolve instead.
+
+**Solution:** Adhere strictly to the project's standard error testing utility: **`expectToThrowWithConfig`** (from `@tests/utils/errorTestUtils.js`). This utility appears to handle async rejections more reliably in our test environment.
+
+**Consequences of Deviation:** Using `expect().rejects` or other non-standard methods for asserting async rejections may lead to tests that incorrectly pass when they should fail, or fail unpredictably due to issues with rejection propagation in the test framework.

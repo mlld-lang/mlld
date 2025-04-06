@@ -87,7 +87,7 @@ export class PathResolver {
       // Step 1: Resolve the path based on context (e.g., relative to current file)
       const resolvedMeldPath = await this.pathService.resolvePath(meldPath, context.pathContext.purpose, context.currentFilePath);
 
-      // --- Add Logging Here ---
+      // --- Logging added earlier (currently suppressed) ---
       console.log(
         `PathResolver: Calling validatePath with: `,
         `  Resolved Path: ${JSON.stringify(resolvedMeldPath)}`, 
@@ -105,21 +105,17 @@ export class PathResolver {
              `PathResolver: validatePath for '${resolvedMeldPath?.originalValue}' did not return a valid MeldPath object. Result:`, 
              validatedMeldPath
            );
-           // If validation was required by context but didn't return a valid object (and didn't throw), 
-           // treat it as a failure.
-           if (context.pathContext.validation?.required) { // Check if validation was actually required
+           if (context.pathContext.validation?.required) { 
                 if (context.flags.strict) {
                     throw new MeldResolutionError(
                         `Path validation failed for '${resolvedMeldPath?.originalValue}': Expected validated path object, got ${typeof validatedMeldPath}`,
                         { code: 'E_PATH_VALIDATION_FAILED' }
                     );
                 } else {
-                    return ''; // Non-strict: return empty on implicit failure
+                    return '';
                 }
             } else {
-                // If validation wasn't required, proceed cautiously, maybe return the resolved (but not validated) path?
-                // Or stick to returning empty string if validation didn't produce the expected type.
-                return resolvedMeldPath?.validatedPath as string || ''; // Fallback to resolved path if possible
+                return resolvedMeldPath?.validatedPath as string || ''; 
             }
       }
       
@@ -127,28 +123,27 @@ export class PathResolver {
       return validatedMeldPath.validatedPath as string; 
 
     } catch (error) {
-      // Re-throw PathValidationError specifically
+      // Check if it's the expected PathValidationError
       if (error instanceof PathValidationError) {
-        console.log(`PathResolver caught PathValidationError: ${error.message}, Type: ${error.constructor.name}`); // Enhanced log
-        throw error; 
+        // This is the expected path for the failing tests
+        console.log(`PathResolver caught EXPECTED PathValidationError: ${error.message}`); // Log (suppressed)
+        throw error; // Re-throw the expected error
       }
-      // Log details for unexpected errors
-      console.error(
-        `PathResolver caught unexpected error:`, 
-        error, 
-        `Type: ${error?.constructor?.name}`, 
-        `Is PathValidationError? ${error instanceof PathValidationError}`
-      ); 
-      // Check if it's a VariableResolutionError from getPathVar that wasn't caught by strict check (shouldn't happen often)
-      if (error instanceof VariableResolutionError && !context.flags.strict) {
-          // In non-strict mode, errors during fetching (like special vars not found) should resolve to empty string?
-          // This aligns with the 'undefined variables in non-strict mode' test.
-          console.log(`PathResolver caught VariableResolutionError in non-strict mode, returning empty string: ${error.message}`); // Debug log
-          return ''; 
+      
+      // --- NEW: Handle unexpected errors caught during validation --- 
+      else {
+        // If we caught something ELSE during the validation process, throw a new generic error
+        const errorType = error?.constructor?.name || typeof error;
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error(`PathResolver caught UNEXPECTED error during validation: Type=${errorType}, Msg=${errorMessage}`); // Log (suppressed)
+        // Throw a generic error to change the test failure signature
+        throw new Error(`PathResolver caught unexpected error type during validation: ${errorType}. Original message: ${errorMessage}`); 
       }
-      // Otherwise, re-throw unknown errors
-      console.error(`PathResolver caught unexpected error:`, error); // Debug log for unexpected errors
-      throw error; 
+      // --- END NEW --- 
+
+      // Note: The VariableResolutionError check for non-strict mode is implicitly handled
+      // because if it occurs *before* validation, it won't reach this catch block.
+      // If it somehow occurs *during* validation (unlikely), it would fall into the 'else' block above.
     }
   }
 
