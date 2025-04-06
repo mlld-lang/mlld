@@ -1,27 +1,163 @@
 import type { IStateService } from '@services/state/StateService/IStateService.js';
-import { ResolutionContext, ResolutionErrorCode } from '@services/resolution/ResolutionService/IResolutionService.js';
-import { ResolutionError } from '@services/resolution/ResolutionService/errors/ResolutionError.js';
+import type { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
 import type { MeldNode, DirectiveNode, TextNode } from '@core/syntax/types.js';
 import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 import { VariableResolutionError } from '@core/errors/VariableResolutionError.js';
-import { VariableType } from '@core/types';
+import { VariableType, isBasicCommand } from '@core/types';
 import type { VariableReferenceNode } from '@core/types/ast-types';
+import type { IBasicCommandDefinition, ICommandParameterMetadata } from '@core/types/define.js';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
+import { logger } from '@core/utils/logger.js';
 
 /**
- * Handles resolution of command references ($run)
+ * Handles resolution and execution of command variables.
  */
 export class CommandResolver {
   constructor(
     private stateService: IStateService,
+    private fileSystemService: IFileSystemService,
     private parserService?: IParserService
   ) {}
 
   /**
-   * Resolve command references in a node
+   * Executes a basic command definition with provided arguments.
+   *
+   * @param definition - The IBasicCommandDefinition.
+   * @param args - Array of resolved argument strings provided at invocation time.
+   * @param context - The resolution context.
+   * @returns The stdout of the executed command.
+   */
+  async executeBasicCommand(definition: IBasicCommandDefinition, args: string[], context: ResolutionContext): Promise<string> {
+    logger.debug(`Executing basic command: ${definition.name}`, { argsCount: args.length, template: definition.commandTemplate });
+
+    // 1. Validate arguments against definition parameters
+    const validationError = this.validateArguments(definition.parameters, args);
+    if (validationError) {
+      logger.error(`Argument validation failed for command ${definition.name}`, { error: validationError });
+      if (context.strict) {
+        throw validationError;
+      }
+      return ''; // Return empty string in non-strict mode for param mismatch
+    }
+
+    // 2. Substitute parameters into the template
+    let commandString = definition.commandTemplate;
+    const paramMap = this.createParamMap(definition.parameters, args);
+
+    for (const param of definition.parameters) {
+      const value = paramMap.get(param.name) ?? param.defaultValue ?? ''; // Use provided arg, then default, then empty
+      const placeholder = `{{${param.name}}}`;
+      // Use regex for global replacement
+      commandString = commandString.replace(new RegExp(placeholder.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'), 'g'), value);
+    }
+
+    // 3. Check for leftover placeholders (optional, but good practice)
+    const leftoverMatch = commandString.match(/{{(.*?)}}/);
+    if (leftoverMatch) {
+       const errorMsg = `Command ${definition.name}: Unresolved parameter placeholder found after substitution: ${leftoverMatch[0]}`;
+       logger.error(errorMsg, { finalCommandString: commandString });
+       if (context.strict) {
+           throw new MeldResolutionError(errorMsg, {
+               code: 'E_RESOLVE_PARAM_SUBSTITUTION',
+               details: { commandName: definition.name, template: definition.commandTemplate, args }
+           });
+       }
+       // Decide if execution should proceed or return empty in non-strict
+       return ''; // Safer to return empty if substitution failed
+    }
+
+    // 4. Handle variable resolution within the command string (if mode requires)
+    // TODO: Implement variable resolution based on definition.variableResolutionMode
+    // This might involve calling back to ResolutionService.resolveText(commandString, context)
+    // For now, we execute the command string as-is after parameter substitution.
+    if (definition.variableResolutionMode && definition.variableResolutionMode !== 'none') {
+        logger.warn(`Command ${definition.name}: Variable resolution mode '${definition.variableResolutionMode}' not yet implemented. Executing command without further variable resolution.`);
+        // Placeholder: In future, call resolution service here if mode is 'immediate'
+        // if (definition.variableResolutionMode === 'immediate') {
+        //   commandString = await resolutionService.resolveText(commandString, context); // Need resolutionService access
+        // }
+    }
+
+
+    // 5. Execute the command
+    logger.debug(`Executing command string for ${definition.name}: ${commandString}`);
+    try {
+      // Determine working directory (use context.state's current path?)
+      const cwd = context.state?.getCurrentFilePath()
+          ? this.fileSystemService.dirname(context.state.getCurrentFilePath())
+          : this.fileSystemService.getCwd();
+
+      const result = await this.fileSystemService.executeCommand(commandString, { cwd });
+      logger.debug(`Command ${definition.name} execution successful`, { stdoutLength: result.stdout.length, stderrLength: result.stderr.length });
+
+      // Handle stderr? Throw if non-empty? Depends on desired behavior.
+      if (result.stderr && context.strict) {
+           // Optional: throw an error if stderr is produced in strict mode
+           // throw new MeldResolutionError(`Command ${definition.name} produced stderr: ${result.stderr}`, { code: 'E_COMMAND_STDERR' });
+           logger.warn(`Command ${definition.name} produced stderr`, { stderr: result.stderr });
+      }
+
+      return result.stdout;
+    } catch (error) {
+      logger.error(`Command execution failed for ${definition.name}`, { error, commandString });
+      if (context.strict) {
+        throw new MeldResolutionError(`Command execution failed: ${definition.name}`, {
+          code: 'E_COMMAND_EXEC_FAILED',
+          cause: error,
+          details: { commandName: definition.name, executedCommand: commandString }
+        });
+      }
+      return ''; // Return empty on execution failure in non-strict
+    }
+  }
+
+  /** Helper to validate provided arguments against parameter definitions */
+  private validateArguments(parameters: ICommandParameterMetadata[], args: string[]): MeldResolutionError | null {
+      const requiredParams = parameters.filter(p => p.required !== false); // required is true by default
+      const maxParams = parameters.length;
+
+      if (args.length < requiredParams.length) {
+          return new MeldResolutionError(
+              `Expected at least ${requiredParams.length} arguments, but got ${args.length}`, {
+              code: 'E_RESOLVE_PARAM_MISMATCH_COUNT',
+              details: { expectedMin: requiredParams.length, actual: args.length }
+          });
+      }
+      if (args.length > maxParams) {
+           return new MeldResolutionError(
+               `Expected at most ${maxParams} arguments, but got ${args.length}`, {
+               code: 'E_RESOLVE_PARAM_MISMATCH_COUNT',
+               details: { expectedMax: maxParams, actual: args.length }
+           });
+      }
+      return null; // Arguments are valid
+  }
+
+   /** Helper to map parameter names to provided argument values by position */
+   private createParamMap(parameters: ICommandParameterMetadata[], args: string[]): Map<string, string> {
+       const map = new Map<string, string>();
+       // Sort parameters by position to ensure correct mapping
+       const sortedParams = [...parameters].sort((a, b) => a.position - b.position);
+       for (let i = 0; i < sortedParams.length; i++) {
+           if (i < args.length) {
+               map.set(sortedParams[i].name, args[i]);
+           } else if (sortedParams[i].defaultValue !== undefined) {
+               // Use default value if argument not provided
+               map.set(sortedParams[i].name, sortedParams[i].defaultValue);
+           }
+           // If arg not provided and no default, it simply won't be in the map
+       }
+       return map;
+   }
+
+  /**
+   * Resolve command references in a node (Likely Deprecated for general use)
+   * @deprecated Prefer ResolutionService.resolveCommand which uses executeBasicCommand.
    */
   async resolve(node: MeldNode, context: ResolutionContext): Promise<string> {
+     logger.warn("CommandResolver.resolve(node, context) is likely deprecated for general use. Consider ResolutionService.resolveCommand.");
     // Early return if not a directive node
     if (node.type !== 'Directive') {
       return node.type === 'Text' ? (node as TextNode).content : '';
@@ -212,47 +348,47 @@ export class CommandResolver {
   }
 
   /**
-   * Parse command parameters from a run directive using AST
+   * Parse command parameters from a run directive using AST (Likely Deprecated)
+   * @deprecated Definition now provides parameters directly.
    */
-  private async parseCommandParameters(command: any): Promise<{ name: string; params: string[] }> {
+  private async parseCommandParameters(commandDef: any): Promise<{ name: string; params: string[] }> {
+    logger.warn("CommandResolver.parseCommandParameters is deprecated.");
     // Validate command format first
-    if (!command || typeof command.command !== 'string') {
+    if (!commandDef || (typeof commandDef.commandTemplate !== 'string' && typeof commandDef.codeBlock !== 'string')) {
       throw new MeldResolutionError(
-        'Invalid command definition format: missing command string',
-        {
-          code: 'E_COMMAND_INVALID_DEF',
-          severity: ErrorSeverity.Fatal,
-          details: { commandDefinition: JSON.stringify(command) }
-        }
+        'Invalid command definition format provided to parseCommandParameters',
+        { code: 'E_COMMAND_INVALID_DEF', severity: ErrorSeverity.Fatal }
       );
     }
 
-    // This function's purpose seems flawed. The command definition itself contains the template
-    // and the parameter list. We shouldn't be re-parsing the template string here to find parameters.
-    // We should use command.command as the template and command.parameters as the list.
-    // Refactoring the caller (`resolve` method) to use command.command and command.parameters directly.
-    // This function is likely unnecessary if ICommandDefinition is structured correctly.
-    
-    // TEMPORARY Placeholder - returning structure based on definition
-    return {
-      name: command.command,
-      params: command.parameters || []
-    };
+    if (isBasicCommand(commandDef)) {
+        return {
+            name: commandDef.commandTemplate, // 'name' here means the template string
+            params: commandDef.parameters.map(p => p.name) // Extract names from metadata
+        };
+    } else { // Language command
+        return {
+            name: commandDef.codeBlock, // 'name' here means the code block
+            params: commandDef.parameters.map(p => p.name)
+        };
+    }
   }
 
   /**
-   * Count parameter references in a template using AST
+   * Count parameter references in a template using AST (Likely Deprecated)
+   * @deprecated Definition now provides parameters directly.
    */
   private async countParameterReferences(template: string): Promise<number> {
-    console.warn('CommandResolver.countParameterReferences is likely unnecessary and being called.');
+    logger.warn('CommandResolver.countParameterReferences is deprecated.');
     return (template.match(/{{(.*?)}}/g) || []).length;
   }
 
   /**
-   * Extract parameter names from template using AST
+   * Extract parameter names from template using AST (Likely Deprecated)
+   * @deprecated Definition now provides parameters directly.
    */
   private async extractParameterNames(template: string): Promise<string[]> {
-    console.warn('CommandResolver.extractParameterNames is likely unnecessary and being called.');
+    logger.warn('CommandResolver.extractParameterNames is deprecated.');
     const matches = template.matchAll(/{{(.*?)}}/g);
     return Array.from(matches, m => m[1].trim());
   }
