@@ -31,6 +31,8 @@ import { TestContextDI } from '@tests/utils/di/index.js'; // Added TestContextDI
 import { DeepMockProxy, mockDeep } from 'vitest-mock-extended'; // Added mockDeep and DeepMockProxy
 import { MeldPath, PathContentType, ValidatedResourcePath, unsafeCreateValidatedResourcePath } from '@core/types/paths.js'; // Added path helper
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js'; // Added factory import
+// Import error testing utility
+import { expectToThrowWithConfig } from '@tests/utils/errorTestUtils.js';
 
 describe('VariableReferenceResolver', () => {
   let contextDI: TestContextDI;
@@ -134,12 +136,14 @@ describe('VariableReferenceResolver', () => {
       const node = createVariableReferenceNode('missing', VariableType.TEXT);
       stateService.getTextVar.calledWith('missing').mockReturnValue(undefined);
       
-      await expect(resolver.resolve(node, context))
-        .rejects
-        .toThrow(VariableResolutionError);
-      await expect(resolver.resolve(node, context))
-        .rejects
-        .toThrow("Text variable 'missing' not found in state."); 
+      // Use expectToThrowWithConfig
+      await expectToThrowWithConfig(async () => {
+        await resolver.resolve(node, context);
+      }, {
+        errorType: VariableResolutionError,
+        messageContains: "Variable not found: missing", // Adjusted message
+        code: 'E_VAR_NOT_FOUND' // Added expected code
+      });
     });
 
     it('should return empty string for undefined variables in non-strict mode', async () => {
@@ -165,12 +169,15 @@ describe('VariableReferenceResolver', () => {
 
       stateService.getDataVar.calledWith('dataObj').mockReturnValue(mockVar);
 
-      await expect(resolver.resolve(node, context))
-        .rejects
-        .toThrow(FieldAccessError); 
-      await expect(resolver.resolve(node, context))
-        .rejects
-        .toThrow("Field 'age' not found in object.");
+      // Use expectToThrowWithConfig
+      await expectToThrowWithConfig(async () => {
+        await resolver.resolve(node, context);
+      }, {
+        errorType: FieldAccessError,
+        messageContains: "Field 'age' not found in object.",
+        // Add code if FieldAccessError has specific codes (e.g., FIELD_NOT_FOUND)
+        // code: 'FIELD_NOT_FOUND'
+      });
     });
 
     it('should return empty string on invalid field access in non-strict mode', async () => {

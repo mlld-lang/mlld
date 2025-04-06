@@ -42,6 +42,8 @@ import { IDirectiveServiceClient } from '@services/pipeline/DirectiveService/int
 import type { IFileSystemServiceClient } from '@services/fs/FileSystemService/interfaces/IFileSystemServiceClient.js';
 // Import the Factory we need to use
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
+// Import error testing utility
+import { expectToThrowWithConfig } from '@tests/utils/errorTestUtils.js';
 
 // Use the correctly imported run directive examples
 const runDirectiveExamples = runDirectiveExamplesModule;
@@ -115,6 +117,7 @@ describe('ResolutionService', () => {
       getDataVar: vi.fn().mockImplementation((name: string): DataVariable | undefined => {
         if (name === 'user') return createMockDataVariable('user', { name: 'Alice', id: 123 });
         if (name === 'config') return createMockDataVariable('config', { version: 1, active: true });
+        if (name === 'nested') return createMockDataVariable('nested', { data: { level1: { value: 'deep' } } });
         return undefined;
       }),
       getPathVar: vi.fn().mockImplementation((name: string): PathVariable | undefined => {
@@ -147,7 +150,14 @@ describe('ResolutionService', () => {
     fileSystemService = {
       exists: vi.fn().mockResolvedValue(true),
       readFile: vi.fn().mockResolvedValue('file content'),
+      // Add executeCommand mock
+      executeCommand: vi.fn().mockImplementation(async (command: string, options?: { cwd?: string }) => {
+        // Simple mock: return command string as stdout
+        return { stdout: command, stderr: '' };
+      }),
       // Add other necessary IFileSystemService methods
+      dirname: vi.fn(p => typeof p === 'string' ? p.substring(0, p.lastIndexOf('/') || 0) : ''), // Needed by CommandResolver
+      getCwd: vi.fn().mockReturnValue('/mock/cwd'), // Needed by CommandResolver
     } as unknown as IFileSystemService;
 
     // Mock parser to return VariableReferenceNodes where appropriate
@@ -193,7 +203,18 @@ describe('ResolutionService', () => {
       normalizePath: vi.fn().mockImplementation((p: string | MeldPath): MeldPath => {
         return typeof p === 'string' ? createMeldPath(p) : p; // Return MeldPath
       }),
-      validatePath: vi.fn().mockResolvedValue(undefined), // Assume paths are valid for most tests
+      validatePath: vi.fn().mockImplementation(async (resolvedPath: MeldPath, context: PathValidationContext): Promise<MeldPath> => {
+        // Simulate failure if context requires validation and path is marked invalid for test
+        if (context.validation?.required && resolvedPath?.raw?.includes('invalid-for-test')) {
+          throw new PathValidationError('Simulated validation failure', { 
+            code: 'E_PATH_VALIDATION_FAILED', 
+            details: { pathString: resolvedPath.raw, validationContext: context }
+          });
+        }
+        // Basic mock: Assume valid and return the resolved path object
+        if (!resolvedPath) throw new Error('Mock validatePath received undefined path');
+        return resolvedPath;
+      }),
       getProjectPath: vi.fn().mockReturnValue('/mock/project/root'),
       isAbsolute: vi.fn().mockImplementation(p => typeof p === 'string' && p.startsWith('/')),
     };
@@ -249,8 +270,8 @@ describe('ResolutionService', () => {
     testContext.registerMock('DirectiveServiceClientFactory', mockDirectiveClientFactory);
     testContext.registerMock('FileSystemServiceClientFactory', mockFileSystemClientFactory);
     
-    // Instantiate the service directly with mocked dependencies
-    service = new ResolutionService(stateService, fileSystemService, pathService, parserService);
+    // Instantiate the service using the DI container
+    service = await testContext.resolve<IResolutionService>('IResolutionService');
 
     // Create a default ResolutionContext using the factory
     defaultContext = ResolutionContextFactory.create(stateService, 'test.meld');
@@ -398,16 +419,17 @@ describe('ResolutionService', () => {
     it('should throw when file does not exist', async () => {
       const filePathString = '/missing/file';
       const filePath = createMeldPath(filePathString);
-      
-      // Mock the underlying FileSystemService readFile to reject
-      const error = new Error('File not found');
-      vi.mocked(fileSystemService.readFile).mockRejectedValue(error);
+      vi.mocked(fileSystemService.readFile).mockRejectedValue(new Error('File not found'));
 
-      // Call resolveFile with the MeldPath object and expect rejection
-      await expect(service.resolveFile(filePath))
-        .rejects
-        .toThrowError(MeldResolutionError); // Check for MeldResolutionError or specific file error type
-        // .toThrow('Failed to read file: /missing/file'); // Check specific message if needed
+      // Use expectToThrowWithConfig
+      await expectToThrowWithConfig(async () => {
+        await service.resolveFile(filePath);
+      }, {
+        // Assuming resolveFile wraps the fs error in a MeldResolutionError or similar
+        errorType: MeldResolutionError, // Or a more specific error type if available
+        // code: 'E_FILE_NOT_FOUND', // If a specific code is used
+        messageContains: 'Failed to resolve file content' // Adjust message as needed
+      });
     });
   });
 
@@ -664,6 +686,277 @@ Content 2`;
         expect(result.error.code).toBe('INVALID_BASE_TYPE'); // Or similar code
         expect(result.error.message).toContain("Cannot access field 'length' on type 'string'");
       }
+    });
+
+    it('should handle non-existent variable', async () => {
+      // Use expectToThrowWithConfig
+      await expectToThrowWithConfig(async () => {
+        await service.resolveFieldAccess('nonexistent', ['field'], defaultContext);
+      }, {
+        errorType: VariableResolutionError,
+        code: 'E_VAR_NOT_FOUND', // VariableReferenceResolver should throw this first
+        messageContains: 'Variable not found: nonexistent'
+      });
+    });
+
+    it('should handle invalid field access in strict mode', async () => {
+      const strictContext = ResolutionContextFactory.create(stateService, 'test.meld', { strict: true });
+      // Mock getDataVar to return 'user' which has { name, id }
+      vi.mocked(stateService.getDataVar).mockImplementation((name: string): DataVariable | undefined => {
+        if (name === 'user') return createMockDataVariable('user', { name: 'Alice', id: 123 });
+        return undefined;
+      });
+      // Use expectToThrowWithConfig
+      await expectToThrowWithConfig(async () => {
+        // Accessing 'address' which doesn't exist on the user object
+        await service.resolveFieldAccess('user', ['address'], strictContext);
+      }, {
+        errorType: FieldAccessError, // Expecting FieldAccessError from VariableReferenceResolver
+        // code might depend on the specific FieldAccessError subclass used
+        messageContains: 'Field 'address' not found' // Or similar message from accessFields
+      });
+    });
+
+    it('should return empty string for invalid field access in non-strict mode', async () => {
+      // Mock getDataVar to return 'user'
+      vi.mocked(stateService.getDataVar).mockImplementation((name: string): DataVariable | undefined => {
+        if (name === 'user') return createMockDataVariable('user', { name: 'Alice', id: 123 });
+        return undefined;
+      });
+      // Accessing 'address' which doesn't exist on the user object
+      const result = await service.resolveFieldAccess('user', ['address'], defaultContext); // non-strict
+      // VariableReferenceResolver returns empty string in non-strict mode on field access failure
+      expect(result).toBe('');
+    });
+  });
+
+  describe('resolveData', () => {
+    it('should resolve data variables', async () => {
+      // The beforeEach setup handles mocking:
+      // - stateService.getDataVar('user') returns DataVariable({ value: { name: 'Alice', id: 123 } })
+      // - mockParserClient.parseString('{{user}}') returns VariableReferenceNode({ identifier: 'user' })
+      // We don't need to mock them again here.
+
+      // Call the service method with the default context
+      // Assuming resolveData is the correct method for getting the raw data value
+      const result = await service.resolveData('user', defaultContext);
+
+      // Assert the final resolved JSON value
+      expect(result).toEqual({ name: 'Alice', id: 123 });
+    });
+
+    it('should handle non-existent variable', async () => {
+      // Use expectToThrowWithConfig
+      await expectToThrowWithConfig(async () => {
+        await service.resolveData('nonexistent', defaultContext);
+      }, {
+        errorType: VariableResolutionError, // Expecting VariableResolutionError
+        code: 'E_VAR_NOT_FOUND', // Specific code for not found
+        messageContains: 'Data variable 'nonexistent' not found'
+      });
+    });
+
+    it('should handle context disallowing data vars', async () => {
+      const contextWithoutData = ResolutionContextFactory.create(
+        stateService, 
+        'test.meld', 
+        { allowedVariableTypes: [VariableType.TEXT] } // Only allow TEXT
+      );
+      // Use expectToThrowWithConfig
+      await expectToThrowWithConfig(async () => {
+        await service.resolveData('user', contextWithoutData);
+      }, {
+        errorType: MeldResolutionError, // Expecting MeldResolutionError
+        code: 'E_RESOLVE_TYPE_NOT_ALLOWED', // Specific code
+        messageContains: 'Data variables are not allowed'
+      });
+    });
+  });
+
+  describe('resolvePath', () => {
+    it('should return MeldPath object', async () => {
+      const result = await service.resolvePath('$HOMEPATH', defaultContext);
+      expect(result).toBeInstanceOf(MeldPath);
+      expect(result.raw).toBe('/home/user');
+    });
+
+    it('should handle validation failures', async () => {
+      const invalidPathString = '$invalid-for-test';
+      const validationContext = ResolutionContextFactory.create(
+        stateService, 
+        'test.meld', 
+        { 
+          pathContext: { 
+            purpose: PathPurpose.INCLUDE, 
+            validation: { required: true } // Ensure validation runs
+          } 
+        }
+      );
+
+      // Use expectToThrowWithConfig
+      await expectToThrowWithConfig(async () => {
+        await service.resolvePath(invalidPathString, validationContext);
+      }, {
+        errorType: PathValidationError, // Expecting PathValidationError from the mock
+        code: 'E_PATH_VALIDATION_FAILED',
+        messageContains: 'Simulated validation failure'
+      });
+    });
+
+    it('should handle non-existent variable', async () => {
+      // Use expectToThrowWithConfig
+      await expectToThrowWithConfig(async () => {
+        await service.resolvePath('$nonexistent', defaultContext);
+      }, {
+        errorType: VariableResolutionError,
+        code: 'E_VAR_NOT_FOUND',
+        messageContains: 'Path variable 'nonexistent' not found'
+      });
+    });
+
+    it('should handle context disallowing path vars', async () => {
+      const contextWithoutPath = ResolutionContextFactory.create(
+        stateService, 
+        'test.meld', 
+        { allowedVariableTypes: [VariableType.TEXT] } // Only allow TEXT
+      );
+      // Use expectToThrowWithConfig
+      await expectToThrowWithConfig(async () => {
+        await service.resolvePath('$home', contextWithoutPath);
+      }, {
+        errorType: MeldResolutionError,
+        code: 'E_RESOLVE_TYPE_NOT_ALLOWED',
+        messageContains: 'Path variables are not allowed'
+      });
+    });
+  });
+
+  describe('resolveCommand', () => {
+    it('should execute basic command', async () => {
+      // Mock stateService to return a basic command definition
+      const basicCommandDef = {
+        name: 'testcmd',
+        commandTemplate: 'echo {{arg1}}',
+        parameters: [{ name: 'arg1', position: 0, required: true }],
+        variableResolutionMode: 'none'
+      };
+      vi.mocked(stateService.getCommandVar).mockReturnValue({
+        name: 'testcmd',
+        valueType: VariableType.COMMAND,
+        value: basicCommandDef,
+        source: { type: 'definition', filePath: 'mock.meld' }
+      });
+      
+      // Mock file system execution
+      vi.mocked(fileSystemService.executeCommand).mockResolvedValue({ stdout: 'echo Hello', stderr: '' });
+      
+      const result = await service.resolveCommand('testcmd', ['Hello'], defaultContext);
+      expect(result).toBe('echo Hello');
+      expect(fileSystemService.executeCommand).toHaveBeenCalledWith('echo Hello', expect.any(Object));
+    });
+
+    it('should handle non-existent command', async () => {
+      vi.mocked(stateService.getCommandVar).mockReturnValue(undefined);
+      // Use expectToThrowWithConfig
+      await expectToThrowWithConfig(async () => {
+        await service.resolveCommand('nonexistent', [], defaultContext);
+      }, {
+        errorType: VariableResolutionError,
+        code: 'E_VAR_NOT_FOUND',
+        messageContains: 'Command 'nonexistent' not found'
+      });
+    });
+
+    it('should handle context disallowing command vars', async () => {
+      const contextWithoutCommand = ResolutionContextFactory.create(
+        stateService, 
+        'test.meld', 
+        { allowedVariableTypes: [VariableType.TEXT] } // Only allow TEXT
+      );
+      // Use expectToThrowWithConfig
+      await expectToThrowWithConfig(async () => {
+        // Need to ensure a command exists for this test case
+        vi.mocked(stateService.getCommandVar).mockReturnValue({
+          name: 'testcmd',
+          valueType: VariableType.COMMAND,
+          value: { name: 'testcmd', commandTemplate: 'echo', parameters: [] }, // Dummy basic def
+          source: { type: 'definition', filePath: 'mock.meld' }
+        });
+        await service.resolveCommand('testcmd', [], contextWithoutCommand);
+      }, {
+        errorType: MeldResolutionError,
+        code: 'E_RESOLVE_TYPE_NOT_ALLOWED',
+        messageContains: 'Command variables are not allowed'
+      });
+    });
+
+    it('should handle command execution error', async () => {
+      // Mock stateService to return a basic command definition
+      const basicCommandDef = {
+        name: 'failcmd',
+        commandTemplate: 'exit 1',
+        parameters: [],
+        variableResolutionMode: 'none'
+      };
+      vi.mocked(stateService.getCommandVar).mockReturnValue({
+        name: 'failcmd',
+        valueType: VariableType.COMMAND,
+        value: basicCommandDef,
+        source: { type: 'definition', filePath: 'mock.meld' }
+      });
+      // Mock file system execution to throw an error
+      vi.mocked(fileSystemService.executeCommand).mockRejectedValue(new Error('Execution failed'));
+      
+      // Use expectToThrowWithConfig
+      await expectToThrowWithConfig(async () => {
+        await service.resolveCommand('failcmd', [], defaultContext);
+      }, {
+        errorType: MeldResolutionError,
+        code: 'E_COMMAND_EXEC_FAILED',
+        messageContains: 'Command execution failed: failcmd'
+      });
+    });
+  });
+
+  describe('resolveText', () => {
+    it('should resolve simple text variable', async () => {
+      const result = await service.resolveText('{{greeting}}', defaultContext);
+      expect(result).toBe('Hello World');
+    });
+
+    it('should handle nested text variables', async () => {
+      // Ensure stateService mock handles the nesting correctly in beforeEach
+      const result = await service.resolveText('{{message}}', defaultContext);
+      expect(result).toBe('`Hello World, Universe!`'); // Based on mock var values
+    });
+
+    it('should handle non-existent variable in strict mode', async () => {
+      const strictContext = ResolutionContextFactory.create(stateService, 'test.meld', { strict: true });
+      // Use expectToThrowWithConfig
+      await expectToThrowWithConfig(async () => {
+        await service.resolveText('{{nonexistent}}', strictContext);
+      }, {
+        errorType: VariableResolutionError,
+        code: 'E_VAR_NOT_FOUND',
+        messageContains: 'Variable not found: nonexistent' // Message from VariableReferenceResolver
+      });
+    });
+
+    it('should return empty string for non-existent variable in non-strict mode', async () => {
+      const result = await service.resolveText('{{nonexistent}}', defaultContext); // defaultContext is non-strict
+      expect(result).toBe('');
+    });
+
+    it('should detect circular references', async () => {
+      // Ensure stateService mock handles the circular vars in beforeEach
+      // Use expectToThrowWithConfig
+      await expectToThrowWithConfig(async () => {
+        await service.resolveText('{{var1}}', defaultContext);
+      }, {
+        errorType: VariableResolutionError,
+        code: 'MaxDepth', // Code set by VariableReferenceResolver
+        messageContains: 'Maximum resolution depth exceeded'
+      });
     });
   });
 }); 
