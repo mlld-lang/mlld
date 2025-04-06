@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import { MeldInterpreterError } from '@core/errors/MeldInterpreterError.js';
 import { DirectiveError } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
