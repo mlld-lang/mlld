@@ -173,6 +173,8 @@ export interface MeldResolvedFilesystemPath {
   exists?: boolean;
   /** Security status based on validation rules */
   isSecure: boolean;
+  /** Whether the path syntax is valid and normalization succeeded */
+  isValidSyntax: boolean;
 }
 
 // Placeholder interface representing a successfully resolved and validated URL.
@@ -230,6 +232,7 @@ export const createMeldPath = (
   isAbsolute,
   isSecure,
   exists,
+  isValidSyntax: true,
 });
 
 // =========================================================================

@@ -1,27 +1,31 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { ContentResolver } from '@services/resolution/ResolutionService/resolvers/ContentResolver.js';
 import type { MeldNode, TextNode, CodeFenceNode, CommentNode, DirectiveNode } from '@core/syntax/types.js';
-import { createMockStateService } from '@tests/utils/testFactories.js';
-import { ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
+import { ResolutionContext } from '@core/types';
+import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
+import type { IStateService } from '@services/state/StateService/IStateService.js';
+import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
+import { DeepMockProxy, mockDeep } from 'vitest-mock-extended';
 
 describe('ContentResolver', () => {
+  let contextDI: TestContextDI;
   let resolver: ContentResolver;
-  let stateService: ReturnType<typeof createMockStateService>;
+  let stateService: DeepMockProxy<IStateService>;
   let context: ResolutionContext;
 
-  beforeEach(() => {
-    stateService = createMockStateService();
+  beforeEach(async () => {
+    contextDI = TestContextDI.createIsolated();
+    stateService = mockDeep<IStateService>();
+    
+    contextDI.registerMock<IStateService>('IStateService', stateService);
+    
     resolver = new ContentResolver(stateService);
-    context = {
-      allowedVariableTypes: {
-        text: true,
-        data: true,
-        path: true,
-        command: true
-      },
-      currentFilePath: '',
-      state: stateService
-    };
+    
+    context = ResolutionContextFactory.create(stateService, 'test.meld');
+  });
+
+  afterEach(async () => {
+    await contextDI?.cleanup();
   });
 
   it('should preserve text content exactly as is', async () => {

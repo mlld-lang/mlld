@@ -713,7 +713,7 @@ Content 2`;
       }, {
         errorType: FieldAccessError, // Expecting FieldAccessError from VariableReferenceResolver
         // code might depend on the specific FieldAccessError subclass used
-        messageContains: 'Field 'address' not found' // Or similar message from accessFields
+        messageContains: 'Field \'address\' not found' // Or similar message from accessFields
       });
     });
 

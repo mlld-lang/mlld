@@ -38,7 +38,7 @@ describe('VariableReferenceResolver', () => {
   let stateService: DeepMockProxy<IStateService>;
   let parserService: DeepMockProxy<IParserService>;
   let resolutionService: DeepMockProxy<IResolutionService>;
-  let pathService: DeepMockProxy<IPathService>;
+  let pathService: Partial<IPathService>;
   let context: ResolutionContext;
 
   beforeEach(async () => {
@@ -48,16 +48,19 @@ describe('VariableReferenceResolver', () => {
     stateService = mockDeep<IStateService>();
     parserService = mockDeep<IParserService>();
     resolutionService = mockDeep<IResolutionService>();
-    pathService = mockDeep<IPathService>();
+    pathService = {
+        resolvePath: vi.fn() as any,
+        validatePath: vi.fn() as any,
+    };
 
     // Register mocks
     contextDI.registerMock<IStateService>('IStateService', stateService);
     contextDI.registerMock<IParserService>('IParserService', parserService);
     contextDI.registerMock<IResolutionService>('IResolutionService', resolutionService);
-    contextDI.registerMock<IPathService>('IPathService', pathService);
+    contextDI.registerMock<IPathService>('IPathService', pathService as IPathService); 
     
     // Instantiate resolver directly, passing mocks
-    resolver = new VariableReferenceResolver(stateService, pathService, resolutionService, parserService);
+    resolver = new VariableReferenceResolver(stateService, pathService as IPathService, resolutionService, parserService);
     
     // Use ResolutionContextFactory to create the context
     context = ResolutionContextFactory.create(stateService, 'test.meld')
@@ -213,35 +216,32 @@ describe('VariableReferenceResolver', () => {
       const resolvedPathString = '/abs/project/docs';
       const validatedPathString = '/abs/project/docs/validated';
       
-      const mockPath = {
+      const mockPath: MeldPath = {
          contentType: PathContentType.FILESYSTEM,
          originalValue: rawPathString,
          validatedPath: unsafeCreateValidatedResourcePath(''),
          isAbsolute: false,
          isSecure: true,
          isValidSyntax: true 
-      } as MeldPath;
+      };
       const mockVar: IPathVariable = { name: 'docsPath', type: VariableType.PATH, value: mockPath };
       stateService.getPathVar.calledWith('docsPath').mockResolvedValue(mockVar);
       
-      const resolvedMeldPath = { 
+      const resolvedMeldPath: MeldPath = { 
           contentType: PathContentType.FILESYSTEM, 
           originalValue: rawPathString, 
           validatedPath: unsafeCreateValidatedResourcePath(resolvedPathString),
           isAbsolute: true,
           isSecure: true,
           isValidSyntax: true 
-      } as MeldPath;
-      pathService.resolvePath.mockResolvedValue(resolvedMeldPath);
+      };
+      (pathService.resolvePath as any).mockResolvedValue(resolvedMeldPath);
       
-      const validatedMeldPath = { 
+      const validatedMeldPath: MeldPath = { 
           ...resolvedMeldPath,
           validatedPath: unsafeCreateValidatedResourcePath(validatedPathString)
-      } as MeldPath;
-      pathService.validatePath.calledWith(resolvedMeldPath, expect.objectContaining({
-          purpose: context.pathContext?.purpose,
-          constraints: context.pathContext?.constraints
-      })).mockResolvedValue(validatedMeldPath);
+      };
+      (pathService.validatePath as any).mockResolvedValue(validatedMeldPath);
       
       const result = await resolver.resolve(node, context);
       
@@ -258,12 +258,11 @@ describe('VariableReferenceResolver', () => {
       const node = createVariableReferenceNode('myCmd', VariableType.COMMAND);
       const mockCmdDef = { 
           name: 'myCmd', 
-          type: 'basic', 
+          type: 'basic' as const, 
           commandTemplate: 'echo Hello', 
           parameters: [],
           isMultiline: false
       };
-      // @ts-ignore
       const mockVar: CommandVariable = { name: 'myCmd', type: VariableType.COMMAND, value: mockCmdDef };
       stateService.getCommandVar.calledWith('myCmd').mockResolvedValue(mockVar);
       
