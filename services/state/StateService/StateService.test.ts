@@ -51,6 +51,8 @@ describe('StateService', () => {
 
   beforeEach(() => {
     mockEventService = mock<IStateEventService>();
+    mockEventService.emit = vi.fn();
+    
     trackingClient = mock<IStateTrackingServiceClient>();
     stateFactory = new StateFactory();
     const trackingClientFactory: Pick<StateTrackingServiceClientFactory, 'createClient'> = { 
@@ -198,19 +200,30 @@ describe('StateService', () => {
       expect(state.hasImport('test.md')).toBe(true);
     });
 
-    // Skip this test for now - See investigation [DATE?] regarding async event emission issues
-    it.skip('should emit events for state operations', async () => {
-      const handler = vi.fn();
-      mockEventService.on('transform', handler);
+    // Un-skip this test
+    it('should emit events for state operations', async () => {
+      const emitSpy = vi.spyOn(mockEventService, 'emit');
       
       state.setCurrentFilePath('test.meld');
+      
+      // Clear mocks *after* potentially triggering calls, before the call under test
+      emitSpy.mockClear(); 
+      // vi.clearAllMocks(); // Alternative if needed
+      
       // Await the async setTextVar call
       await state.setTextVar('test', 'value'); 
       
-      expect(handler).toHaveBeenCalledWith(expect.objectContaining({
+      // Check if the emit spy was called with the expected event object
+      expect(emitSpy).toHaveBeenCalledTimes(1); // Check if called at all first
+      expect(emitSpy).toHaveBeenCalledWith(expect.objectContaining({
         type: 'transform',
-        source: 'setTextVar:test' 
+        stateId: state.getStateId(), // Check against the actual state ID
+        source: 'setTextVar:test', 
+        location: { file: 'test.meld' }
       }));
+      
+      // Restore the spy
+      emitSpy.mockRestore();
     });
 
     it('should create child state with inherited properties (typed)', async () => {
