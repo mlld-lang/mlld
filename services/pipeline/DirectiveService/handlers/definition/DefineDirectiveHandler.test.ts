@@ -16,6 +16,7 @@ import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 import type { ICommandDefinition } from '@core/types/definitions.js';
 import type { DirectiveContext } from '@services/pipeline/DirectiveService/IDirectiveService.js';
 import type { DirectiveNode, DefineDirectiveData } from '@core/syntax/types.js'; // Ensure DefineDirectiveData is imported
+import { expectToThrowWithConfig } from '@tests/utils/errorTestUtils.js'; // Import the utility
 
 // NOTE: The createMockState helper is NOT used here, setup is simpler
 
@@ -143,12 +144,10 @@ describe('DefineDirectiveHandler', () => {
   
   describe('error handling', () => {
     it('should handle state errors', async () => {
-      const node = createValidDefineNode('cmdError', 'test'); // Use helper
+      const node = createValidDefineNode('cmdError', 'test'); 
       const executeContext = { state: stateService } as DirectiveContext;
       const stateError = new Error('State error');
 
-      // Mock the clone's setCommandVar method
-      // Ensure mockStateClone exists before mocking (it should from beforeEach)
       if(clonedState) {
          vi.mocked(clonedState.setCommandVar).mockImplementation(() => {
            throw stateError;
@@ -157,12 +156,24 @@ describe('DefineDirectiveHandler', () => {
          throw new Error("Test setup error: mockStateClone was not initialized");
       }
 
-      await expect(handler.execute(node, executeContext))
-            .rejects
-            .toThrow(DirectiveError); 
-      await expect(handler.execute(node, executeContext))
-            .rejects
-            .toThrow(stateError); 
+      // Use expectToThrowWithConfig
+      await expectToThrowWithConfig(
+        async () => await handler.execute(node, executeContext),
+        {
+          errorType: DirectiveError, // Expect the handler to wrap the error
+          // code: DirectiveErrorCode.COMMAND_DEFINITION_FAILED, // Optional: Add if code is consistent
+          message: /State error|Failed to define command/i, // Check message contains original or wrapper message
+          cause: stateError // Expect the original error to be the cause
+        }
+      );
+      
+      // Remove old assertions
+      // await expect(handler.execute(node, executeContext))
+      //       .rejects
+      //       .toThrow(DirectiveError); 
+      // await expect(handler.execute(node, executeContext))
+      //       .rejects
+      //       .toThrow(stateError); 
     });
   });
 

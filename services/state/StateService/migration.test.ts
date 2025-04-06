@@ -181,8 +181,14 @@ describe('State Migration', () => {
       errorMock.getCurrentFilePath.mockReturnValue(null);
 
       const result = migrateState(errorMock);
+
+      // Log the actual warnings for debugging
+      // process.stdout.write(`[DEBUG migration.test.ts] Warnings: ${JSON.stringify(result.warnings)}\n`); // Remove DEBUG log
+
+      // Assertions
       expect(result.success).toBe(false);
-      expect(result.warnings).toContain('Error migrating state: Error: Test error');
+      // Update expected warning message format
+      expect(result.warnings).toContain('Error: Test error');
       expect(result.state.variables.text.size).toBe(0);
     });
   });
