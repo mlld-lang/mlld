@@ -99,11 +99,28 @@ export class PathResolver {
       // Step 2: Validate the *resolved* path against context rules
       const validatedMeldPath = await this.pathService.validatePath(resolvedMeldPath, context.pathContext); 
       
-      // Ensure validatedMeldPath is not undefined/null before accessing validatedPath
-      if (!validatedMeldPath?.validatedPath) {
-           console.warn(`PathResolver: validatePath for '${resolvedMeldPath?.originalValue}' returned unexpected structure:`, validatedMeldPath);
-           // Decide behavior: throw, return empty, or return original raw? Returning empty for now.
-           return ''; 
+      // Check if validation *actually succeeded* based on mock contract (expecting the object back)
+      if (!validatedMeldPath?.validatedPath) { 
+           console.warn(
+             `PathResolver: validatePath for '${resolvedMeldPath?.originalValue}' did not return a valid MeldPath object. Result:`, 
+             validatedMeldPath
+           );
+           // If validation was required by context but didn't return a valid object (and didn't throw), 
+           // treat it as a failure.
+           if (context.pathContext.validation?.required) { // Check if validation was actually required
+                if (context.flags.strict) {
+                    throw new MeldResolutionError(
+                        `Path validation failed for '${resolvedMeldPath?.originalValue}': Expected validated path object, got ${typeof validatedMeldPath}`,
+                        { code: 'E_PATH_VALIDATION_FAILED' }
+                    );
+                } else {
+                    return ''; // Non-strict: return empty on implicit failure
+                }
+            } else {
+                // If validation wasn't required, proceed cautiously, maybe return the resolved (but not validated) path?
+                // Or stick to returning empty string if validation didn't produce the expected type.
+                return resolvedMeldPath?.validatedPath as string || ''; // Fallback to resolved path if possible
+            }
       }
       
       // Return the validated path string from the final validated object
