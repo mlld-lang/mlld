@@ -15,7 +15,9 @@ import {
   DataVariable, 
   IPathVariable,
   CommandVariable, 
-  MeldVariable
+  MeldVariable,
+  StructuredPath,
+  PathResolutionContext
 } from '@core/types/index.js';
 import type { VariableReferenceNode } from '@core/ast/ast/astTypes.js';
 import { MeldResolutionError, FieldAccessError, VariableResolutionError } from '@core/errors/index.js';
@@ -100,9 +102,11 @@ describe('VariableReferenceResolver', () => {
         { type: FieldAccessType.PROPERTY, key: 'user' }, 
         { type: FieldAccessType.PROPERTY, key: 'name' }
       ];
-      // @ts-ignore - Persistent linter error: Type mapping conflict (key vs value) between FieldAccess and node factory param.
       const node = createVariableReferenceNode('dataObj', VariableType.DATA, 
-          fieldsDefinition.map(f => ({ ...f, value: f.key }))
+          fieldsDefinition.map(f => ({
+             type: f.type === FieldAccessType.PROPERTY ? 'field' : 'index',
+             value: f.key
+           }))
       );
 
       stateService.getDataVar.calledWith('dataObj').mockResolvedValue(mockVar);
@@ -119,9 +123,11 @@ describe('VariableReferenceResolver', () => {
         { type: FieldAccessType.PROPERTY, key: 'users' },
         { type: FieldAccessType.INDEX, key: 1 }
       ];
-      // @ts-ignore - Persistent linter error: Type mapping conflict (key vs value) between FieldAccess and node factory param.
       const node = createVariableReferenceNode('dataObj', VariableType.DATA, 
-          fieldsDefinition.map(f => ({ ...f, value: f.key }))
+          fieldsDefinition.map(f => ({
+             type: f.type === FieldAccessType.PROPERTY ? 'field' : 'index',
+             value: f.key
+           }))
       );
 
       stateService.getDataVar.calledWith('dataObj').mockResolvedValue(mockVar);
@@ -162,9 +168,11 @@ describe('VariableReferenceResolver', () => {
         { type: FieldAccessType.PROPERTY, key: 'user' },
         { type: FieldAccessType.PROPERTY, key: 'age' } 
       ];
-      // @ts-ignore - Persistent linter error: Type mapping conflict (key vs value) between FieldAccess and node factory param.
       const node = createVariableReferenceNode('dataObj', VariableType.DATA, 
-          fieldsDefinition.map(f => ({ ...f, value: f.key }))
+          fieldsDefinition.map(f => ({
+             type: f.type === FieldAccessType.PROPERTY ? 'field' : 'index',
+             value: f.key
+           }))
       );
 
       stateService.getDataVar.calledWith('dataObj').mockResolvedValue(mockVar);
@@ -184,9 +192,11 @@ describe('VariableReferenceResolver', () => {
         { type: FieldAccessType.PROPERTY, key: 'user' },
         { type: FieldAccessType.INDEX, key: 10 }
       ];
-      // @ts-ignore - Persistent linter error: Type mapping conflict (key vs value) between FieldAccess and node factory param.
       const node = createVariableReferenceNode('dataObj', VariableType.DATA, 
-          fieldsDefinition.map(f => ({ ...f, value: f.key }))
+          fieldsDefinition.map(f => ({
+             type: f.type === FieldAccessType.PROPERTY ? 'field' : 'index',
+             value: f.key
+           }))
       );
 
       stateService.getDataVar.calledWith('dataObj').mockResolvedValue(mockVar);
@@ -203,51 +213,44 @@ describe('VariableReferenceResolver', () => {
       const resolvedPathString = '/abs/project/docs';
       const validatedPathString = '/abs/project/docs/validated';
       
-      // @ts-ignore - Persistent linter error: MeldPath subtypes/mock structure incompatible.
-      const mockPath: MeldPath = {
+      const mockPath = {
          contentType: PathContentType.FILESYSTEM,
          originalValue: rawPathString,
-         validatedPath: unsafeCreateValidatedResourcePath(''), 
+         validatedPath: unsafeCreateValidatedResourcePath(''),
          isAbsolute: false,
          isSecure: true,
          isValidSyntax: true 
-      };
+      } as MeldPath;
       const mockVar: IPathVariable = { name: 'docsPath', type: VariableType.PATH, value: mockPath };
       stateService.getPathVar.calledWith('docsPath').mockResolvedValue(mockVar);
       
-      // @ts-ignore - Persistent linter error: MeldPath subtypes/mock structure incompatible.
-      const resolvedMeldPath: MeldPath = { 
+      const resolvedMeldPath = { 
           contentType: PathContentType.FILESYSTEM, 
           originalValue: rawPathString, 
           validatedPath: unsafeCreateValidatedResourcePath(resolvedPathString),
           isAbsolute: true,
           isSecure: true,
-          isValidSyntax: true
-      }; 
-      // @ts-ignore - Persistent linter error: calledWith type mismatch for pathService.resolvePath.
-      pathService.resolvePath.calledWith(mockPath, expect.any(String)).mockResolvedValue(resolvedMeldPath);
+          isValidSyntax: true 
+      } as MeldPath;
+      pathService.resolvePath.mockResolvedValue(resolvedMeldPath);
       
-      // @ts-ignore - Persistent linter error: MeldPath subtypes/mock structure incompatible.
-      const validatedMeldPath: MeldPath = { 
+      const validatedMeldPath = { 
           ...resolvedMeldPath,
           validatedPath: unsafeCreateValidatedResourcePath(validatedPathString)
-      };
-      // @ts-ignore - Persistent linter error: calledWith type mismatch for pathService.validatePath.
+      } as MeldPath;
       pathService.validatePath.calledWith(resolvedMeldPath, expect.objectContaining({
           purpose: context.pathContext?.purpose,
-          validation: context.pathContext?.validation 
+          constraints: context.pathContext?.constraints
       })).mockResolvedValue(validatedMeldPath);
       
       const result = await resolver.resolve(node, context);
       
       expect(result).toBe(validatedPathString);
       expect(stateService.getPathVar).toHaveBeenCalledWith('docsPath');
-      // @ts-ignore - Persistent linter error: calledWith type mismatch for pathService.resolvePath.
-      expect(pathService.resolvePath).toHaveBeenCalledWith(mockPath, expect.any(String)); 
-      // @ts-ignore - Persistent linter error: calledWith type mismatch for pathService.validatePath.
+      expect(pathService.resolvePath).toHaveBeenCalledWith(mockPath.originalValue, expect.any(String)); 
       expect(pathService.validatePath).toHaveBeenCalledWith(resolvedMeldPath, expect.objectContaining({ 
           purpose: context.pathContext?.purpose,
-          validation: context.pathContext?.validation
+          constraints: context.pathContext?.constraints
       }));
     });
     
@@ -255,11 +258,12 @@ describe('VariableReferenceResolver', () => {
       const node = createVariableReferenceNode('myCmd', VariableType.COMMAND);
       const mockCmdDef = { 
           name: 'myCmd', 
-          type: 'basic',
+          type: 'basic', 
           commandTemplate: 'echo Hello', 
           parameters: [],
           isMultiline: false
       };
+      // @ts-ignore
       const mockVar: CommandVariable = { name: 'myCmd', type: VariableType.COMMAND, value: mockCmdDef };
       stateService.getCommandVar.calledWith('myCmd').mockResolvedValue(mockVar);
       
