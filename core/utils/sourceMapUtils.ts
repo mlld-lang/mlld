@@ -158,13 +158,13 @@ export function enhanceMeldErrorWithSourceInfo(
   const newOptions: MeldErrorOptions = {
     code: error.code,
     severity: error.severity,
-    context: error.context ? { ...error.context } : {},
-    filePath: sourceLocation.filePath,
-    cause: (error as any).errorCause
+    // Pass original details if they exist
+    details: error.details ? { ...error.details } : undefined, 
+    // Pass the calculated sourceLocation directly
+    sourceLocation: sourceLocation,
+    // filePath: sourceLocation.filePath, // REMOVED: Not used by constructor
+    cause: error.cause // Correctly access cause property
   };
-  
-  // Add sourceLocation to context
-  newOptions.context!.sourceLocation = sourceLocation;
   
   // Create enhanced message
   const enhancedMessage = `${error.message} (in ${sourceLocation.filePath}:${sourceLocation.line})`;

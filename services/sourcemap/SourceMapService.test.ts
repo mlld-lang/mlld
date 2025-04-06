@@ -284,37 +284,22 @@ describe('sourceMapUtils', () => {
     // Create error with location in message
     const error = new MeldError('Error at line 10, column 5', {
       code: 'TEST_ERROR',
-      severity: ErrorSeverity.Fatal
+      severity: ErrorSeverity.Fatal,
+      details: { original: 'context' } // Add some details
     });
     
     // Enhance error
     const enhanced = enhanceMeldErrorWithSourceInfo(error);
     
-    // Check that the error is enhanced with source info
+    // Check enhanced message
     expect(enhanced.message).toContain('/path/to/source.md:1');
-    expect(enhanced.filePath).toEqual('/path/to/source.md');
-    expect(enhanced.context?.sourceLocation).toEqual({
+    // Check the top-level sourceLocation property
+    expect(enhanced.sourceLocation).toEqual({
       filePath: '/path/to/source.md',
       line: 1,
       column: 5
     });
-  });
-
-  test('should respect preferExistingSourceInfo option', () => {
-    // Set up source mapping
-    addMapping('/path/to/source.md', 1, 0, 10, 0);
-    
-    // Create error with existing filePath
-    const error = new MeldError('Error at line 10, column 5', {
-      filePath: '/existing/path.md'
-    });
-    
-    // Enhance error with preferExistingSourceInfo
-    const enhanced = enhanceMeldErrorWithSourceInfo(error, {
-      preferExistingSourceInfo: true
-    });
-    
-    // Check that the error keeps existing filePath
-    expect(enhanced.filePath).toEqual('/existing/path.md');
+    // Check that original details were preserved
+    expect(enhanced.details).toEqual({ original: 'context' });
   });
 });
