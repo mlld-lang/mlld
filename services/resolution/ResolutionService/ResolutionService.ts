@@ -1,11 +1,10 @@
 import * as path from 'path';
 import type { IStateService } from '@services/state/StateService/IStateService';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
+import type { ResolutionContext, FormattingContext } from '@core/types/resolution.js';
 import { 
-  ResolutionContext, 
   JsonValue, 
   VariableType,
-  FormattingContext,
   PathPurpose,
   Result,
   success,
@@ -28,12 +27,9 @@ import {
   MeldResolutionError, 
   PathValidationError,
   VariableResolutionError,
-  isFilesystemPath,
   isUrlPath,
   unsafeCreateNormalizedAbsoluteDirectoryPath,
   NormalizedAbsoluteDirectoryPath,
-  FieldAccess,
-  FieldAccessType,
   isBasicCommand
 } from '@core/types';
 import type { MeldNode, VariableReferenceNode, DirectiveNode, TextNode, CodeFenceNode } from '@core/ast/ast/astTypes';
@@ -57,7 +53,7 @@ import type { IFileSystemServiceClient } from '@services/fs/FileSystemService/in
 import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/factories/FileSystemServiceClientFactory.js';
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 import { VariableResolutionErrorFactory } from './resolvers/error-factory.js';
-import { isTextVariable, isPathVariable, isCommandVariable } from '@core/types/guards.js';
+import { isTextVariable, isPathVariable, isCommandVariable, isDataVariable, isFilesystemPath } from '@core/types/guards.js';
 // Import and alias the AST Field type
 import { Field as AstField } from '@core/syntax/types/shared-types';
 
@@ -493,8 +489,76 @@ export class ResolutionService implements IResolutionService {
   }
 
   /**
-   * Resolve data variables and fields to their JSON values.
-   * Parses the reference string to handle field access correctly.
+   * Resolves field access on a variable value.
+   *
+   * @param baseValue - The base value (object, array, etc.) to start access from.
+   * @param fieldPath - Array of AST Field nodes describing the access path.
+   * @param context - Resolution context.
+   * @returns Result with the resolved value or a FieldAccessError.
+   */
+  async resolveFieldAccess(
+    baseValue: unknown, 
+    fieldPath: AstField[], // Use AstField[] here
+    context: ResolutionContext
+  ): Promise<Result<JsonValue, FieldAccessError>> { // Match interface: returns Promise<Result<...>>
+    logger.debug('Resolving field access', { baseValueType: typeof baseValue, fieldPathLength: fieldPath.length });
+    
+    if (!this.variableReferenceResolver) {
+      logger.error('VariableReferenceResolver not initialized in resolveFieldAccess');
+      // Return a FieldAccessError as required by the signature
+      const internalError = new FieldAccessError('Internal resolver error: VariableReferenceResolver missing', {
+        baseValue: baseValue,
+        fieldAccessChain: fieldPath,
+        failedAtIndex: -1, // Indicate internal failure
+        failedKey: '(internal)'
+      });
+      return Promise.resolve(failure(internalError));
+    }
+    
+    // Directly call the resolver's accessFields and return its Promise<Result<...>>
+    // The accessFields method now expects JsonValue, so cast baseValue.
+    // Provide a placeholder variable name or modify accessFields if needed.
+    const resultPromise = this.variableReferenceResolver.accessFields(
+      baseValue as JsonValue, 
+      fieldPath, 
+      '(unknown base)', // Placeholder variable name
+      context
+    );
+
+    // Ensure the return type matches exactly Promise<Result<JsonValue, FieldAccessError>>
+    // The accessFields method returns Promise<Result<JsonValue | undefined>>, need to map undefined to null?
+    return resultPromise.then(result => {
+      if (result.success) {
+        // Map undefined success value to null (assuming null is a valid JsonValue)
+        const finalValue = result.value === undefined ? null : result.value;
+        return success(finalValue as JsonValue);
+      } else {
+        // Ensure the error is FieldAccessError
+        if (result.error instanceof FieldAccessError) {
+          return failure(result.error);
+        } else {
+          // Wrap unexpected errors
+          const wrapError = new FieldAccessError('Field access failed with unexpected error', {
+              baseValue: baseValue,
+              fieldAccessChain: fieldPath,
+              failedAtIndex: -1, // Indicate failure wasn't at a specific index
+              failedKey: '(unknown)'
+          });
+          // We need to return a failure Result, not throw
+          return failure(wrapError);
+        }
+      }
+    });
+  }
+
+  /**
+   * Resolves a data variable reference, including potential field access.
+   *
+   * @param ref - The variable reference string (e.g., "myData.field[0]").
+   * @param context - The resolution context.
+   * @returns The resolved JSON value.
+   * @throws {VariableResolutionError} If the variable is not found or resolution fails.
+   * @throws {FieldAccessError} If field access fails.
    */
   async resolveData(ref: string, context: ResolutionContext): Promise<JsonValue> {
     logger.debug(`resolveData called`, { ref, contextFlags: context.flags });
@@ -1004,77 +1068,6 @@ export class ResolutionService implements IResolutionService {
       });
       return false;
     }
-  }
-
-  /**
-   * Resolves a field access on a variable (e.g., variable.field.subfield)
-   * 
-   * @param variableName - The base variable name
-   * @param fieldPath - The path to the specific field
-   * @param context - The resolution context with state and allowed variable types
-   * @returns The resolved field value
-   * @throws {MeldResolutionError} If field access fails
-   */
-  async resolveFieldAccess(variableName: string, fieldPath: AstField[], context: ResolutionContext): Promise<Result<JsonValue, FieldAccessError>> {
-    logger.debug('Resolving field access', { variableName, fieldPath: JSON.stringify(fieldPath) });
-    const variableResult = this.stateService.getDataVar(variableName); // Ensure correct method call if stateService returns Result
-    
-    // Handle potential undefined result from state service more robustly
-    if (!variableResult) { 
-      return failure(new VariableResolutionError(
-        `Variable not found: ${variableName}`,
-        {
-          code: 'E_VAR_NOT_FOUND',
-          severity: context.strict ? ErrorSeverity.Fatal : ErrorSeverity.Recoverable,
-          details: { variableName, context }
-        }
-      ));
-    }
-    
-    // Assuming getDataVar returns the variable object directly (adjust if it returns Result<DataVariable>)
-    const variable = variableResult; // Adjust if variableResult is a Result object
-
-    if (!variable || variable.value === undefined) { // Check if variable exists and has a value
-       return failure(new VariableResolutionError(
-        `Variable not found or has no value: ${variableName}`,
-        {
-          code: 'E_VAR_NOT_FOUND',
-          severity: context.strict ? ErrorSeverity.Fatal : ErrorSeverity.Recoverable,
-          details: { variableName, context }
-        }
-      ));
-    }
-
-    // Ensure variableReferenceResolver is initialized (might need this check)
-    if (!this.variableReferenceResolver) {
-        throw new Error('Internal Error: variableReferenceResolver not initialized before call to resolveFieldAccess');
-    }
-
-    // Delegate to VariableReferenceResolver for actual field access logic
-    // Ensure variable.value is passed, as accessFields expects the base value
-    // Pass the correct fieldPath (AstField[]) type
-    const result = await this.variableReferenceResolver.accessFields(variable.value, fieldPath, variableName, context);
-
-    // Handle the Result<JsonValue | undefined>
-    if (!result.success) {
-        // Ensure the error is FieldAccessError before returning
-        if (result.error instanceof FieldAccessError) {
-            return failure(result.error); 
-        } else {
-            // If it's some other error or undefined, wrap it or handle appropriately
-            // For now, let's re-wrap as a generic FieldAccessError if possible
-             const wrapError = new FieldAccessError('Field access failed with unexpected error type', {
-                 details: { variableName, fieldAccessChain: fieldPath, failedAtIndex: -1, code: 'E_FIELD_ACCESS_UNKNOWN' },
-                 cause: result.error // Preserve original error if available
-             });
-            return failure(wrapError);
-        }
-    }
-    
-    // If successful, handle potential undefined value - map undefined to null?
-    const finalValue = result.value === undefined ? null : result.value;
-    
-    return success(finalValue as JsonValue); // Assume null is a valid JsonValue here
   }
 
   /**

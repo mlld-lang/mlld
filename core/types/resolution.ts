@@ -209,18 +209,6 @@ export interface ParserFlags {
   parseLiteralTypes: StringLiteralType[];
 }
 
-// Define FieldAccessType enum here
-export enum FieldAccessType {
-  PROPERTY = 'property',
-  INDEX = 'index'
-}
-
-// Define FieldAccess interface here (or ensure it exists)
-export interface FieldAccess {
-  type: FieldAccessType; // Use the enum
-  key: string | number;
-}
-
 /**
  * Defines the type of variable being referenced or resolved.
  */

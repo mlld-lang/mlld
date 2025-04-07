@@ -10,6 +10,7 @@ import type { MeldPath, StructuredPath } from '@core/types/paths';
 import type { IStateService } from '@services/state/StateService/IStateService';
 import { VariableResolutionTracker, ResolutionTrackingConfig } from '@tests/utils/debug/VariableResolutionTracker/index.js';
 import type { MeldResolutionError, PathValidationError } from '@core/types';
+import type { Field } from '@core/syntax/types/shared-types';
 
 /**
  * Service responsible for resolving variables, commands, and paths in Meld content.
@@ -144,15 +145,18 @@ interface IResolutionService {
   resolveInContext(value: string | StructuredPath, context: ResolutionContext): Promise<string>;
 
   /**
-   * Resolves a field access path on a data variable (e.g., variable.field[0].subfield).
-   * Uses the FieldAccess types defined in the spec.
-   * 
-   * @param variableName - The base data variable name
-   * @param fieldPath - An array of FieldAccess objects representing the path
-   * @param context - The resolution context providing state and rules
-   * @returns A Result object containing the resolved field value (JsonValue) or a FieldAccessError
+   * Resolves a field access path against a given base value.
+   *
+   * @param baseValue The starting value (e.g., an object, array).
+   * @param fieldPath An array of AST Field objects representing the access path.
+   * @param context Context for resolution.
+   * @returns A Promise resolving to a Result containing the resolved value or a FieldAccessError.
    */
-  resolveFieldAccess(variableName: string, fieldPath: FieldAccess[], context: ResolutionContext): Promise<Result<JsonValue, FieldAccessError>>;
+  resolveFieldAccess(
+    baseValue: unknown,
+    fieldPath: Field[],
+    context: ResolutionContext
+  ): Promise<Result<unknown, FieldAccessError>>;
 
   /**
    * Validate that a value can be resolved successfully within the given context.

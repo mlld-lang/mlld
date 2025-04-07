@@ -1,8 +1,8 @@
 import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { ResolutionContext, JsonValue, FieldAccess, Result, PathResolutionContext } from '@core/types';
+import type { ResolutionContext, PathResolutionContext } from '@core/types/resolution.js';
+import type { JsonValue, Result } from '@core/types';
 import { VariableType, MeldError } from '@core/types';
 import type { MeldVariable, TextVariable, DataVariable, IPathVariable, CommandVariable } from '@core/types/variables';
-import type { Field } from '@core/syntax/types/variables.js';
 import type { MeldNode, VariableReferenceNode, TextNode, DirectiveNode, NodeType } from '@core/ast/ast/astTypes.js';
 import { isTextVariable, isDataVariable, isPathVariable, isCommandVariable } from '@core/types/guards.js';
 import { success, failure } from '@core/types';
@@ -18,18 +18,10 @@ import type { IParserServiceClient } from '@services/pipeline/ParserService/inte
 import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory.js';
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 import { MeldPath, PathValidationContext, PathPurpose, RawPath, NormalizedAbsoluteDirectoryPath } from '@core/types/paths';
-import { FieldAccessType } from '@core/types';
 import type { IPathService } from '@services/fs/PathService/IPathService.js';
 import {
   Field as AstField
 } from '@core/syntax/types/shared-types';
-
-// Define the expected shape for field access items OUTSIDE the class
-interface FieldAccessItem {
-  type: 'field' | 'index';
-  value: string | number;
-  key?: string | number; // Keep key if FieldAccess definition uses it internally
-}
 
 /**
  * Handles resolution of variable references based on VariableReferenceNode AST.
@@ -250,15 +242,13 @@ export class VariableReferenceResolver {
                   }
              } else {
                   if (newContext.strict) {
-                      // Update error details to pass node.fields directly
-                      throw new FieldAccessError(`Cannot access fields on non-data variable '${node.identifier}'`, { 
-                         details: { 
-                             code: 'E_FIELD_ACCESS_ON_NON_DATA',
-                             variableName: node.identifier,
-                             fieldAccessChain: node.fields as any, // Cast needed due to type mismatch in details definition
-                             failedAtIndex: -1,
-                             severity: ErrorSeverity.Recoverable
-                         }, 
+                      // Update error details to pass node.fields directly and use new details structure
+                      const errorMsg = `Cannot access fields on non-data variable '${node.identifier}'`;
+                      throw new FieldAccessError(errorMsg, { 
+                         baseValue: variableValue, // Pass the non-data value 
+                         fieldAccessChain: node.fields, // Pass the AST fields directly
+                         failedAtIndex: 0, // Failure occurs at the first field attempt
+                         failedKey: node.fields[0]?.value ?? 'unknown' // Get the first key
                       });
                   }
                   resolvedValueForStringify = '';
@@ -394,55 +384,58 @@ export class VariableReferenceResolver {
 
       if (current === undefined || current === null) {
          const errorMsg = `Cannot access field '${field.value}' on null or undefined value at path ${currentPathString}`; 
+         // Update error details to use new structure
          return failure(new FieldAccessError(errorMsg, {
-             details: { baseValue, fieldAccessChain: fields as any, failedAtIndex: i, variableName, code: 'E_ACCESS_ON_NULL' }
+             baseValue: baseValue, // Original base value
+             fieldAccessChain: fields, // Pass the full chain
+             failedAtIndex: i,
+             failedKey: field.value
          }));
       }
 
-      if (field.type === 'field') { 
-        const key = String(field.value);
-        if (typeof current === 'object' && !Array.isArray(current)) {
-          if (Object.prototype.hasOwnProperty.call(current, key)) {
-            current = (current as Record<string, JsonValue>)[key];
-          } else {
-            const availableKeys = Object.keys(current).join(', ') || '(none)';
-            const errorMsg = `Field '${key}' not found in object. Available keys: ${availableKeys}`;
-            return failure(new FieldAccessError(errorMsg, {
-                details: { baseValue, fieldAccessChain: fields as any, failedAtIndex: i, availableKeys, variableName, code: 'E_FIELD_NOT_FOUND' }
-            }));
-          }
-        } else {
-          return failure(new FieldAccessError(`Cannot access property '${key}' on non-object or array`, {
-              details: { baseValue, fieldAccessChain: fields as any, failedAtIndex: i, variableName, code: 'E_ACCESS_ON_NON_OBJECT' }
+      if (field.type === 'field') {
+        const key = field.value as string;
+        if (typeof current !== 'object' || current === null || Array.isArray(current)) {
+          const errorMsg = `Attempted to access property '${key}' on non-object value at path ${currentPathString}`; 
+          // Update error details
+          return failure(new FieldAccessError(errorMsg, { 
+              baseValue: baseValue,
+              fieldAccessChain: fields,
+              failedAtIndex: i,
+              failedKey: key
           }));
         }
+        current = (current as Record<string, JsonValue>)[key];
       } else if (field.type === 'index') {
-        const index = Number(field.value);
-        if (isNaN(index) || !Number.isInteger(index)) {
-            return failure(new FieldAccessError(`Invalid array index '${field.value}'`, {
-                details: { baseValue, fieldAccessChain: fields as any, failedAtIndex: i, variableName, code: 'E_INVALID_INDEX' }
+        const index = field.value as number;
+        if (!Array.isArray(current)) {
+           const errorMsg = `Attempted to access index [${index}] on non-array value at path ${currentPathString}`;
+           // Update error details
+           return failure(new FieldAccessError(errorMsg, {
+               baseValue: baseValue,
+               fieldAccessChain: fields,
+               failedAtIndex: i,
+               failedKey: index
+           }));
+        }
+        if (index < 0 || index >= current.length) {
+            const errorMsg = `Index [${index}] out of bounds for array of length ${current.length} at path ${currentPathString}`;
+            // Update error details
+            return failure(new FieldAccessError(errorMsg, {
+                baseValue: baseValue,
+                fieldAccessChain: fields,
+                failedAtIndex: i,
+                failedKey: index
             }));
         }
-        if (Array.isArray(current)) {
-          if (index >= 0 && index < current.length) {
-            current = current[index];
-          } else {
-            return failure(new FieldAccessError(`Index '${index}' out of bounds for array of length ${current.length}`, {
-                details: { baseValue, fieldAccessChain: fields as any, failedAtIndex: i, arrayLength: current.length, variableName, code: 'E_INDEX_OUT_OF_BOUNDS' }
-            }));
-          }
-        } else {
-            return failure(new FieldAccessError(`Cannot access index '${index}' on non-array value`, {
-                details: { baseValue, fieldAccessChain: fields as any, failedAtIndex: i, variableName, code: 'E_ACCESS_ON_NON_ARRAY' }
-            }));
-        }
+        current = current[index];
       } else {
-          const unknownType = (field as any).type;
-          return failure(new FieldAccessError(`Unknown field access type: '${unknownType}'`, {
-              details: { baseValue, fieldAccessChain: fields as any, failedAtIndex: i, unknownType: unknownType, variableName, code: 'E_UNKNOWN_FIELD_TYPE' }
-          }));
+         // This should not happen based on AST definition
+         const errorMsg = `Unknown field access type '${(field as any).type}' at path ${currentPathString}`;
+         return failure(new MeldResolutionError(errorMsg, { code: 'E_INTERNAL', details: { field } }));
       }
     }
+    
     return success(current);
   }
 

@@ -9,15 +9,17 @@ import type {
   IResolutionService,
 } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { MeldResolutionError, VariableResolutionError, PathValidationError, FieldAccessError } from '@core/errors/index.js';
+// Corrected import for ResolutionContext
+import type { ResolutionContext } from '@core/types/resolution.js'; 
+// Corrected import for isFilesystemPath
+import { isFilesystemPath } from '@core/types/guards.js'; 
 import { 
-  ResolutionContext, 
+  // Remove ResolutionContext from here
   VariableType, 
   MeldVariable, 
   TextVariable,
   DataVariable,
   IPathVariable,
-  type FieldAccess,
-  FieldAccessType,
   createDataVariable,
   createTextVariable,
   createPathVariable,
@@ -26,8 +28,10 @@ import {
   type IFilesystemPathState,
   type IUrlPathState,
   type StructuredPath,
-  isFilesystemPath
+  // Remove isFilesystemPath from here
 } from '@core/types'; // Import core types
+// Import the AST Field type correctly
+import type { Field as AstField } from '@core/syntax/types/shared-types';
 // Import AST types from their actual location
 import type { MeldNode, TextNode, VariableReferenceNode } from '@core/syntax/types';
 // Import path-related types from core/types
@@ -65,7 +69,7 @@ import type { IFileSystemServiceClient } from '@services/fs/FileSystemService/in
 // Import the Factory we need to use
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
 // Import error testing utility
-import { expectToThrowWithConfig } from '@tests/utils/ErrorTestUtils.js'; // Corrected casing
+import { expectToThrowWithConfig } from '@tests/utils/ErrorTestUtils.js';
 
 // Use the correctly imported run directive examples
 const runDirectiveExamples = runDirectiveExamplesModule;
@@ -255,35 +259,27 @@ describe('ResolutionService', () => {
         let resolvedValue = originalPathString;
         let isAbsolute = false;
 
-        // 1. Handle special variables ($HOMEPATH)
         if (originalPathString === '$HOMEPATH') {
-          resolvedValue = '/home/user'; // Use the mock home path
+          resolvedValue = '/home/user';
           isAbsolute = true;
         } 
-        // 2. Handle user-defined variables ($home)
         else if (originalPathString.startsWith('$') && originalPathString.length > 1) {
            const varName = originalPathString.substring(1);
-           const pathVar = stateService.getPathVar(varName); // Use the mocked stateService
-           // Pass the whole pathVar to the type guard
-           if (isFilesystemPath(pathVar)) { 
-              // Explicitly cast pathVar.value after guard check
+           const pathVar = stateService.getPathVar(varName);
+           // Add explicit check for pathVar before type guard
+           if (pathVar && isFilesystemPath(pathVar)) { 
               const fsState = pathVar.value as IFilesystemPathState;
-              resolvedValue = fsState.originalValue; // Use the path from the state variable
+              resolvedValue = fsState.originalValue; 
               isAbsolute = fsState.isAbsolute;
            } else {
-               // Variable not found or not a filesystem path
-               // For mock, let's return a basic representation of the original input
-               // Or potentially throw if strict testing needed this case
-               console.warn(`Mock validatePath: Path variable '${varName}' not found in stateService mock or not a filesystem path.`); // Use console.warn
-               // Fall through to default handling - return MeldPath for original input
+               console.warn(`Mock validatePath: Path variable '${varName}' not found or not filesystem path.`);
            }
         }
-         // Determine isAbsolute if not already set
+        
          if (!isAbsolute) {
            isAbsolute = resolvedValue.startsWith('/');
          }
 
-        // 3. Simulate failure based on rules (as before)
         if (context.rules?.mustExist && resolvedValue.includes('invalid-for-test')) {
           throw new PathValidationError('Simulated validation failure: mustExist', {
             code: 'E_PATH_VALIDATION_FAILED', 
@@ -291,13 +287,11 @@ describe('ResolutionService', () => {
           });
         }
         
-        // 4. Return a MeldPath object with the resolved value
-        // Use createMeldPath helper, providing the potentially resolved value
         return createMeldPath(
-            originalPathString, // Keep original input string
-            unsafeCreateValidatedResourcePath(resolvedValue), // Use resolved value for validated path (unsafe ok for mock)
+            originalPathString,
+            unsafeCreateValidatedResourcePath(resolvedValue),
             isAbsolute,
-            true // Assume isSecure for mock
+            true
         );
       }),
       getProjectPath: vi.fn().mockReturnValue('/mock/project/root'),
@@ -309,51 +303,49 @@ describe('ResolutionService', () => {
     // Mock VariableResolverClient - Keep simple for now
     mockVariableResolverClient = {
       resolve: vi.fn().mockResolvedValue('resolved value'),
-      resolveFieldAccess: vi.fn().mockImplementation(async (baseValue: any, fields: FieldAccess[], context: ResolutionContext): Promise<any> => {
-        // Simulate basic field access for tests needing it directly mocked
+      // Update mock to expect AstField[] and use field.type/field.value
+      resolveFieldAccess: vi.fn().mockImplementation(async (baseValue: any, fields: AstField[], context: ResolutionContext): Promise<any> => {
         let current = baseValue;
-        let failedAtIndex = -1; // Track failure index
+        let failedAtIndex = -1; 
         for (const [index, field] of fields.entries()) {
-          failedAtIndex = index; // Update potential failure index
-          if (field.type === FieldAccessType.PROPERTY) { // Use Enum
-            // Use 'key' based on spec results
-            if (current && typeof current === 'object' && typeof field.key === 'string' && field.key in current) {
-              current = current[field.key];
+          failedAtIndex = index;
+          const keyOrIndex = field.value; // Use field.value
+          
+          if (field.type === 'field') { // Check field.type
+            const key = keyOrIndex as string;
+            if (current && typeof current === 'object' && !Array.isArray(current) && key in current) {
+              current = current[key];
             } else {
-              // FieldAccessError takes message and optional details object
-              // Include required details based on FieldAccessErrorDetails
               const details = { 
-                variableName: 'mockVar', // Placeholder
+                baseValue: baseValue,
                 fieldAccessChain: fields, 
                 failedAtIndex: failedAtIndex, 
-                targetValue: current, // Value at failure point
-                message: `Field '${String(field.key)}' not found or invalid on base value.` // Add base message
+                failedKey: key
               };
-              return context.strict ? Promise.reject(new FieldAccessError(`Field '${String(field.key)}' not found or invalid on base value.`, { details })) : '';
+              // Return rejected promise for strict mode
+              return context.strict ? Promise.reject(new FieldAccessError(`Field '${String(key)}' not found or invalid.`, details)) : '';
             }
-          } else if (field.type === FieldAccessType.INDEX) { // Use Enum
-             // Use 'key' and ensure it's a number for array access
-             if (Array.isArray(current) && typeof field.key === 'number' && field.key >= 0 && field.key < current.length) {
-               current = current[field.key];
+          } else if (field.type === 'index') { // Check field.type
+             const indexNum = keyOrIndex as number;
+             if (Array.isArray(current) && indexNum >= 0 && indexNum < current.length) {
+               current = current[indexNum];
              } else {
-               // FieldAccessError takes message and optional details object
-               // Include required details based on FieldAccessErrorDetails
                const details = { 
-                 variableName: 'mockVar', // Placeholder
+                 baseValue: baseValue,
                  fieldAccessChain: fields, 
                  failedAtIndex: failedAtIndex, 
-                 targetValue: current, // Value at failure point
-                 message: `Index ${String(field.key)} out of bounds or invalid on base value.` // Add base message
+                 failedKey: indexNum
                 };
-               return context.strict ? Promise.reject(new FieldAccessError(`Index ${String(field.key)} out of bounds or invalid on base value.`, { details })) : '';
+               // Return rejected promise for strict mode
+               return context.strict ? Promise.reject(new FieldAccessError(`Index ${String(indexNum)} out of bounds or invalid.`, details)) : '';
              }
           }
-          failedAtIndex = -1; // Reset if access succeeded for this field
+          failedAtIndex = -1; // Reset if access succeeded
         }
         return current;
       }),
       debugFieldAccess: vi.fn().mockResolvedValue({ value: 'debug field', path: [] }),
-      convertToString: vi.fn().mockImplementation(v => String(v)), // Simple string conversion
+      convertToString: vi.fn().mockImplementation(v => String(v)),
     } as unknown as IVariableReferenceResolverClient;
     
     mockDirectiveClient = {
@@ -651,7 +643,7 @@ describe('ResolutionService', () => {
   describe('resolveFieldAccess', () => {
     it('should resolve a simple field access', async () => {
       // beforeEach mocks stateService.getDataVar('user') -> { name: 'Alice', id: 123 }
-      const fieldPath: FieldAccess[] = [{ type: FieldAccessType.PROPERTY, key: 'name' }];
+      const fieldPath: AstField[] = [{ type: 'field', value: 'name' }];
 
       // VariableReferenceResolver handles this internally now.
       // We should test resolveText or resolveData with the field access string.
@@ -815,37 +807,28 @@ describe('ResolutionService', () => {
 
   });
 
-  describe('resolveData (Refactored Tests)', () => {
-    it('should resolve data variables', async () => {
-      // beforeEach mocks stateService.getDataVar('user') and parserClient for '{{user}}'
-      const result = await service.resolveData('user', defaultContext);
-      expect(result).toEqual({ name: 'Alice', id: 123 });
+  describe('resolveData', () => {
+    it('should resolve nested data with field access', async () => {
+      stateService.getDataVar = vi.fn().mockReturnValue(createMockDataVariable('nested', { data: { level1: { value: 'deep' } } }));
+      const result = await service.resolveData('nested.data.level1.value', defaultContext);
+      expect(result).toBe('deep');
     });
 
-    it('should throw VariableResolutionError for non-existent variable', async () => {
-       // Fix: Use VariableNodeFactory
-       vi.mocked(mockParserClient.parseString).mockImplementation(async (text: string): Promise<MeldNode[]> => {
-         const mockLocation = { start: { line: 1, column: 1 }, end: { line: 1, column: text.length + 1 } };
-         if (text === '{{nonexistent}}') {
-           if (!mockVariableNodeFactory) throw new Error('Mock VariableNodeFactory not initialized');
-           const node = mockVariableNodeFactory.createVariableReferenceNode('nonexistent', VariableType.DATA, [], undefined, mockLocation);
-           return [node];
-         }
-         if (!mockTextNodeFactory) throw new Error('Mock TextNodeFactory not initialized');
-         return [mockTextNodeFactory.createTextNode(text, mockLocation)];
-      });
+    it('should throw FieldAccessError in strict mode if field access fails', async () => {
+      stateService.getDataVar = vi.fn().mockReturnValue(createMockDataVariable('user', { name: 'Alice' }));
+      const strictContext = defaultContext.withStrictMode(true);
+      
       await expectToThrowWithConfig(async () => {
-        await service.resolveData('nonexistent', defaultContext);
+        await service.resolveData('user.profile.nonexistent', strictContext);
       }, {
-        type: 'VariableResolutionError', // Use string type name
-        code: 'E_VAR_NOT_FOUND',
-        messageContains: 'Variable not found' // Simplified string
+        type: 'FieldAccessError', 
+        messageContains: "Field 'profile' not found or invalid", 
+        // Removed unsupported 'details' property
       });
     });
-     // Add tests for resolving data with field access (these are covered in resolveFieldAccess suite now)
   });
 
-  describe('resolvePath (Refactored Tests)', () => {
+  describe('resolvePath', () => {
      it('should resolve system path variables', async () => {
       // beforeEach mocks pathService.resolvePath('$HOMEPATH') and parserClient
       const result: MeldPath = await service.resolvePath('$HOMEPATH', defaultContext);
@@ -884,7 +867,7 @@ describe('ResolutionService', () => {
     });
   });
 
-   describe('resolveText (Refactored Tests)', () => {
+   describe('resolveText', () => {
      it('should resolve text variables', async () => {
        // beforeEach mocks stateService.getTextVar('greeting') and parserClient
       const result = await service.resolveText('{{greeting}}', defaultContext);
@@ -950,7 +933,7 @@ describe('ResolutionService', () => {
     });
   });
 
-   describe('resolveCommand (Refactored Tests)', () => {
+   describe('resolveCommand', () => {
     it('should execute basic command', async () => {
       // beforeEach mocks stateService.getCommand('echo'), parserClient, and fileSystemService.executeCommand
        vi.mocked(fileSystemService.executeCommand).mockResolvedValue({ stdout: 'echo mock output', stderr: '' });

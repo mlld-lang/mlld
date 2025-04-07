@@ -96,16 +96,9 @@ export * from './variables.js';
 export * from './paths.js';
 export * from './define.js';
 export * from './state.js';
-export * from './resolution.js';
 export * from '../errors/index.js';
-export * from './embed.js'; 
-// export * from './run.js';   
-// export * from './import.js'; 
-
-// Restore original wildcard export for dependencies
+export * from './embed.js';
 export * from './dependencies.js';
-
-// Note: Ensure all necessary types are exported from their respective files.
 
 // Generic utility types (if any, keep minimal)
 export type Maybe<T> = T | null | undefined;
@@ -114,9 +107,6 @@ export type Maybe<T> = T | null | undefined;
 
 // Fix: Remove .js extension from exports
 // export * from './result'; // Commented out - file might be missing
-export * from './variables';
 // export * from './ast-types'; // Commented out - file might be missing
-export * from './paths';
-export * from './guards';
 
 // Add export for the new guards file 
