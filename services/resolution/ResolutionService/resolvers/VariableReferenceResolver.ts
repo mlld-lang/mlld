@@ -20,6 +20,9 @@ import type { IParserService } from '@services/pipeline/ParserService/IParserSer
 import { MeldPath, PathValidationContext, PathPurpose, RawPath, NormalizedAbsoluteDirectoryPath } from '@core/types/paths';
 import { FieldAccessType } from '@core/types';
 import type { IPathService } from '@services/fs/PathService/IPathService.js';
+import {
+  Field as AstField
+} from '@core/syntax/types/shared-types';
 
 // Define the expected shape for field access items OUTSIDE the class
 interface FieldAccessItem {
@@ -235,13 +238,8 @@ export class VariableReferenceResolver {
           
           if (node.fields && node.fields.length > 0) {
              if (dataForAccess !== undefined) {
-                  // Map Field[] from AST node to FieldAccess[] expected by accessFields
-                  const mappedFields: FieldAccess[] = node.fields.map((f: Field) => ({
-                      type: f.type === 'field' ? FieldAccessType.PROPERTY : FieldAccessType.INDEX,
-                      key: f.value // Map 'value' from Field to 'key' in FieldAccess
-                  }));
-
-                  const fieldAccessResult = await this.accessFields(dataForAccess, mappedFields, node.identifier, newContext);
+                  // Pass node.fields (AstField[]) directly to accessFields
+                  const fieldAccessResult = await this.accessFields(dataForAccess, node.fields, node.identifier, newContext);
                   if (fieldAccessResult.success) {
                       resolvedValueForStringify = fieldAccessResult.value ?? '';
                   } else {
@@ -252,11 +250,12 @@ export class VariableReferenceResolver {
                   }
              } else {
                   if (newContext.strict) {
+                      // Update error details to pass node.fields directly
                       throw new FieldAccessError(`Cannot access fields on non-data variable '${node.identifier}'`, { 
                          details: { 
                              code: 'E_FIELD_ACCESS_ON_NON_DATA',
                              variableName: node.identifier,
-                             fieldAccessChain: node.fields,
+                             fieldAccessChain: node.fields as any, // Cast needed due to type mismatch in details definition
                              failedAtIndex: -1,
                              severity: ErrorSeverity.Recoverable
                          }, 
@@ -369,10 +368,18 @@ export class VariableReferenceResolver {
     }
   }
 
-  // Update accessFields parameter type and internal logic
+  /**
+   * Access fields on a value based on an AST Field array.
+   *
+   * @param baseValue The starting value (object or array).
+   * @param fields The ordered array of AST Field objects ({ type: 'field' | 'index', value: string | number }).
+   * @param variableName The name of the base variable (for error reporting).
+   * @param context The resolution context.
+   * @returns A Result containing the final value or a FieldAccessError.
+   */
   public async accessFields(
     baseValue: JsonValue, 
-    fields: FieldAccess[],
+    fields: AstField[],
     variableName: string,
     context: ResolutionContext
   ): Promise<Result<JsonValue | undefined>> {
@@ -380,23 +387,20 @@ export class VariableReferenceResolver {
     
     for (let i = 0; i < fields.length; i++) {
       const field = fields[i];
-      const currentPathString = fields.slice(0, i + 1).map(f => f.type === FieldAccessType.INDEX ? `[${f.key}]` : `.${f.key}`).join('');
+      const currentPathString = fields.slice(0, i + 1).map(f => f.type === 'index' ? `[${f.value}]` : `.${f.value}`).join('');
       logger.debug(`[ACCESS FIELDS] Accessing field: ${currentPathString}`, { currentValueType: typeof current });
 
-      // Add console log for debugging field type
-      // Corrected logging to show enum name if possible, or raw value
-      const fieldTypeName = Object.keys(FieldAccessType).find(key => (FieldAccessType as any)[key] === field.type) || String(field.type);
-      console.log(`[DEBUG accessFields] field.type = ${fieldTypeName}, field.key = ${JSON.stringify(field.key)}`);
+      console.log(`[DEBUG accessFields] field.type = ${field.type}, field.value = ${JSON.stringify(field.value)}`);
 
       if (current === undefined || current === null) {
-         const errorMsg = `Cannot access field '${field.key}' on null or undefined value at path ${currentPathString}`; 
+         const errorMsg = `Cannot access field '${field.value}' on null or undefined value at path ${currentPathString}`; 
          return failure(new FieldAccessError(errorMsg, {
-             details: { baseValue, fieldAccessChain: fields, failedAtIndex: i, variableName, code: 'E_ACCESS_ON_NULL' }
+             details: { baseValue, fieldAccessChain: fields as any, failedAtIndex: i, variableName, code: 'E_ACCESS_ON_NULL' }
          }));
       }
 
-      if (field.type === FieldAccessType.PROPERTY) { 
-        const key = String(field.key);
+      if (field.type === 'field') { 
+        const key = String(field.value);
         if (typeof current === 'object' && !Array.isArray(current)) {
           if (Object.prototype.hasOwnProperty.call(current, key)) {
             current = (current as Record<string, JsonValue>)[key];
@@ -404,19 +408,19 @@ export class VariableReferenceResolver {
             const availableKeys = Object.keys(current).join(', ') || '(none)';
             const errorMsg = `Field '${key}' not found in object. Available keys: ${availableKeys}`;
             return failure(new FieldAccessError(errorMsg, {
-                details: { baseValue, fieldAccessChain: fields, failedAtIndex: i, availableKeys, variableName, code: 'E_FIELD_NOT_FOUND' }
+                details: { baseValue, fieldAccessChain: fields as any, failedAtIndex: i, availableKeys, variableName, code: 'E_FIELD_NOT_FOUND' }
             }));
           }
         } else {
           return failure(new FieldAccessError(`Cannot access property '${key}' on non-object or array`, {
-              details: { baseValue, fieldAccessChain: fields, failedAtIndex: i, variableName, code: 'E_ACCESS_ON_NON_OBJECT' }
+              details: { baseValue, fieldAccessChain: fields as any, failedAtIndex: i, variableName, code: 'E_ACCESS_ON_NON_OBJECT' }
           }));
         }
-      } else if (field.type === FieldAccessType.INDEX) {
-        const index = Number(field.key);
+      } else if (field.type === 'index') {
+        const index = Number(field.value);
         if (isNaN(index) || !Number.isInteger(index)) {
-            return failure(new FieldAccessError(`Invalid array index '${field.key}'`, {
-                details: { baseValue, fieldAccessChain: fields, failedAtIndex: i, variableName, code: 'E_INVALID_INDEX' }
+            return failure(new FieldAccessError(`Invalid array index '${field.value}'`, {
+                details: { baseValue, fieldAccessChain: fields as any, failedAtIndex: i, variableName, code: 'E_INVALID_INDEX' }
             }));
         }
         if (Array.isArray(current)) {
@@ -424,19 +428,18 @@ export class VariableReferenceResolver {
             current = current[index];
           } else {
             return failure(new FieldAccessError(`Index '${index}' out of bounds for array of length ${current.length}`, {
-                details: { baseValue, fieldAccessChain: fields, failedAtIndex: i, arrayLength: current.length, variableName, code: 'E_INDEX_OUT_OF_BOUNDS' }
+                details: { baseValue, fieldAccessChain: fields as any, failedAtIndex: i, arrayLength: current.length, variableName, code: 'E_INDEX_OUT_OF_BOUNDS' }
             }));
           }
         } else {
             return failure(new FieldAccessError(`Cannot access index '${index}' on non-array value`, {
-                details: { baseValue, fieldAccessChain: fields, failedAtIndex: i, variableName, code: 'E_ACCESS_ON_NON_ARRAY' }
+                details: { baseValue, fieldAccessChain: fields as any, failedAtIndex: i, variableName, code: 'E_ACCESS_ON_NON_ARRAY' }
             }));
         }
       } else {
-          // This block should ideally not be reached if input type is correct
           const unknownType = (field as any).type;
           return failure(new FieldAccessError(`Unknown field access type: '${unknownType}'`, {
-              details: { baseValue, fieldAccessChain: fields, failedAtIndex: i, unknownType: unknownType, variableName, code: 'E_UNKNOWN_FIELD_TYPE' }
+              details: { baseValue, fieldAccessChain: fields as any, failedAtIndex: i, unknownType: unknownType, variableName, code: 'E_UNKNOWN_FIELD_TYPE' }
           }));
       }
     }

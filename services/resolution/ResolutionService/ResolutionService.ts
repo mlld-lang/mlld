@@ -58,6 +58,8 @@ import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/f
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 import { VariableResolutionErrorFactory } from './resolvers/error-factory.js';
 import { isTextVariable, isPathVariable, isCommandVariable } from '@core/types/guards.js';
+// Import and alias the AST Field type
+import { Field as AstField } from '@core/syntax/types/shared-types';
 
 /**
  * Internal type for heading nodes in the ResolutionService
@@ -491,33 +493,85 @@ export class ResolutionService implements IResolutionService {
   }
 
   /**
-   * Resolve data variables and fields
+   * Resolve data variables and fields to their JSON values.
+   * Parses the reference string to handle field access correctly.
    */
   async resolveData(ref: string, context: ResolutionContext): Promise<JsonValue> {
     logger.debug(`resolveData called`, { ref, contextFlags: context.flags });
-    const parts = ref.split('.');
-    const varName = parts[0];
-    const fieldPathString = parts.slice(1).join('.');
-    
-    // TODO: Properly parse fieldPathString into FieldAccess[] considering array indices etc.
-    const fieldAccess: FieldAccess[] = fieldPathString 
-        ? fieldPathString.split('.').map(key => ({
-            type: FieldAccessType.PROPERTY,
-            key: key
-        }))
-        : [];
 
-    const result = await this.resolveFieldAccess(varName, fieldAccess, context);
-    if (result.success) {
-        // Handle potential undefined value from successful resolution
-        return result.value === undefined ? null : result.value; 
-    } else {
-        logger.error('resolveData failed', { error: result.error });
-        if (context.strict) {
-            // Throw the specific error (FieldAccessError or VariableResolutionError) from resolveFieldAccess
-            throw result.error; 
+    try {
+      // 1. Parse the reference string (assuming template format like {{var.field}})
+      // Use parseForResolution which handles parser client/service logic
+      const nodes = await this.parseForResolution(`{{${ref}}}`, context);
+
+      if (!nodes || nodes.length === 0 || nodes[0].type !== 'VariableReference') {
+        // If parsing fails or doesn't yield a VariableReference, try direct lookup?
+        // Or should this be an error?
+        logger.warn(`resolveData: Could not parse '${ref}' as a standard variable reference.`);
+        // Attempt direct lookup as fallback (handles cases where ref is just 'varName')
+        const directVar = this.stateService.getDataVar(ref);
+        if (directVar) {
+           logger.debug(`resolveData: Direct lookup successful for '${ref}'.`);
+           return directVar.value;
         }
-        return null; // Return null if not strict and resolution fails
+        // If direct lookup also fails, consider it not found
+        throw new VariableResolutionError(`Variable or reference not found: ${ref}`, {
+             code: 'E_VAR_NOT_FOUND',
+             details: { variableName: ref }
+         });
+      }
+
+      const node = nodes[0] as VariableReferenceNode;
+      const varName = node.identifier;
+      const fields = node.fields || []; // Ensure fields is an array
+
+      // 2. Get the base variable value
+      const variable = this.stateService.getDataVar(varName);
+      if (!variable) {
+         throw new VariableResolutionError(`Variable not found: ${varName}`, {
+             code: 'E_VAR_NOT_FOUND',
+             details: { variableName: varName }
+         });
+      }
+      const baseValue = variable.value;
+
+      // 3. Access fields if necessary
+      let finalValue: JsonValue | undefined;
+      if (fields.length > 0) {
+          // Ensure variableReferenceResolver is available
+          if (!this.variableReferenceResolver) {
+              throw new Error('Internal Error: variableReferenceResolver not initialized before field access in resolveData');
+          }
+          // Call the CORRECTED accessFields with AST Field[]
+          const result = await this.variableReferenceResolver.accessFields(baseValue, fields, varName, context);
+          if (result.success) {
+              finalValue = result.value;
+          } else {
+              // If accessFields failed, throw its specific error
+              throw result.error; 
+          }
+      } else {
+          // No fields, return the base value
+          finalValue = baseValue;
+      }
+      
+      // Return the final value, mapping undefined to null
+      return finalValue === undefined ? null : finalValue;
+
+    } catch (error) {
+      logger.error('resolveData failed', { error, ref });
+      if (context.strict) {
+        // Re-throw if already a MeldError, otherwise wrap
+        const meldError = (error instanceof MeldError)
+           ? error
+           : new MeldResolutionError(`Failed to resolve data reference: ${ref}`, {
+               code: 'E_RESOLVE_DATA_FAILED',
+               details: { reference: ref, context },
+               cause: error
+           });
+        throw meldError;
+      }
+      return null; // Return null if not strict and resolution fails
     }
   }
 
@@ -961,7 +1015,7 @@ export class ResolutionService implements IResolutionService {
    * @returns The resolved field value
    * @throws {MeldResolutionError} If field access fails
    */
-  async resolveFieldAccess(variableName: string, fieldPath: FieldAccess[], context: ResolutionContext): Promise<Result<JsonValue, FieldAccessError>> {
+  async resolveFieldAccess(variableName: string, fieldPath: AstField[], context: ResolutionContext): Promise<Result<JsonValue, FieldAccessError>> {
     logger.debug('Resolving field access', { variableName, fieldPath: JSON.stringify(fieldPath) });
     const variableResult = this.stateService.getDataVar(variableName); // Ensure correct method call if stateService returns Result
     
@@ -998,8 +1052,7 @@ export class ResolutionService implements IResolutionService {
 
     // Delegate to VariableReferenceResolver for actual field access logic
     // Ensure variable.value is passed, as accessFields expects the base value
-    // Add variableName as the third argument
-    // Remove mapping - accessFields now takes FieldAccess[] directly
+    // Pass the correct fieldPath (AstField[]) type
     const result = await this.variableReferenceResolver.accessFields(variable.value, fieldPath, variableName, context);
 
     // Handle the Result<JsonValue | undefined>

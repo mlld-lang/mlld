@@ -25,8 +25,8 @@ export class FieldAccessError extends MeldError {
     }
   ) {
     super(message, {
-      code: 'E_FIELD_ACCESS', // Example error code
-      severity: ErrorSeverity.Recoverable, // Usually recoverable, might depend on context
+      code: options.details?.code ?? 'E_FIELD_ACCESS',
+      severity: options.details?.severity ?? ErrorSeverity.Recoverable,
       details: options.details,
       sourceLocation: options.sourceLocation,
       cause: options.cause,
