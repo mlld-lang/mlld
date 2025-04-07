@@ -854,15 +854,21 @@ export class ResolutionService implements IResolutionService {
 
     // 2. Check if intended type is allowed
     let isAllowed = false;
-    if (intendedType === VariableType.TEXT || intendedType === 'plaintext') {
-      // Allow if TEXT is permitted, OR if it might be DATA and DATA is permitted
-      isAllowed = allowedTypes.has(VariableType.TEXT) || (isMaybeData && allowedTypes.has(VariableType.DATA));
-      // Debug log
-      logger.debug(`[Debug] resolveInContext TypeCheck: TEXT/PLAINTEXT/DATA path`, { valueString, intendedType, isMaybeData, allowedTypes: [...allowedTypes], isAllowed });
+    if (intendedType === VariableType.TEXT && isMaybeData) { // Specifically {{...}} syntax
+       // Allow if EITHER TEXT or DATA is permitted
+       isAllowed = allowedTypes.has(VariableType.TEXT) || allowedTypes.has(VariableType.DATA);
+       // Debug log
+       logger.debug(`[Debug] resolveInContext TypeCheck: {{...}} path`, { valueString, intendedType, isMaybeData, allowedTypes: [...allowedTypes], isAllowed });
+    } else if (intendedType === 'plaintext' || intendedType === VariableType.TEXT) {
+       // Plain text or simple identifier assumed as TEXT
+       isAllowed = allowedTypes.has(VariableType.TEXT);
+       // Debug log
+       logger.debug(`[Debug] resolveInContext TypeCheck: Plaintext/Simple TEXT path`, { valueString, intendedType, allowedTypes: [...allowedTypes], isAllowed });
     } else if (intendedType === VariableType.DATA) {
-        isAllowed = allowedTypes.has(VariableType.DATA);
-        // Debug log
-        logger.debug(`[Debug] resolveInContext TypeCheck: DATA path`, { valueString, intendedType, allowedTypes: [...allowedTypes], isAllowed });
+       // Dot/bracket notation assumed as DATA
+       isAllowed = allowedTypes.has(VariableType.DATA);
+       // Debug log
+       logger.debug(`[Debug] resolveInContext TypeCheck: DATA path`, { valueString, intendedType, allowedTypes: [...allowedTypes], isAllowed });
     } else if (intendedType === VariableType.PATH) {
         isAllowed = allowedTypes.has(VariableType.PATH);
         // Debug log
@@ -878,6 +884,8 @@ export class ResolutionService implements IResolutionService {
        const errorMsg = `${typeName} variables/references are not allowed in this context`;
        logger.warn(errorMsg, { valueString, allowedTypes });
        if (context.strict) {
+           // Add debug log before throw
+           logger.debug(`[Debug] resolveInContext: Throwing E_TYPE_NOT_ALLOWED in strict mode.`);
            throw new MeldResolutionError(errorMsg, {
                code: 'E_TYPE_NOT_ALLOWED',
                details: { value: valueString, allowedTypes: [...allowedTypes], detectedType: typeName }
