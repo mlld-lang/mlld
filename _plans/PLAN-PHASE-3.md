@@ -83,4 +83,32 @@ This plan details the steps to refactor `ResolutionService` and its components t
     *   `services/resolution/ResolutionService/resolvers/ContentResolver.test.ts`
 *   **Details/Considerations:**
     *   Leverage test context helpers (`TestContextDI`) for managing dependencies and mocks effectively.
-    *   Ensure coverage for edge cases, including nested resolutions and interactions between different variable types. 
+    *   Ensure coverage for edge cases, including nested resolutions and interactions between different variable types.
+
+## C. Post-Refactor Test Failures & Follow-up
+
+After completing the refactoring steps and updating the primary unit tests for `ResolutionService` and its sub-resolvers, running the test suite (`npm test services`) revealed several remaining failures that require follow-up investigation:
+
+1.  **Build/Syntax Errors:**
+    *   Persistent syntax errors were encountered in `ResolutionService.test.ts` related to `expectToThrowWithConfig` option objects, requiring careful correction.
+
+2.  **`VariableReferenceResolver` Logic/Mock Issues:**
+    *   **`getVariable` Mocking:** Tests in `VariableReferenceResolver.test.ts` initially failed because the mock for `stateService.getVariable` was incomplete. Expanding this mock resolved most failures but highlighted issues with test-specific overrides.
+    *   **Field Access (`array index access` test):** Still failing with `Field 'users' not found...`. The test-specific mock override for `stateService.getVariable` (to provide `dataObjWithUsers`) is likely not being applied correctly, possibly due to mocking timing or `vitest-mock-extended` behavior.
+    *   **Specific Getters (`getTextVar`, `getDataVar` assertions):** Tests were failing because they asserted that specific getters (`getTextVar`) were called, but the refactored resolver now primarily uses the generic `getVariable`. Assertions were updated to check `getVariable` instead.
+
+3.  **`VariableReferenceResolver.edge.test.ts` Failures:**
+    *   Multiple tests fail with `Variable not found: undefined`, indicating the variables used in these edge cases (`nested`, `outer`, `user`, etc.) need to be added to the `stateService.getVariable` mock implementation (likely in the shared `beforeEach` of `VariableReferenceResolver.test.ts`).
+    *   One test fails due to an incorrect error type assertion (`MeldResolutionError` vs `VariableResolutionError`).
+
+4.  **Integration Test Failures (`DirectiveService`, `OutputService`, `TextDirectiveHandler`):**
+    *   Tests fail because variable/field access resolution (`{{name}}`, `{{user.name}}`) is not occurring as expected.
+    *   This strongly suggests the mocks for `ResolutionService` within *these other test suites* are outdated and do not reflect the refactored resolution logic (e.g., the delegation to `VariableReferenceResolver`). These mocks need to be updated.
+    *   `TextDirectiveHandler.integration.test.ts` has a specific failure related to `error.context` being undefined, indicating a change in error object structure during validation/resolution.
+
+**Recommended Next Steps:**
+
+*   Fix the remaining syntax error in `ResolutionService.test.ts`.
+*   Thoroughly fix the `getVariable` mock implementation and test-specific overrides in `VariableReferenceResolver.test.ts` and `VariableReferenceResolver.edge.test.ts`.
+*   Update the mocks for `ResolutionService` used in the integration tests (`DirectiveService`, `OutputService`, `TextDirectiveHandler`) to accurately reflect the refactored behavior.
+*   Investigate and update the error structure assertion in `TextDirectiveHandler.integration.test.ts`. 

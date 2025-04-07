@@ -5,7 +5,7 @@ import type { MeldVariable, TextVariable, DataVariable, IPathVariable, CommandVa
 import type { MeldNode, VariableReferenceNode, TextNode, DirectiveNode, NodeType } from '@core/ast/ast/astTypes.js';
 import { isTextVariable, isDataVariable, isPathVariable, isCommandVariable } from '@core/types/guards.js';
 import { success, failure } from '@core/types';
-import { FieldAccessError as CoreFieldAccessError, VariableResolutionError, MeldResolutionError, PathValidationError } from '@core/errors';
+import { FieldAccessError as CoreFieldAccessError, VariableResolutionError, MeldResolutionError, PathValidationError, FieldAccessError } from '@core/errors/index.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { resolutionLogger as logger } from '@core/utils/logger.js';
@@ -19,6 +19,13 @@ import type { IParserService } from '@services/pipeline/ParserService/IParserSer
 import { MeldPath, PathValidationContext, PathPurpose, RawPath, NormalizedAbsoluteDirectoryPath } from '@core/types/paths';
 import { FieldAccessType } from '@core/types';
 import type { IPathService } from '@services/fs/PathService/IPathService.js';
+
+// Define the expected shape for field access items OUTSIDE the class
+interface FieldAccessItem {
+  type: 'field' | 'index';
+  value: string | number;
+  key?: string | number; // Keep key if FieldAccess definition uses it internally
+}
 
 /**
  * Handles resolution of variable references based on VariableReferenceNode AST.
@@ -135,206 +142,150 @@ export class VariableReferenceResolver {
   async resolve(node: VariableReferenceNode, context: ResolutionContext): Promise<string> {
     const currentDepth = context.depth || 0;
     if (currentDepth > this.MAX_RESOLUTION_DEPTH) {
-      // @ts-ignore - Persistent linter error: Expected 2 arguments, but got 3. See _plans/PLAN-PHASE-3-ISSUES.md
+      // @ts-ignore - Persistent error (arg count)
       throw new VariableResolutionError('Maximum resolution depth exceeded', 'MaxDepth', context);
     }
     
     const newContext = context.withIncreasedDepth();
-    // let node: VariableReferenceNode | null = null; // No longer needed
-
-    // REMOVED: Block handling raw string input
-    /*
-    if (typeof valueOrNode === 'string') {
-        // ... removed string handling logic ...
-              } else {
-        node = valueOrNode;
-        logger.debug(`Resolving VariableReferenceNode: ${node.identifier}`, { fields: node.fields, depth: currentDepth });
-    }
-    
-    if (!node) {
-        // Should not happen if input is VariableReferenceNode, but guard anyway
-        logger.error('Resolution failed: No valid node provided.');
-        return ''; // Or throw if strict? 
-    }
-    */
-   
-    console.log(`[RESOLVE] Start: Resolving ${node.identifier}`, { fields: node.fields, typeHint: node.valueType, depth: currentDepth });
 
     try {
-      const variable = await this.getVariable(node, newContext); 
-      console.log(`[RESOLVE] getVariable result for ${node.identifier}:`, variable ? { type: variable.type, valuePreview: JSON.stringify(variable.value)?.substring(0,50) } : 'undefined');
+      const variable = await this.stateService.getVariable(node.identifier);
       
       if (!variable) {
-        // Handle not found based on strict mode
-        if (newContext.strict) {
-          console.error(`[RESOLVE] Strict mode: Variable not found: ${node.identifier}`);
-          // @ts-ignore - Persistent linter error: Expected 2 arguments, but got 3. See _plans/PLAN-PHASE-3-ISSUES.md
-          throw new VariableResolutionError(`Variable not found: ${node.identifier}`, node.identifier, newContext);
-        }
-        console.warn(`[RESOLVE] Non-strict mode: Variable not found: ${node.identifier}, returning empty string.`);
-        return ''; // Return empty string if not found and not strict
+          if (!newContext.strict) return '';
+          throw new VariableResolutionError(`Variable not found: ${node.identifier}`, {
+              code: 'E_VAR_NOT_FOUND',
+              severity: ErrorSeverity.Recoverable, 
+              details: { variableName: node.identifier }
+          });
       }
 
       // --- Path Variable Handling --- 
       if (isPathVariable(variable)) {
           logger.debug(`Resolving PathVariable '${node.identifier}'`);
-          const meldPathValue = variable.value; // This is IFilesystemPathState | IUrlPathState
+          const meldPathValue = variable.value;
           
-          // Ensure PathService is available (should be guaranteed by constructor injection)
           if (!this.pathService) {
-              throw new MeldResolutionError('PathService unavailable in VariableReferenceResolver', { code: 'E_SERVICE_UNAVAILABLE'});
+              throw new MeldResolutionError('PathService unavailable', { code: 'E_SERVICE_UNAVAILABLE'});
           }
           
           try {
-              // Manually construct PathValidationContext from ResolutionContext
-              const resCtx = newContext; 
               const pathValidationContext: PathValidationContext = {
-                  // Assert workingDirectory type
-                  workingDirectory: (resCtx.pathContext?.baseDir ?? '.') as NormalizedAbsoluteDirectoryPath,
-                  allowExternalPaths: resCtx.pathContext?.allowTraversal ?? !resCtx.strict,
-                  // Provide defaults for PathValidationRules
+                  workingDirectory: (newContext.pathContext?.baseDir ?? '.') as NormalizedAbsoluteDirectoryPath,
+                  allowExternalPaths: newContext.pathContext?.allowTraversal ?? !newContext.strict,
                   rules: {
-                      ...(resCtx.pathContext?.constraints ?? {}),
-                      allowAbsolute: true, // Default rule
-                      allowRelative: true, // Default rule
-                      allowParentTraversal: !resCtx.strict // Default rule (match allowExternalPaths?)
-                  },
-                  // @ts-ignore - Persistent linter error: 'severity' does not exist in type 'PathValidationContext'. See _plans/PLAN-PHASE-3-ISSUES.md
-                  severity: ErrorSeverity.Recoverable 
+                      ...(newContext.pathContext?.constraints ?? {}),
+                      allowAbsolute: true,
+                      allowRelative: true,
+                      allowParentTraversal: !newContext.strict
+                  }
               };
               
-              // Extract original path string to pass to resolvePath
-              const pathInput = meldPathValue.originalValue;
-              if (typeof pathInput !== 'string') {
-                  throw new PathValidationError('Path variable value lacks original string value', { 
-                      code: 'E_PATH_INVALID_VALUE', 
-                      details: { pathString: JSON.stringify(meldPathValue), pathValue: meldPathValue }
-                    });
-              }
-
-              // Call resolvePath with RawPath cast
-              const resolvedPathObject = await this.pathService.resolvePath(pathInput as RawPath);
-              // Call validatePath with the resolved path object and the context
-              const validatedMeldPath = await this.pathService.validatePath(resolvedPathObject, pathValidationContext);
+              const pathInput = meldPathValue.originalValue as RawPath;
+              const baseDir = newContext.state?.getCurrentFilePath() ?? '.';
+              const resolvedPath = await this.pathService.resolvePath(pathInput, baseDir as RawPath);
+              const validatedPath = await this.pathService.validatePath(resolvedPath, pathValidationContext);
               
-              // Return the final validated path string
-              const finalPath = validatedMeldPath.validatedPath as string;
-              logger.debug(`Path variable '${node.identifier}' resolved to: ${finalPath}`);
-              return finalPath;
-              
-          } catch (pathError) {
-              logger.error(`Path resolution/validation failed for '${node.identifier}'`, { pathError });
-              const pathInputString = typeof meldPathValue?.originalValue === 'string' ? meldPathValue.originalValue : JSON.stringify(meldPathValue);
-              if (newContext.strict) {
-                  // Re-throw PathValidationError or wrap other errors
-                  const meldError = (pathError instanceof MeldError)
-                      ? pathError
-                      : new PathValidationError(`Path resolution/validation failed for '${variable.name}'`, { 
-                          code: 'E_PATH_VALIDATION_FAILED', 
-                          cause: pathError, 
-                          details: { 
-                              pathString: pathInputString, 
-                              pathValue: meldPathValue 
-                          }
-                        });
-                  throw meldError;
-              }
-              return ''; // Return empty in non-strict mode on path error
+              return validatedPath.validatedPath as string; 
+
+          } catch (error) {
+              logger.error(`Error resolving/validating path variable ${node.identifier}`, { error });
+              if (newContext.strict) throw error;
+              return '';
           }
       }
-      // --- End Path Variable Handling ---
-
-      // --- Data/Text Variable Handling (Field Access) ---
-      let resolvedValueForStringify: JsonValue | string;
-      if (isCommandVariable(variable)) {
-          resolvedValueForStringify = variable.value.name; 
-      } else {
-          resolvedValueForStringify = variable.value as JsonValue;
-      }
-
-      if (node.fields && node.fields.length > 0) {
-          let dataForAccess: JsonValue | undefined = undefined;
-          let isVariableData = false;
-  
-          if (isDataVariable(variable)) {
-            dataForAccess = variable.value;
-            isVariableData = true;
-          } else if (isTextVariable(variable) && typeof variable.value === 'string') {
-             try {
-                 dataForAccess = JSON.parse(variable.value);
-                 isVariableData = true;
-             } catch (parseError) { /* Ignore */ }
-          }
-  
-          if (isVariableData && dataForAccess !== undefined) {
-               const fieldAccessResult = await this.accessFields(dataForAccess, node.fields, newContext);
-               if (fieldAccessResult.success) {
-                   // @ts-ignore - Persistent linter error: Type 'JsonValue | undefined' is not assignable. See _plans/PLAN-PHASE-3-ISSUES.md
-                   resolvedValueForStringify = fieldAccessResult.value;
-               } else {
-                   console.warn(`[RESOLVE] Field access failed for ${node.identifier}:`, fieldAccessResult.error?.message);
-                   if (newContext.strict) {
-                       if (fieldAccessResult.error) {
-                          throw fieldAccessResult.error;
-                       } else {
-                           // Corrected CoreFieldAccessError arguments (3 expected)
-                           // @ts-ignore - Persistent linter error: Expected 2 arguments, but got 3. See _plans/PLAN-PHASE-3-ISSUES.md
-                           throw new CoreFieldAccessError('Unknown field access error', dataForAccess, node.fields);
-                       }
-                   }
-                   resolvedValueForStringify = ''; 
-              }
-            } else {
-              const errorMsg = `Cannot access fields on variable: ${node.identifier} (type: ${variable.type})`;
-              console.warn(`[RESOLVE] ${errorMsg}`);
-              if (newContext.strict) {
-                   // Corrected VariableResolutionError arguments (2 arguments expected)
-                   throw new VariableResolutionError(errorMsg, {
-                       code: 'E_FIELD_ACCESS_INVALID_TYPE',
-                       details: { variableName: node.identifier, fieldAccessAttempted: true }
-                    });
-              }
-              resolvedValueForStringify = ''; 
-          }
-        } else {
-            console.log(`[RESOLVE] No fields to access for ${node.identifier}.`);
-        }
       
-      // --- Final String Conversion & Recursive Resolution --- 
-      const stringValue = this.convertToString(resolvedValueForStringify, newContext);
-      console.log(`[RESOLVE] Converted value to string for ${node.identifier}:`, stringValue.substring(0,100));
+      // --- Command Variable Handling ---
+      else if (isCommandVariable(variable)) {
+          logger.debug(`Resolving CommandVariable '${node.identifier}'`);
+          return JSON.stringify(variable.value); 
+      }
       
-      if (stringValue.includes('{{') && this.resolutionService) {
-           console.log(`[RESOLVE] Result contains nested variables, resolving recursively: ${stringValue.substring(0,100)}`);
-           return await this.resolutionService.resolveText(stringValue, newContext);
-      }
+      // --- Text/Data Variable Handling ---
+      else {
+          let variableValue: JsonValue | string | undefined;
+          let dataForAccess: JsonValue | undefined;
+          
+          if (isTextVariable(variable)) {
+              variableValue = variable.value;
+          } else if (isDataVariable(variable)) {
+              variableValue = variable.value;
+              dataForAccess = variable.value;
+          } else {
+              throw new VariableResolutionError(`Unexpected variable type for ${node.identifier}`, { 
+                code: 'E_UNEXPECTED_TYPE', 
+                details: { variableName: node.identifier }
+              });
+          }
 
-      console.log(`[RESOLVE] Final resolved value for ${node.identifier}: ${stringValue.substring(0,100)}`);
-      return stringValue;
-
-      } catch (error) {
-      console.error(`[RESOLVE] Error during resolution for ${node.identifier}:`, error);
-      if (error instanceof CoreFieldAccessError && !newContext.strict) {
-           console.warn(`[RESOLVE] Non-strict mode, suppressing FieldAccessError for ${node.identifier}`);
-           return ''; 
-      }
-      if (newContext.strict) {
-          // Corrected VariableResolutionError arguments (2 arguments expected)
-          throw new VariableResolutionError(
-             `Failed to resolve variable: ${node.identifier}`, 
-             {
-               code: 'E_RESOLVE_VAR_FAILED',
-               details: {
-                 variableName: node.identifier,
-                 variableType: node.valueType
-               },
-               cause: error, 
-               severity: (error instanceof MeldError) ? error.severity : ErrorSeverity.Fatal
+          let resolvedValueForStringify: JsonValue | string;
+          
+          if (node.fields && node.fields.length > 0) {
+             if (dataForAccess !== undefined) {
+                  const fieldAccessResult = await this.accessFields(dataForAccess, node.fields as FieldAccessItem[], newContext);
+                  if (fieldAccessResult.success) {
+                      resolvedValueForStringify = fieldAccessResult.value ?? '';
+                  } else {
+                      if (newContext.strict) {
+                          throw fieldAccessResult.error; 
+                      }
+                      resolvedValueForStringify = '';
+                  }
+             } else {
+                  if (newContext.strict) {
+                      throw new FieldAccessError(`Cannot access fields on non-data variable '${node.identifier}'`, { 
+                         details: { 
+                             code: 'E_FIELD_ACCESS_ON_NON_DATA',
+                             variableName: node.identifier,
+                             fieldAccessChain: node.fields,
+                             failedAtIndex: -1,
+                             severity: ErrorSeverity.Recoverable
+                         }, 
+                      });
+                  }
+                  resolvedValueForStringify = '';
              }
-           );
+          } else {
+              resolvedValueForStringify = variableValue ?? '';
+          }
+          
+          if (typeof resolvedValueForStringify === 'string') {
+             return resolvedValueForStringify;
+          } else if (resolvedValueForStringify === null) {
+             return 'null';
+          } else if (resolvedValueForStringify === undefined) {
+             return '';
+          } else {
+             try {
+                 return JSON.stringify(resolvedValueForStringify);
+             } catch (e) {
+                 logger.error(`Error stringifying resolved value for ${node.identifier}`, { value: resolvedValueForStringify, error: e });
+                 if (newContext.strict) {
+                     throw new MeldResolutionError(`Could not stringify resolved value for ${node.identifier}`, { 
+                        code: 'E_STRINGIFY_FAILED', 
+                        cause: e 
+                     });
+                 }
+                 return '';
+             }
+          }
       }
-      console.warn(`[RESOLVE] Non-strict mode, suppressing error for ${node.identifier}, returning empty string.`);
-      return '';
+
+    } catch (error) {
+        logger.warn(`[RESOLVE CATCH] Error resolving ${node.identifier}:`, { error });
+        
+        if (newContext.strict) {
+            throw error; 
+        }
+        
+        if (error instanceof MeldError && 
+            (error.severity === ErrorSeverity.Fatal || error.severity === ErrorSeverity.Critical)) {
+             logger.error(`[RESOLVE] Throwing non-suppressed fatal/critical error for ${node.identifier} in non-strict mode`, { error });
+             throw error;
+        }
+        
+        console.warn(`[RESOLVE] Non-strict mode, suppressing error for ${node.identifier}, returning empty string.`);
+        return ''; 
     }
   }
   
@@ -399,57 +350,60 @@ export class VariableReferenceResolver {
     }
   }
 
-  // Add placeholder/basic implementation for accessFields
-  public async accessFields(
-    baseValue: JsonValue,
-    fields: FieldAccess[],
-    context: ResolutionContext
-  ): Promise<Result<JsonValue, FieldAccessError>> {
-    console.log('[ACCESS_FIELDS] Start:', { fields, baseValueType: typeof baseValue, baseValuePreview: JSON.stringify(baseValue)?.substring(0, 50) }); 
-    let current: JsonValue = baseValue;
-
+  // Update accessFields parameter type and internal logic
+  private async accessFields(baseValue: JsonValue, fields: FieldAccessItem[], context: ResolutionContext): Promise<Result<JsonValue | undefined>> {
+    let current: JsonValue | undefined = baseValue;
+    
     for (let i = 0; i < fields.length; i++) {
       const field = fields[i];
-      const currentPathString = fields.slice(0, i + 1).map(f => f.type === FieldAccessType.INDEX ? `[${f.key}]` : `.${f.key}`).join('');
-      console.log(`[ACCESS_FIELDS] Step ${i+1}/${fields.length}: Accessing field`, { type: field.type, key: field.key });
+      const currentPathString = fields.slice(0, i + 1).map(f => f.type === 'index' ? `[${f.value}]` : `.${f.value}`).join('');
+      logger.debug(`[ACCESS FIELDS] Accessing field: ${currentPathString}`, { currentValueType: typeof current });
 
-      if (current === null || typeof current !== 'object') {
-        const errorMsg = `Cannot access field '${field.key}' on non-object value: ${typeof current}`;
-        // @ts-ignore - Persistent linter error: Expected 2 arguments, but got 4. See _plans/PLAN-PHASE-3-ISSUES.md
-        return failure(new CoreFieldAccessError(errorMsg, baseValue, fields, i));
+      // Add console log for debugging field type
+      console.log(`[DEBUG accessFields] field.type = ${JSON.stringify(field.type)}, field.value = ${JSON.stringify(field.value)}`);
+
+      if (current === undefined || current === null) {
+         const errorMsg = `Cannot access field '${field.value}' on null or undefined value at path ${currentPathString}`; 
+         // @ts-ignore - Persistent error (arg count)
+         return failure(new CoreFieldAccessError(errorMsg, baseValue, fields as any, i));
       }
 
-      if (field.type === FieldAccessType.PROPERTY) {
-        const key = String(field.key);
-        if (!Array.isArray(current)) {
+      if (field.type === 'field') { 
+        const key = String(field.value);
+        if (typeof current === 'object' && !Array.isArray(current)) {
           if (Object.prototype.hasOwnProperty.call(current, key)) {
             current = (current as Record<string, JsonValue>)[key];
           } else {
             const availableKeys = Object.keys(current).join(', ') || '(none)';
             const errorMsg = `Field '${key}' not found in object. Available keys: ${availableKeys}`;
-            // @ts-ignore - Persistent linter error: Expected 2 arguments, but got 4. See _plans/PLAN-PHASE-3-ISSUES.md
-            return failure(new CoreFieldAccessError(errorMsg, baseValue, fields, i));
+            // @ts-ignore - Persistent error (arg count)
+            return failure(new CoreFieldAccessError(errorMsg, baseValue, fields as any, i));
           }
         } else {
-          // @ts-ignore - Persistent linter error: Expected 2 arguments, but got 4. See _plans/PLAN-PHASE-3-ISSUES.md
-          return failure(new CoreFieldAccessError(`Cannot access property '${key}' on an array`, baseValue, fields, i));
+          // @ts-ignore - Persistent error (arg count)
+          return failure(new CoreFieldAccessError(`Cannot access property '${key}' on non-object or array`, baseValue, fields as any, i));
         }
-      } else if (field.type === FieldAccessType.INDEX) {
+      } else if (field.type === 'index') {
+        const index = Number(field.value);
+        if (isNaN(index) || !Number.isInteger(index)) {
+            // @ts-ignore - Persistent error (arg count)
+            return failure(new CoreFieldAccessError(`Invalid array index '${field.value}'`, baseValue, fields as any, i));
+        }
         if (Array.isArray(current)) {
-          const index = Number(field.key);
-          if (Number.isInteger(index) && index >= 0 && index < current.length) {
+          if (index >= 0 && index < current.length) {
             current = current[index];
           } else {
-            // @ts-ignore - Persistent linter error: Expected 2 arguments, but got 4. See _plans/PLAN-PHASE-3-ISSUES.md
-            return failure(new CoreFieldAccessError(`Index '${field.key}' out of bounds for array of length ${current.length}`, baseValue, fields, i));
+            // @ts-ignore - Persistent error (arg count)
+            return failure(new CoreFieldAccessError(`Index '${index}' out of bounds for array of length ${current.length}`, baseValue, fields as any, i));
           }
         } else {
-          // @ts-ignore - Persistent linter error: Expected 2 arguments, but got 4. See _plans/PLAN-PHASE-3-ISSUES.md
-          return failure(new CoreFieldAccessError(`Cannot access index '${field.key}' on non-array value`, baseValue, fields, i));
+          // @ts-ignore - Persistent error (arg count)
+          return failure(new CoreFieldAccessError(`Cannot access index '${index}' on non-array value`, baseValue, fields as any, i));
         }
       } else {
-        // @ts-ignore - Persistent linter error: Expected 2 arguments, but got 4. See _plans/PLAN-PHASE-3-ISSUES.md
-        return failure(new CoreFieldAccessError(`Unknown field access type: '${(field as any).type}'`, baseValue, fields, i));
+          // This block should ideally not be reached if input type is correct
+          // @ts-ignore - Persistent error (arg count)
+          return failure(new CoreFieldAccessError(`Unknown field access type: '${(field as any).type}'`, baseValue, fields as any, i));
       }
     }
     return success(current);

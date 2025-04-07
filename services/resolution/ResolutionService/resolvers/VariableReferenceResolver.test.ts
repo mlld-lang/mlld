@@ -31,6 +31,9 @@ import { DeepMockProxy, mockDeep } from 'vitest-mock-extended';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
 import { expectToThrowWithConfig } from '@tests/utils/ErrorTestUtils.js'; 
 import { createVariableReferenceNode } from '@tests/utils/testFactories.js';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
+// Import IFilesystemPathState for explicit typing
+import type { IFilesystemPathState } from '@core/types/paths.js'; 
 
 describe('VariableReferenceResolver', () => {
   let contextDI: TestContextDI;
@@ -40,31 +43,91 @@ describe('VariableReferenceResolver', () => {
   let resolutionService: DeepMockProxy<IResolutionService>;
   let pathService: Partial<IPathService>;
   let context: ResolutionContext;
+  let fileSystemService: DeepMockProxy<IFileSystemService>;
+
+  // --- Define ALL mock variables/defs used in tests --- 
+  const mockGreetingVar: TextVariable = { name: 'greeting', type: VariableType.TEXT, value: 'Hello World' };
+  const mockDataVarVar: DataVariable = { name: 'dataVar', type: VariableType.DATA, value: { key: 'value' } };
+  const mockDataObjVar: DataVariable = { name: 'dataObj', type: VariableType.DATA, value: { user: { name: 'Alice' } } }; // Default
+  const mockDataObjWithUsersVar: DataVariable = { name: 'dataObjWithUsers', type: VariableType.DATA, value: { users: ['Alice', 'Bob'] } };
+  const mockPathValue: IFilesystemPathState = {
+      contentType: PathContentType.FILESYSTEM, originalValue: '$./docs', validatedPath: unsafeCreateValidatedResourcePath(''), isAbsolute: false, isSecure: true, isValidSyntax: true
+  };
+  const mockDocsPathVar: IPathVariable = { name: 'docsPath', type: VariableType.PATH, value: mockPathValue };
+  const mockCmdDef = { name: 'myCmd', type: 'basic' as const, commandTemplate: 'echo Hello', parameters: [], isMultiline: false };
+  const mockMyCmdVar: CommandVariable = { name: 'myCmd', type: VariableType.COMMAND, value: mockCmdDef };
+  const mockVar1: TextVariable = { name: 'var1', type: VariableType.TEXT, value: '{{var2}}' };
+  const mockVar2: TextVariable = { name: 'var2', type: VariableType.TEXT, value: '{{var1}}' };
 
   beforeEach(async () => {
     contextDI = TestContextDI.createIsolated();
 
-    // Create mocks
+    // Initialize ALL mocks first
     stateService = mockDeep<IStateService>();
-    parserService = mockDeep<IParserService>();
-    resolutionService = mockDeep<IResolutionService>();
-    pathService = {
-        resolvePath: vi.fn() as any,
+    fileSystemService = mockDeep<IFileSystemService>();
+    parserService = mockDeep<IParserService>(); 
+    resolutionService = mockDeep<IResolutionService>(); // Initialize resolutionService
+    pathService = { // Initialize pathService partial mock
+        resolvePath: vi.fn() as any, 
         validatePath: vi.fn() as any,
     };
 
-    // Register mocks
+    // --- Mock implementation for getVariable --- 
+    stateService.getVariable.mockImplementation((name: string): MeldVariable | undefined => {
+        console.log(`[DEBUG MOCK getVariable] Called for: ${name}`); 
+        if (name === 'greeting') return mockGreetingVar;
+        if (name === 'dataVar') return mockDataVarVar;
+        if (name === 'dataObj') return mockDataObjVar; 
+        if (name === 'dataObjWithUsers') return mockDataObjWithUsersVar;
+        if (name === 'docsPath') return mockDocsPathVar;
+        if (name === 'myCmd') return mockMyCmdVar;
+        if (name === 'var1') return mockVar1;
+        if (name === 'var2') return mockVar2;
+        // 'missing' variable is intentionally undefined
+        console.log(`[DEBUG MOCK getVariable] NOT FOUND for: ${name}`);
+        return undefined;
+    });
+    
+    // --- Mock specific getters (can act as fallback/verification) --- 
+    stateService.getTextVar.mockImplementation((name: string) => {
+        if (name === 'greeting') return mockGreetingVar;
+        if (name === 'var1') return mockVar1;
+        if (name === 'var2') return mockVar2;
+        return undefined;
+    });
+    stateService.getDataVar.mockImplementation((name: string) => {
+        // Default mock for dataObj
+        if (name === 'dataObj') return mockDataObjVar;
+        if (name === 'dataVar') return mockDataVarVar;
+        return undefined;
+    });
+    stateService.getPathVar.mockImplementation((name: string) => {
+        if (name === 'docsPath') return mockDocsPathVar;
+        return undefined;
+    });
+    stateService.getCommandVar.mockImplementation((name: string) => {
+        if (name === 'myCmd') return mockMyCmdVar;
+        return undefined;
+    });
+    
+    // --- Mock other services --- 
+    fileSystemService.executeCommand.mockResolvedValue({ stdout: '', stderr: '' });
+    fileSystemService.dirname.mockImplementation(p => p ? p.substring(0, p.lastIndexOf('/') || 0) : '');
+    fileSystemService.getCwd.mockReturnValue('/mock/cwd');
+    stateService.getCurrentFilePath.mockReturnValue('/mock/dir/test.meld');
+
+    // --- Register ALL mocks --- 
     contextDI.registerMock<IStateService>('IStateService', stateService);
+    contextDI.registerMock<IFileSystemService>('IFileSystemService', fileSystemService);
     contextDI.registerMock<IParserService>('IParserService', parserService);
-    contextDI.registerMock<IResolutionService>('IResolutionService', resolutionService);
+    contextDI.registerMock<IResolutionService>('IResolutionService', resolutionService); // Register resolutionService
     contextDI.registerMock<IPathService>('IPathService', pathService as IPathService); 
     
-    // Instantiate resolver directly, passing mocks
-    resolver = new VariableReferenceResolver(stateService, pathService as IPathService, resolutionService, parserService);
-    
-    // Use ResolutionContextFactory to create the context
+    // --- Instantiate resolver AFTER mocks are initialized and registered --- 
+    resolver = new VariableReferenceResolver(stateService, pathService as IPathService, resolutionService, parserService); 
+
     context = ResolutionContextFactory.create(stateService, 'test.meld')
-      .withStrictMode(true);
+               .withStrictMode(true); 
   });
   
   afterEach(async () => {
@@ -99,57 +162,47 @@ describe('VariableReferenceResolver', () => {
     });
 
     it('should handle field access in data variables', async () => {
-      const mockData = { user: { name: 'Alice' } };
-      const mockVar: DataVariable = { name: 'dataObj', type: VariableType.DATA, value: mockData };
-      const fieldsDefinition: FieldAccess[] = [
-        { type: FieldAccessType.PROPERTY, key: 'user' }, 
-        { type: FieldAccessType.PROPERTY, key: 'name' }
-      ];
+       // This test uses the default mockDataObjVar { user: { name: 'Alice' } }
       const node = createVariableReferenceNode('dataObj', VariableType.DATA, 
-          fieldsDefinition.map(f => ({
-             type: f.type === FieldAccessType.PROPERTY ? 'field' : 'index',
-             value: f.key
-           }))
+          [{ type: 'field', value: 'user' }, { type: 'field', value: 'name' }]
       );
-
-      stateService.getDataVar.calledWith('dataObj').mockResolvedValue(mockVar);
-      
       const result = await resolver.resolve(node, context);
       expect(result).toBe('Alice');
-      expect(stateService.getDataVar).toHaveBeenCalledWith('dataObj');
+      expect(stateService.getVariable).toHaveBeenCalledWith('dataObj'); // Check getVariable call
     });
 
     it('should handle array index access in data variables', async () => {
-      const mockData = { users: ['Alice', 'Bob'] };
-      const mockVar: DataVariable = { name: 'dataObj', type: VariableType.DATA, value: mockData };
+      // Override mock for this specific test
+      const mockDataForArray = { users: ['Alice', 'Bob'] };
+      const mockDataObjForArray: DataVariable = { name: 'dataObj', type: VariableType.DATA, value: mockDataForArray };
+      stateService.getVariable.calledWith('dataObj').mockResolvedValue(mockDataObjForArray);
+      // Also mock the specific getter if it might be called as fallback
+      stateService.getDataVar.calledWith('dataObj').mockResolvedValue(mockDataObjForArray);
+      
       const fieldsDefinition: FieldAccess[] = [
         { type: FieldAccessType.PROPERTY, key: 'users' },
         { type: FieldAccessType.INDEX, key: 1 }
       ];
       const node = createVariableReferenceNode('dataObj', VariableType.DATA, 
-          fieldsDefinition.map(f => ({
-             type: f.type === FieldAccessType.PROPERTY ? 'field' : 'index',
-             value: f.key
-           }))
+          fieldsDefinition.map(f => ({ type: f.type === FieldAccessType.PROPERTY ? 'field' : 'index', value: f.key }))
       );
-
-      stateService.getDataVar.calledWith('dataObj').mockResolvedValue(mockVar);
       
       const result = await resolver.resolve(node, context);
       expect(result).toBe('Bob');
-      expect(stateService.getDataVar).toHaveBeenCalledWith('dataObj');
+      expect(stateService.getVariable).toHaveBeenCalledWith('dataObj');
     });
 
     it('should throw VariableResolutionError for undefined variables in strict mode', async () => {
       const node = createVariableReferenceNode('missing', VariableType.TEXT);
-      stateService.getTextVar.calledWith('missing').mockResolvedValue(undefined);
+      // Mock getVariable to return undefined for 'missing'
+      stateService.getVariable.calledWith('missing').mockResolvedValue(undefined);
       
       await expectToThrowWithConfig(async () => {
         await resolver.resolve(node, context);
       }, {
         type: 'VariableResolutionError',
         messageContains: "Variable not found: missing",
-        code: 'E_VAR_NOT_FOUND'
+        code: 'E_VAR_NOT_FOUND' // Verify resolver throws this specific code now
       });
     });
 
@@ -165,25 +218,15 @@ describe('VariableReferenceResolver', () => {
     });
 
     it('should throw FieldAccessError on invalid field access in strict mode', async () => {
-      const mockData = { user: { name: 'Alice' } };
-      const mockVar: DataVariable = { name: 'dataObj', type: VariableType.DATA, value: mockData };
-      const fieldsDefinition: FieldAccess[] = [
-        { type: FieldAccessType.PROPERTY, key: 'user' },
-        { type: FieldAccessType.PROPERTY, key: 'age' } 
-      ];
+      // Uses default mockDataObjVar { user: { name: 'Alice' } }
       const node = createVariableReferenceNode('dataObj', VariableType.DATA, 
-          fieldsDefinition.map(f => ({
-             type: f.type === FieldAccessType.PROPERTY ? 'field' : 'index',
-             value: f.key
-           }))
+          [{ type: 'field', value: 'user' }, { type: 'field', value: 'age' }]
       );
-
-      stateService.getDataVar.calledWith('dataObj').mockResolvedValue(mockVar);
 
       await expectToThrowWithConfig(async () => {
         await resolver.resolve(node, context);
       }, {
-        type: 'FieldAccessError',
+        type: 'FieldAccessError', // Verify resolver lets this specific error bubble up
         messageContains: "Field 'age' not found in object.",
       });
     });
@@ -216,60 +259,47 @@ describe('VariableReferenceResolver', () => {
       const resolvedPathString = '/abs/project/docs';
       const validatedPathString = '/abs/project/docs/validated';
       
-      const mockPath: MeldPath = {
-         contentType: PathContentType.FILESYSTEM,
-         originalValue: rawPathString,
-         validatedPath: unsafeCreateValidatedResourcePath(''),
-         isAbsolute: false,
-         isSecure: true,
-         isValidSyntax: true 
-      };
-      const mockVar: IPathVariable = { name: 'docsPath', type: VariableType.PATH, value: mockPath };
-      stateService.getPathVar.calledWith('docsPath').mockResolvedValue(mockVar);
+      // Uses mockDocsPathVar from beforeEach
+      const mockPath = mockDocsPathVar.value as IFilesystemPathState;
       
       const resolvedMeldPath: MeldPath = { 
-          contentType: PathContentType.FILESYSTEM, 
-          originalValue: rawPathString, 
+          contentType: PathContentType.FILESYSTEM, originalValue: rawPathString, 
           validatedPath: unsafeCreateValidatedResourcePath(resolvedPathString),
-          isAbsolute: true,
-          isSecure: true,
-          isValidSyntax: true 
-      };
+          isAbsolute: true, isSecure: true, isValidSyntax: true 
+      } as MeldPath;
       (pathService.resolvePath as any).mockResolvedValue(resolvedMeldPath);
       
       const validatedMeldPath: MeldPath = { 
           ...resolvedMeldPath,
           validatedPath: unsafeCreateValidatedResourcePath(validatedPathString)
-      };
+      } as MeldPath;
       (pathService.validatePath as any).mockResolvedValue(validatedMeldPath);
       
       const result = await resolver.resolve(node, context);
       
       expect(result).toBe(validatedPathString);
-      expect(stateService.getPathVar).toHaveBeenCalledWith('docsPath');
+      expect(stateService.getVariable).toHaveBeenCalledWith('docsPath'); // Check getVariable call
       expect(pathService.resolvePath).toHaveBeenCalledWith(mockPath.originalValue, expect.any(String)); 
       expect(pathService.validatePath).toHaveBeenCalledWith(resolvedMeldPath, expect.objectContaining({ 
-          purpose: context.pathContext?.purpose,
-          constraints: context.pathContext?.constraints
+          workingDirectory: expect.any(String),
+          allowExternalPaths: expect.any(Boolean),
+          rules: expect.objectContaining({
+              allowAbsolute: true,
+              allowRelative: true,
+              allowParentTraversal: expect.any(Boolean)
+          })
       }));
     });
     
     it('should resolve command variables using node.valueType', async () => {
       const node = createVariableReferenceNode('myCmd', VariableType.COMMAND);
-      const mockCmdDef = { 
-          name: 'myCmd', 
-          type: 'basic' as const, 
-          commandTemplate: 'echo Hello', 
-          parameters: [],
-          isMultiline: false
-      };
-      const mockVar: CommandVariable = { name: 'myCmd', type: VariableType.COMMAND, value: mockCmdDef };
-      stateService.getCommandVar.calledWith('myCmd').mockResolvedValue(mockVar);
-      
+      // Uses mockMyCmdVar from beforeEach
+      const mockCmdDef = mockMyCmdVar.value;
+
       const result = await resolver.resolve(node, context);
       
-      expect(result).toBe(JSON.stringify(mockCmdDef)); 
-      expect(stateService.getCommandVar).toHaveBeenCalledWith('myCmd');
+      expect(result).toBe(JSON.stringify(mockCmdDef)); // Verify resolver returns stringified def
+      expect(stateService.getVariable).toHaveBeenCalledWith('myCmd'); // Check getVariable call
     });
 
   }); 

@@ -752,7 +752,7 @@ Content 2`;
       }, {
         errorType: VariableResolutionError, // Expecting VariableResolutionError
         code: 'E_VAR_NOT_FOUND', // Specific code for not found
-        messageContains: 'Data variable 'nonexistent' not found'
+        messageContains: 'Data variable \'nonexistent\' not found' // Ensure correct quoting
       });
     });
 
@@ -810,7 +810,7 @@ Content 2`;
       }, {
         errorType: VariableResolutionError,
         code: 'E_VAR_NOT_FOUND',
-        messageContains: 'Path variable 'nonexistent' not found'
+        messageContains: 'Path variable \'nonexistent\' not found' // Ensure correct quoting
       });
     });
 
@@ -863,7 +863,7 @@ Content 2`;
       }, {
         errorType: VariableResolutionError,
         code: 'E_VAR_NOT_FOUND',
-        messageContains: 'Command 'nonexistent' not found'
+        messageContains: 'Command \'nonexistent\' not found' 
       });
     });
 
