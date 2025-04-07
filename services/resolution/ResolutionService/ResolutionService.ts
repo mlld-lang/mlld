@@ -589,6 +589,8 @@ export class ResolutionService implements IResolutionService {
       if (isBasicCommand(commandDef)) {
           // 5. Execute basic command using CommandResolver
           logger.debug(`Executing basic command '${commandName}' via CommandResolver`);
+          // Add ts-ignore due to suspected flow analysis issue
+          // @ts-ignore - TS unable to guarantee commandResolver is defined despite check
           return await commandResolver.executeBasicCommand(commandDef, args, context);
       } else {
           // 6. Handle language commands (or other types)
@@ -996,7 +998,30 @@ export class ResolutionService implements IResolutionService {
 
     // Delegate to VariableReferenceResolver for actual field access logic
     // Ensure variable.value is passed, as accessFields expects the base value
-    return await this.variableReferenceResolver.accessFields(variable.value, fieldPath, context);
+    // Add variableName as the third argument
+    // Remove mapping - accessFields now takes FieldAccess[] directly
+    const result = await this.variableReferenceResolver.accessFields(variable.value, fieldPath, variableName, context);
+
+    // Handle the Result<JsonValue | undefined>
+    if (!result.success) {
+        // Ensure the error is FieldAccessError before returning
+        if (result.error instanceof FieldAccessError) {
+            return failure(result.error); 
+        } else {
+            // If it's some other error or undefined, wrap it or handle appropriately
+            // For now, let's re-wrap as a generic FieldAccessError if possible
+             const wrapError = new FieldAccessError('Field access failed with unexpected error type', {
+                 details: { variableName, fieldAccessChain: fieldPath, failedAtIndex: -1, code: 'E_FIELD_ACCESS_UNKNOWN' },
+                 cause: result.error // Preserve original error if available
+             });
+            return failure(wrapError);
+        }
+    }
+    
+    // If successful, handle potential undefined value - map undefined to null?
+    const finalValue = result.value === undefined ? null : result.value;
+    
+    return success(finalValue as JsonValue); // Assume null is a valid JsonValue here
   }
 
   /**

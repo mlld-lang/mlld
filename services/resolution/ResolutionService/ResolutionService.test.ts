@@ -256,7 +256,6 @@ describe('ResolutionService', () => {
 
     // Create test context with appropriate DI mode
     testContext = TestContextDI.createIsolated();
-    await testContext.initialize();
     
     // Register mock services with the container
     testContext.registerMock('IStateService', stateService);
@@ -269,6 +268,9 @@ describe('ResolutionService', () => {
     testContext.registerMock('VariableReferenceResolverClientFactory', mockVariableResolverClientFactory);
     testContext.registerMock('DirectiveServiceClientFactory', mockDirectiveClientFactory);
     testContext.registerMock('FileSystemServiceClientFactory', mockFileSystemClientFactory);
+
+    // Initialize the context AFTER mocks are registered
+    await testContext.initialize();
     
     // Instantiate the service using the DI container
     service = await testContext.resolve<IResolutionService>('IResolutionService');

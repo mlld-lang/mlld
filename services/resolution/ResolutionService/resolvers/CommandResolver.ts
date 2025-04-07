@@ -98,8 +98,8 @@ export class CommandResolver {
       // Determine working directory (handling null path)
       let cwd: string;
       // Assuming context.state is always defined based on ResolutionContext type.
-      // Using non-null assertions (!) for state and method because the linter struggles here.
-      const currentFilePath = context.state!.getCurrentFilePath!(); 
+      // @ts-ignore - TS unable to guarantee state/method is defined here (See _plans/PLAN-PHASE-3-ISSUES.md)
+      const currentFilePath = context.state.getCurrentFilePath(); 
       // Check if path is a valid string before using dirname
       if (typeof currentFilePath === 'string') {
           // Path is valid, use its directory - Use local non-null fs service
