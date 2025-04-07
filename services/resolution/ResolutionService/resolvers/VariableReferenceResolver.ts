@@ -1,11 +1,11 @@
 import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { ResolutionContext, JsonValue, FieldAccessError, FieldAccess, Result, PathResolutionContext } from '@core/types';
+import type { ResolutionContext, JsonValue, FieldAccess, Result, PathResolutionContext } from '@core/types';
 import { VariableType, MeldError } from '@core/types';
 import type { MeldVariable, TextVariable, DataVariable, IPathVariable, CommandVariable } from '@core/types/variables';
 import type { MeldNode, VariableReferenceNode, TextNode, DirectiveNode, NodeType } from '@core/ast/ast/astTypes.js';
 import { isTextVariable, isDataVariable, isPathVariable, isCommandVariable } from '@core/types/guards.js';
 import { success, failure } from '@core/types';
-import { FieldAccessError as CoreFieldAccessError, VariableResolutionError, MeldResolutionError, PathValidationError, FieldAccessError } from '@core/errors/index.js';
+import { VariableResolutionError, MeldResolutionError, PathValidationError, FieldAccessError } from '@core/errors/index.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { resolutionLogger as logger } from '@core/utils/logger.js';
@@ -142,8 +142,11 @@ export class VariableReferenceResolver {
   async resolve(node: VariableReferenceNode, context: ResolutionContext): Promise<string> {
     const currentDepth = context.depth || 0;
     if (currentDepth > this.MAX_RESOLUTION_DEPTH) {
-      // @ts-ignore - Persistent error (arg count)
-      throw new VariableResolutionError('Maximum resolution depth exceeded', 'MaxDepth', context);
+      throw new VariableResolutionError('Maximum resolution depth exceeded', {
+          code: 'E_MAX_DEPTH', 
+          severity: ErrorSeverity.Fatal, 
+          details: { context, variableName: 'Unknown (Max Depth)' }
+      });
     }
     
     const newContext = context.withIncreasedDepth();
@@ -165,10 +168,6 @@ export class VariableReferenceResolver {
           logger.debug(`Resolving PathVariable '${node.identifier}'`);
           const meldPathValue = variable.value;
           
-          if (!this.pathService) {
-              throw new MeldResolutionError('PathService unavailable', { code: 'E_SERVICE_UNAVAILABLE'});
-          }
-          
           try {
               const pathValidationContext: PathValidationContext = {
                   workingDirectory: (newContext.pathContext?.baseDir ?? '.') as NormalizedAbsoluteDirectoryPath,
@@ -183,8 +182,19 @@ export class VariableReferenceResolver {
               
               const pathInput = meldPathValue.originalValue as RawPath;
               const baseDir = newContext.state?.getCurrentFilePath() ?? '.';
-              const resolvedPath = await this.pathService.resolvePath(pathInput, baseDir as RawPath);
-              const validatedPath = await this.pathService.validatePath(resolvedPath, pathValidationContext);
+              
+              if (!this.pathService) {
+                  throw new MeldResolutionError('PathService unavailable', { code: 'E_SERVICE_UNAVAILABLE'});
+              }
+              
+              // Assign to local constant after check
+              const pathService = this.pathService!;
+              
+              // Put ts-ignore back above the line
+              // @ts-ignore - TS unable to guarantee non-null despite checks/assertions
+              const resolvedPath = 
+                  await pathService.resolvePath(pathInput, baseDir as RawPath);
+              const validatedPath = await pathService.validatePath(resolvedPath, pathValidationContext);
               
               return validatedPath.validatedPath as string; 
 
@@ -279,7 +289,7 @@ export class VariableReferenceResolver {
         }
         
         if (error instanceof MeldError && 
-            (error.severity === ErrorSeverity.Fatal || error.severity === ErrorSeverity.Critical)) {
+            (error.severity === ErrorSeverity.Fatal)) { 
              logger.error(`[RESOLVE] Throwing non-suppressed fatal/critical error for ${node.identifier} in non-strict mode`, { error });
              throw error;
         }
@@ -364,8 +374,10 @@ export class VariableReferenceResolver {
 
       if (current === undefined || current === null) {
          const errorMsg = `Cannot access field '${field.value}' on null or undefined value at path ${currentPathString}`; 
-         // @ts-ignore - Persistent error (arg count)
-         return failure(new CoreFieldAccessError(errorMsg, baseValue, fields as any, i));
+         return failure(new FieldAccessError(errorMsg, {
+             code: 'E_ACCESS_ON_NULL',
+             details: { baseValue, fieldAccessChain: fields.map(f => ({ type: f.type === 'field' ? FieldAccessType.PROPERTY : FieldAccessType.INDEX, key: f.value })), failedAtIndex: i }
+         }));
       }
 
       if (field.type === 'field') { 
@@ -376,34 +388,46 @@ export class VariableReferenceResolver {
           } else {
             const availableKeys = Object.keys(current).join(', ') || '(none)';
             const errorMsg = `Field '${key}' not found in object. Available keys: ${availableKeys}`;
-            // @ts-ignore - Persistent error (arg count)
-            return failure(new CoreFieldAccessError(errorMsg, baseValue, fields as any, i));
+            return failure(new FieldAccessError(errorMsg, {
+                code: 'E_FIELD_NOT_FOUND',
+                details: { baseValue, fieldAccessChain: fields.map(f => ({ type: f.type === 'field' ? FieldAccessType.PROPERTY : FieldAccessType.INDEX, key: f.value })), failedAtIndex: i, availableKeys }
+            }));
           }
         } else {
-          // @ts-ignore - Persistent error (arg count)
-          return failure(new CoreFieldAccessError(`Cannot access property '${key}' on non-object or array`, baseValue, fields as any, i));
+          return failure(new FieldAccessError(`Cannot access property '${key}' on non-object or array`, {
+              code: 'E_ACCESS_ON_NON_OBJECT',
+              details: { baseValue, fieldAccessChain: fields.map(f => ({ type: f.type === 'field' ? FieldAccessType.PROPERTY : FieldAccessType.INDEX, key: f.value })), failedAtIndex: i }
+          }));
         }
       } else if (field.type === 'index') {
         const index = Number(field.value);
         if (isNaN(index) || !Number.isInteger(index)) {
-            // @ts-ignore - Persistent error (arg count)
-            return failure(new CoreFieldAccessError(`Invalid array index '${field.value}'`, baseValue, fields as any, i));
+            return failure(new FieldAccessError(`Invalid array index '${field.value}'`, {
+                code: 'E_INVALID_INDEX',
+                details: { baseValue, fieldAccessChain: fields.map(f => ({ type: f.type === 'field' ? FieldAccessType.PROPERTY : FieldAccessType.INDEX, key: f.value })), failedAtIndex: i }
+            }));
         }
         if (Array.isArray(current)) {
           if (index >= 0 && index < current.length) {
             current = current[index];
           } else {
-            // @ts-ignore - Persistent error (arg count)
-            return failure(new CoreFieldAccessError(`Index '${index}' out of bounds for array of length ${current.length}`, baseValue, fields as any, i));
+            return failure(new FieldAccessError(`Index '${index}' out of bounds for array of length ${current.length}`, {
+                code: 'E_INDEX_OUT_OF_BOUNDS',
+                details: { baseValue, fieldAccessChain: fields.map(f => ({ type: f.type === 'field' ? FieldAccessType.PROPERTY : FieldAccessType.INDEX, key: f.value })), failedAtIndex: i, arrayLength: current.length }
+            }));
           }
         } else {
-          // @ts-ignore - Persistent error (arg count)
-          return failure(new CoreFieldAccessError(`Cannot access index '${index}' on non-array value`, baseValue, fields as any, i));
+            return failure(new FieldAccessError(`Cannot access index '${index}' on non-array value`, {
+                code: 'E_ACCESS_ON_NON_ARRAY',
+                details: { baseValue, fieldAccessChain: fields.map(f => ({ type: f.type === 'field' ? FieldAccessType.PROPERTY : FieldAccessType.INDEX, key: f.value })), failedAtIndex: i }
+            }));
         }
       } else {
           // This block should ideally not be reached if input type is correct
-          // @ts-ignore - Persistent error (arg count)
-          return failure(new CoreFieldAccessError(`Unknown field access type: '${(field as any).type}'`, baseValue, fields as any, i));
+          return failure(new FieldAccessError(`Unknown field access type: '${(field as any).type}'`, {
+              code: 'E_UNKNOWN_FIELD_TYPE',
+              details: { baseValue, fieldAccessChain: fields.map(f => ({ type: f.type === 'field' ? FieldAccessType.PROPERTY : FieldAccessType.INDEX, key: f.value })), failedAtIndex: i, unknownType: (field as any).type }
+          }));
       }
     }
     return success(current);

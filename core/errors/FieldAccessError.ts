@@ -1,5 +1,5 @@
 import { MeldError, ErrorSeverity, BaseErrorDetails, ErrorSourceLocation } from './MeldError.js';
-import type { FieldAccess } from '@core/types/embed.js'; // Import the FieldAccess type
+import type { FieldAccess } from '@core/types/index.js'; // Correct the import path for FieldAccess
 
 /**
  * Represents an error during field access on a data variable.
