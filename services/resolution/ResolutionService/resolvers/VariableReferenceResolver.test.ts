@@ -83,6 +83,11 @@ describe('VariableReferenceResolver', () => {
         if (name === 'myCmd') return mockMyCmdVar;
         if (name === 'var1') return mockVar1;
         if (name === 'var2') return mockVar2;
+        // Add variables used in edge tests - they are expected to be undefined/not found
+        if ([ 'nested', 'outer', 'user', 'missingVar', 'data', 'var_'].some(prefix => name.startsWith(prefix))) { // Simplified check
+            console.log(`[DEBUG MOCK getVariable] Explicitly returning undefined for edge case var: ${name}`);
+            return undefined;
+        }
         // 'missing' variable is intentionally undefined
         console.log(`[DEBUG MOCK getVariable] NOT FOUND for: ${name}`);
         return undefined;
@@ -124,7 +129,8 @@ describe('VariableReferenceResolver', () => {
     contextDI.registerMock<IPathService>('IPathService', pathService as IPathService); 
     
     // --- Instantiate resolver AFTER mocks are initialized and registered --- 
-    resolver = new VariableReferenceResolver(stateService, pathService as IPathService, resolutionService, parserService); 
+    // resolver = new VariableReferenceResolver(stateService, pathService as IPathService, resolutionService, parserService); 
+    resolver = await contextDI.resolve(VariableReferenceResolver);
 
     context = ResolutionContextFactory.create(stateService, 'test.meld')
                .withStrictMode(true); 
@@ -143,8 +149,7 @@ describe('VariableReferenceResolver', () => {
       const result = await resolver.resolve(node, context);
       
       expect(result).toBe('Hello World');
-      expect(stateService.getTextVar).toHaveBeenCalledWith('greeting');
-      expect(stateService.getDataVar).not.toHaveBeenCalled();
+      expect(stateService.getVariable).toHaveBeenCalledWith('greeting');
     });
 
     it('should resolve data variables using node.valueType', async () => {
@@ -157,8 +162,7 @@ describe('VariableReferenceResolver', () => {
       const result = await resolver.resolve(node, context);
       
       expect(result).toBe(JSON.stringify(mockData)); 
-      expect(stateService.getDataVar).toHaveBeenCalledWith('dataVar');
-      expect(stateService.getTextVar).not.toHaveBeenCalled();
+      expect(stateService.getVariable).toHaveBeenCalledWith('dataVar');
     });
 
     it('should handle field access in data variables', async () => {
@@ -172,24 +176,22 @@ describe('VariableReferenceResolver', () => {
     });
 
     it('should handle array index access in data variables', async () => {
-      // Override mock for this specific test
-      const mockDataForArray = { users: ['Alice', 'Bob'] };
-      const mockDataObjForArray: DataVariable = { name: 'dataObj', type: VariableType.DATA, value: mockDataForArray };
-      stateService.getVariable.calledWith('dataObj').mockResolvedValue(mockDataObjForArray);
-      // Also mock the specific getter if it might be called as fallback
-      stateService.getDataVar.calledWith('dataObj').mockResolvedValue(mockDataObjForArray);
+      // Use the dataObjWithUsers variable defined in beforeEach
+      // No need for test-specific mock overrides anymore
       
       const fieldsDefinition: FieldAccess[] = [
         { type: FieldAccessType.PROPERTY, key: 'users' },
         { type: FieldAccessType.INDEX, key: 1 }
       ];
-      const node = createVariableReferenceNode('dataObj', VariableType.DATA, 
+      // Use 'dataObjWithUsers' identifier
+      const node = createVariableReferenceNode('dataObjWithUsers', VariableType.DATA, 
           fieldsDefinition.map(f => ({ type: f.type === FieldAccessType.PROPERTY ? 'field' : 'index', value: f.key }))
       );
       
       const result = await resolver.resolve(node, context);
       expect(result).toBe('Bob');
-      expect(stateService.getVariable).toHaveBeenCalledWith('dataObj');
+      // Expect getVariable to be called with the correct identifier
+      expect(stateService.getVariable).toHaveBeenCalledWith('dataObjWithUsers');
     });
 
     it('should throw VariableResolutionError for undefined variables in strict mode', async () => {
