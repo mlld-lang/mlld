@@ -236,19 +236,18 @@ export class VariableReferenceResolver {
                       resolvedValueForStringify = fieldAccessResult.value ?? '';
                   } else {
                       if (newContext.strict) {
-                          throw fieldAccessResult.error; 
+                          throw fieldAccessResult.error;
                       }
                       resolvedValueForStringify = '';
                   }
              } else {
                   if (newContext.strict) {
-                      // Update error details to pass node.fields directly and use new details structure
                       const errorMsg = `Cannot access fields on non-data variable '${node.identifier}'`;
                       throw new FieldAccessError(errorMsg, { 
-                         baseValue: variableValue, // Pass the non-data value 
-                         fieldAccessChain: node.fields, // Pass the AST fields directly
-                         failedAtIndex: 0, // Failure occurs at the first field attempt
-                         failedKey: node.fields[0]?.value ?? 'unknown' // Get the first key
+                         baseValue: variableValue, 
+                         fieldAccessChain: node.fields, 
+                         failedAtIndex: 0, 
+                         failedKey: node.fields[0]?.value ?? 'unknown' 
                       });
                   }
                   resolvedValueForStringify = '';
@@ -381,18 +380,18 @@ export class VariableReferenceResolver {
       const currentPathString = fields.slice(0, i + 1).map(f => f.type === 'index' ? `[${f.value}]` : `.${f.value}`).join('');
       logger.debug(`[ACCESS FIELDS] Accessing field: ${currentPathString}`, { currentValueType: typeof current });
 
-      console.log(`[DEBUG accessFields] field.type = ${field.type}, field.value = ${JSON.stringify(field.value)}`);
+      // Use process.stdout.write for debug logging
+      process.stdout.write(`[DEBUG VariableReferenceResolver.accessFields] field.type = ${field.type}, field.value = ${JSON.stringify(field.value)}\n`);
 
       if (current === undefined || current === null) {
          const errorMsg = `Cannot access field '${field.value}' on null or undefined value at path ${currentPathString}`;
-         // Fix: Correct properties in details object
          const errorDetails: FieldAccessErrorDetails = { 
              baseValue,
              fieldAccessChain: fields as any, 
              failedAtIndex: i, 
-             failedKey: field.value // The key/index that failed
+             failedKey: field.value
          };
-         return failure(new FieldAccessError(errorMsg, errorDetails));
+         return Promise.reject(new FieldAccessError(errorMsg, errorDetails));
       }
 
       if (field.type === 'field') { 
@@ -408,40 +407,37 @@ export class VariableReferenceResolver {
             const availableKeys = Object.keys(current).join(', ') || '(none)';
             const errorMsg = `Field '${key}' not found in object. Available keys: ${availableKeys}`;
             logger.warn(`[ACCESS FIELDS] Error: ${errorMsg}`); // Log warning before failure
-            // Fix: Correct properties in details object
             const errorDetails: FieldAccessErrorDetails = { 
                 baseValue: current, // The object being accessed
                 fieldAccessChain: fields as any, 
                 failedAtIndex: i, 
                 failedKey: key // The key that failed
             };
-            return failure(new FieldAccessError(errorMsg, errorDetails));
+            return Promise.reject(new FieldAccessError(errorMsg, errorDetails));
           }
         } else {
           // Log type issue
           logger.warn(`[ACCESS FIELDS] Error: Cannot access property '${key}' on non-object/array`, { currentType: typeof current, isArray: Array.isArray(current) });
-          // Fix: Correct properties in details object
           const errorDetails: FieldAccessErrorDetails = { 
               baseValue: current, // The non-object value
               fieldAccessChain: fields as any, 
               failedAtIndex: i, 
               failedKey: key // The key that failed
           };
-          return failure(new FieldAccessError(`Cannot access property '${key}' on non-object or array`, errorDetails));
+          return Promise.reject(new FieldAccessError(`Cannot access property '${key}' on non-object or array`, errorDetails));
         }
       } else if (field.type === 'index') {
         const index = Number(field.value);
         logger.debug(`[ACCESS FIELDS] Processing field type 'index'`, { index, currentType: typeof current }); // Log current type
         if (isNaN(index) || !Number.isInteger(index)) {
-            logger.warn(`[ACCESS FIELDS] Error: Invalid array index '${field.value}'`); // Log warning
-            // Fix: Correct properties in details object
+            logger.warn(`[ACCESS FIELDS] Error: Invalid array index '${field.value}'`);
             const errorDetails: FieldAccessErrorDetails = { 
-                baseValue: current, // The value being accessed
+                baseValue: current,
                 fieldAccessChain: fields as any, 
                 failedAtIndex: i, 
-                failedKey: field.value // The invalid index value
+                failedKey: field.value
             };
-            return failure(new FieldAccessError(`Invalid array index '${field.value}'`, errorDetails));
+            return Promise.reject(new FieldAccessError(`Invalid array index '${field.value}'`, errorDetails));
         }
         if (Array.isArray(current)) {
           logger.debug(`[ACCESS FIELDS] Checking index '${index}' on array`, { length: current.length }); // Log array length
@@ -450,39 +446,37 @@ export class VariableReferenceResolver {
             logger.debug(`[ACCESS FIELDS] Index '${index}' found. New current value: ${JSON.stringify(current)}`); // Log new value
           } else {
             logger.warn(`[ACCESS FIELDS] Error: Index '${index}' out of bounds for array`, { length: current.length }); // Log warning
-            // Fix: Correct properties in details object
             const errorDetails: FieldAccessErrorDetails = { 
-                baseValue: current, // The array being accessed
+                baseValue: current,
                 fieldAccessChain: fields as any, 
                 failedAtIndex: i, 
-                failedKey: index // The index that failed
+                failedKey: index
             };
-            return failure(new FieldAccessError(`Index '${index}' out of bounds for array of length ${current.length}`, errorDetails));
+            return Promise.reject(new FieldAccessError(`Index '${index}' out of bounds for array of length ${current.length}`, errorDetails));
           }
         } else {
           logger.warn(`[ACCESS FIELDS] Error: Cannot access index '${index}' on non-array value`, { currentType: typeof current }); // Log warning
-          // Fix: Correct properties in details object
-          const errorDetails: FieldAccessErrorDetails = { 
-              baseValue: current, // The non-array value
-              fieldAccessChain: fields as any, 
-              failedAtIndex: i, 
-              failedKey: index // The index that failed
-          };
-          return failure(new FieldAccessError(`Cannot access index '${index}' on non-array value`, errorDetails));
-        }
-      } else {
-          const unknownType = (field as any).type;
-          // Fix: Correct properties in details object
           const errorDetails: FieldAccessErrorDetails = { 
               baseValue: current,
               fieldAccessChain: fields as any, 
               failedAtIndex: i, 
-              failedKey: 'unknown' // Indicate unknown key type
+              failedKey: index
           };
-          return failure(new FieldAccessError(`Unknown field access type: '${unknownType}'`, errorDetails));
+          return Promise.reject(new FieldAccessError(`Cannot access index '${index}' on non-array value`, errorDetails));
+        }
+      } else {
+          const unknownType = (field as any).type;
+          const errorDetails: FieldAccessErrorDetails = { 
+              baseValue: current,
+              fieldAccessChain: fields as any, 
+              failedAtIndex: i, 
+              failedKey: 'unknown'
+          };
+          return Promise.reject(new FieldAccessError(`Unknown field access type: '${unknownType}'`, errorDetails));
       }
     }
-    logger.debug(`[ACCESS FIELDS EXIT] Completed successfully. Final value: ${JSON.stringify(current)}`); // Log final value
+    // Use process.stdout.write for debug logging
+    process.stdout.write(`[DEBUG VariableReferenceResolver.accessFields EXIT] Completed successfully. Final value: ${JSON.stringify(current)}\n`);
     return success(current);
   }
 
