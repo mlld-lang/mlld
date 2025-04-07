@@ -425,15 +425,19 @@ export class ResolutionService implements IResolutionService {
           // Use process.stdout.write for debug logging
           process.stdout.write(`[DEBUG ResolutionService.resolveNodes] Found VariableReferenceNode: ${JSON.stringify(node)}\n`);
           const resolvedValue = await this.variableReferenceResolver.resolve(node as VariableReferenceNode, context);
+          // Add log AFTER await
+          logger.debug(`[resolveNodes] Successfully resolved node ${node.identifier}, value starts: ${resolvedValue.substring(0, 30)}`);
           // Use process.stdout.write for debug logging
           process.stdout.write(`[DEBUG ResolutionService.resolveNodes] Resolved value for ${node.identifier}: ${resolvedValue.substring(0,100)}\n`);
           resolvedParts.push(resolvedValue);
         } catch (error) {
            logger.error(`resolveNodes: Error resolving individual node ${ (node as VariableReferenceNode).identifier }`, { error });
            if (context.strict) {
-             throw error; // Re-throw original error temporarily
+             // Revert: Use Promise.reject instead of throw to preserve error object?
+             // throw error;
+             return Promise.reject(error); 
            } else {
-             resolvedParts.push(''); // Append empty string in non-strict mode
+             resolvedParts.push(''); // Non-strict
            }
          }
        } else {
@@ -457,42 +461,52 @@ export class ResolutionService implements IResolutionService {
     logger.debug(`resolveText called`, { text: text.substring(0, 50), contextFlags: context.flags });
     
     // Optimization: If no variable syntax, return text directly
-    if (!text.includes('{{') && !text.includes('$')) { // Added check for $ for potential path/command vars
+    if (!text.includes('{{') && !text.includes('$')) { 
         logger.debug('resolveText: Input contains no variable markers, returning original text.');
         return text; 
     }
 
-    try {
+    // Remove outer try...catch, handle rejection with .catch()
+    // try {
       // 1. Parse the input string into nodes
       const nodes = await this.parseForResolution(text, context);
       logger.debug(`resolveText: Parsed into ${nodes.length} nodes. Delegating to resolveNodes.`);
       
-      // 2. Delegate node resolution to the core internal method
-      return await this.resolveNodes(nodes, context);
+      // 2. Delegate node resolution and add explicit .catch handler
+      return await this.resolveNodes(nodes, context)
+        .catch(error => {
+            logger.error('resolveText explicit .catch handler triggered', { error });
+            if (context.strict) {
+                // Add detailed logging of the caught error object using stdout
+                process.stdout.write(`\n[resolveText .catch STDOUT] Inspecting caught error:\n`);
+                process.stdout.write(`  Error Name: ${(error as Error)?.name}\n`);
+                process.stdout.write(`  Error Code: ${(error as any)?.code}\n`);
+                process.stdout.write(`  Error Message: ${(error as Error)?.message}\n`);
+                process.stdout.write(`  Error Object: ${JSON.stringify(error)}\n`);
 
-    } catch (error) {
-      // Catch errors from parsing or re-thrown strict errors from resolveNodes
-      logger.error('resolveText failed', { error });
-      if (context.strict) {
-          // Fix: Refine duck-typing check
-          if (error && typeof error === 'object' && 'code' in error && 'message' in error && 'name' in error) {
-             logger.debug('[resolveText CATCH] Re-throwing original MeldError (duck-typed)', { name: error.name, code: (error as MeldError).code });
-             throw error; // Re-throw original FieldAccessError, VariableResolutionError etc.
-          } else {
-              // Log the unexpected error object itself
-              logger.debug('[resolveText CATCH] Wrapping unexpected error object:', { errorObject: error });
-              // Wrap only if it doesn't look like a MeldError
-              logger.debug('[resolveText CATCH] Wrapping non-MeldError (duck-typed)');
-              const meldError = new MeldResolutionError('Failed to resolve text', { 
-                  code: 'E_RESOLVE_TEXT_FAILED',
-                  details: { originalText: text, context },
-                  cause: error 
-              });
-              throw meldError;
-          }
-      }
-      return text; // Return original text if not strict
-    }
+                // Generalize duck-typing check to re-throw any MeldError-like object
+                if (error instanceof Error && 'code' in error && 'name' in error) { 
+                    process.stdout.write(`[resolveText .catch STDOUT] Re-throwing original MeldError (duck-typed), Name: ${error.name}, Code: ${(error as MeldError).code}\n`);
+                    throw error; // Re-throw original MeldError
+                } else {
+                    // Wrap truly unexpected errors
+                    const errorName = error instanceof Error ? error.name : 'Unknown Type';
+                    const errorCode = typeof error === 'object' && error !== null && 'code' in error ? (error as any).code : 'Unknown Code';
+                    process.stdout.write(`[resolveText .catch STDOUT] Error did not look like MeldError, wrapping. Name: ${errorName}, Code: ${errorCode}\n`);
+                    const meldError = new MeldResolutionError('Failed to resolve text', { 
+                        code: 'E_RESOLVE_TEXT_FAILED',
+                        details: { originalText: text, context },
+                        cause: error 
+                    });
+                    throw meldError;
+                }
+            }
+            return text; // Return original text if not strict
+        });
+
+    // } catch (error) { // Removed old try...catch block
+    //  // ... (old logic removed) ...
+    // }
   }
 
   /**
@@ -618,8 +632,8 @@ export class ResolutionService implements IResolutionService {
           if (result.success) {
               finalValue = result.value;
           } else {
-              // Fix: If accessFields failed, reject with its specific error
-              return Promise.reject(result.error);
+              // Fix: Throw the error so the catch block handles it, instead of returning rejected promise
+              throw result.error; 
           }
       } else {
           // No fields, return the base value
@@ -632,15 +646,13 @@ export class ResolutionService implements IResolutionService {
     } catch (error) {
       logger.error('resolveData failed', { error, ref });
       if (context.strict) {
-        // Fix: Re-throw caught MeldErrors directly or reject if necessary?
-        // Let's keep throw here for now, as Promise.reject should happen earlier.
-        if (error instanceof MeldError) {
-            throw error; // Re-throw original FieldAccessError, VariableResolutionError etc.
+        // Generalize duck-typing check to re-throw any MeldError-like object
+        if (error instanceof Error && 'code' in error && 'name' in error) { 
+            logger.debug('[resolveData CATCH] Re-throwing original MeldError (duck-typed)', { name: error.name, code: (error as MeldError).code });
+            throw error; // Re-throw original MeldError
         } else {
-            // Log the unexpected error object itself
-            logger.debug('[resolveData CATCH] Wrapping unexpected error object:', { errorObject: error });
-            // Wrap only if it doesn't look like a MeldError
-            logger.debug('[resolveData CATCH] Wrapping non-MeldError (duck-typed)');
+            // Wrap truly unexpected errors
+            logger.warn('[resolveData CATCH] Wrapping non-MeldError (duck-typed)', { errorName: (error as Error)?.name });
             const meldError = new MeldResolutionError(`Failed to resolve data reference: ${ref}`, {
                 code: 'E_RESOLVE_DATA_FAILED',
                 details: { reference: ref, context },

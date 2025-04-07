@@ -787,6 +787,7 @@ describe('ResolutionService', () => {
          return [{ type: 'Text', content: text, location: mockLocation } as TextNode]; // Add location
       });
 
+      // Original test using expectToThrowWithConfig
       await expectToThrowWithConfig(async () => {
         // Accessing 'address' which doesn't exist on the user object
         await service.resolveText('{{user.address}}', strictContext);
