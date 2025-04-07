@@ -892,14 +892,16 @@ describe('ResolutionService', () => {
           if (!mockTextNodeFactory) throw new Error('Mock TextNodeFactory not initialized');
          return [mockTextNodeFactory.createTextNode(text, mockLocation)];
       });
+      // Fix: Use strict context
+      const strictContext = defaultContext.withStrictMode(true);
       await expectToThrowWithConfig(async () => {
-        await service.resolvePath('$nonexistent', defaultContext);
+        // Fix: Pass strict context
+        await service.resolvePath('$nonexistent', strictContext);
       }, {
-        // Fix: Expect PathValidationError as resolvePath wraps the error
-        type: 'PathValidationError', 
-        code: 'E_PATH_VALIDATION_FAILED', // resolvePath uses this code when wrapping
-        // messageContains: 'Variable not found: nonexistent' // Original message is in the cause
-        messageContains: 'Path validation failed during resolution' // Message from resolvePath wrapper
+        // Fix: Revert expectation to VariableResolutionError
+        type: 'VariableResolutionError', 
+        code: 'E_VAR_NOT_FOUND', 
+        messageContains: 'Path variable not found: nonexistent' // Message from validatePath mock throw
       });
     });
   });
