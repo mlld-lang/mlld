@@ -536,7 +536,89 @@ VarFormat
     return format;
   }
 
-// <<< START EDIT --- Move Helper Rules Before Directive --- >>>
+// --- Interpolation Rules ---
+
+// Double Quotes
+DoubleQuoteAllowedLiteralChar
+  = !('"' / '{{' / '\\') char:. { return char; } // Not quote, not var start, not escape
+  / '\\' esc:. { return '\\' + esc; }          // Allow escaped characters
+
+DoubleQuoteLiteralTextSegment
+  = chars:DoubleQuoteAllowedLiteralChar+ {
+      return createNode(NodeType.Text, { content: chars.join('') }, location());
+    }
+
+DoubleQuoteInterpolatableContent
+  = parts:(DoubleQuoteLiteralTextSegment / Variable)+ {
+      // TODO: Add combineAdjacentTextNodes(parts) helper call here later?
+      return parts;
+    }
+
+DoubleQuoteInterpolatableContentOrEmpty
+  = result:DoubleQuoteInterpolatableContent? {
+      return result || [];
+    }
+
+// Single Quotes
+SingleQuoteAllowedLiteralChar
+  = !('\'' / '{{' / '\\') char:. { return char; }
+  / '\\' esc:. { return '\\' + esc; }
+
+SingleQuoteLiteralTextSegment
+  = chars:SingleQuoteAllowedLiteralChar+ {
+      return createNode(NodeType.Text, { content: chars.join('') }, location());
+    }
+
+SingleQuoteInterpolatableContent
+  = parts:(SingleQuoteLiteralTextSegment / Variable)+ {
+      return parts;
+    }
+
+SingleQuoteInterpolatableContentOrEmpty
+  = result:SingleQuoteInterpolatableContent? {
+      return result || [];
+    }
+
+// Backticks (Template Literals)
+BacktickAllowedLiteralChar
+  = !('`' / '{{' / '\\') char:. { return char; }
+  / '\\' esc:. { return '\\' + esc; }
+
+BacktickLiteralTextSegment
+  = chars:BacktickAllowedLiteralChar+ {
+      return createNode(NodeType.Text, { content: chars.join('') }, location());
+    }
+
+BacktickInterpolatableContent
+  = parts:(BacktickLiteralTextSegment / Variable)+ {
+      return parts;
+    }
+
+BacktickInterpolatableContentOrEmpty
+  = result:BacktickInterpolatableContent? {
+      return result || [];
+    }
+
+// Multiline [[...]]
+MultilineAllowedLiteralChar
+  = !']]' !'{{' char:. { return char; } // Not end delimiter, not var start
+
+MultilineLiteralTextSegment
+  = chars:MultilineAllowedLiteralChar+ {
+      return createNode(NodeType.Text, { content: chars.join('') }, location());
+    }
+
+MultilineInterpolatableContent
+  = parts:(MultilineLiteralTextSegment / Variable)+ {
+      return parts;
+    }
+
+MultilineInterpolatableContentOrEmpty
+  = result:MultilineInterpolatableContent? {
+      return result || [];
+    }
+
+// --- End Interpolation Rules ---
 
 // Helper rule for parsing RHS @embed variations
 // Returns { subtype: '...', ... } structure without 'source' field.
