@@ -269,6 +269,20 @@ describe('ResolutionService', () => {
          if (text === '{{var1}}') return [{ type: 'VariableReference', identifier: 'var1', valueType: VariableType.TEXT, fields: [], isVariableReference: true, location: mockLocation } as VariableReferenceNode]; // Fix structure
          if (text === '{{var2}}') return [{ type: 'VariableReference', identifier: 'var2', valueType: VariableType.TEXT, fields: [], isVariableReference: true, location: mockLocation } as VariableReferenceNode]; // Fix structure
          
+         // Add handler for command syntax
+         const commandMatch = text.match(/^\$?([^\(\]]+)\((.*)\)$/);
+         if (commandMatch) {
+            const cmdIdentifier = commandMatch[1];
+            const cmdArgsString = commandMatch[2];
+            // Basic arg parsing (same as resolveInContext)
+            const cmdArgs = cmdArgsString ? cmdArgsString.split(',').map(arg => arg.trim()).filter(arg => arg !== '') : [];
+            if (!mockVariableNodeFactory) throw new Error('Mock VariableNodeFactory not initialized');
+            // Fix: Need to handle `fields` vs `args` correctly in VariableReferenceNode type/factory if they differ
+            // Assuming args are stored differently or node type changes based on context
+            // For now, create a node indicating COMMAND type
+            return [mockVariableNodeFactory.createVariableReferenceNode(cmdIdentifier, VariableType.COMMAND, [], cmdArgs, mockLocation)];
+         }
+
          // Add handlers for specific field access tests
          if (text === '{{user.address}}') {
             if (!mockVariableNodeFactory) throw new Error('Mock VariableNodeFactory not initialized');
@@ -550,9 +564,9 @@ describe('ResolutionService', () => {
       // - fileSystemService.executeCommand is mocked
 
       // Assuming CommandResolver internally calls executeCommand
-      vi.mocked(fileSystemService.executeCommand).mockResolvedValue({ stdout: 'echo test output', stderr: '' });
+      vi.mocked(fileSystemService.executeCommand).mockResolvedValue({ stdout: 'test', stderr: '' });
 
-      const result = await service.resolveText('$echo(test)', defaultContext);
+      const result = await service.resolveInContext('$echo(test)', defaultContext);
 
       // Fix: Update expected output to match actual echo behavior
       expect(result).toBe('test');

@@ -1,5 +1,6 @@
 import type { IStateService } from '@services/state/StateService/IStateService.js';
-import { ResolutionContext, VariableType } from '@core/types';
+import { ResolutionContext } from '@core/types/resolution.js';
+import { VariableType } from '@core/types/variables';
 import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
@@ -53,7 +54,7 @@ export class CommandResolver {
 
     // 2. Substitute parameters into the template
     let commandString = definition.commandTemplate; 
-    // const paramMap = this.createParamMap(definition.parameters, args);
+    const paramMap = this.createParamMap(definition.parameters, args);
 
     // Fix: Implement simple shell-style argument substitution for now
     // Replace "$@" with all arguments joined by space
@@ -63,14 +64,12 @@ export class CommandResolver {
       commandString = commandString.replace('"$@"', quotedArgs.join(' '));
     }
     // TODO: Implement positional parameter substitution ($1, $2, etc.) if needed
-    /* Original loop assuming {{param}} syntax:
     for (const param of definition.parameters) {
       const value = paramMap.get(param.name) ?? param.defaultValue ?? ''; // Use provided arg, then default, then empty
       const placeholder = `{{${param.name}}}`; 
       // Use regex for global replacement
       commandString = commandString.replace(new RegExp(placeholder.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'), 'g'), value);
     }
-    */
 
     // 3. Check for leftover placeholders (optional, but good practice)
     // Note: This check might need adjustment if we support complex shell syntax

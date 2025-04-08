@@ -916,30 +916,30 @@ export class ResolutionService implements IResolutionService {
 
     // 3. Proceed with resolution based on determined type (or best guess)
     try {
-        if (intendedType === VariableType.PATH) {
+        // Parse inside the try block
+        const nodes = await this.parseForResolution(valueString, context);
+        logger.debug(`resolveInContext: Parsed into ${nodes.length} nodes.`);
+
+        // Trust parser if it identified the type
+        const parsedNodeType = nodes.length === 1 && nodes[0].type === 'VariableReference' ? (nodes[0] as VariableReferenceNode).valueType : null;
+        
+        if (parsedNodeType === VariableType.PATH || (!parsedNodeType && intendedType === VariableType.PATH)) {
             const meldPath = await this.resolvePath(valueString, context);
             return meldPath.validatedPath as string;
-        } else if (intendedType === VariableType.COMMAND) {
-            // Extract command name properly (remove potential trailing parens and leading $)
-            const commandNameMatch = valueString.match(/^\$?([^\(]+)/);
-            const commandName = commandNameMatch ? commandNameMatch[1] : '';
-            
-            // Fix: Parse arguments from within parentheses
-            let args: string[] = [];
-            const argsMatch = valueString.match(/\((.*)\)/);
-            if (argsMatch && argsMatch[1]) {
-              // Very basic split by comma, trim whitespace. Doesn't handle quoted commas etc.
-              args = argsMatch[1].split(',').map(arg => arg.trim()).filter(arg => arg !== '');
-            }
-            logger.debug(`[resolveInContext] Parsed command`, { commandName, args });
-            
+        } else if (parsedNodeType === VariableType.COMMAND || (!parsedNodeType && intendedType === VariableType.COMMAND)) {
+            const node = nodes.length === 1 && nodes[0].type === 'VariableReference' ? nodes[0] as VariableReferenceNode : null;
+            const commandName = node ? node.identifier : (valueString.match(/^\$?([^\(]+)/)?.[1] || '');
+            // Use args from parsed node if available, otherwise parse from string
+            const args = node?.args || (valueString.match(/\((.*)\)/)?.[1]?.split(',').map(arg => arg.trim()).filter(arg => arg !== '') || []);
+            logger.debug(`[resolveInContext] Calling resolveCommand`, { commandName, args });
             return await this.resolveCommand(commandName, args, context);
-        } else if (intendedType === VariableType.DATA) {
-            // If syntax was dot/bracket, resolve as data
-            const resolvedData = await this.resolveData(valueString, context);
-            return await this.convertToFormattedString(resolvedData, context);
-        } else {
-             // Fallback to text resolution (handles {{var}}, simple data vars if TEXT allowed, plain text)
+        } else if (parsedNodeType === VariableType.DATA || (!parsedNodeType && intendedType === VariableType.DATA)) { 
+             // Resolve as data if parser said DATA, or if syntax looked like data access
+             const resolvedData = await this.resolveData(valueString, context);
+             return await this.convertToFormattedString(resolvedData, context);
+        } else { 
+             // Fallback to text resolution (handles TEXT type from parser, {{var}}, simple vars, plain text)
+             logger.debug(`[resolveInContext] Falling back to resolveText`);
              return await this.resolveText(valueString, context);
         }
     } catch (error) {

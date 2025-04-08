@@ -1,27 +1,30 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { VariableReferenceResolver } from '@services/resolution/ResolutionService/resolvers/VariableReferenceResolver.js';
 
-// Corrected Import Paths
+// --- Corrected Core Type Imports ---
+import type { JsonValue, Result } from '@core/types';
+import { MeldError } from '@core/types'; // Keep MeldError if needed
+import type { ResolutionContext, PathResolutionContext } from '@core/types/resolution.js'; 
 import {
-  ResolutionContext, 
-  VariableType,
-  FieldAccess,
-  FieldAccessType,
-  MeldPath,
-  PathContentType,
-  ValidatedResourcePath,
-  unsafeCreateValidatedResourcePath,
-  TextVariable, 
-  DataVariable, 
-  IPathVariable,
-  CommandVariable, 
-  MeldVariable,
-  StructuredPath,
-  PathResolutionContext
-} from '@core/types/index.js';
+    VariableType, 
+    type MeldVariable, 
+    type TextVariable, 
+    type DataVariable, 
+    type IPathVariable, 
+    type CommandVariable
+} from '@core/types/variables';
+import {
+    MeldPath,
+    PathContentType,
+    ValidatedResourcePath,
+    unsafeCreateValidatedResourcePath,
+    type IFilesystemPathState // Keep if needed
+} from '@core/types/paths';
+// Removed incorrect/conflicting imports from @core/types/index.js
+
+// --- Other Imports ---
 import type { VariableReferenceNode } from '@core/ast/ast/astTypes.js';
 import { MeldResolutionError, FieldAccessError, VariableResolutionError } from '@core/errors/index.js';
-
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IPathService } from '@services/fs/PathService/IPathService.js';
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js'; 
@@ -32,8 +35,7 @@ import { ResolutionContextFactory } from '@services/resolution/ResolutionService
 import { expectToThrowWithConfig } from '@tests/utils/ErrorTestUtils.js'; 
 import { createVariableReferenceNode } from '@tests/utils/testFactories.js';
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
-// Import IFilesystemPathState for explicit typing
-import type { IFilesystemPathState } from '@core/types/paths.js'; 
+// Removed duplicate import of IFilesystemPathState
 
 describe('VariableReferenceResolver', () => {
   let contextDI: TestContextDI;
@@ -177,20 +179,14 @@ describe('VariableReferenceResolver', () => {
 
     it('should handle array index access in data variables', async () => {
       // Use the dataObjWithUsers variable defined in beforeEach
-      // No need for test-specific mock overrides anymore
-      
-      const fieldsDefinition: FieldAccess[] = [
-        { type: FieldAccessType.PROPERTY, key: 'users' },
-        { type: FieldAccessType.INDEX, key: 1 }
-      ];
-      // Use 'dataObjWithUsers' identifier
-      const node = createVariableReferenceNode('dataObjWithUsers', VariableType.DATA, 
-          fieldsDefinition.map(f => ({ type: f.type === FieldAccessType.PROPERTY ? 'field' : 'index', value: f.key }))
+
+      // Pass AstField-like structure directly to createVariableReferenceNode
+      const node = createVariableReferenceNode('dataObjWithUsers', VariableType.DATA,
+          [{ type: 'field', value: 'users' }, { type: 'index', value: 1 }]
       );
-      
+
       const result = await resolver.resolve(node, context);
       expect(result).toBe('Bob');
-      // Expect getVariable to be called with the correct identifier
       expect(stateService.getVariable).toHaveBeenCalledWith('dataObjWithUsers');
     });
 
@@ -236,18 +232,13 @@ describe('VariableReferenceResolver', () => {
     it('should return empty string on invalid field access in non-strict mode', async () => {
       const mockData = { user: { name: 'Alice' } };
       const mockVar: DataVariable = { name: 'dataObj', type: VariableType.DATA, value: mockData };
-      const fieldsDefinition: FieldAccess[] = [
-        { type: FieldAccessType.PROPERTY, key: 'user' },
-        { type: FieldAccessType.INDEX, key: 10 }
-      ];
-      const node = createVariableReferenceNode('dataObj', VariableType.DATA, 
-          fieldsDefinition.map(f => ({
-             type: f.type === FieldAccessType.PROPERTY ? 'field' : 'index',
-             value: f.key
-           }))
+
+      // Pass AstField-like structure directly to createVariableReferenceNode
+      const node = createVariableReferenceNode('dataObj', VariableType.DATA,
+          [{ type: 'field', value: 'user' }, { type: 'index', value: 10 }]
       );
 
-      stateService.getDataVar.calledWith('dataObj').mockResolvedValue(mockVar);
+      stateService.getDataVar.calledWith('dataObj').mockResolvedValue(mockVar); // Ensure this mock remains if needed
       const nonStrictContext = ResolutionContextFactory.create(stateService, 'test.meld')
                                  .withStrictMode(false);
 
