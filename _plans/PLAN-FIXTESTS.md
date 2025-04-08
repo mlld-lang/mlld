@@ -16,14 +16,18 @@ This plan tracks the remaining test failures after addressing the bulk of issues
     *   **Reason:** Failure in context/source location propagation, likely related to Phase 1/2 changes.
     *   **Original Plan Index:** #4 (#24).
 
-3.  **`services/pipeline/DirectiveService/DirectiveService.test.ts` Interpolation Failures:**
-    *   **Errors:**
+3.  **[DEFERRED - Requires Test Refactor] `services/pipeline/DirectiveService/DirectiveService.test.ts` Interpolation Failures:**
+    *   **Original Errors:**
         *   `should process text directive with variable interpolation`: `expected 'Hello {{name}}' to be 'Hello World'`.
-        *   `should process data directive with variable interpolation`: `Directive error (data): Error processing data directive: object is not iterable...`.
-    *   **Reason:** 
-        *   Text interpolation: The `TextDirectiveHandler` is not resolving variables (e.g., `{{name}}`) within the directive's content before setting the state variable. It needs to call the resolution service.
-        *   Data interpolation: The `DataDirectiveHandler` likely has a bug related to handling non-iterable values during processing or interpolation.
-    *   **Original Plan Index:** #5 / #9 (Text), plus data handling issue.
+        *   `should process data directive with variable interpolation`: `Directive error (data): Error processing data directive: object is not iterable...` (later changed to `expected { greeting: 'Hello [object Object]' } to deeply equal { greeting: 'Hello Alice' }`).
+    *   **Debugging Journey & Diagnosis:**
+        *   Initial hypothesis was that `TextDirectiveHandler` wasn't resolving variables. Simplified handler logic, but text failure persisted.
+        *   Initial data interpolation failure ("not iterable") was traced to incorrect `ResolutionContext` creation (using object instead of array for `allowedVariableTypes`). Fixed by using `ResolutionContextFactory`.
+        *   Data interpolation failure then changed to `Hello [object Object]` vs `Hello Alice`, pointing to incorrect stringification in `VariableReferenceResolver.resolve`.
+        *   Corrected `VariableReferenceResolver.resolve` to return the `.value` of `TextVariable` instead of using `String()`. Text interpolation failure *still* persisted (`Hello {{name}}`) and data interpolation failure reverted (`Hello [object Object]`).
+        *   Further investigation revealed the `DirectiveService.test.ts` suite uses an outdated `TestContext` setup, likely lacks mocks for `IResolutionService`, and implicitly uses the *real* `ResolutionService`. This means the fixes to `ResolutionService` and its resolvers might be correct, but the test environment itself is flawed, causing inconsistent behavior and masking the true state. The handlers likely receive an improperly configured or non-functional `ResolutionService` instance in this test.
+    *   **Status:** Deferred pending refactor of `DirectiveService.test.ts` to use `TestContextDI`.
+    *   **Original Plan Index:** #5 / #9, plus data handling issue.
 
 4.  **[RESOLVED] `services/resolution/ResolutionService/resolvers/CommandResolver.test.ts` Mock Execution Failures:**
     *   **Original Errors:** `executeCommand` mock (`fileSystemService.executeCommand`) not called as expected in tests for substituting required/all args.
@@ -46,7 +50,8 @@ This plan tracks the remaining test failures after addressing the bulk of issues
 *   **GH#25:** Deferred linter errors suppressed with `@ts-ignore`.
 *   **GH#26:** Incomplete `detectCircularReferences` implementation.
 *   **GH#27:** Inconsistent DI usage across various test files.
+*   **GH#TBD:** `DirectiveService.test.ts` needs refactoring to use `TestContextDI`.
 
 **Recommendation:**
 
-Focus on fixing the failures in `VariableReferenceResolver` (Item #1, excluding GH#24) and `CommandResolver` (Item #4) first, as these are core components of the resolution process. Then address the `DirectiveService` (Item #3) and `OutputService` (Item #5) issues. Finally, tackle the context propagation issue (Item #2) and unskip/update the `InterpreterService` integration tests (Item #6).
+Focus on the remaining non-deferred, non-test-setup failures: `OutputService` (Item #5) and the context propagation issue (Item #2). Then address the skipped `InterpreterService` tests (Item #6). The `DirectiveService` test refactor (Item #3 / GH#TBD) should be tackled as a separate effort.

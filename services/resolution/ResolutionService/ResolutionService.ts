@@ -1,10 +1,17 @@
 import * as path from 'path';
-import type { IStateService } from '@services/state/StateService/IStateService';
+import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
 import type { ResolutionContext, FormattingContext } from '@core/types/resolution.js';
+import {
+    VariableType, 
+    type MeldVariable, 
+    type TextVariable, 
+    type DataVariable, 
+    type IPathVariable, 
+    type CommandVariable
+} from '@core/types/variables';
 import { 
   JsonValue, 
-  VariableType,
   PathPurpose,
   Result,
   success,
@@ -14,11 +21,6 @@ import {
   StructuredPath, 
   ValidatedResourcePath, 
   PathValidationContext, 
-  MeldVariable, 
-  TextVariable, 
-  DataVariable, 
-  IPathVariable, 
-  CommandVariable, 
   SourceLocation,
   MeldError,
   ErrorSeverity,
@@ -423,16 +425,20 @@ export class ResolutionService implements IResolutionService {
       if (node.type === 'Text') {
         resolvedParts.push((node as TextNode).content);
       } else if (node.type === 'VariableReference') {
+        // Move log BEFORE the try block
+        logger.info('[resolveNodes] Attempting to resolve VariableReferenceNode:', { 
+            identifier: node.identifier, 
+            contextHasState: !!context.state, 
+            stateGreetingVar: context.state?.getTextVar('greeting')?.value, // Check if greeting is there
+            stateNameVar: context.state?.getTextVar('name')?.value // Check if name is there
+        });
         try {
-          // Use process.stdout.write for debug logging
-          process.stdout.write(`[DEBUG ResolutionService.resolveNodes] Found VariableReferenceNode: ${JSON.stringify(node)}\n`);
-          // ADD LOGGING HERE
-          logger.info('[resolveNodes] Attempting to resolve VariableReferenceNode:', { 
-              identifier: node.identifier, 
-              contextHasState: !!context.state, 
-              stateGreetingVar: context.state?.getTextVar('greeting')?.value, // Check if greeting is there
-              stateNameVar: context.state?.getTextVar('name')?.value // Check if name is there
-          });
+          // Remove this potentially problematic log
+          // process.stdout.write(`[DEBUG ResolutionService.resolveNodes] Found VariableReferenceNode: ${JSON.stringify(node)}\n`);
+          
+          // Logging to check context (now happens before try)
+          // logger.info('[resolveNodes] Attempting to resolve VariableReferenceNode:', { ... });
+
           const resolvedValue = await this.variableReferenceResolver.resolve(node as VariableReferenceNode, context);
           // Add log AFTER await
           logger.debug(`[resolveNodes] Successfully resolved node ${node.identifier}, value starts: ${resolvedValue.substring(0, 30)}`);

@@ -38,6 +38,9 @@ export interface ResolutionContext {
   /** Path resolution context for path handling */
   readonly pathContext?: PathResolutionContext;
   
+  /** The absolute path of the file being processed */
+  readonly currentFilePath?: string;
+  
   /** Parser-specific flags */
   readonly parserFlags?: ParserFlags;
   

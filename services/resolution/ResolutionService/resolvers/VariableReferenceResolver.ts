@@ -213,6 +213,7 @@ export class VariableReferenceResolver {
       else {
           let variableValue: JsonValue | string | undefined;
           let dataForAccess: JsonValue | undefined;
+          let originalVariable = variable; // Keep reference to original variable object
           
           if (isTextVariable(variable)) {
               variableValue = variable.value;
@@ -220,25 +221,25 @@ export class VariableReferenceResolver {
               variableValue = variable.value;
               dataForAccess = variable.value;
           } else {
+              // This case should ideally not be hit if variable type checks are exhaustive
               throw new VariableResolutionError(`Unexpected variable type for ${node.identifier}`, { 
                 code: 'E_UNEXPECTED_TYPE', 
                 details: { variableName: node.identifier }
               });
           }
 
-          let resolvedValueForStringify: JsonValue | string;
+          let finalResolvedValue: JsonValue | string | undefined;
           
           if (node.fields && node.fields.length > 0) {
              if (dataForAccess !== undefined) {
-                  // Pass node.fields (AstField[]) directly to accessFields
                   const fieldAccessResult = await this.accessFields(dataForAccess, node.fields, node.identifier, newContext);
                   if (fieldAccessResult.success) {
-                      resolvedValueForStringify = fieldAccessResult.value ?? '';
+                      finalResolvedValue = fieldAccessResult.value;
                   } else {
                       if (newContext.strict) {
                           throw fieldAccessResult.error;
                       }
-                      resolvedValueForStringify = '';
+                      finalResolvedValue = undefined; // Represent failure as undefined before final string conversion
                   }
              } else {
                   if (newContext.strict) {
@@ -250,31 +251,35 @@ export class VariableReferenceResolver {
                          failedKey: node.fields[0]?.value ?? 'unknown' 
                       });
                   }
-                  resolvedValueForStringify = '';
+                  finalResolvedValue = undefined;
              }
           } else {
-              resolvedValueForStringify = variableValue ?? '';
+              finalResolvedValue = variableValue; // Use the direct value if no fields
           }
           
-          if (typeof resolvedValueForStringify === 'string') {
-             return resolvedValueForStringify;
-          } else if (resolvedValueForStringify === null) {
-             return 'null';
-          } else if (resolvedValueForStringify === undefined) {
-             return '';
+          // Convert the final resolved value to a string appropriately
+          if (finalResolvedValue === undefined) {
+              return ''; // Return empty string for failed/undefined resolution
+          } else if (finalResolvedValue === null) {
+              return 'null';
+          } else if (typeof finalResolvedValue === 'string') {
+              // This correctly handles the case where the original was TextVariable with no fields,
+              // as finalResolvedValue would be the string value itself.
+              return finalResolvedValue;
           } else {
-             try {
-                 return JSON.stringify(resolvedValueForStringify);
-             } catch (e) {
-                 logger.error(`Error stringifying resolved value for ${node.identifier}`, { value: resolvedValueForStringify, error: e });
-                 if (newContext.strict) {
-                     throw new MeldResolutionError(`Could not stringify resolved value for ${node.identifier}`, { 
-                        code: 'E_STRINGIFY_FAILED', 
-                        cause: e 
-                     });
-                 }
-                 return '';
-             }
+              // For DataVariables, results of field access, or other complex types, JSON.stringify
+              try {
+                  return JSON.stringify(finalResolvedValue);
+              } catch (e) {
+                  logger.error(`Error stringifying resolved value for ${node.identifier}`, { value: finalResolvedValue, error: e });
+                  if (newContext.strict) {
+                      throw new MeldResolutionError(`Could not stringify resolved value for ${node.identifier}`, {
+                          code: 'E_STRINGIFY_FAILED',
+                          cause: e
+                      });
+                  }
+                  return '';
+              }
           }
       }
 

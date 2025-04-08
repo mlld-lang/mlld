@@ -44,16 +44,13 @@ export class DataDirectiveHandler implements IDirectiveHandler {
     await this.validationService.validate(node);
 
     const { identifier, value, source } = node.directive as DataDirective;
-    const resolutionContext: ResolutionContext = {
-      allowedVariableTypes: {
-        text: true,
-        data: true,
-        path: true,
-        command: true
-      },
-      currentFilePath: context.currentFilePath,
-      state: context.state
-    };
+    logger.info('[DataDirectiveHandler] Processing:', { identifier, value: JSON.stringify(value), source });
+
+    // Use ResolutionContextFactory to create the context
+    const resolutionContext = ResolutionContextFactory.forDataDirective(
+      context.state, 
+      context.currentFilePath
+    );
 
     try {
       let resolvedValue: unknown;
@@ -98,6 +95,7 @@ export class DataDirectiveHandler implements IDirectiveHandler {
 
       // Store the resolved value in a new state
       const newState = context.state.clone();
+      logger.info('[DataDirectiveHandler] Setting data var:', { identifier, resolvedValue: JSON.stringify(resolvedValue) });
       newState.setDataVar(identifier, resolvedValue);
       return newState;
     } catch (error) {
