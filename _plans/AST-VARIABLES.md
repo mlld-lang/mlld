@@ -2,7 +2,7 @@
 
 ## Goal
 
-Refactor the `@core/ast` parser to be context-aware regarding variable interpolation syntax (`{{...}}`). The parser should generate an AST that accurately reflects whether `{{...}}` represents a variable reference needing resolution or literal text, based on Meld's language rules.
+Refactor the `@core/ast` parser to be context-aware regarding variable interpolation syntax (`{{...}}`, `$var`). The parser should generate an AST that accurately reflects whether variable syntax represents a reference needing resolution or literal text, based on Meld's language rules.
 
 ## Problem Statement
 
@@ -14,65 +14,120 @@ Currently, the parser (`@core/ast/grammar/meld.pegjs`) incorrectly parses variab
 
 This violates the principle of the AST fully representing the parsed structure, pushes syntactic concerns into the semantic resolution phase, and increases complexity and fragility.
 
-## Refined Solution: Context-Aware Parsing via Grammar
+## Implementation Challenges & Lessons Learned (First Attempt)
 
-We will modify the PEG.js grammar to handle variable parsing contextually, ensuring the AST accurately reflects intent.
+During the initial implementation attempt, several challenges arose, primarily related to modifying the PEG.js grammar:
 
-**1. Detailed `meld.pegjs` Modification Strategy:**
+1.  **Recursive Parsing Issues:** An approach using a helper function (`parseInterpolated`) within grammar action blocks to recursively call the main `parser.parse` function proved problematic. It initially failed with `parse is not defined` errors, requiring the `parser` instance to be passed explicitly. Even then, it subsequently failed with `Can't start parsing from rule "..."` errors, indicating limitations or complexities in using non-default start rules during an active parse, even if the rule was listed in `allowedStartRules` during parser generation. **Conclusion: Avoid recursive calls to `parser.parse` within the grammar.**
+2.  **Build Script Sensitivity:** The build script (`build-grammar.mjs`) uses `peggy.generate` for validation with `allowedStartRules`. Incorrectly listing rules here (or potential Peggy bugs related to rule registration visibility) caused build failures unrelated to the main parsing logic. The `allowedStartRules` should generally only contain the primary `Start` rule.
+3.  **Fragile Editing & Build Errors:** Sequential edits to the large grammar file proved extremely error-prone.
+    *   Accidental deletion of core rules (`_`, `__`, `Comment`, `EOF`, etc.) or misplaced rule definitions caused build failures.
+    *   Large-scale commenting/uncommenting or moving large blocks often led to subtle syntax errors (like missing `=` after rule names, missing newlines/semicolons after action blocks `}`) that were hard to spot.
+    *   PEG.js build errors can be misleading. For instance, `Rule "X" is not defined` often means `X` is referenced *before* its definition is complete *in file order*, or that a syntax error *within* `X`'s definition prevented it from being registered correctly. `Expected "Y" but found "Z"` often points to a syntax error in the rule *preceding* the error location. `Possible infinite loop` indicates a repetition (`*` or `+`) uses a rule that might match zero characters.
 
-*   **Core Idea:** Introduce a dedicated grammar rule (`InterpolatableContent`) responsible for parsing strings *only* in contexts where variable interpolation is allowed (directive values, paths, templates). Plain text parsing will remain separate and treat `{{...}}`/`$var` literally.
+**Key Lesson:** Modifying PEG.js grammars requires extreme care and understanding of its top-down processing. **Small, atomic changes, frequent `build:grammar` checks, and careful attention to rule order are paramount.**
 
-*   **New Grammar Rules:**
-    *   `LiteralTextSegment`:
-        *   **Purpose:** Matches one or more characters that are *not* the start of a `Variable` rule (`{{` or `$identifier`).
-        *   **Action:** Generates a `TextNode` containing the literal character sequence.
-    *   `InterpolatableContent`:
-        *   **Purpose:** Parses content where variables *should* be interpolated.
-        *   **Structure:** Matches `(LiteralTextSegment / Variable)+`. The existing `Variable` rule (covering `TextVar`, `DataVar`, `PathVar`) will be used here.
-        *   **Action:** Returns an array of `TextNode` and `VariableReferenceNode`, representing the sequence of literal text and variable references. Example: `"Hello {{user}}"` becomes `[TextNode(content='Hello '), VariableReferenceNode(identifier='user')]`.
+## Critical Lesson: PEG.js Grammar Structure & Rule Order
 
-*   **Context Handling Mechanism:**
-    *   The top-level `Start` rule in `meld.pegjs` prioritizes matching directives (`@text`, `@embed`, etc.).
-    *   If a directive rule matches, its *internal* parsing logic for values, paths, or templates will explicitly call the new `InterpolatableContent` rule.
-    *   If no directive matches, the `TextBlock` rule (via `TextPart`) will consume input as plain text. Crucially, `TextBlock`/`TextPart` will *not* call `InterpolatableContent`. It will be modified to consume `{{...}}`/`$var` as part of its literal `TextNode` content in this non-directive context.
+Our debugging revealed that the **order of rule definitions** in the `.pegjs` file is critical for successful builds, even more so than typically expected. Peggy processes the grammar file top-down. While forward references are sometimes allowed, relying on them heavily, especially across complex rule interactions (like lookaheads), proved fragile.
 
-*   **Specific Rule Modifications (Calls to `InterpolatableContent`):**
-    *   `TextValue`: Modify alternatives parsing content of `StringLiteral` (`"..."`, `'...'`, `` `...` ``) and `MultilineTemplateLiteral` (`[[...]]`).
-    *   `_EmbedRHS`: Modify the `[[...]]` (template) and `[...]` (path) alternatives to parse their *content* using this rule.
-    *   `_RunRHS`: Modify the `[[...]]` (template) and `[...]` (command) alternatives.
-    *   `DefineValue`: Modify alternatives parsing content of `StringLiteral` and `@run [...]`.
-    *   `DataValue`: Modify how `PropertyValue` handles `StringLiteral` within `DataObjectLiteral` or `ArrayLiteral` when under `@data`. The string *content* must be parsed using `InterpolatableContent`.
-    *   `PathValue`: Modify the `StringLiteral` alternative to parse its content.
-    *   `VarDirective` (`VarValue`): String literals assigned via `@var` currently do *not* support interpolation. This remains unchanged unless a future decision requires it.
+**Recommended Stable Structure:** Adhere strictly to the following definition order within `meld.pegjs`:
 
-*   **Path Handling in AST:**
-    *   When directive paths (e.g., in `@embed`, `@path`, `@import`) are parsed using `InterpolatableContent`, the AST node will store the resulting array.
-    *   Introduce a new property, e.g., `interpolatedValue: InterpolatableValue`, alongside `raw` and `structured` representations within the path object in the AST node. The `raw` value will still hold the original string, while `interpolatedValue` holds the parsed `[TextNode, VariableReferenceNode, ...]` sequence.
+1.  **Initial `{...}` Block:** Contains all JavaScript helper functions (`debug`, `isLineStart`, `validatePath`, `combineAdjacentTextNodes`, etc.) and constants (`NodeType`, `DirectiveKind`).
+2.  **Core Data Structure / Complex Parsing Rules:** Define rules that parse significant, structured parts of the language. This includes:
+    *   `Variable`, `TextVar`, `DataVar`, `PathVar`, `FieldAccess`, `ArrayAccess`, etc.
+    *   Interpolation logic: `DoubleQuoteAllowedLiteralChar`, `DoubleQuoteLiteralTextSegment`, `DoubleQuoteInterpolatableContent`, `DoubleQuoteInterpolatableContentOrEmpty` (and variants for single quotes, backticks, multiline).
+    *   `InterpolatedStringLiteral`, `InterpolatedMultilineTemplate`.
+    *   **Main `Directive` Rule:** The top-level rule that chooses between specific directives (`= &{...} "@" directive:(ImportDirective / EmbedDirective / ...)`).
+    *   **Specific Directive Rules:** `ImportDirective`, `EmbedDirective`, `RunDirective`, `DefineDirective`, `DataDirective`, `TextDirective`, `PathDirective`, `VarDirective`, and any rules used *only* within these specific directives (e.g., `ImportsList`, `DefineParams`, `PropertyValue`, `RunVariableParams`).
+    *   `CodeFence`, `BacktickSequence`, `CodeFenceLangID`.
+    *   Any other complex, non-terminal rules.
+3.  **Layout / Text Flow Rules:** Define rules that manage the flow between the complex structures above.
+    *   `Comment`, `LineStartComment`.
+    *   `TextBlock`, `TextPart`. **Crucially**, `TextPart` must use lookaheads (`!Directive`, `!CodeFence`, `!Comment`, etc.) to avoid consuming the start of higher-precedence rules defined earlier. Ensure `TextPart` always consumes at least one character to prevent infinite loops in `TextBlock`.
+4.  **Main Entry Point:**
+    *   `Start`. This rule references the layout/complex rules defined above (`= nodes:(LineStartComment / Comment / CodeFence / Directive / TextBlock)* EOF`).
+5.  **Fundamental / "Terminal" Rules:** Define the basic building blocks.
+    *   `Identifier`, `StringLiteral`, `NumberLiteral`, `BooleanLiteral`, `NullLiteral`, `MultilineTemplateLiteral` (raw version if needed).
+    *   Character-level helpers: `DoubleQuotedChars`, `SingleQuotedChars`, `BacktickQuotedChars`, `TextUntilNewline`, `TextUntilNewlineOrEmpty`.
+6.  **Whitespace & EOF Rules:**
+    *   `_`, `__`.
+    *   `EOF`, `LineTerminator`.
 
-*   **Maintainability:** Isolating the interpolation logic within `InterpolatableContent` makes the grammar clearer and promotes reuse across different directive types.
+**Rationale:** This order ensures that when Peggy processes any rule (like `Start` or `TextPart`), all other non-terminal rules it references (or uses in lookaheads) have already been fully defined and registered by the parser generator. Fundamental/terminal rules are defined last as they don't typically depend on complex rules. Adhering to this structure dramatically reduces "Rule not defined" build errors.
 
-**2. AST Type Updates (`@core/types/`)**
+## Revised Implementation Strategy (Second Attempt)
 
-*   **Define `InterpolatableValue`:** Introduce a shared type alias:
+Based on the lessons learned, we will proceed with the **inline, delimiter-specific parsing strategy** for handling interpolation within directive values.
+
+**1. Detailed `meld.pegjs` Modification Strategy (Inline Approach):**
+
+*   **Adhere to Strict Rule Order:** (NEW) Implement all grammar changes following the **Critical Lesson: PEG.js Grammar Structure & Rule Order** section above. Place new rules and modify existing rules according to that structure.
+*   **Top-Level Parsing:** (REVISED)
+    *   Remove the old `TopLevelNode`, `TopLevelTextBlock`, and `TopLevelTextPart` concepts.
+    *   Define the main entry point `Start` *after* complex/layout rules but *before* fundamentals/whitespace: `Start = nodes:(LineStartComment / Comment / CodeFence / Directive / TextBlock)* EOF { return nodes.filter(n => n !== null); }`. This order dictates parsing precedence.
+    *   Define `TextBlock` and `TextPart` just before `Start`. `TextBlock = content:TextPart+ { ... }`.
+    *   Define `TextPart` to use lookaheads to avoid consuming higher-precedence elements and ensure it always consumes one character:
+        ```pegjs
+        TextPart "part of a text block"
+          = ( // Group lookaheads
+              !Directive          // Check full rules if defined before TextPart
+              !CodeFence
+              !LineStartComment
+              !Comment
+              // Add other top-level lookaheads if needed
+            )
+            char:. // Consume one character MANDATORY
+            { return text(); }
+        ```
+    *   This approach treats any line not starting with `@`, ``` ` ```, `>>`, `/*` etc. as plain text within a `TextBlock` -> `TextNode`. Variable syntax (`{{...}}`, `$var`) within these blocks will be treated as literal text.
+*   **Core Rule Preservation:** Ensure essential rules (`_`, `__`, `EOF`, `Identifier`, `StringLiteral` etc.) are correctly placed according to the structure (likely in Fundamentals or Whitespace/EOF sections) and are never accidentally deleted. Perform edits atomically, build and run tests frequently.
+*   **Delimiter-Specific Interpolation Rules:** (Minor Update)
+    *   Define these rules (`XxxAllowedLiteralChar`, `XxxLiteralTextSegment`, `XxxInterpolatableContent`, `XxxInterpolatableContentOrEmpty`) within the "Core Data Structure / Complex Parsing Rules" section.
+    *   (Keep existing example)
+*   **Update Literal/Template Parsing Rules:** (REVISED)
+    *   Define `InterpolatedStringLiteral` and `InterpolatedMultilineTemplate` in the "Core Data Structure / Complex Parsing Rules" section.
+    *   These rules should **directly** embed the `XxxInterpolatableContentOrEmpty` rules to parse their content. Do **not** use the `parseInterpolated` helper.
+    *   These rules should return the `InterpolatableValue` array directly (e.g., `[ TextNode(...), VariableReferenceNode(...) ]`).
+    *   Example (`InterpolatedStringLiteral`):
+        ```pegjs
+        InterpolatedStringLiteral "String literal with potential variable interpolation"
+          = '"' content:DoubleQuoteInterpolatableContentOrEmpty '"' { return content; }
+          / "'" content:SingleQuoteInterpolatableContentOrEmpty "'" { return content; }
+          / "`" content:BacktickInterpolatableContentOrEmpty "`" { return content; }
+        ```
+    *   Example (`InterpolatedMultilineTemplate`):
+        ```pegjs
+        InterpolatedMultilineTemplate "Multiline template with potential variable interpolation"
+          = "[[" content:MultilineInterpolatableContentOrEmpty "]]" { return content; }
+        ```
+*   **Update Directive Value Rules:** (Minor Update) Modify rules like `TextValue`, `PropertyValue` (for `@data`), `DefineValue` to use `InterpolatedStringLiteral` or `InterpolatedMultilineTemplate` where they previously used `StringLiteral` or `MultilineTemplateLiteral`. These rules will now receive an `InterpolatableValue` array.
+*   **Path Handling:** (Minor Update) Modify `PathDirective`'s right-hand side (`rhs`) to accept `InterpolatedStringLiteral` or `PathVar`.
+    *   If `rhs` is `InterpolatedStringLiteral` (which now returns an `InterpolatableValue` array): Use a *separate* rule or capture mechanism (like the `{raw, interpolated}` object approach *specifically for paths if needed*) to get the **raw** string for `validatePath`. Store the returned `InterpolatableValue` array in the `interpolatedValue` property of the path object.
+    *   If `rhs` is `PathVar`, proceed as before.
+*   **Helper Functions:** Keep JS helpers (`combineAdjacentTextNodes`, `validatePath`, etc.) in the top `{}` block. **Remove the `parseInterpolated` helper.**
+
+**2. AST Type Updates (`@core/types/`, `@core/syntax/types/`)**
+
+*   **Define `InterpolatableValue`:** (Already Done) Add to `core/types/common.ts`:
     ```typescript
-    import type { TextNode, VariableReferenceNode } from '@core/syntax/types'; // Adjust import path
+    import type { TextNode, VariableReferenceNode } from '@core/syntax/types/nodes';
     export type InterpolatableValue = (TextNode | VariableReferenceNode)[];
     ```
-*   **Update Node Interfaces:** Modify relevant `DirectiveNode` interfaces (e.g., `TextDirectiveNode`, `DataDirectiveNode`, `EmbedDirectiveNode`, `PathDirectiveNode`, etc.). Change properties that previously held a potentially interpolated `string` (like `value`, `command`, `template`, `path.raw`) to instead hold or additionally hold the `InterpolatableValue` type. Ensure clear distinction between the original raw string and the parsed sequence. For paths, this means adding the `interpolatedValue` property to the path object structure within the directive node.
+*   **Define Specific `DirectiveData` Interfaces:** (Already Done) Create `core/syntax/types/directives.ts` with specific interfaces (`TextDirectiveData`, `EmbedDirectiveData`, etc.) using `InterpolatableValue` for relevant properties.
+*   **Update `StructuredPath`:** (Already Done) Modify `StructuredPath` in `core/syntax/types/nodes.ts` to include `interpolatedValue?: InterpolatableValue`.
 
 **3. AST Test Update Strategy (`meld-spec`, `*.test.ts`)**
 
-*   **Role of Tests:** Tests are the primary validation tool. Expect initial failures after grammar changes; use them to guide implementation.
-*   **New Test Cases (`meld-spec`):** Create specific tests covering:
-    *   Plain text `{{...}}`/`$var` remaining literal.
-    *   Successful interpolation in `@text`, `@data`, `@embed` (paths/templates), `@run`, `@path`, `@define`.
-    *   Nested interpolation in `@data` objects/arrays.
-    *   Edge Cases: Adjacent variables (`{{a}}{{b}}`), start/end of string (`{{a}}text`, `text{{a}}`), empty strings, strings with only variables (`{{a}}`), quoted `{{...}}` within interpolated strings (should remain literal within quotes).
-*   **Updating Existing Tests:**
-    *   Identify affected test files by searching for assertions related to string values in the affected directives.
-    *   **Snapshot Tests (`*.spec.ts`):** Update snapshots. Assertions will now show the `InterpolatableValue` array structure (e.g., `[{ type: 'Text', ... }, { type: 'VariableReference', ... }]`) instead of a simple string for the relevant properties.
-    *   **Assertion Tests (`*.test.ts`):** Modify assertions to check for the array structure, correct node types (`TextNode`, `VariableReferenceNode`), correct order, and correct content/identifiers within the nodes.
-*   **Debugging Workflow:** Use `npm run build:grammar && npm test core/ast` frequently. Employ `test/debug-test.js` to analyze differences between expected and actual AST output for failing tests.
+*   **Role of Tests:** Primary validation mechanism. Failures are expected and guide implementation.
+*   **Plain Text Tests:** Update tests for inputs *outside* directives (e.g., `{{var}}`, `Hello {{var}}`, `$path`) to assert they produce a single `TextNode` with the literal content.
+*   **Directive Interpolation Tests:**
+    *   Add *new* test cases for each directive type where interpolation is now supported (text literals, multiline templates, paths, commands).
+    *   Assert that the relevant property (e.g., `value`, `command`, `path.interpolatedValue`) contains the correct `InterpolatableValue` array structure (`[ TextNode(...), VariableReferenceNode(...), TextNode(...) ]`).
+    *   Cover edge cases: adjacent variables, start/end of string variables, empty content, content with only variables.
+*   **Existing Literal Tests:** Update tests that previously asserted simple string values for directives to now expect an `InterpolatableValue` array containing a single `TextNode`.
+*   **Rejection Tests:** Review tests that expect parsing to fail (e.g., invalid syntax). Ensure they still fail correctly after the changes.
+*   **Debugging Workflow:** Use `npm run build:grammar && npm test core/ast` frequently. Employ `test/debug-test.js` to analyze AST differences.
 
 **4. Downstream Impact Outline (High-Level)**
 
@@ -87,14 +142,29 @@ We will modify the PEG.js grammar to handle variable parsing contextually, ensur
     *   **Processing Order:** Path resolution will now first process the `interpolatedValue` array (resolving variables) to construct the target path string *before* applying filesystem/URL validation and resolution steps using services like `PathService`.
 *   **General AST Consumers:** Any code directly accessing affected directive node properties (e.g., `node.value` where `value` was previously `string`) must be updated to handle the new `InterpolatableValue` array structure.
 
-## Implementation Steps (Revised Order)
+**5. Build Script (`build-grammar.mjs`)**
 
-1.  **Refine Plan:** (Done) Ensure the detailed plan is agreed upon.
-2.  **Update AST Types:** Define `InterpolatableValue` and modify relevant `DirectiveNode` interfaces in `@core/types/`. (Requires careful review of all affected directives).
-3.  **Implement Grammar Changes (`meld.pegjs`):** Introduce `LiteralTextSegment`, `InterpolatableContent`, modify `TextPart`, and update relevant directive rules to call `InterpolatableContent`. Build and perform initial basic tests.
-4.  **Update Tests:** Implement new test cases in `meld-spec` and update existing tests (`*.spec.ts`, `*.test.ts`) to expect the new AST structure. Use failing tests to drive grammar refinement. Iterate between steps 3 & 4.
-5.  **Refactor Downstream Consumers:** (Separate phase/PR likely) Update `ResolutionService`, directive handlers, and any other AST consumers to work with the `InterpolatableValue` type.
+*   Ensure `allowedStartRules` in *all* `peggy.generate` calls contains *only* `['Start']`.
+
+## Implementation Steps (Fourth Attempt - Order Focused)
+
+1.  **Prepare:** Ensure `@_plans/AST-VARIABLES.md` reflects this updated plan. (This step)
+2.  **Clean Grammar & Verify Structure:** Start with a known-good version of `meld.pegjs` or carefully **restructure the existing file** to match the **Recommended Stable Structure** outlined above. Place existing rules into their correct sections. **Run `build:grammar`**. Fix any build errors resulting *only* from reordering before proceeding.
+3.  **Implement Delimiter-Specific Rules:** Add all `XxxAllowedLiteralChar`, `XxxLiteralTextSegment`, `XxxInterpolatableContent`, `XxxInterpolatableContentOrEmpty` rules into the "Complex Parsing" section. **Run `build:grammar`**.
+4.  **Implement Interpolated Literals:** Add `InterpolatedStringLiteral` and `InterpolatedMultilineTemplate` (returning arrays directly) into the "Complex Parsing" section. **Run `build:grammar`**.
+5.  **Update Directive Value Rules (One by One):**
+    *   Modify `TextValue` to use `Interpolated...` rules. **Run `build:grammar`**.
+    *   Modify `PropertyValue` (for `@data`). **Run `build:grammar`**.
+    *   Modify `DefineValue`. **Run `build:grammar`**.
+    *   Modify `PathDirective` (handle raw vs interpolated carefully). **Run `build:grammar`**.
+    *   *(Self-correction: `_EmbedRHS` and `_RunRHS` are complex helpers, not simple value rules. The plan needs to decide if these helpers are still the best approach or if `EmbedDirective`/`RunDirective` should handle their variations directly. For now, assume they stay but need updating)* Modify `_EmbedRHS` and `_RunRHS` to use interpolation logic internally if they process bracketed content. **Run `build:grammar`**.
+6.  **Run Full Tests:** Once the grammar builds cleanly, run `npm test core/ast`. Expect many assertion failures.
+7.  **Update Tests Iteratively:**
+    *   Fix plain text tests first (expecting `TextNode` from `TextBlock`).
+    *   Fix directive tests one by one, updating assertions to expect `InterpolatableValue` arrays where appropriate.
+    *   Use `test.only`/`it.only` and `test/debug-test.js` extensively.
+8.  **Refactor Downstream Consumers:** (Separate phase/PR).
 
 ## Priority
 
-**High.** This remains a foundational fix for AST accuracy and downstream simplification. 
+**High.** This remains a foundational fix for AST accuracy and downstream simplification. The structural refactoring is key to enabling further grammar work reliably. 
