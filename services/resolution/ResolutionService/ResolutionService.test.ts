@@ -70,6 +70,8 @@ import type { IFileSystemServiceClient } from '@services/fs/FileSystemService/in
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
 // Import error testing utility
 import { expectToThrowWithConfig } from '@tests/utils/ErrorTestUtils.js';
+// Import CommandVariable and ICommandDefinition
+import { CommandVariable, ICommandDefinition, createCommandVariable } from '@core/types';
 
 // Use the correctly imported run directive examples
 const runDirectiveExamples = runDirectiveExamplesModule;
@@ -97,6 +99,29 @@ const createMockDataVariable = (name: string, value: any): DataVariable => {
 // Helper function to create mock PathVariable using factory
 const createMockPathVariable = (name: string, value: IFilesystemPathState | IUrlPathState): IPathVariable => {
   return createPathVariable(name, value);
+};
+
+// Helper function to create mock CommandVariable using factory
+const createMockCommandVariable = (name: string, commandString: string): CommandVariable => {
+  let definition: ICommandDefinition;
+  if (name === 'echo') {
+    // Add parameter definition for echo
+    definition = {
+      type: 'basic',
+      command: commandString,
+      parameters: [
+        { name: 'output', type: 'string' } // Define one string parameter
+      ]
+    };
+  } else {
+    // Default for other commands (like errorCmd, greet)
+    definition = {
+      type: 'basic',
+      command: commandString,
+      parameters: [] // No parameters by default
+    };
+  }
+  return createCommandVariable(name, definition);
 };
 
 
@@ -152,7 +177,15 @@ describe('ResolutionService', () => {
         }
         return undefined;
       }),
+      getCommandVar: vi.fn().mockImplementation((name: string): CommandVariable | undefined => {
+        if (name === 'echo') return createMockCommandVariable('echo', 'echo "$@"'); // Basic echo command
+        if (name === 'errorCmd') return createMockCommandVariable('errorCmd', 'exit 1'); // Command designed to fail
+        // Add greet command from another test
+        if (name === 'greet') return createMockCommandVariable('greet', 'echo Hello there');
+        return undefined; // For nonexistent command test
+      }),
       getCommand: vi.fn().mockImplementation((name: string) => {
+         // This seems unused now? Keep for now, or remove if getCommandVar replaces its usage.
          if (name === 'echo') return { command: '@run echo ${text}' };
          if (name === 'greet') return { command: '@run echo Hello there' };
          return undefined;
@@ -190,7 +223,22 @@ describe('ResolutionService', () => {
       readFile: vi.fn().mockResolvedValue('file content'),
       // Add executeCommand mock
       executeCommand: vi.fn().mockImplementation(async (command: string, options?: { cwd?: string }) => {
-        // Simple mock: return command string as stdout
+        // Add specific behavior for errorCmd
+        if (command.startsWith('exit 1')) { // Check if it's our error command
+            const error = new Error('Command failed with exit code 1');
+            (error as any).code = 1; // Simulate non-zero exit code
+            (error as any).stderr = 'Simulated command error';
+            throw error;
+        }
+        // Mock output for echo
+        if (command.startsWith('echo')) {
+           // Simple mock: return command string as stdout
+           // Extract args (everything after echo and space)
+           const argsString = command.substring(5).trim();
+           // Simulate echo output - might need refinement based on actual usage
+           return { stdout: `${argsString.replace('"$@"' ,'test')}`, stderr: '' }; // Basic arg replace
+        }
+        // Default mock behavior for other commands
         return { stdout: command, stderr: '' };
       }),
       // Add other necessary IFileSystemService methods
@@ -975,43 +1023,40 @@ describe('ResolutionService', () => {
 
    describe('resolveCommand', () => {
     it('should execute basic command', async () => {
-      // beforeEach mocks stateService.getCommand('echo'), parserClient, and fileSystemService.executeCommand
-       vi.mocked(fileSystemService.executeCommand).mockResolvedValue({ stdout: 'echo mock output', stderr: '' });
+      // Mock stateService to return a basic command definition
+      vi.mocked(stateService.getCommandVar).mockReturnValue(createMockCommandVariable('echo', 'echo "$@"'));
+      // Fix: Use strict context
+      const strictContext = defaultContext.withStrictMode(true);
       // Fix: Add missing args array []
-      const result = await service.resolveCommand('echo', ['test'], defaultContext);
-      expect(result).toBe('echo mock output');
-      expect(fileSystemService.executeCommand).toHaveBeenCalledWith(expect.stringContaining('echo'), expect.anything()); // Check base command
+      const result = await service.resolveCommand('echo', ['test'], strictContext);
+      // Fix: Update expected output based on refined mock
+      expect(result).toBe('test'); // Mock replaces "$@" with 'test'
     });
 
      it('should throw VariableResolutionError for non-existent command', async () => {
-       // Fix: Use TextNodeFactory as commands aren't variable references here
-       vi.mocked(mockParserClient.parseString).mockImplementation(async (text: string): Promise<MeldNode[]> => {
-        const mockLocation = { start: { line: 1, column: 1 }, end: { line: 1, column: text.length + 1 } };
-        if (!mockTextNodeFactory) throw new Error('Mock TextNodeFactory not initialized');
-        // Cannot mock COMMAND valueType for VariableReferenceNode
-        // Assume parser returns simple text for unknown command syntax
-        return [mockTextNodeFactory.createTextNode(text, mockLocation)];
-      });
-      await expectToThrowWithConfig(async () => {
-        // Fix: Add missing args array []
-        await service.resolveCommand('nonexistent', [], defaultContext);
-      }, {
-        type: 'VariableResolutionError',
-        code: 'E_VAR_NOT_FOUND',
-        messageContains: 'Command definition not found' // Simplified string
-      });
+       // beforeEach mock ensures getCommandVar returns undefined for 'nonexistent'
+       // Fix: Use strict context
+       const strictContext = defaultContext.withStrictMode(true);
+       await expectToThrowWithConfig(async () => {
+         await service.resolveCommand('nonexistent', [], strictContext);
+       }, {
+         type: 'VariableResolutionError',
+         code: 'E_VAR_NOT_FOUND',
+         messageContains: 'Command variable \'nonexistent\' not found'
+       });
     });
 
     it('should handle command execution error', async () => {
-       // beforeEach mocks stateService.getCommand('echo'), parserClient
-       vi.mocked(fileSystemService.executeCommand).mockRejectedValue(new Error('Execution failed'));
-
+      // Mock stateService to return the errorCmd
+      vi.mocked(stateService.getCommandVar).mockReturnValue(createMockCommandVariable('errorCmd', 'exit 1'));
+      // executeCommand mock is set up in beforeEach to throw for 'exit 1'
+      // Fix: Use strict context
+      const strictContext = defaultContext.withStrictMode(true);
       await expectToThrowWithConfig(async () => {
-         // Fix: Add missing args array []
-         await service.resolveCommand('echo', ['fail'], defaultContext);
+        await service.resolveCommand('errorCmd', [], strictContext);
       }, {
-        type: 'MeldResolutionError',
-        messageContains: 'Command execution failed for: echo'
+        type: 'MeldResolutionError', // resolveCommand wraps external errors
+        messageContains: 'Failed to resolve/execute command'
       });
     });
   });

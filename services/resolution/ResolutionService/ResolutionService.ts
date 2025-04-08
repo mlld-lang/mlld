@@ -477,26 +477,14 @@ export class ResolutionService implements IResolutionService {
         .catch(error => {
             logger.error('resolveText explicit .catch handler triggered', { error });
             if (context.strict) {
-                // Remove detailed logging
-                /*
-                process.stdout.write(`\n[resolveText .catch STDOUT] Inspecting caught error:\n`);
-                process.stdout.write(`  Error Name: ${(error as Error)?.name}\n`);
-                process.stdout.write(`  Error Code: ${(error as any)?.code}\n`);
-                process.stdout.write(`  Error Message: ${(error as Error)?.message}\n`);
-                process.stdout.write(`  Error Object: ${JSON.stringify(error)}\n`);
-                */
-
                 // Generalize duck-typing check to re-throw any MeldError-like object
                 if (error instanceof Error && 'code' in error && 'name' in error) { 
-                    // Remove logging
-                    // process.stdout.write(`[resolveText .catch STDOUT] Re-throwing original MeldError (duck-typed), Name: ${error.name}, Code: ${(error as MeldError).code}\n`);
+                    logger.debug('[resolveText .catch] Re-throwing original MeldError (duck-typed)', { name: error.name, code: (error as MeldError).code }); // Keep logger call
                     throw error; // Re-throw original MeldError
                 } else {
                     // Wrap truly unexpected errors
                     const errorName = error instanceof Error ? error.name : 'Unknown Type';
                     const errorCode = typeof error === 'object' && error !== null && 'code' in error ? (error as any).code : 'Unknown Code';
-                    // Remove logging
-                    // process.stdout.write(`[resolveText .catch STDOUT] Error did not look like MeldError, wrapping. Name: ${errorName}, Code: ${errorCode}\n`);
                     logger.warn('[resolveText .catch] Error did not look like MeldError, wrapping.', { errorName, errorCode }); // Keep warn log
                     const meldError = new MeldResolutionError('Failed to resolve text', { 
                         code: 'E_RESOLVE_TEXT_FAILED',
@@ -651,13 +639,28 @@ export class ResolutionService implements IResolutionService {
     } catch (error) {
       logger.error('resolveData failed', { error, ref });
       if (context.strict) {
+        // Remove detailed logging
+        /*
+        process.stdout.write(`\n[resolveData CATCH STDOUT] Inspecting caught error:\n`);
+        process.stdout.write(`  Error Name: ${(error as Error)?.name}\n`);
+        process.stdout.write(`  Error Code: ${(error as any)?.code}\n`);
+        process.stdout.write(`  Error Message: ${(error as Error)?.message}\n`);
+        process.stdout.write(`  Error Object: ${JSON.stringify(error)}\n`);
+        */
+        
         // Generalize duck-typing check to re-throw any MeldError-like object
         if (error instanceof Error && 'code' in error && 'name' in error) { 
-            logger.debug('[resolveData CATCH] Re-throwing original MeldError (duck-typed)', { name: error.name, code: (error as MeldError).code });
+            // Remove logging
+            // process.stdout.write(`[resolveData CATCH STDOUT] Re-throwing original MeldError (duck-typed), Name: ${error.name}, Code: ${(error as MeldError).code}\n`);
+            logger.debug('[resolveData CATCH] Re-throwing original MeldError (duck-typed)', { name: error.name, code: (error as MeldError).code }); // Keep logger call
             throw error; // Re-throw original MeldError
         } else {
             // Wrap truly unexpected errors
-            logger.warn('[resolveData CATCH] Wrapping non-MeldError (duck-typed)', { errorName: (error as Error)?.name });
+            const errorName = error instanceof Error ? error.name : 'Unknown Type';
+            const errorCode = typeof error === 'object' && error !== null && 'code' in error ? (error as any).code : 'Unknown Code';
+            // Remove logging
+            // process.stdout.write(`[resolveData CATCH STDOUT] Error did not look like MeldError, wrapping. Name: ${errorName}, Code: ${errorCode}\n`);
+            logger.warn('[resolveData CATCH] Wrapping non-MeldError (duck-typed)', { errorName, errorCode }); // Keep logger call
             const meldError = new MeldResolutionError(`Failed to resolve data reference: ${ref}`, {
                 code: 'E_RESOLVE_DATA_FAILED',
                 details: { reference: ref, context },
