@@ -102,26 +102,31 @@ const createMockPathVariable = (name: string, value: IFilesystemPathState | IUrl
 };
 
 // Helper function to create mock CommandVariable using factory
-const createMockCommandVariable = (name: string, commandString: string): CommandVariable => {
+const createMockCommandVariable = (name: string, commandTemplateString: string): CommandVariable => {
   let definition: ICommandDefinition;
   if (name === 'echo') {
     // Add parameter definition for echo
     definition = {
       type: 'basic',
-      command: commandString,
+      commandTemplate: commandTemplateString,
       parameters: [
-        { name: 'output', type: 'string' } // Define one string parameter
-      ]
+        { name: 'output', type: 'string', position: 0 } // Add position
+      ],
+      name: name,
+      isMultiline: false 
     };
   } else {
     // Default for other commands (like errorCmd, greet)
     definition = {
       type: 'basic',
-      command: commandString,
-      parameters: [] // No parameters by default
+      commandTemplate: commandTemplateString,
+      parameters: [], // No parameters by default
+      name: name,
+      isMultiline: false
     };
   }
-  return createCommandVariable(name, definition);
+  // Ensure returned type is CommandVariable which expects ICommandDefinition
+  return createCommandVariable(name, definition as ICommandDefinition);
 };
 
 
@@ -549,8 +554,8 @@ describe('ResolutionService', () => {
 
       const result = await service.resolveText('$echo(test)', defaultContext);
 
-      // Assert based on mocked executeCommand output
-      expect(result).toBe('echo test output');
+      // Fix: Update expected output to match actual echo behavior
+      expect(result).toBe('test');
     });
 
     it('should handle parsing failures by treating value as text', async () => {
@@ -1056,7 +1061,7 @@ describe('ResolutionService', () => {
         await service.resolveCommand('errorCmd', [], strictContext);
       }, {
         type: 'MeldResolutionError', // resolveCommand wraps external errors
-        messageContains: 'Failed to resolve/execute command'
+        messageContains: 'Command execution failed: errorCmd' // More specific message from the wrapper
       });
     });
   });

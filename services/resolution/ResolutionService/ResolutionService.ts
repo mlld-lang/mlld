@@ -923,8 +923,17 @@ export class ResolutionService implements IResolutionService {
             // Extract command name properly (remove potential trailing parens and leading $)
             const commandNameMatch = valueString.match(/^\$?([^\(]+)/);
             const commandName = commandNameMatch ? commandNameMatch[1] : '';
-            // TODO: Parse actual args instead of passing empty array
-            return await this.resolveCommand(commandName, [], context);
+            
+            // Fix: Parse arguments from within parentheses
+            let args: string[] = [];
+            const argsMatch = valueString.match(/\((.*)\)/);
+            if (argsMatch && argsMatch[1]) {
+              // Very basic split by comma, trim whitespace. Doesn't handle quoted commas etc.
+              args = argsMatch[1].split(',').map(arg => arg.trim()).filter(arg => arg !== '');
+            }
+            logger.debug(`[resolveInContext] Parsed command`, { commandName, args });
+            
+            return await this.resolveCommand(commandName, args, context);
         } else if (intendedType === VariableType.DATA) {
             // If syntax was dot/bracket, resolve as data
             const resolvedData = await this.resolveData(valueString, context);
