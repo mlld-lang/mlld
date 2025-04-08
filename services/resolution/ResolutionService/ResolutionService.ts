@@ -477,22 +477,27 @@ export class ResolutionService implements IResolutionService {
         .catch(error => {
             logger.error('resolveText explicit .catch handler triggered', { error });
             if (context.strict) {
-                // Add detailed logging of the caught error object using stdout
+                // Remove detailed logging
+                /*
                 process.stdout.write(`\n[resolveText .catch STDOUT] Inspecting caught error:\n`);
                 process.stdout.write(`  Error Name: ${(error as Error)?.name}\n`);
                 process.stdout.write(`  Error Code: ${(error as any)?.code}\n`);
                 process.stdout.write(`  Error Message: ${(error as Error)?.message}\n`);
                 process.stdout.write(`  Error Object: ${JSON.stringify(error)}\n`);
+                */
 
                 // Generalize duck-typing check to re-throw any MeldError-like object
                 if (error instanceof Error && 'code' in error && 'name' in error) { 
-                    process.stdout.write(`[resolveText .catch STDOUT] Re-throwing original MeldError (duck-typed), Name: ${error.name}, Code: ${(error as MeldError).code}\n`);
+                    // Remove logging
+                    // process.stdout.write(`[resolveText .catch STDOUT] Re-throwing original MeldError (duck-typed), Name: ${error.name}, Code: ${(error as MeldError).code}\n`);
                     throw error; // Re-throw original MeldError
                 } else {
                     // Wrap truly unexpected errors
                     const errorName = error instanceof Error ? error.name : 'Unknown Type';
                     const errorCode = typeof error === 'object' && error !== null && 'code' in error ? (error as any).code : 'Unknown Code';
-                    process.stdout.write(`[resolveText .catch STDOUT] Error did not look like MeldError, wrapping. Name: ${errorName}, Code: ${errorCode}\n`);
+                    // Remove logging
+                    // process.stdout.write(`[resolveText .catch STDOUT] Error did not look like MeldError, wrapping. Name: ${errorName}, Code: ${errorCode}\n`);
+                    logger.warn('[resolveText .catch] Error did not look like MeldError, wrapping.', { errorName, errorCode }); // Keep warn log
                     const meldError = new MeldResolutionError('Failed to resolve text', { 
                         code: 'E_RESOLVE_TEXT_FAILED',
                         details: { originalText: text, context },
