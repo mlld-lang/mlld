@@ -620,6 +620,18 @@ MultilineInterpolatableContentOrEmpty
 
 // --- End Interpolation Rules ---
 
+// --- Interpolated Literal Rules ---
+
+InterpolatedStringLiteral "String literal with potential variable interpolation"
+  = '"' content:DoubleQuoteInterpolatableContentOrEmpty '"' { return content; }
+  / "'" content:SingleQuoteInterpolatableContentOrEmpty "'" { return content; }
+  / "`" content:BacktickInterpolatableContentOrEmpty "`" { return content; }
+
+InterpolatedMultilineTemplate "Multiline template with potential variable interpolation"
+  = "[[" content:MultilineInterpolatableContentOrEmpty "]]" { return content; }
+
+// --- End Interpolated Literal Rules ---
+
 // Helper rule for parsing RHS @embed variations
 // Returns { subtype: '...', ... } structure without 'source' field.
 _EmbedRHS
@@ -1270,7 +1282,7 @@ PropertyKey
   / str:StringLiteral { return str; }
 
 PropertyValue
-  = StringLiteral
+  = InterpolatedStringLiteral
   / NumberLiteral
   / BooleanLiteral
   / NullLiteral
@@ -1371,13 +1383,13 @@ TextValue
       }
     };
   }
-  / value:StringLiteral {
+  / value:InterpolatedStringLiteral {
     return {
       source: "literal",
       value
     };
   }
-  / value:MultilineTemplateLiteral {
+  / value:InterpolatedMultilineTemplate {
     return {
       source: "literal",
       value
