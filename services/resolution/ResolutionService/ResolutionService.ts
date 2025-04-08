@@ -355,51 +355,53 @@ export class ResolutionService implements IResolutionService {
   /**
    * Parse a string into AST nodes for resolution
    */
-  private async parseForResolution(value: string, context?: ResolutionContext): Promise<MeldNode[]> {
-    try {
-      // Factory initialization moved to constructor
+  private async parseForResolution(value: string, context: ResolutionContext): Promise<MeldNode[]> {
+    logger.debug(`Entering parseForResolution`, { value: value.substring(0, 50), contextFlags: context.flags });
 
-      if (this.parserClient) { 
-        // Add explicit check before use to satisfy linter
-        if (!this.parserClient) {
-            throw new Error('Internal Error: parserClient not initialized before use in parseForResolution');
-        }
-        try {
-          // Ignore persistent linter error: check above should guarantee definition.
-          // @ts-ignore // TODO: Linter struggles with conditional DI initialization, check guarantees it's defined.
-          const nodes = await this.parserClient.parseString(value, { filePath: context?.state?.getCurrentFilePath() ?? undefined });
-          return nodes || [];
-        } catch (error) {
-          logger.error('Error using parserClient.parseString', { error, valueLength: value.length });
-          if (context?.strict) throw error;
-        }
-      }
-      if (this.parserService) {
-        try {
-          const nodes = await this.parserService.parse(value);
-          return nodes || [];
-        } catch (error) {
-          logger.warn('Error using injected parser service', { error });
-          if (context?.strict) throw error;
-        }
-      }
-      // Last resort fallback to direct parsing in tests
-      logger.warn('No parser client available - falling back to direct import or mock parser');
-      
-      // Try using require
+    // Ensure factory/client is initialized (might be needed if called early)
+    this.ensureFactoryInitialized(); 
+
+    // Always attempt to use ParserServiceClient if available
+    if (this.parserClient) {
       try {
-        // Use require for better build compatibility
-        const coreAst = require('@core/ast');
-        const result = await coreAst.parse(value, { trackLocations: true });
-        return result.ast || [];
+        logger.debug(`parseForResolution: Attempting parse via ParserServiceClient.`);
+        const nodes = await this.parserClient.parseString(value, { filePath: context.currentFilePath });
+        logger.debug(`parseForResolution: Parsed via client into ${nodes.length} nodes.`);
+        return nodes;
       } catch (error) {
-        // In a test environment, create a fallback text node
-        logger.warn('Last resort - creating fallback text node', { value });
-        return [{ type: 'Text', content: value } as TextNode];
+        logger.error(`parseForResolution: ParserServiceClient failed.`, { error });
+        // Re-throw the error to ensure failure is explicit
+        throw new MeldResolutionError('Parsing failed via ParserServiceClient', { 
+            code: 'E_PARSE_FAILED', 
+            cause: error,
+            details: { value: value.substring(0, 100) } 
+        }); 
       }
-    } catch (error) {
-      logger.error('Error parsing content for resolution', { error });
-      return [];
+    }
+    // If no client, check for directly injected ParserService (e.g., tests)
+    else if (this.parserService) {
+         try {
+            logger.debug(`parseForResolution: Attempting parse via direct ParserService.`);
+            const nodes = await this.parserService.parse(value);
+            logger.debug(`parseForResolution: Parsed via service into ${nodes.length} nodes.`);
+            return nodes;
+         } catch (error) {
+             logger.error(`parseForResolution: Direct ParserService failed.`, { error });
+             // Re-throw the error
+             throw new MeldResolutionError('Parsing failed via direct ParserService', { 
+                code: 'E_PARSE_FAILED', 
+                cause: error,
+                details: { value: value.substring(0, 100) }
+             });
+         }
+    }
+    // If neither client nor service is available, throw an error
+    else {
+        logger.error('parseForResolution: No parser available (Client or Service).');
+        throw new MeldResolutionError('Parsing service not available', { 
+            code: 'E_SERVICE_UNAVAILABLE', 
+            details: { serviceName: 'ParserService/Client' }
+        });
     }
   }
 
@@ -424,6 +426,13 @@ export class ResolutionService implements IResolutionService {
         try {
           // Use process.stdout.write for debug logging
           process.stdout.write(`[DEBUG ResolutionService.resolveNodes] Found VariableReferenceNode: ${JSON.stringify(node)}\n`);
+          // ADD LOGGING HERE
+          logger.info('[resolveNodes] Attempting to resolve VariableReferenceNode:', { 
+              identifier: node.identifier, 
+              contextHasState: !!context.state, 
+              stateGreetingVar: context.state?.getTextVar('greeting')?.value, // Check if greeting is there
+              stateNameVar: context.state?.getTextVar('name')?.value // Check if name is there
+          });
           const resolvedValue = await this.variableReferenceResolver.resolve(node as VariableReferenceNode, context);
           // Add log AFTER await
           logger.debug(`[resolveNodes] Successfully resolved node ${node.identifier}, value starts: ${resolvedValue.substring(0, 30)}`);

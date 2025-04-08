@@ -247,72 +247,27 @@ export class TextDirectiveHandler implements IDirectiveHandler {
           value: value
         });
 
-        // Check for string concatenation first
-        if (await this.stringConcatenationHandler.hasConcatenation(value)) {
-          try {
-            resolvedValue = await this.stringConcatenationHandler.resolveConcatenation(value, resolutionContext);
-          } catch (error) {
-            if (error instanceof ResolutionError) {
-              throw new DirectiveError(
-                'Failed to resolve string concatenation',
-                this.kind,
-                DirectiveErrorCode.RESOLUTION_FAILED,
-                {
-                  node,
-                  context,
-                  cause: error,
-                  location: node.location,
-                  severity: DirectiveErrorSeverity[DirectiveErrorCode.RESOLUTION_FAILED]
-                }
-              );
-            }
-            throw error;
+        // SIMPLIFIED LOGIC: Always attempt to resolve the value using ResolutionService
+        // Remove checks for concatenation and string literals here.
+        // ResolutionService should handle variables, plain text, and potentially literals correctly.
+        try {
+          resolvedValue = await this.resolutionService.resolveInContext(value, resolutionContext);
+        } catch (error) {
+          if (error instanceof ResolutionError) {
+            throw new DirectiveError(
+              'Failed to resolve value in text directive',
+              this.kind,
+              DirectiveErrorCode.RESOLUTION_FAILED,
+              {
+                node,
+                context,
+                cause: error,
+                location: node.location,
+                severity: DirectiveErrorSeverity[DirectiveErrorCode.RESOLUTION_FAILED]
+              }
+            );
           }
-        } else if (this.stringLiteralHandler.isStringLiteral(value)) {
-          // First, strip the quotes and handle escapes
-          const parsedLiteral = this.stringLiteralHandler.parseLiteral(value);
-          
-          // Then resolve any variable references within the string
-          try {
-            resolvedValue = await this.resolutionService.resolveInContext(parsedLiteral, resolutionContext);
-          } catch (error) {
-            if (error instanceof ResolutionError) {
-              throw new DirectiveError(
-                'Failed to resolve variables in string literal',
-                this.kind,
-                DirectiveErrorCode.RESOLUTION_FAILED,
-                {
-                  node,
-                  context,
-                  cause: error,
-                  location: node.location,
-                  severity: DirectiveErrorSeverity[DirectiveErrorCode.RESOLUTION_FAILED]
-                }
-              );
-            }
-            throw error;
-          }
-        } else {
-          // For values with variables, resolve them using the resolution service
-          try {
-            resolvedValue = await this.resolutionService.resolveInContext(value, resolutionContext);
-          } catch (error) {
-            if (error instanceof ResolutionError) {
-              throw new DirectiveError(
-                'Failed to resolve variables in text directive',
-                this.kind,
-                DirectiveErrorCode.RESOLUTION_FAILED,
-                {
-                  node,
-                  context,
-                  cause: error,
-                  location: node.location,
-                  severity: DirectiveErrorSeverity[DirectiveErrorCode.RESOLUTION_FAILED]
-                }
-              );
-            }
-            throw error;
-          }
+          throw error;
         }
       }
 
