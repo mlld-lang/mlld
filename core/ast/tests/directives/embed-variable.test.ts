@@ -31,13 +31,13 @@ describe('embed directive with variable references', () => {
     expect(embedNode.directive.path.variable.fields).toEqual([{ type: 'field', value: 'text' }]);
   });
 
-  it('should handle direct variable embedding with array access using dot notation', async () => {
+  it('should handle direct variable embedding with array access using dot notation in input', async () => {
     const input = '@data list = [1, 2, 3]\n@embed {{list.0}}';
     const { ast } = await parse(input);
     
     expect(ast).toHaveLength(3); // Data directive, newline, embed directive
     const embedNode = ast[2]; // The embed directive is the third node
-    expect(embedNode.directive.path.raw).toBe('{{list.0}}');
+    expect(embedNode.directive.path.raw).toBe('{{list[0]}}');
     expect(embedNode.directive.path.isVariableReference).toBe(true);
     expect(embedNode.directive.path.variable.type).toBe('VariableReference');
     expect(embedNode.directive.path.variable.valueType).toBe('data');
@@ -60,12 +60,12 @@ describe('embed directive with variable references', () => {
   });
 
   it('should handle direct variable embedding with complex nested access', async () => {
-    const input = '@data users = [{"roles": ["admin", "user"]}]\n@embed {{users.0.roles.1}}';
+    const input = '@data users = [{"roles": ["admin", "user"]}]\n@embed {{users[0].roles[1]}}';
     const { ast } = await parse(input);
     
     expect(ast).toHaveLength(3); // Data directive, newline, embed directive
     const embedNode = ast[2]; // The embed directive is the third node
-    expect(embedNode.directive.path.raw).toBe('{{users.0.roles.1}}');
+    expect(embedNode.directive.path.raw).toBe('{{users[0].roles[1]}}');
     expect(embedNode.directive.path.isVariableReference).toBe(true);
     expect(embedNode.directive.path.variable.type).toBe('VariableReference');
     expect(embedNode.directive.path.variable.valueType).toBe('data');

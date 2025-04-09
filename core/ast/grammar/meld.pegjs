@@ -1390,3 +1390,25 @@ PathValue
 
     return validatedPath;
   }
+
+// Brackets [...] Interpolation
+BracketAllowedLiteralChar
+  = !(']' / '{{' / '$') char:. { return char; } // Allow any char except ], {{, $
+
+BracketLiteralTextSegment
+  = chars:BracketAllowedLiteralChar+ {
+      return createNode(NodeType.Text, { content: chars.join('') }, location());
+    }
+
+BracketInterpolatableContent
+  = parts:(BracketLiteralTextSegment / Variable)+ { // Variable must be tried first
+      // TODO: Add combineAdjacentTextNodes(parts) helper call here later?
+      return parts;
+    }
+
+BracketInterpolatableContentOrEmpty
+  = result:BracketInterpolatableContent? {
+      return result || [];
+    }
+
+// --- End Interpolation Rules ---
