@@ -160,20 +160,49 @@ Based on the lessons learned, we will proceed with the **inline, delimiter-speci
         *   **3c. Update Rule Action Calls:** Systematically go through all grammar rule actions (`{ ... }`) and prepend `helpers.` to all calls to the moved functions (e.g., `validatePath(...)` becomes `helpers.validatePath(...)`). Do this section by section or rule by rule. **Run `build:grammar && npm test core/ast` frequently.**
         *   **3d. Final Verification:** Once all calls are updated, run `npm run build:grammar && npm test core/ast` to ensure all tests still pass with the refactored helper access.
 
-4.  **(Was Step 3)** **Implement Delimiter-Specific Rules:** Add all `XxxAllowedLiteralChar`, `XxxLiteralTextSegment`, `XxxInterpolatableContent`, `XxxInterpolatableContentOrEmpty` rules into the "Complex Parsing" section. **Run `build:grammar`** after each group (DoubleQuote, SingleQuote, etc.).
-5.  **(Was Step 4)** **Implement Interpolated Literals:** Add `InterpolatedStringLiteral` and `InterpolatedMultilineTemplate` (returning arrays directly) into the "Complex Parsing" section. **Run `build:grammar`** after each.
-6.  **(Was Step 5)** **Update Directive Value Rules (One by One):**
-    *   Modify `TextValue` to use `Interpolated...` rules. **Run `build:grammar`**.
-    *   Modify `PropertyValue` (for `@data`). **Run `build:grammar`**.
-    *   Modify `DefineValue`. **Run `build:grammar`**.
-    *   Modify `PathValue` (handle raw vs interpolated carefully, using `helpers.reconstructRawString`). **Run `build:grammar`**.
-    *   Modify `_EmbedRHS` and `_RunRHS` to use interpolation logic internally (using `helpers.reconstructRawString` where needed). **Run `build:grammar`**.
-7.  **(Was Step 6)** **Run Full Tests:** Once the grammar builds cleanly after Step 6, run `npm test core/ast`. Expect many assertion failures.
-8.  **(Was Step 7)** **Update Tests Iteratively:**
-    *   Fix plain text tests first (expecting `TextNode` from `TextBlock`).
-    *   Fix directive tests one by one, updating assertions to expect `InterpolatableValue` arrays where appropriate. Pay attention to `content`, `value`, `command`, and `path.interpolatedValue` properties.
-    *   Use `test.only`/`it.only` and `test/debug-test.js` extensively.
-9.  **(Was Step 8)** **Refactor Downstream Consumers:** (Separate phase/PR).
+4.  **Implement Delimiter-Specific Rules:** Add the rules necessary for parsing content *within* various delimiters, accounting for potential variables. Place these in the "Core Data Structure / Complex Parsing Rules" section. **Run `build:grammar`** after adding each set to verify syntax immediately.
+    *   **4a. Double Quotes (`"..."`):** Add `DoubleQuoteAllowedLiteralChar`, `DoubleQuoteLiteralTextSegment`, `DoubleQuoteInterpolatableContent`, `DoubleQuoteInterpolatableContentOrEmpty`. Ensure `DoubleQuoteAllowedLiteralChar` uses lookahead `!('"' / '{{' / '\\')` to stop at quotes, escapes, or variable starts.
+    *   **4b. Single Quotes (`'...'`):** Add `SingleQuote...` rules, similar to Double Quotes but looking for `'`.
+    *   **4c. Backticks (``` `...` ```):** Add `Backtick...` rules, similar but looking for `` ` ``.
+    *   **4d. Multiline (`[[...]]`):** Add `Multiline...` rules. `MultilineAllowedLiteralChar` needs `!']]' !'{{'` lookahead.
+    *   **4e. Brackets (`[...]`):** Add `Bracket...` rules. **Crucially**, ensure `BracketAllowedLiteralChar` uses `!(']' / '{{' / '$')` lookahead. This allows literal nested brackets `[` but stops correctly for the closing `]`, text/data variables `{{`, and path variables `$`, fixing a previously identified parse error.
+    *   _Note:_ The `XxxInterpolatableContent` rules should generally try `Variable` before `XxxLiteralTextSegment` (`parts:(Variable / XxxLiteralTextSegment)+`) if Path Variables (`$var`) need to be parsed within that context (like Brackets). Otherwise, `parts:(XxxLiteralTextSegment / Variable)+` is fine. Ensure `Variable` matches all types (`TextVar | DataVar | PathVar`).
+
+5.  **Implement Interpolated Literals:** Define the top-level rules for string and multiline templates that consume the rules from Step 4 and produce the final `InterpolatableValue` array. Place these after the delimiter-specific rules in the "Core Data Structure / Complex Parsing Rules" section. **Run `build:grammar`** after adding each rule.
+    *   **5a. `InterpolatedStringLiteral`:** Define to handle `"..."`, `'...'`, and ``` `...` ```, using the corresponding `XxxInterpolatableContentOrEmpty` rules. The action code should simply be `{ return content; }` as `content` will hold the desired `InterpolatableValue` array.
+    *   **5b. `InterpolatedMultilineTemplate`:** Define to handle `[[...]]` using `MultilineInterpolatableContentOrEmpty`. Action code is `{ return content; }`.
+
+6.  **Update Directive Value Rules (One by One):** Modify existing rules that previously consumed simple literals (`StringLiteral`, `MultilineTemplateLiteral`, `DirectiveContent` for paths/commands) to use the new `Interpolated...` rules where appropriate. **Run `build:grammar`** after modifying each rule.
+    *   **6a. `TextValue` (@text):** Replace `StringLiteral` alternative with `InterpolatedStringLiteral`. Replace `MultilineTemplateLiteral` alternative with `InterpolatedMultilineTemplate`. The `value` property will now hold an `InterpolatableValue` array.
+    *   **6b. `PropertyValue` (@data):** Replace `StringLiteral` alternative with `InterpolatedStringLiteral`. String values within data structures will now be `InterpolatableValue` arrays.
+    *   **6c. `DefineValue` (@define):** Replace `StringLiteral` alternative with `InterpolatedStringLiteral`. The `value` property for string definitions will now hold an `InterpolatableValue` array.
+    *   **6d. `PathValue` (@path):** Replace `StringLiteral` alternative with `InterpolatedStringLiteral`. In the action code:
+        *   Call `helpers.reconstructRawString(interpolatedArray)` to get the raw path string.
+        *   Call `helpers.validatePath(rawString, { context: 'pathDirective' })` to get the validation result object.
+        *   Attach the original `interpolatedArray` to the result object as `interpolatedValue`.
+        *   Ensure the `PathVar` alternative returns the correct structured object (as fixed previously).
+    *   **6e. `_EmbedRHS` (helper for @embed, @data, @text):**
+        *   Modify the `[[...]]` alternative to use `MultilineInterpolatableContentOrEmpty`. The `content` property will now hold an `InterpolatableValue` array.
+        *   Modify the `[...]` alternative to use `BracketInterpolatableContentOrEmpty`. In the action code, follow the same pattern as `PathValue` (reconstruct raw, validate raw, attach original array as `interpolatedValue` to the resulting `path` object). Note the current simplification for handling sections (`#`) - the full array is attached.
+    *   **6f. `_RunRHS` (helper for @run, @data, @text, @define):**
+        *   Modify the `[[...]]` alternative to use `MultilineInterpolatableContentOrEmpty`. The `command` property will now hold an `InterpolatableValue` array.
+        *   Modify the `[...]` alternative to use `BracketInterpolatableContentOrEmpty`. The `command` property will now hold an `InterpolatableValue` array.
+
+7.  **Run Full Tests:** Once Step 6 is complete and the grammar builds, run `npm test core/ast`.
+    *   **Expected Failures:** Anticipate ~60-70+ test failures. These are primarily due to:
+        *   **Type Mismatches:** Assertions expecting `string` for properties like `value`, `content`, `command` will now receive `InterpolatableValue` arrays.
+        *   **Path Object Changes:** Assertions performing deep equality checks on `path` objects will fail due to the new `interpolatedValue` property.
+
+8.  **Update Tests Iteratively:** Address the failures from Step 7 systematically.
+    *   **Focus:** Prioritize fixing tests related to the specific directive value rule most recently changed in Step 6. Use `test.only` / `it.only` liberally.
+    *   **String vs. Array:** For properties that are now `InterpolatableValue` arrays:
+        *   If the original string had no variables, update the assertion to expect an array containing a single `TextNode`: `expect(node.directive.value).toEqual([{ type: 'Text', content: 'original string', location: expect.any(Object) }])`. Use `expect.any(Object)` for `location` initially unless precise locations are critical.
+        *   If the original string *did* contain variables, update the assertion to expect an array with the corresponding `TextNode` and `VariableReferenceNode` structure: `expect(node.directive.value).toEqual([ { type: 'Text', ... }, { type: 'VariableReference', identifier: 'varName', valueType: 'text', location: ... }, { type: 'Text', ... } ])`.
+    *   **Path Objects:** For tests failing on `path` objects (from `@path`, `@embed [...]`), update the `toEqual` assertion's expected object to include the `interpolatedValue` property, containing the expected array structure (usually a single `TextNode` if no variables were in the original path string).
+    *   **Array Access:** Remember the `raw` vs `fields` distinction for array access variables (`{{list[0]}}` vs `.0` in `fields`). Tests on the `raw` property (mainly in `_EmbedRHS` direct variable case) should expect bracket notation `[0]`. Tests on the `fields` array within the `VariableReferenceNode` should expect `{ type: 'index', value: 0 }`.
+    *   **Use `debug-test.js`:** If assertion differences are complex, use `node test/debug-test.js` to compare the expected vs. actual AST structures side-by-side.
+
+9.  **Refactor Downstream Consumers:** (Separate phase/PR).
 
 ## Progress Summary (As of 2024-10-27 - Updated)
 
