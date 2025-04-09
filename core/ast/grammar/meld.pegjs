@@ -570,8 +570,8 @@ VarFormat
 
 // Double Quotes
 DoubleQuoteAllowedLiteralChar
-  = !('"' / '{{' / '\\') char:. { return char; } // Not quote, not var start, not escape
-  / '\\' esc:. { return '\\' + esc; }          // Allow escaped characters
+  = !('"' / '{{' / '\\\\') char:. { return char; } // Not quote, not var start, not escape
+  / '\\\\' esc:. { return '\\\\' + esc; }          // Allow escaped characters
 
 DoubleQuoteLiteralTextSegment
   = chars:DoubleQuoteAllowedLiteralChar+ {
@@ -591,8 +591,8 @@ DoubleQuoteInterpolatableContentOrEmpty
 
 // Single Quotes
 SingleQuoteAllowedLiteralChar
-  = !('\'' / '{{' / '\\') char:. { return char; }
-  / '\\' esc:. { return '\\' + esc; }
+  = !('\'' / '{{' / '\\\\') char:. { return char; }
+  / '\\\\' esc:. { return '\\\\' + esc; }
 
 SingleQuoteLiteralTextSegment
   = chars:SingleQuoteAllowedLiteralChar+ {
@@ -611,8 +611,8 @@ SingleQuoteInterpolatableContentOrEmpty
 
 // Backticks (Template Literals)
 BacktickAllowedLiteralChar
-  = !('`' / '{{' / '\\') char:. { return char; }
-  / '\\' esc:. { return '\\' + esc; }
+  = !('`' / '{{' / '\\\\') char:. { return char; }
+  / '\\\\' esc:. { return '\\\\' + esc; }
 
 BacktickLiteralTextSegment
   = chars:BacktickAllowedLiteralChar+ {
@@ -635,7 +635,7 @@ MultilineAllowedLiteralChar
 
 MultilineLiteralTextSegment
   = chars:MultilineAllowedLiteralChar+ {
-      return helpers.createNode('Text', { content: chars.join('') }, location());
+      return helpers.createNode(NodeType.Text, { content: chars.join('') }, location());
     }
 
 MultilineInterpolatableContent
@@ -1547,7 +1547,7 @@ PathValue
 
 // Brackets [...] Interpolation
 BracketAllowedLiteralChar
-  = !(']' / '{{') char:. { return char; } // Allow any char except ] and {{
+  = !(']' / '{{' / '$') char:. { return char; } // Allow any char except ], {{, and $
 
 BracketLiteralTextSegment
   = chars:BracketAllowedLiteralChar+ {
