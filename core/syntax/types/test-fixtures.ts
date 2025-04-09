@@ -324,7 +324,7 @@ export const textTests: ParserTestCase[] = [
         kind: 'text',
         identifier: 'greeting',
         source: 'literal',
-        value: 'Hello, world!'
+        value: [{ type: 'Text', content: 'Hello, world!' }]
       }
     }
   }
