@@ -275,7 +275,10 @@ describe('Parser', () => {
       const node = ast[0] as DirectiveNode;
       expect(node.type).toBe('Directive');
       expect(node.directive.kind).toBe('run');
-      expect(node.directive.command).toBe('echo hello');
+      expect(node.directive.command).toEqual([
+        expect.objectContaining({ type: 'Text', content: 'echo hello' })
+      ]);
+      expect(node.directive.subtype).toBe('runCommand');
     });
 
     it('should parse a define directive', async () => {
@@ -287,8 +290,10 @@ describe('Parser', () => {
       expect(node.type).toBe('Directive');
       expect(node.directive.kind).toBe('define');
       expect(node.directive.name).toBe('command');
-      expect(node.directive.command.kind).toBe('run');
-      expect(node.directive.command.command).toBe('echo hello');
+      expect(node.directive.command.subtype).toBe('runCommand');
+      expect(node.directive.command.command).toEqual([
+        expect.objectContaining({ type: 'Text', content: 'echo hello' })
+      ]);
     });
 
     it('should parse a data directive', async () => {
@@ -301,7 +306,9 @@ describe('Parser', () => {
       expect(node.directive.kind).toBe('data');
       expect(node.directive.identifier).toBe('config');
       expect(node.directive.source).toBe('literal');
-      expect(node.directive.value).toEqual({ name: 'test' });
+      expect(node.directive.value).toEqual({
+        name: [ expect.objectContaining({ type: 'Text', content: 'test' }) ]
+      });
     });
 
     it('should parse a var directive', async () => {
@@ -399,12 +406,13 @@ describe('Parser', () => {
       expect(node.directive.kind).toBe('embed');
       expect(node.directive.path).toEqual({
         raw: 'path/to/file',
+        interpolatedValue: [ expect.objectContaining({ type: 'Text', content: 'path/to/file' }) ],
         normalized: 'path/to/file',
         structured: {
           base: '.',
           segments: ['path', 'to', 'file'],
-          variables: {},
-        },
+          variables: {}
+        }
       });
       expect(node.directive.subtype).toBe('embedPath');
     });

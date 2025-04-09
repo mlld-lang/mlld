@@ -12,7 +12,16 @@ export const dataTests: ParserTestCase[] = [
         kind: 'data',
         identifier: 'user',
         source: 'literal',
-        value: { name: 'John', age: 30 }
+        value: {
+          name: [
+            {
+              type: 'Text',
+              content: 'John',
+              location: expect.any(Object)
+            }
+          ],
+          age: 30
+        }
       }
     }
   },
@@ -69,8 +78,14 @@ export const defineTests: ParserTestCase[] = [
         kind: 'define',
         name: 'list',
         command: {
-          kind: 'run',
-          command: 'ls -la'
+          subtype: 'runCommand',
+          command: [
+            {
+              type: 'Text',
+              content: 'ls -la',
+              location: expect.any(Object)
+            }
+          ]
         }
       }
     }
@@ -102,6 +117,9 @@ export const embedTests: ParserTestCase[] = [
         subtype: 'embedPath',
         path: {
           raw: 'path/to/file.md',
+          interpolatedValue: [
+            { type: 'Text', content: 'path/to/file.md', location: expect.any(Object) }
+          ],
           normalized: 'path/to/file.md',
           structured: {
             base: '.',
@@ -123,6 +141,9 @@ export const embedTests: ParserTestCase[] = [
         subtype: 'embedPath',
         path: {
           raw: 'file.md:2',
+          interpolatedValue: [
+            { type: 'Text', content: 'file.md:2', location: expect.any(Object) }
+          ],
           normalized: './file.md:2',
           structured: {
             base: '.',
@@ -145,6 +166,9 @@ export const embedTests: ParserTestCase[] = [
         subtype: 'embedPath',
         path: {
           raw: 'file.md',
+          interpolatedValue: [
+            { type: 'Text', content: 'file.md', location: expect.any(Object) }
+          ],
           normalized: './file.md',
           structured: {
             base: '.',
@@ -293,7 +317,9 @@ export const runTests: ParserTestCase[] = [
       type: 'Directive',
       directive: {
         kind: 'run',
-        command: 'echo hello world',
+        command: [
+          { type: 'Text', content: 'echo hello world', location: expect.any(Object) }
+        ],
         subtype: 'runCommand'
       }
     }
@@ -324,7 +350,13 @@ export const textTests: ParserTestCase[] = [
         kind: 'text',
         identifier: 'greeting',
         source: 'literal',
-        value: [{ type: 'Text', content: 'Hello, world!' }]
+        value: [
+          expect.objectContaining({
+            type: 'Text',
+            content: 'Hello, world!',
+            location: expect.any(Object)
+          })
+        ]
       }
     }
   }

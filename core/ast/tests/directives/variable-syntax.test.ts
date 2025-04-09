@@ -70,8 +70,14 @@ describe('directives with variable syntax', () => {
     expect(ast).toHaveLength(1);
     expect(ast[0].type).toBe('Directive');
     expect(ast[0].directive.kind).toBe('run');
-    // For bracketed syntax it's still a string in the current implementation
-    expect(ast[0].directive.command).toBe('$command');
+    // For bracketed syntax, command is InterpolatableValue array
+    expect(ast[0].directive.command).toEqual([
+      expect.objectContaining({
+        type: 'VariableReference',
+        identifier: 'command',
+        valueType: 'path' // Since it's $command
+      })
+    ]);
   });
   
   it('should handle non-bracketed variable syntax in @run directive', async () => {
@@ -81,11 +87,12 @@ describe('directives with variable syntax', () => {
     expect(ast).toHaveLength(1);
     expect(ast[0].type).toBe('Directive');
     expect(ast[0].directive.kind).toBe('run');
-    // Validate the new command object structure
+    // For non-bracketed $command, it's parsed as CommandReference
     expect(ast[0].directive.command).toBeTypeOf('object');
     expect(ast[0].directive.command.name).toBe('command');
     expect(ast[0].directive.command.args).toEqual([]);
     expect(ast[0].directive.command.raw).toBe('$command');
+    expect(ast[0].directive.subtype).toBe('runDefined'); // Check subtype
   });
   
   // Test combined path variables and text variables in @embed directive

@@ -11,7 +11,9 @@ describe('manual/data-array', () => {
     expect(ast[0].directive.kind).toBe('data');
     expect(ast[0].directive.identifier).toBe('var');
     expect(ast[0].directive.source).toBe('literal');
-    expect(ast[0].directive.value).toEqual({ my: 'var' });
+    expect(ast[0].directive.value).toEqual({ 
+      my: [ expect.objectContaining({ type: 'Text', content: 'var' }) ] 
+    });
   });
   
   it('should parse @data with array containing objects', async () => {
@@ -23,7 +25,10 @@ describe('manual/data-array', () => {
     expect(ast[0].directive.kind).toBe('data');
     expect(ast[0].directive.identifier).toBe('var');
     expect(ast[0].directive.source).toBe('literal');
-    expect(ast[0].directive.value).toEqual([{ some: 'var' }, { another: 'var' }]);
+    expect(ast[0].directive.value).toEqual([
+      { some: [ expect.objectContaining({ type: 'Text', content: 'var' }) ] },
+      { another: [ expect.objectContaining({ type: 'Text', content: 'var' }) ] }
+    ]);
   });
   
   it('should parse @data with array containing comma at end', async () => {
@@ -35,7 +40,10 @@ describe('manual/data-array', () => {
     expect(ast[0].directive.kind).toBe('data');
     expect(ast[0].directive.identifier).toBe('var');
     expect(ast[0].directive.source).toBe('literal');
-    expect(ast[0].directive.value).toEqual([{ some: 'var' }, { another: 'var' }]);
+    expect(ast[0].directive.value).toEqual([
+      { some: [ expect.objectContaining({ type: 'Text', content: 'var' }) ] },
+      { another: [ expect.objectContaining({ type: 'Text', content: 'var' }) ] }
+    ]);
   });
   
   it('should parse @data with nested arrays and objects', async () => {
@@ -47,6 +55,14 @@ describe('manual/data-array', () => {
     expect(ast[0].directive.kind).toBe('data');
     expect(ast[0].directive.identifier).toBe('var');
     expect(ast[0].directive.source).toBe('literal');
-    expect(ast[0].directive.value).toEqual([{ items: ['a', 'b'] }, { nested: { x: 1 } }]);
+    expect(ast[0].directive.value).toEqual([
+      { 
+        items: [
+          [ expect.objectContaining({ type: 'Text', content: 'a' }) ], 
+          [ expect.objectContaining({ type: 'Text', content: 'b' }) ]
+        ] 
+      },
+      { nested: { x: 1 } }
+    ]);
   });
 });

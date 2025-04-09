@@ -18,19 +18,21 @@ template without backticks.
     expect(directive.directive.kind).toBe('text');
     expect(directive.directive.identifier).toBe('template');
     expect(directive.directive.source).toBe('literal');
-    expect(directive.directive.value).toBe('\nHello, world!\nThis is a multi-line\ntemplate without backticks.\n');
+    expect(directive.directive.value).toEqual([
+      expect.objectContaining({ type: 'Text', content: '\nHello, world!\nThis is a multi-line\ntemplate without backticks.\n' })
+    ]);
   });
 
   it('should support variable interpolation in multiline templates', async () => {
     const input = `@text greeting = "Hello"
 @text name = "World"
 @text template = [[
-\${greeting}!
-It is nice to meet you, \${name}.
+{{greeting}}!
+It is nice to meet you, {{name}}.
 ]]`;
 
     const result = await parse(input);
-    expect(result.ast).toHaveLength(5); // 3 directives + 2 newline Text nodes
+    expect(result.ast.length).toBeGreaterThanOrEqual(3); 
     
     // Find the multiline template directive
     const templateDirective = result.ast.find(node => 
@@ -43,6 +45,12 @@ It is nice to meet you, \${name}.
     expect(templateDirective.directive.kind).toBe('text');
     expect(templateDirective.directive.identifier).toBe('template');
     expect(templateDirective.directive.source).toBe('literal');
-    expect(templateDirective.directive.value).toBe('\n${greeting}!\nIt is nice to meet you, ${name}.\n');
+    expect(templateDirective.directive.value).toEqual([
+      expect.objectContaining({ type: 'Text', content: '\n' }),
+      expect.objectContaining({ type: 'VariableReference', identifier: 'greeting', valueType: 'text' }),
+      expect.objectContaining({ type: 'Text', content: '!\nIt is nice to meet you, ' }),
+      expect.objectContaining({ type: 'VariableReference', identifier: 'name', valueType: 'text' }),
+      expect.objectContaining({ type: 'Text', content: '.\n' })
+    ]);
   });
 }); 

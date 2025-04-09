@@ -42,7 +42,13 @@ describe('directives/@embed invalid syntax', () => {
     // The input should be treated as content, not a path
     const node = result.ast[0] as DirectiveNode;
     expect(node.directive.content).toBeDefined();
-    expect(node.directive.content).toBe(' path/to/file.md ');
+    // Check for the InterpolatableValue structure
+    expect(node.directive.content).toEqual([
+      expect.objectContaining({
+        type: 'Text',
+        content: ' path/to/file.md '
+      })
+    ]);
     expect(node.directive.path).toBeUndefined();
     // No section should be parsed
     expect(node.directive.section).toBeUndefined();
@@ -63,7 +69,13 @@ describe('directives/@embed invalid syntax', () => {
     
     const node2 = result2.ast[0] as DirectiveNode;
     expect(node2.directive.content).toBeDefined();
-    expect(node2.directive.content).toBe(' $file_path ');
+    // Check for the InterpolatableValue structure
+    expect(node2.directive.content).toEqual([
+      expect.objectContaining({
+        type: 'Text',
+        content: ' $file_path '
+      })
+    ]);
     // No path variable should be extracted
     expect(node2.directive.path).toBeUndefined();
   });

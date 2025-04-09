@@ -83,7 +83,9 @@ describe('directives/@embed syntax boundaries', () => {
       expect(directive.type).toBe('Directive');
       expect(directive.directive.kind).toBe('embed');
       expect(directive.directive.content).toBeDefined();
-      expect(directive.directive.content).toBe(' Simple content ');
+      expect(directive.directive.content).toEqual([
+        expect.objectContaining({ type: 'Text', content: ' Simple content ' })
+      ]);
       expect(directive.directive.path).toBeUndefined();
     });
 
@@ -100,7 +102,9 @@ Line 3
       expect(directive.type).toBe('Directive');
       expect(directive.directive.kind).toBe('embed');
       expect(directive.directive.content).toBeDefined();
-      expect(directive.directive.content).toBe('\nLine 1\nLine 2\nLine 3\n');
+      expect(directive.directive.content).toEqual([
+        expect.objectContaining({ type: 'Text', content: '\nLine 1\nLine 2\nLine 3\n' })
+      ]);
       expect(directive.directive.path).toBeUndefined();
     });
 
@@ -118,7 +122,11 @@ Line 3
       expect(directive).toBeDefined();
       expect(directive.directive.kind).toBe('embed');
       expect(directive.directive.content).toBeDefined();
-      expect(directive.directive.content).toBe(' Hello, {{name}}! ');
+      expect(directive.directive.content).toEqual([
+        expect.objectContaining({ type: 'Text', content: ' Hello, ' }),
+        expect.objectContaining({ type: 'VariableReference', identifier: 'name', valueType: 'text' }),
+        expect.objectContaining({ type: 'Text', content: '! ' })
+      ]);
       expect(directive.directive.path).toBeUndefined();
     });
 
@@ -131,7 +139,9 @@ Line 3
       expect(directive.type).toBe('Directive');
       expect(directive.directive.kind).toBe('embed');
       expect(directive.directive.content).toBeDefined();
-      expect(directive.directive.content).toBe(' Content with $path_var ');
+      expect(directive.directive.content).toEqual([
+        expect.objectContaining({ type: 'Text', content: ' Content with $path_var ' })
+      ]);
       expect(directive.directive.path).toBeUndefined();
     });
 
@@ -144,7 +154,9 @@ Line 3
       expect(directive.type).toBe('Directive');
       expect(directive.directive.kind).toBe('embed');
       expect(directive.directive.content).toBeDefined();
-      expect(directive.directive.content).toBe(' file.md # Introduction ');
+      expect(directive.directive.content).toEqual([
+        expect.objectContaining({ type: 'Text', content: ' file.md # Introduction ' })
+      ]);
       expect(directive.directive.section).toBeUndefined();
       expect(directive.directive.path).toBeUndefined();
     });

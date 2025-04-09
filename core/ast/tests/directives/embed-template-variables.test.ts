@@ -14,7 +14,12 @@ describe('Embed directive with double brackets and variables', () => {
     );
     
     expect(embedNode).toBeDefined();
-    expect(embedNode.directive.content).toBe(' This is content with {{variable}} ');
+    // Check for interpolated structure
+    expect(embedNode.directive.content).toEqual([
+      expect.objectContaining({ type: 'Text', content: ' This is content with ' }),
+      expect.objectContaining({ type: 'VariableReference', identifier: 'variable', valueType: 'text' }),
+      expect.objectContaining({ type: 'Text', content: ' ' })
+    ]);
     // Ensure no warnings are generated
     expect(embedNode.warnings).toBeUndefined();
   });
@@ -28,7 +33,10 @@ describe('Embed directive with double brackets and variables', () => {
     
     expect(embedNode.type).toBe('Directive');
     expect(embedNode.directive.kind).toBe('embed');
-    expect(embedNode.directive.content).toBe(' This is content with $pathVariable ');
+    // Check for literal structure
+    expect(embedNode.directive.content).toEqual([
+      expect.objectContaining({ type: 'Text', content: ' This is content with $pathVariable ' })
+    ]);
     // Ensure no warnings are generated
     expect(embedNode.warnings).toBeUndefined();
   });
@@ -48,8 +56,18 @@ describe('Embed directive with double brackets and variables', () => {
     );
     
     expect(embedNode).toBeDefined();
-    expect(embedNode.directive.content).toContain('{{user.name}}');
-    expect(embedNode.directive.content).toContain('$thisPathVariable');
+    // Check the full interpolated structure
+    const expectedContent = [
+      expect.objectContaining({ type: 'Text', content: '\n    This text should highlight differently than ' }),
+      expect.objectContaining({ 
+        type: 'VariableReference', 
+        identifier: 'user', 
+        valueType: 'data', 
+        fields: [expect.objectContaining({ type: 'field', value: 'name' })]
+      }),
+      expect.objectContaining({ type: 'Text', content: ' or \n    $thisPathVariable. \n' })
+    ];
+    expect(embedNode.directive.content).toEqual(expectedContent);
     // Ensure no warnings are generated
     expect(embedNode.warnings).toBeUndefined();
   });
@@ -66,8 +84,18 @@ describe('Embed directive with double brackets and variables', () => {
     
     expect(embedNode.type).toBe('Directive');
     expect(embedNode.directive.kind).toBe('embed');
-    expect(embedNode.directive.content).toContain('{{this.variable}}');
-    expect(embedNode.directive.content).toContain('$thisPathVariable');
+    // Check the full interpolated structure
+    const expectedContent = [
+      expect.objectContaining({ type: 'Text', content: '\n    This text should highlight differently than ' }),
+      expect.objectContaining({ 
+        type: 'VariableReference', 
+        identifier: 'this', 
+        valueType: 'data',
+        fields: [expect.objectContaining({ type: 'field', value: 'variable' })]
+      }),
+      expect.objectContaining({ type: 'Text', content: ' or \n    $thisPathVariable. \n' })
+    ];
+    expect(embedNode.directive.content).toEqual(expectedContent);
     // Ensure no warnings are generated
     expect(embedNode.warnings).toBeUndefined();
   });
