@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+w#!/usr/bin/env node
 
 /**
  * Script to compare output between meld-ast versions
