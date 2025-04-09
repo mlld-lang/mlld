@@ -608,6 +608,11 @@ MultilineLiteralTextSegment
       return createNode(NodeType.Text, { content: chars.join('') }, location());
     }
 
+MultilineInterpolatableContent
+  = parts:(MultilineLiteralTextSegment / Variable)+ {
+      return parts;
+    }
+
 // --- End Interpolation Rules (for now) ---
 
 // Helper rule for parsing RHS @embed variations
