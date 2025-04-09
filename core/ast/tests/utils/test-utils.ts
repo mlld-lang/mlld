@@ -209,6 +209,25 @@ function updateExpectedAstProperties(obj: any): any {
   return result;
 }
 
+// Helper function to recursively strip location properties from an AST node/array
+function stripLocations(node: any): any {
+  if (node === null || typeof node !== 'object') {
+    return node;
+  }
+
+  if (Array.isArray(node)) {
+    return node.map(stripLocations);
+  }
+
+  const newNode: any = {};
+  for (const key in node) {
+    if (key !== 'location') {
+      newNode[key] = stripLocations(node[key]);
+    }
+  }
+  return newNode;
+}
+
 /**
  * Helper function to test valid parser test cases
  */
@@ -239,19 +258,19 @@ export async function testValidCase(test: ParserTestCase) {
     return;
   }
   
-  // Remove location info before comparing
-  const node = ast[0] as MeldNode;
-  const { location, ...actualNode } = node;
+  // Remove location info before comparing - RECURSIVELY
+  const actualNodeWithoutLocations = stripLocations(ast[0]);
   
   // Special handling for path variables in import tests
-  // If the test is for "Import with path variable", remove cwd: true from the actual output
+  // Apply this *after* stripping locations
   if (test.description === 'Import with path variable' && 
-      actualNode.directive?.path?.structured?.cwd === true) {
-    delete actualNode.directive.path.structured.cwd;
+      actualNodeWithoutLocations.directive?.path?.structured?.cwd === true) {
+    delete actualNodeWithoutLocations.directive.path.structured.cwd;
   }
   
   // Special handling for path objects - accept simple string or full object
-  if (typeof expected.directive?.path === 'string' && typeof actualNode.directive?.path === 'object') {
+  // Apply this *after* stripping locations
+  if (typeof expected.directive?.path === 'string' && typeof actualNodeWithoutLocations.directive?.path === 'object') {
     // This handles the case where expected has a simple string path
     // but actual has a complex path object
     expected.directive.path = {
@@ -265,8 +284,9 @@ export async function testValidCase(test: ParserTestCase) {
   }
   
   // Special handling for normalized paths - they can differ between implementations
-  if (actualNode.directive?.path?.normalized) {
-    delete actualNode.directive.path.normalized;
+  // Apply this *after* stripping locations
+  if (actualNodeWithoutLocations.directive?.path?.normalized) {
+    delete actualNodeWithoutLocations.directive.path.normalized;
   }
   if (expected.directive?.path?.normalized) {
     delete expected.directive.path.normalized;
@@ -274,24 +294,26 @@ export async function testValidCase(test: ParserTestCase) {
   
   // For all test cases involving special nested objects like 'header_level', etc.
   // extract them to the top level if needed
-  if (actualNode.directive?.path?.raw?.includes(':') && expected.directive?.header_level) {
+  // Apply this *after* stripping locations
+  if (actualNodeWithoutLocations.directive?.path?.raw?.includes(':') && expected.directive?.header_level) {
     // Extract header level from path.raw and add it to the directive directly
-    actualNode.directive.header_level = parseInt(actualNode.directive.path.raw.split(':')[1], 10);
+    actualNodeWithoutLocations.directive.header_level = parseInt(actualNodeWithoutLocations.directive.path.raw.split(':')[1], 10);
   }
   
-  if (actualNode.directive?.path?.raw?.includes('#') && expected.directive?.section) {
+  if (actualNodeWithoutLocations.directive?.path?.raw?.includes('#') && expected.directive?.section) {
     // Extract section from path.raw and add it to the directive directly
-    const sectionMatch = actualNode.directive.path.raw.match(/#([^:]+)/);
+    const sectionMatch = actualNodeWithoutLocations.directive.path.raw.match(/#([^:]+)/);
     if (sectionMatch) {
-      actualNode.directive.section = sectionMatch[1];
+      actualNodeWithoutLocations.directive.section = sectionMatch[1];
     }
   }
   
   try {
-    expect(actualNode).toEqual(expected);
+    // Compare the location-stripped actual node with the expected fixture
+    expect(actualNodeWithoutLocations).toEqual(expected);
   } catch (error) {
     console.error('Test failed for input:', test.input);
-    console.error('Actual:', JSON.stringify(actualNode, null, 2));
+    console.error('Actual (with locations stripped):', JSON.stringify(actualNodeWithoutLocations, null, 2));
     console.error('Expected:', JSON.stringify(expected, null, 2));
     throw error;
   }

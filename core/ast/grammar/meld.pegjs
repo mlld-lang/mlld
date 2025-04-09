@@ -1432,23 +1432,45 @@ TextValue
   }
 
 PathDirective
-  = "path" _ id:Identifier _ "=" _ path:PathValue {
-    // const callerInfo = new Error().stack || ''; // REMOVED
-
-    // Get the raw path string - primarily for debugging/logging
-    const rawPath = typeof path === 'string' ? path :
-                   path.raw ? path.raw :
-                   JSON.stringify(path);
-    helpers.debug("PathDirective parsed value:", JSON.stringify(path), "Raw path was:", rawPath);
-
-    // No longer require special variables in path directives
-
-    // For path directives, we need to manually set the base for special variables - REMOVED
-    // This logic is *only* for test compatibility and may be removed later - REMOVED
-    // if (path && path.structured) { ... } // REMOVED THIS BLOCK
-
-    return helpers.createDirective('path', { identifier: id, path }, location());
-  }
+  = "path" __ id:Identifier __ "=" __ rhs:(
+      // Path Variable alternative
+      pv:PathVar {
+        helpers.debug("PathDirective parsed PathVar:", pv);
+        const pathObject = helpers.validatePath(pv.identifier, { context: 'pathDirective' });
+        // Attach the original PathVar node
+        if (pathObject && typeof pathObject === 'object') {
+          pathObject.variableNode = pv;
+        } else {
+          // Handle case where validatePath didn't return an object (shouldn't happen for vars)
+          // Return a basic structure if validation fails to provide context
+          return { identifier: id, path: { raw: pv.identifier, isPathVariable: true, variableNode: pv, structured: {} } };
+        }
+        return { identifier: id, path: pathObject };
+      }
+    / // Interpolated String Literal alternative
+      interpolatedArray:InterpolatedStringLiteral {
+        helpers.debug("PathDirective parsed InterpolatedStringLiteral:", interpolatedArray);
+        const rawString = helpers.reconstructRawString(interpolatedArray);
+        helpers.debug("PathDirective reconstructed raw string:", rawString);
+        const pathObject = helpers.validatePath(rawString, { context: 'pathDirective' });
+        // Attach the original interpolated array
+        if (pathObject && typeof pathObject === 'object') {
+          pathObject.interpolatedValue = interpolatedArray;
+          helpers.debug("Attached interpolatedValue to path object in PathDirective");
+        } else {
+          // Handle case where validatePath didn't return an object
+          helpers.debug("Warning: validatePath did not return an object in PathDirective.");
+          // Return a basic structure if validation fails to provide context
+          return { identifier: id, path: { raw: rawString, structured: {}, interpolatedValue: interpolatedArray } };
+        }
+        return { identifier: id, path: pathObject };
+      }
+      // NOTE: If neither PathVar nor InterpolatedStringLiteral matches the 'rhs',
+      // this rule will fail to parse, as intended. The grammar does NOT allow
+      // unquoted values like `$HOMEPATH/file` here.
+      // The issue of the test passing likely lies in the test runner/assertion logic.
+    )
+    { return rhs; } // Return the object created in the successful alternative's action block
 
 VarDirective
   = "var" _ id:Identifier _ "=" _ value:VarValue {

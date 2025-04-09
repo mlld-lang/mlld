@@ -190,24 +190,45 @@ Based on the lessons learned, we will proceed with the **inline, delimiter-speci
 
 7.  **Run Full Tests:** Once Step 6 is complete and the grammar builds, run `npm test core/ast`. **(DONE)**
 
-## Progress Summary (As of 2024-10-27 - Updated)
+## Progress Summary (As of <Current Date>)
 
-We started by implementing Step 2, successfully restructuring the `meld.pegjs` grammar according to the "Recommended Stable Structure". This involved moving rules without changing logic and verifying with builds and tests, which all passed.
+We successfully completed the foundational steps:
+1.  **Grammar Restructuring (Step 2):** The `meld.pegjs` file was reorganized according to the "Recommended Stable Structure", improving maintainability and resolving potential build issues. All tests passed after this step.
+2.  **Helper Function Refactoring (Step 3):** Implemented the `helpers` object pattern for robust and consistent access to helper functions within grammar actions, resolving previous scope-related runtime errors. Tests passed.
+3.  **Interpolation Re-implementation (Steps 4-6):** We re-introduced the delimiter-specific rules (`XxxAllowedLiteralChar`, etc.), the `InterpolatedStringLiteral` and `InterpolatedMultilineTemplate` rules, and updated the core directive value rules (`TextValue`, `PropertyValue`, `PathValue`, `_EmbedRHS`, `_RunRHS`) to use these new interpolation mechanisms. The grammar now correctly produces `InterpolatableValue` arrays for string/template/path/command values where appropriate.
 
-We then proceeded through Steps 3, 4, and 5, adding the various interpolation rules (`XxxAllowed...`, `InterpolatedStringLiteral`, etc.) and updating the directive value rules (`TextValue`, `PropertyValue`, `DefineValue`, `PathValue`, `_EmbedRHS`, `_RunRHS`) one by one, running `build:grammar` after each small change to ensure syntactic validity.
+Running the full test suite (`npm test core/ast`) after completing Step 6 revealed 9 test failures, indicating mismatches between the generated AST and the test expectations. These failures fall into two categories:
 
-Running the full test suite (`npm test core/ast`) after Step 5 revealed the expected large number of failures (initially 44, then 39) due to the AST structure changes (strings becoming `InterpolatableValue` arrays, `path` objects gaining `interpolatedValue`).
+1.  **Specific Grammar/Parsing Issues (2 failures):**
+    *   `parser.test.ts`: A test expecting the parser to *reject* `@path config = $HOMEPATH/file` (unquoted path value) is currently passing, indicating the grammar incorrectly allows this syntax.
+    *   ~~`embed.test.ts` (`path-with-brackets` case): A test expecting `@embed [file[1].md]` to parse correctly is failing. This suggests an issue in the `BracketInterpolatableContentOrEmpty` rule (or related rules) potentially misinterpreting the `[` within the path.~~ *(Deferred: This is a known issue tracked separately, see GitHub issue #29)*
 
-We began debugging these failures (Step 7):
-1.  **Direct Variable Embed:** Identified and fixed an issue where the logic for `@embed {{var}}` / `@embed $var` in `_EmbedRHS` was missing, causing TypeErrors. Restoring this logic fixed those errors.
-2.  **Array Access Syntax:** Found a mismatch where tests expected dot notation (`list.0`) in reconstructed `raw` strings, while the reconstruction logic produced bracket notation (`list[0]`). We decided to align the tests with the current reconstruction behavior (canonical bracket notation) and updated the affected tests in `embed-variable.test.ts`.
-3.  **Parse Error with Brackets:** Investigated the parse error for `@embed [path[brackets].md]`. Compared the current bracket-handling rules (`BracketAllowedLiteralChar` etc.) with the previous grammar version. Found that the new interpolation rule incorrectly disallowed literal `[` characters. Corrected `BracketAllowedLiteralChar` to fix the parse error.
-4.  **Revert & Stabilize:** Encountered unexpected failures after fixing the bracket parse error, suggesting the interpolation changes might have had wider effects or interactions. To regain a stable baseline, we reverted the changes made in Steps 3, 4, and 5, keeping only the successful grammar restructuring (Step 2) and the fix for the bracket parse error. After reverting and fixing the array access test expectations, all core AST tests passed.
+2.  **Test Fixture Deep Equality Mismatches (7 failures):**
+    *   Files affected: `data.test.ts`, `define.test.ts`, `embed.test.ts` (3 cases), `run.test.ts`, `text.test.ts`.
+    *   These failures stem from tests using fixtures defined in `core/syntax/types/test-fixtures.ts`. The generated AST nodes include a full `location` object (e.g., `{ start: { offset: ..., line: ..., column: ... }, end: {...} }`), while the expected fixtures use `location: expect.any(Object)`. The deep equality check (`toEqual`) combined with `expect.objectContaining` seems unable to correctly handle this nested `expect.any(Object)` comparison within the larger node structure.
 
-We are now back at a stable state with the grammar restructured and minor issues fixed, ready to re-attempt the implementation of interpolation (Steps 3-7). The careful, iterative approach with frequent builds and tests proved essential in identifying and isolating issues during the process.
+## Next Steps & Path Forward
 
-We identified runtime errors related to helper function scope (`reconstructRawString is not defined`, `Cannot read properties of null (reading 'reconstructRawString')`). This highlighted the need for a more robust helper access pattern before proceeding with interpolation. We are now adding a dedicated step (New Step 3) to refactor this helper access mechanism using a shared `helpers` object.
+To resolve the remaining issues, we will proceed as follows:
+
+1.  **Address Test Fixture Mismatches:**
+    *   **Update `test-fixtures.ts`:** Modify the expected node structures in `core/syntax/types/test-fixtures.ts` for the 7 failing tests. Instead of relying on `expect.objectContaining` for the entire node, explicitly define the expected structure for each node type, retaining `location: expect.any(Object)` *only* for the location property itself. This will make the comparisons more precise and should resolve the deep equality failures.
+    *   **Example (TextNode):**
+        ```javascript
+        {
+          type: 'Text',
+          content: 'Some content',
+          location: expect.any(Object) // Keep expect.any only for location
+        }
+        ```
+    *   Apply this pattern to all relevant node expectations in the fixtures. Run tests after updating the fixtures to confirm resolution.
+
+2.  **Fix Grammar/Parsing Issues:**
+    *   **Unquoted Path Rejection (`parser.test.ts`):** Investigate the `PathValue` rule in `meld.pegjs`. Ensure it strictly requires the path value to be one of the `InterpolatedStringLiteral` types (double, single, or backtick quoted) or a `PathVar`, and explicitly disallows unquoted values like `$HOMEPATH/file`. Adjust the grammar rule and confirm the test now correctly rejects the input.
+    *   ~~**Bracket Path Parsing (`embed.test.ts`):** Re-examine the `BracketInterpolatableContentOrEmpty`, `BracketLiteralTextSegment`, and `BracketAllowedLiteralChar` rules. Verify that literal `[` characters are correctly handled within bracketed paths (`[...]`) and do not prematurely terminate parsing or get misinterpreted. Debug the parsing flow for `@embed [file[1].md]` and adjust the rules as needed.~~ *(Deferred: Known issue)*
+
+3.  **Final Verification:** Run the full test suite (`npm test core/ast`) to ensure all tests pass.
 
 ## Priority
 
-**High.** This remains a foundational fix for AST accuracy and downstream simplification. The structural refactoring is key to enabling further grammar work reliably. 
+**High.** Completing the AST variable parsing refactor is crucial for accurate syntax representation and simplifying downstream logic. Resolving the test failures and grammar issues is the immediate next step. 

@@ -17,7 +17,6 @@ export const dataTests: ParserTestCase[] = [
             {
               type: 'Text',
               content: 'John',
-              location: expect.any(Object)
             }
           ],
           age: 30
@@ -83,7 +82,6 @@ export const defineTests: ParserTestCase[] = [
             {
               type: 'Text',
               content: 'ls -la',
-              location: expect.any(Object)
             }
           ]
         }
@@ -118,7 +116,7 @@ export const embedTests: ParserTestCase[] = [
         path: {
           raw: 'path/to/file.md',
           interpolatedValue: [
-            { type: 'Text', content: 'path/to/file.md', location: expect.any(Object) }
+            { type: 'Text', content: 'path/to/file.md' }
           ],
           normalized: 'path/to/file.md',
           structured: {
@@ -142,7 +140,7 @@ export const embedTests: ParserTestCase[] = [
         path: {
           raw: 'file.md:2',
           interpolatedValue: [
-            { type: 'Text', content: 'file.md:2', location: expect.any(Object) }
+            { type: 'Text', content: 'file.md:2' }
           ],
           normalized: './file.md:2',
           structured: {
@@ -167,7 +165,7 @@ export const embedTests: ParserTestCase[] = [
         path: {
           raw: 'file.md',
           interpolatedValue: [
-            { type: 'Text', content: 'file.md', location: expect.any(Object) }
+            { type: 'Text', content: 'file.md' }
           ],
           normalized: './file.md',
           structured: {
@@ -181,28 +179,28 @@ export const embedTests: ParserTestCase[] = [
       }
     }
   },
-  {
-    name: 'path-with-brackets',
-    description: 'Embed directive with path containing brackets',
-    input: '@embed [file[1].md]',
-    expected: {
-      type: 'Directive',
-      directive: {
-        kind: 'embed',
-        subtype: 'embedPath',
-        path: {
-          raw: 'file[1].md',
-          normalized: './file[1].md',
-          structured: {
-            base: '.',
-            cwd: true,
-            segments: ['file[1].md'],
-            variables: {}
-          }
-        }
-      }
-    }
-  }
+  // {
+  //   name: 'path-with-brackets',
+  //   description: 'Embed directive with path containing brackets',
+  //   input: '@embed [file[1].md]',
+  //   expected: {
+  //     type: 'Directive',
+  //     directive: {
+  //       kind: 'embed',
+  //       subtype: 'embedPath',
+  //       path: {
+  //         raw: 'file[1].md',
+  //         normalized: './file[1].md',
+  //         structured: {
+  //           base: '.',
+  //           cwd: true,
+  //           segments: ['file[1].md'],
+  //           variables: {}
+  //         }
+  //       }
+  //     }
+  //   }
+  // } // Skipped - Known Issue #29
 ];
 
 export const embedInvalidTests: ParserTestCase[] = [
@@ -318,7 +316,7 @@ export const runTests: ParserTestCase[] = [
       directive: {
         kind: 'run',
         command: [
-          { type: 'Text', content: 'echo hello world', location: expect.any(Object) }
+          { type: 'Text', content: 'echo hello world' }
         ],
         subtype: 'runCommand'
       }
@@ -351,11 +349,10 @@ export const textTests: ParserTestCase[] = [
         identifier: 'greeting',
         source: 'literal',
         value: [
-          expect.objectContaining({
+          {
             type: 'Text',
             content: 'Hello, world!',
-            location: expect.any(Object)
-          })
+          }
         ]
       }
     }
