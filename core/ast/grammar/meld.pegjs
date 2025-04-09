@@ -579,6 +579,35 @@ SingleQuoteInterpolatableContentOrEmpty
       return result || [];
     }
 
+// Backticks (Template Literals)
+BacktickAllowedLiteralChar
+  = !('`' / '{{' / '\\') char:. { return char; }
+  / '\\' esc:. { return '\\' + esc; }
+
+BacktickLiteralTextSegment
+  = chars:BacktickAllowedLiteralChar+ {
+      return createNode(NodeType.Text, { content: chars.join('') }, location());
+    }
+
+BacktickInterpolatableContent
+  = parts:(BacktickLiteralTextSegment / Variable)+ {
+      return parts;
+    }
+
+BacktickInterpolatableContentOrEmpty
+  = result:BacktickInterpolatableContent? {
+      return result || [];
+    }
+
+// Multiline [[...]]
+MultilineAllowedLiteralChar
+  = !']]' !'{{' char:. { return char; } // Not end delimiter, not var start
+
+MultilineLiteralTextSegment
+  = chars:MultilineAllowedLiteralChar+ {
+      return createNode(NodeType.Text, { content: chars.join('') }, location());
+    }
+
 // --- End Interpolation Rules (for now) ---
 
 // Helper rule for parsing RHS @embed variations
