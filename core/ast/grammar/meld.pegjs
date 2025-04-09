@@ -559,6 +559,26 @@ DoubleQuoteInterpolatableContentOrEmpty
       return result || [];
     }
 
+// Single Quotes
+SingleQuoteAllowedLiteralChar
+  = !('\'' / '{{' / '\\') char:. { return char; }
+  / '\\' esc:. { return '\\' + esc; }
+
+SingleQuoteLiteralTextSegment
+  = chars:SingleQuoteAllowedLiteralChar+ {
+      return createNode(NodeType.Text, { content: chars.join('') }, location());
+    }
+
+SingleQuoteInterpolatableContent
+  = parts:(SingleQuoteLiteralTextSegment / Variable)+ {
+      return parts;
+    }
+
+SingleQuoteInterpolatableContentOrEmpty
+  = result:SingleQuoteInterpolatableContent? {
+      return result || [];
+    }
+
 // --- End Interpolation Rules (for now) ---
 
 // Helper rule for parsing RHS @embed variations
