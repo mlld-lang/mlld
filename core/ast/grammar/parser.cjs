@@ -393,13 +393,20 @@ function peg$parse(input, options) {
     return { type: 'field', value: field };
   };
   var peg$f13 = function(index) {
-    return { type: 'index', value: parseInt(index, 10) };
+    return { type: 'dotIndex', value: parseInt(index, 10) };
   };
   var peg$f14 = function(digits) {
     return digits.join('');
   };
   var peg$f15 = function(index) {
-    return { type: 'index', value: index };
+    // Determine the type of the index for bracketIndex
+    let indexValue = index;
+    // If index looks like a parsed VariableReference node (from Identifier),
+    // we might want its raw identifier name instead of the whole node?
+    // Or maybe ArrayAccess shouldn't parse Identifier directly?
+    // For now, assume index holds the direct value (string, number).
+    // Let's refine this if needed.
+    return { type: 'bracketIndex', value: indexValue };
   };
   var peg$f16 = function(format) {
     return format;
@@ -452,7 +459,7 @@ function peg$parse(input, options) {
   var peg$f37 = function(chars) {
       return createNode(NodeType.Text, { content: chars.join('') }, location());
     };
-  var peg$f38 = function(parts) { // Variable must be tried first
+  var peg$f38 = function(parts) { // Explicitly allow [ as a part
       // TODO: Add combineAdjacentTextNodes(parts) helper call here later?
       return parts;
     };
@@ -476,8 +483,53 @@ function peg$parse(input, options) {
      };
    };
   var peg$f45 = function(variable, options) {
-     // Variable embed {{...}} or $... (No change needed here)
-     // ... existing code ...
+     // Variable embed {{...}} or $...
+     const variableText = variable.valueType === 'text'
+       ? `{{${variable.identifier}}}`
+       : variable.valueType === 'data'
+         ? `{{${variable.identifier}${variable.fields && variable.fields.length > 0 ? variable.fields.map(f => {
+             if (f.type === 'field') return '.' + f.value;
+             // Use dot/bracket index types
+             if (f.type === 'dotIndex') return '.' + f.value;
+             if (f.type === 'bracketIndex') {
+               if (typeof f.value === 'string') return `[\"${f.value}\"]`;
+               return `[${f.value}]`;
+             }
+             return '';
+           }).join('') : ''}}}` // Handle case where fields might be null/empty
+         : variable.valueType === 'path'
+           ? `$${variable.identifier}` // Path vars don't have fields in this context
+           : '';
+
+     if (variable.valueType === 'path') {
+       // Path variable $...
+       debug("EmbedRHS parsed direct PathVar:", variableText);
+       return {
+         subtype: 'embedVariable', // Keep subtype as variable for path vars too
+         path: validatePath(variableText), // validatePath returns { raw, structured, ... }
+         ...(options ? { options } : {})
+       };
+     } else {
+       // Text/Data variable {{...}}
+       debug("EmbedRHS parsed direct Text/Data Var:", variableText);
+       return {
+         subtype: 'embedVariable',
+         path: { // Maintain structure expected by downstream tests (temporary?)
+           raw: variableText,
+           isVariableReference: true,
+           variable: variable, // Pass the original variable node
+           structured: { // Minimal structured info for compatibility?
+             variables: {
+               // Populate based on variable type
+               ...(variable.valueType === 'text' && { text: [variable.identifier] }),
+               ...(variable.valueType === 'data' && { data: [variable.identifier] }), // Use 'data' key?
+             }
+             // Add other structured properties if needed for tests
+           }
+         },
+         ...(options ? { options } : {})
+       };
+     }
    };
   var peg$f46 = function(content, options) { // Use BracketInterpolatableContentOrEmpty
      // Path embed [...]
@@ -2705,16 +2757,34 @@ function peg$parse(input, options) {
 
     s0 = peg$currPos;
     s1 = [];
-    s2 = peg$parseBracketLiteralTextSegment();
+    if (input.charCodeAt(peg$currPos) === 91) {
+      s2 = peg$c9;
+      peg$currPos++;
+    } else {
+      s2 = peg$FAILED;
+      if (peg$silentFails === 0) { peg$fail(peg$e17); }
+    }
     if (s2 === peg$FAILED) {
-      s2 = peg$parseVariable();
+      s2 = peg$parseBracketLiteralTextSegment();
+      if (s2 === peg$FAILED) {
+        s2 = peg$parseVariable();
+      }
     }
     if (s2 !== peg$FAILED) {
       while (s2 !== peg$FAILED) {
         s1.push(s2);
-        s2 = peg$parseBracketLiteralTextSegment();
+        if (input.charCodeAt(peg$currPos) === 91) {
+          s2 = peg$c9;
+          peg$currPos++;
+        } else {
+          s2 = peg$FAILED;
+          if (peg$silentFails === 0) { peg$fail(peg$e17); }
+        }
         if (s2 === peg$FAILED) {
-          s2 = peg$parseVariable();
+          s2 = peg$parseBracketLiteralTextSegment();
+          if (s2 === peg$FAILED) {
+            s2 = peg$parseVariable();
+          }
         }
       }
     } else {
@@ -7101,9 +7171,13 @@ function peg$parse(input, options) {
         if (node.fields && node.fields.length > 0) {
           fieldsStr = node.fields.map(f => {
             if (f.type === 'field') return '.' + f.value;
-            // Assuming index access uses dot notation for numbers now based on grammar
-            if (f.type === 'index') return '.' + f.value;
-            // if (f.type === 'index') return typeof f.value === 'string' ? `[${JSON.stringify(f.value)}]` : `[${f.value}]`; // Old array access syntax
+            // Use new types to determine notation
+            if (f.type === 'dotIndex') return '.' + f.value;
+            if (f.type === 'bracketIndex') {
+              // Handle string vs number index for brackets
+              if (typeof f.value === 'string') return `[\"${f.value}\"]`; // Assuming string indices need quotes
+              return `[${f.value}]`;
+            }
             return '';
           }).join('');
         }

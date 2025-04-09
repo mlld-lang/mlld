@@ -111,41 +111,6 @@
     return id;
   }
 
-  function reconstructRawString(nodes) {
-    if (!Array.isArray(nodes)) {
-      // Should not happen if called correctly, but handle defensively
-      return String(nodes || '');
-    }
-    return nodes.map(node => {
-      if (!node || typeof node !== 'object') {
-        return ''; // Or handle error
-      }
-      if (node.type === NodeType.Text) {
-        return node.content || '';
-      }
-      if (node.type === NodeType.VariableReference) {
-        let fieldsStr = '';
-        if (node.fields && node.fields.length > 0) {
-          fieldsStr = node.fields.map(f => {
-            if (f.type === 'field') return '.' + f.value;
-            // Assuming index access uses dot notation for numbers now based on grammar
-            if (f.type === 'index') return '.' + f.value;
-            // if (f.type === 'index') return typeof f.value === 'string' ? `[${JSON.stringify(f.value)}]` : `[${f.value}]`; // Old array access syntax
-            return '';
-          }).join('');
-        }
-        let formatStr = node.format ? `>>${node.format}` : '';
-
-        if (node.valueType === 'path') {
-          return `$${node.identifier}${fieldsStr}${formatStr}`; // Path vars don't use {{}}
-        }
-        return `{{${node.identifier}${fieldsStr}${formatStr}}}`; // Text/Data vars use {{}}
-      }
-      // Handle other node types if necessary, otherwise ignore
-      return '';
-    }).join('');
-  }
-
   function validatePath(path, options = {}) {
     const { context } = options;
     // First trim any surrounding quotes that might have been passed
@@ -571,181 +536,78 @@ VarFormat
     return format;
   }
 
-// --- Interpolation Rules ---
-
-// Double Quotes
-DoubleQuoteAllowedLiteralChar
-  = !('"' / '{{' / '\\') char:. { return char; } // Not quote, not var start, not escape
-  / '\\' esc:. { return '\\' + esc; }          // Allow escaped characters
-
-DoubleQuoteLiteralTextSegment
-  = chars:DoubleQuoteAllowedLiteralChar+ {
-      return createNode(NodeType.Text, { content: chars.join('') }, location());
-    }
-
-DoubleQuoteInterpolatableContent
-  = parts:(DoubleQuoteLiteralTextSegment / Variable)+ {
-      // TODO: Add combineAdjacentTextNodes(parts) helper call here later?
-      return parts;
-    }
-
-DoubleQuoteInterpolatableContentOrEmpty
-  = result:DoubleQuoteInterpolatableContent? {
-      return result || [];
-    }
-
-// Single Quotes
-SingleQuoteAllowedLiteralChar
-  = !('\'' / '{{' / '\\') char:. { return char; }
-  / '\\' esc:. { return '\\' + esc; }
-
-SingleQuoteLiteralTextSegment
-  = chars:SingleQuoteAllowedLiteralChar+ {
-      return createNode(NodeType.Text, { content: chars.join('') }, location());
-    }
-
-SingleQuoteInterpolatableContent
-  = parts:(SingleQuoteLiteralTextSegment / Variable)+ {
-      return parts;
-    }
-
-SingleQuoteInterpolatableContentOrEmpty
-  = result:SingleQuoteInterpolatableContent? {
-      return result || [];
-    }
-
-// Backticks (Template Literals)
-BacktickAllowedLiteralChar
-  = !('`' / '{{' / '\\') char:. { return char; }
-  / '\\' esc:. { return '\\' + esc; }
-
-BacktickLiteralTextSegment
-  = chars:BacktickAllowedLiteralChar+ {
-      return createNode(NodeType.Text, { content: chars.join('') }, location());
-    }
-
-BacktickInterpolatableContent
-  = parts:(BacktickLiteralTextSegment / Variable)+ {
-      return parts;
-    }
-
-BacktickInterpolatableContentOrEmpty
-  = result:BacktickInterpolatableContent? {
-      return result || [];
-    }
-
-// Multiline [[...]]
-MultilineAllowedLiteralChar
-  = !']]' !'{{' char:. { return char; } // Not end delimiter, not var start
-
-MultilineLiteralTextSegment
-  = chars:MultilineAllowedLiteralChar+ {
-      return createNode(NodeType.Text, { content: chars.join('') }, location());
-    }
-
-MultilineInterpolatableContent
-  = parts:(MultilineLiteralTextSegment / Variable)+ {
-      return parts;
-    }
-
-MultilineInterpolatableContentOrEmpty
-  = result:MultilineInterpolatableContent? {
-      return result || [];
-    }
-
-// Brackets [...] Interpolation
-BracketAllowedLiteralChar
-  = !(']' / '{{' / '$') char:. { return char; } // Not end bracket, not var start, not path var start
-
-BracketLiteralTextSegment
-  = chars:BracketAllowedLiteralChar+ {
-      return createNode(NodeType.Text, { content: chars.join('') }, location());
-    }
-
-BracketInterpolatableContent
-  = parts:(BracketLiteralTextSegment / Variable)+ { // Variable must be tried first
-      // TODO: Add combineAdjacentTextNodes(parts) helper call here later?
-      return parts;
-    }
-
-BracketInterpolatableContentOrEmpty
-  = result:BracketInterpolatableContent? {
-      return result || [];
-    }
-
-// --- End Interpolation Rules ---
-
-// --- Interpolated Literal Rules ---
-
-InterpolatedStringLiteral "String literal with potential variable interpolation"
-  = '"' content:DoubleQuoteInterpolatableContentOrEmpty '"' { return content; }
-  / "'" content:SingleQuoteInterpolatableContentOrEmpty "'" { return content; }
-  / "`" content:BacktickInterpolatableContentOrEmpty "`" { return content; }
-
-InterpolatedMultilineTemplate "Multiline template with potential variable interpolation"
-  = "[[" content:MultilineInterpolatableContentOrEmpty "]]" { return content; }
-
-// --- End Interpolated Literal Rules ---
+// <<< START EDIT --- Move Helper Rules Before Directive --- >>>
 
 // Helper rule for parsing RHS @embed variations
 // Returns { subtype: '...', ... } structure without 'source' field.
 _EmbedRHS
-   = _ "[[" content:MultilineInterpolatableContentOrEmpty "]]" options:DirectiveOptions? { // Use MultilineInterpolatableContentOrEmpty
+   = _ "[[" content:(!"]]" char:. { return char; })* "]]" options:DirectiveOptions? {
      // Multi-line template embed [[...]]
-     // const contentStr = content.join(''); // No longer needed
-     // validateEmbedContent(contentStr); // Validation likely changes downstream
-     debug("EmbedRHS parsed multiline template: ", JSON.stringify(content));
+     const contentStr = content.join('');
+     validateEmbedContent(contentStr); // Reuse validation
      return {
        subtype: 'embedTemplate',
-       content: content, // Return the InterpolatableValue array
+       content: contentStr,
        isTemplateContent: true, // Mark as template content
        ...(options ? { options } : {})
      };
    }
    / __ variable:Variable options:DirectiveOptions? {
-     // Variable embed {{...}} or $... (No change needed here)
-     // ... existing code ...
-   }
-   / _ "[" content:BracketInterpolatableContentOrEmpty "]" options:DirectiveOptions? { // Use BracketInterpolatableContentOrEmpty
-     // Path embed [...]
-     const rawPath = reconstructRawString(content);
-     debug("EmbedRHS reconstructed raw path from bracket content:", rawPath);
+     // Variable embed {{...}} or $...
+     const variableText = variable.valueType === 'text'
+       ? `{{${variable.identifier}}}`
+       : variable.valueType === 'data'
+         ? `{{${variable.identifier}${variable.fields.map(f => {
+             if (f.type === 'field') return '.' + f.value;
+             if (f.type === 'index') return typeof f.value === 'string' ? `[${JSON.stringify(f.value)}]` : `[${f.value}]`;
+             return '';
+           }).join('')}}}`
+         : variable.valueType === 'path'
+           ? `$${variable.identifier}`
+           : '';
 
-     // Split raw path for section (section itself cannot be interpolated)
-     const [pathPart, section] = rawPath.split('#').map(s => s.trim());
-     validateEmbedPath(pathPart); // Validate raw path part
-     const validationResult = validatePath(pathPart);
-
-     // Attach the interpolated array for the path part
-     // Need to filter the original `content` array to exclude the section part if present
-     let pathInterpolatedValue = content;
-     if (section && content.length > 0) {
-       // Find the TextNode containing the '#' and split/filter
-       // This is complex; for now, let's assume sections aren't interpolated
-       // and attach the *original full* content array. Downstream must handle.
-       // TODO: Refine this later if needed.
-       debug("Section detected, attaching full interpolated array for now.");
-     }
-
-     let finalPathObject = validationResult;
-     if (finalPathObject && typeof finalPathObject === 'object') {
-       finalPathObject.interpolatedValue = pathInterpolatedValue; // Attach possibly filtered array
-       debug("Attached interpolatedValue to path object in EmbedRHS");
+     if (variable.valueType === 'path') {
+       // Path variable $...
+       return {
+         subtype: 'embedVariable', // Keep subtype as variable for path vars too
+         path: validatePath(variableText),
+         ...(options ? { options } : {})
+       };
      } else {
-       debug("Warning: validatePath did not return an object in EmbedRHS.");
-       // Wrap if not an object? Create a default structure?
-       finalPathObject = { raw: pathPart, structured: {}, interpolatedValue: pathInterpolatedValue };
+       // Text/Data variable {{...}}
+       return {
+         subtype: 'embedVariable',
+         path: { // Maintain structure expected by downstream (temporary?)
+           raw: variableText,
+           isVariableReference: true,
+           variable: variable,
+           structured: {
+             variables: {
+               text: variable.valueType === 'text' ? [variable.identifier] :
+                     variable.valueType === 'data' ? [variable.identifier] : []
+             }
+           }
+         },
+         ...(options ? { options } : {})
+       };
      }
+   }
+   / _ content:DirectiveContent options:DirectiveOptions? {
+     // Path embed [...]
+     const [path, section] = content.split('#').map(s => s.trim());
+     validateEmbedPath(path); // Reuse validation
+     const validatedPath = validatePath(path);
 
      // Reorder properties if necessary (consistent with standalone EmbedDirective)
-     if (finalPathObject.normalized && finalPathObject.structured) {
-       const { raw, normalized, structured, ...rest } = finalPathObject;
-       finalPathObject = { raw, normalized, structured, ...rest };
+     let finalPath = validatedPath;
+     if (validatedPath.normalized && validatedPath.structured) {
+       const { raw, normalized, structured, ...rest } = validatedPath;
+       finalPath = { raw, normalized, structured, ...rest };
      }
 
      return {
        subtype: 'embedPath',
-       path: finalPathObject, // Return the object with interpolatedValue
+       path: finalPath,
        ...(section ? { section } : {}),
        ...(options ? { options } : {})
      };
@@ -774,30 +636,31 @@ _RunRHS
       };
     }
   // Multi-line run directive with double brackets
-  / _ lang:Identifier? _ params:RunVariableParams? _ "[[" content:MultilineInterpolatableContentOrEmpty "]]" { // Use MultilineInterpolatableContentOrEmpty
-      // const contentStr = content.join(''); // No longer needed
-      debug("RunRHS parsing Multi-line Run: Lang:", lang, "Params:", params, "Content:", JSON.stringify(content));
+  / _ lang:Identifier? _ params:RunVariableParams? _ "[[" content:(!"]" char:. { return char; })* "]]" {
+      const contentStr = content.join('');
+      debug("RunRHS parsing Multi-line Run:", contentStr, "Lang:", lang, "Params:", params);
       return {
         subtype: params ? 'runCodeParams' : 'runCode',
-        command: content, // Return the InterpolatableValue array
+        command: contentStr,
         ...(lang ? { language: lang } : {}),
         ...(params ? { parameters: params } : {}),
         isMultiLine: true
       };
     }
   // Standard run directive with content in brackets
-  / _ "[" content:BracketInterpolatableContentOrEmpty "]" { // Use BracketInterpolatableContentOrEmpty
-      // const rawCommand = reconstructRawString(content); // May not be needed if validateRunContent is removed/changed
-      // validateRunContent(rawCommand); // Validation likely changes downstream
-      debug("RunRHS parsing bracket content:", JSON.stringify(content));
+  / _ content:DirectiveContent {
+      debug("RunRHS parsing DirectiveContent:", content);
+      validateRunContent(content); // Reuse validation
       return {
         subtype: 'runCommand',
-        command: content // Return the InterpolatableValue array
+        command: content
       };
     }
   // Note: Direct variable variant @run {{var}} is handled by PropertyValue/VarValue
   // and is not parsed explicitly *by* @run here in RHS context.
   // The standalone RunDirective *does* handle it, consistency check needed later.
+
+// --- END EDIT --- >>>
 
  Directive
    = &{ 
@@ -1155,17 +1018,28 @@ DefineParams
   }
 
 DefineValue
-  = "@run" runResult:_RunRHS {
-      debug("DefineValue parsed @run via RunRHS:", JSON.stringify(runResult));
-      return {
-        type: "run",
-        value: runResult
-      };
-    }
-  / value:InterpolatedStringLiteral {
+  = "@run" _ content:DirectiveContent {
+    return {
+      type: "run",
+      value: {
+        kind: "run",
+        command: content
+      }
+    };
+  }
+  / value:StringLiteral {
     return {
       type: "string",
       value
+    };
+  }
+  / content:DirectiveContent {
+    return {
+      type: "run",
+      value: {
+        kind: "run",
+        command: content
+      }
     };
   }
 
@@ -1314,7 +1188,7 @@ PropertyKey
   / str:StringLiteral { return str; }
 
 PropertyValue
-  = InterpolatedStringLiteral
+  = StringLiteral
   / NumberLiteral
   / BooleanLiteral
   / NullLiteral
@@ -1415,13 +1289,13 @@ TextValue
       }
     };
   }
-  / value:InterpolatedStringLiteral {
+  / value:StringLiteral {
     return {
       source: "literal",
       value
     };
   }
-  / value:InterpolatedMultilineTemplate {
+  / value:MultilineTemplateLiteral {
     return {
       source: "literal",
       value
@@ -1503,29 +1377,16 @@ CodeFenceLangID
   = chars:[^`\r\n]+ { return chars.join(''); }
 
 PathValue
-  = interpolatedArray:InterpolatedStringLiteral { // Changed from str:StringLiteral
-      // Reconstruct the raw string from the array of nodes
-      const rawString = reconstructRawString(interpolatedArray);
-      debug("PathValue reconstructed raw string:", rawString, "from array:", JSON.stringify(interpolatedArray));
+  = str:StringLiteral {
+    // Check if this is being called from a PathDirective - REMOVED
+    // const callerInfo = new Error().stack || ''; // REMOVED
+    // const isPathDirective = callerInfo.includes('PathDirective'); // REMOVED
 
-      // Get the validated path from validatePath, passing context
-      const validationResult = validatePath(rawString, { context: 'pathDirective' });
+    // Get the validated path from validatePath, passing context
+    const validatedPath = validatePath(str, { context: 'pathDirective' });
 
-      // Attach the interpolated array to the result
-      // Ensure validationResult is an object before attaching
-      if (validationResult && typeof validationResult === 'object') {
-        validationResult.interpolatedValue = interpolatedArray;
-        debug("Attached interpolatedValue to validationResult");
-      } else {
-        debug("Warning: validatePath did not return an object. Cannot attach interpolatedValue.");
-        // Consider how to handle this case - maybe wrap non-objects?
-        // For now, just return the original result if it wasn't an object.
-      }
+    // For path directives, we need to set top-level properties - REMOVED (moved to validatePath)
+    // if (isPathDirective) { ... }
 
-      return validationResult;
-    }
-  / variable:PathVar { // Allow PathVariables directly
-    // ... existing PathVar logic ...
+    return validatedPath;
   }
-
-// ... rest of grammar ...
