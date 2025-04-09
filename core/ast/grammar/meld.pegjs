@@ -100,7 +100,7 @@
   }
 
   function createVariableReferenceNode(valueType, data, loc) {
-    return createNode(NodeType.VariableReference, {
+    return createNode('VariableReference', {
       valueType,
       isVariableReference: true,
       ...data
@@ -109,6 +109,46 @@
 
   function normalizePathVar(id) {
     return id;
+  }
+
+  function reconstructRawString(nodes) {
+    if (!Array.isArray(nodes)) {
+      return String(nodes || '');
+    }
+    return nodes.map(node => {
+      if (!node || typeof node !== 'object') {
+        return '';
+      }
+      if (node.type === 'Text') { // Use string literal
+        return node.content || '';
+      }
+      if (node.type === 'VariableReference') { // Use string literal
+        let fieldsStr = '';
+        if (node.fields && node.fields.length > 0) {
+          fieldsStr = node.fields.map(f => {
+            if (f.type === 'field') return '.' + f.value;
+            if (f.type === 'index') return '.' + f.value;
+            return '';
+          }).join('');
+        }
+        let formatStr = node.format ? `>>${node.format}` : '';
+
+        if (node.valueType === 'path') {
+          return `$${node.identifier}${fieldsStr}${formatStr}`;
+        }
+        return `{{${node.identifier}${fieldsStr}${formatStr}}}`;
+      }
+      return '';
+    }).join('');
+  }
+
+  // Attach reconstructRawString helper to options if available
+  if (typeof options !== 'undefined' && options !== null) {
+    options.reconstructRawString = reconstructRawString;
+    // options.NodeType = NodeType; // No longer needed here
+  } else {
+    // Fallback (may not be necessary)
+    var parserHelpers = { reconstructRawString }; // No NodeType needed here
   }
 
   function validatePath(path, options = {}) {
@@ -545,7 +585,7 @@ DoubleQuoteAllowedLiteralChar
 
 DoubleQuoteLiteralTextSegment
   = chars:DoubleQuoteAllowedLiteralChar+ {
-      return createNode(NodeType.Text, { content: chars.join('') }, location());
+      return createNode('Text', { content: chars.join('') }, location());
     }
 
 DoubleQuoteInterpolatableContent
@@ -566,7 +606,7 @@ SingleQuoteAllowedLiteralChar
 
 SingleQuoteLiteralTextSegment
   = chars:SingleQuoteAllowedLiteralChar+ {
-      return createNode(NodeType.Text, { content: chars.join('') }, location());
+      return createNode('Text', { content: chars.join('') }, location());
     }
 
 SingleQuoteInterpolatableContent
@@ -586,7 +626,7 @@ BacktickAllowedLiteralChar
 
 BacktickLiteralTextSegment
   = chars:BacktickAllowedLiteralChar+ {
-      return createNode(NodeType.Text, { content: chars.join('') }, location());
+      return createNode('Text', { content: chars.join('') }, location());
     }
 
 BacktickInterpolatableContent
@@ -605,7 +645,7 @@ MultilineAllowedLiteralChar
 
 MultilineLiteralTextSegment
   = chars:MultilineAllowedLiteralChar+ {
-      return createNode(NodeType.Text, { content: chars.join('') }, location());
+      return createNode('Text', { content: chars.join('') }, location());
     }
 
 MultilineInterpolatableContent
@@ -613,18 +653,34 @@ MultilineInterpolatableContent
       return parts;
     }
 
-// --- End Interpolation Rules (for now) ---
+MultilineInterpolatableContentOrEmpty
+  = result:MultilineInterpolatableContent? {
+      return result || [];
+    }
+
+// --- End Interpolation Rules ---
+
+// --- Interpolated Literal Rules ---
+
+InterpolatedStringLiteral "String literal with potential variable interpolation"
+  = '"' content:DoubleQuoteInterpolatableContentOrEmpty '"' { return content; }
+  / "'" content:SingleQuoteInterpolatableContentOrEmpty "'" { return content; }
+  / "`" content:BacktickInterpolatableContentOrEmpty "`" { return content; }
+
+InterpolatedMultilineTemplate "Multiline template with potential variable interpolation"
+  = "[[" content:MultilineInterpolatableContentOrEmpty "]]" { return content; }
+
+// --- End Interpolated Literal Rules ---
 
 // Helper rule for parsing RHS @embed variations
 // Returns { subtype: '...', ... } structure without 'source' field.
 _EmbedRHS
-   = _ "[[" content:(!"]]" char:. { return char; })* "]]" options:DirectiveOptions? {
+   = _ "[[" content:MultilineInterpolatableContentOrEmpty "]]" options:DirectiveOptions? {
      // Multi-line template embed [[...]]
-     const contentStr = content.join('');
-     validateEmbedContent(contentStr); // Reuse validation
+     debug("EmbedRHS parsed multiline template: ", JSON.stringify(content));
      return {
        subtype: 'embedTemplate',
-       content: contentStr,
+       content: content, // Return the InterpolatableValue array
        isTemplateContent: true, // Mark as template content
        ...(options ? { options } : {})
      };
@@ -669,22 +725,42 @@ _EmbedRHS
        };
      }
    }
-   / _ content:DirectiveContent options:DirectiveOptions? {
+   / _ "[" content:BracketInterpolatableContentOrEmpty "]" options:DirectiveOptions? {
      // Path embed [...]
-     const [path, section] = content.split('#').map(s => s.trim());
-     validateEmbedPath(path); // Reuse validation
-     const validatedPath = validatePath(path);
+     const helper = typeof options !== 'undefined' ? options.reconstructRawString : parserHelpers.reconstructRawString;
+     const rawPath = helper(content);
+     debug("EmbedRHS reconstructed raw path from bracket content:", rawPath);
+
+     // Split raw path for section (section itself cannot be interpolated)
+     const [pathPart, section] = rawPath.split('#').map(s => s.trim());
+     validateEmbedPath(pathPart); // Validate raw path part
+     const validationResult = validatePath(pathPart);
+
+     // Attach the interpolated array for the path part
+     let pathInterpolatedValue = content;
+     if (section && content.length > 0) {
+       // TODO: Refine section handling later if needed.
+       debug("Section detected, attaching full interpolated array for now.");
+     }
+
+     let finalPathObject = validationResult;
+     if (finalPathObject && typeof finalPathObject === 'object') {
+       finalPathObject.interpolatedValue = pathInterpolatedValue; // Attach possibly filtered array
+       debug("Attached interpolatedValue to path object in EmbedRHS");
+     } else {
+       debug("Warning: validatePath did not return an object in EmbedRHS.");
+       finalPathObject = { raw: pathPart, structured: {}, interpolatedValue: pathInterpolatedValue };
+     }
 
      // Reorder properties if necessary (consistent with standalone EmbedDirective)
-     let finalPath = validatedPath;
-     if (validatedPath.normalized && validatedPath.structured) {
-       const { raw, normalized, structured, ...rest } = validatedPath;
-       finalPath = { raw, normalized, structured, ...rest };
+     if (finalPathObject.normalized && finalPathObject.structured) {
+       const { raw, normalized, structured, ...rest } = finalPathObject;
+       finalPathObject = { raw, normalized, structured, ...rest };
      }
 
      return {
        subtype: 'embedPath',
-       path: finalPath,
+       path: finalPathObject, // Return the object with interpolatedValue
        ...(section ? { section } : {}),
        ...(options ? { options } : {})
      };
@@ -701,7 +777,7 @@ _RunRHS
       const commandObj = {
         raw: `$${cmdRef.name}${cmdRef.args.length > 0 ? `(${cmdRef.args.map(arg => {
           if (arg.type === 'string') return `\"${arg.value}\"`;
-          if (arg.type === 'variable') return arg.value.raw || '';
+          if (arg.type === 'variable') return arg.value.raw || ''; // Assuming Variable node has 'raw'
           return arg.value;
         }).join(', ')})` : ''}`,
         name: cmdRef.name,
@@ -713,24 +789,22 @@ _RunRHS
       };
     }
   // Multi-line run directive with double brackets
-  / _ lang:Identifier? _ params:RunVariableParams? _ "[[" content:(!"]" char:. { return char; })* "]]" {
-      const contentStr = content.join('');
-      debug("RunRHS parsing Multi-line Run:", contentStr, "Lang:", lang, "Params:", params);
+  / _ lang:Identifier? _ params:RunVariableParams? _ "[[" content:MultilineInterpolatableContentOrEmpty "]]" {
+      debug("RunRHS parsing Multi-line Run: Lang:", lang, "Params:", params, "Content:", JSON.stringify(content));
       return {
         subtype: params ? 'runCodeParams' : 'runCode',
-        command: contentStr,
+        command: content, // Return the InterpolatableValue array
         ...(lang ? { language: lang } : {}),
         ...(params ? { parameters: params } : {}),
         isMultiLine: true
       };
     }
   // Standard run directive with content in brackets
-  / _ content:DirectiveContent {
-      debug("RunRHS parsing DirectiveContent:", content);
-      validateRunContent(content); // Reuse validation
+  / _ "[" content:BracketInterpolatableContentOrEmpty "]" {
+      debug("RunRHS parsing bracket content:", JSON.stringify(content));
       return {
         subtype: 'runCommand',
-        command: content
+        command: content // Return the InterpolatableValue array
       };
     }
   // Note: Direct variable variant @run {{var}} is handled by PropertyValue/VarValue
@@ -1095,28 +1169,17 @@ DefineParams
   }
 
 DefineValue
-  = "@run" _ content:DirectiveContent {
-    return {
-      type: "run",
-      value: {
-        kind: "run",
-        command: content
-      }
-    };
-  }
-  / value:StringLiteral {
+  = "@run" runResult:_RunRHS {
+      debug("DefineValue parsed @run via RunRHS:", JSON.stringify(runResult));
+      return {
+        type: "run",
+        value: runResult
+      };
+    }
+  / value:InterpolatedStringLiteral {
     return {
       type: "string",
       value
-    };
-  }
-  / content:DirectiveContent {
-    return {
-      type: "run",
-      value: {
-        kind: "run",
-        command: content
-      }
     };
   }
 
@@ -1265,7 +1328,7 @@ PropertyKey
   / str:StringLiteral { return str; }
 
 PropertyValue
-  = StringLiteral
+  = InterpolatedStringLiteral
   / NumberLiteral
   / BooleanLiteral
   / NullLiteral
@@ -1366,13 +1429,13 @@ TextValue
       }
     };
   }
-  / value:StringLiteral {
+  / value:InterpolatedStringLiteral {
     return {
       source: "literal",
       value
     };
   }
-  / value:MultilineTemplateLiteral {
+  / value:InterpolatedMultilineTemplate {
     return {
       source: "literal",
       value
@@ -1454,18 +1517,45 @@ CodeFenceLangID
   = chars:[^`\r\n]+ { return chars.join(''); }
 
 PathValue
-  = str:StringLiteral {
-    // Check if this is being called from a PathDirective - REMOVED
-    // const callerInfo = new Error().stack || ''; // REMOVED
-    // const isPathDirective = callerInfo.includes('PathDirective'); // REMOVED
+  = interpolatedArray:InterpolatedStringLiteral { // Changed from str:StringLiteral
+      // Reconstruct the raw string from the array of nodes
+      // Use options object if available, otherwise fallback
+      const helper = typeof options !== 'undefined' ? options.reconstructRawString : parserHelpers.reconstructRawString;
+      const rawString = helper(interpolatedArray);
+      debug("PathValue reconstructed raw string:", rawString, "from array:", JSON.stringify(interpolatedArray));
 
-    // Get the validated path from validatePath, passing context
-    const validatedPath = validatePath(str, { context: 'pathDirective' });
+      // Get the validated path from validatePath, passing context
+      const validationResult = validatePath(rawString, { context: 'pathDirective' });
 
-    // For path directives, we need to set top-level properties - REMOVED (moved to validatePath)
-    // if (isPathDirective) { ... }
+      // Attach the interpolated array to the result
+      // Ensure validationResult is an object before attaching
+      if (validationResult && typeof validationResult === 'object') {
+        validationResult.interpolatedValue = interpolatedArray;
+        debug("Attached interpolatedValue to validationResult");
+      } else {
+        debug("Warning: validatePath did not return an object. Cannot attach interpolatedValue.");
+        // Consider how to handle this case - maybe wrap non-objects?
+        // For now, just return the original result if it wasn't an object.
+      }
 
-    return validatedPath;
+      return validationResult;
+    }
+  / variable:PathVar { // Allow PathVariables directly
+    debug("PathValue parsed PathVar:", JSON.stringify(variable));
+    // Return a structure consistent with validatePath for path variables
+    return {
+        raw: `$${variable.identifier}`,
+        isPathVariable: true,
+        structured: {
+          base: '.', // Default base for path variables in PathDirective?
+          segments: [`$${variable.identifier}`], // Segment is the var itself
+          variables: {
+            path: [variable.identifier]
+          },
+          cwd: false // Path variables are not CWD relative
+        }
+        // No interpolatedValue for a direct PathVar
+      };
   }
 
 // Brackets [...] Interpolation
