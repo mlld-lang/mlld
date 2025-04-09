@@ -536,7 +536,30 @@ VarFormat
     return format;
   }
 
-// <<< START EDIT --- Move Helper Rules Before Directive --- >>>
+// --- Interpolation Rules ---
+
+// Double Quotes
+DoubleQuoteAllowedLiteralChar
+  = !('"' / '{{' / '\\') char:. { return char; } // Not quote, not var start, not escape
+  / '\\' esc:. { return '\\' + esc; }          // Allow escaped characters
+
+DoubleQuoteLiteralTextSegment
+  = chars:DoubleQuoteAllowedLiteralChar+ {
+      return createNode(NodeType.Text, { content: chars.join('') }, location());
+    }
+
+DoubleQuoteInterpolatableContent
+  = parts:(DoubleQuoteLiteralTextSegment / Variable)+ {
+      // TODO: Add combineAdjacentTextNodes(parts) helper call here later?
+      return parts;
+    }
+
+DoubleQuoteInterpolatableContentOrEmpty
+  = result:DoubleQuoteInterpolatableContent? {
+      return result || [];
+    }
+
+// --- End Interpolation Rules (for now) ---
 
 // Helper rule for parsing RHS @embed variations
 // Returns { subtype: '...', ... } structure without 'source' field.
