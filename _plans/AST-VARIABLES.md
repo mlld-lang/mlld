@@ -146,27 +146,36 @@ Based on the lessons learned, we will proceed with the **inline, delimiter-speci
 
 *   Ensure `allowedStartRules` in *all* `peggy.generate` calls contains *only* `['Start']`.
 
-## Implementation Steps (Fourth Attempt - Order Focused)
+## Implementation Steps (Fourth Attempt - Order Focused - Revised Again)
 
 1.  **Prepare:** Ensure `@_plans/AST-VARIABLES.md` reflects this updated plan. **(DONE)**
 2.  **Clean Grammar & Verify Structure:** Start with a known-good version of `meld.pegjs` or carefully **restructure the existing file** to match the **Recommended Stable Structure** outlined above. Place existing rules into their correct sections. **Run `build:grammar`**. Fix any build errors resulting *only* from reordering before proceeding. **(DONE)**
     *   _Note:_ Performed grammar restructuring. Ran build and tests (`npm run build:grammar && npm test core/ast`). All tests passed, confirming the structural integrity after reordering.
-3.  **(ATTEMPTED & REVERTED - Ready for Retry)** **Implement Delimiter-Specific Rules:** Add all `XxxAllowedLiteralChar`, `XxxLiteralTextSegment`, `XxxInterpolatableContent`, `XxxInterpolatableContentOrEmpty` rules into the "Complex Parsing" section. **Run `build:grammar`**.
-4.  **(ATTEMPTED & REVERTED - Ready for Retry)** **Implement Interpolated Literals:** Add `InterpolatedStringLiteral` and `InterpolatedMultilineTemplate` (returning arrays directly) into the "Complex Parsing" section. **Run `build:grammar`**.
-5.  **(ATTEMPTED & REVERTED - Ready for Retry)** **Update Directive Value Rules (One by One):**
+
+3.  **(NEW)** **Refactor Helper Function Access:** Implement the `helpers` object pattern for robust access to helper functions within rule actions.
+    *   **Rationale:** To ensure consistent access to helper functions within rule actions, avoiding potential scoping issues encountered with direct function calls or reliance on the `options` object's state during test runs, and to facilitate easier mocking/testing.
+    *   **Sub-steps (Perform Surgically with Frequent Build/Test Cycles):**
+        *   **3a. Define `helpers` Structure:** In the grammar initializer block (`{...}`), define `const helpers = { ... };`, including the `...(options && options.helpers ? options.helpers : {})` spread for overrides.
+        *   **3b. Move Helper Functions:** Incrementally move the existing standalone function definitions (`debug`, `isLineStart`, `validatePath`, `createNode`, `reconstructRawString`, etc.) *inside* the `helpers` object definition. Remove the original standalone definitions. **Run `build:grammar` frequently.**
+        *   **3c. Update Rule Action Calls:** Systematically go through all grammar rule actions (`{ ... }`) and prepend `helpers.` to all calls to the moved functions (e.g., `validatePath(...)` becomes `helpers.validatePath(...)`). Do this section by section or rule by rule. **Run `build:grammar && npm test core/ast` frequently.**
+        *   **3d. Final Verification:** Once all calls are updated, run `npm run build:grammar && npm test core/ast` to ensure all tests still pass with the refactored helper access.
+
+4.  **(Was Step 3)** **Implement Delimiter-Specific Rules:** Add all `XxxAllowedLiteralChar`, `XxxLiteralTextSegment`, `XxxInterpolatableContent`, `XxxInterpolatableContentOrEmpty` rules into the "Complex Parsing" section. **Run `build:grammar`** after each group (DoubleQuote, SingleQuote, etc.).
+5.  **(Was Step 4)** **Implement Interpolated Literals:** Add `InterpolatedStringLiteral` and `InterpolatedMultilineTemplate` (returning arrays directly) into the "Complex Parsing" section. **Run `build:grammar`** after each.
+6.  **(Was Step 5)** **Update Directive Value Rules (One by One):**
     *   Modify `TextValue` to use `Interpolated...` rules. **Run `build:grammar`**.
     *   Modify `PropertyValue` (for `@data`). **Run `build:grammar`**.
     *   Modify `DefineValue`. **Run `build:grammar`**.
-    *   Modify `PathDirective` (handle raw vs interpolated carefully). **Run `build:grammar`**.
-    *   *(Self-correction: `_EmbedRHS` and `_RunRHS` are complex helpers, not simple value rules. The plan needs to decide if these helpers are still the best approach or if `EmbedDirective`/`RunDirective` should handle their variations directly. For now, assume they stay but need updating)* Modify `_EmbedRHS` and `_RunRHS` to use interpolation logic internally if they process bracketed content. **Run `build:grammar`**.
-6.  **(PARTIALLY DONE - Tests Failed as Expected)** **Run Full Tests:** Once the grammar builds cleanly, run `npm test core/ast`. Expect many assertion failures.
-7.  **(STARTED - Paused)** **Update Tests Iteratively:**
+    *   Modify `PathValue` (handle raw vs interpolated carefully, using `helpers.reconstructRawString`). **Run `build:grammar`**.
+    *   Modify `_EmbedRHS` and `_RunRHS` to use interpolation logic internally (using `helpers.reconstructRawString` where needed). **Run `build:grammar`**.
+7.  **(Was Step 6)** **Run Full Tests:** Once the grammar builds cleanly after Step 6, run `npm test core/ast`. Expect many assertion failures.
+8.  **(Was Step 7)** **Update Tests Iteratively:**
     *   Fix plain text tests first (expecting `TextNode` from `TextBlock`).
-    *   Fix directive tests one by one, updating assertions to expect `InterpolatableValue` arrays where appropriate.
+    *   Fix directive tests one by one, updating assertions to expect `InterpolatableValue` arrays where appropriate. Pay attention to `content`, `value`, `command`, and `path.interpolatedValue` properties.
     *   Use `test.only`/`it.only` and `test/debug-test.js` extensively.
-8.  **Refactor Downstream Consumers:** (Separate phase/PR).
+9.  **(Was Step 8)** **Refactor Downstream Consumers:** (Separate phase/PR).
 
-## Progress Summary (As of 2024-10-27)
+## Progress Summary (As of 2024-10-27 - Updated)
 
 We started by implementing Step 2, successfully restructuring the `meld.pegjs` grammar according to the "Recommended Stable Structure". This involved moving rules without changing logic and verifying with builds and tests, which all passed.
 
@@ -181,6 +190,8 @@ We began debugging these failures (Step 7):
 4.  **Revert & Stabilize:** Encountered unexpected failures after fixing the bracket parse error, suggesting the interpolation changes might have had wider effects or interactions. To regain a stable baseline, we reverted the changes made in Steps 3, 4, and 5, keeping only the successful grammar restructuring (Step 2) and the fix for the bracket parse error. After reverting and fixing the array access test expectations, all core AST tests passed.
 
 We are now back at a stable state with the grammar restructured and minor issues fixed, ready to re-attempt the implementation of interpolation (Steps 3-7). The careful, iterative approach with frequent builds and tests proved essential in identifying and isolating issues during the process.
+
+We identified runtime errors related to helper function scope (`reconstructRawString is not defined`, `Cannot read properties of null (reading 'reconstructRawString')`). This highlighted the need for a more robust helper access pattern before proceeding with interpolation. We are now adding a dedicated step (New Step 3) to refactor this helper access mechanism using a shared `helpers` object.
 
 ## Priority
 
