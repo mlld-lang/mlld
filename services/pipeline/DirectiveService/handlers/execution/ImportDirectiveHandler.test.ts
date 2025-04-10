@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { mock } from 'vitest-mock-extended';
+import { mock, mockDeep } from 'vitest-mock-extended';
 import { ImportDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/ImportDirectiveHandler.js';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
@@ -7,19 +7,18 @@ import type { IResolutionService } from '@services/resolution/ResolutionService/
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 import type { ICircularityService as ICircularityServiceType } from '@services/resolution/CircularityService/ICircularityService.js';
-import type { ImportDirectiveNode, PathValueObject, MeldNode } from '@core/syntax/types/index.js';
-import type { SourceLocation } from '@core/syntax/types/location.js';
+import type { ImportDirectiveData } from '@core/syntax/types/directives.js';
+import type { MeldNode, DirectiveNode, StructuredPath, SourceLocation } from '@core/syntax/types/nodes.js';
 import { VariableOrigin, type TextVariable, type MeldVariable, type VariableMetadata } from '@core/types/variables.js';
 import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
 import { MeldResolutionError, ResolutionErrorDetails } from '@core/errors/MeldResolutionError.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
-import { 
-  expectToThrowDirectiveError,
-  expectToThrowErrorOfType
-} from '@tests/utils/errorTestUtils.js';
-import { createLocation } from '@tests/utils/locationFactory.js';
-import { createMockLogger } from '@tests/utils/logger.js';
+import {
+  expectToThrowWithConfig
+} from '@tests/utils/ErrorTestUtils.js';
+import { createLocation } from '@tests/utils/testFactories.js';
+import { createMockLogger } from '@tests/utils/mockLogger.js';
 import { importDirectiveExamples } from '@core/syntax/index.js';
 import { createNodeFromExample } from '@core/syntax/helpers/index.js';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
@@ -29,15 +28,12 @@ import {
   createResolutionServiceMock,
   createFileSystemServiceMock,
   createPathServiceMock,
-  createParserServiceMock,
-  createInterpreterServiceClientFactoryMock,
   createCircularityServiceMock,
-  createURLContentResolverMock,
-  createInterpreterServiceClientMock
 } from '@tests/utils/mocks/serviceMocks.js';
 import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory.js';
-import type { IInterpreterServiceClient } from '@services/pipeline/InterpreterService/IInterpreterServiceClient.js';
+import type { IInterpreterServiceClient } from '@services/pipeline/InterpreterService/interfaces/IInterpreterServiceClient.js';
 import type { IURLContentResolver } from '@services/resolution/URLContentResolver/IURLContentResolver.js';
+import { mockDeep } from 'vitest-mock-extended';
 
 /**
  * ImportDirectiveHandler Test Status
@@ -66,7 +62,7 @@ function createImportDirectiveNode(options: {
   importList?: string;
   imports?: Array<{ name: string; alias?: string }>;
   location?: ReturnType<typeof createLocation>;
-}): DirectiveNode {
+}): DirectiveNode<ImportDirectiveData> {
   const { path, importList = '*', imports, location = createLocation(1, 1) } = options;
   
   // Format the directive structure as expected by the handler
@@ -92,19 +88,18 @@ function createImportDirectiveNode(options: {
       value: importList ? `path = "${path}" importList = "${importList}"` : `path = "${path}"`
     },
     location
-  } as DirectiveNode;
+  } as DirectiveNode<ImportDirectiveData>;
 }
 
 // Helper to create a valid PathValueObject for tests
-function createTestPathObject(rawPath: string, isUrl: boolean = false): PathValueObject {
+function createTestPathObject(rawPath: string, isUrl: boolean = false): StructuredPath {
   // Basic mock structure, adjust segments etc. as needed per test
   return {
     raw: rawPath,
     structured: {
-      base: isUrl ? '' : '.',
       segments: rawPath.split('/').filter(s => s !== '.' && s !== ''),
       url: isUrl,
-      variables: { text: [], special: [], path: [] } // Assume no vars unless specified by test
+      // variables: { text: [], special: [], path: [] } // Assume no vars unless specified by test
     },
     // interpolatedValue: undefined, // Add if testing quoted paths
     // isPathVariable: false,
@@ -113,11 +108,11 @@ function createTestPathObject(rawPath: string, isUrl: boolean = false): PathValu
 
 // Helper to create a basic ImportDirectiveNode for tests
 function createTestImportNode(options: {
-  pathObject: PathValueObject;
+  pathObject: StructuredPath;
   imports?: Array<{ name: string; alias?: string | null }>;
   subtype?: 'importAll' | 'importStandard' | 'importNamed';
   location?: SourceLocation;
-}): ImportDirectiveNode {
+}): DirectiveNode<ImportDirectiveData> {
   const { pathObject, imports = [{ name: '*' }], subtype = 'importAll', location = createLocation(1, 1) } = options;
   return {
     type: 'Directive',
@@ -157,12 +152,16 @@ describe('ImportDirectiveHandler', () => {
     resolutionService = createResolutionServiceMock();
     fileSystemService = createFileSystemServiceMock();
     pathService = createPathServiceMock();
-    parserService = createParserServiceMock();
-    interpreterServiceClientFactory = createInterpreterServiceClientFactoryMock();
     interpreterServiceClient = createInterpreterServiceClientMock();
     circularityService = createCircularityServiceMock();
     urlContentResolver = createURLContentResolverMock();
     childState = createStateServiceMock();
+
+    // Manually create mocks for missing factories
+    parserService = mockDeep<IParserService>();
+    interpreterServiceClientFactory = mockDeep<InterpreterServiceClientFactory>();
+    urlContentResolver = mockDeep<IURLContentResolver>();
+    interpreterServiceClient = mockDeep<IInterpreterServiceClient>();
 
     // Register All Mocks with TestContextDI
     context.registerMock('IValidationService', validationService);
@@ -187,11 +186,20 @@ describe('ImportDirectiveHandler', () => {
     vi.mocked(childState.getAllCommands).mockReturnValue(new Map());
     vi.mocked(childState.getCurrentFilePath).mockReturnValue('imported.meld');
 
-    resolutionService.resolvePathString.mockImplementation(async (p) => p);
-    resolutionService.resolveInterpolatableValue.mockImplementation(async (val) =>
-      Array.isArray(val) ? val.map(n => (n.type === 'Text' ? n.content : '')).join('') : ''
-    );
-    resolutionService.resolveVariableReference.mockResolvedValue(undefined);
+    // Add default mock for resolvePath
+    resolutionService.resolvePath.mockImplementation(async (pathInput) => {
+      const raw = typeof pathInput === 'string' ? pathInput : pathInput.raw;
+      // Basic default mock: assume file path relative to /project/
+      const isUrl = raw.startsWith('http');
+      const resolved = isUrl ? raw : `/project/${raw}`.replace('//','/'); // Basic join
+      return createMeldPath(
+        raw, 
+        resolved as any, // Using 'any' for mock simplicity with branded types
+        resolved.startsWith('/') || isUrl,
+        true, // Assume validated for mock
+        isUrl ? 'url' : 'filesystem'
+      );
+    });
 
     fileSystemService.exists.mockResolvedValue(true);
     fileSystemService.readFile.mockResolvedValue(''); 
@@ -293,10 +301,9 @@ describe('ImportDirectiveHandler', () => {
       const directiveContext = { currentFilePath: '/project/main.meld', state: stateService };
       const importLocation = createLocation(5, 1);
 
-      const pathObject: PathValueObject = {
+      const pathObject: StructuredPath = {
         raw: '$docs/file.meld',
         structured: {
-          base: '$docs',
           segments: ['file.meld'],
           variables: { path: ['docs'] },
         },
@@ -481,7 +488,7 @@ describe('ImportDirectiveHandler', () => {
     });
 
     it('should handle variable not found during path resolution', async () => {
-      const pathObject: PathValueObject = { raw: '{{nonexistent}}/file', structured: { variables: { text: ['nonexistent'] } }, interpolatedValue: [] } as any;
+      const pathObject: StructuredPath = { raw: '{{nonexistent}}/file', structured: { variables: { text: ['nonexistent'] } }, interpolatedValue: [] } as any;
       const node = createTestImportNode({ pathObject });
       const directiveContext = { currentFilePath: '/some/path', state: stateService };
       const resolutionError = new MeldResolutionError('Variable not found: nonexistent');
