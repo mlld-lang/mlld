@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { PathService } from '@services/fs/PathService/PathService';
-import { ProjectPathResolver } from '@services/fs/ProjectPathResolver';
-import { URLContentResolver } from '@services/resolution/URLContentResolver/URLContentResolver';
-import type { URLResponse } from '@services/fs/PathService/IURLCache';
+import { PathService } from '@services/fs/PathService/PathService.js';
+import { ProjectPathResolver } from '@services/fs/ProjectPathResolver.js';
+import { URLContentResolver } from '@services/resolution/URLContentResolver/URLContentResolver.js';
+import type { URLResponse } from '@services/fs/PathService/IURLCache.js';
 
 // Mock ProjectPathResolver
 vi.mock('@services/fs/ProjectPathResolver', () => {

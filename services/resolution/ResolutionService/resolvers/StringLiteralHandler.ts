@@ -6,7 +6,7 @@ import type { MeldNode, TextNode } from '@core/syntax/types.js';
  * Handles validation and parsing of string literals in text directives
  */
 export class StringLiteralHandler {
-  private readonly QUOTE_TYPES = ["'", '"', '`'] as const;
+  private readonly QUOTE_TYPES = ['\'', '"', '`'] as const;
   private readonly MIN_CONTENT_LENGTH = 1;
   private silentMode: boolean = false;
 
@@ -286,7 +286,7 @@ export class StringLiteralHandler {
   private isEscaped(str: string, char: string, pos?: number): boolean {
     if (pos === undefined) {
       // If no position given, check all occurrences
-      let escaped = false;
+      const escaped = false;
       for (let i = 0; i < str.length; i++) {
         if (str[i] === char && !this.isEscaped(str, char, i)) {
           return false;

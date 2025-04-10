@@ -153,7 +153,7 @@ describe('DefineDirectiveHandler', () => {
            throw stateError;
          });
       } else {
-         throw new Error("Test setup error: mockStateClone was not initialized");
+         throw new Error('Test setup error: mockStateClone was not initialized');
       }
 
       // Use expectToThrowWithConfig

@@ -1,5 +1,5 @@
 /// <reference types="vitest" />
-import { parse } from '@core/ast';
+import { parse } from '@core/ast.js';
 import { expect, describe, it } from 'vitest';
 
 describe('directives/@embed with header levels', () => {

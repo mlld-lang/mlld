@@ -121,19 +121,19 @@ function generateDetailedReport(v301Failures, v330Failures) {
       report += `#### Test: ${failure.test}\n\n`;
       
       if (failure.expected && failure.received) {
-        report += "**Expected:**\n```\n" + failure.expected + "\n```\n\n";
-        report += "**Received:**\n```\n" + failure.received + "\n```\n\n";
+        report += '**Expected:**\n```\n' + failure.expected + '\n```\n\n';
+        report += '**Received:**\n```\n' + failure.received + '\n```\n\n';
         
         // Try to analyze the specific differences
         const analysis = analyzeFailureDifference(failure.expected, failure.received);
         if (analysis) {
-          report += "**Analysis:**\n" + analysis + "\n\n";
+          report += '**Analysis:**\n' + analysis + '\n\n';
         }
       } else {
-        report += "**Failure Details:**\n```\n" + failure.details + "\n```\n\n";
+        report += '**Failure Details:**\n```\n' + failure.details + '\n```\n\n';
       }
       
-      report += "---\n\n";
+      report += '---\n\n';
     }
   }
   
@@ -144,14 +144,14 @@ function generateDetailedReport(v301Failures, v330Failures) {
   
   for (const pattern of patterns) {
     report += `### ${pattern.name}\n\n`;
-    report += pattern.description + "\n\n";
+    report += pattern.description + '\n\n';
     
     if (pattern.examples && pattern.examples.length > 0) {
-      report += "**Examples:**\n\n";
+      report += '**Examples:**\n\n';
       for (const example of pattern.examples) {
         report += `- ${example}\n`;
       }
-      report += "\n";
+      report += '\n';
     }
   }
   
@@ -161,11 +161,11 @@ function generateDetailedReport(v301Failures, v330Failures) {
 function analyzeFailureDifference(expected, received) {
   if (!expected || !received) return null;
   
-  let analysis = "";
+  let analysis = '';
   
   // Check for array notation changes (brackets vs dot notation)
   if (expected.includes('[') && received.includes('.')) {
-    analysis += "• Array notation has changed from bracket notation `[index]` to dot notation `.index`.\n";
+    analysis += '• Array notation has changed from bracket notation `[index]` to dot notation `.index`.\n';
   }
   
   // Check for structural changes in the AST
@@ -210,10 +210,10 @@ function analyzeFailureDifference(expected, received) {
   
   // Check for string escaping differences
   if (expected.includes('\\') !== received.includes('\\')) {
-    analysis += "• String escaping behavior may have changed.\n";
+    analysis += '• String escaping behavior may have changed.\n';
   }
   
-  return analysis || "No specific pattern identified in this difference.";
+  return analysis || 'No specific pattern identified in this difference.';
 }
 
 function analyzeCommonPatterns(failures) {
@@ -227,7 +227,7 @@ function analyzeCommonPatterns(failures) {
   
   if (arrayNotationFailures.length > 0) {
     patterns.push({
-      name: "Array Notation Change",
+      name: 'Array Notation Change',
       description: `${arrayNotationFailures.length} failures appear to be related to a change in array notation, from bracket notation [index] to dot notation .index.`,
       examples: arrayNotationFailures.slice(0, 3).map(f => f.test)
     });
@@ -242,7 +242,7 @@ function analyzeCommonPatterns(failures) {
   
   if (structureFailures.length > 0) {
     patterns.push({
-      name: "AST Structure Changes",
+      name: 'AST Structure Changes',
       description: `${structureFailures.length} failures appear to be related to changes in the AST structure, possibly affecting node types or properties.`,
       examples: structureFailures.slice(0, 3).map(f => f.test)
     });

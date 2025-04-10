@@ -558,7 +558,7 @@ export function createMockResolutionService(): IResolutionService {
   // Set default implementations
   mockService.resolveInContext.mockImplementation(async (value: string, context: any) => {
     // Validate string literals
-    if (value.startsWith("'") || value.startsWith('"') || value.startsWith('`')) {
+    if (value.startsWith('\'') || value.startsWith('"') || value.startsWith('`')) {
       const quote = value[0];
       if (value[value.length - 1] !== quote) {
         throw new Error('Unclosed string literal');

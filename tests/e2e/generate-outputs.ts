@@ -9,11 +9,11 @@
  * These files can be used to compare actual vs expected output and debug issues.
  */
 
-import { findFiles, VALID_CASES_DIR, INVALID_CASES_DIR, ERROR_EXTENSION, setupTestContext } from './example-runner-setup';
-import { main as runMeld } from '@api/index';
+import { findFiles, VALID_CASES_DIR, INVALID_CASES_DIR, ERROR_EXTENSION, setupTestContext } from './example-runner-setup.js';
+import { main as runMeld } from '@api/index.js';
 import { promises as fs } from 'fs';
 import path from 'path';
-import type { Services } from '@core/types/index';
+import type { Services } from '@core/types/index.js';
 
 // File extensions for outputs
 const OUTPUT_MD_EXT = '.o.md';

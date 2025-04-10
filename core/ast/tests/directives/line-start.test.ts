@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parse } from '@core/ast';
+import { parse } from '@core/ast.js';
 
 describe('Line Start Directives', () => {
   it('should only recognize directives at the start of a line', async () => {
@@ -48,8 +48,8 @@ More text`;
 >> This is a comment
 More text`;
     
-    console.log("Comments test input (JSON):", JSON.stringify(input));
-    console.log("Comments test input (raw):", input);
+    console.log('Comments test input (JSON):', JSON.stringify(input));
+    console.log('Comments test input (raw):', input);
 
     const { ast } = await parse(input);
     

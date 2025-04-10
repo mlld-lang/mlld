@@ -1,7 +1,7 @@
 /// <reference types="vitest" />
-import { parse } from '@core/ast';
+import { parse } from '@core/ast.js';
 import { expect, describe, it } from 'vitest';
-import { DirectiveNode } from '../../src/types';
+import { DirectiveNode } from '../../src/types.js';
 
 describe('directives/@import with path variables', () => {
   it('should correctly parse basic path variables in import directives', async () => {
@@ -17,7 +17,7 @@ describe('directives/@import with path variables', () => {
     expect(node.directive.path.structured.variables.path).toEqual(['file_path']);
     expect(node.directive.path.structured.cwd).toBe(false);
     // Import directives have an imports property with a default wildcard import
-    expect(node.directive.imports).toEqual([{name: "*", alias: null}]);
+    expect(node.directive.imports).toEqual([{name: '*', alias: null}]);
   });
   
   it('should correctly parse path variables with subdirectories', async () => {
@@ -33,7 +33,7 @@ describe('directives/@import with path variables', () => {
     expect(node.directive.path.structured.variables.path).toEqual(['file_path']);
     expect(node.directive.path.structured.segments).toEqual(['subdirectory', 'file.md']);
     expect(node.directive.path.structured.cwd).toBe(false);
-    expect(node.directive.imports).toEqual([{name: "*", alias: null}]);
+    expect(node.directive.imports).toEqual([{name: '*', alias: null}]);
   });
   
   it('should correctly parse path variables with text variables', async () => {
@@ -49,7 +49,7 @@ describe('directives/@import with path variables', () => {
     expect(node.directive.path.structured.variables.path).toEqual(['file_path']);
     expect(node.directive.path.structured.variables.text).toEqual(['text_var']);
     expect(node.directive.path.variable_warning).toBe(true);
-    expect(node.directive.imports).toEqual([{name: "*", alias: null}]);
+    expect(node.directive.imports).toEqual([{name: '*', alias: null}]);
   });
   
   it('should handle non-bracketed path variable syntax', async () => {
@@ -63,7 +63,7 @@ describe('directives/@import with path variables', () => {
     expect(node.directive.path.raw).toBe('$file_path');
     expect(node.directive.path.isPathVariable).toBe(true);
     expect(node.directive.path.structured.variables.path).toEqual(['file_path']);
-    expect(node.directive.imports).toEqual([{name: "*", alias: null}]);
+    expect(node.directive.imports).toEqual([{name: '*', alias: null}]);
   });
   
   // Import-specific test for named imports with path variables
@@ -79,8 +79,8 @@ describe('directives/@import with path variables', () => {
     expect(node.directive.path.isPathVariable).toBe(true);
     expect(node.directive.path.structured.variables.path).toEqual(['file_path']);
     expect(node.directive.imports).toEqual([
-      {name: "component1", alias: null},
-      {name: "component2", alias: null}
+      {name: 'component1', alias: null},
+      {name: 'component2', alias: null}
     ]);
   });
   
@@ -97,8 +97,8 @@ describe('directives/@import with path variables', () => {
     expect(node.directive.path.isPathVariable).toBe(true);
     expect(node.directive.path.structured.variables.path).toEqual(['file_path']);
     expect(node.directive.imports).toEqual([
-      {name: "component1", alias: "comp1"},
-      {name: "component2", alias: "comp2"}
+      {name: 'component1', alias: 'comp1'},
+      {name: 'component2', alias: 'comp2'}
     ]);
   });
   
@@ -114,7 +114,7 @@ describe('directives/@import with path variables', () => {
     expect(node.directive.path.raw).toBe('$file_path');
     expect(node.directive.path.isPathVariable).toBe(true);
     expect(node.directive.path.structured.variables.path).toEqual(['file_path']);
-    expect(node.directive.imports).toEqual([{name: "*", alias: null}]);
+    expect(node.directive.imports).toEqual([{name: '*', alias: null}]);
   });
   
   // Test for non-bracketed path variable with "from" syntax
@@ -130,8 +130,8 @@ describe('directives/@import with path variables', () => {
     expect(node.directive.path.isPathVariable).toBe(true);
     expect(node.directive.path.structured.variables.path).toEqual(['file_path']);
     expect(node.directive.imports).toEqual([
-      {name: "component1", alias: null},
-      {name: "component2", alias: null}
+      {name: 'component1', alias: null},
+      {name: 'component2', alias: null}
     ]);
   });
   
@@ -151,6 +151,6 @@ describe('directives/@import with path variables', () => {
     expect(node.directive.path.structured.segments).toContain('level1');
     expect(node.directive.path.structured.segments).toContain('level2');
     expect(node.directive.path.structured.segments).toContain('file.md');
-    expect(node.directive.imports).toEqual([{name: "*", alias: null}]);
+    expect(node.directive.imports).toEqual([{name: '*', alias: null}]);
   });
 }); 

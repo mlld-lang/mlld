@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import type { TextNode, CommentNode } from '@core/syntax/types';
-import { createMockNode, createMockValidationContext, createMockLocation } from './utils/test-utils';
-import { MeldAstError, ParseErrorCode } from '@core/ast/types';
+import type { TextNode, CommentNode } from '@core/syntax/types.js';
+import { createMockNode, createMockValidationContext, createMockLocation } from './utils/test-utils.js';
+import { MeldAstError, ParseErrorCode } from '@core/ast/types.js';
 
 describe('Validation Helpers', () => {
   describe('createMockValidationContext', () => {

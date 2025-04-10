@@ -24,7 +24,7 @@ const JEST_MOCK_DEEP_REGEX = /from\s+['"]jest-mock-deep['"]/g;
  * Fix resolve patterns in a file
  */
 async function fixResolvePatterns(filePath) {
-  let content = await fs.readFile(filePath, 'utf8');
+  const content = await fs.readFile(filePath, 'utf8');
   let modified = false;
 
   // 1. Replace context.resolveSync<T>('Token') with await context.resolve<T>('Token')
@@ -74,7 +74,7 @@ async function fixResolvePatterns(filePath) {
  * Check if the file needs beforeEach updated from sync to async
  */
 async function fixBeforeEachPatterns(filePath) {
-  let content = await fs.readFile(filePath, 'utf8');
+  const content = await fs.readFile(filePath, 'utf8');
   
   // If we added await to any resolve methods, we need to ensure beforeEach is async
   if (content.includes('await context.resolve') || content.includes('await context.container.resolve')) {

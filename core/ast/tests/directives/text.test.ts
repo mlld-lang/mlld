@@ -1,6 +1,6 @@
 /// <reference types="vitest" />
-import { textTests, textInvalidTests, type ParserTestCase } from '@core/syntax/types';
-import { testValidCase, testInvalidCase } from '../utils/test-utils';
+import { textTests, textInvalidTests, type ParserTestCase } from '@core/syntax/types.js';
+import { testValidCase, testInvalidCase } from '../utils/test-utils.js';
 
 describe('directives/@text', () => {
   describe('valid cases', () => {

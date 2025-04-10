@@ -1,13 +1,13 @@
 /// <reference types="vitest" />
 import { describe, it, expect } from 'vitest';
-import { parse } from '@core/ast';
+import { parse } from '@core/ast.js';
 import type { 
   TextNode, 
   CodeFenceNode, 
   VariableReferenceNode,
   DirectiveNode,
   MeldNode
-} from '@core/ast/ast/astTypes';
+} from '@core/ast/ast/astTypes.js';
 
 describe('Parser', () => {
   describe('Text blocks', () => {
@@ -264,7 +264,7 @@ describe('Parser', () => {
         },
       });
       expect(node.directive.subtype).toBe('importAll');
-      expect(node.directive.imports).toEqual([{ name: "*", alias: null }]);
+      expect(node.directive.imports).toEqual([{ name: '*', alias: null }]);
     });
 
     it('should parse a run directive', async () => {

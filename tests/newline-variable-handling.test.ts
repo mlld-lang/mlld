@@ -168,34 +168,34 @@ describe('Newline Handling', () => {
       // This documents the workarounds in api/index.ts
       const workarounds = [
         {
-          name: "WORKAROUND 1.1: Multiple Newline Reduction",
+          name: 'WORKAROUND 1.1: Multiple Newline Reduction',
           pattern: /\n{2,}/g,
           replacement: '\n',
-          purpose: "Replace multiple consecutive newlines with a single newline"
+          purpose: 'Replace multiple consecutive newlines with a single newline'
         },
         {
-          name: "WORKAROUND 1.2: Word-Colon-Newline Fix",
+          name: 'WORKAROUND 1.2: Word-Colon-Newline Fix',
           pattern: /(\w+):\n(\w+)/g,
           replacement: '$1: $2',
-          purpose: "Fix formatting when variable is substituted after colon+newline"
+          purpose: 'Fix formatting when variable is substituted after colon+newline'
         },
         {
-          name: "WORKAROUND 1.3: Word-Comma-Newline Fix",
+          name: 'WORKAROUND 1.3: Word-Comma-Newline Fix',
           pattern: /(\w+),\n(\w+)/g,
           replacement: '$1, $2',
-          purpose: "Fix formatting when variable is substituted after comma+newline"
+          purpose: 'Fix formatting when variable is substituted after comma+newline'
         },
         {
-          name: "WORKAROUND 1.4: Object Notation Formatting",
+          name: 'WORKAROUND 1.4: Object Notation Formatting',
           pattern: /(\w+):\n{/g,
           replacement: '$1: {',
-          purpose: "Fix JSON-like notation broken by newlines"
+          purpose: 'Fix JSON-like notation broken by newlines'
         },
         {
-          name: "WORKAROUND 1.5: Object Property Newline Fix",
+          name: 'WORKAROUND 1.5: Object Property Newline Fix',
           pattern: /},\n(\w+):/g,
           replacement: '}, $1:',
-          purpose: "Fix object property lists broken by newlines"
+          purpose: 'Fix object property lists broken by newlines'
         }
       ];
       

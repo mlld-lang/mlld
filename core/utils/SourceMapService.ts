@@ -183,10 +183,10 @@ export class SourceMapService implements ISourceMapService {
    */
   getDebugInfo(): string {
     if (this.mappings.length === 0) {
-      return "No source mappings registered";
+      return 'No source mappings registered';
     }
     
-    return "Source mappings:\n" + this.mappings.map(m => 
+    return 'Source mappings:\n' + this.mappings.map(m => 
       `  ${m.source.filePath}:${m.source.line}:${m.source.column} -> ${m.combined.line}:${m.combined.column}`
     ).join('\n');
   }
@@ -196,12 +196,12 @@ export class SourceMapService implements ISourceMapService {
    * @returns Detailed string representation of all mappings and sources
    */
   getDetailedDebugInfo(): string {
-    let output = [];
+    const output = [];
     
     // Add information about registered sources
-    output.push("Registered source files:");
+    output.push('Registered source files:');
     if (this.sources.size === 0) {
-      output.push("  No source files registered");
+      output.push('  No source files registered');
     } else {
       for (const [filePath, lines] of this.sources.entries()) {
         output.push(`  ${filePath} (${lines.length} lines)`);
@@ -209,9 +209,9 @@ export class SourceMapService implements ISourceMapService {
     }
     
     // Add mappings information
-    output.push("\nSource mappings:");
+    output.push('\nSource mappings:');
     if (this.mappings.length === 0) {
-      output.push("  No mappings registered");
+      output.push('  No mappings registered');
     } else {
       // Group mappings by source file for better readability
       const mappingsByFile = new Map<string, Array<{source: SourceLocation, combined: {line: number, column: number}}>>();
@@ -248,7 +248,7 @@ export class SourceMapService implements ISourceMapService {
   reset(): void {
     this.sources.clear();
     this.mappings = [];
-    logger.debug("Source mappings have been reset");
+    logger.debug('Source mappings have been reset');
   }
 }
 

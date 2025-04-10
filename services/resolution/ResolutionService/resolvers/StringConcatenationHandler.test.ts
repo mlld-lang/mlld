@@ -273,19 +273,19 @@ describe('StringConcatenationHandler', () => {
           identifier: 'test',
           value: {
             type: 'Concatenation',
-            parts: ["'hello'", "' world'"],
-            raw: "'hello' ++ ' world'"
+            parts: ['\'hello\'', '\' world\''],
+            raw: '\'hello\' ++ \' world\''
           }
         })
       ]);
 
       vi.mocked(mockResolutionService.resolveInContext).mockImplementation(async (value) => {
-        if (value === "'hello'") return 'hello';
-        if (value === "' world'") return ' world';
+        if (value === '\'hello\'') return 'hello';
+        if (value === '\' world\'') return ' world';
         return value;
       });
 
-      const result = await handler.resolveConcatenation("'hello' ++ ' world'", context);
+      const result = await handler.resolveConcatenation('\'hello\' ++ \' world\'', context);
       expect(result).toBe('hello world');
     });
   });

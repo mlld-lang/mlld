@@ -103,7 +103,7 @@ export class VariableTransformationVisualizer {
         // Trace field access if this is a property access
         if (fieldPath.length > 0 && value !== undefined) {
           let currentValue = value;
-          let currentPath = [variableName];
+          const currentPath = [variableName];
           
           for (const field of fieldPath) {
             currentPath.push(field);

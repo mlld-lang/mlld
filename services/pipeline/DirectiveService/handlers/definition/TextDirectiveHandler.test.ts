@@ -83,7 +83,7 @@ describe('TextDirectiveHandler', () => {
     
     // Configure mock implementations
     validationService.validate.mockImplementation((node: any) => {
-      if (node.directive?.value === "'unclosed string") {
+      if (node.directive?.value === '\'unclosed string') {
         throw new Error('Invalid string literal: unclosed string');
       }
       if (node.directive?.value === '"no"++"spaces"') {

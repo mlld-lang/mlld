@@ -70,7 +70,7 @@ function parseMeldFile(content) {
           // Try a more aggressive approach to fix common JSON issues
           try {
             // Replace newlines with spaces and ensure proper JSON format
-            let fixedJson = currentDataContent
+            const fixedJson = currentDataContent
               .replace(/\n/g, ' ')
               .replace(/,\s*}/g, '}')  // Remove trailing commas
               .replace(/([{,])\s*([^"{\s][^:]*?):/g, '$1"$2":')  // Quote unquoted keys
@@ -85,17 +85,17 @@ function parseMeldFile(content) {
             // If all else fails, try a manual approach for the person object
             if (currentDataName === 'person') {
               variables.data.person = {
-                name: "John Doe",
+                name: 'John Doe',
                 age: 30,
-                occupation: "Developer",
+                occupation: 'Developer',
                 address: {
-                  street: "123 Main St",
-                  city: "Anytown",
-                  state: "CA",
-                  zip: "12345"
+                  street: '123 Main St',
+                  city: 'Anytown',
+                  state: 'CA',
+                  zip: '12345'
                 }
               };
-              console.log("Used hardcoded person object as fallback");
+              console.log('Used hardcoded person object as fallback');
               inDataDirective = false;
               currentDataName = '';
               currentDataContent = '';
@@ -223,7 +223,7 @@ function processContent(content, variables) {
     
     // Add a special marker to help us debug if our fix is taking effect
     if (parts.length > 1 && parts[1] === 'name') {
-      stringValue = "FIX_APPLIED_" + stringValue;
+      stringValue = 'FIX_APPLIED_' + stringValue;
     }
     
     return stringValue;

@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { VariableReferenceResolver } from '@services/resolution/ResolutionService/resolvers/VariableReferenceResolver.js';
 
 // --- Corrected Core Type Imports ---
-import type { JsonValue, Result } from '@core/types';
-import { MeldError } from '@core/types'; // Keep MeldError if needed
+import type { JsonValue, Result } from '@core/types.js';
+import { MeldError } from '@core/types.js'; // Keep MeldError if needed
 import type { ResolutionContext, PathResolutionContext } from '@core/types/resolution.js'; 
 import {
     VariableType, 
@@ -12,14 +12,14 @@ import {
     type DataVariable, 
     type IPathVariable, 
     type CommandVariable
-} from '@core/types/variables';
+} from '@core/types/variables.js';
 import {
     MeldPath,
     PathContentType,
     ValidatedResourcePath,
     unsafeCreateValidatedResourcePath,
     type IFilesystemPathState // Keep if needed
-} from '@core/types/paths';
+} from '@core/types/paths.js';
 // Removed incorrect/conflicting imports from @core/types/index.js
 
 // --- Other Imports ---
@@ -199,7 +199,7 @@ describe('VariableReferenceResolver', () => {
         await resolver.resolve(node, context);
       }, {
         type: 'VariableResolutionError',
-        messageContains: "Variable not found: missing",
+        messageContains: 'Variable not found: missing',
         code: 'E_VAR_NOT_FOUND' // Verify resolver throws this specific code now
       });
     });
@@ -225,7 +225,7 @@ describe('VariableReferenceResolver', () => {
         await resolver.resolve(node, context);
       }, {
         type: 'FieldAccessError', // Verify resolver lets this specific error bubble up
-        messageContains: "Field 'age' not found in object.",
+        messageContains: 'Field \'age\' not found in object.',
       });
     });
 

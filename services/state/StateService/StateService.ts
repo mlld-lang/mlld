@@ -811,7 +811,7 @@ export class StateService implements IStateService {
           // OR rely on the registerState call potentially setting the clonedFrom implicitly?
           // For now, let's assume addRelationship takes the standard types and comment out direct setting
           // this.trackingService.addRelationship(originalId, cloneId, 'clone'); 
-          logger.debug('Tracking service fallback for clone relationship might need review based on addRelationship capabilities.')
+          logger.debug('Tracking service fallback for clone relationship might need review based on addRelationship capabilities.');
         } catch (error) {
           logger.warn('Failed to register clone operation with tracking service', { error });
         }

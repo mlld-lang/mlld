@@ -1,5 +1,5 @@
 import { DependencyContainer, injectable, injectAll, inject, container } from 'tsyringe';
-import TestContainerHelper from './TestContainerHelper';
+import TestContainerHelper from './TestContainerHelper.js';
 import type { ICircularityService } from '@services/resolution/CircularityService/ICircularityService.js';
 
 /**

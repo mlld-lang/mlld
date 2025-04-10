@@ -162,7 +162,7 @@ export class TestContext {
     const stateTrackingServiceClientFactory = new StateTrackingServiceClientFactory(stateTracking);
     
     // Initialize state service with factories
-    let stateFactory = new StateFactory();
+    const stateFactory = new StateFactory();
     const state = new StateService(stateFactory, eventService, stateTrackingServiceClientFactory);
     state.setCurrentFilePath('test.meld'); // Set initial file path
     state.setTransformationEnabled(true);

@@ -6,14 +6,14 @@ const { createLLMXML } = require('llmxml');
 
 // Sample JSON object
 const person = {
-  name: "John Doe",
+  name: 'John Doe',
   age: 30,
   address: {
-    street: "123 Main St",
-    city: "Anytown",
-    zip: "12345"
+    street: '123 Main St',
+    city: 'Anytown',
+    zip: '12345'
   },
-  hobbies: ["reading", "hiking", "coding"]
+  hobbies: ['reading', 'hiking', 'coding']
 };
 
 // Create a test markdown document with field access examples
@@ -32,9 +32,9 @@ Field access:
 Here's the names: {"first": "Alice", "last": "Smith"}
 `;
 
-console.log("Original markdown:");
+console.log('Original markdown:');
 console.log(markdown);
-console.log("\n--------------------------------------------------\n");
+console.log('\n--------------------------------------------------\n');
 
 // Main async function to handle promises
 async function runTest() {
@@ -52,19 +52,19 @@ async function runTest() {
     // Convert to XML (await the Promise)
     const xml = await llmxml.toXML(markdown);
     
-    console.log("Converted to LLMXML:");
+    console.log('Converted to LLMXML:');
     console.log(xml);
-    console.log("\n--------------------------------------------------\n");
+    console.log('\n--------------------------------------------------\n');
     
     // Look for entity-encoded JSON
-    console.log("HTML entity check:");
+    console.log('HTML entity check:');
     if (xml.includes('&quot;')) {
-      console.log("✓ HTML entities found in output - this will be fixed when the llmxml library is updated");
+      console.log('✓ HTML entities found in output - this will be fixed when the llmxml library is updated');
     } else {
-      console.log("❌ No HTML entities found - unexpected");
+      console.log('❌ No HTML entities found - unexpected');
     }
   } catch (error) {
-    console.error("Error in test:", error);
+    console.error('Error in test:', error);
   }
 }
 

@@ -1,5 +1,5 @@
 // Generated CJS parser
-"use strict";
+'use strict';
 
 // Define return type for the parser
 /** @typedef {import('@core/syntax/types.js').MeldNode} MeldNode */
@@ -12,7 +12,7 @@ class SyntaxError extends Error {
     this.expected = expected;
     this.found = found;
     this.location = location;
-    this.name = "SyntaxError";
+    this.name = 'SyntaxError';
   }
 }
 
@@ -21,7 +21,7 @@ class SyntaxError extends Error {
 //
 // https://peggyjs.org/
 
-"use strict";
+'use strict';
 
 
 function peg$subclass(child, parent) {
@@ -39,14 +39,14 @@ function peg$SyntaxError(message, expected, found, location) {
   self.expected = expected;
   self.found = found;
   self.location = location;
-  self.name = "SyntaxError";
+  self.name = 'SyntaxError';
   return self;
 }
 
 peg$subclass(peg$SyntaxError, Error);
 
 function peg$padEnd(str, targetLength, padString) {
-  padString = padString || " ";
+  padString = padString || ' ';
   if (str.length > targetLength) { return str; }
   targetLength -= str.length;
   padString += padString.repeat(targetLength);
@@ -54,7 +54,7 @@ function peg$padEnd(str, targetLength, padString) {
 }
 
 peg$SyntaxError.prototype.format = function(sources) {
-  var str = "Error: " + this.message;
+  var str = 'Error: ' + this.message;
   if (this.location) {
     var src = null;
     var k;
@@ -65,23 +65,23 @@ peg$SyntaxError.prototype.format = function(sources) {
       }
     }
     var s = this.location.start;
-    var offset_s = (this.location.source && (typeof this.location.source.offset === "function"))
+    var offset_s = (this.location.source && (typeof this.location.source.offset === 'function'))
       ? this.location.source.offset(s)
       : s;
-    var loc = this.location.source + ":" + offset_s.line + ":" + offset_s.column;
+    var loc = this.location.source + ':' + offset_s.line + ':' + offset_s.column;
     if (src) {
       var e = this.location.end;
-      var filler = peg$padEnd("", offset_s.line.toString().length, ' ');
+      var filler = peg$padEnd('', offset_s.line.toString().length, ' ');
       var line = src[s.line - 1];
       var last = s.line === e.line ? e.column : line.length + 1;
       var hatLen = (last - s.column) || 1;
-      str += "\n --> " + loc + "\n"
-          + filler + " |\n"
-          + offset_s.line + " | " + line + "\n"
-          + filler + " | " + peg$padEnd("", s.column - 1, ' ')
-          + peg$padEnd("", hatLen, "^");
+      str += '\n --> ' + loc + '\n'
+          + filler + ' |\n'
+          + offset_s.line + ' | ' + line + '\n'
+          + filler + ' | ' + peg$padEnd('', s.column - 1, ' ')
+          + peg$padEnd('', hatLen, '^');
     } else {
-      str += "\n at " + loc;
+      str += '\n at ' + loc;
     }
   }
   return str;
@@ -90,25 +90,25 @@ peg$SyntaxError.prototype.format = function(sources) {
 peg$SyntaxError.buildMessage = function(expected, found) {
   var DESCRIBE_EXPECTATION_FNS = {
     literal: function(expectation) {
-      return "\"" + literalEscape(expectation.text) + "\"";
+      return '"' + literalEscape(expectation.text) + '"';
     },
 
     class: function(expectation) {
       var escapedParts = expectation.parts.map(function(part) {
         return Array.isArray(part)
-          ? classEscape(part[0]) + "-" + classEscape(part[1])
+          ? classEscape(part[0]) + '-' + classEscape(part[1])
           : classEscape(part);
       });
 
-      return "[" + (expectation.inverted ? "^" : "") + escapedParts.join("") + "]";
+      return '[' + (expectation.inverted ? '^' : '') + escapedParts.join('') + ']';
     },
 
     any: function() {
-      return "any character";
+      return 'any character';
     },
 
     end: function() {
-      return "end of input";
+      return 'end of input';
     },
 
     other: function(expectation) {
@@ -122,28 +122,28 @@ peg$SyntaxError.buildMessage = function(expected, found) {
 
   function literalEscape(s) {
     return s
-      .replace(/\\/g, "\\\\")
-      .replace(/"/g,  "\\\"")
-      .replace(/\0/g, "\\0")
-      .replace(/\t/g, "\\t")
-      .replace(/\n/g, "\\n")
-      .replace(/\r/g, "\\r")
-      .replace(/[\x00-\x0F]/g,          function(ch) { return "\\x0" + hex(ch); })
-      .replace(/[\x10-\x1F\x7F-\x9F]/g, function(ch) { return "\\x"  + hex(ch); });
+      .replace(/\\/g, '\\\\')
+      .replace(/"/g,  '\\"')
+      .replace(/\0/g, '\\0')
+      .replace(/\t/g, '\\t')
+      .replace(/\n/g, '\\n')
+      .replace(/\r/g, '\\r')
+      .replace(/[\x00-\x0F]/g,          function(ch) { return '\\x0' + hex(ch); })
+      .replace(/[\x10-\x1F\x7F-\x9F]/g, function(ch) { return '\\x'  + hex(ch); });
   }
 
   function classEscape(s) {
     return s
-      .replace(/\\/g, "\\\\")
-      .replace(/\]/g, "\\]")
-      .replace(/\^/g, "\\^")
-      .replace(/-/g,  "\\-")
-      .replace(/\0/g, "\\0")
-      .replace(/\t/g, "\\t")
-      .replace(/\n/g, "\\n")
-      .replace(/\r/g, "\\r")
-      .replace(/[\x00-\x0F]/g,          function(ch) { return "\\x0" + hex(ch); })
-      .replace(/[\x10-\x1F\x7F-\x9F]/g, function(ch) { return "\\x"  + hex(ch); });
+      .replace(/\\/g, '\\\\')
+      .replace(/\]/g, '\\]')
+      .replace(/\^/g, '\\^')
+      .replace(/-/g,  '\\-')
+      .replace(/\0/g, '\\0')
+      .replace(/\t/g, '\\t')
+      .replace(/\n/g, '\\n')
+      .replace(/\r/g, '\\r')
+      .replace(/[\x00-\x0F]/g,          function(ch) { return '\\x0' + hex(ch); })
+      .replace(/[\x10-\x1F\x7F-\x9F]/g, function(ch) { return '\\x'  + hex(ch); });
   }
 
   function describeExpectation(expectation) {
@@ -171,20 +171,20 @@ peg$SyntaxError.buildMessage = function(expected, found) {
         return descriptions[0];
 
       case 2:
-        return descriptions[0] + " or " + descriptions[1];
+        return descriptions[0] + ' or ' + descriptions[1];
 
       default:
-        return descriptions.slice(0, -1).join(", ")
-          + ", or "
+        return descriptions.slice(0, -1).join(', ')
+          + ', or '
           + descriptions[descriptions.length - 1];
     }
   }
 
   function describeFound(found) {
-    return found ? "\"" + literalEscape(found) + "\"" : "end of input";
+    return found ? '"' + literalEscape(found) + '"' : 'end of input';
   }
 
-  return "Expected " + describeExpected(expected) + " but " + describeFound(found) + " found.";
+  return 'Expected ' + describeExpected(expected) + ' but ' + describeFound(found) + ' found.';
 };
 
 function peg$parse(input, options) {
@@ -196,58 +196,58 @@ function peg$parse(input, options) {
   var peg$startRuleFunctions = { Start: peg$parseStart };
   var peg$startRuleFunction = peg$parseStart;
 
-  var peg$c0 = ">>";
-  var peg$c1 = "\n";
-  var peg$c2 = "{{";
-  var peg$c3 = "}}";
-  var peg$c4 = "$";
-  var peg$c5 = "HOMEPATH";
-  var peg$c6 = "~";
-  var peg$c7 = "PROJECTPATH";
-  var peg$c8 = ".";
-  var peg$c9 = "[";
-  var peg$c10 = "]";
-  var peg$c11 = "\"";
-  var peg$c12 = "\\\\";
-  var peg$c13 = "'";
-  var peg$c14 = "`";
-  var peg$c15 = "]]";
-  var peg$c16 = "[[";
-  var peg$c17 = "@";
-  var peg$c18 = "(";
-  var peg$c19 = ")";
-  var peg$c20 = ",";
-  var peg$c21 = "run";
-  var peg$c22 = "import";
-  var peg$c23 = "from";
-  var peg$c24 = "*";
-  var peg$c25 = "as";
-  var peg$c26 = "embed";
-  var peg$c27 = "{";
-  var peg$c28 = "}";
-  var peg$c29 = "#";
-  var peg$c30 = "under";
-  var peg$c31 = "define";
-  var peg$c32 = "=";
-  var peg$c33 = "risk.high";
-  var peg$c34 = "risk.med";
-  var peg$c35 = "risk.low";
-  var peg$c36 = "risk";
-  var peg$c37 = "about";
-  var peg$c38 = "meta";
-  var peg$c39 = "@run";
-  var peg$c40 = "data";
-  var peg$c41 = ":";
-  var peg$c42 = "@embed";
-  var peg$c43 = "@call";
-  var peg$c44 = "-";
-  var peg$c45 = "true";
-  var peg$c46 = "false";
-  var peg$c47 = "null";
-  var peg$c48 = "text";
-  var peg$c49 = "path";
-  var peg$c50 = "var";
-  var peg$c51 = "\r\n";
+  var peg$c0 = '>>';
+  var peg$c1 = '\n';
+  var peg$c2 = '{{';
+  var peg$c3 = '}}';
+  var peg$c4 = '$';
+  var peg$c5 = 'HOMEPATH';
+  var peg$c6 = '~';
+  var peg$c7 = 'PROJECTPATH';
+  var peg$c8 = '.';
+  var peg$c9 = '[';
+  var peg$c10 = ']';
+  var peg$c11 = '"';
+  var peg$c12 = '\\\\';
+  var peg$c13 = '\'';
+  var peg$c14 = '`';
+  var peg$c15 = ']]';
+  var peg$c16 = '[[';
+  var peg$c17 = '@';
+  var peg$c18 = '(';
+  var peg$c19 = ')';
+  var peg$c20 = ',';
+  var peg$c21 = 'run';
+  var peg$c22 = 'import';
+  var peg$c23 = 'from';
+  var peg$c24 = '*';
+  var peg$c25 = 'as';
+  var peg$c26 = 'embed';
+  var peg$c27 = '{';
+  var peg$c28 = '}';
+  var peg$c29 = '#';
+  var peg$c30 = 'under';
+  var peg$c31 = 'define';
+  var peg$c32 = '=';
+  var peg$c33 = 'risk.high';
+  var peg$c34 = 'risk.med';
+  var peg$c35 = 'risk.low';
+  var peg$c36 = 'risk';
+  var peg$c37 = 'about';
+  var peg$c38 = 'meta';
+  var peg$c39 = '@run';
+  var peg$c40 = 'data';
+  var peg$c41 = ':';
+  var peg$c42 = '@embed';
+  var peg$c43 = '@call';
+  var peg$c44 = '-';
+  var peg$c45 = 'true';
+  var peg$c46 = 'false';
+  var peg$c47 = 'null';
+  var peg$c48 = 'text';
+  var peg$c49 = 'path';
+  var peg$c50 = 'var';
+  var peg$c51 = '\r\n';
 
   var peg$r0 = /^[ ]/;
   var peg$r1 = /^[^\n]/;
@@ -260,73 +260,73 @@ function peg$parse(input, options) {
   var peg$r8 = /^[^`\r\n]/;
   var peg$r9 = /^[\r\u2028-\u2029]/;
 
-  var peg$e0 = peg$literalExpectation(">>", false);
-  var peg$e1 = peg$classExpectation([" "], false, false);
-  var peg$e2 = peg$classExpectation(["\n"], true, false);
-  var peg$e3 = peg$literalExpectation("\n", false);
-  var peg$e4 = peg$otherExpectation("whitespace");
-  var peg$e5 = peg$classExpectation([" ", "\t", "\r", "\n"], false, false);
-  var peg$e6 = peg$otherExpectation("mandatory whitespace");
-  var peg$e7 = peg$literalExpectation("{{", false);
-  var peg$e8 = peg$literalExpectation("}}", false);
-  var peg$e9 = peg$classExpectation(["[", "]", "{", "}"], false, false);
+  var peg$e0 = peg$literalExpectation('>>', false);
+  var peg$e1 = peg$classExpectation([' '], false, false);
+  var peg$e2 = peg$classExpectation(['\n'], true, false);
+  var peg$e3 = peg$literalExpectation('\n', false);
+  var peg$e4 = peg$otherExpectation('whitespace');
+  var peg$e5 = peg$classExpectation([' ', '\t', '\r', '\n'], false, false);
+  var peg$e6 = peg$otherExpectation('mandatory whitespace');
+  var peg$e7 = peg$literalExpectation('{{', false);
+  var peg$e8 = peg$literalExpectation('}}', false);
+  var peg$e9 = peg$classExpectation(['[', ']', '{', '}'], false, false);
   var peg$e10 = peg$anyExpectation();
-  var peg$e11 = peg$literalExpectation("$", false);
-  var peg$e12 = peg$literalExpectation("HOMEPATH", false);
-  var peg$e13 = peg$literalExpectation("~", false);
-  var peg$e14 = peg$literalExpectation("PROJECTPATH", false);
-  var peg$e15 = peg$literalExpectation(".", false);
-  var peg$e16 = peg$classExpectation([["0", "9"]], false, false);
-  var peg$e17 = peg$literalExpectation("[", false);
-  var peg$e18 = peg$literalExpectation("]", false);
-  var peg$e19 = peg$literalExpectation("\"", false);
-  var peg$e20 = peg$literalExpectation("\\\\", false);
-  var peg$e21 = peg$literalExpectation("'", false);
-  var peg$e22 = peg$literalExpectation("`", false);
-  var peg$e23 = peg$literalExpectation("]]", false);
-  var peg$e24 = peg$otherExpectation("String literal with potential variable interpolation");
-  var peg$e25 = peg$otherExpectation("Multiline template with potential variable interpolation");
-  var peg$e26 = peg$literalExpectation("[[", false);
-  var peg$e27 = peg$literalExpectation("@", false);
-  var peg$e28 = peg$literalExpectation("(", false);
-  var peg$e29 = peg$literalExpectation(")", false);
-  var peg$e30 = peg$literalExpectation(",", false);
-  var peg$e31 = peg$classExpectation([")", ","], false, false);
-  var peg$e32 = peg$literalExpectation("run", false);
-  var peg$e33 = peg$literalExpectation("import", false);
-  var peg$e34 = peg$literalExpectation("from", false);
-  var peg$e35 = peg$literalExpectation("*", false);
-  var peg$e36 = peg$literalExpectation("as", false);
-  var peg$e37 = peg$literalExpectation("embed", false);
-  var peg$e38 = peg$literalExpectation("{", false);
-  var peg$e39 = peg$literalExpectation("}", false);
-  var peg$e40 = peg$literalExpectation("#", false);
-  var peg$e41 = peg$literalExpectation("under", false);
-  var peg$e42 = peg$literalExpectation("define", false);
-  var peg$e43 = peg$literalExpectation("=", false);
-  var peg$e44 = peg$literalExpectation("risk.high", false);
-  var peg$e45 = peg$literalExpectation("risk.med", false);
-  var peg$e46 = peg$literalExpectation("risk.low", false);
-  var peg$e47 = peg$literalExpectation("risk", false);
-  var peg$e48 = peg$literalExpectation("about", false);
-  var peg$e49 = peg$literalExpectation("meta", false);
-  var peg$e50 = peg$literalExpectation("@run", false);
-  var peg$e51 = peg$classExpectation([["a", "z"], ["A", "Z"], "_"], false, false);
-  var peg$e52 = peg$classExpectation([["a", "z"], ["A", "Z"], ["0", "9"], "_"], false, false);
-  var peg$e53 = peg$literalExpectation("data", false);
-  var peg$e54 = peg$literalExpectation(":", false);
-  var peg$e55 = peg$literalExpectation("@embed", false);
-  var peg$e56 = peg$literalExpectation("@call", false);
-  var peg$e57 = peg$literalExpectation("-", false);
-  var peg$e58 = peg$literalExpectation("true", false);
-  var peg$e59 = peg$literalExpectation("false", false);
-  var peg$e60 = peg$literalExpectation("null", false);
-  var peg$e61 = peg$literalExpectation("text", false);
-  var peg$e62 = peg$literalExpectation("path", false);
-  var peg$e63 = peg$literalExpectation("var", false);
-  var peg$e64 = peg$classExpectation(["`", "\r", "\n"], true, false);
-  var peg$e65 = peg$literalExpectation("\r\n", false);
-  var peg$e66 = peg$classExpectation(["\r", ["\u2028", "\u2029"]], false, false);
+  var peg$e11 = peg$literalExpectation('$', false);
+  var peg$e12 = peg$literalExpectation('HOMEPATH', false);
+  var peg$e13 = peg$literalExpectation('~', false);
+  var peg$e14 = peg$literalExpectation('PROJECTPATH', false);
+  var peg$e15 = peg$literalExpectation('.', false);
+  var peg$e16 = peg$classExpectation([['0', '9']], false, false);
+  var peg$e17 = peg$literalExpectation('[', false);
+  var peg$e18 = peg$literalExpectation(']', false);
+  var peg$e19 = peg$literalExpectation('"', false);
+  var peg$e20 = peg$literalExpectation('\\\\', false);
+  var peg$e21 = peg$literalExpectation('\'', false);
+  var peg$e22 = peg$literalExpectation('`', false);
+  var peg$e23 = peg$literalExpectation(']]', false);
+  var peg$e24 = peg$otherExpectation('String literal with potential variable interpolation');
+  var peg$e25 = peg$otherExpectation('Multiline template with potential variable interpolation');
+  var peg$e26 = peg$literalExpectation('[[', false);
+  var peg$e27 = peg$literalExpectation('@', false);
+  var peg$e28 = peg$literalExpectation('(', false);
+  var peg$e29 = peg$literalExpectation(')', false);
+  var peg$e30 = peg$literalExpectation(',', false);
+  var peg$e31 = peg$classExpectation([')', ','], false, false);
+  var peg$e32 = peg$literalExpectation('run', false);
+  var peg$e33 = peg$literalExpectation('import', false);
+  var peg$e34 = peg$literalExpectation('from', false);
+  var peg$e35 = peg$literalExpectation('*', false);
+  var peg$e36 = peg$literalExpectation('as', false);
+  var peg$e37 = peg$literalExpectation('embed', false);
+  var peg$e38 = peg$literalExpectation('{', false);
+  var peg$e39 = peg$literalExpectation('}', false);
+  var peg$e40 = peg$literalExpectation('#', false);
+  var peg$e41 = peg$literalExpectation('under', false);
+  var peg$e42 = peg$literalExpectation('define', false);
+  var peg$e43 = peg$literalExpectation('=', false);
+  var peg$e44 = peg$literalExpectation('risk.high', false);
+  var peg$e45 = peg$literalExpectation('risk.med', false);
+  var peg$e46 = peg$literalExpectation('risk.low', false);
+  var peg$e47 = peg$literalExpectation('risk', false);
+  var peg$e48 = peg$literalExpectation('about', false);
+  var peg$e49 = peg$literalExpectation('meta', false);
+  var peg$e50 = peg$literalExpectation('@run', false);
+  var peg$e51 = peg$classExpectation([['a', 'z'], ['A', 'Z'], '_'], false, false);
+  var peg$e52 = peg$classExpectation([['a', 'z'], ['A', 'Z'], ['0', '9'], '_'], false, false);
+  var peg$e53 = peg$literalExpectation('data', false);
+  var peg$e54 = peg$literalExpectation(':', false);
+  var peg$e55 = peg$literalExpectation('@embed', false);
+  var peg$e56 = peg$literalExpectation('@call', false);
+  var peg$e57 = peg$literalExpectation('-', false);
+  var peg$e58 = peg$literalExpectation('true', false);
+  var peg$e59 = peg$literalExpectation('false', false);
+  var peg$e60 = peg$literalExpectation('null', false);
+  var peg$e61 = peg$literalExpectation('text', false);
+  var peg$e62 = peg$literalExpectation('path', false);
+  var peg$e63 = peg$literalExpectation('var', false);
+  var peg$e64 = peg$classExpectation(['`', '\r', '\n'], true, false);
+  var peg$e65 = peg$literalExpectation('\r\n', false);
+  var peg$e66 = peg$classExpectation(['\r', ['\u2028', '\u2029']], false, false);
 
   var peg$f0 = function(nodes) {
     return nodes;
@@ -335,19 +335,19 @@ function peg$parse(input, options) {
       // Only match comments at line start
       const pos = offset();
       const isAtLineStart = helpers.isLineStart(input, pos);
-      helpers.debug("LineStartComment check at pos", pos, "isAtLineStart:", isAtLineStart);
+      helpers.debug('LineStartComment check at pos', pos, 'isAtLineStart:', isAtLineStart);
       return isAtLineStart;
     };
   var peg$f2 = function(content) {
-    helpers.debug("Creating comment node with content:", content);
+    helpers.debug('Creating comment node with content:', content);
     return helpers.createNode(NodeType.Comment, { content: content.trim() }, location());
   };
   var peg$f3 = function(content) {
-    helpers.debug("Creating non-line-start comment node with content:", content);
+    helpers.debug('Creating non-line-start comment node with content:', content);
     return helpers.createNode(NodeType.Comment, { content: content.trim() }, location());
   };
   var peg$f4 = function(chars) {
-    helpers.debug("Comment content chars:", chars.join(''));
+    helpers.debug('Comment content chars:', chars.join(''));
     return chars.join('');
   };
   var peg$f5 = function(first, rest) {
@@ -363,8 +363,8 @@ function peg$parse(input, options) {
       // Also prevent consuming >> at line start (for comments)
       const isComment = isAtLineStart && input.substr(pos, 2) === '>>';
       
-      helpers.debug("TextPart check at pos", pos, "isAtLineStart:", isAtLineStart, 
-            "isDirective:", isDirective, "isComment:", isComment);
+      helpers.debug('TextPart check at pos', pos, 'isAtLineStart:', isAtLineStart, 
+            'isDirective:', isDirective, 'isComment:', isComment);
       
       return isDirective || isComment;
     };
@@ -458,7 +458,7 @@ function peg$parse(input, options) {
   var peg$f39 = function(content) { return content; };
   var peg$f40 = function(content, options) {
      // Multi-line template embed [[...]]
-     helpers.debug("EmbedRHS parsed multiline template: ", JSON.stringify(content));
+     helpers.debug('EmbedRHS parsed multiline template: ', JSON.stringify(content));
      return {
        subtype: 'embedTemplate',
        content: content, // Return the InterpolatableValue array
@@ -509,7 +509,7 @@ function peg$parse(input, options) {
   var peg$f42 = function(content, options) {
      // Path embed [...]
      const rawPath = helpers.reconstructRawString(content);
-     helpers.debug("EmbedRHS reconstructed raw path from bracket content:", rawPath);
+     helpers.debug('EmbedRHS reconstructed raw path from bracket content:', rawPath);
 
      // Split raw path for section (section itself cannot be interpolated)
      const [pathPart, section] = rawPath.split('#').map(s => s.trim());
@@ -526,9 +526,9 @@ function peg$parse(input, options) {
      let finalPathObject = validationResult;
      if (finalPathObject && typeof finalPathObject === 'object') {
        finalPathObject.interpolatedValue = pathInterpolatedValue; // Attach possibly filtered array
-       helpers.debug("Attached interpolatedValue to path object in EmbedRHS");
+       helpers.debug('Attached interpolatedValue to path object in EmbedRHS');
      } else {
-       helpers.debug("Warning: validatePath did not return an object in EmbedRHS.");
+       helpers.debug('Warning: validatePath did not return an object in EmbedRHS.');
        finalPathObject = { raw: pathPart, structured: {}, interpolatedValue: pathInterpolatedValue };
      }
 
@@ -546,7 +546,7 @@ function peg$parse(input, options) {
      };
    };
   var peg$f43 = function(cmdRef) {
-      helpers.debug("RunRHS parsing CommandReference:", cmdRef);
+      helpers.debug('RunRHS parsing CommandReference:', cmdRef);
       const commandObj = {
         raw: `$${cmdRef.name}${cmdRef.args.length > 0 ? `(${cmdRef.args.map(arg => {
           if (arg.type === 'string') return `\"${arg.value}\"`;
@@ -562,7 +562,7 @@ function peg$parse(input, options) {
       };
     };
   var peg$f44 = function(lang, params, content) {
-      helpers.debug("RunRHS parsing Multi-line Run: Lang:", lang, "Params:", params, "Content:", JSON.stringify(content));
+      helpers.debug('RunRHS parsing Multi-line Run: Lang:', lang, 'Params:', params, 'Content:', JSON.stringify(content));
       return {
         subtype: params ? 'runCodeParams' : 'runCode',
         command: content, // Return the InterpolatableValue array
@@ -572,7 +572,7 @@ function peg$parse(input, options) {
       };
     };
   var peg$f45 = function(content) {
-      helpers.debug("RunRHS parsing bracket content:", JSON.stringify(content));
+      helpers.debug('RunRHS parsing bracket content:', JSON.stringify(content));
       return {
         subtype: 'runCommand',
         command: content // Return the InterpolatableValue array
@@ -603,7 +603,7 @@ function peg$parse(input, options) {
   var peg$f54 = function(chars) { return { type: 'raw', value: chars.join('').trim() }; };
   var peg$f55 = function(char) { return char; };
   var peg$f56 = function(runResult, header) {
-      helpers.debug("Standalone RunDirective parsed via RunRHS:", JSON.stringify(runResult));
+      helpers.debug('Standalone RunDirective parsed via RunRHS:', JSON.stringify(runResult));
 
       // Create the final directive node using the result from RunRHS
       // _RunRHS already contains the subtype and specific data (command, lang, params, etc.)
@@ -659,7 +659,7 @@ function peg$parse(input, options) {
         !content.startsWith('$.') &&
         content.match(/^\$[a-z][a-zA-Z0-9_]*/);
       
-      helpers.debug("ImportDirective isPathVar:", isPathVar, "for path:", content);
+      helpers.debug('ImportDirective isPathVar:', isPathVar, 'for path:', content);
       
       // Always validate the path
       const validatedPath = helpers.validatePath(content);
@@ -718,7 +718,7 @@ function peg$parse(input, options) {
         !content.startsWith('$.') &&
         content.match(/^\$[a-z][a-zA-Z0-9_]*/);
       
-      helpers.debug("ImportDirective isPathVar:", isPathVar, "for path:", content);
+      helpers.debug('ImportDirective isPathVar:', isPathVar, 'for path:', content);
       
       // Always validate the path
       const validatedPath = helpers.validatePath(content);
@@ -728,7 +728,7 @@ function peg$parse(input, options) {
         validatedPath.isPathVariable = true;
       }
       
-      const implicitImports = [{name: "*", alias: null}];
+      const implicitImports = [{name: '*', alias: null}];
       // Return the validated path and subtype
       return helpers.createDirective('import', {
         subtype: helpers.getImportSubtype(implicitImports), // Always importAll
@@ -761,7 +761,7 @@ function peg$parse(input, options) {
           validatedPath.isPathVariable = true;
       }
         
-      const implicitImports = [{name: "*", alias: null}];
+      const implicitImports = [{name: '*', alias: null}];
       // Return the validated path and subtype
       return helpers.createDirective('import', {
         subtype: helpers.getImportSubtype(implicitImports), // Always importAll
@@ -770,7 +770,7 @@ function peg$parse(input, options) {
       }, location());
     };
   var peg$f67 = function() {
-      return [{name: "*", alias: null}];
+      return [{name: '*', alias: null}];
     };
   var peg$f68 = function(first, item) { return item; };
   var peg$f69 = function(first, rest) {
@@ -786,7 +786,7 @@ function peg$parse(input, options) {
       return alias;
     };
   var peg$f73 = function(embedResult, header, under) {
-      helpers.debug("Standalone EmbedDirective parsed via EmbedRHS:", JSON.stringify(embedResult));
+      helpers.debug('Standalone EmbedDirective parsed via EmbedRHS:', JSON.stringify(embedResult));
 
       // Create the final directive node using the result from EmbedRHS
       // EmbedRHS already contains the subtype and specific data (path, content, etc.)
@@ -831,15 +831,15 @@ function peg$parse(input, options) {
     return [first, ...rest];
   };
   var peg$f82 = function(id, params, value) {
-    if (value.type === "run") {
+    if (value.type === 'run') {
       helpers.validateRunContent(value.value.command);
-    } else if (typeof value.value === "string") {
+    } else if (typeof value.value === 'string') {
       helpers.validateDefineContent(value.value);
     }
     
     // For define directives, we need to structure it differently
     // The command field should be at the top level
-    if (value.type === "run") {
+    if (value.type === 'run') {
       return helpers.createDirective('define', {
         name: id.name,
         ...(id.field ? { field: id.field } : {}),
@@ -865,20 +865,20 @@ function peg$parse(input, options) {
     return params;
   };
   var peg$f86 = function(runResult) {
-      helpers.debug("DefineValue parsed @run via RunRHS:", JSON.stringify(runResult));
+      helpers.debug('DefineValue parsed @run via RunRHS:', JSON.stringify(runResult));
       return {
-        type: "run",
+        type: 'run',
         value: runResult
       };
     };
   var peg$f87 = function(value) {
     return {
-      type: "string",
+      type: 'string',
       value
     };
   };
   var peg$f88 = function(content) {
-    helpers.debug("DirectiveContent parsed:", content);
+    helpers.debug('DirectiveContent parsed:', content);
     return content;
   };
   var peg$f89 = function(chars) {
@@ -886,8 +886,8 @@ function peg$parse(input, options) {
   };
   var peg$f90 = function(char) { return char; };
   var peg$f91 = function(chars) { return '"' + chars + '"'; };
-  var peg$f92 = function(chars) { return "'" + chars + "'"; };
-  var peg$f93 = function(chars) { return "`" + chars + "`"; };
+  var peg$f92 = function(chars) { return '\'' + chars + '\''; };
+  var peg$f93 = function(chars) { return '`' + chars + '`'; };
   var peg$f94 = function(char) { return char; };
   var peg$f95 = function(chars) { return chars.join(''); };
   var peg$f96 = function(char) { return char; };
@@ -895,7 +895,7 @@ function peg$parse(input, options) {
   var peg$f98 = function(char) { return char; };
   var peg$f99 = function(chars) { return chars.join(''); };
   var peg$f100 = function(content) {
-    return "[" + content + "]";
+    return '[' + content + ']';
   };
   var peg$f101 = function(chars) { return chars.join(''); };
   var peg$f102 = function(options) {
@@ -925,32 +925,32 @@ function peg$parse(input, options) {
       identifier: id,
       ...(schema ? { schema } : {}),
       source: value.source,
-      ...(value.source === "embed" ? { embed: value.value } :
-          value.source === "run" ? { run: value.value } :
-          value.source === "call" ? { call: value.value } :
+      ...(value.source === 'embed' ? { embed: value.value } :
+          value.source === 'run' ? { run: value.value } :
+          value.source === 'call' ? { call: value.value } :
           { value: value.value }) // Pass literal value directly
     }, location());
   };
   var peg$f114 = function(schema) { return schema; };
   var peg$f115 = function(embedResult) {
-      helpers.debug("DataValue parsed @embed via EmbedRHS:", JSON.stringify(embedResult));
+      helpers.debug('DataValue parsed @embed via EmbedRHS:', JSON.stringify(embedResult));
       return {
-        source: "embed",
+        source: 'embed',
         embed: embedResult // EmbedRHS already returns the structured { subtype, ... }
       };
     };
   var peg$f116 = function(runResult) {
-      helpers.debug("DataValue parsed @run via RunRHS:", JSON.stringify(runResult));
+      helpers.debug('DataValue parsed @run via RunRHS:', JSON.stringify(runResult));
       return {
-        source: "run",
+        source: 'run',
         run: runResult // RunRHS already returns the structured { subtype, ... }
       };
     };
   var peg$f117 = function(api, method, content) {
     return {
-      source: "call",
+      source: 'call',
       value: {
-        kind: "call",
+        kind: 'call',
         api,
         method,
         path: content
@@ -959,13 +959,13 @@ function peg$parse(input, options) {
   };
   var peg$f118 = function(value) {
     return {
-      source: "literal",
+      source: 'literal',
       value
     };
   };
   var peg$f119 = function(value) {
     return {
-      source: "literal",
+      source: 'literal',
       value
     };
   };
@@ -987,27 +987,27 @@ function peg$parse(input, options) {
   var peg$f127 = function(varExpr) { return text(); };
   var peg$f128 = function(content) {
     return {
-      kind: "embed",
+      kind: 'embed',
       path: content
     };
   };
   var peg$f129 = function(content) {
     return {
-      kind: "run",
+      kind: 'run',
       command: content,
-      ...(content.startsWith("$") ? { isReference: true } : {})
+      ...(content.startsWith('$') ? { isReference: true } : {})
     };
   };
   var peg$f130 = function(api, method, content) {
     return {
-      kind: "call",
+      kind: 'call',
       api,
       method,
       path: content
     };
   };
   var peg$f131 = function(digits, decimal) {
-    return parseFloat((text().startsWith("-") ? "-" : "") + digits.join('') + (decimal ? decimal[0] + decimal[1].join('') : ''));
+    return parseFloat((text().startsWith('-') ? '-' : '') + digits.join('') + (decimal ? decimal[0] + decimal[1].join('') : ''));
   };
   var peg$f132 = function() { return true; };
   var peg$f133 = function() { return false; };
@@ -1026,31 +1026,31 @@ function peg$parse(input, options) {
     return helpers.createDirective('text', {
       identifier: id,
       source: value.source,
-      ...(value.source === "embed" ? { embed: value.embed } :
-          value.source === "run" ? { run: value.run } :
-          value.source === "call" ? { call: value.value } :
+      ...(value.source === 'embed' ? { embed: value.embed } :
+          value.source === 'run' ? { run: value.run } :
+          value.source === 'call' ? { call: value.value } :
           { value: value.value })
     }, location());
   };
   var peg$f140 = function(embedResult) {
-      helpers.debug("TextValue parsed @embed via EmbedRHS:", JSON.stringify(embedResult));
+      helpers.debug('TextValue parsed @embed via EmbedRHS:', JSON.stringify(embedResult));
       return {
-        source: "embed",
+        source: 'embed',
         embed: embedResult // EmbedRHS already returns the structured { subtype, ... }
       };
     };
   var peg$f141 = function(runResult) {
-      helpers.debug("TextValue parsed @run via RunRHS:", JSON.stringify(runResult));
+      helpers.debug('TextValue parsed @run via RunRHS:', JSON.stringify(runResult));
       return {
-        source: "run",
+        source: 'run',
         run: runResult // RunRHS already returns the structured { subtype, ... }
       };
     };
   var peg$f142 = function(api, method, content) {
     return {
-      source: "call",
+      source: 'call',
       value: {
-        kind: "call",
+        kind: 'call',
         api,
         method,
         path: content
@@ -1059,18 +1059,18 @@ function peg$parse(input, options) {
   };
   var peg$f143 = function(value) {
     return {
-      source: "literal",
+      source: 'literal',
       value
     };
   };
   var peg$f144 = function(value) {
     return {
-      source: "literal",
+      source: 'literal',
       value
     };
   };
   var peg$f145 = function(id, pv) {
-        helpers.debug("PathDirective parsed PathVar:", pv);
+        helpers.debug('PathDirective parsed PathVar:', pv);
         const pathObject = helpers.validatePath(pv.identifier, { context: 'pathDirective' });
         // Attach the original PathVar node
         if (pathObject && typeof pathObject === 'object') {
@@ -1083,17 +1083,17 @@ function peg$parse(input, options) {
         return { identifier: id, path: pathObject };
       };
   var peg$f146 = function(id, interpolatedArray) {
-        helpers.debug("PathDirective parsed InterpolatedStringLiteral:", interpolatedArray);
+        helpers.debug('PathDirective parsed InterpolatedStringLiteral:', interpolatedArray);
         const rawString = helpers.reconstructRawString(interpolatedArray);
-        helpers.debug("PathDirective reconstructed raw string:", rawString);
+        helpers.debug('PathDirective reconstructed raw string:', rawString);
         const pathObject = helpers.validatePath(rawString, { context: 'pathDirective' });
         // Attach the original interpolated array
         if (pathObject && typeof pathObject === 'object') {
           pathObject.interpolatedValue = interpolatedArray;
-          helpers.debug("Attached interpolatedValue to path object in PathDirective");
+          helpers.debug('Attached interpolatedValue to path object in PathDirective');
         } else {
           // Handle case where validatePath didn't return an object
-          helpers.debug("Warning: validatePath did not return an object in PathDirective.");
+          helpers.debug('Warning: validatePath did not return an object in PathDirective.');
           // Return a basic structure if validation fails to provide context
           return { identifier: id, path: { raw: rawString, structured: {}, interpolatedValue: interpolatedArray } };
         }
@@ -1145,7 +1145,7 @@ function peg$parse(input, options) {
   var peg$f157 = function(interpolatedArray) { // Changed from str:StringLiteral
       // Reconstruct the raw string from the array of nodes
       const rawString = helpers.reconstructRawString(interpolatedArray);
-      helpers.debug("PathValue reconstructed raw string:", rawString, "from array:", JSON.stringify(interpolatedArray));
+      helpers.debug('PathValue reconstructed raw string:', rawString, 'from array:', JSON.stringify(interpolatedArray));
 
       // Get the validated path from validatePath, passing context
       const validationResult = helpers.validatePath(rawString, { context: 'pathDirective' });
@@ -1154,9 +1154,9 @@ function peg$parse(input, options) {
       // Ensure validationResult is an object before attaching
       if (validationResult && typeof validationResult === 'object') {
         validationResult.interpolatedValue = interpolatedArray;
-        helpers.debug("Attached interpolatedValue to validationResult");
+        helpers.debug('Attached interpolatedValue to validationResult');
       } else {
-        helpers.debug("Warning: validatePath did not return an object. Cannot attach interpolatedValue.");
+        helpers.debug('Warning: validatePath did not return an object. Cannot attach interpolatedValue.');
         // Consider how to handle this case - maybe wrap non-objects?
         // For now, just return the original result if it wasn't an object.
       }
@@ -1164,7 +1164,7 @@ function peg$parse(input, options) {
       return validationResult;
     };
   var peg$f158 = function(variable) { // Allow PathVariables directly
-    helpers.debug("PathValue parsed PathVar:", JSON.stringify(variable));
+    helpers.debug('PathValue parsed PathVar:', JSON.stringify(variable));
     // Return a structure consistent with validatePath for path variables
     return {
         raw: `$${variable.identifier}`,
@@ -1203,7 +1203,7 @@ function peg$parse(input, options) {
 
   if (options.startRule) {
     if (!(options.startRule in peg$startRuleFunctions)) {
-      throw new Error("Can't start parsing from rule \"" + options.startRule + "\".");
+      throw new Error('Can\'t start parsing from rule "' + options.startRule + '".');
     }
 
     peg$startRuleFunction = peg$startRuleFunctions[options.startRule];
@@ -1250,23 +1250,23 @@ function peg$parse(input, options) {
   }
 
   function peg$literalExpectation(text, ignoreCase) {
-    return { type: "literal", text: text, ignoreCase: ignoreCase };
+    return { type: 'literal', text: text, ignoreCase: ignoreCase };
   }
 
   function peg$classExpectation(parts, inverted, ignoreCase) {
-    return { type: "class", parts: parts, inverted: inverted, ignoreCase: ignoreCase };
+    return { type: 'class', parts: parts, inverted: inverted, ignoreCase: ignoreCase };
   }
 
   function peg$anyExpectation() {
-    return { type: "any" };
+    return { type: 'any' };
   }
 
   function peg$endExpectation() {
-    return { type: "end" };
+    return { type: 'end' };
   }
 
   function peg$otherExpectation(description) {
-    return { type: "other", description: description };
+    return { type: 'other', description: description };
   }
 
   function peg$computePosDetails(pos) {
@@ -1323,7 +1323,7 @@ function peg$parse(input, options) {
         column: endPosDetails.column
       }
     };
-    if (offset && peg$source && (typeof peg$source.offset === "function")) {
+    if (offset && peg$source && (typeof peg$source.offset === 'function')) {
       res.start = peg$source.offset(res.start);
       res.end = peg$source.offset(res.end);
     }
@@ -7169,8 +7169,8 @@ function peg$parse(input, options) {
 
     // Add function to check if position is at start of line
     isLineStart(input, pos) {
-      helpers.debug("Checking line start at pos", pos, "char at pos-1:", JSON.stringify(pos > 0 ? input.charAt(pos - 1) : ''));
-      helpers.debug("Input:", JSON.stringify(input));
+      helpers.debug('Checking line start at pos', pos, 'char at pos-1:', JSON.stringify(pos > 0 ? input.charAt(pos - 1) : ''));
+      helpers.debug('Input:', JSON.stringify(input));
       return pos === 0 || input.charAt(pos - 1) === '\n';
     },
 
@@ -7222,14 +7222,14 @@ function peg$parse(input, options) {
     },
 
     validateEmbedContent(content) {
-      helpers.debug("validateEmbedContent called with content:", content);
+      helpers.debug('validateEmbedContent called with content:', content);
       
       // Check for variable patterns
       const hasTextVars = content.includes('{{') && content.includes('}}');
       const hasPathVars = /\$[a-zA-Z][a-zA-Z0-9_]*/.test(content);
       
-      helpers.debug("Content has text variables:", hasTextVars);
-      helpers.debug("Content has path variables:", hasPathVars);
+      helpers.debug('Content has text variables:', hasTextVars);
+      helpers.debug('Content has path variables:', hasPathVars);
       
       // We explicitly allow all content in double brackets including variables
       // No warnings should be generated for variable patterns
@@ -7287,7 +7287,7 @@ function peg$parse(input, options) {
               return '';
             }).join('');
           }
-          let formatStr = node.format ? `>>${node.format}` : '';
+          const formatStr = node.format ? `>>${node.format}` : '';
 
           if (node.valueType === 'path') {
             return `$${node.identifier}${fieldsStr}${formatStr}`;
@@ -7305,7 +7305,7 @@ function peg$parse(input, options) {
         path = path.replace(/^["'`](.*)["'`]$/, '$1');
       }
       
-      helpers.debug("validatePath called with path:", path, "context:", context);
+      helpers.debug('validatePath called with path:', path, 'context:', context);
       
       // Check if this is a path variable (starts with $ but is not a special variable)
       const isPathVar = typeof path === 'string' && 
@@ -7316,7 +7316,7 @@ function peg$parse(input, options) {
         !path.startsWith('$.') &&
         path.match(/^\$[a-zA-Z][a-zA-Z0-9_]*/);
       
-      helpers.debug("isPathVar:", isPathVar, "for path:", path);
+      helpers.debug('isPathVar:', isPathVar, 'for path:', path);
       
       // If this is a path variable, handle it specially
       if (isPathVar) {
@@ -7328,7 +7328,7 @@ function peg$parse(input, options) {
         const textVars = [];
         const textVarRegex = /\{\{([a-zA-Z0-9_]+)\}\}/g;
         let textVarMatch;
-        let pathWithTextVars = path;
+        const pathWithTextVars = path;
         
         while ((textVarMatch = textVarRegex.exec(pathWithTextVars)) !== null) {
           textVars.push(textVarMatch[1]);
@@ -7355,13 +7355,13 @@ function peg$parse(input, options) {
         // Set cwd to false for path variables (unconditionally)
         result.structured.cwd = false;
         
-        helpers.debug("Path variable result:", JSON.stringify(result));
+        helpers.debug('Path variable result:', JSON.stringify(result));
         return result;
       }
       
       // Determine if this is a URL path (starts with http://, https://, etc.)
       const isUrl = /^https?:\/\//.test(path);
-      helpers.debug("isUrl:", isUrl, "for path:", path);
+      helpers.debug('isUrl:', isUrl, 'for path:', path);
       
       // Allow relative paths
       const isRelativePathTest = (path.includes('../') || path.startsWith('./'));
@@ -7401,11 +7401,11 @@ function peg$parse(input, options) {
 
       // Determine if this is a CWD path (no slashes and doesn't start with $)
       const isCwd = !path.includes('/') && !path.startsWith('$');
-      helpers.debug("isCwd:", isCwd, "for path:", path);
+      helpers.debug('isCwd:', isCwd, 'for path:', path);
       
       // Determine if this is a special variable path (starts with $)
       const isSpecialVarPath = path.startsWith('$');
-      helpers.debug("isSpecialVarPath:", isSpecialVarPath, "for path:", path);
+      helpers.debug('isSpecialVarPath:', isSpecialVarPath, 'for path:', path);
       
       // Determine the base based on special variables
       let base = '.';
@@ -7466,17 +7466,17 @@ function peg$parse(input, options) {
       // Paths that start with $ are not CWD paths (cwd: false)
       if (isCwd) {
         structured.cwd = true;
-        helpers.debug("Set structured.cwd = true for path:", path);
+        helpers.debug('Set structured.cwd = true for path:', path);
       } else if (path.startsWith('$')) {
         // Set cwd: false for special variables and path variables
         structured.cwd = false;
-        helpers.debug("Set structured.cwd = false for path:", path);
+        helpers.debug('Set structured.cwd = false for path:', path);
       }
       
       // Add url property for URL paths
       if (isUrl) {
         structured.url = true;
-        helpers.debug("Set structured.url = true for path:", path);
+        helpers.debug('Set structured.url = true for path:', path);
       }
 
       // Create the result object
@@ -7497,11 +7497,11 @@ function peg$parse(input, options) {
       } else if (isUrl) {
         // Keep URLs as-is in normalization
         result.normalized = path;
-        helpers.debug("Kept URL as-is in normalization:", path);
+        helpers.debug('Kept URL as-is in normalization:', path);
       } else if (isPathVar) {
         // For path variables, keep as-is (don't normalize)
         result.normalized = path;
-        helpers.debug("Kept path variable as-is in normalization:", path);
+        helpers.debug('Kept path variable as-is in normalization:', path);
       } else {
         // Handle special variable normalization
         if (path.startsWith('$~/')) {
@@ -7525,7 +7525,7 @@ function peg$parse(input, options) {
 
       // --- Start: Logic moved from PathValue ---
       if (context === 'pathDirective') {
-        helpers.debug("Applying pathDirective context logic for:", path);
+        helpers.debug('Applying pathDirective context logic for:', path);
         // Determine base from the raw path specifically for PathDirective context
         if (path.startsWith('$HOMEPATH')) {
           structured.base = '$HOMEPATH';
@@ -7538,7 +7538,7 @@ function peg$parse(input, options) {
         } else {
           // If none of the special prefixes match, keep the default base
           // calculated earlier (usually '.')
-          helpers.debug("PathDirective context: No special base override for:", path, "keeping base:", structured.base);
+          helpers.debug('PathDirective context: No special base override for:', path, 'keeping base:', structured.base);
         }
 
         // Extract segments specifically for PathDirective context
@@ -7550,16 +7550,16 @@ function peg$parse(input, options) {
           directiveSegments = directiveSegments.slice(1);
         } else {
           // If none of the special prefixes match, keep the default segments
-           helpers.debug("PathDirective context: No special segment override for:", path, "keeping segments:", structured.segments);
+           helpers.debug('PathDirective context: No special segment override for:', path, 'keeping segments:', structured.segments);
            directiveSegments = structured.segments; // Keep existing segments
         }
         structured.segments = directiveSegments;
-        helpers.debug("PathDirective context adjusted base:", structured.base, "segments:", structured.segments);
+        helpers.debug('PathDirective context adjusted base:', structured.base, 'segments:', structured.segments);
       }
       // --- End: Logic moved from PathValue ---
 
       // Log the final result for debugging
-      helpers.debug("validatePath result:", JSON.stringify(result));
+      helpers.debug('validatePath result:', JSON.stringify(result));
 
       return result;
     },
@@ -7625,7 +7625,7 @@ function peg$parse(input, options) {
 }
 
 module.exports = {
-  StartRules: ["Start"],
+  StartRules: ['Start'],
   SyntaxError: peg$SyntaxError,
   parse: peg$parse
 };

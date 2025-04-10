@@ -22,7 +22,7 @@ describe('XML Output Format', () => {
 
   it('should convert markdown to XML format directly', async () => {
     // Create a simple markdown string
-    const markdown = "# Hello World\n\nThis is a test.";
+    const markdown = '# Hello World\n\nThis is a test.';
     
     // Get services from dependency injection container
     const outputService = context.services.output;

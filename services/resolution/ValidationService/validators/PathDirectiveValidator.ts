@@ -66,7 +66,7 @@ export async function validatePathDirective(node: DirectiveNode, context?: Resol
   }
   
   // Handle both direct string value and path object
-  let pathObject = directive.path;
+  const pathObject = directive.path;
   let pathRaw: string | undefined;
   
   if (!pathObject) {

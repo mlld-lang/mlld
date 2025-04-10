@@ -159,7 +159,7 @@ describe('ParserService', () => {
         {
           type: 'CodeFence',
           language: 'js',
-          content: "```js\nconst greeting = 'Hello, world!';\nconsole.log(greeting);\n```",
+          content: '```js\nconst greeting = \'Hello, world!\';\nconsole.log(greeting);\n```',
           location: {
             start: { line: 1, column: 1 },
             end: { line: 4, column: 4 },

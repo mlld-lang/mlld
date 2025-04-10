@@ -99,7 +99,7 @@ export default defineConfig([
       return {
         js: '.mjs',
         dts: '.d.ts'
-      }
+      };
     },
     tsconfig: 'tsconfig.build.json',
     external: externalDependencies,
@@ -128,7 +128,7 @@ export default defineConfig([
     outExtension({ format }) {
       return {
         js: '.cjs',
-      }
+      };
     },
     tsconfig: 'tsconfig.build.json',
     external: externalDependencies,
@@ -155,7 +155,7 @@ export default defineConfig([
       return {
         js: '.cjs',
         dts: '.d.ts'
-      }
+      };
     },
     tsconfig: 'tsconfig.build.json',
     external: externalDependencies,

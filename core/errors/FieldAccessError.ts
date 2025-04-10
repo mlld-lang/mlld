@@ -1,5 +1,5 @@
 import { MeldError, ErrorCode } from './MeldError.js';
-import type { Field as AstField } from '@core/syntax/types/shared-types';
+import type { Field as AstField } from '@core/syntax/types/shared-types.js';
 
 /**
  * Details specific to field access errors.

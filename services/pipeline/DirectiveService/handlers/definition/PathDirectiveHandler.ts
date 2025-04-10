@@ -182,7 +182,7 @@ export class PathDirectiveHandler implements IDirectiveHandler {
       }
 
       // Create resolution context - make sure the state has getPathVar if needed
-      let resolutionContext = ResolutionContextFactory.forPathDirective(
+      const resolutionContext = ResolutionContextFactory.forPathDirective(
         context.currentFilePath,
         typeof newState.getPathVar === 'function' ? newState : undefined
       );

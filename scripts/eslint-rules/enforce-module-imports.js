@@ -3,17 +3,17 @@
  * @author Claude-Meld
  */
 
-"use strict";
+'use strict';
 
 module.exports = {
   meta: {
-    type: "suggestion",
+    type: 'suggestion',
     docs: {
-      description: "Enforce Meld module import standards",
-      category: "Module System",
+      description: 'Enforce Meld module import standards',
+      category: 'Module System',
       recommended: true,
     },
-    fixable: "code",
+    fixable: 'code',
     schema: [],
   },
 
@@ -38,7 +38,7 @@ module.exports = {
           if (importSource.endsWith('.js')) {
             context.report({
               node,
-              message: "Node.js built-in modules should not have .js extension",
+              message: 'Node.js built-in modules should not have .js extension',
               fix: function(fixer) {
                 return fixer.replaceText(
                   node.source,
@@ -59,7 +59,7 @@ module.exports = {
           
           context.report({
             node,
-            message: "Internal imports must include .js extension",
+            message: 'Internal imports must include .js extension',
             fix: function(fixer) {
               return fixer.replaceText(
                 node.source,
@@ -73,7 +73,7 @@ module.exports = {
         if (importSource.startsWith('@sdk/')) {
           context.report({
             node,
-            message: "Use @api/ instead of @sdk/ for API module imports",
+            message: 'Use @api/ instead of @sdk/ for API module imports',
             fix: function(fixer) {
               return fixer.replaceText(
                 node.source,
@@ -88,7 +88,7 @@ module.exports = {
             !importSource.includes('.') && !importSource.endsWith('/')) {
           context.report({
             node,
-            message: "Directory imports should explicitly include index.js",
+            message: 'Directory imports should explicitly include index.js',
             fix: function(fixer) {
               return fixer.replaceText(
                 node.source,

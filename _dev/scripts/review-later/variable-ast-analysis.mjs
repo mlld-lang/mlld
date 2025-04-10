@@ -5,54 +5,54 @@ import { parse } from 'meld-ast';
 // to understand how they're represented and how to handle both formats
 
 async function analyzeVariables() {
-  console.log("===== VARIABLE REFERENCE AST STRUCTURE ANALYSIS =====\n");
+  console.log('===== VARIABLE REFERENCE AST STRUCTURE ANALYSIS =====\n');
 
   // Set up examples that highlight the differences
   const examples = [
     {
-      name: "Simple Text Variable",
-      code: "{{greeting}}",
-      description: "A simple text variable reference"
+      name: 'Simple Text Variable',
+      code: '{{greeting}}',
+      description: 'A simple text variable reference'
     },
     {
-      name: "Data Variable With Field",
-      code: "{{config.value}}",
-      description: "A data variable accessing a field"
+      name: 'Data Variable With Field',
+      code: '{{config.value}}',
+      description: 'A data variable accessing a field'
     },
     {
-      name: "Array Access with Brackets",
-      code: "{{items[0]}}",
-      description: "Array access using bracket notation"
+      name: 'Array Access with Brackets',
+      code: '{{items[0]}}',
+      description: 'Array access using bracket notation'
     },
     {
-      name: "Array Access with Dot Notation",
-      code: "{{items.0}}",
-      description: "Array access using dot notation"
+      name: 'Array Access with Dot Notation',
+      code: '{{items.0}}',
+      description: 'Array access using dot notation'
     },
     {
-      name: "Nested Object Access",
-      code: "{{config.nested.key}}",
-      description: "Accessing a nested object property"
+      name: 'Nested Object Access',
+      code: '{{config.nested.key}}',
+      description: 'Accessing a nested object property'
     },
     {
-      name: "Variables in Text",
-      code: "Hello, {{name}}!",
-      description: "Variables embedded in text content"
+      name: 'Variables in Text',
+      code: 'Hello, {{name}}!',
+      description: 'Variables embedded in text content'
     },
     {
-      name: "Multiple Variables",
-      code: "{{greeting}}, {{name}}!",
-      description: "Multiple variables in a single line"
+      name: 'Multiple Variables',
+      code: '{{greeting}}, {{name}}!',
+      description: 'Multiple variables in a single line'
     },
     {
-      name: "Variable in Directive",
-      code: "@text test = \"{{greeting}}\"",
-      description: "Variable inside a directive value"
+      name: 'Variable in Directive',
+      code: '@text test = "{{greeting}}"',
+      description: 'Variable inside a directive value'
     },
     {
-      name: "Variable in Embed",
-      code: "@embed [{{filename}}]",
-      description: "Variable in an embed directive"
+      name: 'Variable in Embed',
+      code: '@embed [{{filename}}]',
+      description: 'Variable in an embed directive'
     }
   ];
 
@@ -71,13 +71,13 @@ async function analyzeVariables() {
     
     try {
       const result = await parse(example.code, options);
-      console.log("AST Structure:");
+      console.log('AST Structure:');
       console.log(JSON.stringify(result.ast, null, 2));
       
       // Extract information about variable nodes
       const varNodes = findVariableNodes(result.ast);
       if (varNodes.length > 0) {
-        console.log("\nVariable Nodes Analysis:");
+        console.log('\nVariable Nodes Analysis:');
         varNodes.forEach((node, i) => {
           console.log(`\nVariable #${i+1}:`);
           console.log(`  Type: ${node.type}`);
@@ -99,15 +99,15 @@ async function analyzeVariables() {
           }
         });
       } else {
-        console.log("\nNo variable nodes found.");
+        console.log('\nNo variable nodes found.');
       }
     } catch (error) {
       console.error(`Error parsing: ${error.message}`);
     }
-    console.log("\n" + "=".repeat(50));
+    console.log('\n' + '='.repeat(50));
   }
 
-  console.log("\n===== TRANSFORMATION HANDLING RECOMMENDATIONS =====");
+  console.log('\n===== TRANSFORMATION HANDLING RECOMMENDATIONS =====');
   console.log(`
 1. Node Type Check: Check both 'TextVar'/'DataVar' and 'Directive' node types
    if (node.type === 'TextVar' || node.type === 'DataVar') {

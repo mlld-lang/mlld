@@ -278,7 +278,7 @@ export class ErrorDisplayService implements IErrorDisplayService {
    */
   async displayErrorWithSourceContext(error: MeldError): Promise<string> {
     // Extract location based on error type
-    let location = this.extractLocationFromError(error);
+    const location = this.extractLocationFromError(error);
     
     // If no source location found, fall back to basic formatting
     if (!location) {
@@ -371,7 +371,7 @@ export class ErrorDisplayService implements IErrorDisplayService {
       ].join('\n');
     } catch (e) {
       // Fallback if reading the source or highlighting fails
-      console.error("Failed to load source context:", e);
+      console.error('Failed to load source context:', e);
       return this.formatError(error);
     }
   }
@@ -385,7 +385,7 @@ export class ErrorDisplayService implements IErrorDisplayService {
     let location: { filePath: string, line: number, column: number } | null = null;
     
     // Get file path from the error
-    let filePath: string | undefined = error.filePath;
+    const filePath: string | undefined = error.filePath;
     
     // Helper to recursively search for location in the error chain
     const searchErrorChain = (err: any): void => {
@@ -737,7 +737,7 @@ export class ErrorDisplayService implements IErrorDisplayService {
     }
     
     // Check if we already have a location on the error or nested errors
-    let location = this.extractLocationFromError(meldError);
+    const location = this.extractLocationFromError(meldError);
     if (location) {
       // Update the error with the extracted location to ensure it's used in display
       if (!meldError.context) meldError.context = {};
@@ -780,7 +780,7 @@ export class ErrorDisplayService implements IErrorDisplayService {
         }
       }
     } catch (mappingError) {
-      console.error("Error during source mapping:", mappingError);
+      console.error('Error during source mapping:', mappingError);
       // Continue to fallback methods if source mapping fails
     }
     
@@ -788,7 +788,7 @@ export class ErrorDisplayService implements IErrorDisplayService {
     if (meldError.message.includes('at line') && meldError.message.includes('column')) {
       const nestedLocations = [];
       // Extract all line/column references from the message
-      let errorMsg = meldError.message;
+      const errorMsg = meldError.message;
       const pattern = /(?:at|on|in|line)\s+(?:line\s+)?(\d+)(?:,\s+column\s+|:)(\d+)/gi;
       let match;
       

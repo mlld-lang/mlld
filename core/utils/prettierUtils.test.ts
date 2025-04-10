@@ -1,4 +1,4 @@
-import { formatWithPrettier } from './prettierUtils';
+import { formatWithPrettier } from './prettierUtils.js';
 import { describe, it, expect } from 'vitest';
 
 describe('Prettier Utils', () => {

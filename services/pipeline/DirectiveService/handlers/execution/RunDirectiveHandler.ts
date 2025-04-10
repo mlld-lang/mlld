@@ -125,13 +125,13 @@ export class RunDirectiveHandler implements IDirectiveHandler {
           }
         }
         
-        console.log("Processed arguments:", processedArgs);
+        console.log('Processed arguments:', processedArgs);
         
         // Create the parameter map for substitution
-        let parameterMap: Record<string, string> = {};
+        const parameterMap: Record<string, string> = {};
         
         // Log what we've got so far
-        console.log("Command parameters from definition:", parameters);
+        console.log('Command parameters from definition:', parameters);
         
         // Map provided args to parameters based on position
         if (parameters.length > 0) {
@@ -147,7 +147,7 @@ export class RunDirectiveHandler implements IDirectiveHandler {
           const paramNames: string[] = [];
           let match;
           
-          console.log("Looking for parameter placeholders in template:", commandString);
+          console.log('Looking for parameter placeholders in template:', commandString);
           while ((match = templateParamPattern.exec(commandString)) !== null) {
             paramNames.push(match[1].trim());
             console.log(`Found parameter placeholder: {{${match[1].trim()}}}`);
@@ -167,8 +167,8 @@ export class RunDirectiveHandler implements IDirectiveHandler {
         // Replace parameters in the template
         let expandedCommand = commandString;
         
-        console.log("Command string before parameter substitution:", commandString);
-        console.log("Parameter map for substitution:", parameterMap);
+        console.log('Command string before parameter substitution:', commandString);
+        console.log('Parameter map for substitution:', parameterMap);
         
         // For echo commands, use a special handling approach
         if (commandString.startsWith('echo ') && processedArgs.length > 0) {
@@ -191,21 +191,21 @@ export class RunDirectiveHandler implements IDirectiveHandler {
           }
           
           commandToExecute = expandedCommand;
-          console.log("Final command after substitution:", expandedCommand);
+          console.log('Final command after substitution:', expandedCommand);
         }
       } 
       // Check for multi-line run directive
       else if (directive.isMultiLine) {
         directiveLogger.debug(`Detected multi-line run directive`);
-        console.log("DETECTED MULTI-LINE RUN DIRECTIVE");
+        console.log('DETECTED MULTI-LINE RUN DIRECTIVE');
         
         const content = typeof directive.command === 'string' ? directive.command : '';
         const language = directive.language || '';
         const parameters = directive.parameters || [];
         
-        console.log("Content:", content);
-        console.log("Language:", language);
-        console.log("Parameters:", parameters);
+        console.log('Content:', content);
+        console.log('Language:', language);
+        console.log('Parameters:', parameters);
         
         // Determine how to execute the content based on language
         if (language === 'javascript' || language === 'js') {
@@ -233,7 +233,7 @@ export class RunDirectiveHandler implements IDirectiveHandler {
         
         // If parameters are provided, pass them as arguments to the script
         if (parameters.length > 0) {
-          console.log("Passing parameters to the script execution");
+          console.log('Passing parameters to the script execution');
           
           // Process each parameter to get its value
           const paramValues: string[] = [];
@@ -273,7 +273,7 @@ export class RunDirectiveHandler implements IDirectiveHandler {
       else if (rawCommand.startsWith('$')) {
         // Legacy support for command references (for backward compatibility)
         // Keep this until we're confident the AST-based approach is working well
-        console.log("LEGACY COMMAND REFERENCE HANDLING - This should eventually be removed");
+        console.log('LEGACY COMMAND REFERENCE HANDLING - This should eventually be removed');
         
         // It's a command reference - extract the command name and arguments
         // Match $commandName(args) - including with quoted arguments
@@ -291,8 +291,8 @@ export class RunDirectiveHandler implements IDirectiveHandler {
         const commandName = commandMatch[1];
         const commandArgs = commandMatch[2] || '';
         
-        console.log("Command name:", commandName);
-        console.log("Command args:", commandArgs);
+        console.log('Command name:', commandName);
+        console.log('Command args:', commandArgs);
         
         directiveLogger.debug(`Detected command reference: $${commandName}(${commandArgs})`);
         
@@ -347,7 +347,7 @@ export class RunDirectiveHandler implements IDirectiveHandler {
             const char = argsString[i];
             
             // Handle quotes
-            if ((char === '"' || char === "'") && (i === 0 || argsString[i - 1] !== '\\')) {
+            if ((char === '"' || char === '\'') && (i === 0 || argsString[i - 1] !== '\\')) {
               if (!inQuote) {
                 inQuote = true;
                 quoteChar = char;
@@ -392,7 +392,7 @@ export class RunDirectiveHandler implements IDirectiveHandler {
         directiveLogger.debug(`Parsed arguments: ${JSON.stringify(argParts)}`);
         
         // Create the parameter map for substitution
-        let parameterMap: Record<string, string> = {};
+        const parameterMap: Record<string, string> = {};
         
         // Map provided args to parameters based on position
         if (parameters.length > 0) {
@@ -408,7 +408,7 @@ export class RunDirectiveHandler implements IDirectiveHandler {
           const paramNames: string[] = [];
           let match;
           
-          console.log("Looking for parameter placeholders in template:", commandString);
+          console.log('Looking for parameter placeholders in template:', commandString);
           while ((match = templateParamPattern.exec(commandString)) !== null) {
             paramNames.push(match[1].trim());
             console.log(`Found parameter placeholder: {{${match[1].trim()}}}`);
@@ -428,8 +428,8 @@ export class RunDirectiveHandler implements IDirectiveHandler {
         // Replace parameters in the template
         let expandedCommand = commandString;
         
-        console.log("Command string before parameter substitution:", commandString);
-        console.log("Parameter map for substitution:", parameterMap);
+        console.log('Command string before parameter substitution:', commandString);
+        console.log('Parameter map for substitution:', parameterMap);
         
         // For echo commands, use a special handling approach
         if (commandString.startsWith('echo ') && argParts.length > 0) {
@@ -452,7 +452,7 @@ export class RunDirectiveHandler implements IDirectiveHandler {
           }
           
           commandToExecute = expandedCommand;
-          console.log("Final command after substitution:", expandedCommand);
+          console.log('Final command after substitution:', expandedCommand);
         }
       } else {
         // For regular commands (not references), resolve variables in the command

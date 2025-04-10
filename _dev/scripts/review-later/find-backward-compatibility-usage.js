@@ -325,7 +325,7 @@ function analyzeResults() {
   console.log('\n==== BACKWARD COMPATIBILITY USAGE REPORT ====\n');
   
   let totalExamples = 0;
-  let totalFiles = new Set();
+  const totalFiles = new Set();
   
   // Group examples by directive type for better organization
   const directiveGroups = new Map();

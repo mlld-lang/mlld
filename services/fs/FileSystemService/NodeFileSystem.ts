@@ -91,7 +91,7 @@ export class NodeFileSystem implements IFileSystem {
     // Helper function to safely escape shell special characters in commands
     const escapeShellArg = (arg: string): string => {
       // Wrap in single quotes and escape any single quotes inside
-      return `'${arg.replace(/'/g, "'\\''")}'`;
+      return `'${arg.replace(/'/g, '\'\\\'\'')}'`;
     };
 
     // Special handling for oneshot and other commands that need to preserve multi-line content
@@ -106,7 +106,7 @@ export class NodeFileSystem implements IFileSystem {
           
           // If args are wrapped in quotes, remove them for direct passing
           if ((args.startsWith('"') && args.endsWith('"')) || 
-              (args.startsWith("'") && args.endsWith("'"))) {
+              (args.startsWith('\'') && args.endsWith('\''))) {
             args = args.substring(1, args.length - 1);
           }
           

@@ -1,8 +1,8 @@
-import type { MeldNode, NodeType, SourceLocation, ParserTestCase } from '@core/syntax/types';
+import type { MeldNode, NodeType, SourceLocation, ParserTestCase } from '@core/syntax/types.js';
 import type { Parser } from 'peggy';
-import { MeldAstError, ParseErrorCode, ParseResult } from '@core/ast/types';
+import { MeldAstError, ParseErrorCode, ParseResult } from '@core/ast/types.js';
 import { vi, expect } from 'vitest';
-import { parse } from '@core/ast';
+import { parse } from '@core/ast.js';
 
 // Define interfaces needed for validation tests
 interface ValidationError {

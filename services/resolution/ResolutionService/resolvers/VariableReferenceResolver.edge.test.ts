@@ -4,7 +4,7 @@ import {
   createTextNode,
   createVariableReferenceNode
 } from '@tests/utils/testFactories.js';
-import type { ResolutionContext, IStateService, IParserService, IResolutionService, MeldNode } from '@core/types';
+import type { ResolutionContext, IStateService, IParserService, IResolutionService, MeldNode } from '@core/types.js';
 import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
 import { VariableNodeFactory } from '@core/syntax/types/factories/index.js';
 import { DeepMockProxy, mockDeep } from 'vitest-mock-extended';
@@ -187,7 +187,7 @@ describe('VariableReferenceResolver Edge Cases', () => {
     } catch (error) {
         expect(error).toBeInstanceOf(FieldAccessError); // Check type
         // Check each part of the message individually
-        expect(error.message).toContain("Field 'email'"); 
+        expect(error.message).toContain('Field \'email\''); 
         expect(error.message).toContain('not found in object');
         expect(error.message).toContain('Available keys:');
         expect(error.message).toContain('name');

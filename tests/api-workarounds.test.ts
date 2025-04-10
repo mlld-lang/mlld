@@ -16,11 +16,11 @@ describe('API Workarounds', () => {
     it('should confirm that object property access workarounds have been removed', () => {
       // These workarounds were previously needed but have been removed:
       const removedObjectWorkarounds = [
-        "User Object Property Fix",
-        "Nested Array with HTML Entities",
-        "Nested Array without HTML Entities",
-        "Hardcoded Complex Nested Array",
-        "Name-Hobby Pattern with Different Format"
+        'User Object Property Fix',
+        'Nested Array with HTML Entities',
+        'Nested Array without HTML Entities',
+        'Hardcoded Complex Nested Array',
+        'Name-Hobby Pattern with Different Format'
       ];
       
       // The test passes by documentation - no actual assertions, just documenting the removal
@@ -30,11 +30,11 @@ describe('API Workarounds', () => {
     it('should confirm that newline handling workarounds have been removed', () => {
       // These workarounds were previously needed but have been removed:
       const removedNewlineWorkarounds = [
-        "Multiple Newline Reduction",
-        "Word-Colon-Newline Fix",
-        "Word-Comma-Newline Fix",
-        "Object Notation Formatting", 
-        "Object Property Newline Fix"
+        'Multiple Newline Reduction',
+        'Word-Colon-Newline Fix',
+        'Word-Comma-Newline Fix',
+        'Object Notation Formatting', 
+        'Object Property Newline Fix'
       ];
       
       // The test passes by documentation - no actual assertions, just documenting the removal
@@ -45,12 +45,12 @@ describe('API Workarounds', () => {
       // The only remaining code is for resolving any unresolved variable references
       // This is considered essential functionality rather than a workaround
       const essentialReference = {
-        name: "Unresolved Variable References",
-        description: "Catches any remaining unresolved variable references",
-        purpose: "Final pass to ensure all variables are properly resolved"
+        name: 'Unresolved Variable References',
+        description: 'Catches any remaining unresolved variable references',
+        purpose: 'Final pass to ensure all variables are properly resolved'
       };
       
-      expect(essentialReference.name).toBe("Unresolved Variable References");
+      expect(essentialReference.name).toBe('Unresolved Variable References');
     });
   });
 

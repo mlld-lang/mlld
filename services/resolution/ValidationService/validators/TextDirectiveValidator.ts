@@ -264,12 +264,12 @@ export function validateTextDirective(node: DirectiveNode): void {
     const lastQuote = directive.value[directive.value.length - 1];
     
     // Allow both single and double quotes, but they must match
-    if (firstQuote !== lastQuote || !["'", '"', '`'].includes(firstQuote)) {
+    if (firstQuote !== lastQuote || !['\'', '"', '`'].includes(firstQuote)) {
       // Instead of regex, manually check for unescaped quotes
       let unescapedQuoteCount = 0;
       for (let i = 0; i < directive.value.length; i++) {
         const char = directive.value[i];
-        if ((char === "'" || char === '"' || char === '`') && 
+        if ((char === '\'' || char === '"' || char === '`') && 
             (i === 0 || directive.value[i-1] !== '\\')) {
           unescapedQuoteCount++;
         }

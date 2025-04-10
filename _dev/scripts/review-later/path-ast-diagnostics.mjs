@@ -39,7 +39,7 @@ async function runPathDiagnostics() {
     structuredPaths: true
   };
 
-  console.log("\n\n========= PATH AST ANALYSIS =========\n");
+  console.log('\n\n========= PATH AST ANALYSIS =========\n');
   for (const [type, sample] of Object.entries(pathSamples)) {
     console.log(`\n===== ${type.toUpperCase()} =====`);
     console.log(`Sample: ${sample}`);
@@ -54,7 +54,7 @@ async function runPathDiagnostics() {
       );
       
       if (pathNode) {
-        console.log("Path Node Found:");
+        console.log('Path Node Found:');
         console.log(JSON.stringify(pathNode, null, 2));
         
         // Extract structured path if available
@@ -64,17 +64,17 @@ async function runPathDiagnostics() {
           
           // If there's a structured path representation
           if (pathNode.directive.path && pathNode.directive.path.structured) {
-            console.log("\nStructured Path:");
+            console.log('\nStructured Path:');
             console.log(JSON.stringify(pathNode.directive.path.structured, null, 2));
           }
         } else if (pathNode.type === 'PathVar') {
-          console.log("\nPath Variable:");
+          console.log('\nPath Variable:');
           console.log(JSON.stringify(pathNode.value, null, 2));
         }
       } else {
-        console.log("No path-related node found in AST");
+        console.log('No path-related node found in AST');
         // Print the full AST for debugging
-        console.log("Full AST:");
+        console.log('Full AST:');
         console.log(JSON.stringify(result.ast, null, 2));
       }
     } catch (error) {
@@ -83,7 +83,7 @@ async function runPathDiagnostics() {
         console.error(error.stack);
       }
     }
-    console.log("\n" + "-".repeat(50) + "\n");
+    console.log('\n' + '-'.repeat(50) + '\n');
   }
 
   // Save results to file for analysis

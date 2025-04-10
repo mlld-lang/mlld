@@ -29,11 +29,11 @@ import {
   type IUrlPathState,
   type StructuredPath,
   // Remove isFilesystemPath from here
-} from '@core/types'; // Import core types
+} from '@core/types.js'; // Import core types
 // Import the AST Field type correctly
-import type { Field as AstField } from '@core/syntax/types/shared-types';
+import type { Field as AstField } from '@core/syntax/types/shared-types.js';
 // Import AST types from their actual location
-import type { MeldNode, TextNode, VariableReferenceNode } from '@core/syntax/types';
+import type { MeldNode, TextNode, VariableReferenceNode } from '@core/syntax/types.js';
 // Import path-related types from core/types
 import {
   MeldPath,
@@ -41,7 +41,7 @@ import {
   createMeldPath,
   unsafeCreateValidatedResourcePath,
   MeldResolvedFilesystemPath
-} from '@core/types';
+} from '@core/types.js';
 
 // Import centralized syntax examples and helpers - KEEP THESE
 import { 
@@ -52,7 +52,7 @@ import {
 } from '@core/syntax/index.js';
 // Import run examples directly
 import runDirectiveExamplesModule from '@core/syntax/run.js';
-import { createExample, createInvalidExample, createNodeFromExample } from '@core/syntax'; // Adjusted import path
+import { createExample, createInvalidExample, createNodeFromExample } from '@core/syntax.js'; // Adjusted import path
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
 // Import factory classes
 import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory.js';
@@ -60,7 +60,7 @@ import { VariableReferenceResolverClientFactory } from '@services/resolution/Res
 import { DirectiveServiceClientFactory } from '@services/pipeline/DirectiveService/factories/DirectiveServiceClientFactory.js';
 import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/factories/FileSystemServiceClientFactory.js';
 // Import AST factories
-import { TextNodeFactory, VariableNodeFactory } from '@core/syntax/types';
+import { TextNodeFactory, VariableNodeFactory } from '@core/syntax/types.js';
 // Import client interfaces
 import type { IParserServiceClient } from '@services/pipeline/ParserService/interfaces/IParserServiceClient.js';
 import { IVariableReferenceResolverClient } from '@services/resolution/ResolutionService/interfaces/IVariableReferenceResolverClient.js';
@@ -71,7 +71,7 @@ import { ResolutionContextFactory } from '@services/resolution/ResolutionService
 // Import error testing utility
 import { expectToThrowWithConfig } from '@tests/utils/ErrorTestUtils.js';
 // Import CommandVariable and ICommandDefinition
-import { CommandVariable, ICommandDefinition, createCommandVariable } from '@core/types';
+import { CommandVariable, ICommandDefinition, createCommandVariable } from '@core/types.js';
 
 // Use the correctly imported run directive examples
 const runDirectiveExamples = runDirectiveExamplesModule;
@@ -925,7 +925,7 @@ describe('ResolutionService', () => {
         await service.resolveData('user.profile.nonexistent', strictContext);
       }, {
         type: 'FieldAccessError', 
-        messageContains: "Field 'profile' not found or invalid", 
+        messageContains: 'Field \'profile\' not found or invalid', 
         // Removed unsupported 'details' property
       });
     });

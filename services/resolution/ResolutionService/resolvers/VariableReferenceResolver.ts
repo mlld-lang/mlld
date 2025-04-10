@@ -1,11 +1,11 @@
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { ResolutionContext, PathResolutionContext } from '@core/types/resolution.js';
-import type { JsonValue, Result } from '@core/types';
-import { VariableType, MeldError } from '@core/types';
-import type { MeldVariable, TextVariable, DataVariable, IPathVariable, CommandVariable } from '@core/types/variables';
+import type { JsonValue, Result } from '@core/types.js';
+import { VariableType, MeldError } from '@core/types.js';
+import type { MeldVariable, TextVariable, DataVariable, IPathVariable, CommandVariable } from '@core/types/variables.js';
 import type { MeldNode, VariableReferenceNode, TextNode, DirectiveNode, NodeType } from '@core/ast/ast/astTypes.js';
 import { isTextVariable, isDataVariable, isPathVariable, isCommandVariable } from '@core/types/guards.js';
-import { success, failure } from '@core/types';
+import { success, failure } from '@core/types.js';
 import { VariableResolutionError, MeldResolutionError, PathValidationError, FieldAccessError, FieldAccessErrorDetails } from '@core/errors/index.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
@@ -17,11 +17,11 @@ import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionS
 import type { IParserServiceClient } from '@services/pipeline/ParserService/interfaces/IParserServiceClient.js';
 import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory.js';
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
-import { MeldPath, PathValidationContext, PathPurpose, RawPath, NormalizedAbsoluteDirectoryPath } from '@core/types/paths';
+import { MeldPath, PathValidationContext, PathPurpose, RawPath, NormalizedAbsoluteDirectoryPath } from '@core/types/paths.js';
 import type { IPathService } from '@services/fs/PathService/IPathService.js';
 import {
   Field as AstField
-} from '@core/syntax/types/shared-types';
+} from '@core/syntax/types/shared-types.js';
 
 /**
  * Handles resolution of variable references based on VariableReferenceNode AST.
@@ -213,7 +213,7 @@ export class VariableReferenceResolver {
       else {
           let variableValue: JsonValue | string | undefined;
           let dataForAccess: JsonValue | undefined;
-          let originalVariable = variable; // Keep reference to original variable object
+          const originalVariable = variable; // Keep reference to original variable object
           
           if (isTextVariable(variable)) {
               variableValue = variable.value;

@@ -17,7 +17,7 @@ export function extractErrorLocation(error: Error): { line: number; column: numb
   // First, check if the error message contains multiple line/column references
   // (e.g., "Directive error (embed): ... at line 29, column 2 at line 29, column 2")
   // This happens with nested errors, and we want the last (most specific) one
-  let matches = [];
+  const matches = [];
   const errorMsg = error.message || '';
   
   // Common patterns to extract line/column information

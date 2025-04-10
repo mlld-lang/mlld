@@ -17,27 +17,27 @@ import {
 export const atomic = {
   simpleCodeFence: createExample(
     'Simple code fence',
-    "```js\nconst greeting = 'Hello, world!';\nconsole.log(greeting);\n```"
+    '```js\nconst greeting = \'Hello, world!\';\nconsole.log(greeting);\n```'
   ),
   
   withLanguage: createExample(
     'Code fence with language',
-    "```python\ndef greet(name):\n    return f'Hello, {name}!'\n\nprint(greet('world'))\n```"
+    '```python\ndef greet(name):\n    return f\'Hello, {name}!\'\n\nprint(greet(\'world\'))\n```'
   ),
   
   withoutLanguage: createExample(
     'Code fence without language',
-    "```\nThis is a code block without a language specified.\n```"
+    '```\nThis is a code block without a language specified.\n```'
   ),
   
   withAttributes: createExample(
     'Code fence with attributes',
-    "```js {title=\"Greeting Example\", highlight=\"1,3\"}\nconst greeting = 'Hello, world!';\nconst name = 'User';\nconsole.log(greeting);\n```"
+    '```js {title="Greeting Example", highlight="1,3"}\nconst greeting = \'Hello, world!\';\nconst name = \'User\';\nconsole.log(greeting);\n```'
   ),
   
   indentedCodeFence: createExample(
     'Indented code fence',
-    "   ```js\n   const greeting = 'Hello, world!';\n   console.log(greeting);\n   ```"
+    '   ```js\n   const greeting = \'Hello, world!\';\n   console.log(greeting);\n   ```'
   )
 };
 
@@ -49,12 +49,12 @@ export const atomic = {
 export const combinations = {
   multipleFences: createExample(
     'Multiple code fences in sequence',
-    "# Code Examples\n\nJavaScript:\n```js\nconsole.log('Hello from JavaScript');\n```\n\nPython:\n```python\nprint('Hello from Python')\n```"
+    '# Code Examples\n\nJavaScript:\n```js\nconsole.log(\'Hello from JavaScript\');\n```\n\nPython:\n```python\nprint(\'Hello from Python\')\n```'
   ),
   
   nestedFences: createExample(
     'Nested code fences representation',
-    "````markdown\nHere's a code fence:\n```js\nconsole.log('Hello');\n```\n````"
+    '````markdown\nHere\'s a code fence:\n```js\nconsole.log(\'Hello\');\n```\n````'
   ),
   
   withDirectives: combineExamples(
@@ -65,13 +65,13 @@ export const combinations = {
     ),
     createExample(
       'Using variables in code fence',
-      "```{{language}}\nconsole.log('Using variable for language');\n```"
+      '```{{language}}\nconsole.log(\'Using variable for language\');\n```'
     )
   ),
   
   equalBacktickCounts: createExample(
     'Code fences with equal backtick counts',
-    "```\nouter\n```\ninner\n```\n```"
+    '```\nouter\n```\ninner\n```\n```'
   )
 };
 
@@ -83,7 +83,7 @@ export const combinations = {
 export const invalid = {
   unclosedFence: createInvalidExample(
     'Unclosed code fence',
-    "```js\nconst greeting = 'Hello, world!';\nconsole.log(greeting);",
+    '```js\nconst greeting = \'Hello, world!\';\nconsole.log(greeting);',
     {
       type: MeldParseError,
       severity: ErrorSeverity.Fatal,
@@ -94,7 +94,7 @@ export const invalid = {
   
   invalidAttributes: createInvalidExample(
     'Invalid attributes format',
-    "```js {title: \"Missing quotes\"}\nconsole.log('Hello');\n```",
+    '```js {title: "Missing quotes"}\nconsole.log(\'Hello\');\n```',
     {
       type: MeldParseError,
       severity: ErrorSeverity.Fatal,
@@ -105,7 +105,7 @@ export const invalid = {
   
   mismatchedDelimiters: createInvalidExample(
     'Mismatched fence delimiters',
-    "```js\nconsole.log('Hello');\n~~~",
+    '```js\nconsole.log(\'Hello\');\n~~~',
     {
       type: MeldParseError,
       severity: ErrorSeverity.Fatal,

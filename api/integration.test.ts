@@ -358,7 +358,7 @@ Template result: {{template}}
       
       // Now for our main test with a docs path
       // Create both versions to compare
-      const docsPath = "my/docs";
+      const docsPath = 'my/docs';
       const content1 = `
 @path docs = "$PROJECTPATH/my/docs"  
 Docs are at $docs
@@ -379,7 +379,7 @@ Docs are at $docs
       // Direct validation of path string
       try {
         console.log('Validating $PROJECTPATH/my/docs path directly...');
-        await pathService.validatePath("$PROJECTPATH/my/docs");
+        await pathService.validatePath('$PROJECTPATH/my/docs');
         console.log('✅ Direct path validation succeeded for $PROJECTPATH format');
       } catch (error) {
         console.error('❌ Direct path validation failed for $PROJECTPATH format:', error);
@@ -413,7 +413,7 @@ Docs are at $docs
       // Direct validation of path string
       try {
         console.log('Validating $./my/docs path directly...');
-        await pathService.validatePath("$./my/docs");
+        await pathService.validatePath('$./my/docs');
         console.log('✅ Direct path validation succeeded for $. format');
       } catch (error) {
         console.error('❌ Direct path validation failed for $. format:', error);
@@ -448,11 +448,11 @@ Docs are at $docs
       
       // Manual structured path creation
       const structuredPath = {
-        raw: "$PROJECTPATH/my/docs",
+        raw: '$PROJECTPATH/my/docs',
         structured: {
-          segments: ["my", "docs"],
+          segments: ['my', 'docs'],
           variables: {
-            special: ["PROJECTPATH"],
+            special: ['PROJECTPATH'],
             path: []
           }
         }
@@ -482,7 +482,7 @@ Docs are at $docs
       try {
         // Set up the paths in state service manually
         console.log('Setting path variable manually...');
-        stateService.setPathVar('docs', "$PROJECTPATH/my/docs");
+        stateService.setPathVar('docs', '$PROJECTPATH/my/docs');
         
         const manualPath = stateService.getPathVar('docs');
         console.log('Manually set path:', manualPath);
@@ -547,7 +547,7 @@ Docs are at $docs
       // First try direct path validation
       try {
         console.log('Directly validating $./config path...');
-        await pathService.validatePath("$./config");
+        await pathService.validatePath('$./config');
         console.log('✅ Direct path validation succeeded for $./config');
       } catch (error) {
         console.error('❌ Direct path validation failed for $./config:', error);
@@ -624,7 +624,7 @@ Docs are at $docs
       // First try direct path validation
       try {
         console.log('Directly validating $HOMEPATH/meld path...');
-        await pathService.validatePath("$HOMEPATH/meld");
+        await pathService.validatePath('$HOMEPATH/meld');
         console.log('✅ Direct path validation succeeded for $HOMEPATH/meld');
       } catch (error) {
         console.error('❌ Direct path validation failed for $HOMEPATH/meld:', error);
@@ -701,7 +701,7 @@ Docs are at $docs
       // First try direct path validation
       try {
         console.log('Directly validating $~/data path...');
-        await pathService.validatePath("$~/data");
+        await pathService.validatePath('$~/data');
         console.log('✅ Direct path validation succeeded for $~/data');
       } catch (error) {
         console.error('❌ Direct path validation failed for $~/data:', error);

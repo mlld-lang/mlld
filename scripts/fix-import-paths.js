@@ -99,7 +99,7 @@ async function fixImportsInFile(filePath) {
   const content = await fs.readFile(filePath, 'utf8');
   
   // Process imports
-  let newContent = content.replace(IMPORT_REGEX, (match, importPath) => {
+  const newContent = content.replace(IMPORT_REGEX, (match, importPath) => {
     // Skip package.json imports
     if (importPath === './package.json') {
       return match;

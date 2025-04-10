@@ -92,15 +92,15 @@ describe('VariableReferenceResolver Array Index Debug', () => {
 
   it('should correctly handle field access for arrays with numeric indices via accessFields', async () => {
     // Setup test data
-    const array = ["apple", "banana", "cherry"];
+    const array = ['apple', 'banana', 'cherry'];
     const objArray = [
-      { name: "Alice", age: 30 },
-      { name: "Bob", age: 25 }
+      { name: 'Alice', age: 30 },
+      { name: 'Bob', age: 25 }
     ];
     const nestedObj = {
       users: [
-        { name: "Alice", hobbies: ["reading", "hiking"] },
-        { name: "Bob", hobbies: ["gaming", "cooking"] }
+        { name: 'Alice', hobbies: ['reading', 'hiking'] },
+        { name: 'Bob', hobbies: ['gaming', 'cooking'] }
       ]
     };
 
@@ -111,7 +111,7 @@ describe('VariableReferenceResolver Array Index Debug', () => {
     let fields: FieldAccess[] = [{ type: FieldAccessType.INDEX, key: 0 }];
     let result = await resolver.accessFields(array, fields, context);
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value).toBe("apple");
+    if (result.ok) expect(result.value).toBe('apple');
 
     // Test out of bounds array access (strict mode)
     fields = [{ type: FieldAccessType.INDEX, key: 5 }];
@@ -137,7 +137,7 @@ describe('VariableReferenceResolver Array Index Debug', () => {
     result = await resolver.accessFields(objArray, fields, preserveTypeContext);
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.value).toEqual({ name: "Alice", age: 30 });
+      expect(result.value).toEqual({ name: 'Alice', age: 30 });
     }
 
     // Test nested array access
@@ -147,7 +147,7 @@ describe('VariableReferenceResolver Array Index Debug', () => {
     ];
     result = await resolver.accessFields(objArray, fields, context);
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value).toBe("Alice");
+    if (result.ok) expect(result.value).toBe('Alice');
 
     // Test complex nested access
     fields = [
@@ -158,7 +158,7 @@ describe('VariableReferenceResolver Array Index Debug', () => {
     ];
     result = await resolver.accessFields(nestedObj, fields, context);
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value).toBe("hiking");
+    if (result.ok) expect(result.value).toBe('hiking');
   });
 
   it('should correctly resolve array indices in variable references', async () => {
@@ -196,11 +196,11 @@ describe('VariableReferenceResolver Array Index Debug', () => {
     // Setup mock data
     mockStateService.getDataVar.mockImplementation((name) => {
       if (name === 'items') {
-        return ["apple", "banana", "cherry"];
+        return ['apple', 'banana', 'cherry'];
       } else if (name === 'users') {
         return [
-          { name: "Alice", age: 30 },
-          { name: "Bob", age: 25 }
+          { name: 'Alice', age: 30 },
+          { name: 'Bob', age: 25 }
         ];
       }
       return undefined;

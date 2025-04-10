@@ -9,7 +9,7 @@ import {
   CommandVariable, 
   IBasicCommandDefinition,
   ICommandParameterMetadata
-} from '@core/types'; 
+} from '@core/types.js'; 
 import { MeldResolutionError } from '@core/errors/index.js';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';

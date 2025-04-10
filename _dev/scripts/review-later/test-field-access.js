@@ -35,37 +35,37 @@ Field access:
 `;
 
 try {
-  console.log("Creating test file:", testFilePath);
+  console.log('Creating test file:', testFilePath);
   fs.writeFileSync(testFilePath, testContent);
 
   // Process using the direct processing approach
-  console.log("\nRunning with direct-process.js (our custom implementation):");
+  console.log('\nRunning with direct-process.js (our custom implementation):');
   try {
     // First try our direct process.js implementation
     const directOutput = execSync(`node ${__dirname}/direct-process.js ${testFilePath}`, {
       encoding: 'utf8'
     });
-    console.log("\nDIRECT PROCESS OUTPUT:");
+    console.log('\nDIRECT PROCESS OUTPUT:');
     console.log(directOutput);
   } catch (error) {
-    console.error("Error running direct-process.js:", error.message);
+    console.error('Error running direct-process.js:', error.message);
   }
 
   // Also run with the standard processor using our improvements
-  console.log("\nRunning with standard process-meld.js:");
+  console.log('\nRunning with standard process-meld.js:');
   try {
     const standardOutput = execSync(`node scripts/process-meld.js ${testFilePath} --format=markdown`, {
       encoding: 'utf8'
     });
-    console.log("\nSTANDARD PROCESS OUTPUT:");
+    console.log('\nSTANDARD PROCESS OUTPUT:');
     console.log(standardOutput);
   } catch (error) {
-    console.error("Error running process-meld.js:", error.message);
+    console.error('Error running process-meld.js:', error.message);
   }
 } finally {
   // Clean up the temporary file
   if (fs.existsSync(testFilePath)) {
-    console.log("Cleaning up temporary file");
+    console.log('Cleaning up temporary file');
     fs.unlinkSync(testFilePath);
   }
 } 

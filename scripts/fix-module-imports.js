@@ -147,7 +147,7 @@ function addJsExtension(importPath) {
 
 // Fix imports in a file
 function fixImports(filePath) {
-  let content = fs.readFileSync(filePath, 'utf8');
+  const content = fs.readFileSync(filePath, 'utf8');
   let hasChanges = false;
   
   // Regular expression for import statements

@@ -4,11 +4,11 @@
 
 // Sample data
 const person = {
-  name: "John Doe",
+  name: 'John Doe',
   age: 30,
   address: {
-    street: "123 Main St",
-    city: "Anytown"
+    street: '123 Main St',
+    city: 'Anytown'
   }
 };
 
@@ -114,7 +114,7 @@ function resolveSimpleVariables(text, variables) {
     
     // Add a special marker to help us debug if our fix is taking effect
     if (parts.length > 1 && parts[1] === 'name') {
-      stringValue = "FIX_APPLIED_" + stringValue;
+      stringValue = 'FIX_APPLIED_' + stringValue;
     }
     
     console.log('Replacing with:', stringValue);
@@ -129,21 +129,21 @@ function resolveSimpleVariables(text, variables) {
 // Variables for testing
 const variables = {
   person: person,
-  greeting: "Hello, world!"
+  greeting: 'Hello, world!'
 };
 
 // Test cases
 const tests = [
-  "Simple text: {{greeting}}",
-  "Direct object: {{person}}",
-  "Name: {{person.name}}",
-  "Age: {{person.age}}",
-  "Street: {{person.address.street}}",
-  "City: {{person.address.city}}"
+  'Simple text: {{greeting}}',
+  'Direct object: {{person}}',
+  'Name: {{person.name}}',
+  'Age: {{person.age}}',
+  'Street: {{person.address.street}}',
+  'City: {{person.address.city}}'
 ];
 
 // Run tests
-console.log("=== FIELD ACCESS TESTS ===");
+console.log('=== FIELD ACCESS TESTS ===');
 tests.forEach((test, index) => {
   console.log(`\n----- Test ${index + 1}: ${test} -----`);
   const result = resolveSimpleVariables(test, variables);
@@ -151,16 +151,16 @@ tests.forEach((test, index) => {
 });
 
 // Test if our stringification fix is working correctly
-const fieldAccessTest = "Direct: {{person}} vs Field: {{person.name}}";
-console.log("\n----- Stringification Test -----");
+const fieldAccessTest = 'Direct: {{person}} vs Field: {{person.name}}';
+console.log('\n----- Stringification Test -----');
 const stringResult = resolveSimpleVariables(fieldAccessTest, variables);
 console.log(`Result: ${stringResult}`);
 
 // Summarize results
-console.log("\n=== TEST SUMMARY ===");
-const fieldTest = resolveSimpleVariables("{{person.name}}", variables);
-if (fieldTest.includes("FIX_APPLIED_John Doe")) {
-  console.log("✅ SUCCESS: Field access is working correctly!");
+console.log('\n=== TEST SUMMARY ===');
+const fieldTest = resolveSimpleVariables('{{person.name}}', variables);
+if (fieldTest.includes('FIX_APPLIED_John Doe')) {
+  console.log('✅ SUCCESS: Field access is working correctly!');
 } else {
-  console.log("❌ FAILURE: Field access is not working as expected!");
+  console.log('❌ FAILURE: Field access is not working as expected!');
 } 

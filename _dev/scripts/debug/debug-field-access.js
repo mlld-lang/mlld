@@ -6,14 +6,14 @@ const StateServiceFactory = require('../dist/services/state/StateService/StateSe
 
 // Create a test object
 const testObject = {
-  name: "John Doe",
+  name: 'John Doe',
   age: 30,
-  occupation: "Developer",
+  occupation: 'Developer',
   address: {
-    street: "123 Main St",
-    city: "Anytown",
-    state: "CA",
-    zip: "12345"
+    street: '123 Main St',
+    city: 'Anytown',
+    state: 'CA',
+    zip: '12345'
   }
 };
 

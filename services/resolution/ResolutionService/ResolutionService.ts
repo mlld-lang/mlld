@@ -9,7 +9,7 @@ import {
     type DataVariable, 
     type IPathVariable, 
     type CommandVariable
-} from '@core/types/variables';
+} from '@core/types/variables.js';
 import { 
   JsonValue, 
   PathPurpose,
@@ -33,9 +33,9 @@ import {
   unsafeCreateNormalizedAbsoluteDirectoryPath,
   NormalizedAbsoluteDirectoryPath,
   isBasicCommand
-} from '@core/types';
-import type { MeldNode, VariableReferenceNode, DirectiveNode, TextNode, CodeFenceNode } from '@core/ast/ast/astTypes';
-import { ResolutionContextFactory } from './ResolutionContextFactory';
+} from '@core/types.js';
+import type { MeldNode, VariableReferenceNode, DirectiveNode, TextNode, CodeFenceNode } from '@core/ast/ast/astTypes.js';
+import { ResolutionContextFactory } from './ResolutionContextFactory.js';
 import { CommandResolver } from './resolvers/CommandResolver.js';
 import { ContentResolver } from './resolvers/ContentResolver.js';
 import { VariableReferenceResolver } from './resolvers/VariableReferenceResolver.js';
@@ -57,7 +57,7 @@ import type { IParserService } from '@services/pipeline/ParserService/IParserSer
 import { VariableResolutionErrorFactory } from './resolvers/error-factory.js';
 import { isTextVariable, isPathVariable, isCommandVariable, isDataVariable, isFilesystemPath } from '@core/types/guards.js';
 // Import and alias the AST Field type
-import { Field as AstField } from '@core/syntax/types/shared-types';
+import { Field as AstField } from '@core/syntax/types/shared-types.js';
 
 /**
  * Internal type for heading nodes in the ResolutionService

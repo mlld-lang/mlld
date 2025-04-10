@@ -2,7 +2,7 @@ import type { IPathService, URLValidationOptions } from '@services/fs/PathServic
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import { PathValidationError, PathErrorCode, PathValidationErrorDetails } from '@services/fs/PathService/errors/PathValidationError.js';
 import { ProjectPathResolver } from '@services/fs/ProjectPathResolver.js';
-import type { Location, Position } from '@core/types';
+import type { Location, Position } from '@core/types.js';
 import * as path from 'path';
 import * as os from 'os';
 import type { MeldNode } from '@core/syntax/types/index.js';
@@ -24,7 +24,7 @@ import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/f
 import type { URLResponse, URLFetchOptions } from '@services/fs/PathService/IURLCache.js';
 import { 
   URLError 
-} from '@services/fs/PathService/errors/url/index';
+} from '@services/fs/PathService/errors/url/index.js';
 import type { IURLContentResolver } from '@services/resolution/URLContentResolver/IURLContentResolver.js';
 import {
   AbsolutePath,
@@ -49,7 +49,7 @@ import {
   createRawPath
 } from '@core/types/paths.js';
 import { ErrorSeverity } from '@core/errors/index.js';
-import { type Position } from '@core/types';
+import { type Position } from '@core/types.js';
 import { type IFileSystemClient } from '../FileSystemService/IFileSystemClient.js';
 
 /**
@@ -292,7 +292,7 @@ export class PathService implements IPathService {
    */
   private normalizeUserprofilePath(pathString: string): string {
     // Replace $USERPROFILE with the actual user profile path
-    let resolved = pathString.replace('$USERPROFILE', this.homePath);
+    const resolved = pathString.replace('$USERPROFILE', this.homePath);
     
     // Normalize slashes and resolve dots
     return this.normalizePath(resolved);

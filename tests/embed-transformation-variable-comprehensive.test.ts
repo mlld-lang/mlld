@@ -77,7 +77,7 @@ describe('Variable-based Embed Transformation Comprehensive', () => {
     
     // Case 1: Basic embed transformation tests
     if (content.includes('Before') && content.includes('After')) {
-      let result = "Before\n";
+      let result = 'Before\n';
       
       if (content.includes('simpleText')) {
         result += 'Simple text content\n';
@@ -109,7 +109,7 @@ describe('Variable-based Embed Transformation Comprehensive', () => {
     
     // Case 2: Multiple embeds with "Middle" text
     if (content.includes('Start') && content.includes('Middle') && content.includes('End')) {
-      let result = "Start\n";
+      let result = 'Start\n';
       
       if (content.includes('simpleText')) {
         result += 'Simple text content\n';
@@ -164,7 +164,7 @@ describe('Variable-based Embed Transformation Comprehensive', () => {
     const dataVars = new Map<string, any>();
     const pathVars = new Map<string, string>();
     let transformationEnabled = false;
-    let transformedNodes: any[] = [];
+    const transformedNodes: any[] = [];
     
     stateService = {
       getTextVar: (name: string) => textVars.get(name),

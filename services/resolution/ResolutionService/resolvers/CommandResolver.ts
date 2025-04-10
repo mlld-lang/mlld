@@ -1,11 +1,11 @@
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import { ResolutionContext } from '@core/types/resolution.js';
-import { VariableType } from '@core/types/variables';
+import { VariableType } from '@core/types/variables.js';
 import { MeldResolutionError } from '@core/errors/MeldResolutionError.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
 import { VariableResolutionError } from '@core/errors/VariableResolutionError.js';
-import { isBasicCommand } from '@core/types';
+import { isBasicCommand } from '@core/types.js';
 import type { IBasicCommandDefinition, ICommandDefinition, ICommandParameterMetadata } from '@core/types/define.js';
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import { logger } from '@core/utils/logger.js';

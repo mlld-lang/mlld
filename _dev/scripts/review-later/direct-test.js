@@ -5,14 +5,14 @@
 
 // Test object
 const person = {
-  name: "John Doe",
+  name: 'John Doe',
   age: 30,
-  occupation: "Developer",
+  occupation: 'Developer',
   address: {
-    street: "123 Main St",
-    city: "Anytown",
-    state: "CA",
-    zip: "12345"
+    street: '123 Main St',
+    city: 'Anytown',
+    state: 'CA',
+    zip: '12345'
   }
 };
 
@@ -122,7 +122,7 @@ function resolveSimpleVariables(text, variables) {
     
     // Add a special marker to help us debug if our fix is taking effect
     if (parts.length > 1 && parts[1] === 'name') {
-      stringValue = "FIX_APPLIED_" + stringValue;
+      stringValue = 'FIX_APPLIED_' + stringValue;
     }
     
     // Replace the variable in the text
@@ -138,7 +138,7 @@ function runTests() {
   // Available variables
   const variables = {
     person: person,
-    simple_text: "Hello, world!"
+    simple_text: 'Hello, world!'
   };
   
   console.log('=== TEST 1: Simple field access ===');
@@ -159,7 +159,7 @@ function runTests() {
   
   console.log('\n=== TEST 3: Variable resolution with field access ===');
   try {
-    const text = "Testing person.name: {{person.name}}";
+    const text = 'Testing person.name: {{person.name}}';
     const result = resolveSimpleVariables(text, variables);
     console.log('Test 3 result:', result);
     console.log('Contains marker:', result.includes('FIX_APPLIED_'));
@@ -169,7 +169,7 @@ function runTests() {
   
   console.log('\n=== TEST 4: Variable resolution without field access ===');
   try {
-    const text = "Person object: {{person}}";
+    const text = 'Person object: {{person}}';
     const result = resolveSimpleVariables(text, variables);
     console.log('Test 4 result:', result);
   } catch (error) {
@@ -178,7 +178,7 @@ function runTests() {
   
   console.log('\n=== TEST 5: Simple text variable ===');
   try {
-    const text = "Simple text variable: {{simple_text}}";
+    const text = 'Simple text variable: {{simple_text}}';
     const result = resolveSimpleVariables(text, variables);
     console.log('Test 5 result:', result);
   } catch (error) {

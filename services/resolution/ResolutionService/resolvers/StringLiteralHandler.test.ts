@@ -47,16 +47,16 @@ describe('StringLiteralHandler', () => {
       vi.mocked(parserService.parse).mockResolvedValue([
         createDirectiveNode('text', { 
           identifier: 'test', 
-          value: "'hello world'",
+          value: '\'hello world\'',
           source: 'literal'
         })
       ]);
       
-      const result = await handler.isStringLiteralWithAst("'hello world'");
+      const result = await handler.isStringLiteralWithAst('\'hello world\'');
       expect(result).toBe(true);
       
       // Test the synchronous method as well
-      expect(handler.isStringLiteral("'hello world'")).toBe(true);
+      expect(handler.isStringLiteral('\'hello world\'')).toBe(true);
     });
 
     it('should accept double quoted strings', async () => {
@@ -95,11 +95,11 @@ describe('StringLiteralHandler', () => {
       // Mock parser to throw an error for invalid string
       vi.mocked(parserService.parse).mockRejectedValue(new Error('Parse error'));
       
-      const result = await handler.isStringLiteralWithAst("'hello world");
+      const result = await handler.isStringLiteralWithAst('\'hello world');
       expect(result).toBe(false);
       
       // Test the synchronous method as well
-      expect(handler.isStringLiteral("'hello world")).toBe(false);
+      expect(handler.isStringLiteral('\'hello world')).toBe(false);
     });
   });
 
@@ -186,11 +186,11 @@ describe('StringLiteralHandler', () => {
         })
       ]);
       
-      const result = await handler.parseLiteralWithAst("'hello world'");
+      const result = await handler.parseLiteralWithAst('\'hello world\'');
       expect(result).toBe('hello world');
       
       // Test the synchronous method as well
-      expect(handler.parseLiteral("'hello world'")).toBe('hello world');
+      expect(handler.parseLiteral('\'hello world\'')).toBe('hello world');
     });
     
     it('should remove matching double quotes with AST', async () => {
@@ -237,11 +237,11 @@ describe('StringLiteralHandler', () => {
         })
       ]);
       
-      const result = await handler.parseLiteralWithAst("'It\\'s a test'");
-      expect(result).toBe("It's a test");
+      const result = await handler.parseLiteralWithAst('\'It\\\'s a test\'');
+      expect(result).toBe('It\'s a test');
       
       // Test the synchronous method as well
-      expect(handler.parseLiteral("'It\\'s a test'")).toBe("It's a test");
+      expect(handler.parseLiteral('\'It\\\'s a test\'')).toBe('It\'s a test');
     });
     
     it('should throw on invalid input with AST', async () => {

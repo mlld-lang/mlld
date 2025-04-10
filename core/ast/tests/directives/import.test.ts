@@ -1,7 +1,7 @@
 /// <reference types="vitest" />
 import { describe, it } from 'vitest';
-import { importTests, importInvalidTests, type ParserTestCase } from '@core/syntax/types';
-import { testValidCase, testInvalidCase } from '../utils/test-utils';
+import { importTests, importInvalidTests, type ParserTestCase } from '@core/syntax/types.js';
+import { testValidCase, testInvalidCase } from '../utils/test-utils.js';
 
 describe('directives/@import', () => {
   describe('valid cases', () => {

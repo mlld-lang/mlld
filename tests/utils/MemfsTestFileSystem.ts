@@ -172,7 +172,7 @@ export class MemfsTestFileSystem implements IFileSystem {
     }
 
     // Normalize path to handle special cases
-    let normalizedPath = result
+    const normalizedPath = result
       .replace(/\/+/g, '/') // Remove duplicate slashes
       .replace(/^\.\//, '') // Remove leading ./
       .replace(/\/$/, ''); // Remove trailing slash

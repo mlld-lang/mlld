@@ -99,27 +99,27 @@ describe('Object Property Access Patterns', () => {
     it('should document the workarounds for object property access', () => {
       const workarounds = [
         {
-          name: "WORKAROUND 3.1: User Object Property Fix",
+          name: 'WORKAROUND 3.1: User Object Property Fix',
           pattern: /User: {\s*"name": "([^"]+)",\s*"age": (\d+)\s*}, Age: {\s*"name": "[^"]+",\s*"age": (\d+)\s*}/g,
           replacement: 'User: $1, Age: $3',
-          purpose: "Handles serialized objects in User context"
+          purpose: 'Handles serialized objects in User context'
         },
         {
-          name: "WORKAROUND 3.2-3.3: Nested Array Handling",
-          description: "Patterns that match serialized nested arrays and extract properties",
-          purpose: "Handles nested arrays with various formats (HTML entities, quotes)"
+          name: 'WORKAROUND 3.2-3.3: Nested Array Handling',
+          description: 'Patterns that match serialized nested arrays and extract properties',
+          purpose: 'Handles nested arrays with various formats (HTML entities, quotes)'
         },
         {
-          name: "WORKAROUND 3.4: Hardcoded Complex Nested Array",
+          name: 'WORKAROUND 3.4: Hardcoded Complex Nested Array',
           pattern: /Name: (.*?)\s+Hobby: ([^,\n]+).*$/s,
           replacement: 'Name: Alice\nHobby: reading',
-          purpose: "Fallback for complex nested arrays"
+          purpose: 'Fallback for complex nested arrays'
         },
         {
-          name: "WORKAROUND 3.5: Name-Hobby Pattern with Different Format",
+          name: 'WORKAROUND 3.5: Name-Hobby Pattern with Different Format',
           pattern: /Name: \{\s*"name": "([^"]+)"[^}]*\}, Hobby: \[\s*"([^"]+)"/g,
           replacement: 'Name: $1\nHobby: $2',
-          purpose: "Handles another variant of object/array pairs"
+          purpose: 'Handles another variant of object/array pairs'
         }
       ];
       

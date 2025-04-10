@@ -1,7 +1,7 @@
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { IOutputService, OutputFormat, OutputOptions } from '@services/pipeline/OutputService/IOutputService.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
-import type { ResolutionContext } from '@core/types'; // Try importing from @core/types directly
+import type { ResolutionContext } from '@core/types.js'; // Try importing from @core/types directly
 import { formatWithPrettier } from '@core/utils/prettierUtils.js';
 
 /**
@@ -1220,7 +1220,7 @@ export class OutputService implements IOutputService {
             
             try {
               // Placeholder: Default to original match if resolution fails later
-              let resolvedValue = fullMatch; 
+              const resolvedValue = fullMatch; 
 
               // TODO: Add calls to resolutionClient/resolutionService here later
               
@@ -1299,7 +1299,7 @@ export class OutputService implements IOutputService {
               const reference = match[1].trim(); // The variable reference, e.g., variable
               
               // Placeholder: Default to original match if resolution fails later
-              let resolvedValue = fullMatch; 
+              const resolvedValue = fullMatch; 
 
               // TODO: Add calls to resolutionClient/resolutionService here later
               
@@ -1332,7 +1332,7 @@ export class OutputService implements IOutputService {
               if (field.type === 'field') {
                 // Check if field value needs quotes (e.g., contains spaces or special chars)
                 const needsQuotes = !/^[a-zA-Z0-9_]+$/.test(String(field.value));
-                return needsQuotes ? `['${String(field.value).replace(/'/g, "\\'")}']` : `.${field.value}`;
+                return needsQuotes ? `['${String(field.value).replace(/'/g, '\\\'')}']` : `.${field.value}`;
               } else if (field.type === 'index') {
                 return `[${field.value}]`;
               }

@@ -135,10 +135,10 @@ describe('Circular Dependency Tests', () => {
     context.registerMock('FileSystemServiceClientFactory', fileSystemServiceClientFactory);
 
     // Manually inject client factories to break the circular dependency chain
-    pathService["fsClientFactory"] = fileSystemServiceClientFactory;
-    pathService["factoryInitialized"] = true;
-    fileSystemService["pathClient"] = pathServiceClientFactory.createClient();
-    fileSystemService["factoryInitialized"] = true;
+    pathService['fsClientFactory'] = fileSystemServiceClientFactory;
+    pathService['factoryInitialized'] = true;
+    fileSystemService['pathClient'] = pathServiceClientFactory.createClient();
+    fileSystemService['factoryInitialized'] = true;
 
     // REGRESSION TEST: Verify PathService resolution doesn't trigger circular dependency
     // Use the dirname method which calls resolvePath internally without throwing errors in test mode

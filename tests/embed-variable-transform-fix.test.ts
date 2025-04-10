@@ -171,10 +171,10 @@ describe('Phase 4B: Variable-based Embed Transformation Fix', () => {
     
     // Verify that the variable's field value is correctly embedded in the output
     // This tests the fix for field access in variable embeds
-    expect(transformedResult).toContain("Senior architect");
+    expect(transformedResult).toContain('Senior architect');
     
     // Verify the variable reference has been properly transformed
-    expect(transformedResult).not.toContain("{{role.architect}}");
+    expect(transformedResult).not.toContain('{{role.architect}}');
   });
   
   it('should support complex field access patterns in variable embeds', async () => {
@@ -211,7 +211,7 @@ Project Role: @embed {{user.projects.0.role}}
     });
     
     // Verify original format has embed directives
-    expect(standardResult).toContain("@embed");
+    expect(standardResult).toContain('@embed');
     
     // Process with transformation enabled 
     const transformedResult = await main(testFilePath, {
@@ -226,22 +226,22 @@ Project Role: @embed {{user.projects.0.role}}
     // Check for properly resolved values without assuming specific formatting
     
     // 1. Simple object property access
-    expect(transformedResult).toContain("John Doe");
+    expect(transformedResult).toContain('John Doe');
     
     // 2. Array indexing
-    expect(transformedResult).toContain("Developer");
+    expect(transformedResult).toContain('Developer');
     
     // 3. Nested property access
-    expect(transformedResult).toContain("john@example.com");
+    expect(transformedResult).toContain('john@example.com');
     
     // 4. Complex nested structure with array and object access
-    expect(transformedResult).toContain("Project A");
-    expect(transformedResult).toContain("Lead");
+    expect(transformedResult).toContain('Project A');
+    expect(transformedResult).toContain('Lead');
     
     // Verify variable references are transformed (regardless of directive format)
-    expect(transformedResult).not.toContain("{{user.info.name}}");
-    expect(transformedResult).not.toContain("{{user.info.roles.0}}");
-    expect(transformedResult).not.toContain("{{user.projects.0.name}}");
+    expect(transformedResult).not.toContain('{{user.info.name}}');
+    expect(transformedResult).not.toContain('{{user.info.roles.0}}');
+    expect(transformedResult).not.toContain('{{user.projects.0.name}}');
     
     // This test verifies the issue is fixed - the values are properly being resolved
     // The exact formatting may vary in different implementations

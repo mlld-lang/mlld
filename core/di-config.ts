@@ -103,12 +103,12 @@ const fileSystemServiceClientFactory = new FileSystemServiceClientFactory(fileSy
 container.registerInstance('FileSystemServiceClientFactory', fileSystemServiceClientFactory);
 
 // Manually inject FileSystemServiceClientFactory into PathService
-pathService["fsClientFactory"] = fileSystemServiceClientFactory;
-pathService["factoryInitialized"] = true;
+pathService['fsClientFactory'] = fileSystemServiceClientFactory;
+pathService['factoryInitialized'] = true;
 
 // Manually inject PathServiceClient into FileSystemService
-fileSystemService["pathClient"] = pathServiceClientFactory.createClient();
-fileSystemService["factoryInitialized"] = true;
+fileSystemService['pathClient'] = pathServiceClientFactory.createClient();
+fileSystemService['factoryInitialized'] = true;
 
 const parserService = new ParserService();
 

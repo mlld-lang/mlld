@@ -42,7 +42,7 @@ describe('FuzzyMatchingValidator', () => {
     it.skip('should reject non-numeric fuzzy thresholds - Edge case validation deferred for V1', async () => {
       const node = createEmbedDirective('test.md', 'section', createLocation(1, 1));
       // @ts-ignore - Intentionally setting an invalid type for testing
-      node.directive.fuzzy = "not-a-number";
+      node.directive.fuzzy = 'not-a-number';
       
       await expectThrowsInStrictButWarnsInPermissive(
         async () => validateFuzzyThreshold(node),
@@ -89,7 +89,7 @@ describe('FuzzyMatchingValidator', () => {
       // Test for non-numeric
       const nodeNonNumeric = createEmbedDirective('test.md', 'section', createLocation(1, 1));
       // @ts-ignore - Intentionally setting an invalid type for testing
-      nodeNonNumeric.directive.fuzzy = "not-a-number";
+      nodeNonNumeric.directive.fuzzy = 'not-a-number';
       
       const collectorNonNumeric = new ErrorCollector();
       try {

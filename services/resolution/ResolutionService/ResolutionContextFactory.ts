@@ -5,8 +5,8 @@ import {
   PathPurpose, 
   VariableType, 
   FormattingContext
-} from '@core/types';
-import type { IStateService } from '@services/state/IStateService';
+} from '@core/types.js';
+import type { IStateService } from '@services/state/IStateService.js';
 
 // Define the type for the context methods more explicitly
 type ContextMethods = {

@@ -67,7 +67,7 @@ export class TextDirectiveHandler implements IDirectiveHandler {
   private isStringLiteral(value: string): boolean {
     const firstChar = value[0];
     const lastChar = value[value.length - 1];
-    const validQuotes = ["'", '"', '`'];
+    const validQuotes = ['\'', '"', '`'];
     
     // Check for matching quotes
     if (!validQuotes.includes(firstChar) || firstChar !== lastChar) {

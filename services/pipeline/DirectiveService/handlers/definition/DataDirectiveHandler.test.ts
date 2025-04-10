@@ -82,9 +82,9 @@ describe('DataDirectiveHandler', () => {
     stateService.clone.mockReturnValue(clonedState);
 
     // Register mocks with the container
-    context.registerMock("IValidationService", validationService);
-    context.registerMock("IStateService", stateService);
-    context.registerMock("IResolutionService", resolutionService);
+    context.registerMock('IValidationService', validationService);
+    context.registerMock('IStateService', stateService);
+    context.registerMock('IResolutionService', resolutionService);
 
     // Create handler directly since it's not registered with DI
     handler = new DataDirectiveHandler(
@@ -117,7 +117,7 @@ describe('DataDirectiveHandler', () => {
       // Create a properly structured data directive node (not using raw string)
       const node = createDataDirective(
         'user', 
-        { "name": "${username}", "id": 123 }
+        { 'name': '${username}', 'id': 123 }
       );
       
       const directiveContext = { 
@@ -178,11 +178,11 @@ describe('DataDirectiveHandler', () => {
 
       expect(stateService.clone).toHaveBeenCalled();
       expect(clonedState.setDataVar).toHaveBeenCalledWith('person', {
-        name: "John Doe",
+        name: 'John Doe',
         age: 30,
         address: {
-          street: "123 Main St",
-          city: "Anytown"
+          street: '123 Main St',
+          city: 'Anytown'
         }
       });
       expect(result).toBe(clonedState);
@@ -208,7 +208,7 @@ describe('DataDirectiveHandler', () => {
       const result = await handler.execute(node, directiveContext);
 
       expect(stateService.clone).toHaveBeenCalled();
-      expect(clonedState.setDataVar).toHaveBeenCalledWith('fruits', ["apple", "banana", "cherry"]);
+      expect(clonedState.setDataVar).toHaveBeenCalledWith('fruits', ['apple', 'banana', 'cherry']);
       expect(result).toBe(clonedState);
     });
 
@@ -370,11 +370,11 @@ describe('DataDirectiveHandler', () => {
 
       expect(clonedState.setDataVar).toHaveBeenCalledWith('config', {
         app: {
-          name: "Meld",
-          version: "1.0.0",
-          features: ["text", "data", "path"]
+          name: 'Meld',
+          version: '1.0.0',
+          features: ['text', 'data', 'path']
         },
-        env: "test"
+        env: 'test'
       });
     });
 

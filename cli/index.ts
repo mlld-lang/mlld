@@ -329,8 +329,8 @@ async function confirmOverwrite(filePath: string): Promise<{ outputPath: string;
   const cliOptions = getCurrentCLIOptions();
   
   // For .md files, auto-redirect to .o.md unless explicitly set with -o
-  if (filePath.endsWith(".md") && !cliOptions.output) {
-    console.log("Auto-redirecting .md file to prevent overwrite");
+  if (filePath.endsWith('.md') && !cliOptions.output) {
+    console.log('Auto-redirecting .md file to prevent overwrite');
     const baseName = filePath.slice(0, -3); // Remove .md extension
     const newOutputPath = `${baseName}.o.md`;
     if (!(await fs.access(newOutputPath).then(() => true).catch(() => false))) {
@@ -981,7 +981,7 @@ export async function main(fsAdapter?: any, customArgs?: string[]): Promise<void
             ...contextLines
           ].join('\n');
         } catch (err) {
-          console.log("Failed to format error with source context:", err);
+          console.log('Failed to format error with source context:', err);
           return chalk.red(`Error in ${error.filePath}: ${error.message}`);
         }
       };
@@ -1098,29 +1098,29 @@ export async function main(fsAdapter?: any, customArgs?: string[]): Promise<void
               
               // Debug logging for file path issues
               if (options.debug) {
-                console.error("DEBUG: Input file path:", options.input);
+                console.error('DEBUG: Input file path:', options.input);
                 
                 // Cast error to MeldError for type safety
                 const meldError = error as MeldError;
                 
-                console.error("DEBUG: Error filePath property:", meldError.filePath);
+                console.error('DEBUG: Error filePath property:', meldError.filePath);
                 if (meldError.context?.sourceLocation) {
-                  console.error("DEBUG: Error sourceLocation.filePath:", meldError.context.sourceLocation.filePath);
+                  console.error('DEBUG: Error sourceLocation.filePath:', meldError.context.sourceLocation.filePath);
                 }
                 if (meldError.context?.errorFilePath) {
-                  console.error("DEBUG: Error context.errorFilePath:", meldError.context.errorFilePath);
+                  console.error('DEBUG: Error context.errorFilePath:', meldError.context.errorFilePath);
                 }
                 if ((meldError as any).location?.filePath) {
-                  console.error("DEBUG: Error location.filePath:", (meldError as any).location.filePath);
+                  console.error('DEBUG: Error location.filePath:', (meldError as any).location.filePath);
                 }
 
                 // Check if file exists at the input path
                 try {
                   fsService.exists(options.input).then(exists => {
-                    console.error("DEBUG: Input file exists:", exists);
+                    console.error('DEBUG: Input file exists:', exists);
                   });
                 } catch (err) {
-                  console.error("DEBUG: Error checking if file exists:", err);
+                  console.error('DEBUG: Error checking if file exists:', err);
                 }
               }
               

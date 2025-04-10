@@ -85,7 +85,7 @@ describe('PathDirectiveHandler', () => {
       const testContext = { currentFilePath: 'test.meld', state: stateService };
 
       // The path value is now a structured object
-      const pathValue = "$PROJECTPATH/docs";
+      const pathValue = '$PROJECTPATH/docs';
       vi.mocked(resolutionService.resolveInContext).mockResolvedValueOnce(pathValue);
 
       const result = await handler.execute(node, testContext);
@@ -96,8 +96,8 @@ describe('PathDirectiveHandler', () => {
       expect(resolutionService.resolveInContext).toHaveBeenCalledWith(
         expect.objectContaining({
           structured: expect.objectContaining({
-            base: "$PROJECTPATH",
-            segments: expect.arrayContaining(["docs"])
+            base: '$PROJECTPATH',
+            segments: expect.arrayContaining(['docs'])
           })
         }),
         expect.any(Object)
@@ -118,7 +118,7 @@ describe('PathDirectiveHandler', () => {
       const testContext = { currentFilePath: 'test.meld', state: stateService };
 
       // Mock the resolution with the variable replaced
-      const resolvedPath = "$PROJECTPATH/meld/docs";  
+      const resolvedPath = '$PROJECTPATH/meld/docs';  
       vi.mocked(resolutionService.resolveInContext).mockResolvedValueOnce(resolvedPath);
 
       const result = await handler.execute(node, testContext);
@@ -127,8 +127,8 @@ describe('PathDirectiveHandler', () => {
       expect(resolutionService.resolveInContext).toHaveBeenCalledWith(
         expect.objectContaining({
           structured: expect.objectContaining({
-            base: "$PROJECTPATH",
-            segments: expect.arrayContaining(["{{project}}", "docs"])
+            base: '$PROJECTPATH',
+            segments: expect.arrayContaining(['{{project}}', 'docs'])
           })
         }),
         expect.any(Object)
@@ -143,7 +143,7 @@ describe('PathDirectiveHandler', () => {
       const node = await createNodeFromExample(example.code);
       const testContext = { currentFilePath: 'test.meld', state: stateService };
 
-      const pathValue = "$./config";
+      const pathValue = '$./config';
       vi.mocked(resolutionService.resolveInContext).mockResolvedValueOnce(pathValue);
 
       const result = await handler.execute(node, testContext);
@@ -152,8 +152,8 @@ describe('PathDirectiveHandler', () => {
       expect(resolutionService.resolveInContext).toHaveBeenCalledWith(
         expect.objectContaining({
           structured: expect.objectContaining({
-            base: "$.",
-            segments: expect.arrayContaining(["config"])
+            base: '$.',
+            segments: expect.arrayContaining(['config'])
           })
         }),
         expect.any(Object)
