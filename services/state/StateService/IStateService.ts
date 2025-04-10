@@ -161,11 +161,11 @@ interface IStateService {
   getAllCommands(): Map<string, CommandVariable>;
 
   /**
-   * Gets all original document nodes in order.
+   * Gets all document nodes (original or transformed depending on mode).
    * 
    * @returns An array of document nodes
    */
-  getOriginalNodes(): MeldNode[];
+  getNodes(): MeldNode[];
   
   /**
    * Adds a node to the document.
@@ -372,16 +372,17 @@ interface IStateService {
   removeVariable(name: string, type?: VariableType): Promise<boolean>;
 
   /**
-   * Gets the output of a previously executed command.
-   * @deprecated Review if this is still needed or how it interacts with CommandVariable.
+   * Gets the output of a previously executed command (If state tracks this).
+   * @param command - The command string or identifier.
+   * @returns The command's stdout or undefined.
    */
-  getCommandOutput?(command: string): string | undefined;
+  getCommandOutput(command: string): string | undefined;
 
   /**
-   * Checks if the state implementation supports transformation.
-   * @deprecated Transformation is now implicitly supported.
+   * Checks if the state implementation supports transformation features.
+   * @returns true if transformation is supported.
    */
-  hasTransformationSupport?(): boolean;
+  hasTransformationSupport(): boolean;
 
   /**
    * Gets the underlying StateNode object. 
@@ -392,7 +393,35 @@ interface IStateService {
    * 
    * @returns The internal StateNode object.
    */
-  getInternalStateNode(): StateNode;
+  // getInternalStateNode(): StateNode; // Commenting out if StateNode type import is issue
+
+  /**
+   * Sets a command variable.
+   * 
+   * @param name - The name of the command variable to set
+   * @param command - The command definition or a raw command string
+   * @param metadata - Optional metadata
+   * @returns The created CommandVariable object
+   * @throws {MeldStateError} If the state is immutable
+   */
+  setCommand(name: string, command: string | ICommandDefinition, metadata?: Partial<VariableMetadata>): Promise<CommandVariable>;
+
+  /**
+   * Gets a command definition by name (preferred over getCommandVar).
+   * 
+   * @param name - The command name.
+   * @returns The command definition or undefined.
+   */
+  getCommand(name: string): ICommandDefinition | undefined;
+
+  /**
+   * Checks if a specific transformation type should be applied.
+   * Note: This seems less relevant if transformation is always enabled.
+   * 
+   * @param type - The transformation type string (e.g., 'directive', 'variable')
+   * @returns true if the transformation should occur.
+   */
+  shouldTransform(type: string): boolean;
 }
 
-export type { TransformationOptions, IStateService }; 
+export type { TransformationOptions, IStateService, DataVariable }; 

@@ -33,10 +33,59 @@ export function createValidationServiceMock() {
  */
 export function createStateServiceMock() {
   const service = mock<IStateService>();
-  // Default behaviors
+  // Mock methods from IStateService (core)
   service.clone.mockReturnValue({} as ClonedState);
-  // Ensure getPathVar is defined with default behavior
-  service.getPathVar.mockImplementation((name) => undefined);
+  service.getTextVar.mockReturnValue(undefined);
+  service.setTextVar.mockResolvedValue({} as any); // Return placeholder
+  service.getAllTextVars.mockReturnValue(new Map());
+  service.getLocalTextVars.mockReturnValue(new Map());
+  service.getDataVar.mockReturnValue(undefined);
+  service.setDataVar.mockResolvedValue({} as any);
+  service.getAllDataVars.mockReturnValue(new Map());
+  service.getLocalDataVars.mockReturnValue(new Map());
+  service.getPathVar.mockReturnValue(undefined);
+  service.setPathVar.mockResolvedValue({} as any);
+  service.getAllPathVars.mockReturnValue(new Map());
+  service.getCommandVar.mockReturnValue(undefined);
+  service.getAllCommands.mockReturnValue(new Map());
+  service.getOriginalNodes.mockReturnValue([]); // Keep original method if still present
+  service.addNode.mockReturnValue(undefined);
+  service.appendContent.mockReturnValue(undefined);
+  service.getTransformedNodes.mockReturnValue([]);
+  service.setTransformedNodes.mockReturnValue(undefined);
+  service.transformNode.mockReturnValue(undefined);
+  service.isTransformationEnabled.mockReturnValue(false);
+  service.setTransformationEnabled.mockReturnValue(undefined);
+  service.getTransformationOptions.mockReturnValue({});
+  service.setTransformationOptions.mockReturnValue(undefined);
+  service.addImport.mockReturnValue(undefined);
+  service.removeImport.mockReturnValue(undefined);
+  service.hasImport.mockReturnValue(false);
+  service.getImports.mockReturnValue(new Set());
+  service.getCurrentFilePath.mockReturnValue(null);
+  service.setCurrentFilePath.mockReturnValue(undefined);
+  service.hasLocalChanges.mockReturnValue(false);
+  service.getLocalChanges.mockReturnValue([]);
+  service.setImmutable.mockReturnValue(undefined);
+  // service.isImmutable needs property mock if readonly
+  Object.defineProperty(service, 'isImmutable', { get: () => false });
+  service.createChildState.mockReturnValue(service); // Return self for simple cases
+  service.mergeChildState.mockReturnValue(undefined);
+  service.getVariable.mockReturnValue(undefined);
+  service.setVariable.mockResolvedValue({} as any);
+  service.hasVariable.mockReturnValue(false);
+  service.removeVariable.mockResolvedValue(false);
+  // service.getInternalStateNode.mockReturnValue({} as any);
+
+  // Mock methods added from StateServiceLike
+  service.enableTransformation = vi.fn();
+  service.getNodes.mockReturnValue([]); // Replaces getOriginalNodes if renamed
+  service.setCommand.mockResolvedValue({} as any);
+  service.getCommand.mockReturnValue(undefined);
+  service.shouldTransform.mockReturnValue(false);
+  service.getCommandOutput.mockReturnValue(undefined);
+  service.hasTransformationSupport.mockReturnValue(true); // Assume support
+
   return service;
 }
 

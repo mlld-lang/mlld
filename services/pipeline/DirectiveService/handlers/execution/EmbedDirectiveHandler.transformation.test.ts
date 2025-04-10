@@ -10,6 +10,7 @@ import type { IStateService } from '@services/state/StateService/IStateService.j
 import type { DataVariable } from '@core/types/variables.js';
 import type { Result } from '@core/types/common.js';
 import { success, failure } from '@core/types/common.js';
+import type { DirectiveContext } from '@services/pipeline/DirectiveService/IDirectiveService.js';
 import type { FieldAccessError } from '@core/errors/FieldAccessError.js';
 import type { ICircularityService } from '@services/resolution/CircularityService/ICircularityService.js';
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
@@ -169,7 +170,7 @@ describe('EmbedDirectiveHandler Transformation', () => {
         directive: { kind: 'embed' },
         location: createLocation(1, 1, 0, 1)
       } as DirectiveNode;
-      const context = { currentFilePath: 'test.meld', state: stateService as any };
+      const context: DirectiveContext = { currentFilePath: 'test.meld', state: stateService, parentState: stateService };
 
       const resolvedPath = createMeldPath('/path/to/doc.md');
       resolutionService.resolvePath.mockResolvedValue(resolvedPath);
@@ -206,7 +207,7 @@ describe('EmbedDirectiveHandler Transformation', () => {
         directive: { kind: 'embed' },
         location: createLocation(1, 1, 0, 1)
       } as DirectiveNode;
-      const context = { currentFilePath: 'test.meld', state: stateService as any };
+      const context: DirectiveContext = { currentFilePath: 'test.meld', state: stateService, parentState: stateService };
 
       const resolvedPath = createMeldPath('/path/to/sections.md');
       const rawContent = '# Content';
@@ -243,7 +244,7 @@ describe('EmbedDirectiveHandler Transformation', () => {
         directive: { kind: 'embed' },
         location: createLocation(1, 1, 0, 1)
       } as DirectiveNode;
-      const context = { currentFilePath: 'test.meld', state: stateService as any };
+      const context: DirectiveContext = { currentFilePath: 'test.meld', state: stateService, parentState: stateService };
 
       const resolvedPath = createMeldPath('/path/to/doc.md');
       const rawContent = 'Test content';
@@ -277,7 +278,7 @@ describe('EmbedDirectiveHandler Transformation', () => {
         directive: { kind: 'embed' },
         location: createLocation(1, 1, 0, 1)
       } as DirectiveNode;
-      const context = { currentFilePath: 'test.meld', state: stateService as any };
+      const context: DirectiveContext = { currentFilePath: 'test.meld', state: stateService, parentState: stateService };
 
       const resolvedPath = createMeldPath('/path/to/doc.md');
       const rawContent = 'Test content';
@@ -311,7 +312,7 @@ describe('EmbedDirectiveHandler Transformation', () => {
         directive: { kind: 'embed' },
         location: createLocation(1, 1, 0, 1)
       } as DirectiveNode;
-      const context = { currentFilePath: 'test.meld', state: stateService as any };
+      const context: DirectiveContext = { currentFilePath: 'test.meld', state: stateService, parentState: stateService };
 
       const resolvedPath = createMeldPath('/path/to/resolved.md');
       const rawContent = 'Variable content';
@@ -356,24 +357,16 @@ describe('EmbedDirectiveHandler Transformation', () => {
       };
       
       // Create the node
-      const node = {
-        type: 'Directive',
-        subtype: 'embedVariable',
-        path: variablePath,
-        options: {},
-        directive: { kind: 'embed' },
-        location: createLocation(1, 1, 0, 1)
-      } as DirectiveNode;
-      
-      const context = { 
-        currentFilePath: 'test.meld', 
-        state: stateService,
-        parentState: stateService
-      };
+      const node = createEmbedDirective(variablePath.raw, undefined, createLocation(1, 1, 0, 1));
+      // Add subtype and ensure path object is correct if needed by handler
+      node.subtype = 'embedVariable';
+      node.path = variablePath;
+      const context: DirectiveContext = { currentFilePath: 'test.meld', state: stateService, parentState: stateService };
       
       // The variable resolves to text content
       const resolvedContent = 'This is a test bio.';
-      vi.mocked(resolutionService.resolveInContext).mockResolvedValue(resolvedContent);
+      resolutionService.resolveInContext.mockResolvedValue(resolvedContent);
+      resolutionService.resolveFieldAccess.mockResolvedValue(success(resolvedContent));
       
       const result = await handler.execute(node, context);
       
@@ -410,24 +403,16 @@ describe('EmbedDirectiveHandler Transformation', () => {
       };
       
       // Create the directive node with the variable reference path
-      const node = {
-        type: 'Directive',
-        subtype: 'embedVariable',
-        path: variablePath,
-        options: {},
-        directive: { kind: 'embed' },
-        location: { start: { line: 1, column: 1 }, end: { line: 1, column: 20 } }
-      } as DirectiveNode;
-      
-      const context = { 
-        currentFilePath: 'test.meld', 
-        state: stateService,
-        parentState: stateService
-      };
+      const node = createEmbedDirective(variablePath.raw, undefined, createLocation(1, 1, 0, 1));
+      // Add subtype and ensure path object is correct if needed by handler
+      node.subtype = 'embedVariable';
+      node.path = variablePath;
+      const context: DirectiveContext = { currentFilePath: 'test.meld', state: stateService, parentState: stateService };
       
       // Variable resolves to the content string
       const resolvedContent = 'You are a senior architect skilled in TypeScript.';
-      vi.mocked(resolutionService.resolveInContext).mockResolvedValue(resolvedContent);
+      resolutionService.resolveInContext.mockResolvedValue(resolvedContent);
+      resolutionService.resolveFieldAccess.mockResolvedValue(success(resolvedContent));
       
       const result = await handler.execute(node, context);
       
@@ -459,7 +444,7 @@ describe('EmbedDirectiveHandler Transformation', () => {
         directive: { kind: 'embed' },
         location: createLocation(1, 1, 0, 1)
       } as DirectiveNode;
-      const context = { currentFilePath: 'test.meld', state: stateService as any };
+      const context: DirectiveContext = { currentFilePath: 'test.meld', state: stateService, parentState: stateService };
 
       const resolvedPath = createMeldPath('/path/to/missing.md');
       resolutionService.resolvePath.mockResolvedValue(resolvedPath);
@@ -480,7 +465,7 @@ describe('EmbedDirectiveHandler Transformation', () => {
         directive: { kind: 'embed' },
         location: createLocation(1, 1, 0, 1)
       } as DirectiveNode;
-      const context = { currentFilePath: 'test.meld', state: stateService as any, parentState: stateService as any };
+      const context: DirectiveContext = { currentFilePath: 'test.meld', state: stateService, parentState: stateService };
 
       const resolvedPath = createMeldPath('/path/to/circular.md');
       resolutionService.resolvePath.mockResolvedValue(resolvedPath);
@@ -527,12 +512,20 @@ describe('EmbedDirectiveHandler Transformation', () => {
         isVariableReference: true
       };
 
-      const node = createEmbedDirective(varReference, undefined, createLocation(1, 1));
-      const context = { currentFilePath: 'test.meld', state: stateService };
+      const node = {
+        type: 'Directive',
+        subtype: 'embedVariable',
+        path: varReference,
+        options: {},
+        directive: { kind: 'embed' },
+        location: createLocation(1, 1)
+      } as DirectiveNode;
+      const context: DirectiveContext = { currentFilePath: 'test.meld', state: stateService, parentState: stateService };
 
       // Mock the resolution service to return the field value
-      resolutionService.resolveInContext.mockResolvedValue('This is a test bio.');
-      resolutionService.resolveFieldAccess.mockResolvedValue('This is a test bio.');
+      const resolvedContent = 'This is a test bio.';
+      resolutionService.resolveInContext.mockResolvedValue(resolvedContent);
+      resolutionService.resolveFieldAccess.mockResolvedValue(success(resolvedContent));
       resolutionService.convertToFormattedString.mockResolvedValue('This is a test bio.');
 
       // Execute the handler
@@ -587,13 +580,14 @@ describe('EmbedDirectiveHandler Transformation', () => {
         isVariableReference: true
       };
 
-      const node = createEmbedDirective(varReference, undefined, createLocation(1, 1));
-      const context = { currentFilePath: 'test.meld', state: stateService };
+      const node = createEmbedDirective(varReference.raw, undefined, createLocation(1, 1, 0, 1));
+      const context: DirectiveContext = { currentFilePath: 'test.meld', state: stateService, parentState: stateService };
 
       // Mock the resolution service to return the field value (an object)
       const contactObject = { email: 'test@example.com', phone: '555-1234' };
-      resolutionService.resolveInContext.mockResolvedValue(JSON.stringify(contactObject, null, 2));
-      resolutionService.resolveFieldAccess.mockResolvedValue(contactObject);
+      const resolvedContent = JSON.stringify(contactObject, null, 2);
+      resolutionService.resolveInContext.mockResolvedValue(resolvedContent);
+      resolutionService.resolveFieldAccess.mockResolvedValue(success(contactObject));
       resolutionService.convertToFormattedString.mockResolvedValue(
         JSON.stringify(contactObject, null, 2)
       );
@@ -619,11 +613,11 @@ describe('EmbedDirectiveHandler Transformation', () => {
       expect(clonedState.transformNode).toHaveBeenCalledWith(node, result.replacement);
     });
 
-    it('should throw INITIALIZATION_FAILED if interpreter client is not available', async () => {
+    it('should throw EXECUTION_FAILED if interpreter client is not available', async () => {
       // Arrange
       const node = { type: 'Directive', subtype: 'embedPath', path: { raw: 'any.md' }, options: {}, directive: { kind: 'embed' }, location: createLocation(1, 1, 0, 1) } as DirectiveNode;
       // Use DirectiveContext type
-      const execContext: DirectiveContext = { currentFilePath: 'test.meld', state: stateService as any };
+      const execContext: DirectiveContext = { currentFilePath: 'test.meld', state: stateService };
 
       // Configure factory to return undefined
       interpreterServiceClientFactory.getClient.mockReturnValue(undefined);
@@ -632,8 +626,9 @@ describe('EmbedDirectiveHandler Transformation', () => {
       await expect(handler.execute(node, execContext)).rejects.toThrow(
         new DirectiveError(
           'Interpreter service client is not available. Ensure InterpreterServiceClientFactory is registered or provide a mock in tests.',
-          DirectiveErrorCode.INITIALIZATION_FAILED,
-          { location: node.location }
+          'embed',
+          DirectiveErrorCode.EXECUTION_FAILED,
+          { node }
         )
       );
     });
