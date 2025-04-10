@@ -9,8 +9,8 @@ import type {
   CircularityServiceLike,
   ResolutionServiceLike,
   DirectiveServiceLike,
-  IStateService
 } from '@core/shared-service-types.js';
+import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { DirectiveResult } from '@services/pipeline/DirectiveService/types.js';
 
 /**

@@ -10,7 +10,7 @@ Please update this document as more definitive information is uncovered.
     *   **Finding:** `DirectiveContext` (defined in `IDirectiveService.ts`) required `state: StateServiceLike`, but `createStateServiceMock` provides a mock based on the narrower `IStateService`. This caused persistent type errors.
     *   **Convention:** Refactor context interfaces (like `DirectiveContext`) to expect the specific core service interface (e.g., `IStateService`) rather than broader `*-Like` types. This aligns expectations with implementations and mocks.
     *   **Status:** Prioritized. `DirectiveContext` updated.
-2.  **Verify Service Methods Before Use:**
+2.  **Verify Service Methods Exist:**
     *   **Finding:** Initial refactoring assumed `IResolutionService` had methods like `resolveVariable`, `resolveTemplate`, `adjustHeadingLevels`, `wrapUnderHeader`, which were not present.
     *   **Convention:** Before implementing handler logic, verify required methods exist on the current service interface (`I*.ts` file). Use the actually available methods (e.g., `resolveInContext`, `resolveContent`, `extractSection` on `IResolutionService`).
     *   **Status:** Applied. Verified `IResolutionService` methods listed below.
@@ -31,6 +31,10 @@ Please update this document as more definitive information is uncovered.
     *   **Finding:** `isTransformationEnabled()` is primarily checked by `OutputService` to choose between `getOriginalNodes()` / `getNodes()` and `getTransformedNodes()`. Transformation is generally enabled via API/tests.
     *   **Convention:** Assume transformation is active unless isolating state (e.g., `@import`). Handlers return `DirectiveResult` with `replacement` nodes. `IStateService` includes necessary transformation methods (`isTransformationEnabled`, `transformNode`, `get/setTransformedNodes`, etc.).
     *   **Status:** Clarified role; methods confirmed/added to `IStateService`.
+6.  **Ensure Resolution Service Handles `InterpolatableValue`:**
+    *   **Finding:** `ResolutionService` (specifically methods like `resolveText`, `resolveContent`) likely still expects simple strings in many cases, rather than the `InterpolatableValue` array (`Array<TextNode | VariableReferenceNode>`) now produced by the parser for interpolated contexts (as per `@AST-VARIABLES.md`). `VariableReferenceResolver` *does* correctly handle the AST `Field` type for field access (as per `@AST-FIELD.md`).
+    *   **Convention:** Refactor `ResolutionService` methods to iterate through `InterpolatableValue` arrays, resolving `VariableReferenceNode`s via `VariableReferenceResolver` and appending literal `TextNode` content. Remove internal regex-based variable searching.
+    *   **Status:** **PRIORITY ISSUE.** This incomplete integration is likely a root cause of resolution inconsistencies and test failures. Needs refactoring as part of `@PLAN-PHASE-3.md`.
 
 ## Core Types (`@core/types`, `@core/syntax/types/index.js`, `@core/shared-service-types.js`)
 

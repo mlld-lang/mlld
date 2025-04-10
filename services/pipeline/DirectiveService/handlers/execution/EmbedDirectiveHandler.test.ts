@@ -285,7 +285,7 @@ describe('EmbedDirectiveHandler', () => {
         location: createLocation(1, 1, 0, 1)
       } as DirectiveNode;
 
-      const context: DirectiveContext = { currentFilePath: 'test.meld', state: stateService as any, parentState: stateService as any };
+      const context: DirectiveContext = { currentFilePath: 'test.meld', state: stateService, parentState: stateService };
 
       // Mock resolutionService.resolvePath for this test
       const resolvedPath: MeldPath = createMeldPath('/path/to/embed.md');
@@ -335,7 +335,7 @@ describe('EmbedDirectiveHandler', () => {
         location: createLocation(1, 1, 0, 1)
       } as DirectiveNode;
 
-      const context: DirectiveContext = { currentFilePath: 'test.meld', state: stateService as any, parentState: stateService as any };
+      const context: DirectiveContext = { currentFilePath: 'test.meld', state: stateService, parentState: stateService };
 
       // Mock path resolution and file reading for this test
       const resolvedPath: MeldPath = createMeldPath('/path/to/sections.md');
@@ -386,7 +386,7 @@ describe('EmbedDirectiveHandler', () => {
   describe('error handling', () => {
     it('should throw error if file not found', async () => {
       const node = await createRealEmbedDirective('non-existent-file.txt');
-      const context = { currentFilePath: 'test.meld', state: stateService as any, parentState: stateService as any };
+      const context = { currentFilePath: 'test.meld', state: stateService, parentState: stateService };
 
       // Use resolvePath mock for consistency
       const resolvedPath: MeldPath = createMeldPath('/path/to/non-existent-file.txt');
@@ -400,7 +400,7 @@ describe('EmbedDirectiveHandler', () => {
     it('should handle heading level validation', async () => {
       // Create directive with an invalid heading level (9)
       const node = await createRealEmbedDirective('file.md', undefined, { headingLevel: 9 });
-      const context = { currentFilePath: 'test.meld', state: stateService as any, parentState: stateService as any };
+      const context = { currentFilePath: 'test.meld', state: stateService, parentState: stateService };
 
       // Use resolvePath mock for consistency
       const resolvedPath: MeldPath = createMeldPath('/path/to/file.md');
@@ -425,7 +425,7 @@ describe('EmbedDirectiveHandler', () => {
     it('should handle section extraction gracefully', async () => {
       // Create directive with a section that doesn't exist
       const node = await createRealEmbedDirective('sections.md', 'non-existent-section');
-      const context = { currentFilePath: 'test.meld', state: stateService as any, parentState: stateService as any };
+      const context = { currentFilePath: 'test.meld', state: stateService, parentState: stateService };
 
       const resolvedPath: MeldPath = createMeldPath('/path/to/sections.md');
       resolutionService.resolvePath.mockResolvedValue(resolvedPath);
@@ -448,7 +448,7 @@ describe('EmbedDirectiveHandler', () => {
   describe('cleanup', () => {
     it('should always end import tracking', async () => {
       const node = await createRealEmbedDirective('content.md');
-      const context = { currentFilePath: 'test.meld', state: stateService as any, parentState: stateService as any };
+      const context = { currentFilePath: 'test.meld', state: stateService, parentState: stateService };
 
       const resolvedPath: MeldPath = createMeldPath('/path/to/content.md');
       resolutionService.resolvePath.mockResolvedValue(resolvedPath);
@@ -461,7 +461,7 @@ describe('EmbedDirectiveHandler', () => {
 
     it('should end import tracking even on error', async () => {
       const node = await createRealEmbedDirective('error.md');
-      const context = { currentFilePath: 'test.meld', state: stateService as any, parentState: stateService as any };
+      const context = { currentFilePath: 'test.meld', state: stateService, parentState: stateService };
 
       const resolvedPath: MeldPath = createMeldPath('/path/to/error.md');
       resolutionService.resolvePath.mockResolvedValue(resolvedPath);
@@ -504,7 +504,7 @@ describe('EmbedDirectiveHandler', () => {
       (fileSystemService.readFile as any).mockResolvedValue('# File content');
       
       // Execute the directive
-      const context: DirectiveContext = { currentFilePath: '/project/test.meld', state: stateService as any, parentState: stateService as any };
+      const context: DirectiveContext = { currentFilePath: '/project/test.meld', state: stateService, parentState: stateService };
       
       await handler.execute(node, context);
       
@@ -551,7 +551,7 @@ describe('EmbedDirectiveHandler', () => {
         node.directive.path = variablePath;
       }
       
-      const context = { currentFilePath: 'test.meld', state: stateService as any, parentState: stateService as any };
+      const context = { currentFilePath: 'test.meld', state: stateService, parentState: stateService };
 
       // Mock variable resolution to return the variable's content
       vi.mocked(resolutionService.resolveInContext).mockResolvedValue(
@@ -615,7 +615,7 @@ describe('EmbedDirectiveHandler', () => {
         node.directive.path = variablePath;
       }
       
-      const context = { currentFilePath: 'test.meld', state: stateService as any, parentState: stateService as any };
+      const context = { currentFilePath: 'test.meld', state: stateService, parentState: stateService };
       
       // Mock variable resolution to return a text variable
       vi.mocked(resolutionService.resolveInContext).mockResolvedValue('# Sample Content');
@@ -669,7 +669,7 @@ describe('EmbedDirectiveHandler', () => {
         node.directive.path = variablePath;
       }
       
-      const context = { currentFilePath: 'test.meld', state: stateService as any, parentState: stateService as any };
+      const context = { currentFilePath: 'test.meld', state: stateService, parentState: stateService };
       
       // Variable resolves to plain text
       vi.mocked(resolutionService.resolveInContext).mockResolvedValue('Variable Content');
@@ -730,7 +730,7 @@ describe('EmbedDirectiveHandler', () => {
         node.directive.path = variablePath;
       }
       
-      const context = { currentFilePath: 'test.meld', state: stateService as any, parentState: stateService as any };
+      const context = { currentFilePath: 'test.meld', state: stateService, parentState: stateService };
       
       // Mock variable resolution to return the resolved field value
       vi.mocked(resolutionService.resolveInContext).mockResolvedValue('dark');

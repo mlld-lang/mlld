@@ -580,7 +580,7 @@ describe('EmbedDirectiveHandler Transformation', () => {
         isVariableReference: true
       };
 
-      const node = createEmbedDirective(varReference.raw, undefined, createLocation(1, 1, 0, 1));
+      const node = createEmbedDirective(varReference.content, undefined, createLocation(1, 1, 0, 1));
       const context: DirectiveContext = { currentFilePath: 'test.meld', state: stateService, parentState: stateService };
 
       // Mock the resolution service to return the field value (an object)
