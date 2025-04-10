@@ -1,7 +1,7 @@
 import * as path from 'path';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
-import type { ResolutionContext, FormattingContext } from '@core/types/resolution.js';
+import type { IStateService } from '@services/state/StateService/IStateService';
+import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
+import type { ResolutionContext, FormattingContext } from '@core/types/resolution';
 import {
     VariableType, 
     type MeldVariable, 
@@ -9,7 +9,7 @@ import {
     type DataVariable, 
     type IPathVariable, 
     type CommandVariable
-} from '@core/types/variables.js';
+} from '@core/types/variables';
 import { 
   JsonValue, 
   PathPurpose,
@@ -33,31 +33,31 @@ import {
   unsafeCreateNormalizedAbsoluteDirectoryPath,
   NormalizedAbsoluteDirectoryPath,
   isBasicCommand
-} from '@core/types.js';
-import type { MeldNode, VariableReferenceNode, DirectiveNode, TextNode, CodeFenceNode } from '@core/ast/ast/astTypes.js';
-import { ResolutionContextFactory } from './ResolutionContextFactory.js';
-import { CommandResolver } from './resolvers/CommandResolver.js';
-import { ContentResolver } from './resolvers/ContentResolver.js';
-import { VariableReferenceResolver } from './resolvers/VariableReferenceResolver.js';
-import { logger } from '@core/utils/logger.js';
-import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
+} from '@core/types';
+import type { MeldNode, VariableReferenceNode, DirectiveNode, TextNode, CodeFenceNode } from '@core/ast/ast/astTypes';
+import { ResolutionContextFactory } from './ResolutionContextFactory';
+import { CommandResolver } from './resolvers/CommandResolver';
+import { ContentResolver } from './resolvers/ContentResolver';
+import { VariableReferenceResolver } from './resolvers/VariableReferenceResolver';
+import { logger } from '@core/utils/logger';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
 import { inject, singleton, container } from 'tsyringe';
-import type { IPathService } from '@services/fs/PathService/IPathService.js';
-import { VariableResolutionTracker, ResolutionTrackingConfig } from '@tests/utils/debug/VariableResolutionTracker/index.js';
-import { Service } from '@core/ServiceProvider.js';
-import type { IParserServiceClient } from '@services/pipeline/ParserService/interfaces/IParserServiceClient.js';
-import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory.js';
-import { IVariableReferenceResolverClient } from './interfaces/IVariableReferenceResolverClient.js';
-import { VariableReferenceResolverClientFactory } from './factories/VariableReferenceResolverClientFactory.js';
-import { IDirectiveServiceClient } from '@services/pipeline/DirectiveService/interfaces/IDirectiveServiceClient.js';
-import { DirectiveServiceClientFactory } from '@services/pipeline/DirectiveService/factories/DirectiveServiceClientFactory.js';
-import type { IFileSystemServiceClient } from '@services/fs/FileSystemService/interfaces/IFileSystemServiceClient.js';
-import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/factories/FileSystemServiceClientFactory.js';
-import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
-import { VariableResolutionErrorFactory } from './resolvers/error-factory.js';
-import { isTextVariable, isPathVariable, isCommandVariable, isDataVariable, isFilesystemPath } from '@core/types/guards.js';
+import type { IPathService } from '@services/fs/PathService/IPathService';
+import { VariableResolutionTracker, ResolutionTrackingConfig } from '@tests/utils/debug/VariableResolutionTracker/index';
+import { Service } from '@core/ServiceProvider';
+import type { IParserServiceClient } from '@services/pipeline/ParserService/interfaces/IParserServiceClient';
+import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory';
+import { IVariableReferenceResolverClient } from './interfaces/IVariableReferenceResolverClient';
+import { VariableReferenceResolverClientFactory } from './factories/VariableReferenceResolverClientFactory';
+import { IDirectiveServiceClient } from '@services/pipeline/DirectiveService/interfaces/IDirectiveServiceClient';
+import { DirectiveServiceClientFactory } from '@services/pipeline/DirectiveService/factories/DirectiveServiceClientFactory';
+import type { IFileSystemServiceClient } from '@services/fs/FileSystemService/interfaces/IFileSystemServiceClient';
+import { FileSystemServiceClientFactory } from '@services/fs/FileSystemService/factories/FileSystemServiceClientFactory';
+import type { IParserService } from '@services/pipeline/ParserService/IParserService';
+import { VariableResolutionErrorFactory } from './resolvers/error-factory';
+import { isTextVariable, isPathVariable, isCommandVariable, isDataVariable, isFilesystemPath } from '@core/types/guards';
 // Import and alias the AST Field type
-import { Field as AstField } from '@core/syntax/types/shared-types.js';
+import { Field as AstField } from '@core/syntax/types/shared-types';
 
 /**
  * Internal type for heading nodes in the ResolutionService

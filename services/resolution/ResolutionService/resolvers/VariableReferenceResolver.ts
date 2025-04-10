@@ -1,28 +1,28 @@
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { ResolutionContext, PathResolutionContext } from '@core/types/resolution.js';
-import type { JsonValue, Result } from '@core/types/common.js';
-import { success, failure } from '@core/types/common.js';
-import { VariableType } from '@core/types/variables.js';
-import { MeldError } from '@core/errors/index.js';
-import type { MeldVariable, TextVariable, DataVariable, IPathVariable, CommandVariable } from '@core/types/variables.js';
-import type { MeldNode, VariableReferenceNode, TextNode, DirectiveNode, NodeType } from '@core/ast/ast/astTypes.js';
-import { isTextVariable, isDataVariable, isPathVariable, isCommandVariable } from '@core/types/guards.js';
-import { VariableResolutionError, MeldResolutionError, PathValidationError, FieldAccessError, FieldAccessErrorDetails } from '@core/errors/index.js';
-import { ErrorSeverity } from '@core/errors/MeldError.js';
-import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
-import { resolutionLogger as logger } from '@core/utils/logger.js';
-import { VariableResolutionTracker } from '@tests/utils/debug/VariableResolutionTracker/index.js';
+import type { IStateService } from '@services/state/StateService/IStateService';
+import type { ResolutionContext, PathResolutionContext } from '@core/types/resolution';
+import type { JsonValue, Result } from '@core/types/common';
+import { success, failure } from '@core/types/common';
+import { VariableType } from '@core/types/variables';
+import { MeldError } from '@core/errors/index';
+import type { MeldVariable, TextVariable, DataVariable, IPathVariable, CommandVariable } from '@core/types/variables';
+import type { MeldNode, VariableReferenceNode, TextNode, DirectiveNode, NodeType } from '@core/ast/ast/astTypes';
+import { isTextVariable, isDataVariable, isPathVariable, isCommandVariable } from '@core/types/guards';
+import { VariableResolutionError, MeldResolutionError, PathValidationError, FieldAccessError, FieldAccessErrorDetails } from '@core/errors/index';
+import { ErrorSeverity } from '@core/errors/MeldError';
+import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService';
+import { resolutionLogger as logger } from '@core/utils/logger';
+import { VariableResolutionTracker } from '@tests/utils/debug/VariableResolutionTracker/index';
 import { container, inject, injectable } from 'tsyringe';
-import type { IResolutionServiceClient } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClient.js';
-import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientFactory.js';
-import type { IParserServiceClient } from '@services/pipeline/ParserService/interfaces/IParserServiceClient.js';
-import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory.js';
-import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
-import { MeldPath, PathValidationContext, PathPurpose, RawPath, NormalizedAbsoluteDirectoryPath } from '@core/types/paths.js';
-import type { IPathService } from '@services/fs/PathService/IPathService.js';
+import type { IResolutionServiceClient } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClient';
+import { ResolutionServiceClientFactory } from '@services/resolution/ResolutionService/factories/ResolutionServiceClientFactory';
+import type { IParserServiceClient } from '@services/pipeline/ParserService/interfaces/IParserServiceClient';
+import { ParserServiceClientFactory } from '@services/pipeline/ParserService/factories/ParserServiceClientFactory';
+import type { IParserService } from '@services/pipeline/ParserService/IParserService';
+import { MeldPath, PathValidationContext, PathPurpose, RawPath, NormalizedAbsoluteDirectoryPath } from '@core/types/paths';
+import type { IPathService } from '@services/fs/PathService/IPathService';
 import {
   Field as AstField
-} from '@core/syntax/types/shared-types.js';
+} from '@core/syntax/types/shared-types';
 
 /**
  * Handles resolution of variable references based on VariableReferenceNode AST.

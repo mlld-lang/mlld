@@ -15,7 +15,7 @@ export class SyntaxError extends Error {
     this.expected = expected;
     this.found = found;
     this.location = location;
-    this.name = 'SyntaxError';
+    this.name = "SyntaxError";
   }
 }
 
@@ -32,7 +32,7 @@ function peg$subclass(child, parent) {
 }
 
 function peg$SyntaxError(message, expected, found, location) {
-  const self = Error.call(this, message);
+  var self = Error.call(this, message);
   // istanbul ignore next Check is a necessary evil to support older environments
   if (Object.setPrototypeOf) {
     Object.setPrototypeOf(self, peg$SyntaxError.prototype);
@@ -40,14 +40,14 @@ function peg$SyntaxError(message, expected, found, location) {
   self.expected = expected;
   self.found = found;
   self.location = location;
-  self.name = 'SyntaxError';
+  self.name = "SyntaxError";
   return self;
 }
 
 peg$subclass(peg$SyntaxError, Error);
 
 function peg$padEnd(str, targetLength, padString) {
-  padString = padString || ' ';
+  padString = padString || " ";
   if (str.length > targetLength) { return str; }
   targetLength -= str.length;
   padString += padString.repeat(targetLength);
@@ -55,61 +55,61 @@ function peg$padEnd(str, targetLength, padString) {
 }
 
 peg$SyntaxError.prototype.format = function(sources) {
-  let str = 'Error: ' + this.message;
+  var str = "Error: " + this.message;
   if (this.location) {
-    let src = null;
-    let k;
+    var src = null;
+    var k;
     for (k = 0; k < sources.length; k++) {
       if (sources[k].source === this.location.source) {
         src = sources[k].text.split(/\r\n|\n|\r/g);
         break;
       }
     }
-    const s = this.location.start;
-    const offset_s = (this.location.source && (typeof this.location.source.offset === 'function'))
+    var s = this.location.start;
+    var offset_s = (this.location.source && (typeof this.location.source.offset === "function"))
       ? this.location.source.offset(s)
       : s;
-    const loc = this.location.source + ':' + offset_s.line + ':' + offset_s.column;
+    var loc = this.location.source + ":" + offset_s.line + ":" + offset_s.column;
     if (src) {
-      const e = this.location.end;
-      const filler = peg$padEnd('', offset_s.line.toString().length, ' ');
-      const line = src[s.line - 1];
-      const last = s.line === e.line ? e.column : line.length + 1;
-      const hatLen = (last - s.column) || 1;
-      str += '\n --> ' + loc + '\n'
-          + filler + ' |\n'
-          + offset_s.line + ' | ' + line + '\n'
-          + filler + ' | ' + peg$padEnd('', s.column - 1, ' ')
-          + peg$padEnd('', hatLen, '^');
+      var e = this.location.end;
+      var filler = peg$padEnd("", offset_s.line.toString().length, ' ');
+      var line = src[s.line - 1];
+      var last = s.line === e.line ? e.column : line.length + 1;
+      var hatLen = (last - s.column) || 1;
+      str += "\n --> " + loc + "\n"
+          + filler + " |\n"
+          + offset_s.line + " | " + line + "\n"
+          + filler + " | " + peg$padEnd("", s.column - 1, ' ')
+          + peg$padEnd("", hatLen, "^");
     } else {
-      str += '\n at ' + loc;
+      str += "\n at " + loc;
     }
   }
   return str;
 };
 
 peg$SyntaxError.buildMessage = function(expected, found) {
-  const DESCRIBE_EXPECTATION_FNS = {
+  var DESCRIBE_EXPECTATION_FNS = {
     literal: function(expectation) {
-      return '"' + literalEscape(expectation.text) + '"';
+      return "\"" + literalEscape(expectation.text) + "\"";
     },
 
     class: function(expectation) {
-      const escapedParts = expectation.parts.map(function(part) {
+      var escapedParts = expectation.parts.map(function(part) {
         return Array.isArray(part)
-          ? classEscape(part[0]) + '-' + classEscape(part[1])
+          ? classEscape(part[0]) + "-" + classEscape(part[1])
           : classEscape(part);
       });
 
-      return '[' + (expectation.inverted ? '^' : '') + escapedParts.join('') + ']';
+      return "[" + (expectation.inverted ? "^" : "") + escapedParts.join("") + "]";
     },
 
     any: function() {
-      return 'any character';
+      return "any character";
     },
 
     end: function() {
-      return 'end of input';
+      return "end of input";
     },
 
     other: function(expectation) {
@@ -123,28 +123,28 @@ peg$SyntaxError.buildMessage = function(expected, found) {
 
   function literalEscape(s) {
     return s
-      .replace(/\\/g, '\\\\')
-      .replace(/"/g,  '\\"')
-      .replace(/\0/g, '\\0')
-      .replace(/\t/g, '\\t')
-      .replace(/\n/g, '\\n')
-      .replace(/\r/g, '\\r')
-      .replace(/[\x00-\x0F]/g,          function(ch) { return '\\x0' + hex(ch); })
-      .replace(/[\x10-\x1F\x7F-\x9F]/g, function(ch) { return '\\x'  + hex(ch); });
+      .replace(/\\/g, "\\\\")
+      .replace(/"/g,  "\\\"")
+      .replace(/\0/g, "\\0")
+      .replace(/\t/g, "\\t")
+      .replace(/\n/g, "\\n")
+      .replace(/\r/g, "\\r")
+      .replace(/[\x00-\x0F]/g,          function(ch) { return "\\x0" + hex(ch); })
+      .replace(/[\x10-\x1F\x7F-\x9F]/g, function(ch) { return "\\x"  + hex(ch); });
   }
 
   function classEscape(s) {
     return s
-      .replace(/\\/g, '\\\\')
-      .replace(/\]/g, '\\]')
-      .replace(/\^/g, '\\^')
-      .replace(/-/g,  '\\-')
-      .replace(/\0/g, '\\0')
-      .replace(/\t/g, '\\t')
-      .replace(/\n/g, '\\n')
-      .replace(/\r/g, '\\r')
-      .replace(/[\x00-\x0F]/g,          function(ch) { return '\\x0' + hex(ch); })
-      .replace(/[\x10-\x1F\x7F-\x9F]/g, function(ch) { return '\\x'  + hex(ch); });
+      .replace(/\\/g, "\\\\")
+      .replace(/\]/g, "\\]")
+      .replace(/\^/g, "\\^")
+      .replace(/-/g,  "\\-")
+      .replace(/\0/g, "\\0")
+      .replace(/\t/g, "\\t")
+      .replace(/\n/g, "\\n")
+      .replace(/\r/g, "\\r")
+      .replace(/[\x00-\x0F]/g,          function(ch) { return "\\x0" + hex(ch); })
+      .replace(/[\x10-\x1F\x7F-\x9F]/g, function(ch) { return "\\x"  + hex(ch); });
   }
 
   function describeExpectation(expectation) {
@@ -152,8 +152,8 @@ peg$SyntaxError.buildMessage = function(expected, found) {
   }
 
   function describeExpected(expected) {
-    const descriptions = expected.map(describeExpectation);
-    let i, j;
+    var descriptions = expected.map(describeExpectation);
+    var i, j;
 
     descriptions.sort();
 
@@ -172,20 +172,20 @@ peg$SyntaxError.buildMessage = function(expected, found) {
         return descriptions[0];
 
       case 2:
-        return descriptions[0] + ' or ' + descriptions[1];
+        return descriptions[0] + " or " + descriptions[1];
 
       default:
-        return descriptions.slice(0, -1).join(', ')
-          + ', or '
+        return descriptions.slice(0, -1).join(", ")
+          + ", or "
           + descriptions[descriptions.length - 1];
     }
   }
 
   function describeFound(found) {
-    return found ? '"' + literalEscape(found) + '"' : 'end of input';
+    return found ? "\"" + literalEscape(found) + "\"" : "end of input";
   }
 
-  return 'Expected ' + describeExpected(expected) + ' but ' + describeFound(found) + ' found.';
+  return "Expected " + describeExpected(expected) + " but " + describeFound(found) + " found.";
 };
 
 function peg$DefaultTracer() {
@@ -193,11 +193,11 @@ function peg$DefaultTracer() {
 }
 
 peg$DefaultTracer.prototype.trace = function(event) {
-  const that = this;
+  var that = this;
 
   function log(event) {
     function repeat(string, n) {
-       let result = '', i;
+       var result = "", i;
 
        for (i = 0; i < n; i++) {
          result += string;
@@ -207,207 +207,207 @@ peg$DefaultTracer.prototype.trace = function(event) {
     }
 
     function pad(string, length) {
-      return string + repeat(' ', length - string.length);
+      return string + repeat(" ", length - string.length);
     }
 
-    if (typeof console === 'object') {
+    if (typeof console === "object") {
       console.log(
-        event.location.start.line + ':' + event.location.start.column + '-'
-          + event.location.end.line + ':' + event.location.end.column + ' '
-          + pad(event.type, 10) + ' '
-          + repeat('  ', that.indentLevel) + event.rule
+        event.location.start.line + ":" + event.location.start.column + "-"
+          + event.location.end.line + ":" + event.location.end.column + " "
+          + pad(event.type, 10) + " "
+          + repeat("  ", that.indentLevel) + event.rule
       );
     }
   }
 
   switch (event.type) {
-    case 'rule.enter':
+    case "rule.enter":
       log(event);
       this.indentLevel++;
       break;
 
-    case 'rule.match':
+    case "rule.match":
       this.indentLevel--;
       log(event);
       break;
 
-    case 'rule.fail':
+    case "rule.fail":
       this.indentLevel--;
       log(event);
       break;
 
     default:
-      throw new Error('Invalid event type: ' + event.type + '.');
+      throw new Error("Invalid event type: " + event.type + ".");
   }
 };
 
 function peg$parse(input, options) {
   options = options !== undefined ? options : {};
 
-  const peg$FAILED = {};
-  const peg$source = options.grammarSource;
+  var peg$FAILED = {};
+  var peg$source = options.grammarSource;
 
-  const peg$startRuleFunctions = { Start: peg$parseStart };
-  let peg$startRuleFunction = peg$parseStart;
+  var peg$startRuleFunctions = { Start: peg$parseStart };
+  var peg$startRuleFunction = peg$parseStart;
 
-  const peg$c0 = '>>';
-  const peg$c1 = '\n';
-  const peg$c2 = '{{';
-  const peg$c3 = '}}';
-  const peg$c4 = '$';
-  const peg$c5 = 'HOMEPATH';
-  const peg$c6 = '~';
-  const peg$c7 = 'PROJECTPATH';
-  const peg$c8 = '.';
-  const peg$c9 = '[';
-  const peg$c10 = ']';
-  const peg$c11 = '"';
-  const peg$c12 = '\\\\';
-  const peg$c13 = '\'';
-  const peg$c14 = '`';
-  const peg$c15 = ']]';
-  const peg$c16 = '[[';
-  const peg$c17 = '@';
-  const peg$c18 = '(';
-  const peg$c19 = ')';
-  const peg$c20 = ',';
-  const peg$c21 = 'run';
-  const peg$c22 = 'import';
-  const peg$c23 = 'from';
-  const peg$c24 = '*';
-  const peg$c25 = 'as';
-  const peg$c26 = 'embed';
-  const peg$c27 = '{';
-  const peg$c28 = '}';
-  const peg$c29 = '#';
-  const peg$c30 = 'under';
-  const peg$c31 = 'define';
-  const peg$c32 = '=';
-  const peg$c33 = 'risk.high';
-  const peg$c34 = 'risk.med';
-  const peg$c35 = 'risk.low';
-  const peg$c36 = 'risk';
-  const peg$c37 = 'about';
-  const peg$c38 = 'meta';
-  const peg$c39 = '@run';
-  const peg$c40 = 'data';
-  const peg$c41 = ':';
-  const peg$c42 = '@embed';
-  const peg$c43 = '@call';
-  const peg$c44 = '-';
-  const peg$c45 = 'true';
-  const peg$c46 = 'false';
-  const peg$c47 = 'null';
-  const peg$c48 = 'text';
-  const peg$c49 = 'path';
-  const peg$c50 = 'var';
-  const peg$c51 = '\r\n';
+  var peg$c0 = ">>";
+  var peg$c1 = "\n";
+  var peg$c2 = "{{";
+  var peg$c3 = "}}";
+  var peg$c4 = "$";
+  var peg$c5 = "HOMEPATH";
+  var peg$c6 = "~";
+  var peg$c7 = "PROJECTPATH";
+  var peg$c8 = ".";
+  var peg$c9 = "[";
+  var peg$c10 = "]";
+  var peg$c11 = "\"";
+  var peg$c12 = "\\\\";
+  var peg$c13 = "'";
+  var peg$c14 = "`";
+  var peg$c15 = "]]";
+  var peg$c16 = "[[";
+  var peg$c17 = "@";
+  var peg$c18 = "(";
+  var peg$c19 = ")";
+  var peg$c20 = ",";
+  var peg$c21 = "run";
+  var peg$c22 = "import";
+  var peg$c23 = "from";
+  var peg$c24 = "*";
+  var peg$c25 = "as";
+  var peg$c26 = "embed";
+  var peg$c27 = "{";
+  var peg$c28 = "}";
+  var peg$c29 = "#";
+  var peg$c30 = "under";
+  var peg$c31 = "define";
+  var peg$c32 = "=";
+  var peg$c33 = "risk.high";
+  var peg$c34 = "risk.med";
+  var peg$c35 = "risk.low";
+  var peg$c36 = "risk";
+  var peg$c37 = "about";
+  var peg$c38 = "meta";
+  var peg$c39 = "@run";
+  var peg$c40 = "data";
+  var peg$c41 = ":";
+  var peg$c42 = "@embed";
+  var peg$c43 = "@call";
+  var peg$c44 = "-";
+  var peg$c45 = "true";
+  var peg$c46 = "false";
+  var peg$c47 = "null";
+  var peg$c48 = "text";
+  var peg$c49 = "path";
+  var peg$c50 = "var";
+  var peg$c51 = "\r\n";
 
-  const peg$r0 = /^[ ]/;
-  const peg$r1 = /^[^\n]/;
-  const peg$r2 = /^[ \t\r\n]/;
-  const peg$r3 = /^[[\]{}]/;
-  const peg$r4 = /^[0-9]/;
-  const peg$r5 = /^[),]/;
-  const peg$r6 = /^[a-zA-Z_]/;
-  const peg$r7 = /^[a-zA-Z0-9_]/;
-  const peg$r8 = /^[^`\r\n]/;
-  const peg$r9 = /^[\r\u2028-\u2029]/;
+  var peg$r0 = /^[ ]/;
+  var peg$r1 = /^[^\n]/;
+  var peg$r2 = /^[ \t\r\n]/;
+  var peg$r3 = /^[[\]{}]/;
+  var peg$r4 = /^[0-9]/;
+  var peg$r5 = /^[),]/;
+  var peg$r6 = /^[a-zA-Z_]/;
+  var peg$r7 = /^[a-zA-Z0-9_]/;
+  var peg$r8 = /^[^`\r\n]/;
+  var peg$r9 = /^[\r\u2028-\u2029]/;
 
-  const peg$e0 = peg$literalExpectation('>>', false);
-  const peg$e1 = peg$classExpectation([' '], false, false);
-  const peg$e2 = peg$classExpectation(['\n'], true, false);
-  const peg$e3 = peg$literalExpectation('\n', false);
-  const peg$e4 = peg$otherExpectation('whitespace');
-  const peg$e5 = peg$classExpectation([' ', '\t', '\r', '\n'], false, false);
-  const peg$e6 = peg$otherExpectation('mandatory whitespace');
-  const peg$e7 = peg$literalExpectation('{{', false);
-  const peg$e8 = peg$literalExpectation('}}', false);
-  const peg$e9 = peg$classExpectation(['[', ']', '{', '}'], false, false);
-  const peg$e10 = peg$anyExpectation();
-  const peg$e11 = peg$literalExpectation('$', false);
-  const peg$e12 = peg$literalExpectation('HOMEPATH', false);
-  const peg$e13 = peg$literalExpectation('~', false);
-  const peg$e14 = peg$literalExpectation('PROJECTPATH', false);
-  const peg$e15 = peg$literalExpectation('.', false);
-  const peg$e16 = peg$classExpectation([['0', '9']], false, false);
-  const peg$e17 = peg$literalExpectation('[', false);
-  const peg$e18 = peg$literalExpectation(']', false);
-  const peg$e19 = peg$literalExpectation('"', false);
-  const peg$e20 = peg$literalExpectation('\\\\', false);
-  const peg$e21 = peg$literalExpectation('\'', false);
-  const peg$e22 = peg$literalExpectation('`', false);
-  const peg$e23 = peg$literalExpectation(']]', false);
-  const peg$e24 = peg$otherExpectation('String literal with potential variable interpolation');
-  const peg$e25 = peg$otherExpectation('Multiline template with potential variable interpolation');
-  const peg$e26 = peg$literalExpectation('[[', false);
-  const peg$e27 = peg$literalExpectation('@', false);
-  const peg$e28 = peg$literalExpectation('(', false);
-  const peg$e29 = peg$literalExpectation(')', false);
-  const peg$e30 = peg$literalExpectation(',', false);
-  const peg$e31 = peg$classExpectation([')', ','], false, false);
-  const peg$e32 = peg$literalExpectation('run', false);
-  const peg$e33 = peg$literalExpectation('import', false);
-  const peg$e34 = peg$literalExpectation('from', false);
-  const peg$e35 = peg$literalExpectation('*', false);
-  const peg$e36 = peg$literalExpectation('as', false);
-  const peg$e37 = peg$literalExpectation('embed', false);
-  const peg$e38 = peg$literalExpectation('{', false);
-  const peg$e39 = peg$literalExpectation('}', false);
-  const peg$e40 = peg$literalExpectation('#', false);
-  const peg$e41 = peg$literalExpectation('under', false);
-  const peg$e42 = peg$literalExpectation('define', false);
-  const peg$e43 = peg$literalExpectation('=', false);
-  const peg$e44 = peg$literalExpectation('risk.high', false);
-  const peg$e45 = peg$literalExpectation('risk.med', false);
-  const peg$e46 = peg$literalExpectation('risk.low', false);
-  const peg$e47 = peg$literalExpectation('risk', false);
-  const peg$e48 = peg$literalExpectation('about', false);
-  const peg$e49 = peg$literalExpectation('meta', false);
-  const peg$e50 = peg$literalExpectation('@run', false);
-  const peg$e51 = peg$classExpectation([['a', 'z'], ['A', 'Z'], '_'], false, false);
-  const peg$e52 = peg$classExpectation([['a', 'z'], ['A', 'Z'], ['0', '9'], '_'], false, false);
-  const peg$e53 = peg$literalExpectation('data', false);
-  const peg$e54 = peg$literalExpectation(':', false);
-  const peg$e55 = peg$literalExpectation('@embed', false);
-  const peg$e56 = peg$literalExpectation('@call', false);
-  const peg$e57 = peg$literalExpectation('-', false);
-  const peg$e58 = peg$literalExpectation('true', false);
-  const peg$e59 = peg$literalExpectation('false', false);
-  const peg$e60 = peg$literalExpectation('null', false);
-  const peg$e61 = peg$literalExpectation('text', false);
-  const peg$e62 = peg$literalExpectation('path', false);
-  const peg$e63 = peg$literalExpectation('var', false);
-  const peg$e64 = peg$classExpectation(['`', '\r', '\n'], true, false);
-  const peg$e65 = peg$literalExpectation('\r\n', false);
-  const peg$e66 = peg$classExpectation(['\r', ['\u2028', '\u2029']], false, false);
+  var peg$e0 = peg$literalExpectation(">>", false);
+  var peg$e1 = peg$classExpectation([" "], false, false);
+  var peg$e2 = peg$classExpectation(["\n"], true, false);
+  var peg$e3 = peg$literalExpectation("\n", false);
+  var peg$e4 = peg$otherExpectation("whitespace");
+  var peg$e5 = peg$classExpectation([" ", "\t", "\r", "\n"], false, false);
+  var peg$e6 = peg$otherExpectation("mandatory whitespace");
+  var peg$e7 = peg$literalExpectation("{{", false);
+  var peg$e8 = peg$literalExpectation("}}", false);
+  var peg$e9 = peg$classExpectation(["[", "]", "{", "}"], false, false);
+  var peg$e10 = peg$anyExpectation();
+  var peg$e11 = peg$literalExpectation("$", false);
+  var peg$e12 = peg$literalExpectation("HOMEPATH", false);
+  var peg$e13 = peg$literalExpectation("~", false);
+  var peg$e14 = peg$literalExpectation("PROJECTPATH", false);
+  var peg$e15 = peg$literalExpectation(".", false);
+  var peg$e16 = peg$classExpectation([["0", "9"]], false, false);
+  var peg$e17 = peg$literalExpectation("[", false);
+  var peg$e18 = peg$literalExpectation("]", false);
+  var peg$e19 = peg$literalExpectation("\"", false);
+  var peg$e20 = peg$literalExpectation("\\\\", false);
+  var peg$e21 = peg$literalExpectation("'", false);
+  var peg$e22 = peg$literalExpectation("`", false);
+  var peg$e23 = peg$literalExpectation("]]", false);
+  var peg$e24 = peg$otherExpectation("String literal with potential variable interpolation");
+  var peg$e25 = peg$otherExpectation("Multiline template with potential variable interpolation");
+  var peg$e26 = peg$literalExpectation("[[", false);
+  var peg$e27 = peg$literalExpectation("@", false);
+  var peg$e28 = peg$literalExpectation("(", false);
+  var peg$e29 = peg$literalExpectation(")", false);
+  var peg$e30 = peg$literalExpectation(",", false);
+  var peg$e31 = peg$classExpectation([")", ","], false, false);
+  var peg$e32 = peg$literalExpectation("run", false);
+  var peg$e33 = peg$literalExpectation("import", false);
+  var peg$e34 = peg$literalExpectation("from", false);
+  var peg$e35 = peg$literalExpectation("*", false);
+  var peg$e36 = peg$literalExpectation("as", false);
+  var peg$e37 = peg$literalExpectation("embed", false);
+  var peg$e38 = peg$literalExpectation("{", false);
+  var peg$e39 = peg$literalExpectation("}", false);
+  var peg$e40 = peg$literalExpectation("#", false);
+  var peg$e41 = peg$literalExpectation("under", false);
+  var peg$e42 = peg$literalExpectation("define", false);
+  var peg$e43 = peg$literalExpectation("=", false);
+  var peg$e44 = peg$literalExpectation("risk.high", false);
+  var peg$e45 = peg$literalExpectation("risk.med", false);
+  var peg$e46 = peg$literalExpectation("risk.low", false);
+  var peg$e47 = peg$literalExpectation("risk", false);
+  var peg$e48 = peg$literalExpectation("about", false);
+  var peg$e49 = peg$literalExpectation("meta", false);
+  var peg$e50 = peg$literalExpectation("@run", false);
+  var peg$e51 = peg$classExpectation([["a", "z"], ["A", "Z"], "_"], false, false);
+  var peg$e52 = peg$classExpectation([["a", "z"], ["A", "Z"], ["0", "9"], "_"], false, false);
+  var peg$e53 = peg$literalExpectation("data", false);
+  var peg$e54 = peg$literalExpectation(":", false);
+  var peg$e55 = peg$literalExpectation("@embed", false);
+  var peg$e56 = peg$literalExpectation("@call", false);
+  var peg$e57 = peg$literalExpectation("-", false);
+  var peg$e58 = peg$literalExpectation("true", false);
+  var peg$e59 = peg$literalExpectation("false", false);
+  var peg$e60 = peg$literalExpectation("null", false);
+  var peg$e61 = peg$literalExpectation("text", false);
+  var peg$e62 = peg$literalExpectation("path", false);
+  var peg$e63 = peg$literalExpectation("var", false);
+  var peg$e64 = peg$classExpectation(["`", "\r", "\n"], true, false);
+  var peg$e65 = peg$literalExpectation("\r\n", false);
+  var peg$e66 = peg$classExpectation(["\r", ["\u2028", "\u2029"]], false, false);
 
-  const peg$f0 = function(nodes) {
+  var peg$f0 = function(nodes) {
     return nodes;
   };
-  const peg$f1 = function() { 
+  var peg$f1 = function() { 
       // Only match comments at line start
       const pos = offset();
       const isAtLineStart = helpers.isLineStart(input, pos);
-      helpers.debug('LineStartComment check at pos', pos, 'isAtLineStart:', isAtLineStart);
+      helpers.debug("LineStartComment check at pos", pos, "isAtLineStart:", isAtLineStart);
       return isAtLineStart;
     };
-  const peg$f2 = function(content) {
-    helpers.debug('Creating comment node with content:', content);
+  var peg$f2 = function(content) {
+    helpers.debug("Creating comment node with content:", content);
     return helpers.createNode(NodeType.Comment, { content: content.trim() }, location());
   };
-  const peg$f3 = function(content) {
-    helpers.debug('Creating non-line-start comment node with content:', content);
+  var peg$f3 = function(content) {
+    helpers.debug("Creating non-line-start comment node with content:", content);
     return helpers.createNode(NodeType.Comment, { content: content.trim() }, location());
   };
-  const peg$f4 = function(chars) {
-    helpers.debug('Comment content chars:', chars.join(''));
+  var peg$f4 = function(chars) {
+    helpers.debug("Comment content chars:", chars.join(''));
     return chars.join('');
   };
-  const peg$f5 = function(first, rest) {
+  var peg$f5 = function(first, rest) {
     return helpers.createNode(NodeType.Text, { content: first + rest.join('') }, location());
   };
-  const peg$f6 = function() { 
+  var peg$f6 = function() { 
       // Only prevent @ directive interpretation at line start
       const pos = offset();
       const isAtLineStart = helpers.isLineStart(input, pos);
@@ -417,26 +417,26 @@ function peg$parse(input, options) {
       // Also prevent consuming >> at line start (for comments)
       const isComment = isAtLineStart && input.substr(pos, 2) === '>>';
       
-      helpers.debug('TextPart check at pos', pos, 'isAtLineStart:', isAtLineStart, 
-            'isDirective:', isDirective, 'isComment:', isComment);
+      helpers.debug("TextPart check at pos", pos, "isAtLineStart:", isAtLineStart, 
+            "isDirective:", isDirective, "isComment:", isComment);
       
       return isDirective || isComment;
     };
-  const peg$f7 = function(char) { return char; };
-  const peg$f8 = function(id, format) {
+  var peg$f7 = function(char) { return char; };
+  var peg$f8 = function(id, format) {
     return helpers.createVariableReferenceNode('text', {
       identifier: id,
       ...(format ? { format } : {})
     }, location());
   };
-  const peg$f9 = function(id, accessElements, format) {
+  var peg$f9 = function(id, accessElements, format) {
     return helpers.createVariableReferenceNode('data', {
       identifier: id,
       fields: accessElements || [],
       ...(format ? { format } : {})
     }, location());
   };
-  const peg$f10 = function(id) {
+  var peg$f10 = function(id) {
     // Check if the matched identifier is special
     const isSpecial = helpers.isSpecialPathIdentifier(id);
     return helpers.createVariableReferenceNode('path', {
@@ -444,75 +444,75 @@ function peg$parse(input, options) {
       isSpecial: isSpecial
     }, location());
   };
-  const peg$f11 = function() {
+  var peg$f11 = function() {
     return text();
   };
-  const peg$f12 = function(field) {
+  var peg$f12 = function(field) {
     return { type: 'field', value: field };
   };
-  const peg$f13 = function(index) {
+  var peg$f13 = function(index) {
     return { type: 'index', value: parseInt(index, 10) };
   };
-  const peg$f14 = function(digits) {
+  var peg$f14 = function(digits) {
     return digits.join('');
   };
-  const peg$f15 = function(index) {
+  var peg$f15 = function(index) {
     return { type: 'index', value: index };
   };
-  const peg$f16 = function(format) {
+  var peg$f16 = function(format) {
     return format;
   };
-  const peg$f17 = function(char) { return char; };
-  const peg$f18 = function(esc) { return '\\\\' + esc; };
-  const peg$f19 = function(chars) {
+  var peg$f17 = function(char) { return char; };
+  var peg$f18 = function(esc) { return '\\\\' + esc; };
+  var peg$f19 = function(chars) {
       return helpers.createNode('Text', { content: chars.join('') }, location());
     };
-  const peg$f20 = function(parts) {
+  var peg$f20 = function(parts) {
       // TODO: Add combineAdjacentTextNodes(parts) helper call here later?
       return parts;
     };
-  const peg$f21 = function(result) {
+  var peg$f21 = function(result) {
       return result || [];
     };
-  const peg$f22 = function(char) { return char; };
-  const peg$f23 = function(esc) { return '\\\\' + esc; };
-  const peg$f24 = function(chars) {
+  var peg$f22 = function(char) { return char; };
+  var peg$f23 = function(esc) { return '\\\\' + esc; };
+  var peg$f24 = function(chars) {
       return helpers.createNode('Text', { content: chars.join('') }, location());
     };
-  const peg$f25 = function(parts) {
+  var peg$f25 = function(parts) {
       return parts;
     };
-  const peg$f26 = function(result) {
+  var peg$f26 = function(result) {
       return result || [];
     };
-  const peg$f27 = function(char) { return char; };
-  const peg$f28 = function(esc) { return '\\\\' + esc; };
-  const peg$f29 = function(chars) {
+  var peg$f27 = function(char) { return char; };
+  var peg$f28 = function(esc) { return '\\\\' + esc; };
+  var peg$f29 = function(chars) {
       return helpers.createNode('Text', { content: chars.join('') }, location());
     };
-  const peg$f30 = function(parts) {
+  var peg$f30 = function(parts) {
       return parts;
     };
-  const peg$f31 = function(result) {
+  var peg$f31 = function(result) {
       return result || [];
     };
-  const peg$f32 = function(char) { return char; };
-  const peg$f33 = function(chars) {
+  var peg$f32 = function(char) { return char; };
+  var peg$f33 = function(chars) {
       return helpers.createNode(NodeType.Text, { content: chars.join('') }, location());
     };
-  const peg$f34 = function(parts) {
+  var peg$f34 = function(parts) {
       return parts;
     };
-  const peg$f35 = function(result) {
+  var peg$f35 = function(result) {
       return result || [];
     };
-  const peg$f36 = function(content) { return content; };
-  const peg$f37 = function(content) { return content; };
-  const peg$f38 = function(content) { return content; };
-  const peg$f39 = function(content) { return content; };
-  const peg$f40 = function(content, options) {
+  var peg$f36 = function(content) { return content; };
+  var peg$f37 = function(content) { return content; };
+  var peg$f38 = function(content) { return content; };
+  var peg$f39 = function(content) { return content; };
+  var peg$f40 = function(content, options) {
      // Multi-line template embed [[...]]
-     helpers.debug('EmbedRHS parsed multiline template: ', JSON.stringify(content));
+     helpers.debug("EmbedRHS parsed multiline template: ", JSON.stringify(content));
      return {
        subtype: 'embedTemplate',
        content: content, // Return the InterpolatableValue array
@@ -520,7 +520,7 @@ function peg$parse(input, options) {
        ...(options ? { options } : {})
      };
    };
-  const peg$f41 = function(variable, options) {
+  var peg$f41 = function(variable, options) {
      // Variable embed {{...}} or $...
      const variableText = variable.valueType === 'text'
        ? `{{${variable.identifier}}}`
@@ -560,10 +560,10 @@ function peg$parse(input, options) {
        };
      }
    };
-  const peg$f42 = function(content, options) {
+  var peg$f42 = function(content, options) {
      // Path embed [...]
      const rawPath = helpers.reconstructRawString(content);
-     helpers.debug('EmbedRHS reconstructed raw path from bracket content:', rawPath);
+     helpers.debug("EmbedRHS reconstructed raw path from bracket content:", rawPath);
 
      // Split raw path for section (section itself cannot be interpolated)
      const [pathPart, section] = rawPath.split('#').map(s => s.trim());
@@ -580,9 +580,9 @@ function peg$parse(input, options) {
      let finalPathObject = validationResult;
      if (finalPathObject && typeof finalPathObject === 'object') {
        finalPathObject.interpolatedValue = pathInterpolatedValue; // Attach possibly filtered array
-       helpers.debug('Attached interpolatedValue to path object in EmbedRHS');
+       helpers.debug("Attached interpolatedValue to path object in EmbedRHS");
      } else {
-       helpers.debug('Warning: validatePath did not return an object in EmbedRHS.');
+       helpers.debug("Warning: validatePath did not return an object in EmbedRHS.");
        finalPathObject = { raw: pathPart, structured: {}, interpolatedValue: pathInterpolatedValue };
      }
 
@@ -599,8 +599,8 @@ function peg$parse(input, options) {
        ...(options ? { options } : {})
      };
    };
-  const peg$f43 = function(cmdRef) {
-      helpers.debug('RunRHS parsing CommandReference:', cmdRef);
+  var peg$f43 = function(cmdRef) {
+      helpers.debug("RunRHS parsing CommandReference:", cmdRef);
       const commandObj = {
         raw: `$${cmdRef.name}${cmdRef.args.length > 0 ? `(${cmdRef.args.map(arg => {
           if (arg.type === 'string') return `\"${arg.value}\"`;
@@ -615,8 +615,8 @@ function peg$parse(input, options) {
         command: commandObj
       };
     };
-  const peg$f44 = function(lang, params, content) {
-      helpers.debug('RunRHS parsing Multi-line Run: Lang:', lang, 'Params:', params, 'Content:', JSON.stringify(content));
+  var peg$f44 = function(lang, params, content) {
+      helpers.debug("RunRHS parsing Multi-line Run: Lang:", lang, "Params:", params, "Content:", JSON.stringify(content));
       return {
         subtype: params ? 'runCodeParams' : 'runCode',
         command: content, // Return the InterpolatableValue array
@@ -625,39 +625,39 @@ function peg$parse(input, options) {
         isMultiLine: true
       };
     };
-  const peg$f45 = function(content) {
-      helpers.debug('RunRHS parsing bracket content:', JSON.stringify(content));
+  var peg$f45 = function(content) {
+      helpers.debug("RunRHS parsing bracket content:", JSON.stringify(content));
       return {
         subtype: 'runCommand',
         command: content // Return the InterpolatableValue array
       };
     };
-  const peg$f46 = function() { 
+  var peg$f46 = function() { 
        // Only match directive at line start
        const pos = offset();
        return helpers.isLineStart(input, pos);
      };
-  const peg$f47 = function(directive) { return directive; };
-  const peg$f48 = function(name, args) {
+  var peg$f47 = function(directive) { return directive; };
+  var peg$f48 = function(name, args) {
       return {
         name,
         args: args || [],
         isCommandReference: true
       };
     };
-  const peg$f49 = function(args) {
+  var peg$f49 = function(args) {
       return args || [];
     };
-  const peg$f50 = function(first, arg) { return arg; };
-  const peg$f51 = function(first, rest) {
+  var peg$f50 = function(first, arg) { return arg; };
+  var peg$f51 = function(first, rest) {
       return [first, ...rest];
     };
-  const peg$f52 = function(str) { return { type: 'string', value: str }; };
-  const peg$f53 = function(varRef) { return { type: 'variable', value: varRef }; };
-  const peg$f54 = function(chars) { return { type: 'raw', value: chars.join('').trim() }; };
-  const peg$f55 = function(char) { return char; };
-  const peg$f56 = function(runResult, header) {
-      helpers.debug('Standalone RunDirective parsed via RunRHS:', JSON.stringify(runResult));
+  var peg$f52 = function(str) { return { type: 'string', value: str }; };
+  var peg$f53 = function(varRef) { return { type: 'variable', value: varRef }; };
+  var peg$f54 = function(chars) { return { type: 'raw', value: chars.join('').trim() }; };
+  var peg$f55 = function(char) { return char; };
+  var peg$f56 = function(runResult, header) {
+      helpers.debug("Standalone RunDirective parsed via RunRHS:", JSON.stringify(runResult));
 
       // Create the final directive node using the result from RunRHS
       // _RunRHS already contains the subtype and specific data (command, lang, params, etc.)
@@ -669,7 +669,7 @@ function peg$parse(input, options) {
 
       return helpers.createDirective('run', directiveData, location());
     };
-  const peg$f57 = function(variable, header) { 
+  var peg$f57 = function(variable, header) { 
       // Handle direct variable embedding (without brackets)
       // This allows syntax like @run {{variable}} or @run {{data.field}}
       
@@ -694,16 +694,16 @@ function peg$parse(input, options) {
         ...(header ? { underHeader: header } : {})
       }, location());
     };
-  const peg$f58 = function(params) {
+  var peg$f58 = function(params) {
       return params || [];
     };
-  const peg$f59 = function(first, param) { return param; };
-  const peg$f60 = function(first, rest) {
+  var peg$f59 = function(first, param) { return param; };
+  var peg$f60 = function(first, rest) {
       return [first, ...rest];
     };
-  const peg$f61 = function(variable) { return variable; };
-  const peg$f62 = function(identifier) { return identifier; };
-  const peg$f63 = function(imports, content) {
+  var peg$f61 = function(variable) { return variable; };
+  var peg$f62 = function(identifier) { return identifier; };
+  var peg$f63 = function(imports, content) {
       // Check if this is a path variable
       const isPathVar = typeof content === 'string' && 
         content.startsWith('$') && 
@@ -713,7 +713,7 @@ function peg$parse(input, options) {
         !content.startsWith('$.') &&
         content.match(/^\$[a-z][a-zA-Z0-9_]*/);
       
-      helpers.debug('ImportDirective isPathVar:', isPathVar, 'for path:', content);
+      helpers.debug("ImportDirective isPathVar:", isPathVar, "for path:", content);
       
       // Always validate the path
       const validatedPath = helpers.validatePath(content);
@@ -730,7 +730,7 @@ function peg$parse(input, options) {
         imports: imports
       }, location());
     };
-  const peg$f64 = function(imports, variable) {
+  var peg$f64 = function(imports, variable) {
       // Get the variable text directly from the variable node
       const variableText = variable.valueType === 'text' 
         ? `{{${variable.identifier}}}` 
@@ -762,7 +762,7 @@ function peg$parse(input, options) {
         imports: imports
       }, location());
     };
-  const peg$f65 = function(content) {
+  var peg$f65 = function(content) {
       // Check if this is a path variable
       const isPathVar = typeof content === 'string' && 
         content.startsWith('$') && 
@@ -772,7 +772,7 @@ function peg$parse(input, options) {
         !content.startsWith('$.') &&
         content.match(/^\$[a-z][a-zA-Z0-9_]*/);
       
-      helpers.debug('ImportDirective isPathVar:', isPathVar, 'for path:', content);
+      helpers.debug("ImportDirective isPathVar:", isPathVar, "for path:", content);
       
       // Always validate the path
       const validatedPath = helpers.validatePath(content);
@@ -782,7 +782,7 @@ function peg$parse(input, options) {
         validatedPath.isPathVariable = true;
       }
       
-      const implicitImports = [{name: '*', alias: null}];
+      const implicitImports = [{name: "*", alias: null}];
       // Return the validated path and subtype
       return helpers.createDirective('import', {
         subtype: helpers.getImportSubtype(implicitImports), // Always importAll
@@ -790,7 +790,7 @@ function peg$parse(input, options) {
         imports: implicitImports
       }, location());
     };
-  const peg$f66 = function(variable) {
+  var peg$f66 = function(variable) {
       // Get the variable text directly from the variable node
       const variableText = variable.valueType === 'text' 
         ? `{{${variable.identifier}}}` 
@@ -815,7 +815,7 @@ function peg$parse(input, options) {
           validatedPath.isPathVariable = true;
       }
         
-      const implicitImports = [{name: '*', alias: null}];
+      const implicitImports = [{name: "*", alias: null}];
       // Return the validated path and subtype
       return helpers.createDirective('import', {
         subtype: helpers.getImportSubtype(implicitImports), // Always importAll
@@ -823,24 +823,24 @@ function peg$parse(input, options) {
         imports: implicitImports
       }, location());
     };
-  const peg$f67 = function() {
-      return [{name: '*', alias: null}];
+  var peg$f67 = function() {
+      return [{name: "*", alias: null}];
     };
-  const peg$f68 = function(first, item) { return item; };
-  const peg$f69 = function(first, rest) {
+  var peg$f68 = function(first, item) { return item; };
+  var peg$f69 = function(first, rest) {
       return [first, ...rest];
     };
-  const peg$f70 = function() {
+  var peg$f70 = function() {
       return [];
     };
-  const peg$f71 = function(name, alias) {
+  var peg$f71 = function(name, alias) {
       return {name, alias: alias || null};
     };
-  const peg$f72 = function(alias) {
+  var peg$f72 = function(alias) {
       return alias;
     };
-  const peg$f73 = function(embedResult, header, under) {
-      helpers.debug('Standalone EmbedDirective parsed via EmbedRHS:', JSON.stringify(embedResult));
+  var peg$f73 = function(embedResult, header, under) {
+      helpers.debug("Standalone EmbedDirective parsed via EmbedRHS:", JSON.stringify(embedResult));
 
       // Create the final directive node using the result from EmbedRHS
       // EmbedRHS already contains the subtype and specific data (path, content, etc.)
@@ -853,7 +853,7 @@ function peg$parse(input, options) {
 
       return helpers.createDirective('embed', directiveData, location());
     };
-  const peg$f74 = function(names, content, options, header, under) {
+  var peg$f74 = function(names, content, options, header, under) {
     const [path, section] = content.split('#').map(s => s.trim());
     
     // Validate that the content is a path
@@ -869,31 +869,31 @@ function peg$parse(input, options) {
       ...(under ? { underHeader: under } : {})
     }, location());
   };
-  const peg$f75 = function(first, id) { return id; };
-  const peg$f76 = function(first, rest) {
+  var peg$f75 = function(first, id) { return id; };
+  var peg$f76 = function(first, rest) {
     return [first, ...rest];
   };
-  const peg$f77 = function() { return []; };
-  const peg$f78 = function(level) {
+  var peg$f77 = function() { return []; };
+  var peg$f78 = function(level) {
     return level.length;
   };
-  const peg$f79 = function(header) {
+  var peg$f79 = function(header) {
     return header.trim();
   };
-  const peg$f80 = function(first, id) { return id; };
-  const peg$f81 = function(first, rest) {
+  var peg$f80 = function(first, id) { return id; };
+  var peg$f81 = function(first, rest) {
     return [first, ...rest];
   };
-  const peg$f82 = function(id, params, value) {
-    if (value.type === 'run') {
+  var peg$f82 = function(id, params, value) {
+    if (value.type === "run") {
       helpers.validateRunContent(value.value.command);
-    } else if (typeof value.value === 'string') {
+    } else if (typeof value.value === "string") {
       helpers.validateDefineContent(value.value);
     }
     
     // For define directives, we need to structure it differently
     // The command field should be at the top level
-    if (value.type === 'run') {
+    if (value.type === "run") {
       return helpers.createDirective('define', {
         name: id.name,
         ...(id.field ? { field: id.field } : {}),
@@ -909,69 +909,69 @@ function peg$parse(input, options) {
       }, location());
     }
   };
-  const peg$f83 = function(name, field) {
+  var peg$f83 = function(name, field) {
     return { name, ...(field ? { field } : {}) };
   };
-  const peg$f84 = function(field) {
+  var peg$f84 = function(field) {
     return field;
   };
-  const peg$f85 = function(params) {
+  var peg$f85 = function(params) {
     return params;
   };
-  const peg$f86 = function(runResult) {
-      helpers.debug('DefineValue parsed @run via RunRHS:', JSON.stringify(runResult));
+  var peg$f86 = function(runResult) {
+      helpers.debug("DefineValue parsed @run via RunRHS:", JSON.stringify(runResult));
       return {
-        type: 'run',
+        type: "run",
         value: runResult
       };
     };
-  const peg$f87 = function(value) {
+  var peg$f87 = function(value) {
     return {
-      type: 'string',
+      type: "string",
       value
     };
   };
-  const peg$f88 = function(content) {
-    helpers.debug('DirectiveContent parsed:', content);
+  var peg$f88 = function(content) {
+    helpers.debug("DirectiveContent parsed:", content);
     return content;
   };
-  const peg$f89 = function(chars) {
+  var peg$f89 = function(chars) {
     return chars.join('');
   };
-  const peg$f90 = function(char) { return char; };
-  const peg$f91 = function(chars) { return '"' + chars + '"'; };
-  const peg$f92 = function(chars) { return '\'' + chars + '\''; };
-  const peg$f93 = function(chars) { return '`' + chars + '`'; };
-  const peg$f94 = function(char) { return char; };
-  const peg$f95 = function(chars) { return chars.join(''); };
-  const peg$f96 = function(char) { return char; };
-  const peg$f97 = function(chars) { return chars.join(''); };
-  const peg$f98 = function(char) { return char; };
-  const peg$f99 = function(chars) { return chars.join(''); };
-  const peg$f100 = function(content) {
-    return '[' + content + ']';
+  var peg$f90 = function(char) { return char; };
+  var peg$f91 = function(chars) { return '"' + chars + '"'; };
+  var peg$f92 = function(chars) { return "'" + chars + "'"; };
+  var peg$f93 = function(chars) { return "`" + chars + "`"; };
+  var peg$f94 = function(char) { return char; };
+  var peg$f95 = function(chars) { return chars.join(''); };
+  var peg$f96 = function(char) { return char; };
+  var peg$f97 = function(chars) { return chars.join(''); };
+  var peg$f98 = function(char) { return char; };
+  var peg$f99 = function(chars) { return chars.join(''); };
+  var peg$f100 = function(content) {
+    return "[" + content + "]";
   };
-  const peg$f101 = function(chars) { return chars.join(''); };
-  const peg$f102 = function(options) {
+  var peg$f101 = function(chars) { return chars.join(''); };
+  var peg$f102 = function(options) {
     return options.reduce((acc, opt) => ({ ...acc, ...opt }), {});
   };
-  const peg$f103 = function(key, value) {
+  var peg$f103 = function(key, value) {
     return { [key]: value };
   };
-  const peg$f104 = function(first, rest) {
+  var peg$f104 = function(first, rest) {
     return first + rest.join('');
   };
-  const peg$f105 = function(char) { return char; };
-  const peg$f106 = function(chars) { return chars.join(''); };
-  const peg$f107 = function(char) { return char; };
-  const peg$f108 = function(chars) { return chars.join(''); };
-  const peg$f109 = function(char) { return char; };
-  const peg$f110 = function(chars) { return chars.join(''); };
-  const peg$f111 = function(char) { return char; };
-  const peg$f112 = function(content) { 
+  var peg$f105 = function(char) { return char; };
+  var peg$f106 = function(chars) { return chars.join(''); };
+  var peg$f107 = function(char) { return char; };
+  var peg$f108 = function(chars) { return chars.join(''); };
+  var peg$f109 = function(char) { return char; };
+  var peg$f110 = function(chars) { return chars.join(''); };
+  var peg$f111 = function(char) { return char; };
+  var peg$f112 = function(content) { 
       return content.join(''); 
     };
-  const peg$f113 = function(id, schema, value) {
+  var peg$f113 = function(id, schema, value) {
     // No longer check for specific inputs or callerInfo here
     
     // Always create the directive using the parsed value
@@ -979,152 +979,152 @@ function peg$parse(input, options) {
       identifier: id,
       ...(schema ? { schema } : {}),
       source: value.source,
-      ...(value.source === 'embed' ? { embed: value.value } :
-          value.source === 'run' ? { run: value.value } :
-          value.source === 'call' ? { call: value.value } :
+      ...(value.source === "embed" ? { embed: value.value } :
+          value.source === "run" ? { run: value.value } :
+          value.source === "call" ? { call: value.value } :
           { value: value.value }) // Pass literal value directly
     }, location());
   };
-  const peg$f114 = function(schema) { return schema; };
-  const peg$f115 = function(embedResult) {
-      helpers.debug('DataValue parsed @embed via EmbedRHS:', JSON.stringify(embedResult));
+  var peg$f114 = function(schema) { return schema; };
+  var peg$f115 = function(embedResult) {
+      helpers.debug("DataValue parsed @embed via EmbedRHS:", JSON.stringify(embedResult));
       return {
-        source: 'embed',
+        source: "embed",
         embed: embedResult // EmbedRHS already returns the structured { subtype, ... }
       };
     };
-  const peg$f116 = function(runResult) {
-      helpers.debug('DataValue parsed @run via RunRHS:', JSON.stringify(runResult));
+  var peg$f116 = function(runResult) {
+      helpers.debug("DataValue parsed @run via RunRHS:", JSON.stringify(runResult));
       return {
-        source: 'run',
+        source: "run",
         run: runResult // RunRHS already returns the structured { subtype, ... }
       };
     };
-  const peg$f117 = function(api, method, content) {
+  var peg$f117 = function(api, method, content) {
     return {
-      source: 'call',
+      source: "call",
       value: {
-        kind: 'call',
+        kind: "call",
         api,
         method,
         path: content
       }
     };
   };
-  const peg$f118 = function(value) {
+  var peg$f118 = function(value) {
     return {
-      source: 'literal',
+      source: "literal",
       value
     };
   };
-  const peg$f119 = function(value) {
+  var peg$f119 = function(value) {
     return {
-      source: 'literal',
+      source: "literal",
       value
     };
   };
-  const peg$f120 = function(props) {
+  var peg$f120 = function(props) {
     return props ? Object.fromEntries(props) : {};
   };
-  const peg$f121 = function(props) {
+  var peg$f121 = function(props) {
     return props ? Object.fromEntries(props) : {};
   };
-  const peg$f122 = function(first, p) { return p; };
-  const peg$f123 = function(first, rest) {
+  var peg$f122 = function(first, p) { return p; };
+  var peg$f123 = function(first, rest) {
     return [first, ...rest];
   };
-  const peg$f124 = function(key, value) {
+  var peg$f124 = function(key, value) {
     return [key, value];
   };
-  const peg$f125 = function(id) { return id; };
-  const peg$f126 = function(str) { return str; };
-  const peg$f127 = function(varExpr) { return text(); };
-  const peg$f128 = function(content) {
+  var peg$f125 = function(id) { return id; };
+  var peg$f126 = function(str) { return str; };
+  var peg$f127 = function(varExpr) { return text(); };
+  var peg$f128 = function(content) {
     return {
-      kind: 'embed',
+      kind: "embed",
       path: content
     };
   };
-  const peg$f129 = function(content) {
+  var peg$f129 = function(content) {
     return {
-      kind: 'run',
+      kind: "run",
       command: content,
-      ...(content.startsWith('$') ? { isReference: true } : {})
+      ...(content.startsWith("$") ? { isReference: true } : {})
     };
   };
-  const peg$f130 = function(api, method, content) {
+  var peg$f130 = function(api, method, content) {
     return {
-      kind: 'call',
+      kind: "call",
       api,
       method,
       path: content
     };
   };
-  const peg$f131 = function(digits, decimal) {
-    return parseFloat((text().startsWith('-') ? '-' : '') + digits.join('') + (decimal ? decimal[0] + decimal[1].join('') : ''));
+  var peg$f131 = function(digits, decimal) {
+    return parseFloat((text().startsWith("-") ? "-" : "") + digits.join('') + (decimal ? decimal[0] + decimal[1].join('') : ''));
   };
-  const peg$f132 = function() { return true; };
-  const peg$f133 = function() { return false; };
-  const peg$f134 = function() { return null; };
-  const peg$f135 = function(items) {
+  var peg$f132 = function() { return true; };
+  var peg$f133 = function() { return false; };
+  var peg$f134 = function() { return null; };
+  var peg$f135 = function(items) {
     return items || [];
   };
-  const peg$f136 = function(items) {
+  var peg$f136 = function(items) {
     return items || [];
   };
-  const peg$f137 = function(first, v) { return v; };
-  const peg$f138 = function(first, rest, trailingComma) {
+  var peg$f137 = function(first, v) { return v; };
+  var peg$f138 = function(first, rest, trailingComma) {
     return [first, ...rest];
   };
-  const peg$f139 = function(id, value) {
+  var peg$f139 = function(id, value) {
     return helpers.createDirective('text', {
       identifier: id,
       source: value.source,
-      ...(value.source === 'embed' ? { embed: value.embed } :
-          value.source === 'run' ? { run: value.run } :
-          value.source === 'call' ? { call: value.value } :
+      ...(value.source === "embed" ? { embed: value.embed } :
+          value.source === "run" ? { run: value.run } :
+          value.source === "call" ? { call: value.value } :
           { value: value.value })
     }, location());
   };
-  const peg$f140 = function(embedResult) {
-      helpers.debug('TextValue parsed @embed via EmbedRHS:', JSON.stringify(embedResult));
+  var peg$f140 = function(embedResult) {
+      helpers.debug("TextValue parsed @embed via EmbedRHS:", JSON.stringify(embedResult));
       return {
-        source: 'embed',
+        source: "embed",
         embed: embedResult // EmbedRHS already returns the structured { subtype, ... }
       };
     };
-  const peg$f141 = function(runResult) {
-      helpers.debug('TextValue parsed @run via RunRHS:', JSON.stringify(runResult));
+  var peg$f141 = function(runResult) {
+      helpers.debug("TextValue parsed @run via RunRHS:", JSON.stringify(runResult));
       return {
-        source: 'run',
+        source: "run",
         run: runResult // RunRHS already returns the structured { subtype, ... }
       };
     };
-  const peg$f142 = function(api, method, content) {
+  var peg$f142 = function(api, method, content) {
     return {
-      source: 'call',
+      source: "call",
       value: {
-        kind: 'call',
+        kind: "call",
         api,
         method,
         path: content
       }
     };
   };
-  const peg$f143 = function(value) {
+  var peg$f143 = function(value) {
     return {
-      source: 'literal',
+      source: "literal",
       value
     };
   };
-  const peg$f144 = function(value) {
+  var peg$f144 = function(value) {
     return {
-      source: 'literal',
+      source: "literal",
       value
     };
   };
-  const peg$f145 = function(id, pv) {
-        helpers.debug('PathDirective parsed PathVar:', pv);
+  var peg$f145 = function(id, pv) {
+        helpers.debug("PathDirective parsed PathVar:", pv);
         const pathObject = helpers.validatePath(pv.identifier, { context: 'pathDirective' });
         // Attach the original PathVar node
         if (pathObject && typeof pathObject === 'object') {
@@ -1136,25 +1136,25 @@ function peg$parse(input, options) {
         }
         return { identifier: id, path: pathObject };
       };
-  const peg$f146 = function(id, interpolatedArray) {
-        helpers.debug('PathDirective parsed InterpolatedStringLiteral:', interpolatedArray);
+  var peg$f146 = function(id, interpolatedArray) {
+        helpers.debug("PathDirective parsed InterpolatedStringLiteral:", interpolatedArray);
         const rawString = helpers.reconstructRawString(interpolatedArray);
-        helpers.debug('PathDirective reconstructed raw string:', rawString);
+        helpers.debug("PathDirective reconstructed raw string:", rawString);
         const pathObject = helpers.validatePath(rawString, { context: 'pathDirective' });
         // Attach the original interpolated array
         if (pathObject && typeof pathObject === 'object') {
           pathObject.interpolatedValue = interpolatedArray;
-          helpers.debug('Attached interpolatedValue to path object in PathDirective');
+          helpers.debug("Attached interpolatedValue to path object in PathDirective");
         } else {
           // Handle case where validatePath didn't return an object
-          helpers.debug('Warning: validatePath did not return an object in PathDirective.');
+          helpers.debug("Warning: validatePath did not return an object in PathDirective.");
           // Return a basic structure if validation fails to provide context
           return { identifier: id, path: { raw: rawString, structured: {}, interpolatedValue: interpolatedArray } };
         }
         return { identifier: id, path: pathObject };
       };
-  const peg$f147 = function(id, rhs) { return helpers.createDirective('path', rhs, location()); };
-  const peg$f148 = function(id, value) {
+  var peg$f147 = function(id, rhs) { return helpers.createDirective('path', rhs, location()); };
+  var peg$f148 = function(id, value) {
     return helpers.createDirective('var', {
       identifier: id,
       value: {
@@ -1168,16 +1168,16 @@ function peg$parse(input, options) {
       }
     }, location());
   };
-  const peg$f149 = function(opener, lang) { return true; };
-  const peg$f150 = function(opener, lang, closer) {
+  var peg$f149 = function(opener, lang) { return true; };
+  var peg$f150 = function(opener, lang, closer) {
       return closer.length === opener.length;  // Only match exact length
     };
-  const peg$f151 = function(opener, lang, c) { return c; };
-  const peg$f152 = function(opener, lang, content, closer) {
+  var peg$f151 = function(opener, lang, c) { return c; };
+  var peg$f152 = function(opener, lang, content, closer) {
       // Fail if the closer doesn't match the opener
       return closer.length !== opener.length;
     };
-  const peg$f153 = function(opener, lang, content, closer) {
+  var peg$f153 = function(opener, lang, content, closer) {
       const rawContent = content.join('');
       // Default to true unless explicitly set to false
       const preserveCodeFences = options?.preserveCodeFences !== false;
@@ -1189,17 +1189,17 @@ function peg$parse(input, options) {
         content: finalContent
       }, location());
     };
-  const peg$f154 = function(backticks) {
+  var peg$f154 = function(backticks) {
     return backticks.length >= 3 && backticks.length <= 5;
   };
-  const peg$f155 = function(backticks) { 
+  var peg$f155 = function(backticks) { 
     return backticks;
   };
-  const peg$f156 = function(chars) { return chars.join(''); };
-  const peg$f157 = function(interpolatedArray) { // Changed from str:StringLiteral
+  var peg$f156 = function(chars) { return chars.join(''); };
+  var peg$f157 = function(interpolatedArray) { // Changed from str:StringLiteral
       // Reconstruct the raw string from the array of nodes
       const rawString = helpers.reconstructRawString(interpolatedArray);
-      helpers.debug('PathValue reconstructed raw string:', rawString, 'from array:', JSON.stringify(interpolatedArray));
+      helpers.debug("PathValue reconstructed raw string:", rawString, "from array:", JSON.stringify(interpolatedArray));
 
       // Get the validated path from validatePath, passing context
       const validationResult = helpers.validatePath(rawString, { context: 'pathDirective' });
@@ -1208,17 +1208,17 @@ function peg$parse(input, options) {
       // Ensure validationResult is an object before attaching
       if (validationResult && typeof validationResult === 'object') {
         validationResult.interpolatedValue = interpolatedArray;
-        helpers.debug('Attached interpolatedValue to validationResult');
+        helpers.debug("Attached interpolatedValue to validationResult");
       } else {
-        helpers.debug('Warning: validatePath did not return an object. Cannot attach interpolatedValue.');
+        helpers.debug("Warning: validatePath did not return an object. Cannot attach interpolatedValue.");
         // Consider how to handle this case - maybe wrap non-objects?
         // For now, just return the original result if it wasn't an object.
       }
 
       return validationResult;
     };
-  const peg$f158 = function(variable) { // Allow PathVariables directly
-    helpers.debug('PathValue parsed PathVar:', JSON.stringify(variable));
+  var peg$f158 = function(variable) { // Allow PathVariables directly
+    helpers.debug("PathValue parsed PathVar:", JSON.stringify(variable));
     // Return a structure consistent with validatePath for path variables
     return {
         raw: `$${variable.identifier}`,
@@ -1234,32 +1234,32 @@ function peg$parse(input, options) {
         // No interpolatedValue for a direct PathVar
       };
   };
-  const peg$f159 = function(char) { return char; };
-  const peg$f160 = function(chars) {
+  var peg$f159 = function(char) { return char; };
+  var peg$f160 = function(chars) {
       return helpers.createNode(NodeType.Text, { content: chars.join('') }, location());
     };
-  const peg$f161 = function(part) { return part; };
-  const peg$f162 = function(parts) { // Repeat the guarded part
+  var peg$f161 = function(part) { return part; };
+  var peg$f162 = function(parts) { // Repeat the guarded part
       // TODO: Add combineAdjacentTextNodes(parts) helper call here later?
       return parts;
     };
-  const peg$f163 = function(result) {
+  var peg$f163 = function(result) {
       return result || [];
     };
-  let peg$currPos = options.peg$currPos | 0;
-  let peg$savedPos = peg$currPos;
-  const peg$posDetailsCache = [{ line: 1, column: 1 }];
-  let peg$maxFailPos = peg$currPos;
-  let peg$maxFailExpected = options.peg$maxFailExpected || [];
-  let peg$silentFails = options.peg$silentFails | 0;
+  var peg$currPos = options.peg$currPos | 0;
+  var peg$savedPos = peg$currPos;
+  var peg$posDetailsCache = [{ line: 1, column: 1 }];
+  var peg$maxFailPos = peg$currPos;
+  var peg$maxFailExpected = options.peg$maxFailExpected || [];
+  var peg$silentFails = options.peg$silentFails | 0;
 
-  const peg$tracer = 'tracer' in options ? options.tracer : new peg$DefaultTracer();
+  var peg$tracer = "tracer" in options ? options.tracer : new peg$DefaultTracer();
 
-  let peg$result;
+  var peg$result;
 
   if (options.startRule) {
     if (!(options.startRule in peg$startRuleFunctions)) {
-      throw new Error('Can\'t start parsing from rule "' + options.startRule + '".');
+      throw new Error("Can't start parsing from rule \"" + options.startRule + "\".");
     }
 
     peg$startRuleFunction = peg$startRuleFunctions[options.startRule];
@@ -1306,28 +1306,28 @@ function peg$parse(input, options) {
   }
 
   function peg$literalExpectation(text, ignoreCase) {
-    return { type: 'literal', text: text, ignoreCase: ignoreCase };
+    return { type: "literal", text: text, ignoreCase: ignoreCase };
   }
 
   function peg$classExpectation(parts, inverted, ignoreCase) {
-    return { type: 'class', parts: parts, inverted: inverted, ignoreCase: ignoreCase };
+    return { type: "class", parts: parts, inverted: inverted, ignoreCase: ignoreCase };
   }
 
   function peg$anyExpectation() {
-    return { type: 'any' };
+    return { type: "any" };
   }
 
   function peg$endExpectation() {
-    return { type: 'end' };
+    return { type: "end" };
   }
 
   function peg$otherExpectation(description) {
-    return { type: 'other', description: description };
+    return { type: "other", description: description };
   }
 
   function peg$computePosDetails(pos) {
-    let details = peg$posDetailsCache[pos];
-    let p;
+    var details = peg$posDetailsCache[pos];
+    var p;
 
     if (details) {
       return details;
@@ -1363,10 +1363,10 @@ function peg$parse(input, options) {
   }
 
   function peg$computeLocation(startPos, endPos, offset) {
-    const startPosDetails = peg$computePosDetails(startPos);
-    const endPosDetails = peg$computePosDetails(endPos);
+    var startPosDetails = peg$computePosDetails(startPos);
+    var endPosDetails = peg$computePosDetails(endPos);
 
-    const res = {
+    var res = {
       source: peg$source,
       start: {
         offset: startPos,
@@ -1379,7 +1379,7 @@ function peg$parse(input, options) {
         column: endPosDetails.column
       }
     };
-    if (offset && peg$source && (typeof peg$source.offset === 'function')) {
+    if (offset && peg$source && (typeof peg$source.offset === "function")) {
       res.start = peg$source.offset(res.start);
       res.end = peg$source.offset(res.end);
     }
@@ -1411,12 +1411,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseStart() {
-    const startPos = peg$currPos;
-    let s0, s1, s2;
+    var startPos = peg$currPos;
+    var s0, s1, s2;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'Start',
+      type: "rule.enter",
+      rule: "Start",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -1463,15 +1463,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'Start',
+        type: "rule.match",
+        rule: "Start",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'Start',
+        type: "rule.fail",
+        rule: "Start",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -1480,12 +1480,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseLineStartComment() {
-    const startPos = peg$currPos;
-    let s0, s1, s2, s3, s4;
+    var startPos = peg$currPos;
+    var s0, s1, s2, s3, s4;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'LineStartComment',
+      type: "rule.enter",
+      rule: "LineStartComment",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -1532,15 +1532,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'LineStartComment',
+        type: "rule.match",
+        rule: "LineStartComment",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'LineStartComment',
+        type: "rule.fail",
+        rule: "LineStartComment",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -1549,12 +1549,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseComment() {
-    const startPos = peg$currPos;
-    let s0, s1, s2, s3;
+    var startPos = peg$currPos;
+    var s0, s1, s2, s3;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'Comment',
+      type: "rule.enter",
+      rule: "Comment",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -1589,15 +1589,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'Comment',
+        type: "rule.match",
+        rule: "Comment",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'Comment',
+        type: "rule.fail",
+        rule: "Comment",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -1606,12 +1606,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseCommentContent() {
-    const startPos = peg$currPos;
-    let s0, s1, s2;
+    var startPos = peg$currPos;
+    var s0, s1, s2;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'CommentContent',
+      type: "rule.enter",
+      rule: "CommentContent",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -1649,15 +1649,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'CommentContent',
+        type: "rule.match",
+        rule: "CommentContent",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'CommentContent',
+        type: "rule.fail",
+        rule: "CommentContent",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -1666,12 +1666,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parse_() {
-    const startPos = peg$currPos;
-    let s0, s1;
+    var startPos = peg$currPos;
+    var s0, s1;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: '_',
+      type: "rule.enter",
+      rule: "_",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -1700,15 +1700,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: '_',
+        type: "rule.match",
+        rule: "_",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: '_',
+        type: "rule.fail",
+        rule: "_",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -1717,12 +1717,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parse__() {
-    const startPos = peg$currPos;
-    let s0, s1;
+    var startPos = peg$currPos;
+    var s0, s1;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: '__',
+      type: "rule.enter",
+      rule: "__",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -1757,15 +1757,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: '__',
+        type: "rule.match",
+        rule: "__",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: '__',
+        type: "rule.fail",
+        rule: "__",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -1774,12 +1774,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseTextBlock() {
-    const startPos = peg$currPos;
-    let s0, s1, s2, s3;
+    var startPos = peg$currPos;
+    var s0, s1, s2, s3;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'TextBlock',
+      type: "rule.enter",
+      rule: "TextBlock",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -1801,15 +1801,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'TextBlock',
+        type: "rule.match",
+        rule: "TextBlock",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'TextBlock',
+        type: "rule.fail",
+        rule: "TextBlock",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -1818,12 +1818,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseTextPart() {
-    const startPos = peg$currPos;
-    let s0, s1, s2, s3;
+    var startPos = peg$currPos;
+    var s0, s1, s2, s3;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'TextPart',
+      type: "rule.enter",
+      rule: "TextPart",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -1899,15 +1899,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'TextPart',
+        type: "rule.match",
+        rule: "TextPart",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'TextPart',
+        type: "rule.fail",
+        rule: "TextPart",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -1916,12 +1916,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseVariable() {
-    const startPos = peg$currPos;
-    let s0;
+    var startPos = peg$currPos;
+    var s0;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'Variable',
+      type: "rule.enter",
+      rule: "Variable",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -1935,15 +1935,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'Variable',
+        type: "rule.match",
+        rule: "Variable",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'Variable',
+        type: "rule.fail",
+        rule: "Variable",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -1952,12 +1952,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseTextVar() {
-    const startPos = peg$currPos;
-    let s0, s1, s2, s3, s4, s5, s6, s7, s8;
+    var startPos = peg$currPos;
+    var s0, s1, s2, s3, s4, s5, s6, s7, s8;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'TextVar',
+      type: "rule.enter",
+      rule: "TextVar",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -2018,15 +2018,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'TextVar',
+        type: "rule.match",
+        rule: "TextVar",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'TextVar',
+        type: "rule.fail",
+        rule: "TextVar",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -2035,12 +2035,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseDataVar() {
-    const startPos = peg$currPos;
-    let s0, s1, s2, s3, s4, s5, s6, s7;
+    var startPos = peg$currPos;
+    var s0, s1, s2, s3, s4, s5, s6, s7;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'DataVar',
+      type: "rule.enter",
+      rule: "DataVar",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -2104,15 +2104,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'DataVar',
+        type: "rule.match",
+        rule: "DataVar",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'DataVar',
+        type: "rule.fail",
+        rule: "DataVar",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -2121,12 +2121,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parsePathVar() {
-    const startPos = peg$currPos;
-    let s0, s1, s2;
+    var startPos = peg$currPos;
+    var s0, s1, s2;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'PathVar',
+      type: "rule.enter",
+      rule: "PathVar",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -2154,15 +2154,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'PathVar',
+        type: "rule.match",
+        rule: "PathVar",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'PathVar',
+        type: "rule.fail",
+        rule: "PathVar",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -2171,12 +2171,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parsePathIdentifier() {
-    const startPos = peg$currPos;
-    let s0;
+    var startPos = peg$currPos;
+    var s0;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'PathIdentifier',
+      type: "rule.enter",
+      rule: "PathIdentifier",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -2187,15 +2187,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'PathIdentifier',
+        type: "rule.match",
+        rule: "PathIdentifier",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'PathIdentifier',
+        type: "rule.fail",
+        rule: "PathIdentifier",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -2204,12 +2204,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseSpecialPathIdentifier() {
-    const startPos = peg$currPos;
-    let s0, s1;
+    var startPos = peg$currPos;
+    var s0, s1;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'SpecialPathIdentifier',
+      type: "rule.enter",
+      rule: "SpecialPathIdentifier",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -2256,15 +2256,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'SpecialPathIdentifier',
+        type: "rule.match",
+        rule: "SpecialPathIdentifier",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'SpecialPathIdentifier',
+        type: "rule.fail",
+        rule: "SpecialPathIdentifier",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -2273,12 +2273,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseFieldAccess() {
-    const startPos = peg$currPos;
-    let s0, s1, s2;
+    var startPos = peg$currPos;
+    var s0, s1, s2;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'FieldAccess',
+      type: "rule.enter",
+      rule: "FieldAccess",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -2306,15 +2306,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'FieldAccess',
+        type: "rule.match",
+        rule: "FieldAccess",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'FieldAccess',
+        type: "rule.fail",
+        rule: "FieldAccess",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -2323,12 +2323,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseNumericFieldAccess() {
-    const startPos = peg$currPos;
-    let s0, s1, s2;
+    var startPos = peg$currPos;
+    var s0, s1, s2;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'NumericFieldAccess',
+      type: "rule.enter",
+      rule: "NumericFieldAccess",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -2356,15 +2356,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'NumericFieldAccess',
+        type: "rule.match",
+        rule: "NumericFieldAccess",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'NumericFieldAccess',
+        type: "rule.fail",
+        rule: "NumericFieldAccess",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -2373,12 +2373,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseNumericIndentifier() {
-    const startPos = peg$currPos;
-    let s0, s1, s2;
+    var startPos = peg$currPos;
+    var s0, s1, s2;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'NumericIndentifier',
+      type: "rule.enter",
+      rule: "NumericIndentifier",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -2413,15 +2413,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'NumericIndentifier',
+        type: "rule.match",
+        rule: "NumericIndentifier",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'NumericIndentifier',
+        type: "rule.fail",
+        rule: "NumericIndentifier",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -2430,12 +2430,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseArrayAccess() {
-    const startPos = peg$currPos;
-    let s0, s1, s2, s3;
+    var startPos = peg$currPos;
+    var s0, s1, s2, s3;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'ArrayAccess',
+      type: "rule.enter",
+      rule: "ArrayAccess",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -2481,15 +2481,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'ArrayAccess',
+        type: "rule.match",
+        rule: "ArrayAccess",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'ArrayAccess',
+        type: "rule.fail",
+        rule: "ArrayAccess",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -2498,12 +2498,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseVarFormat() {
-    const startPos = peg$currPos;
-    let s0, s1, s2;
+    var startPos = peg$currPos;
+    var s0, s1, s2;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'VarFormat',
+      type: "rule.enter",
+      rule: "VarFormat",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -2531,15 +2531,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'VarFormat',
+        type: "rule.match",
+        rule: "VarFormat",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'VarFormat',
+        type: "rule.fail",
+        rule: "VarFormat",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -2548,12 +2548,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseDoubleQuoteAllowedLiteralChar() {
-    const startPos = peg$currPos;
-    let s0, s1, s2;
+    var startPos = peg$currPos;
+    var s0, s1, s2;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'DoubleQuoteAllowedLiteralChar',
+      type: "rule.enter",
+      rule: "DoubleQuoteAllowedLiteralChar",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -2643,15 +2643,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'DoubleQuoteAllowedLiteralChar',
+        type: "rule.match",
+        rule: "DoubleQuoteAllowedLiteralChar",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'DoubleQuoteAllowedLiteralChar',
+        type: "rule.fail",
+        rule: "DoubleQuoteAllowedLiteralChar",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -2660,12 +2660,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseDoubleQuoteLiteralTextSegment() {
-    const startPos = peg$currPos;
-    let s0, s1, s2;
+    var startPos = peg$currPos;
+    var s0, s1, s2;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'DoubleQuoteLiteralTextSegment',
+      type: "rule.enter",
+      rule: "DoubleQuoteLiteralTextSegment",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -2688,15 +2688,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'DoubleQuoteLiteralTextSegment',
+        type: "rule.match",
+        rule: "DoubleQuoteLiteralTextSegment",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'DoubleQuoteLiteralTextSegment',
+        type: "rule.fail",
+        rule: "DoubleQuoteLiteralTextSegment",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -2705,12 +2705,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseDoubleQuoteInterpolatableContent() {
-    const startPos = peg$currPos;
-    let s0, s1, s2;
+    var startPos = peg$currPos;
+    var s0, s1, s2;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'DoubleQuoteInterpolatableContent',
+      type: "rule.enter",
+      rule: "DoubleQuoteInterpolatableContent",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -2739,15 +2739,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'DoubleQuoteInterpolatableContent',
+        type: "rule.match",
+        rule: "DoubleQuoteInterpolatableContent",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'DoubleQuoteInterpolatableContent',
+        type: "rule.fail",
+        rule: "DoubleQuoteInterpolatableContent",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -2756,12 +2756,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseDoubleQuoteInterpolatableContentOrEmpty() {
-    const startPos = peg$currPos;
-    let s0, s1;
+    var startPos = peg$currPos;
+    var s0, s1;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'DoubleQuoteInterpolatableContentOrEmpty',
+      type: "rule.enter",
+      rule: "DoubleQuoteInterpolatableContentOrEmpty",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -2776,15 +2776,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'DoubleQuoteInterpolatableContentOrEmpty',
+        type: "rule.match",
+        rule: "DoubleQuoteInterpolatableContentOrEmpty",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'DoubleQuoteInterpolatableContentOrEmpty',
+        type: "rule.fail",
+        rule: "DoubleQuoteInterpolatableContentOrEmpty",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -2793,12 +2793,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseSingleQuoteAllowedLiteralChar() {
-    const startPos = peg$currPos;
-    let s0, s1, s2;
+    var startPos = peg$currPos;
+    var s0, s1, s2;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'SingleQuoteAllowedLiteralChar',
+      type: "rule.enter",
+      rule: "SingleQuoteAllowedLiteralChar",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -2888,15 +2888,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'SingleQuoteAllowedLiteralChar',
+        type: "rule.match",
+        rule: "SingleQuoteAllowedLiteralChar",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'SingleQuoteAllowedLiteralChar',
+        type: "rule.fail",
+        rule: "SingleQuoteAllowedLiteralChar",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -2905,12 +2905,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseSingleQuoteLiteralTextSegment() {
-    const startPos = peg$currPos;
-    let s0, s1, s2;
+    var startPos = peg$currPos;
+    var s0, s1, s2;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'SingleQuoteLiteralTextSegment',
+      type: "rule.enter",
+      rule: "SingleQuoteLiteralTextSegment",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -2933,15 +2933,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'SingleQuoteLiteralTextSegment',
+        type: "rule.match",
+        rule: "SingleQuoteLiteralTextSegment",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'SingleQuoteLiteralTextSegment',
+        type: "rule.fail",
+        rule: "SingleQuoteLiteralTextSegment",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -2950,12 +2950,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseSingleQuoteInterpolatableContent() {
-    const startPos = peg$currPos;
-    let s0, s1, s2;
+    var startPos = peg$currPos;
+    var s0, s1, s2;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'SingleQuoteInterpolatableContent',
+      type: "rule.enter",
+      rule: "SingleQuoteInterpolatableContent",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -2984,15 +2984,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'SingleQuoteInterpolatableContent',
+        type: "rule.match",
+        rule: "SingleQuoteInterpolatableContent",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'SingleQuoteInterpolatableContent',
+        type: "rule.fail",
+        rule: "SingleQuoteInterpolatableContent",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -3001,12 +3001,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseSingleQuoteInterpolatableContentOrEmpty() {
-    const startPos = peg$currPos;
-    let s0, s1;
+    var startPos = peg$currPos;
+    var s0, s1;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'SingleQuoteInterpolatableContentOrEmpty',
+      type: "rule.enter",
+      rule: "SingleQuoteInterpolatableContentOrEmpty",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -3021,15 +3021,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'SingleQuoteInterpolatableContentOrEmpty',
+        type: "rule.match",
+        rule: "SingleQuoteInterpolatableContentOrEmpty",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'SingleQuoteInterpolatableContentOrEmpty',
+        type: "rule.fail",
+        rule: "SingleQuoteInterpolatableContentOrEmpty",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -3038,12 +3038,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseBacktickAllowedLiteralChar() {
-    const startPos = peg$currPos;
-    let s0, s1, s2;
+    var startPos = peg$currPos;
+    var s0, s1, s2;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'BacktickAllowedLiteralChar',
+      type: "rule.enter",
+      rule: "BacktickAllowedLiteralChar",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -3133,15 +3133,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'BacktickAllowedLiteralChar',
+        type: "rule.match",
+        rule: "BacktickAllowedLiteralChar",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'BacktickAllowedLiteralChar',
+        type: "rule.fail",
+        rule: "BacktickAllowedLiteralChar",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -3150,12 +3150,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseBacktickLiteralTextSegment() {
-    const startPos = peg$currPos;
-    let s0, s1, s2;
+    var startPos = peg$currPos;
+    var s0, s1, s2;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'BacktickLiteralTextSegment',
+      type: "rule.enter",
+      rule: "BacktickLiteralTextSegment",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -3178,15 +3178,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'BacktickLiteralTextSegment',
+        type: "rule.match",
+        rule: "BacktickLiteralTextSegment",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'BacktickLiteralTextSegment',
+        type: "rule.fail",
+        rule: "BacktickLiteralTextSegment",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -3195,12 +3195,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseBacktickInterpolatableContent() {
-    const startPos = peg$currPos;
-    let s0, s1, s2;
+    var startPos = peg$currPos;
+    var s0, s1, s2;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'BacktickInterpolatableContent',
+      type: "rule.enter",
+      rule: "BacktickInterpolatableContent",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -3229,15 +3229,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'BacktickInterpolatableContent',
+        type: "rule.match",
+        rule: "BacktickInterpolatableContent",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'BacktickInterpolatableContent',
+        type: "rule.fail",
+        rule: "BacktickInterpolatableContent",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -3246,12 +3246,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseBacktickInterpolatableContentOrEmpty() {
-    const startPos = peg$currPos;
-    let s0, s1;
+    var startPos = peg$currPos;
+    var s0, s1;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'BacktickInterpolatableContentOrEmpty',
+      type: "rule.enter",
+      rule: "BacktickInterpolatableContentOrEmpty",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -3266,15 +3266,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'BacktickInterpolatableContentOrEmpty',
+        type: "rule.match",
+        rule: "BacktickInterpolatableContentOrEmpty",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'BacktickInterpolatableContentOrEmpty',
+        type: "rule.fail",
+        rule: "BacktickInterpolatableContentOrEmpty",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -3283,12 +3283,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseMultilineAllowedLiteralChar() {
-    const startPos = peg$currPos;
-    let s0, s1, s2, s3;
+    var startPos = peg$currPos;
+    var s0, s1, s2, s3;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'MultilineAllowedLiteralChar',
+      type: "rule.enter",
+      rule: "MultilineAllowedLiteralChar",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -3352,15 +3352,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'MultilineAllowedLiteralChar',
+        type: "rule.match",
+        rule: "MultilineAllowedLiteralChar",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'MultilineAllowedLiteralChar',
+        type: "rule.fail",
+        rule: "MultilineAllowedLiteralChar",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -3369,12 +3369,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseMultilineLiteralTextSegment() {
-    const startPos = peg$currPos;
-    let s0, s1, s2;
+    var startPos = peg$currPos;
+    var s0, s1, s2;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'MultilineLiteralTextSegment',
+      type: "rule.enter",
+      rule: "MultilineLiteralTextSegment",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -3397,15 +3397,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'MultilineLiteralTextSegment',
+        type: "rule.match",
+        rule: "MultilineLiteralTextSegment",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'MultilineLiteralTextSegment',
+        type: "rule.fail",
+        rule: "MultilineLiteralTextSegment",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -3414,12 +3414,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseMultilineInterpolatableContent() {
-    const startPos = peg$currPos;
-    let s0, s1, s2;
+    var startPos = peg$currPos;
+    var s0, s1, s2;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'MultilineInterpolatableContent',
+      type: "rule.enter",
+      rule: "MultilineInterpolatableContent",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -3448,15 +3448,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'MultilineInterpolatableContent',
+        type: "rule.match",
+        rule: "MultilineInterpolatableContent",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'MultilineInterpolatableContent',
+        type: "rule.fail",
+        rule: "MultilineInterpolatableContent",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -3465,12 +3465,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseMultilineInterpolatableContentOrEmpty() {
-    const startPos = peg$currPos;
-    let s0, s1;
+    var startPos = peg$currPos;
+    var s0, s1;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'MultilineInterpolatableContentOrEmpty',
+      type: "rule.enter",
+      rule: "MultilineInterpolatableContentOrEmpty",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -3485,15 +3485,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'MultilineInterpolatableContentOrEmpty',
+        type: "rule.match",
+        rule: "MultilineInterpolatableContentOrEmpty",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'MultilineInterpolatableContentOrEmpty',
+        type: "rule.fail",
+        rule: "MultilineInterpolatableContentOrEmpty",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -3502,12 +3502,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseInterpolatedStringLiteral() {
-    const startPos = peg$currPos;
-    let s0, s1, s2, s3;
+    var startPos = peg$currPos;
+    var s0, s1, s2, s3;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'InterpolatedStringLiteral',
+      type: "rule.enter",
+      rule: "InterpolatedStringLiteral",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -3608,15 +3608,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'InterpolatedStringLiteral',
+        type: "rule.match",
+        rule: "InterpolatedStringLiteral",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'InterpolatedStringLiteral',
+        type: "rule.fail",
+        rule: "InterpolatedStringLiteral",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -3625,12 +3625,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseInterpolatedMultilineTemplate() {
-    const startPos = peg$currPos;
-    let s0, s1, s2, s3;
+    var startPos = peg$currPos;
+    var s0, s1, s2, s3;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'InterpolatedMultilineTemplate',
+      type: "rule.enter",
+      rule: "InterpolatedMultilineTemplate",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -3671,15 +3671,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'InterpolatedMultilineTemplate',
+        type: "rule.match",
+        rule: "InterpolatedMultilineTemplate",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'InterpolatedMultilineTemplate',
+        type: "rule.fail",
+        rule: "InterpolatedMultilineTemplate",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -3688,12 +3688,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parse_EmbedRHS() {
-    const startPos = peg$currPos;
-    let s0, s1, s2, s3, s4, s5;
+    var startPos = peg$currPos;
+    var s0, s1, s2, s3, s4, s5;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: '_EmbedRHS',
+      type: "rule.enter",
+      rule: "_EmbedRHS",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -3789,15 +3789,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: '_EmbedRHS',
+        type: "rule.match",
+        rule: "_EmbedRHS",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: '_EmbedRHS',
+        type: "rule.fail",
+        rule: "_EmbedRHS",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -3806,12 +3806,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parse_RunRHS() {
-    const startPos = peg$currPos;
-    let s0, s1, s2, s3, s4, s5, s6, s7, s8;
+    var startPos = peg$currPos;
+    var s0, s1, s2, s3, s4, s5, s6, s7, s8;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: '_RunRHS',
+      type: "rule.enter",
+      rule: "_RunRHS",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -3900,15 +3900,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: '_RunRHS',
+        type: "rule.match",
+        rule: "_RunRHS",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: '_RunRHS',
+        type: "rule.fail",
+        rule: "_RunRHS",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -3917,12 +3917,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseDirective() {
-    const startPos = peg$currPos;
-    let s0, s1, s2, s3;
+    var startPos = peg$currPos;
+    var s0, s1, s2, s3;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'Directive',
+      type: "rule.enter",
+      rule: "Directive",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -3983,15 +3983,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'Directive',
+        type: "rule.match",
+        rule: "Directive",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'Directive',
+        type: "rule.fail",
+        rule: "Directive",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -4000,12 +4000,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseCommandReference() {
-    const startPos = peg$currPos;
-    let s0, s1, s2, s3;
+    var startPos = peg$currPos;
+    var s0, s1, s2, s3;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'CommandReference',
+      type: "rule.enter",
+      rule: "CommandReference",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -4037,15 +4037,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'CommandReference',
+        type: "rule.match",
+        rule: "CommandReference",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'CommandReference',
+        type: "rule.fail",
+        rule: "CommandReference",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -4054,12 +4054,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseCommandArgs() {
-    const startPos = peg$currPos;
-    let s0, s1, s2, s3, s4, s5;
+    var startPos = peg$currPos;
+    var s0, s1, s2, s3, s4, s5;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'CommandArgs',
+      type: "rule.enter",
+      rule: "CommandArgs",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -4099,15 +4099,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'CommandArgs',
+        type: "rule.match",
+        rule: "CommandArgs",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'CommandArgs',
+        type: "rule.fail",
+        rule: "CommandArgs",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -4116,12 +4116,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseCommandArgsList() {
-    const startPos = peg$currPos;
-    let s0, s1, s2, s3, s4, s5, s6, s7;
+    var startPos = peg$currPos;
+    var s0, s1, s2, s3, s4, s5, s6, s7;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'CommandArgsList',
+      type: "rule.enter",
+      rule: "CommandArgsList",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -4187,15 +4187,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'CommandArgsList',
+        type: "rule.match",
+        rule: "CommandArgsList",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'CommandArgsList',
+        type: "rule.fail",
+        rule: "CommandArgsList",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -4204,12 +4204,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseCommandArg() {
-    const startPos = peg$currPos;
-    let s0, s1, s2;
+    var startPos = peg$currPos;
+    var s0, s1, s2;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'CommandArg',
+      type: "rule.enter",
+      rule: "CommandArg",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -4250,15 +4250,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'CommandArg',
+        type: "rule.match",
+        rule: "CommandArg",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'CommandArg',
+        type: "rule.fail",
+        rule: "CommandArg",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -4267,12 +4267,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseRawArgChar() {
-    const startPos = peg$currPos;
-    let s0, s1, s2;
+    var startPos = peg$currPos;
+    var s0, s1, s2;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'RawArgChar',
+      type: "rule.enter",
+      rule: "RawArgChar",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -4315,15 +4315,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'RawArgChar',
+        type: "rule.match",
+        rule: "RawArgChar",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'RawArgChar',
+        type: "rule.fail",
+        rule: "RawArgChar",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -4332,12 +4332,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseRunDirective() {
-    const startPos = peg$currPos;
-    let s0, s1, s2, s3, s4;
+    var startPos = peg$currPos;
+    var s0, s1, s2, s3, s4;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'RunDirective',
+      type: "rule.enter",
+      rule: "RunDirective",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -4405,15 +4405,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'RunDirective',
+        type: "rule.match",
+        rule: "RunDirective",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'RunDirective',
+        type: "rule.fail",
+        rule: "RunDirective",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -4422,12 +4422,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseRunVariableParams() {
-    const startPos = peg$currPos;
-    let s0, s1, s2, s3, s4, s5;
+    var startPos = peg$currPos;
+    var s0, s1, s2, s3, s4, s5;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'RunVariableParams',
+      type: "rule.enter",
+      rule: "RunVariableParams",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -4467,15 +4467,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'RunVariableParams',
+        type: "rule.match",
+        rule: "RunVariableParams",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'RunVariableParams',
+        type: "rule.fail",
+        rule: "RunVariableParams",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -4484,12 +4484,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseRunParamsList() {
-    const startPos = peg$currPos;
-    let s0, s1, s2, s3, s4, s5, s6, s7;
+    var startPos = peg$currPos;
+    var s0, s1, s2, s3, s4, s5, s6, s7;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'RunParamsList',
+      type: "rule.enter",
+      rule: "RunParamsList",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -4555,15 +4555,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'RunParamsList',
+        type: "rule.match",
+        rule: "RunParamsList",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'RunParamsList',
+        type: "rule.fail",
+        rule: "RunParamsList",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -4572,12 +4572,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseRunParam() {
-    const startPos = peg$currPos;
-    let s0, s1;
+    var startPos = peg$currPos;
+    var s0, s1;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'RunParam',
+      type: "rule.enter",
+      rule: "RunParam",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -4603,15 +4603,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'RunParam',
+        type: "rule.match",
+        rule: "RunParam",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'RunParam',
+        type: "rule.fail",
+        rule: "RunParam",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -4620,12 +4620,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseImportDirective() {
-    const startPos = peg$currPos;
-    let s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11;
+    var startPos = peg$currPos;
+    var s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'ImportDirective',
+      type: "rule.enter",
+      rule: "ImportDirective",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -4828,15 +4828,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'ImportDirective',
+        type: "rule.match",
+        rule: "ImportDirective",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'ImportDirective',
+        type: "rule.fail",
+        rule: "ImportDirective",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -4845,12 +4845,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseImportsList() {
-    const startPos = peg$currPos;
-    let s0, s1, s2, s3, s4, s5, s6, s7;
+    var startPos = peg$currPos;
+    var s0, s1, s2, s3, s4, s5, s6, s7;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'ImportsList',
+      type: "rule.enter",
+      rule: "ImportsList",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -4938,15 +4938,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'ImportsList',
+        type: "rule.match",
+        rule: "ImportsList",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'ImportsList',
+        type: "rule.fail",
+        rule: "ImportsList",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -4955,12 +4955,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseImportItem() {
-    const startPos = peg$currPos;
-    let s0, s1, s2;
+    var startPos = peg$currPos;
+    var s0, s1, s2;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'ImportItem',
+      type: "rule.enter",
+      rule: "ImportItem",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -4980,15 +4980,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'ImportItem',
+        type: "rule.match",
+        rule: "ImportItem",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'ImportItem',
+        type: "rule.fail",
+        rule: "ImportItem",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -4997,12 +4997,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseImportAlias() {
-    const startPos = peg$currPos;
-    let s0, s1, s2, s3, s4;
+    var startPos = peg$currPos;
+    var s0, s1, s2, s3, s4;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'ImportAlias',
+      type: "rule.enter",
+      rule: "ImportAlias",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -5032,15 +5032,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'ImportAlias',
+        type: "rule.match",
+        rule: "ImportAlias",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'ImportAlias',
+        type: "rule.fail",
+        rule: "ImportAlias",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -5049,12 +5049,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseEmbedDirective() {
-    const startPos = peg$currPos;
-    let s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14;
+    var startPos = peg$currPos;
+    var s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'EmbedDirective',
+      type: "rule.enter",
+      rule: "EmbedDirective",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -5172,15 +5172,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'EmbedDirective',
+        type: "rule.match",
+        rule: "EmbedDirective",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'EmbedDirective',
+        type: "rule.fail",
+        rule: "EmbedDirective",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -5189,12 +5189,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseNameList() {
-    const startPos = peg$currPos;
-    let s0, s1, s2, s3, s4, s5, s6, s7;
+    var startPos = peg$currPos;
+    var s0, s1, s2, s3, s4, s5, s6, s7;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'NameList',
+      type: "rule.enter",
+      rule: "NameList",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -5267,15 +5267,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'NameList',
+        type: "rule.match",
+        rule: "NameList",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'NameList',
+        type: "rule.fail",
+        rule: "NameList",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -5284,12 +5284,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseHeaderLevel() {
-    const startPos = peg$currPos;
-    let s0, s1, s2, s3, s4, s5;
+    var startPos = peg$currPos;
+    var s0, s1, s2, s3, s4, s5;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'HeaderLevel',
+      type: "rule.enter",
+      rule: "HeaderLevel",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -5340,15 +5340,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'HeaderLevel',
+        type: "rule.match",
+        rule: "HeaderLevel",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'HeaderLevel',
+        type: "rule.fail",
+        rule: "HeaderLevel",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -5357,12 +5357,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseUnderHeader() {
-    const startPos = peg$currPos;
-    let s0, s1, s2, s3, s4;
+    var startPos = peg$currPos;
+    var s0, s1, s2, s3, s4;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'UnderHeader',
+      type: "rule.enter",
+      rule: "UnderHeader",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -5392,15 +5392,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'UnderHeader',
+        type: "rule.match",
+        rule: "UnderHeader",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'UnderHeader',
+        type: "rule.fail",
+        rule: "UnderHeader",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -5409,12 +5409,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseIdentifierList() {
-    const startPos = peg$currPos;
-    let s0, s1, s2, s3, s4, s5, s6, s7;
+    var startPos = peg$currPos;
+    var s0, s1, s2, s3, s4, s5, s6, s7;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'IdentifierList',
+      type: "rule.enter",
+      rule: "IdentifierList",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -5480,15 +5480,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'IdentifierList',
+        type: "rule.match",
+        rule: "IdentifierList",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'IdentifierList',
+        type: "rule.fail",
+        rule: "IdentifierList",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -5497,12 +5497,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseDefineDirective() {
-    const startPos = peg$currPos;
-    let s0, s1, s2, s3, s4, s5, s6, s7, s8;
+    var startPos = peg$currPos;
+    var s0, s1, s2, s3, s4, s5, s6, s7, s8;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'DefineDirective',
+      type: "rule.enter",
+      rule: "DefineDirective",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -5555,15 +5555,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'DefineDirective',
+        type: "rule.match",
+        rule: "DefineDirective",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'DefineDirective',
+        type: "rule.fail",
+        rule: "DefineDirective",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -5572,12 +5572,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseDefineIdentifier() {
-    const startPos = peg$currPos;
-    let s0, s1, s2;
+    var startPos = peg$currPos;
+    var s0, s1, s2;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'DefineIdentifier',
+      type: "rule.enter",
+      rule: "DefineIdentifier",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -5597,15 +5597,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'DefineIdentifier',
+        type: "rule.match",
+        rule: "DefineIdentifier",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'DefineIdentifier',
+        type: "rule.fail",
+        rule: "DefineIdentifier",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -5614,12 +5614,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseDefineField() {
-    const startPos = peg$currPos;
-    let s0, s1, s2;
+    var startPos = peg$currPos;
+    var s0, s1, s2;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'DefineField',
+      type: "rule.enter",
+      rule: "DefineField",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -5698,15 +5698,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'DefineField',
+        type: "rule.match",
+        rule: "DefineField",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'DefineField',
+        type: "rule.fail",
+        rule: "DefineField",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -5715,12 +5715,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseDefineParams() {
-    const startPos = peg$currPos;
-    let s0, s1, s2, s3, s4, s5, s6;
+    var startPos = peg$currPos;
+    var s0, s1, s2, s3, s4, s5, s6;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'DefineParams',
+      type: "rule.enter",
+      rule: "DefineParams",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -5763,15 +5763,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'DefineParams',
+        type: "rule.match",
+        rule: "DefineParams",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'DefineParams',
+        type: "rule.fail",
+        rule: "DefineParams",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -5780,12 +5780,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseDefineValue() {
-    const startPos = peg$currPos;
-    let s0, s1, s2;
+    var startPos = peg$currPos;
+    var s0, s1, s2;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'DefineValue',
+      type: "rule.enter",
+      rule: "DefineValue",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -5822,15 +5822,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'DefineValue',
+        type: "rule.match",
+        rule: "DefineValue",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'DefineValue',
+        type: "rule.fail",
+        rule: "DefineValue",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -5839,12 +5839,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseDirectiveContent() {
-    const startPos = peg$currPos;
-    let s0, s1, s2, s3;
+    var startPos = peg$currPos;
+    var s0, s1, s2, s3;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'DirectiveContent',
+      type: "rule.enter",
+      rule: "DirectiveContent",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -5879,15 +5879,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'DirectiveContent',
+        type: "rule.match",
+        rule: "DirectiveContent",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'DirectiveContent',
+        type: "rule.fail",
+        rule: "DirectiveContent",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -5896,12 +5896,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseBracketContent() {
-    const startPos = peg$currPos;
-    let s0, s1, s2;
+    var startPos = peg$currPos;
+    var s0, s1, s2;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'BracketContent',
+      type: "rule.enter",
+      rule: "BracketContent",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -5918,15 +5918,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'BracketContent',
+        type: "rule.match",
+        rule: "BracketContent",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'BracketContent',
+        type: "rule.fail",
+        rule: "BracketContent",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -5935,12 +5935,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseBracketChar() {
-    const startPos = peg$currPos;
-    let s0, s1, s2;
+    var startPos = peg$currPos;
+    var s0, s1, s2;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'BracketChar',
+      type: "rule.enter",
+      rule: "BracketChar",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -5989,15 +5989,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'BracketChar',
+        type: "rule.match",
+        rule: "BracketChar",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'BracketChar',
+        type: "rule.fail",
+        rule: "BracketChar",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -6006,12 +6006,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseQuotedString() {
-    const startPos = peg$currPos;
-    let s0, s1, s2, s3;
+    var startPos = peg$currPos;
+    var s0, s1, s2, s3;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'QuotedString',
+      type: "rule.enter",
+      rule: "QuotedString",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -6106,15 +6106,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'QuotedString',
+        type: "rule.match",
+        rule: "QuotedString",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'QuotedString',
+        type: "rule.fail",
+        rule: "QuotedString",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -6123,12 +6123,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseDoubleQuotedChars() {
-    const startPos = peg$currPos;
-    let s0, s1, s2, s3, s4;
+    var startPos = peg$currPos;
+    var s0, s1, s2, s3, s4;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'DoubleQuotedChars',
+      type: "rule.enter",
+      rule: "DoubleQuotedChars",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -6215,15 +6215,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'DoubleQuotedChars',
+        type: "rule.match",
+        rule: "DoubleQuotedChars",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'DoubleQuotedChars',
+        type: "rule.fail",
+        rule: "DoubleQuotedChars",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -6232,12 +6232,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseSingleQuotedChars() {
-    const startPos = peg$currPos;
-    let s0, s1, s2, s3, s4;
+    var startPos = peg$currPos;
+    var s0, s1, s2, s3, s4;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'SingleQuotedChars',
+      type: "rule.enter",
+      rule: "SingleQuotedChars",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -6324,15 +6324,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'SingleQuotedChars',
+        type: "rule.match",
+        rule: "SingleQuotedChars",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'SingleQuotedChars',
+        type: "rule.fail",
+        rule: "SingleQuotedChars",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -6341,12 +6341,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseBacktickQuotedChars() {
-    const startPos = peg$currPos;
-    let s0, s1, s2, s3, s4;
+    var startPos = peg$currPos;
+    var s0, s1, s2, s3, s4;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'BacktickQuotedChars',
+      type: "rule.enter",
+      rule: "BacktickQuotedChars",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -6433,15 +6433,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'BacktickQuotedChars',
+        type: "rule.match",
+        rule: "BacktickQuotedChars",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'BacktickQuotedChars',
+        type: "rule.fail",
+        rule: "BacktickQuotedChars",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -6450,12 +6450,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseNestedBrackets() {
-    const startPos = peg$currPos;
-    let s0, s1, s2, s3;
+    var startPos = peg$currPos;
+    var s0, s1, s2, s3;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'NestedBrackets',
+      type: "rule.enter",
+      rule: "NestedBrackets",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -6495,15 +6495,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'NestedBrackets',
+        type: "rule.match",
+        rule: "NestedBrackets",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'NestedBrackets',
+        type: "rule.fail",
+        rule: "NestedBrackets",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -6512,12 +6512,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseTextUntilNewline() {
-    const startPos = peg$currPos;
-    let s0, s1, s2;
+    var startPos = peg$currPos;
+    var s0, s1, s2;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'TextUntilNewline',
+      type: "rule.enter",
+      rule: "TextUntilNewline",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -6552,15 +6552,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'TextUntilNewline',
+        type: "rule.match",
+        rule: "TextUntilNewline",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'TextUntilNewline',
+        type: "rule.fail",
+        rule: "TextUntilNewline",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -6569,12 +6569,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseDirectiveOptions() {
-    const startPos = peg$currPos;
-    let s0, s1, s2, s3;
+    var startPos = peg$currPos;
+    var s0, s1, s2, s3;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'DirectiveOptions',
+      type: "rule.enter",
+      rule: "DirectiveOptions",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -6600,15 +6600,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'DirectiveOptions',
+        type: "rule.match",
+        rule: "DirectiveOptions",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'DirectiveOptions',
+        type: "rule.fail",
+        rule: "DirectiveOptions",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -6617,12 +6617,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseDirectiveOption() {
-    const startPos = peg$currPos;
-    let s0, s1, s2, s3, s4, s5, s6;
+    var startPos = peg$currPos;
+    var s0, s1, s2, s3, s4, s5, s6;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'DirectiveOption',
+      type: "rule.enter",
+      rule: "DirectiveOption",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -6659,15 +6659,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'DirectiveOption',
+        type: "rule.match",
+        rule: "DirectiveOption",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'DirectiveOption',
+        type: "rule.fail",
+        rule: "DirectiveOption",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -6676,12 +6676,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseIdentifier() {
-    const startPos = peg$currPos;
-    let s0, s1, s2, s3;
+    var startPos = peg$currPos;
+    var s0, s1, s2, s3;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'Identifier',
+      type: "rule.enter",
+      rule: "Identifier",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -6721,15 +6721,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'Identifier',
+        type: "rule.match",
+        rule: "Identifier",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'Identifier',
+        type: "rule.fail",
+        rule: "Identifier",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -6738,12 +6738,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseStringLiteral() {
-    const startPos = peg$currPos;
-    let s0, s1, s2, s3, s4, s5;
+    var startPos = peg$currPos;
+    var s0, s1, s2, s3, s4, s5;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'StringLiteral',
+      type: "rule.enter",
+      rule: "StringLiteral",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -7063,15 +7063,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'StringLiteral',
+        type: "rule.match",
+        rule: "StringLiteral",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'StringLiteral',
+        type: "rule.fail",
+        rule: "StringLiteral",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -7080,12 +7080,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseMultilineTemplateLiteral() {
-    const startPos = peg$currPos;
-    let s0, s1, s2, s3, s4, s5;
+    var startPos = peg$currPos;
+    var s0, s1, s2, s3, s4, s5;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'MultilineTemplateLiteral',
+      type: "rule.enter",
+      rule: "MultilineTemplateLiteral",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -7195,15 +7195,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'MultilineTemplateLiteral',
+        type: "rule.match",
+        rule: "MultilineTemplateLiteral",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'MultilineTemplateLiteral',
+        type: "rule.fail",
+        rule: "MultilineTemplateLiteral",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -7212,12 +7212,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseDataDirective() {
-    const startPos = peg$currPos;
-    let s0, s1, s2, s3, s4, s5, s6, s7, s8;
+    var startPos = peg$currPos;
+    var s0, s1, s2, s3, s4, s5, s6, s7, s8;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'DataDirective',
+      type: "rule.enter",
+      rule: "DataDirective",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -7270,15 +7270,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'DataDirective',
+        type: "rule.match",
+        rule: "DataDirective",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'DataDirective',
+        type: "rule.fail",
+        rule: "DataDirective",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -7287,12 +7287,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseSchemaValidation() {
-    const startPos = peg$currPos;
-    let s0, s1, s2, s3, s4;
+    var startPos = peg$currPos;
+    var s0, s1, s2, s3, s4;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'SchemaValidation',
+      type: "rule.enter",
+      rule: "SchemaValidation",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -7322,15 +7322,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'SchemaValidation',
+        type: "rule.match",
+        rule: "SchemaValidation",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'SchemaValidation',
+        type: "rule.fail",
+        rule: "SchemaValidation",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -7339,12 +7339,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseDataValue() {
-    const startPos = peg$currPos;
-    let s0, s1, s2, s3, s4, s5, s6, s7;
+    var startPos = peg$currPos;
+    var s0, s1, s2, s3, s4, s5, s6, s7;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'DataValue',
+      type: "rule.enter",
+      rule: "DataValue",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -7462,15 +7462,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'DataValue',
+        type: "rule.match",
+        rule: "DataValue",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'DataValue',
+        type: "rule.fail",
+        rule: "DataValue",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -7479,12 +7479,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseDataObjectLiteral() {
-    const startPos = peg$currPos;
-    let s0, s1, s2, s3, s4, s5;
+    var startPos = peg$currPos;
+    var s0, s1, s2, s3, s4, s5;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'DataObjectLiteral',
+      type: "rule.enter",
+      rule: "DataObjectLiteral",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -7559,15 +7559,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'DataObjectLiteral',
+        type: "rule.match",
+        rule: "DataObjectLiteral",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'DataObjectLiteral',
+        type: "rule.fail",
+        rule: "DataObjectLiteral",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -7576,12 +7576,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseObjectProperties() {
-    const startPos = peg$currPos;
-    let s0, s1, s2, s3, s4, s5, s6, s7;
+    var startPos = peg$currPos;
+    var s0, s1, s2, s3, s4, s5, s6, s7;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'ObjectProperties',
+      type: "rule.enter",
+      rule: "ObjectProperties",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -7647,15 +7647,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'ObjectProperties',
+        type: "rule.match",
+        rule: "ObjectProperties",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'ObjectProperties',
+        type: "rule.fail",
+        rule: "ObjectProperties",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -7664,12 +7664,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseObjectProperty() {
-    const startPos = peg$currPos;
-    let s0, s1, s2, s3, s4, s5;
+    var startPos = peg$currPos;
+    var s0, s1, s2, s3, s4, s5;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'ObjectProperty',
+      type: "rule.enter",
+      rule: "ObjectProperty",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -7705,15 +7705,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'ObjectProperty',
+        type: "rule.match",
+        rule: "ObjectProperty",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'ObjectProperty',
+        type: "rule.fail",
+        rule: "ObjectProperty",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -7722,12 +7722,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parsePropertyKey() {
-    const startPos = peg$currPos;
-    let s0, s1;
+    var startPos = peg$currPos;
+    var s0, s1;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'PropertyKey',
+      type: "rule.enter",
+      rule: "PropertyKey",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -7750,15 +7750,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'PropertyKey',
+        type: "rule.match",
+        rule: "PropertyKey",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'PropertyKey',
+        type: "rule.fail",
+        rule: "PropertyKey",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -7767,12 +7767,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parsePropertyValue() {
-    const startPos = peg$currPos;
-    let s0, s1;
+    var startPos = peg$currPos;
+    var s0, s1;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'PropertyValue',
+      type: "rule.enter",
+      rule: "PropertyValue",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -7813,15 +7813,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'PropertyValue',
+        type: "rule.match",
+        rule: "PropertyValue",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'PropertyValue',
+        type: "rule.fail",
+        rule: "PropertyValue",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -7830,12 +7830,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseEmbedValue() {
-    const startPos = peg$currPos;
-    let s0, s1, s2, s3;
+    var startPos = peg$currPos;
+    var s0, s1, s2, s3;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'EmbedValue',
+      type: "rule.enter",
+      rule: "EmbedValue",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -7864,15 +7864,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'EmbedValue',
+        type: "rule.match",
+        rule: "EmbedValue",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'EmbedValue',
+        type: "rule.fail",
+        rule: "EmbedValue",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -7881,12 +7881,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseRunValue() {
-    const startPos = peg$currPos;
-    let s0, s1, s2, s3;
+    var startPos = peg$currPos;
+    var s0, s1, s2, s3;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'RunValue',
+      type: "rule.enter",
+      rule: "RunValue",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -7915,15 +7915,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'RunValue',
+        type: "rule.match",
+        rule: "RunValue",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'RunValue',
+        type: "rule.fail",
+        rule: "RunValue",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -7932,12 +7932,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseCallValue() {
-    const startPos = peg$currPos;
-    let s0, s1, s2, s3, s4, s5, s6, s7;
+    var startPos = peg$currPos;
+    var s0, s1, s2, s3, s4, s5, s6, s7;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'CallValue',
+      type: "rule.enter",
+      rule: "CallValue",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -7991,15 +7991,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'CallValue',
+        type: "rule.match",
+        rule: "CallValue",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'CallValue',
+        type: "rule.fail",
+        rule: "CallValue",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -8008,12 +8008,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseNumberLiteral() {
-    const startPos = peg$currPos;
-    let s0, s1, s2, s3, s4, s5, s6;
+    var startPos = peg$currPos;
+    var s0, s1, s2, s3, s4, s5, s6;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'NumberLiteral',
+      type: "rule.enter",
+      rule: "NumberLiteral",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -8105,15 +8105,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'NumberLiteral',
+        type: "rule.match",
+        rule: "NumberLiteral",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'NumberLiteral',
+        type: "rule.fail",
+        rule: "NumberLiteral",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -8122,12 +8122,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseBooleanLiteral() {
-    const startPos = peg$currPos;
-    let s0, s1;
+    var startPos = peg$currPos;
+    var s0, s1;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'BooleanLiteral',
+      type: "rule.enter",
+      rule: "BooleanLiteral",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -8162,15 +8162,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'BooleanLiteral',
+        type: "rule.match",
+        rule: "BooleanLiteral",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'BooleanLiteral',
+        type: "rule.fail",
+        rule: "BooleanLiteral",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -8179,12 +8179,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseNullLiteral() {
-    const startPos = peg$currPos;
-    let s0, s1;
+    var startPos = peg$currPos;
+    var s0, s1;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'NullLiteral',
+      type: "rule.enter",
+      rule: "NullLiteral",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -8204,15 +8204,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'NullLiteral',
+        type: "rule.match",
+        rule: "NullLiteral",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'NullLiteral',
+        type: "rule.fail",
+        rule: "NullLiteral",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -8221,12 +8221,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseArrayLiteral() {
-    const startPos = peg$currPos;
-    let s0, s1, s2, s3, s4, s5;
+    var startPos = peg$currPos;
+    var s0, s1, s2, s3, s4, s5;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'ArrayLiteral',
+      type: "rule.enter",
+      rule: "ArrayLiteral",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -8301,15 +8301,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'ArrayLiteral',
+        type: "rule.match",
+        rule: "ArrayLiteral",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'ArrayLiteral',
+        type: "rule.fail",
+        rule: "ArrayLiteral",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -8318,12 +8318,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseArrayItems() {
-    const startPos = peg$currPos;
-    let s0, s1, s2, s3, s4, s5, s6, s7;
+    var startPos = peg$currPos;
+    var s0, s1, s2, s3, s4, s5, s6, s7;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'ArrayItems',
+      type: "rule.enter",
+      rule: "ArrayItems",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -8408,15 +8408,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'ArrayItems',
+        type: "rule.match",
+        rule: "ArrayItems",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'ArrayItems',
+        type: "rule.fail",
+        rule: "ArrayItems",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -8425,12 +8425,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseTextDirective() {
-    const startPos = peg$currPos;
-    let s0, s1, s2, s3, s4, s5, s6, s7;
+    var startPos = peg$currPos;
+    var s0, s1, s2, s3, s4, s5, s6, s7;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'TextDirective',
+      type: "rule.enter",
+      rule: "TextDirective",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -8479,15 +8479,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'TextDirective',
+        type: "rule.match",
+        rule: "TextDirective",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'TextDirective',
+        type: "rule.fail",
+        rule: "TextDirective",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -8496,12 +8496,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseTextValue() {
-    const startPos = peg$currPos;
-    let s0, s1, s2, s3, s4, s5, s6, s7;
+    var startPos = peg$currPos;
+    var s0, s1, s2, s3, s4, s5, s6, s7;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'TextValue',
+      type: "rule.enter",
+      rule: "TextValue",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -8619,15 +8619,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'TextValue',
+        type: "rule.match",
+        rule: "TextValue",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'TextValue',
+        type: "rule.fail",
+        rule: "TextValue",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -8636,12 +8636,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parsePathDirective() {
-    const startPos = peg$currPos;
-    let s0, s1, s2, s3, s4, s5, s6, s7, s8;
+    var startPos = peg$currPos;
+    var s0, s1, s2, s3, s4, s5, s6, s7, s8;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'PathDirective',
+      type: "rule.enter",
+      rule: "PathDirective",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -8720,15 +8720,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'PathDirective',
+        type: "rule.match",
+        rule: "PathDirective",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'PathDirective',
+        type: "rule.fail",
+        rule: "PathDirective",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -8737,12 +8737,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseVarDirective() {
-    const startPos = peg$currPos;
-    let s0, s1, s2, s3, s4, s5, s6, s7;
+    var startPos = peg$currPos;
+    var s0, s1, s2, s3, s4, s5, s6, s7;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'VarDirective',
+      type: "rule.enter",
+      rule: "VarDirective",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -8791,15 +8791,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'VarDirective',
+        type: "rule.match",
+        rule: "VarDirective",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'VarDirective',
+        type: "rule.fail",
+        rule: "VarDirective",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -8808,12 +8808,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseVarValue() {
-    const startPos = peg$currPos;
-    let s0;
+    var startPos = peg$currPos;
+    var s0;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'VarValue',
+      type: "rule.enter",
+      rule: "VarValue",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -8836,15 +8836,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'VarValue',
+        type: "rule.match",
+        rule: "VarValue",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'VarValue',
+        type: "rule.fail",
+        rule: "VarValue",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -8853,12 +8853,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseCodeFence() {
-    const startPos = peg$currPos;
-    let s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10;
+    var startPos = peg$currPos;
+    var s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'CodeFence',
+      type: "rule.enter",
+      rule: "CodeFence",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -9046,15 +9046,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'CodeFence',
+        type: "rule.match",
+        rule: "CodeFence",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'CodeFence',
+        type: "rule.fail",
+        rule: "CodeFence",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -9063,12 +9063,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseBacktickSequence() {
-    const startPos = peg$currPos;
-    let s0, s1, s2;
+    var startPos = peg$currPos;
+    var s0, s1, s2;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'BacktickSequence',
+      type: "rule.enter",
+      rule: "BacktickSequence",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -9117,15 +9117,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'BacktickSequence',
+        type: "rule.match",
+        rule: "BacktickSequence",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'BacktickSequence',
+        type: "rule.fail",
+        rule: "BacktickSequence",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -9134,12 +9134,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseCodeFenceLangID() {
-    const startPos = peg$currPos;
-    let s0, s1, s2;
+    var startPos = peg$currPos;
+    var s0, s1, s2;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'CodeFenceLangID',
+      type: "rule.enter",
+      rule: "CodeFenceLangID",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -9174,15 +9174,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'CodeFenceLangID',
+        type: "rule.match",
+        rule: "CodeFenceLangID",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'CodeFenceLangID',
+        type: "rule.fail",
+        rule: "CodeFenceLangID",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -9191,12 +9191,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parsePathValue() {
-    const startPos = peg$currPos;
-    let s0, s1;
+    var startPos = peg$currPos;
+    var s0, s1;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'PathValue',
+      type: "rule.enter",
+      rule: "PathValue",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -9219,15 +9219,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'PathValue',
+        type: "rule.match",
+        rule: "PathValue",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'PathValue',
+        type: "rule.fail",
+        rule: "PathValue",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -9236,12 +9236,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseBracketAllowedLiteralChar() {
-    const startPos = peg$currPos;
-    let s0, s1, s2;
+    var startPos = peg$currPos;
+    var s0, s1, s2;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'BracketAllowedLiteralChar',
+      type: "rule.enter",
+      rule: "BracketAllowedLiteralChar",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -9302,15 +9302,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'BracketAllowedLiteralChar',
+        type: "rule.match",
+        rule: "BracketAllowedLiteralChar",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'BracketAllowedLiteralChar',
+        type: "rule.fail",
+        rule: "BracketAllowedLiteralChar",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -9319,12 +9319,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseBracketLiteralTextSegment() {
-    const startPos = peg$currPos;
-    let s0, s1, s2;
+    var startPos = peg$currPos;
+    var s0, s1, s2;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'BracketLiteralTextSegment',
+      type: "rule.enter",
+      rule: "BracketLiteralTextSegment",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -9347,15 +9347,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'BracketLiteralTextSegment',
+        type: "rule.match",
+        rule: "BracketLiteralTextSegment",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'BracketLiteralTextSegment',
+        type: "rule.fail",
+        rule: "BracketLiteralTextSegment",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -9364,12 +9364,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseBracketPart() {
-    const startPos = peg$currPos;
-    let s0, s1, s2;
+    var startPos = peg$currPos;
+    var s0, s1, s2;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'BracketPart',
+      type: "rule.enter",
+      rule: "BracketPart",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -9412,15 +9412,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'BracketPart',
+        type: "rule.match",
+        rule: "BracketPart",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'BracketPart',
+        type: "rule.fail",
+        rule: "BracketPart",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -9429,12 +9429,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseBracketInterpolatableContent() {
-    const startPos = peg$currPos;
-    let s0, s1, s2;
+    var startPos = peg$currPos;
+    var s0, s1, s2;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'BracketInterpolatableContent',
+      type: "rule.enter",
+      rule: "BracketInterpolatableContent",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -9457,15 +9457,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'BracketInterpolatableContent',
+        type: "rule.match",
+        rule: "BracketInterpolatableContent",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'BracketInterpolatableContent',
+        type: "rule.fail",
+        rule: "BracketInterpolatableContent",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -9474,12 +9474,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseBracketInterpolatableContentOrEmpty() {
-    const startPos = peg$currPos;
-    let s0, s1;
+    var startPos = peg$currPos;
+    var s0, s1;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'BracketInterpolatableContentOrEmpty',
+      type: "rule.enter",
+      rule: "BracketInterpolatableContentOrEmpty",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -9494,15 +9494,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'BracketInterpolatableContentOrEmpty',
+        type: "rule.match",
+        rule: "BracketInterpolatableContentOrEmpty",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'BracketInterpolatableContentOrEmpty',
+        type: "rule.fail",
+        rule: "BracketInterpolatableContentOrEmpty",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -9511,12 +9511,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseLineTerminator() {
-    const startPos = peg$currPos;
-    let s0;
+    var startPos = peg$currPos;
+    var s0;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'LineTerminator',
+      type: "rule.enter",
+      rule: "LineTerminator",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -9548,15 +9548,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'LineTerminator',
+        type: "rule.match",
+        rule: "LineTerminator",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'LineTerminator',
+        type: "rule.fail",
+        rule: "LineTerminator",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -9565,12 +9565,12 @@ function peg$parse(input, options) {
   }
 
   function peg$parseEOF() {
-    const startPos = peg$currPos;
-    let s0, s1;
+    var startPos = peg$currPos;
+    var s0, s1;
 
     peg$tracer.trace({
-      type: 'rule.enter',
-      rule: 'EOF',
+      type: "rule.enter",
+      rule: "EOF",
       location: peg$computeLocation(startPos, startPos, true)
     });
 
@@ -9593,15 +9593,15 @@ function peg$parse(input, options) {
 
     if (s0 !== peg$FAILED) {
       peg$tracer.trace({
-        type: 'rule.match',
-        rule: 'EOF',
+        type: "rule.match",
+        rule: "EOF",
         result: s0,
         location: peg$computeLocation(startPos, peg$currPos, true)
       });
     } else {
       peg$tracer.trace({
-        type: 'rule.fail',
-        rule: 'EOF',
+        type: "rule.fail",
+        rule: "EOF",
         location: peg$computeLocation(startPos, startPos, true)
       });
     }
@@ -9623,8 +9623,8 @@ function peg$parse(input, options) {
 
     // Add function to check if position is at start of line
     isLineStart(input, pos) {
-      helpers.debug('Checking line start at pos', pos, 'char at pos-1:', JSON.stringify(pos > 0 ? input.charAt(pos - 1) : ''));
-      helpers.debug('Input:', JSON.stringify(input));
+      helpers.debug("Checking line start at pos", pos, "char at pos-1:", JSON.stringify(pos > 0 ? input.charAt(pos - 1) : ''));
+      helpers.debug("Input:", JSON.stringify(input));
       return pos === 0 || input.charAt(pos - 1) === '\n';
     },
 
@@ -9676,14 +9676,14 @@ function peg$parse(input, options) {
     },
 
     validateEmbedContent(content) {
-      helpers.debug('validateEmbedContent called with content:', content);
+      helpers.debug("validateEmbedContent called with content:", content);
       
       // Check for variable patterns
       const hasTextVars = content.includes('{{') && content.includes('}}');
       const hasPathVars = /\$[a-zA-Z][a-zA-Z0-9_]*/.test(content);
       
-      helpers.debug('Content has text variables:', hasTextVars);
-      helpers.debug('Content has path variables:', hasPathVars);
+      helpers.debug("Content has text variables:", hasTextVars);
+      helpers.debug("Content has path variables:", hasPathVars);
       
       // We explicitly allow all content in double brackets including variables
       // No warnings should be generated for variable patterns
@@ -9741,7 +9741,7 @@ function peg$parse(input, options) {
               return '';
             }).join('');
           }
-          const formatStr = node.format ? `>>${node.format}` : '';
+          let formatStr = node.format ? `>>${node.format}` : '';
 
           if (node.valueType === 'path') {
             return `$${node.identifier}${fieldsStr}${formatStr}`;
@@ -9759,7 +9759,7 @@ function peg$parse(input, options) {
         path = path.replace(/^["'`](.*)["'`]$/, '$1');
       }
       
-      helpers.debug('validatePath called with path:', path, 'context:', context);
+      helpers.debug("validatePath called with path:", path, "context:", context);
       
       // Check if this is a path variable (starts with $ but is not a special variable)
       const isPathVar = typeof path === 'string' && 
@@ -9770,7 +9770,7 @@ function peg$parse(input, options) {
         !path.startsWith('$.') &&
         path.match(/^\$[a-zA-Z][a-zA-Z0-9_]*/);
       
-      helpers.debug('isPathVar:', isPathVar, 'for path:', path);
+      helpers.debug("isPathVar:", isPathVar, "for path:", path);
       
       // If this is a path variable, handle it specially
       if (isPathVar) {
@@ -9782,7 +9782,7 @@ function peg$parse(input, options) {
         const textVars = [];
         const textVarRegex = /\{\{([a-zA-Z0-9_]+)\}\}/g;
         let textVarMatch;
-        const pathWithTextVars = path;
+        let pathWithTextVars = path;
         
         while ((textVarMatch = textVarRegex.exec(pathWithTextVars)) !== null) {
           textVars.push(textVarMatch[1]);
@@ -9809,13 +9809,13 @@ function peg$parse(input, options) {
         // Set cwd to false for path variables (unconditionally)
         result.structured.cwd = false;
         
-        helpers.debug('Path variable result:', JSON.stringify(result));
+        helpers.debug("Path variable result:", JSON.stringify(result));
         return result;
       }
       
       // Determine if this is a URL path (starts with http://, https://, etc.)
       const isUrl = /^https?:\/\//.test(path);
-      helpers.debug('isUrl:', isUrl, 'for path:', path);
+      helpers.debug("isUrl:", isUrl, "for path:", path);
       
       // Allow relative paths
       const isRelativePathTest = (path.includes('../') || path.startsWith('./'));
@@ -9855,11 +9855,11 @@ function peg$parse(input, options) {
 
       // Determine if this is a CWD path (no slashes and doesn't start with $)
       const isCwd = !path.includes('/') && !path.startsWith('$');
-      helpers.debug('isCwd:', isCwd, 'for path:', path);
+      helpers.debug("isCwd:", isCwd, "for path:", path);
       
       // Determine if this is a special variable path (starts with $)
       const isSpecialVarPath = path.startsWith('$');
-      helpers.debug('isSpecialVarPath:', isSpecialVarPath, 'for path:', path);
+      helpers.debug("isSpecialVarPath:", isSpecialVarPath, "for path:", path);
       
       // Determine the base based on special variables
       let base = '.';
@@ -9920,17 +9920,17 @@ function peg$parse(input, options) {
       // Paths that start with $ are not CWD paths (cwd: false)
       if (isCwd) {
         structured.cwd = true;
-        helpers.debug('Set structured.cwd = true for path:', path);
+        helpers.debug("Set structured.cwd = true for path:", path);
       } else if (path.startsWith('$')) {
         // Set cwd: false for special variables and path variables
         structured.cwd = false;
-        helpers.debug('Set structured.cwd = false for path:', path);
+        helpers.debug("Set structured.cwd = false for path:", path);
       }
       
       // Add url property for URL paths
       if (isUrl) {
         structured.url = true;
-        helpers.debug('Set structured.url = true for path:', path);
+        helpers.debug("Set structured.url = true for path:", path);
       }
 
       // Create the result object
@@ -9951,11 +9951,11 @@ function peg$parse(input, options) {
       } else if (isUrl) {
         // Keep URLs as-is in normalization
         result.normalized = path;
-        helpers.debug('Kept URL as-is in normalization:', path);
+        helpers.debug("Kept URL as-is in normalization:", path);
       } else if (isPathVar) {
         // For path variables, keep as-is (don't normalize)
         result.normalized = path;
-        helpers.debug('Kept path variable as-is in normalization:', path);
+        helpers.debug("Kept path variable as-is in normalization:", path);
       } else {
         // Handle special variable normalization
         if (path.startsWith('$~/')) {
@@ -9979,7 +9979,7 @@ function peg$parse(input, options) {
 
       // --- Start: Logic moved from PathValue ---
       if (context === 'pathDirective') {
-        helpers.debug('Applying pathDirective context logic for:', path);
+        helpers.debug("Applying pathDirective context logic for:", path);
         // Determine base from the raw path specifically for PathDirective context
         if (path.startsWith('$HOMEPATH')) {
           structured.base = '$HOMEPATH';
@@ -9992,7 +9992,7 @@ function peg$parse(input, options) {
         } else {
           // If none of the special prefixes match, keep the default base
           // calculated earlier (usually '.')
-          helpers.debug('PathDirective context: No special base override for:', path, 'keeping base:', structured.base);
+          helpers.debug("PathDirective context: No special base override for:", path, "keeping base:", structured.base);
         }
 
         // Extract segments specifically for PathDirective context
@@ -10004,16 +10004,16 @@ function peg$parse(input, options) {
           directiveSegments = directiveSegments.slice(1);
         } else {
           // If none of the special prefixes match, keep the default segments
-           helpers.debug('PathDirective context: No special segment override for:', path, 'keeping segments:', structured.segments);
+           helpers.debug("PathDirective context: No special segment override for:", path, "keeping segments:", structured.segments);
            directiveSegments = structured.segments; // Keep existing segments
         }
         structured.segments = directiveSegments;
-        helpers.debug('PathDirective context adjusted base:', structured.base, 'segments:', structured.segments);
+        helpers.debug("PathDirective context adjusted base:", structured.base, "segments:", structured.segments);
       }
       // --- End: Logic moved from PathValue ---
 
       // Log the final result for debugging
-      helpers.debug('validatePath result:', JSON.stringify(result));
+      helpers.debug("validatePath result:", JSON.stringify(result));
 
       return result;
     },
@@ -10079,7 +10079,7 @@ function peg$parse(input, options) {
 }
 
 const peg$allowedStartRules = [
-  'Start'
+  "Start"
 ];
 
 export {
