@@ -56,8 +56,8 @@ This plan expands on the Phase 5 punch list from `_plans/PLAN-TYPES.md`.
 **3. Verify Type Compatibility Between Service Calls:**
 
 *   **Action:** Ensure type signatures align across the main pipeline flow involving `InterpreterService`:
-    *   `ParserService` output (`MeldNode[]`) matches `InterpreterService.interpret` input.
-    *   `InterpreterService` calls to `DirectiveService.handleDirective` use the correct node types (`DirectiveNode`) and expect compatible return types (likely the updated `StateServiceLike` or a specific `DirectiveResult` type from Phase 4).
+    *   `ParserService` output (`MeldNode[]`, now including richer directive nodes with subtypes, parsed RHS, etc.) matches `InterpreterService.interpret` input.
+    *   `InterpreterService` calls to `DirectiveService.handleDirective` use the correct node types (`DirectiveNode` with subtypes and structured data) and expect compatible return types (likely the updated `StateServiceLike` or a specific `DirectiveResult` type from Phase 4).
     *   `InterpreterService` interactions with `StateService` (`createChildState`, `clone`, `mergeChildState`) use the strictly typed `IStateService` interface (from Phase 1).
 *   **Files:**
     *   `services/pipeline/InterpreterService/InterpreterService.ts`
@@ -87,7 +87,7 @@ This plan expands on the Phase 5 punch list from `_plans/PLAN-TYPES.md`.
         *   **Requirement:** When a directive handler (Phase 4) provides a replacement node (or nodes), the `InterpreterService` (or potentially the `StateService.transformNode` method) must ensure the replacement node(s) have appropriate `SourceLocation` information.
         *   **Strategy:**
             1.  **Default:** Replacement nodes should ideally inherit the `SourceLocation` of the original directive node they are replacing.
-            2.  **Refinement (Phase 4):** Directive handlers *could* be designed to return replacement nodes with more precise `SourceLocation`s if the replacement corresponds directly to a specific part of the *original* source that generated the directive's output (e.g., the content of an embedded file). This would require directive result types (defined in Phase 4) to optionally include refined location info alongside replacement nodes.
+            2.  **Refinement (Phase 4):** Directive handlers *could* be designed to return replacement nodes with more precise `SourceLocation`s if the replacement corresponds directly to a specific part of the *original* source that generated the directive's output (e.g., the content of an embedded file). This would require directive result types (defined in Phase 4) to optionally include refined location info alongside replacement nodes. **The structured AST from the refactored grammar might provide better origin information for handlers to use.**
             3.  **Implementation:** The `InterpreterService` should primarily ensure *some* valid `SourceLocation` exists on replacement nodes, defaulting to the original directive's location unless the `DirectiveResult` provides a more specific one. The `StateService.transformNode` implementation will be key here.
 *   **Testing:**
     *   Add unit tests in `InterpreterService.unit.test.ts` specifically for transformation mode.

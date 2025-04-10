@@ -726,11 +726,11 @@ _EmbedRHS
      const validationResult = helpers.validatePath(pathPart);
 
      // Attach the interpolated array for the path part
-     let pathInterpolatedValue = content;
-     if (section && content.length > 0) {
-       // TODO: Refine section handling later if needed.
-       helpers.debug("Section detected, attaching full interpolated array for now.");
-     }
+     // Create a NEW InterpolatableValue representing only the pathPart
+     // Use location() of the whole rule for this new node
+     const pathInterpolatedValue = [ 
+       helpers.createNode(NodeType.Text, { content: pathPart }, location())
+     ]; 
 
      let finalPathObject = validationResult;
      if (finalPathObject && typeof finalPathObject === 'object') {
@@ -1470,7 +1470,7 @@ PathDirective
       // unquoted values like `$HOMEPATH/file` here.
       // The issue of the test passing likely lies in the test runner/assertion logic.
     )
-    { return rhs; } // Return the object created in the successful alternative's action block
+    { return helpers.createDirective('path', rhs, location()); } // Wrap the result in a proper DirectiveNode
 
 VarDirective
   = "var" _ id:Identifier _ "=" _ value:VarValue {

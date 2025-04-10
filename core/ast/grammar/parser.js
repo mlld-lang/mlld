@@ -514,11 +514,11 @@ function peg$parse(input, options) {
      const validationResult = helpers.validatePath(pathPart);
 
      // Attach the interpolated array for the path part
-     let pathInterpolatedValue = content;
-     if (section && content.length > 0) {
-       // TODO: Refine section handling later if needed.
-       helpers.debug("Section detected, attaching full interpolated array for now.");
-     }
+     // Create a NEW InterpolatableValue representing only the pathPart
+     // Use location() of the whole rule for this new node
+     const pathInterpolatedValue = [ 
+       helpers.createNode(NodeType.Text, { content: pathPart }, location())
+     ]; 
 
      let finalPathObject = validationResult;
      if (finalPathObject && typeof finalPathObject === 'object') {
@@ -1066,24 +1066,38 @@ function peg$parse(input, options) {
       value
     };
   };
-  var peg$f145 = function(id, path) {
-    // const callerInfo = new Error().stack || ''; // REMOVED
-
-    // Get the raw path string - primarily for debugging/logging
-    const rawPath = typeof path === 'string' ? path :
-                   path.raw ? path.raw :
-                   JSON.stringify(path);
-    helpers.debug("PathDirective parsed value:", JSON.stringify(path), "Raw path was:", rawPath);
-
-    // No longer require special variables in path directives
-
-    // For path directives, we need to manually set the base for special variables - REMOVED
-    // This logic is *only* for test compatibility and may be removed later - REMOVED
-    // if (path && path.structured) { ... } // REMOVED THIS BLOCK
-
-    return helpers.createDirective('path', { identifier: id, path }, location());
-  };
-  var peg$f146 = function(id, value) {
+  var peg$f145 = function(id, pv) {
+        helpers.debug("PathDirective parsed PathVar:", pv);
+        const pathObject = helpers.validatePath(pv.identifier, { context: 'pathDirective' });
+        // Attach the original PathVar node
+        if (pathObject && typeof pathObject === 'object') {
+          pathObject.variableNode = pv;
+        } else {
+          // Handle case where validatePath didn't return an object (shouldn't happen for vars)
+          // Return a basic structure if validation fails to provide context
+          return { identifier: id, path: { raw: pv.identifier, isPathVariable: true, variableNode: pv, structured: {} } };
+        }
+        return { identifier: id, path: pathObject };
+      };
+  var peg$f146 = function(id, interpolatedArray) {
+        helpers.debug("PathDirective parsed InterpolatedStringLiteral:", interpolatedArray);
+        const rawString = helpers.reconstructRawString(interpolatedArray);
+        helpers.debug("PathDirective reconstructed raw string:", rawString);
+        const pathObject = helpers.validatePath(rawString, { context: 'pathDirective' });
+        // Attach the original interpolated array
+        if (pathObject && typeof pathObject === 'object') {
+          pathObject.interpolatedValue = interpolatedArray;
+          helpers.debug("Attached interpolatedValue to path object in PathDirective");
+        } else {
+          // Handle case where validatePath didn't return an object
+          helpers.debug("Warning: validatePath did not return an object in PathDirective.");
+          // Return a basic structure if validation fails to provide context
+          return { identifier: id, path: { raw: rawString, structured: {}, interpolatedValue: interpolatedArray } };
+        }
+        return { identifier: id, path: pathObject };
+      };
+  var peg$f147 = function(id, rhs) { return helpers.createDirective('path', rhs, location()); };
+  var peg$f148 = function(id, value) {
     return helpers.createDirective('var', {
       identifier: id,
       value: {
@@ -1097,16 +1111,16 @@ function peg$parse(input, options) {
       }
     }, location());
   };
-  var peg$f147 = function(opener, lang) { return true; };
-  var peg$f148 = function(opener, lang, closer) {
+  var peg$f149 = function(opener, lang) { return true; };
+  var peg$f150 = function(opener, lang, closer) {
       return closer.length === opener.length;  // Only match exact length
     };
-  var peg$f149 = function(opener, lang, c) { return c; };
-  var peg$f150 = function(opener, lang, content, closer) {
+  var peg$f151 = function(opener, lang, c) { return c; };
+  var peg$f152 = function(opener, lang, content, closer) {
       // Fail if the closer doesn't match the opener
       return closer.length !== opener.length;
     };
-  var peg$f151 = function(opener, lang, content, closer) {
+  var peg$f153 = function(opener, lang, content, closer) {
       const rawContent = content.join('');
       // Default to true unless explicitly set to false
       const preserveCodeFences = options?.preserveCodeFences !== false;
@@ -1118,14 +1132,14 @@ function peg$parse(input, options) {
         content: finalContent
       }, location());
     };
-  var peg$f152 = function(backticks) {
+  var peg$f154 = function(backticks) {
     return backticks.length >= 3 && backticks.length <= 5;
   };
-  var peg$f153 = function(backticks) { 
+  var peg$f155 = function(backticks) { 
     return backticks;
   };
-  var peg$f154 = function(chars) { return chars.join(''); };
-  var peg$f155 = function(interpolatedArray) { // Changed from str:StringLiteral
+  var peg$f156 = function(chars) { return chars.join(''); };
+  var peg$f157 = function(interpolatedArray) { // Changed from str:StringLiteral
       // Reconstruct the raw string from the array of nodes
       const rawString = helpers.reconstructRawString(interpolatedArray);
       helpers.debug("PathValue reconstructed raw string:", rawString, "from array:", JSON.stringify(interpolatedArray));
@@ -1146,7 +1160,7 @@ function peg$parse(input, options) {
 
       return validationResult;
     };
-  var peg$f156 = function(variable) { // Allow PathVariables directly
+  var peg$f158 = function(variable) { // Allow PathVariables directly
     helpers.debug("PathValue parsed PathVar:", JSON.stringify(variable));
     // Return a structure consistent with validatePath for path variables
     return {
@@ -1163,16 +1177,16 @@ function peg$parse(input, options) {
         // No interpolatedValue for a direct PathVar
       };
   };
-  var peg$f157 = function(char) { return char; };
-  var peg$f158 = function(chars) {
+  var peg$f159 = function(char) { return char; };
+  var peg$f160 = function(chars) {
       return helpers.createNode(NodeType.Text, { content: chars.join('') }, location());
     };
-  var peg$f159 = function(part) { return part; };
-  var peg$f160 = function(parts) { // Repeat the guarded part
+  var peg$f161 = function(part) { return part; };
+  var peg$f162 = function(parts) { // Repeat the guarded part
       // TODO: Add combineAdjacentTextNodes(parts) helper call here later?
       return parts;
     };
-  var peg$f161 = function(result) {
+  var peg$f163 = function(result) {
       return result || [];
     };
   var peg$currPos = options.peg$currPos | 0;
@@ -6473,7 +6487,7 @@ function peg$parse(input, options) {
   }
 
   function peg$parsePathDirective() {
-    var s0, s1, s2, s3, s4, s5, s6, s7;
+    var s0, s1, s2, s3, s4, s5, s6, s7, s8;
 
     s0 = peg$currPos;
     if (input.substr(peg$currPos, 4) === peg$c49) {
@@ -6484,23 +6498,53 @@ function peg$parse(input, options) {
       if (peg$silentFails === 0) { peg$fail(peg$e62); }
     }
     if (s1 !== peg$FAILED) {
-      s2 = peg$parse_();
-      s3 = peg$parseIdentifier();
-      if (s3 !== peg$FAILED) {
-        s4 = peg$parse_();
-        if (input.charCodeAt(peg$currPos) === 61) {
-          s5 = peg$c32;
-          peg$currPos++;
-        } else {
-          s5 = peg$FAILED;
-          if (peg$silentFails === 0) { peg$fail(peg$e43); }
-        }
-        if (s5 !== peg$FAILED) {
-          s6 = peg$parse_();
-          s7 = peg$parsePathValue();
-          if (s7 !== peg$FAILED) {
-            peg$savedPos = s0;
-            s0 = peg$f145(s3, s7);
+      s2 = peg$parse__();
+      if (s2 !== peg$FAILED) {
+        s3 = peg$parseIdentifier();
+        if (s3 !== peg$FAILED) {
+          s4 = peg$parse__();
+          if (s4 !== peg$FAILED) {
+            if (input.charCodeAt(peg$currPos) === 61) {
+              s5 = peg$c32;
+              peg$currPos++;
+            } else {
+              s5 = peg$FAILED;
+              if (peg$silentFails === 0) { peg$fail(peg$e43); }
+            }
+            if (s5 !== peg$FAILED) {
+              s6 = peg$parse__();
+              if (s6 !== peg$FAILED) {
+                s7 = peg$currPos;
+                s8 = peg$parsePathVar();
+                if (s8 !== peg$FAILED) {
+                  peg$savedPos = s7;
+                  s8 = peg$f145(s3, s8);
+                }
+                s7 = s8;
+                if (s7 === peg$FAILED) {
+                  s7 = peg$currPos;
+                  s8 = peg$parseInterpolatedStringLiteral();
+                  if (s8 !== peg$FAILED) {
+                    peg$savedPos = s7;
+                    s8 = peg$f146(s3, s8);
+                  }
+                  s7 = s8;
+                }
+                if (s7 !== peg$FAILED) {
+                  peg$savedPos = s0;
+                  s0 = peg$f147(s3, s7);
+                } else {
+                  peg$currPos = s0;
+                  s0 = peg$FAILED;
+                }
+              } else {
+                peg$currPos = s0;
+                s0 = peg$FAILED;
+              }
+            } else {
+              peg$currPos = s0;
+              s0 = peg$FAILED;
+            }
           } else {
             peg$currPos = s0;
             s0 = peg$FAILED;
@@ -6549,7 +6593,7 @@ function peg$parse(input, options) {
           s7 = peg$parseVarValue();
           if (s7 !== peg$FAILED) {
             peg$savedPos = s0;
-            s0 = peg$f146(s3, s7);
+            s0 = peg$f148(s3, s7);
           } else {
             peg$currPos = s0;
             s0 = peg$FAILED;
@@ -6617,7 +6661,7 @@ function peg$parse(input, options) {
         peg$silentFails++;
         s7 = peg$currPos;
         peg$savedPos = peg$currPos;
-        s8 = peg$f147(s1, s2);
+        s8 = peg$f149(s1, s2);
         if (s8) {
           s8 = undefined;
         } else {
@@ -6627,7 +6671,7 @@ function peg$parse(input, options) {
           s9 = peg$parseBacktickSequence();
           if (s9 !== peg$FAILED) {
             peg$savedPos = peg$currPos;
-            s10 = peg$f148(s1, s2, s9);
+            s10 = peg$f150(s1, s2, s9);
             if (s10) {
               s10 = undefined;
             } else {
@@ -6665,7 +6709,7 @@ function peg$parse(input, options) {
           }
           if (s7 !== peg$FAILED) {
             peg$savedPos = s5;
-            s5 = peg$f149(s1, s2, s7);
+            s5 = peg$f151(s1, s2, s7);
           } else {
             peg$currPos = s5;
             s5 = peg$FAILED;
@@ -6681,7 +6725,7 @@ function peg$parse(input, options) {
           peg$silentFails++;
           s7 = peg$currPos;
           peg$savedPos = peg$currPos;
-          s8 = peg$f147(s1, s2);
+          s8 = peg$f149(s1, s2);
           if (s8) {
             s8 = undefined;
           } else {
@@ -6691,7 +6735,7 @@ function peg$parse(input, options) {
             s9 = peg$parseBacktickSequence();
             if (s9 !== peg$FAILED) {
               peg$savedPos = peg$currPos;
-              s10 = peg$f148(s1, s2, s9);
+              s10 = peg$f150(s1, s2, s9);
               if (s10) {
                 s10 = undefined;
               } else {
@@ -6729,7 +6773,7 @@ function peg$parse(input, options) {
             }
             if (s7 !== peg$FAILED) {
               peg$savedPos = s5;
-              s5 = peg$f149(s1, s2, s7);
+              s5 = peg$f151(s1, s2, s7);
             } else {
               peg$currPos = s5;
               s5 = peg$FAILED;
@@ -6742,7 +6786,7 @@ function peg$parse(input, options) {
         s5 = peg$parseBacktickSequence();
         if (s5 !== peg$FAILED) {
           peg$savedPos = peg$currPos;
-          s6 = peg$f150(s1, s2, s4, s5);
+          s6 = peg$f152(s1, s2, s4, s5);
           if (s6) {
             s6 = peg$FAILED;
           } else {
@@ -6760,7 +6804,7 @@ function peg$parse(input, options) {
               s7 = null;
             }
             peg$savedPos = s0;
-            s0 = peg$f151(s1, s2, s4, s5);
+            s0 = peg$f153(s1, s2, s4, s5);
           } else {
             peg$currPos = s0;
             s0 = peg$FAILED;
@@ -6809,7 +6853,7 @@ function peg$parse(input, options) {
     }
     if (s1 !== peg$FAILED) {
       peg$savedPos = peg$currPos;
-      s2 = peg$f152(s1);
+      s2 = peg$f154(s1);
       if (s2) {
         s2 = undefined;
       } else {
@@ -6817,7 +6861,7 @@ function peg$parse(input, options) {
       }
       if (s2 !== peg$FAILED) {
         peg$savedPos = s0;
-        s0 = peg$f153(s1);
+        s0 = peg$f155(s1);
       } else {
         peg$currPos = s0;
         s0 = peg$FAILED;
@@ -6858,7 +6902,7 @@ function peg$parse(input, options) {
     }
     if (s1 !== peg$FAILED) {
       peg$savedPos = s0;
-      s1 = peg$f154(s1);
+      s1 = peg$f156(s1);
     }
     s0 = s1;
 
@@ -6872,7 +6916,7 @@ function peg$parse(input, options) {
     s1 = peg$parseInterpolatedStringLiteral();
     if (s1 !== peg$FAILED) {
       peg$savedPos = s0;
-      s1 = peg$f155(s1);
+      s1 = peg$f157(s1);
     }
     s0 = s1;
     if (s0 === peg$FAILED) {
@@ -6880,7 +6924,7 @@ function peg$parse(input, options) {
       s1 = peg$parsePathVar();
       if (s1 !== peg$FAILED) {
         peg$savedPos = s0;
-        s1 = peg$f156(s1);
+        s1 = peg$f158(s1);
       }
       s0 = s1;
     }
@@ -6936,7 +6980,7 @@ function peg$parse(input, options) {
       }
       if (s2 !== peg$FAILED) {
         peg$savedPos = s0;
-        s0 = peg$f157(s2);
+        s0 = peg$f159(s2);
       } else {
         peg$currPos = s0;
         s0 = peg$FAILED;
@@ -6965,7 +7009,7 @@ function peg$parse(input, options) {
     }
     if (s1 !== peg$FAILED) {
       peg$savedPos = s0;
-      s1 = peg$f158(s1);
+      s1 = peg$f160(s1);
     }
     s0 = s1;
 
@@ -7002,7 +7046,7 @@ function peg$parse(input, options) {
       }
       if (s2 !== peg$FAILED) {
         peg$savedPos = s0;
-        s0 = peg$f159(s2);
+        s0 = peg$f161(s2);
       } else {
         peg$currPos = s0;
         s0 = peg$FAILED;
@@ -7031,7 +7075,7 @@ function peg$parse(input, options) {
     }
     if (s1 !== peg$FAILED) {
       peg$savedPos = s0;
-      s1 = peg$f160(s1);
+      s1 = peg$f162(s1);
     }
     s0 = s1;
 
@@ -7047,7 +7091,7 @@ function peg$parse(input, options) {
       s1 = null;
     }
     peg$savedPos = s0;
-    s1 = peg$f161(s1);
+    s1 = peg$f163(s1);
     s0 = s1;
 
     return s0;

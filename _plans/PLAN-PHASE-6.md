@@ -79,4 +79,17 @@ No type refinements are expected in this phase. The focus is on validation and c
     *   Look for any remaining `TODO` comments related to the refactor.
     *   Check for potential logical errors or edge cases that might have been missed during automated testing.
     *   Manually run the application with a few representative `.mld` files or common use cases to ensure core functionality works as expected.
-*   **Testing:** Code review discussions, manual testing of primary user workflows. 
+*   **Testing:** Code review discussions, manual testing of primary user workflows.
+
+## Phase 6: Serialization Service Typing
+
+*   **Goal:** Ensure the `SerializationService` correctly handles the strictly typed AST (`MeldNode[]`) and State (`IStateService`) objects, producing the expected serialized output (e.g., Markdown, JSON).
+*   **Status:** `NOT STARTED`
+*   **Assumptions:**
+    *   Phases 1-5 are complete.
+    *   The AST structure includes the richer directive node types with subtypes, parsed RHS, interpolated content, etc., defined by the refactored grammar (Phase 3).
+    *   `IStateService` (Phase 1) and `DirectiveResult` types (Phase 4) are finalized.
+    *   The exact desired serialization format(s) are defined.
+*   **Key Files:**
+    *   **Action:** Review and update `SerializationService.serialize` and any helper methods (like `_serializeNode`) to correctly handle the full range of `MeldNode` types, including the structured `DirectiveNode` variants (with `subtype`, `path`, `command`, `value`, `embed`, `run`, `interpolatedContent` fields as applicable).
+    *   **Requirement:** Ensure serialization preserves or correctly represents the information contained in the new AST structures (e.g., how to represent an `@embed` directive's parsed `path` vs. a simple `TextNode`). 

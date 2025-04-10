@@ -9,10 +9,10 @@
 This document details the step-by-step implementation plan for Phase 4, focusing on refactoring individual directive handlers to use the improved AST (including `subtype` fields) and integrate with the strictly typed services refactored in previous phases.
 
 **Assumptions:**
-*   Phases 1-3 are complete: `StateService`, `PathService`, `ResolutionService` are refactored and use strict types defined in `_spec/types/`.
+*   Phases 1-3 are complete: `StateService`, `PathService`, `ResolutionService` are refactored and use strict types defined in `_spec/types/`. **The `meld.pegjs` grammar has been refactored** to produce a more structured AST, including directive subtypes and parsed RHS for definition directives.
 *   Core variable types (`MeldVariable` subtypes, `SourceLocation`, etc.) are defined in `core/types/variables.ts` based on `@_spec/types/variables-spec.md`.
 *   Core path types (`MeldPath` subtypes, `StructuredPath`, etc.) are defined in `core/types/paths.ts` based on `@_spec/types/import-spec.md`.
-*   The AST structure follows `docs/dev/AST.md` with explicit `subtype` fields for directives.
+*   The AST structure follows `docs/dev/AST.md` **(needs update)** with explicit `subtype` fields for directives and structured RHS representations (e.g., results from `_EmbedRHS`, `_RunRHS` grammar rules).
 *   Directive-specific types (e.g., `EmbedParams`, `RunDirective`, `ICommandDefinition`, `ImportDefinition`) are available, potentially imported from `_spec/types/` or defined locally within handlers initially.
 
 ## A. Type Refinement Proposals
@@ -23,10 +23,11 @@ No type refinements proposed for this phase.
 
 ### 1. `@import` Handler
 
-*   **Action:** Refactor `ImportDirectiveHandler.execute` to utilize AST `subtype` ('importAll', 'importStandard', 'importNamed') and call refactored services with strict types. Parse the AST's `path` object into a strict `PathValueObject`/`MeldPath` type. Parse `imports` array into strict `ImportDefinition` types (from `import-spec.md`).
+*   **Action:** Refactor `ImportDirectiveHandler.execute` to utilize the AST `subtype` ('importAll', 'importStandard', 'importNamed') provided directly by the parser. Use the pre-validated `path` object from the AST (result of `helpers.validatePath`). Parse the `imports` array (already parsed by the grammar) into strict `ImportDefinition` types if needed (grammar structure might suffice). Call refactored services with strict types.
 *   **Files:** `services/pipeline/DirectiveService/handlers/execution/ImportDirectiveHandler.ts`
 *   **Details/Considerations:**
-    *   Use `subtype` to slightly adjust logic if needed (e.g., validation for `importNamed` aliases).
+    *   Use `node.subtype` for logic branching.
+    *   Use the `node.path` object (which includes `raw`, `structured`, `isPathVariable`, etc.) directly. Pass strict `MeldPath` representation derived from this to `FileSystemService` if needed. Resolve variables within the path *only if necessary* using `ResolutionService`.
     *   Pass strict `MeldPath` to `ResolutionService` and `FileSystemService`.
     *   Call refactored `ParserService.parse` and `InterpreterService.interpret` (via client factory).
     *   When copying variables from `importedState` to `targetState`, ensure strict `MeldVariable` types (including `VariableMetadata` with `origin: VariableOrigin.IMPORT`, `definedAt`, etc.) are used via `StateVariableCopier`. Use the strict `MeldVariable` subtypes (`TextVariable`, `DataVariable`, `IPathVariable`, `CommandVariable`) from `variables-spec.md`.
@@ -34,115 +35,100 @@ No type refinements proposed for this phase.
     *   **`SourceLocation` Tracking:** Ensure `MeldVariable` objects copied into the `targetState` have their `metadata.definedAt` updated to point to the import statement (`node.location`) in the *importing* file, while potentially preserving original location info within `metadata.context` or `history`.
 *   **Testing:**
     *   Update `ImportDirectiveHandler.test.ts` and `ImportDirectiveHandler.transformation.test.ts`.
-    *   Verify correct `subtype` handling.
-    *   Verify strict types passed to/received from mocked services (`ResolutionService`, `StateService`, `FileSystemService`).
-    *   Verify `MeldVariable` objects in the resulting state have correct types, values, and metadata (`origin`, `definedAt`).
-    *   Test URL imports using `urlContentResolver`.
+    *   Verify correct `subtype` handling based on `node.subtype`.
+    *   Verify the handler correctly uses the pre-parsed `node.path` object.
 
 ### 2. `@embed` Handler
 
-*   **Action:** Refactor `EmbedDirectiveHandler.execute` to switch logic based on AST `subtype` ('embedPath', 'embedVariable', 'embedTemplate'). Parse the directive parameters into the strict `EmbedParams` union type (`PathEmbedParams`, `VariableEmbedParams`, `TemplateEmbedParams`) defined in `embed-spec.md`.
+*   **Action:** Refactor `EmbedDirectiveHandler.execute` to use the `node.subtype` ('embedPath', 'embedVariable', 'embedTemplate') provided by the parser (via `_EmbedRHS`). Use the pre-parsed AST structure (`node.path` for 'embedPath', `node.content` for 'embedTemplate', `node.path` containing variable info for 'embedVariable'). Parse these structures into strict `EmbedParams` if needed, although the AST structure might be directly usable.
 *   **Files:** `services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler.ts`
 *   **Details/Considerations:**
-    *   **`subtype` logic:**
-        *   `embedPath`: Resolve `path` (using `ResolutionService` with strict `MeldPath`), read file (using `FileSystemService`), extract content (section, header, etc.).
-        *   `embedVariable`: Resolve the `path` field (which contains a `VariableReferenceNode` structure for text/data vars or a `PathValueObject` for path vars) using `ResolutionService` (expecting a strict `MeldVariable` result). Extract the string value.
-        *   `embedTemplate`: Resolve variables within the `content` string using `ResolutionService`.
+    *   **`subtype` logic (using `node.subtype` and associated fields):**
+        *   `embedPath`: Use `node.path` (result of `validatePath`, including potential `interpolatedValue` array). Resolve variables within the path segments using `ResolutionService` if `node.path.structured.variables` exists. Read file content.
+        *   `embedVariable`: Use `node.path.variable` (the `VariableReferenceNode`) or `node.path.raw` to resolve the variable via `ResolutionService` (expecting strict `MeldVariable`). Extract string value.
+        *   `embedTemplate`: Use `node.content` (array of `TextNode`/`VariableReferenceNode`). Resolve variables within this array using `ResolutionService`.
     *   Use `ResolutionContext` with appropriate flags (e.g., `disablePathPrefixing`) based on the subtype.
     *   **Non-destructive transformations:** The primary output is the embedded content. Return `DirectiveResult` containing the `newState` (which might be unchanged if only embedding) and a `replacementNode` (a `TextNode` containing the resolved content).
     *   **`SourceLocation` Tracking:** The `replacementNode`'s `location` should match the original `@embed` directive (`node.location`). The content itself doesn't inherently carry source location from its origin *within* this handler's result; tracking the origin is implicit in the embedding process. The `EmbedResult` type from the spec could be used internally or returned if needed for more complex scenarios.
 *   **Testing:**
     *   Update `EmbedDirectiveHandler.test.ts` and `EmbedDirectiveHandler.transformation.test.ts`.
-    *   Add tests specifically for each `subtype` ('embedPath', 'embedVariable', 'embedTemplate').
-    *   Verify correct parsing into `EmbedParams` subtypes.
-    *   Verify calls to `ResolutionService` and `FileSystemService` use strict types.
-    *   Verify the content of the `replacementNode` is correct for each subtype.
-    *   Verify `SourceLocation` of the `replacementNode`.
+    *   Add tests specifically for each `subtype` based on `node.subtype`.
+    *   Verify handler correctly uses pre-parsed AST fields (`node.path`, `node.content`, `node.path.variable`).
 
 ### 3. `@run` Handler
 
-*   **Action:** Refactor `RunDirectiveHandler.execute` to switch logic based on AST `subtype` ('runCommand', 'runCode', 'runCodeParams', 'runDefined'). Parse the directive parameters into the strict `RunDirective` union type (`BasicCommandRun`, `LanguageCommandRun`, `DefinedCommandRun`) defined in `run-spec.md`.
+*   **Action:** Refactor `RunDirectiveHandler.execute` to use the `node.subtype` ('runCommand', 'runCode', 'runCodeParams', 'runDefined') provided by the parser (via `_RunRHS`). Use the pre-parsed AST structure (`node.command` which can be an array for interpolated content, a string, or a command reference object). Parse into strict `RunDirective` types if needed.
 *   **Files:** `services/pipeline/DirectiveService/handlers/execution/RunDirectiveHandler.ts`
 *   **Details/Considerations:**
-    *   **`subtype` logic:**
-        *   `runCommand`: Resolve variables in the `command` string using `ResolutionService`. Execute the command.
-        *   `runCode`/`runCodeParams`: Resolve variables in parameters (if `runCodeParams`). Execute the `command` (script block) using the specified `language`.
-        *   `runDefined`: Resolve the `command` reference (`name`, `args`) using `ResolutionService` (expecting `CommandVariable` from `StateService`). Resolve arguments. Execute the defined command logic.
+    *   **`subtype` logic (using `node.subtype` and `node.command`):**
+        *   `runCommand`: `node.command` is an array (interpolated) or string. Resolve variables using `ResolutionService`. Execute.
+        *   `runCode`/`runCodeParams`: `node.command` is an array (interpolated). Resolve variables in `node.parameters` (if present) and `node.command` using `ResolutionService`. Execute using `node.language`.
+        *   `runDefined`: `node.command` is an object `{ name, args }`. Resolve the command `name` via `StateService` (expecting `CommandVariable`). Resolve arguments (`args`) using `ResolutionService`. Execute.
     *   Utilize the `ExecutionContext` type from `run-spec.md` for configuring the execution environment (CWD, env vars, security).
     *   Interact with the (yet to be fully defined/refactored) command execution mechanism (e.g., a dedicated `CommandExecutorService` or shell execution utility).
     *   **Non-destructive transformations:** Return `DirectiveResult` containing the `newState` and a `replacementNode` (a `TextNode` containing the command's `stdout`).
     *   **`SourceLocation` Tracking:** The `replacementNode`'s `location` should match the original `@run` directive (`node.location`). The `ExecutionResult` type could store metadata about the execution.
 *   **Testing:**
     *   Update `RunDirectiveHandler.test.ts`, `RunDirectiveHandler.transformation.test.ts`, `RunDirectiveHandler.integration.test.ts`.
-    *   Add tests for each `subtype`.
-    *   Verify parsing into `RunDirective` subtypes.
-    *   Verify calls to `ResolutionService` and `StateService` (for `runDefined`).
-    *   Verify interaction with the command execution mechanism.
-    *   Verify the content and `SourceLocation` of the `replacementNode`.
+    *   Add tests for each `subtype` based on `node.subtype`.
+    *   Verify handler uses pre-parsed `node.command`, `node.language`, `node.parameters`.
 
 ### 4. `@data` Handler
 
-*   **Action:** Refactor `DataDirectiveHandler.execute` to utilize the enhanced RHS AST structure (`source`, `embed.subtype`, `run.subtype`). Calculate the value based on the `source` ('literal', 'embed', 'run') and its corresponding AST details. Store the result using `StateService.setDataVar` with the strict `DataVariable` type.
+*   **Action:** Refactor `DataDirectiveHandler.execute` to use the pre-parsed RHS structure provided by the AST (`node.source`, `node.embed`, `node.run`, `node.value`). Calculate the value based on `node.source` and its corresponding AST object (`node.embed`, `node.run`, `node.call`, or `node.value`). Store the result using `StateService.setDataVar` with the strict `DataVariable` type.
 *   **Files:** `services/pipeline/DirectiveService/handlers/definition/DataDirectiveHandler.ts`
 *   **Details/Considerations:**
-    *   **RHS Handling:**
-        *   `source: 'literal'`: Resolve variables within the parsed literal `value` (object/array/primitive) using `ResolutionService` recursively.
-        *   `source: 'embed'`: Use the `embed` AST (`EmbedRHSAst`) mirroring `@embed` structure. Perform necessary resolution/file reading based on `embed.subtype` ('embedPath', 'embedVariable', 'embedTemplate') similar to `@embed` handler logic, but obtain the *content* string. **Parse** this string content (e.g., as JSON, YAML if hints are available or based on file extension).
-        *   `source: 'run'`: Use the `run` AST (`RunRHSAst`) mirroring `@run` structure. Execute the command based on `run.subtype` ('runCommand', 'runCode', 'runDefined') similar to `@run` handler logic, but obtain the *stdout* string. **Parse** this string output (e.g., as JSON).
+    *   **RHS Handling (using `node.source`):**
+        *   `source: 'literal'`: `node.value` contains the parsed literal (object/array/primitive potentially with embedded `VariableReferenceNode`s). Resolve variables within `node.value` recursively using `ResolutionService`.
+        *   `source: 'embed'`: Use `node.embed` (result from `_EmbedRHS` with `subtype`, `path`/`content`). Perform necessary resolution/file reading based on `node.embed.subtype` similar to `@embed` handler logic, but obtain the *content* string. **Parse** this string content.
+        *   `source: 'run'`: Use `node.run` (result from `_RunRHS` with `subtype`, `command`). Execute the command based on `node.run.subtype` similar to `@run` handler logic, but obtain the *stdout* string. **Parse** this string output.
     *   **Value Calculation:** The core task is to get the final structured data (`JsonValue`) after resolving/executing the RHS.
     *   Call `newState.setDataVar(identifier, resolvedValue)`. The `resolvedValue` must be a `JsonValue`. Ensure the `DataVariable` stored includes appropriate `metadata` (e.g., `definedAt: node.location`, `origin: VariableOrigin.DIRECT_DEFINITION`).
     *   **Non-destructive transformations:** This handler modifies state. It should return the `newState` object directly (or within `DirectiveResult` if transformation mode requires specific handling, though less likely for definition handlers).
     *   **`SourceLocation` Tracking:** The `DataVariable` stored in state should have its `metadata.definedAt` set to the location of the `@data` directive (`node.location`).
 *   **Testing:**
     *   Update `DataDirectiveHandler.test.ts`.
-    *   Add tests for each `source` type ('literal', 'embed', 'run') and relevant `subtypes` within 'embed'/'run'.
-    *   Verify correct value calculation for different RHS structures.
-    *   Verify calls to `ResolutionService`, `FileSystemService`, command execution.
-    *   Verify the `DataVariable` stored in `StateService` has the correct type, value, and metadata.
+    *   Add tests for each `source` type ('literal', 'embed', 'run', 'call') leveraging the structure provided by `node.source`, `node.embed`, `node.run`, `node.call`, `node.value`.
 
 ### 5. `@text` Handler
 
-*   **Action:** Refactor `TextDirectiveHandler.execute` similar to `@data`, utilizing the enhanced RHS AST structure (`source`, `embed.subtype`, `run.subtype`). Calculate the final *string* value based on the `source`. Store the result using `StateService.setTextVar` with the strict `TextVariable` type.
+*   **Action:** Refactor `TextDirectiveHandler.execute` similar to `@data`, using the pre-parsed RHS structure (`node.source`, `node.embed`, `node.run`, `node.value`). Calculate the final *string* value based on `node.source`. Store the result using `StateService.setTextVar` with the strict `TextVariable` type.
 *   **Files:** `services/pipeline/DirectiveService/handlers/definition/TextDirectiveHandler.ts`
 *   **Details/Considerations:**
-    *   **RHS Handling:**
-        *   `source: 'literal'`: Resolve variables within the literal `value` (string or template literal) using `ResolutionService`.
-        *   `source: 'embed'`: Use the `embed` AST (`EmbedRHSAst`). Perform resolution/file reading based on `embed.subtype` to get the final *content string*. No parsing needed.
-        *   `source: 'run'`: Use the `run` AST (`RunRHSAst`). Execute the command based on `run.subtype` to get the final *stdout string*. No parsing needed.
+    *   **RHS Handling (using `node.source`):**
+        *   `source: 'literal'`: `node.value` is an array (interpolated string/template). Resolve variables using `ResolutionService` and join into a string.
+        *   `source: 'embed'`: Use `node.embed` (result from `_EmbedRHS`). Perform resolution/file reading based on `node.embed.subtype` to get the final *content string*. No parsing needed.
+        *   `source: 'run'`: Use `node.run` (result from `_RunRHS`). Execute based on `node.run.subtype` to get the final *stdout string*. No parsing needed.
     *   **Value Calculation:** The core task is to get the final string value.
     *   Call `newState.setTextVar(identifier, resolvedValue)`. The `resolvedValue` must be a `string`. Ensure the `TextVariable` stored includes appropriate `metadata` (`definedAt: node.location`, `origin: VariableOrigin.DIRECT_DEFINITION`).
     *   **Non-destructive transformations:** Return the `newState` (or within `DirectiveResult`).
     *   **`SourceLocation` Tracking:** The `TextVariable` stored in state should have `metadata.definedAt` set to the `@text` directive location (`node.location`).
 *   **Testing:**
     *   Update `TextDirectiveHandler.test.ts`, `TextDirectiveHandler.integration.test.ts`, `TextDirectiveHandler.command.test.ts`.
-    *   Add tests for each `source` type ('literal', 'embed', 'run') and relevant `subtypes`.
-    *   Verify correct string value calculation.
-    *   Verify calls to `ResolutionService`, `FileSystemService`, command execution.
-    *   Verify the `TextVariable` stored in `StateService` has the correct type, value, and metadata.
+    *   Add tests for each `source` type ('literal', 'embed', 'run', 'call') leveraging the structure provided by `node.source`, `node.embed`, `node.run`, `node.call`, `node.value`.
 
 ### 6. `@define` Handler
 
-*   **Action:** Refactor `DefineDirectiveHandler.execute` to parse the directive details (`name`, `parameters`, `command` block) into the strict `ICommandDefinition` union type (`IBasicCommandDefinition` | `ILanguageCommandDefinition`) from `define-spec.md`. Store the result using `StateService.setCommand`.
+*   **Action:** Refactor `DefineDirectiveHandler.execute` to use the pre-parsed structure from the AST (`node.name`, `node.parameters`, `node.command` which is the result of `_RunRHS`, or `node.value` for string definitions). Parse into the strict `ICommandDefinition` union type. Store using `StateService.setCommand`.
 *   **Files:** `services/pipeline/DirectiveService/handlers/definition/DefineDirectiveHandler.ts`
 *   **Details/Considerations:**
-    *   Determine the `ICommandDefinition` subtype ('basic' or 'language') based on the AST structure (presence of `language` field in the `command` object vs. a simple `command` string).
-    *   Populate the `ICommandDefinition` object with `name`, `parameters`, `commandTemplate`/`codeBlock`, `isMultiline`, `language`, etc., based on the AST and the spec.
+    *   Determine `ICommandDefinition` subtype ('basic' or 'language') based on `node.command.subtype` (from `_RunRHS`) or if `node.value` is present.
+    *   Populate the `ICommandDefinition` object using `node.name`, `node.parameters`, `node.command` (or `node.value`).
     *   Include metadata defined in the spec (`sourceLocation`, `definedAt`, etc.).
     *   Call `newState.setCommand(name, commandDefinition)`. The `commandDefinition` must conform to `ICommandDefinition`. Ensure the stored `CommandVariable` (which wraps the `ICommandDefinition`) includes appropriate `metadata` (`definedAt: node.location`, `origin: VariableOrigin.DIRECT_DEFINITION`).
     *   **Non-destructive transformations:** Return the `newState` (or within `DirectiveResult`).
     *   **`SourceLocation` Tracking:** The `CommandVariable` stored in state should have `metadata.definedAt` set to the `@define` directive location (`node.location`). The `ICommandDefinition` itself should also store `sourceLocation`.
 *   **Testing:**
     *   Update `DefineDirectiveHandler.test.ts`.
-    *   Verify correct parsing into `IBasicCommandDefinition` and `ILanguageCommandDefinition`.
-    *   Verify the `CommandVariable` stored in `StateService` contains the correct `ICommandDefinition` structure and metadata.
+    *   Verify correct parsing based on AST structure (`node.command` vs `node.value`).
 
 ### 7. `@path` Handler
 
-*   **Action:** Refactor `PathDirectiveHandler.execute` to parse the AST's `path` object (`PathValueObject`) and potentially resolve it further using `PathService` and `ResolutionService` if it contains variables. Store the result using `StateService.setPathVar` with the strict `IPathVariable` type.
+*   **Action:** Refactor `PathDirectiveHandler.execute` to use the pre-validated `node.path` object provided by the AST (result of `helpers.validatePath`, potentially including `interpolatedValue` or `variableNode`). Resolve variables within the path using `ResolutionService` if needed. Store the result using `StateService.setPathVar` with the strict `IPathVariable` type.
 *   **Files:** `services/pipeline/DirectiveService/handlers/definition/PathDirectiveHandler.ts`
 *   **Details/Considerations:**
-    *   The AST `PathValueObject` already contains structured path information (`base`, `segments`, `variables`).
-    *   Resolve any variables (`{{textVar}}`, `$pathVar`) within the `path.structured.segments` using `ResolutionService`.
+    *   Use the `node.path` object directly (`raw`, `structured`, `isPathVariable`, `interpolatedValue`, `variableNode`).
+    *   Resolve variables within `node.path.structured.segments` using `ResolutionService` only if `node.path.structured.variables` indicates they exist (or if `node.path.interpolatedValue` contains `VariableReferenceNode`s).
     *   Use `PathService` to validate and potentially normalize the fully resolved path string.
     *   Determine if it's a `FILESYSTEM` or `URL` path based on the structure/protocol. **For URLs, interact with `PathService.validateURL` (which uses `URLContentResolver` or similar) to perform necessary checks.**
     *   Construct the `IFilesystemPathState` or `IUrlPathState` object according to `variables-spec.md`. This involves setting `contentType`, `originalValue`, `isValidSyntax`, `isSecure`, `isAbsolute`, and potentially `validatedPath` (using branded `ValidatedResourcePath`). Existence checks (`exists`) might be deferred. For URLs, set `isValidated`, `fetchStatus` (initially 'not_fetched'), **leveraging results from `PathService`/`URLContentResolver`**. 
@@ -151,10 +137,7 @@ No type refinements proposed for this phase.
     *   **`SourceLocation` Tracking:** The `IPathVariable` stored in state should have `metadata.definedAt` set to the `@path` directive location (`node.location`).
 *   **Testing:**
     *   Update `PathDirectiveHandler.test.ts`.
-    *   Verify correct parsing and resolution of the `PathValueObject`.
-    *   Verify interaction with `ResolutionService` and `PathService` using strict types.
-    *   Verify the `IPathVariable` stored in `StateService` has the correct state (`IFilesystemPathState` or `IUrlPathState`) and metadata.
-    *   Test cases with variables in paths, relative paths, absolute paths, and URLs.
+    *   Verify correct handling of the `node.path` object from the AST (including `interpolatedValue`, `variableNode`).
 
 ---
 *Note: The `@var` directive seems less frequently used or potentially deprecated based on context, but if needed, its handler would be refactored similarly to `@data`, parsing the `value` (primitive/object/array) and storing it, likely as a `DataVariable`.* 
