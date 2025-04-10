@@ -17,7 +17,7 @@ import { ErrorSeverity } from '@core/errors/MeldError.js';
 import { embedLogger } from '@core/utils/logger.js';
 import { StateVariableCopier } from '@services/state/utilities/StateVariableCopier.js';
 import type { IInterpreterServiceClient } from '@services/pipeline/InterpreterService/interfaces/IInterpreterServiceClient.js'; 
-import { InterpreterServiceClientFactory, type IInterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory.js';
+import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory.js';
 import type { IStateTrackingService } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
 import { inject, injectable } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
@@ -89,7 +89,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
     @inject('ICircularityService') private circularityService: ICircularityService,
     @inject('IFileSystemService') private fileSystemService: IFileSystemService,
     @inject('IPathService') private pathService: IPathService,
-    @inject('IInterpreterServiceClientFactory') private interpreterServiceClientFactory: IInterpreterServiceClientFactory,
+    @inject('IInterpreterServiceClientFactory') private interpreterServiceClientFactory: InterpreterServiceClientFactory,
     @inject('ILogger') private logger: ILogger
   ) {
   }
@@ -98,7 +98,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
     // First try to get the client from the factory
     if (!this.interpreterServiceClient && this.interpreterServiceClientFactory) {
       try {
-        this.interpreterServiceClient = this.interpreterServiceClientFactory.getClient();
+        this.interpreterServiceClient = this.interpreterServiceClientFactory.createClient();
       } catch (error) {
         this.logger.warn('Failed to get interpreter service client from factory', {
           error: error instanceof Error ? error.message : String(error)
@@ -241,7 +241,10 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
             if (!(await this.fileSystemService.exists(resolvedPath.validatedPath))) {
               throw new MeldFileNotFoundError(
                 `Embed source file not found: ${resolvedPath.validatedPath}`,
-                { location: node.location }
+                {
+                  details: { filePath: resolvedPath.validatedPath, operation: 'embed' },
+                  sourceLocation: node.location ? { line: node.location.start.line, column: node.location.start.column, filePath: context.currentFilePath } : undefined
+                }
               );
             }
             // Use validatedPath for readFile
@@ -355,7 +358,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
             `Error extracting section \"${section}\": ${error instanceof Error ? error.message : String(error)}`,
             this.kind,
             DirectiveErrorCode.EXECUTION_FAILED,
-            { location: node.location, cause: error instanceof Error ? error : undefined, section: section }
+            { location: node.location, cause: error instanceof Error ? error : undefined }
           );
         }
       }
