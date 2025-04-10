@@ -165,17 +165,6 @@ export interface PathResolutionContext {
 }
 
 /**
- * Purpose of path resolution for validation.
- */
-export enum PathPurpose {
-  READ = 'read',
-  WRITE = 'write',
-  EXECUTE = 'execute',
-  IMPORT = 'import',
-  EMBED = 'embed'
-}
-
-/**
  * Additional constraints for path validation.
  */
 export interface PathConstraints {

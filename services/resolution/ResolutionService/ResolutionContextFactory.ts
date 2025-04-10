@@ -2,35 +2,79 @@ import {
   ResolutionContext, 
   ResolutionFlags, 
   PathResolutionContext, 
-  PathPurpose, 
-  VariableType, 
-  FormattingContext
-} from '@core/types.js';
-import type { IStateService } from '@services/state/IStateService.js';
+  FormattingContext,
+} from '@core/types/resolution';
+import { PathPurpose } from '@core/types/paths';
+import { VariableType } from '@core/types/variables';
+import type { ParserFlags } from '@core/types/resolution';
+import { StringLiteralType } from '@core/types/common';
+import type { IStateService } from '@services/state/StateService/IStateService';
 
-// Define the type for the context methods more explicitly
-type ContextMethods = {
-  withIncreasedDepth: () => ResolutionContext;
-  withStrictMode: (strict: boolean) => ResolutionContext;
-  withAllowedTypes: (types: VariableType[]) => ResolutionContext;
-  withFlags: (flags: Partial<ResolutionFlags>) => ResolutionContext;
-  withFormattingContext: (formatting: Partial<FormattingContext>) => ResolutionContext;
-  withPathContext: (pathContext: Partial<PathResolutionContext>) => ResolutionContext;
-  withParserFlags: (flags: any) => ResolutionContext; // Keeping any for now
-};
+// Define the type for the context object without the methods
+type ResolutionContextBase = Omit<ResolutionContext, 
+  'withIncreasedDepth' | 'withStrictMode' | 'withAllowedTypes' | 'withFlags' | 'withFormattingContext' | 'withPathContext' | 'withParserFlags'
+>;
 
 /**
  * Factory for creating resolution contexts appropriate for different directives
  */
 export class ResolutionContextFactory {
 
+  // --- Private Static Helper Methods for building new contexts --- 
+
+  private static _withIncreasedDepth(currentContext: ResolutionContext): ResolutionContext {
+    const base = currentContext as ResolutionContextBase;
+    const nextContextBase: ResolutionContextBase = { ...base, depth: base.depth + 1 };
+    return ResolutionContextFactory.rebuildContext(nextContextBase); 
+  }
+  private static _withStrictMode(currentContext: ResolutionContext, strict: boolean): ResolutionContext {
+    const base = currentContext as ResolutionContextBase;
+    const nextContextBase: ResolutionContextBase = { ...base, strict };
+    return ResolutionContextFactory.rebuildContext(nextContextBase);
+  }
+  private static _withAllowedTypes(currentContext: ResolutionContext, types: VariableType[]): ResolutionContext {
+    const base = currentContext as ResolutionContextBase;
+    const nextContextBase: ResolutionContextBase = { ...base, allowedVariableTypes: types };
+    return ResolutionContextFactory.rebuildContext(nextContextBase);
+  }
+  private static _withFlags(currentContext: ResolutionContext, flags: Partial<ResolutionFlags>): ResolutionContext {
+    const base = currentContext as ResolutionContextBase;
+    const nextContextBase: ResolutionContextBase = { ...base, flags: { ...base.flags, ...flags } };
+    return ResolutionContextFactory.rebuildContext(nextContextBase);
+  }
+  private static _withFormattingContext(currentContext: ResolutionContext, formatting: Partial<FormattingContext>): ResolutionContext {
+    const base = currentContext as ResolutionContextBase;
+    // Ensure defaults merge correctly
+    const currentFormatting = base.formattingContext || { isBlock: false }; // Ensure currentFormatting is not null/undefined
+    const nextFormatting = { ...currentFormatting, ...formatting };
+    // Ensure isBlock is explicitly boolean if needed by the type (adjust if type allows undefined)
+    if (nextFormatting.isBlock === undefined) {
+       nextFormatting.isBlock = false; // Or handle as per actual type definition
+    }
+    const nextContextBase: ResolutionContextBase = { ...base, formattingContext: nextFormatting as FormattingContext };
+    return ResolutionContextFactory.rebuildContext(nextContextBase);
+  }
+  private static _withPathContext(currentContext: ResolutionContext, pathContext: Partial<PathResolutionContext>): ResolutionContext {
+    const base = currentContext as ResolutionContextBase;
+    const currentPath = base.pathContext || ResolutionContextFactory.createDefaultPathContext(PathPurpose.READ); // Use static helper
+    const nextPathContext = { ...currentPath, ...pathContext };
+    const nextContextBase: ResolutionContextBase = { ...base, pathContext: nextPathContext };
+    return ResolutionContextFactory.rebuildContext(nextContextBase);
+  }
+  private static _withParserFlags(currentContext: ResolutionContext, flags: any): ResolutionContext {
+    const base = currentContext as ResolutionContextBase;
+    const nextContextBase: ResolutionContextBase = { ...base, parserFlags: { ...base.parserFlags, ...flags } };
+    return ResolutionContextFactory.rebuildContext(nextContextBase);
+  }
+
+  // --- Public Static Helpers --- 
+
   // Helper to create a default PathResolutionContext
   private static createDefaultPathContext(purpose: PathPurpose, baseDir?: string): PathResolutionContext {
     return {
-      baseDir: baseDir || '.', // Default to current directory if not provided
-      allowTraversal: false,    // Default to secure settings
+      baseDir: baseDir || '.',
+      allowTraversal: false,
       purpose: purpose,
-      // constraints: undefined // No default constraints initially
     };
   }
   
@@ -40,20 +84,58 @@ export class ResolutionContextFactory {
         isVariableEmbed: false,
         isTransformation: false,
         allowRawContentResolution: false,
-        isDirectiveHandler: false, // Default to false, set true specifically if needed
+        isDirectiveHandler: false,
         isImportContext: false,
-        processNestedVariables: true // Default to true
+        processNestedVariables: true
      };
   }
 
+  // Helper to create default ParserFlags
+  private static createDefaultParserFlags(): ParserFlags {
+      return {
+          parseInRawContent: false,
+          parseInCodeBlocks: true,
+          resolveVariablesDuringParsing: false,
+          parseLiteralTypes: [StringLiteralType.DOUBLE_QUOTED, StringLiteralType.SINGLE_QUOTED, StringLiteralType.BACKTICK]
+      };
+  }
+
+  // Helper to create default FormattingContext
+  private static createDefaultFormattingContext(): FormattingContext {
+      return {
+          isBlock: false,
+          preserveLiteralFormatting: false,
+          preserveWhitespace: false,
+      };
+  }
+
+  /**
+   * Rebuilds the full ResolutionContext object with methods from a base object.
+   * This is used by the private static _withX helpers.
+   */
+  private static rebuildContext(base: ResolutionContextBase): ResolutionContext {
+      let fullContext: ResolutionContext;
+      // Define the methods as closures referencing 'fullContext'
+      const methods = {
+          withIncreasedDepth: () => ResolutionContextFactory._withIncreasedDepth(fullContext),
+          withStrictMode: (strict: boolean) => ResolutionContextFactory._withStrictMode(fullContext, strict),
+          withAllowedTypes: (types: VariableType[]) => ResolutionContextFactory._withAllowedTypes(fullContext, types),
+          withFlags: (flags: Partial<ResolutionFlags>) => ResolutionContextFactory._withFlags(fullContext, flags),
+          withFormattingContext: (formatting: Partial<FormattingContext>) => ResolutionContextFactory._withFormattingContext(fullContext, formatting),
+          withPathContext: (pathContext: Partial<PathResolutionContext>) => ResolutionContextFactory._withPathContext(fullContext, pathContext),
+          withParserFlags: (flags: any) => ResolutionContextFactory._withParserFlags(fullContext, flags),
+      };
+      fullContext = { ...base, ...methods };
+      return fullContext;
+  }
+
+  // --- Public Static Factory Methods --- 
+
   /**
    * Create a generic resolution context.
-   * Allows all variable types and nested interpolation by default.
-   * Assumes a generic read purpose for paths if not specified.
    */
   static create(state: IStateService, filePath?: string): ResolutionContext {
-    // Define the base properties without methods first
-    const baseProps = {
+    const baseProps: ResolutionContextBase = {
       state,
       strict: false, 
       depth: 0,      
@@ -66,68 +148,33 @@ export class ResolutionContextFactory {
       flags: this.createDefaultFlags(),
       pathContext: this.createDefaultPathContext(PathPurpose.READ, filePath),
       currentFilePath: filePath,
-      formattingContext: { isBlock: false }, // Added default formatting context
-      parserFlags: {}, // Added default parser flags
+      formattingContext: this.createDefaultFormattingContext(),
+      parserFlags: this.createDefaultParserFlags(),
     };
 
-    // Define the methods. These will close over the `methods` object itself.
-    const methods: ContextMethods = {
-      withIncreasedDepth: function() {
-        // `this` refers to the current context object
-        return { ...this, depth: this.depth + 1, ...methods }; 
-      },
-      withStrictMode: function(strict: boolean) {
-        return { ...this, strict, ...methods };
-      },
-      withAllowedTypes: function(types: VariableType[]) {
-        return { ...this, allowedVariableTypes: types, ...methods };
-      },
-      withFlags: function(flags: Partial<ResolutionFlags>) {
-        return { ...this, flags: { ...this.flags, ...flags }, ...methods };
-      },
-      withFormattingContext: function(formatting: Partial<FormattingContext>) {
-        return { ...this, formattingContext: { ...this.formattingContext, ...formatting }, ...methods };
-      },
-      withPathContext: function(pathContext: Partial<PathResolutionContext>) {
-        return { 
-          ...this, 
-          pathContext: { 
-            ...(this.pathContext || ResolutionContextFactory.createDefaultPathContext(PathPurpose.READ)), 
-            ...pathContext 
-          }, 
-          ...methods 
-        };
-      },
-      withParserFlags: function(flags: any) {
-        return { ...this, parserFlags: { ...this.parserFlags, ...flags }, ...methods };
-      },
-    };
-
-    // Combine base properties and methods
-    return { ...baseProps, ...methods } as ResolutionContext;
+    // Use the rebuild helper to construct the final object with methods
+    return ResolutionContextFactory.rebuildContext(baseProps);
   }
 
   /**
    * Create context for @text directives
-   * Allows all variable types and nested interpolation.
    */
   static forTextDirective(state: IStateService, filePath?: string): ResolutionContext {
-    const baseContext = this.create(state, filePath);
-    // Use the 'with' methods to modify the base context
+    const baseContext = this.create(state, filePath); 
+    // Call the methods on the created object
     return baseContext
-      .withAllowedTypes([
+      .withAllowedTypes([ 
         VariableType.TEXT,
         VariableType.DATA,
         VariableType.PATH,
         VariableType.COMMAND
       ])
       .withFlags({ isDirectiveHandler: true, processNestedVariables: true })
-      .withPathContext({ purpose: PathPurpose.READ }); // Assuming paths used here are for reading
+      .withPathContext({ purpose: PathPurpose.READ });
   }
 
   /**
    * Create context for @run directives
-   * Allows text, path, command variables. Disallows data variables. No nested variables.
    */
   static forRunDirective(state: IStateService, filePath?: string): ResolutionContext {
     const baseContext = this.create(state, filePath);
@@ -138,24 +185,22 @@ export class ResolutionContextFactory {
         VariableType.COMMAND
       ])
       .withFlags({ isDirectiveHandler: true, processNestedVariables: false })
-      .withPathContext({ purpose: PathPurpose.EXECUTE }); // Paths might be for execution
+      .withPathContext({ purpose: PathPurpose.EXECUTE });
   }
 
   /**
    * Create context for @path directives
-   * Only allows path variables. No nested variables. Paths are for read/reference.
    */
   static forPathDirective(state: IStateService, filePath?: string): ResolutionContext {
      const baseContext = this.create(state, filePath);
      return baseContext
-       .withAllowedTypes([VariableType.PATH]) // Only path variables allowed for RHS
+       .withAllowedTypes([VariableType.PATH])
        .withFlags({ isDirectiveHandler: true, processNestedVariables: false })
-       .withPathContext({ purpose: PathPurpose.READ }); // Defining a path is like reading/referencing
+       .withPathContext({ purpose: PathPurpose.READ });
   }
 
   /**
    * Create context for @data directives
-   * Allows all variable types for flexible data definition.
    */
   static forDataDirective(state: IStateService, filePath?: string): ResolutionContext {
     const baseContext = this.create(state, filePath);
@@ -167,17 +212,16 @@ export class ResolutionContextFactory {
         VariableType.COMMAND
       ])
       .withFlags({ isDirectiveHandler: true, processNestedVariables: true })
-      .withPathContext({ purpose: PathPurpose.READ }); // Paths used in data def might be for reading content
+      .withPathContext({ purpose: PathPurpose.READ });
   }
 
   /**
    * Create context for @import directives
-   * Only allows path variables for security. No nested variables.
    */
   static forImportDirective(state: IStateService, filePath?: string): ResolutionContext {
      const baseContext = this.create(state, filePath);
      return baseContext
-       .withAllowedTypes([VariableType.PATH]) // Only path vars allowed in import path itself
+       .withAllowedTypes([VariableType.PATH])
        .withFlags({ 
          isDirectiveHandler: true, 
          processNestedVariables: false,
@@ -188,25 +232,23 @@ export class ResolutionContextFactory {
 
   /**
    * Create context for resolving command parameters.
-   * Typically allows only simple text/data resolution.
    */
   static forCommandParameters(state: IStateService, filePath?: string): ResolutionContext {
      const baseContext = this.create(state, filePath);
      return baseContext
        .withAllowedTypes([VariableType.TEXT, VariableType.DATA]) 
-       .withFlags({ processNestedVariables: false }) // No deep nesting in params typically
-       .withPathContext({ purpose: PathPurpose.READ }); // Minimal path context
+       .withFlags({ processNestedVariables: false })
+       .withPathContext({ purpose: PathPurpose.READ });
   }
 
   /**
    * Create context specifically for resolving a path string.
-   * Only allows path variables. No nesting.
    */
   static forPathResolution(state: IStateService, purpose: PathPurpose, filePath?: string): ResolutionContext {
      const baseContext = this.create(state, filePath);
      return baseContext
-       .withAllowedTypes([VariableType.PATH, VariableType.TEXT]) // Allow text vars within paths ($project/{{sub}}/file)
+       .withAllowedTypes([VariableType.PATH, VariableType.TEXT])
        .withFlags({ processNestedVariables: false })
-       .withPathContext({ purpose }); // Use the provided purpose
+       .withPathContext({ purpose });
   }
 } 

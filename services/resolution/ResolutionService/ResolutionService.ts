@@ -691,31 +691,71 @@ export class ResolutionService implements IResolutionService {
   /**
    * Resolve path variables
    */
-  async resolvePath(pathString: string | MeldPath, context: ResolutionContext): Promise<MeldPath> {
+  async resolvePath(pathString: string | MeldPath | StructuredPath, context: ResolutionContext): Promise<MeldPath> {
     logger.debug(`Resolving path: ${JSON.stringify(pathString)}`, { context: context.flags });
     const validationContext = this.createValidationContext(context);
+    let pathToValidate: string;
+
     try {
-      const validatedPath = await this.pathService.validatePath(pathString, validationContext); 
-      return validatedPath; // Assuming validatePath returns MeldPath
+      if (typeof pathString === 'string') {
+        // Handle raw string input: parse -> resolve -> validate
+        if (!pathString.includes('{{') && !pathString.includes('$')) { // Optimization
+          pathToValidate = pathString;
+          logger.debug(`resolvePath: Input string '${pathToValidate}' contains no variable markers, proceeding directly to validation.`);
+        } else {
+          const nodes = await this.parseForResolution(pathString, context);
+          pathToValidate = await this.resolveNodes(nodes, context);
+          logger.debug(`resolvePath: Resolved string '${pathString}' to '${pathToValidate}', proceeding to validation.`);
+        }
+      } else if (pathString && typeof pathString === 'object' && 'interpolatedValue' in pathString && pathString.interpolatedValue) {
+        // Handle StructuredPath with interpolation: resolve nodes -> validate
+        pathToValidate = await this.resolveNodes(pathString.interpolatedValue, context);
+        logger.debug(`resolvePath: Resolved StructuredPath.interpolatedValue to '${pathToValidate}', proceeding to validation.`);
+      } else if (pathString instanceof MeldPath) {
+        // Handle MeldPath: validate originalValue
+        pathToValidate = pathString.originalValue;
+        logger.debug(`resolvePath: Using MeldPath.originalValue '${pathToValidate}' for validation.`);
+      } else if (pathString && typeof pathString === 'object' && 'raw' in pathString) {
+        // Handle StructuredPath without interpolation: validate raw
+        pathToValidate = pathString.raw ?? ''; // Use raw value, default to empty if null/undefined
+        logger.debug(`resolvePath: Using StructuredPath.raw '${pathToValidate}' for validation.`);
+      } else {
+        // Should not happen with current types, but handle defensively
+        const errorMsg = 'resolvePath received unexpected input type';
+        logger.error(errorMsg, { pathString });
+        throw new MeldResolutionError(errorMsg, { code: 'E_UNSUPPORTED_TYPE' });
+      }
+
+      // Now validate the determined path string
+      const validatedPath = await this.pathService.validatePath(pathToValidate, validationContext);
+      logger.debug(`resolvePath: Successfully validated '${pathToValidate}'`);
+      
+      // Return the validated MeldPath object
+      // If the original input was already a MeldPath and validation succeeded, 
+      // we might prefer returning the original object if validation doesn't modify it.
+      // However, validatePath might return a *new* MeldPath instance with updated info.
+      // Safest to return what validatePath gives us.
+      return validatedPath; 
+
     } catch (error) {
-        logger.error('resolvePath failed', { error, pathString });
+        logger.error('resolvePath failed', { error, pathInput: pathString });
         if (context.strict) {
             // Ensure it's a MeldError, preferably PathValidationError
             const meldError = (error instanceof MeldError)
               ? error
-              : new PathValidationError('Path validation failed during resolution', {
-                  code: 'E_PATH_VALIDATION_FAILED',
-                  details: { pathString: typeof pathString === 'string' ? pathString : pathString.originalValue, validationContext },
+              : new PathValidationError('Path resolution or validation failed', {
+                  code: 'E_PATH_VALIDATION_FAILED', // Keep generic code or be more specific?
+                  details: { pathInput: pathString, validationContext }, // Use original input for context
                   cause: error
               });
             throw meldError;
         }
-        // How to return MeldPath on failure in non-strict? Needs definition.
-        // Return a placeholder or throw? For now, rethrow wrapped error.
-        throw new PathValidationError('Path validation failed during resolution (non-strict)', { 
+        // Non-strict mode: How to return MeldPath on failure?
+        // For now, rethrow wrapped error marked as recoverable.
+        throw new PathValidationError('Path resolution or validation failed (non-strict)', { 
             code: 'E_PATH_VALIDATION_FAILED_NON_STRICT', 
             severity: ErrorSeverity.Recoverable, 
-            details: { pathString: typeof pathString === 'string' ? pathString : pathString.originalValue, validationContext }, 
+            details: { pathInput: pathString, validationContext }, // Use original input for context
             cause: error 
         });
     }
@@ -846,130 +886,57 @@ export class ResolutionService implements IResolutionService {
   }
 
   /**
-   * Resolve any value based on the provided context rules
+   * Resolve any value based on the provided context rules.
+   * This is a general-purpose resolution method that routes based on allowed types in context.
+   * 
+   * @param value - The string or structured path representation to resolve
+   * @param context - The resolution context defining allowed types and rules
+   * @returns The resolved value as a string
+   * @throws {MeldResolutionError} If resolution fails and context.strict is true
    */
   async resolveInContext(value: string | StructuredPath, context: ResolutionContext): Promise<string> {
-    logger.debug(`resolveInContext called`, {
-        value: typeof value === 'string' ? value.substring(0, 50) : value.original?.substring(0,50),
-        contextFlags: context.flags,
-        allowedTypes: context.allowedVariableTypes
-    });
+    logger.debug(`resolveInContext called`, { value: typeof value === 'string' ? value.substring(0, 50) : JSON.stringify(value), contextFlags: context.flags });
 
-    const valueString = typeof value === 'object' ? value.original : value;
-    const allowedTypes = new Set(context.allowedVariableTypes || [VariableType.TEXT, VariableType.DATA, VariableType.PATH, VariableType.COMMAND]); // Default to all if null/undefined
-
-    // 1. Determine intended variable type from syntax more reliably
-    let intendedType: VariableType | 'plaintext' = 'plaintext'; // Default to plaintext
-    let isMaybeData = false; // Flag if syntax could be simple data var
-
-    if (valueString.startsWith('{{') && valueString.endsWith('}}')) {
-      // Could be TEXT or DATA reference inside braces
-      intendedType = VariableType.TEXT; // Assume TEXT primarily, check DATA allowance later
-      isMaybeData = true; // Note it might be data
-    } else if (valueString.startsWith('$') && valueString.includes('(') && valueString.endsWith(')')) {
-      intendedType = VariableType.COMMAND;
-    } else if (valueString.startsWith('$')) {
-      intendedType = VariableType.PATH;
-    } else if (/^[a-zA-Z0-9_]+(?:\\.[a-zA-Z0-9_]+|\\[\\d+\\])+$/.test(valueString) && !valueString.includes(' ')) {
-       // Looks like dot/bracket notation without braces (e.g., user.name, items[0])
-       // Treat this as DATA intent if DATA is allowed, otherwise TEXT/plaintext
-       if (allowedTypes.has(VariableType.DATA)) {
-           intendedType = VariableType.DATA;
-       } else {
-           intendedType = 'plaintext';
-       }
-    } else if (/^[a-zA-Z0-9_]+$/.test(valueString)) {
-        // Simple identifier - could be TEXT or DATA var name
-        intendedType = VariableType.TEXT; // Assume TEXT primarily
-        isMaybeData = true; // Note it might be data
-    }
-    // Otherwise, it remains 'plaintext'
-
-    logger.debug(`resolveInContext: Determined intended type: ${intendedType}`, { valueString });
-
-    // 2. Check if intended type is allowed
-    let isAllowed = false;
-    if (intendedType === VariableType.TEXT && isMaybeData) { // Specifically {{...}} syntax
-       // Allow if EITHER TEXT or DATA is permitted
-       isAllowed = allowedTypes.has(VariableType.TEXT) || allowedTypes.has(VariableType.DATA);
-       // Debug log
-       logger.debug(`[Debug] resolveInContext TypeCheck: {{...}} path`, { valueString, intendedType, isMaybeData, allowedTypes: [...allowedTypes], isAllowed });
-    } else if (intendedType === 'plaintext' || intendedType === VariableType.TEXT) {
-       // Plain text or simple identifier assumed as TEXT
-       isAllowed = allowedTypes.has(VariableType.TEXT);
-       // Debug log
-       logger.debug(`[Debug] resolveInContext TypeCheck: Plaintext/Simple TEXT path`, { valueString, intendedType, allowedTypes: [...allowedTypes], isAllowed });
-    } else if (intendedType === VariableType.DATA) {
-       // Dot/bracket notation assumed as DATA
-       isAllowed = allowedTypes.has(VariableType.DATA);
-       // Debug log
-       logger.debug(`[Debug] resolveInContext TypeCheck: DATA path`, { valueString, intendedType, allowedTypes: [...allowedTypes], isAllowed });
-    } else if (intendedType === VariableType.PATH) {
-        isAllowed = allowedTypes.has(VariableType.PATH);
-        // Debug log
-        logger.debug(`[Debug] resolveInContext TypeCheck: PATH path`, { valueString, intendedType, allowedTypes: [...allowedTypes], isAllowed });
-    } else if (intendedType === VariableType.COMMAND) {
-        isAllowed = allowedTypes.has(VariableType.COMMAND);
-        // Debug log
-        logger.debug(`[Debug] resolveInContext TypeCheck: COMMAND path`, { valueString, intendedType, allowedTypes: [...allowedTypes], isAllowed });
-    }
-    
-    if (!isAllowed) {
-       const typeName = intendedType === 'plaintext' ? 'Plain text' : intendedType.toString();
-       const errorMsg = `${typeName} variables/references are not allowed in this context`;
-       logger.warn(errorMsg, { valueString, allowedTypes });
-       if (context.strict) {
-           // Add debug log before throw
-           logger.debug(`[Debug] resolveInContext: Throwing E_TYPE_NOT_ALLOWED in strict mode.`);
-           throw new MeldResolutionError(errorMsg, {
-               code: 'E_TYPE_NOT_ALLOWED',
-               details: { value: valueString, allowedTypes: [...allowedTypes], detectedType: typeName }
-            });
-       }
-       return valueString; // Return original if not allowed and not strict
-    }
-
-    // 3. Proceed with resolution based on determined type (or best guess)
-    try {
-        // Parse inside the try block
-        const nodes = await this.parseForResolution(valueString, context);
-        logger.debug(`resolveInContext: Parsed into ${nodes.length} nodes.`);
-
-        // Trust parser if it identified the type
-        const parsedNodeType = nodes.length === 1 && nodes[0].type === 'VariableReference' ? (nodes[0] as VariableReferenceNode).valueType : null;
-        
-        if (parsedNodeType === VariableType.PATH || (!parsedNodeType && intendedType === VariableType.PATH)) {
-            const meldPath = await this.resolvePath(valueString, context);
-            return meldPath.validatedPath as string;
-        } else if (parsedNodeType === VariableType.COMMAND || (!parsedNodeType && intendedType === VariableType.COMMAND)) {
-            const node = nodes.length === 1 && nodes[0].type === 'VariableReference' ? nodes[0] as VariableReferenceNode : null;
-            const commandName = node ? node.identifier : (valueString.match(/^\$?([^\(]+)/)?.[1] || '');
-            // Use args from parsed node if available, otherwise parse from string
-            const args = node?.args || (valueString.match(/\((.*)\)/)?.[1]?.split(',').map(arg => arg.trim()).filter(arg => arg !== '') || []);
-            logger.debug(`[resolveInContext] Calling resolveCommand`, { commandName, args });
-            return await this.resolveCommand(commandName, args, context);
-        } else if (parsedNodeType === VariableType.DATA || (!parsedNodeType && intendedType === VariableType.DATA)) { 
-             // Resolve as data if parser said DATA, or if syntax looked like data access
-             const resolvedData = await this.resolveData(valueString, context);
-             return await this.convertToFormattedString(resolvedData, context);
-        } else { 
-             // Fallback to text resolution (handles TEXT type from parser, {{var}}, simple vars, plain text)
-             logger.debug(`[resolveInContext] Falling back to resolveText`);
-             return await this.resolveText(valueString, context);
+    // Refactored logic based on @AST-VARIABLES.md
+    if (typeof value === 'string') {
+        // If input is a string, parse it and resolve the nodes.
+        // This handles strings potentially containing {{variables}}.
+        if (!value.includes('{{') && !value.includes('$')) { // Optimization
+            logger.debug('resolveInContext: Input string contains no variable markers, returning directly.');
+            return value;
         }
-    } catch (error) {
-       logger.error('resolveInContext failed during specific resolution call', { error, valueString, intendedType });
+        try {
+            const nodes = await this.parseForResolution(value, context);
+            logger.debug(`resolveInContext: Parsed string into ${nodes.length} nodes, resolving...`);
+            return await this.resolveNodes(nodes, context);
+        } catch (error) {
+            logger.error('resolveInContext failed parsing/resolving string value', { error });
+            if (context.strict) throw error; 
+            return value; // Return original string in non-strict mode on error
+        }
+    } else if (value && typeof value === 'object' && 'interpolatedValue' in value && value.interpolatedValue) {
+        // If it's a StructuredPath with an interpolatedValue array (from brackets/quotes)
+        logger.debug(`resolveInContext: Resolving nodes from StructuredPath.interpolatedValue`);
+        try {
+          return await this.resolveNodes(value.interpolatedValue, context);
+        } catch (error) {
+          logger.error('resolveInContext failed resolving nodes from StructuredPath.interpolatedValue', { error });
+          if (context.strict) throw error;
+          return value.raw ?? ''; // Return raw value in non-strict mode
+        }
+    } else if (value && typeof value === 'object' && 'raw' in value && typeof value.raw === 'string') {
+        // If it's a StructuredPath without interpolation, return raw (or resolve it? TBD)
+        // For now, assume raw value is sufficient if no interpolation needed.
+        logger.debug(`resolveInContext: Returning raw value from non-interpolated StructuredPath: ${value.raw}`);
+        return value.raw; 
+    } else {
+       // Handle other cases or throw error?
+       const errorMsg = 'resolveInContext received unsupported value type';
+       logger.error(errorMsg, { value });
        if (context.strict) {
-          const meldError = (error instanceof MeldError)
-            ? error
-            : new MeldResolutionError('Failed to resolve value in context', {
-                code: 'E_RESOLVE_CONTEXT_FAILED',
-                details: { value: valueString, context },
-                cause: error
-              });
-          throw meldError;
+           throw new MeldResolutionError(errorMsg, { code: 'E_UNSUPPORTED_TYPE' });
        }
-       return valueString;
+       return ''; // Return empty string in non-strict mode
     }
   }
 

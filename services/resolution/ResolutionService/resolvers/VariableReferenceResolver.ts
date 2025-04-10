@@ -1,11 +1,12 @@
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { ResolutionContext, PathResolutionContext } from '@core/types/resolution.js';
-import type { JsonValue, Result } from '@core/types.js';
-import { VariableType, MeldError } from '@core/types.js';
+import type { JsonValue, Result } from '@core/types/common.js';
+import { success, failure } from '@core/types/common.js';
+import { VariableType } from '@core/types/variables.js';
+import { MeldError } from '@core/errors/index.js';
 import type { MeldVariable, TextVariable, DataVariable, IPathVariable, CommandVariable } from '@core/types/variables.js';
 import type { MeldNode, VariableReferenceNode, TextNode, DirectiveNode, NodeType } from '@core/ast/ast/astTypes.js';
 import { isTextVariable, isDataVariable, isPathVariable, isCommandVariable } from '@core/types/guards.js';
-import { success, failure } from '@core/types.js';
 import { VariableResolutionError, MeldResolutionError, PathValidationError, FieldAccessError, FieldAccessErrorDetails } from '@core/errors/index.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
