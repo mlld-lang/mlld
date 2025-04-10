@@ -4,13 +4,33 @@ This document serves as a reference for verified type definitions and service in
 
 Please update this document as more definitive information is uncovered.
 
-## General Guidance for Refactoring (Learnings from Embed Handler)
+## Key Findings & Conventions (Learnings from Embed Handler)
 
-1.  **Prioritize Interface Alignment (Solve Root Cause):** Persistent type errors often stem from mismatches between interfaces used in different contexts (e.g., `IStateService` vs `StateServiceLike`). **Before resorting to workarounds (`as any`), investigate and refactor the consuming component (e.g., `DirectiveContext`) to expect the *actual* service interface (`IStateService`) implemented by the core service and provided by mock factories.** This ensures type safety and reflects the intended architecture.
-2.  **Verify Service Methods Exist:** Before implementing or testing handler logic based on plans (`@PLAN-PHASE-4.md`), **verify that the required service methods actually exist on the target service's current interface definition (`I*.ts`)**. If a method is missing (e.g., `resolveVariable`), find the appropriate *existing* method (e.g., `resolveInContext`) and update the plan/implementation accordingly.
-3.  **Standardize Core Type Imports:** **Always import core types directly from their canonical source definition file** within `@core/types/` or `@core/errors/` (e.g., `import { ResolutionContext } from '@core/types/resolution.js'`). Avoid relying on potentially incomplete or outdated re-exports from intermediate files (like service interfaces or index files).
-4.  **Synchronize Mock Factories:** Test mock factories (`create*Mock` in `tests/utils/mocks/serviceMocks.ts`) **must be kept synchronized with the interfaces (`I*Service`) they mock.** When an interface is updated, immediately update the factory to provide default mocks (`vi.fn()`) for all methods. Use these factories where possible. If persistent type errors occur with `DeepMockProxy`, investigate potential signature mismatches before resorting to `as any`.
-5.  **Clarify Transformation Flag Role:** The `isTransformationEnabled` flag (and related `get/setTransformedNodes`, `transformNode` methods on `IStateService`) **appears primarily used by the `OutputService`** to select between original vs. transformed nodes for final rendering. Transformation seems generally **enabled by default** in end-to-end runs. Unless specifically isolating state (e.g., potentially `@import`), assume transformation is active. Directive handlers should focus on returning correct `DirectiveResult` objects.
+1.  **Align Contexts with Core Interfaces:**
+    *   **Finding:** `DirectiveContext` (defined in `IDirectiveService.ts`) required `state: StateServiceLike`, but `createStateServiceMock` provides a mock based on the narrower `IStateService`. This caused persistent type errors.
+    *   **Convention:** Refactor context interfaces (like `DirectiveContext`) to expect the specific core service interface (e.g., `IStateService`) rather than broader `*-Like` types. This aligns expectations with implementations and mocks.
+    *   **Status:** Prioritized. `DirectiveContext` updated.
+2.  **Verify Service Methods Before Use:**
+    *   **Finding:** Initial refactoring assumed `IResolutionService` had methods like `resolveVariable`, `resolveTemplate`, `adjustHeadingLevels`, `wrapUnderHeader`, which were not present.
+    *   **Convention:** Before implementing handler logic, verify required methods exist on the current service interface (`I*.ts` file). Use the actually available methods (e.g., `resolveInContext`, `resolveContent`, `extractSection` on `IResolutionService`).
+    *   **Status:** Applied. Verified `IResolutionService` methods listed below.
+3.  **Use Canonical Core Type Imports:**
+    *   **Finding:** Difficulty importing `ResolutionContext`, `DataVariable`, `FieldAccessError` reliably via re-exports.
+    *   **Convention:** Always import core types directly from their source definition file:
+        *   `ResolutionContext` from `@core/types/resolution.js`
+        *   `DataVariable` from `@core/types/variables.js`
+        *   `MeldPath`, `StructuredPath` from `@core/types/paths.js`
+        *   `FieldAccessError` from `@core/errors/FieldAccessError.ts`
+        *   `Result`, `success`, `failure` from `@core/types/common.js`
+    *   **Status:** Applied in test file refactoring.
+4.  **Maintain Mock Factory Synchronization:**
+    *   **Finding:** Even after updating `IStateService`, mocks from `createStateServiceMock` didn't satisfy `StateServiceLike` until the factory was explicitly updated with *all* methods.
+    *   **Convention:** When a service interface (`I*Service`) changes, immediately update its corresponding mock factory (`create*Mock` in `serviceMocks.ts`) to mock *all* methods. Use factories over `mockDeep` for services. Use `as any` casts only as a last resort for persistent mock type issues, with a `// TODO:`. 
+    *   **Status:** `IStateService` and `createStateServiceMock` updated.
+5.  **Understand Transformation State Usage:**
+    *   **Finding:** `isTransformationEnabled()` is primarily checked by `OutputService` to choose between `getOriginalNodes()` / `getNodes()` and `getTransformedNodes()`. Transformation is generally enabled via API/tests.
+    *   **Convention:** Assume transformation is active unless isolating state (e.g., `@import`). Handlers return `DirectiveResult` with `replacement` nodes. `IStateService` includes necessary transformation methods (`isTransformationEnabled`, `transformNode`, `get/setTransformedNodes`, etc.).
+    *   **Status:** Clarified role; methods confirmed/added to `IStateService`.
 
 ## Core Types (`@core/types`, `@core/syntax/types/index.js`, `@core/shared-service-types.js`)
 
@@ -77,14 +97,15 @@ Please update this document as more definitive information is uncovered.
     - `parentState?: IStateService`
     - `currentFilePath?: string`
     - `workingDirectory?: string`
-    - `resolutionContext?: ResolutionContext` (Correct type)
+    - `resolutionContext?: ResolutionContext` (Import from `@core/types/resolution.js`)
     - `formattingContext?: {...}`
-- **Usage:** Passed to `IDirectiveHandler.execute`. Test contexts need `state` and `parentState` (if applicable).
+- **Usage:** Passed to `IDirectiveHandler.execute`.
+- **Refactoring Note:** Changed `StateServiceLike` to `IStateService` (Done).
 
 ### `IResolutionService`
 - **Source:** `services/resolution/ResolutionService/IResolutionService.ts`
 - **Verified Existing Methods:**
-    - `resolvePath(pathString: string | StructuredPath, context: ResolutionContext): Promise<MeldPath>` (Note: Accepts `string | StructuredPath`, not just `string`)
+    - `resolvePath(pathString: string | StructuredPath, context: ResolutionContext): Promise<MeldPath>`
     - `resolveText(text: string, context: ResolutionContext): Promise<string>`
     - `resolveData(ref: string, context: ResolutionContext): Promise<JsonValue>`
     - `resolveFile(path: MeldPath): Promise<string>`
@@ -101,16 +122,14 @@ Please update this document as more definitive information is uncovered.
     - `adjustHeadingLevels`
     - `wrapUnderHeader`
 - **Evidence:** Direct reading of the interface definition file (`IResolutionService.ts`). Linter errors `Property 'resolveVariable' does not exist...` etc. in `EmbedDirectiveHandler.test.ts`.
+- **Guidance:** Verify method existence on interface before implementing handler logic.
 
 ### `StateServiceLike` vs `IStateService`
-- **Finding:** `StateServiceLike` (defined in `@core/shared-service-types.ts`) is a broader interface than `IStateService` (defined in `services/state/StateService/IStateService.ts`). Mocks created based on `IStateService` (e.g., via `createStateServiceMock`) do not fully satisfy the `StateServiceLike` interface required by `DirectiveContext.state`.
+- **Finding:** `StateServiceLike` (defined in `@core/shared-service-types.ts`) is a broader interface than `IStateService` (defined in `services/state/StateService/IStateService.ts`).
 - **Source of `StateServiceLike`:** `@core/shared-service-types.ts` (Verified by file read).
-- **Key Differences:** `StateServiceLike` includes methods like `enableTransformation`, `getNodes`, `getCommand`, `setCommand`, `shouldTransform`, etc., which are absent from the stricter `IStateService` definition used by the core `StateService` implementation.
+- **Key Differences:** `StateServiceLike` includes methods like `getCommand`, `shouldTransform`, etc., and uses broader types (e.g., `unknown`, `string`) compared to the stricter `IStateService` (which uses `ICommandDefinition`, `CommandVariable`, `TextVariable`, etc.). *(Note: `IStateService` interface was updated to include most method *names* from `StateServiceLike`, but signature mismatches remained).* 
 - **Evidence:** Direct comparison of `core/shared-service-types.ts` and `services/state/StateService/IStateService.ts`. Linter errors `Type '_MockProxy<IStateService> & IStateService' is missing the following properties from type 'StateServiceLike': ...` when passing `stateService` mock to `handler.execute` in tests.
-- **Resolution Plan:** Refactor `DirectiveContext` (in `IDirectiveService.ts`) to use `IStateService` instead of `StateServiceLike`. This aligns the context with the actual service interface (`IStateService`) and the capabilities provided by the mock factory (`createStateServiceMock`).
-    1. Modify `DirectiveContext` definition in `IDirectiveService.ts`.
-    2. Address any downstream type errors caused by the change.
-    3. Remove `as any` casts in test files.
+- **Resolution (Applied):** Refactored `DirectiveContext` (in `IDirectiveService.ts`) to use `IStateService` instead of `StateServiceLike`. This aligns the context with the actual service interface (`IStateService`) and the capabilities provided by the mock factory (`createStateServiceMock`).
 
 ### `DirectiveErrorCode`
 - **Source:** `services/pipeline/DirectiveService/errors/DirectiveError.ts`
@@ -138,4 +157,4 @@ Please update this document as more definitive information is uncovered.
 *   Location/implementation of heading/wrapping utilities (`adjustHeadingLevels`, `wrapUnderHeader`).
 *   Verification of `FieldAccessError` export from `@core/types/common.js` (Class is in `@core/errors/FieldAccessError.ts`).
 *   Correct import path for `IInterpreterServiceClient`.
-*   Reason for `transformNode` mock signature error `Expected 0-1 type arguments, but got 2`.
+*   Reason for `transformNode` mock signature error `Expected 0-1 type arguments, but got 2` (Potentially resolved by clarifying `MeldNode` usage?).
