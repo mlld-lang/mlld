@@ -6,6 +6,7 @@ import type {
   TextVariable,
   DataVariable,
   IPathVariable,
+  ICommandDefinition,
   CommandVariable,
   VariableMetadata,
   MeldVariable,
@@ -37,6 +38,7 @@ import type { IPathService } from '@services/fs/PathService/IPathService.js';
 import type { IURLContentResolver, URLFetchOptions, URLValidationOptions } from '@services/resolution/URLContentResolver/IURLContentResolver.js';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
 import { RawPath } from '@core/types/paths';
+import type { ICommandDefinition } from '@core/types/define.js';
 
 /**
  * Handler for @import directives
@@ -128,7 +130,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
       let resolvedPath: MeldPath;
       try {
         // Let resolvePath handle strings, variables, interpolation, etc.
-        resolvedPath = await this.resolutionService.resolveInContext(pathObject, context.resolutionContext);
+        resolvedPath = await this.resolutionService.resolveInContext(pathObject.originalValue, context.resolutionContext);
         resolvedIdentifier = resolvedPath.validatedPath; // Get the final string path
         // Determine if it's a URL based on the resolved MeldPath type
         isURLImport = resolvedPath.contentType === 'url'; 
@@ -262,8 +264,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
 
         resultState = await interpreterClient.interpret(
           nodesToInterpret,
-          importedState,
-          { currentFilePath: resolvedIdentifier }
+          { initialState: importedState as any, currentFilePath: resolvedIdentifier }
         );
 
         logger.debug('Import interpretation complete', {
@@ -348,10 +349,14 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
         throw new DirectiveError(`Failed to interpret imported file: ${error instanceof Error ? error.message : String(error)}`, this.kind, DirectiveErrorCode.EXECUTION_FAILED);
       }
 
-      if (!imports || imports.length === 0 || imports.some(i => i.name === '*')) {
-          this.importAllVariables(resultState, targetState, importDirectiveLocation);
+      if (!imports || imports.length === 0 || imports.some((i: { name: string }) => i.name === '*')) {
+          if (importDirectiveLocation) {
+            this.importAllVariables(resultState, targetState, importDirectiveLocation, resolvedIdentifier);
+          }
       } else {
-          this.processStructuredImports(imports, resultState, targetState, importDirectiveLocation);
+          if (importDirectiveLocation) {
+            this.processStructuredImports(imports, resultState, targetState, importDirectiveLocation, resolvedIdentifier);
+          }
       }
 
       if (resolvedIdentifier) {
@@ -399,29 +404,31 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
   private importAllVariables(
       sourceState: IStateService,
       targetState: IStateService,
-      importLocation: SourceLocation
+      importLocation: SourceLocation | undefined,
+      sourcePath: string | undefined
     ): void {
     if (!sourceState || !targetState) {
       logger.warn('Cannot import variables - null or undefined state');
       return;
     }
 
-    const createMetadata = (originalVar?: MeldVariable): VariableMetadata => ({
-      createdAt: Date.now(),
-      modifiedAt: Date.now(),
-      definedAt: importLocation,
-      origin: VariableOrigin.IMPORT,
-      context: originalVar?.metadata?.definedAt ? { importedFrom: originalVar.metadata.definedAt } : undefined,
-    });
-
     try {
       const textVars = sourceState.getAllTextVars();
       textVars.forEach((originalVar, key) => {
         try {
+          const metadata: VariableMetadata = {
+            name: key,
+            origin: VariableOrigin.IMPORT,
+            sourcePath: sourcePath,
+            definedAt: importLocation,
+            originalMetadata: originalVar?.metadata,
+            timestamp: Date.now(),
+          };
           const newVar: TextVariable = {
             type: VariableType.TEXT,
+            name: key,
             value: originalVar.value,
-            metadata: createMetadata(originalVar)
+            metadata: metadata
           };
           targetState.setTextVar(key, newVar.value);
           logger.debug(`Imported text variable: ${key}`);
@@ -434,10 +441,19 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
       dataVars.forEach((originalVar, key) => {
         try {
           const valueCopy = JSON.parse(JSON.stringify(originalVar.value)) as JsonValue;
+          const metadata: VariableMetadata = {
+            name: key,
+            origin: VariableOrigin.IMPORT,
+            sourcePath: sourcePath,
+            definedAt: importLocation,
+            originalMetadata: originalVar?.metadata,
+            timestamp: Date.now(),
+          };
           const newVar: DataVariable = {
             type: VariableType.DATA,
+            name: key,
             value: valueCopy,
-            metadata: createMetadata(originalVar)
+            metadata: metadata
           };
           targetState.setDataVar(key, newVar.value);
           logger.debug(`Imported data variable: ${key}`);
@@ -449,12 +465,21 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
       const pathVars = sourceState.getAllPathVars();
       pathVars.forEach((originalVar, key) => {
         try {
-           const newVar: IPathVariable = {
-             ...originalVar,
-             metadata: createMetadata(originalVar)
-           };
-           targetState.setPathVar(key, newVar.value);
-           logger.debug(`Imported path variable: ${key}`);
+          const metadata: VariableMetadata = {
+            name: key,
+            origin: VariableOrigin.IMPORT,
+            sourcePath: sourcePath,
+            definedAt: importLocation,
+            originalMetadata: originalVar?.metadata,
+            timestamp: Date.now(),
+          };
+          const newVar: IPathVariable = {
+            ...originalVar,
+            name: key,
+            metadata: metadata
+          };
+          targetState.setPathVar(key, newVar.value);
+          logger.debug(`Imported path variable: ${key}`);
         } catch (error) {
           logger.warn(`Failed to import path variable ${key}`, { error });
         }
@@ -463,12 +488,22 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
       const commands = sourceState.getAllCommands();
       commands.forEach((originalVar, key) => {
         try {
-           const newVar: CommandVariable = {
-             ...originalVar,
-             metadata: createMetadata(originalVar)
-           };
-           targetState.setCommand(key, newVar.value);
-           logger.debug(`Imported command: ${key}`);
+          const metadata: VariableMetadata = {
+            name: key,
+            origin: VariableOrigin.IMPORT,
+            sourcePath: sourcePath,
+            definedAt: importLocation,
+            originalMetadata: undefined,
+            timestamp: Date.now(),
+          };
+          const newVar: CommandVariable = {
+            type: VariableType.COMMAND,
+            name: key,
+            value: originalVar,
+            metadata: metadata
+          };
+          targetState.setCommand(key, newVar.value);
+          logger.debug(`Imported command: ${key}`);
         } catch (error) {
           logger.warn(`Failed to import command ${key}`, { error });
         }
