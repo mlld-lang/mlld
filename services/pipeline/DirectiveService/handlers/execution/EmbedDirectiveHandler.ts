@@ -251,7 +251,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
             content = await this.fileSystemService.readFile(resolvedPath.validatedPath);
             // Use validatedPath for logging
             this.logger.debug(`Read file content successfully`, { path: resolvedPath.validatedPath, length: content.length });
-          } catch (error) {
+              } catch (error) {
             const errorCode = error instanceof MeldFileNotFoundError
               ? DirectiveErrorCode.FILE_NOT_FOUND
               : DirectiveErrorCode.EXECUTION_FAILED;
@@ -295,9 +295,9 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
             }
             this.logger.debug(`Resolved embed variable content`, { length: content.length });
           } catch (error) {
-            throw new DirectiveError(
+                throw new DirectiveError(
               `Error resolving embed variable/path: ${error instanceof Error ? error.message : String(error)}`,
-              this.kind,
+                  this.kind,
               DirectiveErrorCode.RESOLUTION_FAILED,
               { location: node.location, cause: error instanceof Error ? error : undefined }
             );
@@ -346,6 +346,8 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
       const section = options.section;
       if (section) {
         this.logger.debug(`Extracting section: ${section}`);
+        // Log before try
+        // process.stderr.write(`EmbedDirectiveHandler: Entering try block for section extraction. Section: ${section}\n`);
         try {
           content = await this.resolutionService.extractSection(
             content,
@@ -354,6 +356,9 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
           );
           this.logger.debug(`Section extracted successfully`, { section, length: content.length });
         } catch (error) {
+          // Use process.stderr.write for reliable debug output in tests
+          // process.stderr.write(`EmbedDirectiveHandler: Caught error during section extraction: ${error instanceof Error ? error.message : String(error)}\n`);
+          // process.stderr.write(`EmbedDirectiveHandler: About to throw DirectiveError for section extraction failure. Section: ${section}\n`);
           throw new DirectiveError(
             `Error extracting section \"${section}\": ${error instanceof Error ? error.message : String(error)}`,
             this.kind,
@@ -361,6 +366,8 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
             { location: node.location, cause: error instanceof Error ? error : undefined }
           );
         }
+        // Log after catch
+        // process.stderr.write(`EmbedDirectiveHandler: Exited try/catch block for section extraction. Section: ${section}\n`);
       }
 
       // Handle heading level adjustment if specified
