@@ -36,6 +36,7 @@ import { Service } from '@core/ServiceProvider.js';
 import type { IPathService } from '@services/fs/PathService/IPathService.js';
 import type { IURLContentResolver, URLFetchOptions, URLValidationOptions } from '@services/resolution/URLContentResolver/IURLContentResolver.js';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
+import { RawPath } from '@core/types/paths';
 
 /**
  * Handler for @import directives
@@ -127,7 +128,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
       let resolvedPath: MeldPath;
       try {
         // Let resolvePath handle strings, variables, interpolation, etc.
-        resolvedPath = await this.resolutionService.resolveInContext(pathObject.originalValue, context.resolutionContext);
+        resolvedPath = await this.resolutionService.resolveInContext(pathObject, context.resolutionContext);
         resolvedIdentifier = resolvedPath.validatedPath; // Get the final string path
         // Determine if it's a URL based on the resolved MeldPath type
         isURLImport = resolvedPath.contentType === 'url'; 
@@ -261,7 +262,8 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
 
         resultState = await interpreterClient.interpret(
           nodesToInterpret,
-          { initialState: importedState as IStateService, currentFilePath: resolvedIdentifier }
+          importedState,
+          { currentFilePath: resolvedIdentifier }
         );
 
         logger.debug('Import interpretation complete', {
