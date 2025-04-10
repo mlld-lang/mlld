@@ -1,4 +1,4 @@
-import { DirectiveNode, MeldNode, TextNode, VariableReferenceNode, SourceLocation, VariableType } from '@core/syntax/types/index.js';
+import { DirectiveNode, MeldNode, TextNode, VariableReferenceNode, VariableType } from '@core/syntax/types/index.js';
 import type {
   ImportDirectiveData
 } from '@core/syntax/types/index.js';
@@ -6,7 +6,6 @@ import type {
   TextVariable,
   DataVariable,
   IPathVariable,
-  ICommandDefinition,
   CommandVariable,
   VariableMetadata,
   MeldVariable,
@@ -39,6 +38,7 @@ import type { IURLContentResolver, URLFetchOptions, URLValidationOptions } from 
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
 import { RawPath } from '@core/types/paths';
 import type { ICommandDefinition } from '@core/types/define.js';
+import { SourceLocation } from '@core/types/common';
 
 /**
  * Handler for @import directives
@@ -130,7 +130,7 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
       let resolvedPath: MeldPath;
       try {
         // Let resolvePath handle strings, variables, interpolation, etc.
-        resolvedPath = await this.resolutionService.resolveInContext(pathObject.originalValue, context.resolutionContext);
+        resolvedPath = await this.resolutionService.resolveInContext(pathObject.raw, context.resolutionContext);
         resolvedIdentifier = resolvedPath.validatedPath; // Get the final string path
         // Determine if it's a URL based on the resolved MeldPath type
         isURLImport = resolvedPath.contentType === 'url'; 
@@ -264,7 +264,8 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
 
         resultState = await interpreterClient.interpret(
           nodesToInterpret,
-          { initialState: importedState as any, currentFilePath: resolvedIdentifier }
+          importedState as any,
+          { currentFilePath: resolvedIdentifier }
         );
 
         logger.debug('Import interpretation complete', {
