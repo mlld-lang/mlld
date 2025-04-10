@@ -209,10 +209,11 @@ Below are the key "services" in the codebase. Each follows the single responsibi
    - Dependencies: ParserService, InterpreterService, OutputService, FileSystemService, PathService, StateService
 
 ### ParserService  
-   - Wraps the meld-ast parse(content) function  
-   - Adds location information with file paths (parseWithLocations)  
-   - Produces an array of MeldNode objects  
-   - Dependencies: ResolutionServiceClient (for resolving variables during parsing)
+   - Wraps the meld-ast parse(content) function
+   - Adds location information with file paths (parseWithLocations)
+   - Produces an array of MeldNode objects, including structured directive data (like `InterpolatableValue` arrays and `Field[]` for variable references)
+   - Conditionally uses `ResolutionServiceClient` via a factory for reading file content in `parseFile`.
+   - Dependencies: (Optional) `ResolutionServiceClientFactory`, `VariableNodeFactory`
 
 ### DirectiveService  
    - Routes directives to the correct directive handler  
@@ -250,13 +251,15 @@ Below are the key "services" in the codebase. Each follows the single responsibi
 
 ### ResolutionService  
    - Handles all variable interpolation:
-       • Variables ("{{var}}", "{{data.field}}")
-       • Path expansions ("$HOMEPATH/path")  
-       • Command references  
-   - Context-aware resolution  
-   - Circular reference detection  
-   - Sub-fragment parsing support  
-   - Dependencies: StateService, FileSystemService, ParserServiceClient, PathService
+       • Variables ("{{var}}", "{{data.field}}", etc., operating on `VariableReferenceNode` from AST)
+       • Path expansions ("$HOMEPATH/path")
+       • Command references
+   - Processes structured field access paths (`Field[]` from AST).
+   - Operates primarily on AST nodes (`MeldNode[]`), minimizing string re-parsing.
+   - Context-aware resolution using `ResolutionContext`.
+   - Circular reference detection.
+   - Conditionally uses `ParserServiceClient` via a factory for internal string parsing needs (e.g., resolving nested content).
+   - Dependencies: `StateService`, `FileSystemService`, `PathService`, (Optional) `ParserServiceClientFactory`
 
 ### CircularityService  
    - Prevents infinite import loops  
@@ -285,13 +288,12 @@ Below are the key "services" in the codebase. Each follows the single responsibi
    - Dependencies: PathOperationsService, PathServiceClient, IFileSystem
 
 ### OutputService  
-   - Converts final AST and state to desired format
-   - Uses transformed nodes when available
-   - Supports markdown and LLM XML output  
-   - Integrates with llmxml for LLM-friendly formatting  
-   - Handles format-specific transformations
-   - Provides clean output without directive definitions
-   - Dependencies: StateService, ResolutionService, VariableReferenceResolverClient
+   - Converts final AST and state to desired format (markdown, llm-xml).
+   - Uses transformed nodes when available.
+   - Handles the rich AST structures containing `InterpolatableValue` arrays.
+   - Performs final resolution of variable references (`{{...}}`) within `TextNode` content before output.
+   - Uses `VariableReferenceResolverClient` via a factory for detailed field access resolution and context-aware value-to-string conversion.
+   - Dependencies: `StateService`, (Optional) `ResolutionServiceClientFactory` or `IResolutionService`, (optional) `VariableReferenceResolverClientFactory`
 
 ## TESTING INFRASTRUCTURE
 
@@ -404,17 +406,17 @@ Services in Meld follow a dependency graph managed through the DI container:
    - StateService (depends on StateFactory, StateEventService, StateTrackingService)
 
 3. Core Pipeline:
-   - ParserService (depends on ResolutionServiceClient)
-   - ResolutionService (depends on StateService, FileSystemService, PathService, ParserServiceClient)
-   - ValidationService (depends on ResolutionService)
-   - CircularityService (depends on ResolutionService)
+   - ParserService (depends on (optional) `ResolutionServiceClientFactory`, `VariableNodeFactory`)
+   - ResolutionService (depends on `StateService`, `FileSystemService`, `PathService`, (optional) `ParserServiceClientFactory`)
+   - ValidationService (depends on `ResolutionService`)
+   - CircularityService (depends on `ResolutionService`)
 
 4. Pipeline Orchestration:
    - DirectiveService (depends on multiple services)
    - InterpreterService (orchestrates others)
 
 5. Output Generation:
-   - OutputService (depends on StateService, ResolutionService, VariableReferenceResolverClient)
+   - OutputService (depends on `StateService`, (optional) `ResolutionServiceClientFactory` or `IResolutionService`, (optional) `VariableReferenceResolverClientFactory`)
 
 6. Debug Support:
    - DebuggerService (optional, depends on all)
@@ -425,9 +427,9 @@ Services in Meld follow a dependency graph managed through the DI container:
 
 Circular dependencies occur when two or more services depend on each other, creating a dependency cycle:
 
-- **FileSystemService ↔ PathService**: FileSystemService needs PathService for path resolution, while PathService needs FileSystemService to check if paths exist
-- **ParserService ↔ ResolutionService**: ParserService needs ResolutionService to resolve variables, while ResolutionService needs ParserService to parse content
-- **StateService ↔ StateTrackingService**: Complex bidirectional relationship for state tracking and management
+- **FileSystemService ↔ PathService**: `FileSystemService` needs `PathService` for path resolution, while `PathService` needs `FileSystemService` to check if paths exist. Managed via client factories (`PathServiceClientFactory`, `FileSystemServiceClientFactory`).
+- **ParserService ↔ ResolutionService**: `ParserService` may need `ResolutionServiceClient` (via factory) to read files for `parseFile`. `ResolutionService` may need `ParserServiceClient` (via factory) for internal parsing during resolution. Managed via client factories.
+- **StateService ↔ StateTrackingService**: Complex bidirectional relationship for state tracking and management.
 
 ### Client Factory Pattern (Current Approach)
 
