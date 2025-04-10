@@ -760,4 +760,100 @@ describe('EmbedDirectiveHandler', () => {
       expect(fileSystemService.readFile).not.toHaveBeenCalled();
     });
   });
+
+  // Add new test suite for embedTemplate subtype
+  describe('Template embeds', () => {
+    it('should handle simple template embed without variables', async () => {
+      const templateContent = 'This is a literal template.';
+      // Simulate AST node for @embed [[This is a literal template.]]
+      const node: DirectiveNode = {
+        type: 'Directive',
+        subtype: 'embedTemplate',
+        content: [{ type: 'Text', content: templateContent, location: createLocation(1, 9, 8, 37) } as TextNode], // Array with single TextNode
+        options: {},
+        directive: { kind: 'embed' },
+        location: createLocation(1, 1, 0, 39)
+      } as DirectiveNode;
+
+      const context: DirectiveContext = { currentFilePath: 'test.meld', state: stateService, parentState: stateService };
+
+      // Mock resolveText to handle the node array (or ensure resolveInContext does)
+      // Since the handler calls resolveInContext, mock that
+      resolutionService.resolveInContext.mockResolvedValue(templateContent);
+
+      const result = await handler.execute(node, context);
+
+      // Check that resolveInContext was called with the content array
+      // Use type assertion to access content safely
+      expect(resolutionService.resolveInContext).toHaveBeenCalledWith(expect.arrayContaining((node as any).content || []), expect.any(Object));
+
+      // Filesystem should not be involved
+      expect(fileSystemService.exists).not.toHaveBeenCalled();
+      expect(fileSystemService.readFile).not.toHaveBeenCalled();
+
+      // Result should be a TextNode with the template content
+      expect(result.replacement).toEqual({
+        type: 'Text',
+        content: templateContent,
+        location: node.location,
+        formattingMetadata: {
+          isFromDirective: true,
+          originalNodeType: 'Directive',
+          preserveFormatting: true
+        }
+      });
+    });
+
+    it('should handle template embed with variable interpolation', async () => {
+      const templateNodes: MeldNode[] = [
+        { type: 'Text', content: 'Hello, ', location: createLocation(1, 9, 8, 15) } as TextNode,
+        {
+          type: 'VariableReference',
+          identifier: 'name',
+          valueType: 'text',
+          isVariableReference: true,
+          location: createLocation(1, 16, 15, 23)
+        } as VariableReferenceNode,
+        { type: 'Text', content: '!', location: createLocation(1, 24, 23, 25) } as TextNode
+      ];
+      const resolvedContent = 'Hello, Alice!';
+
+      // Simulate AST node for @embed [[Hello, {{name}}!]]
+      const node: DirectiveNode = {
+        type: 'Directive',
+        subtype: 'embedTemplate',
+        content: templateNodes, // Array with TextNode and VariableReferenceNode
+        options: {},
+        directive: { kind: 'embed' },
+        location: createLocation(1, 1, 0, 27)
+      } as DirectiveNode;
+
+      const context: DirectiveContext = { currentFilePath: 'test.meld', state: stateService, parentState: stateService };
+
+      // Mock resolveInContext to handle the node array and return the resolved string
+      resolutionService.resolveInContext.mockResolvedValue(resolvedContent);
+
+      const result = await handler.execute(node, context);
+
+      // Check that resolveInContext was called with the content array
+      // Use type assertion to access content safely
+      expect(resolutionService.resolveInContext).toHaveBeenCalledWith(expect.arrayContaining((node as any).content || []), expect.any(Object));
+
+      // Filesystem should not be involved
+      expect(fileSystemService.exists).not.toHaveBeenCalled();
+      expect(fileSystemService.readFile).not.toHaveBeenCalled();
+
+      // Result should be a TextNode with the resolved content
+      expect(result.replacement).toEqual({
+        type: 'Text',
+        content: resolvedContent,
+        location: node.location,
+        formattingMetadata: {
+          isFromDirective: true,
+          originalNodeType: 'Directive',
+          preserveFormatting: true
+        }
+      });
+    });
+  });
 }); 
