@@ -33,7 +33,7 @@
     "test:e2e": "node scripts/e2e-case-runner.js",
     "test:e2e:verbose": "node scripts/e2e-case-runner.js --verbose",
     "test:e2e:clean": "node scripts/e2e-case-runner.js clean",
-    "lint": "eslint . --ext .ts",
+    "lint": "eslint .",
     "clean": "rimraf dist",
     "prepublishOnly": "npm run clean && npm run build",
     "postinstall": "node scripts/install-warning.js && node scripts/ensure-dependencies.js",
@@ -57,8 +57,6 @@
     "fix:imports": "node scripts/fix-module-imports.js",
     "fix:imports:dry": "node scripts/fix-module-imports.js --dry-run",
     "fix:imports:verbose": "node scripts/fix-module-imports.js --verbose",
-    "lint:imports": "eslint . --ext .ts --rule 'meld/enforce-module-imports: warn' --fix",
-    "lint:imports:check": "eslint . --ext .ts --rule 'meld/enforce-module-imports: warn'",
     "bump": "node scripts/bump-version.js",
     "bump:patch": "node scripts/bump-version.js patch",
     "bump:minor": "node scripts/bump-version.js minor",
@@ -104,6 +102,7 @@
     "yargs": "^17.7.2"
   },
   "devDependencies": {
+    "@eslint/js": "^9.24.0",
     "@types/fs-extra": "^11.0.4",
     "@types/yargs": "^17.0.33",
     "@typescript-eslint/eslint-plugin": "^8.26.1",
@@ -115,6 +114,7 @@
     "tsconfig-paths": "^4.2.0",
     "tsup": "^8.0.2",
     "typescript": "^5.7.3",
+    "typescript-eslint": "^8.29.1",
     "vite-tsconfig-paths": "^5.1.4",
     "vitest": "^3.1.1",
     "vitest-mock-extended": "^2.0.1"
