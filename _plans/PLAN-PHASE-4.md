@@ -40,7 +40,7 @@ No type refinements proposed for this phase.
 
 ### 2. `@embed` Handler
 
-*   **Action:** Refactor `EmbedDirectiveHandler.execute` to use the `node.subtype` ('embedPath', 'embedVariable', 'embedTemplate') provided by the parser (via `_EmbedRHS`). Use the pre-parsed AST structure (`node.path` for 'embedPath', `node.content` for 'embedTemplate', `node.path` containing variable info for 'embedVariable'). Parse these structures into strict `EmbedParams` if needed, although the AST structure might be directly usable.
+*   **Action:** Refactor `EmbedDirectiveHandler.execute` to use the `node.subtype` ('embedPath', 'embedVariable', 'embedTemplate') provided by the parser (via `_EmbedRHS`). Use the pre-parsed AST structure (`node.path` for 'embedPath', `node.content` for 'embedTemplate', `node.path` containing variable info for 'embedVariable'). Parse these structures into strict `EmbedParams` if needed, although the AST structure might be directly usable. **(Completed - Handler refactored for subtypes and AST)**
 *   **Files:** `services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler.ts`
 *   **Details/Considerations:**
     *   **`subtype` logic (using `node.subtype` and associated fields):**
@@ -50,10 +50,10 @@ No type refinements proposed for this phase.
     *   Use `ResolutionContext` with appropriate flags (e.g., `disablePathPrefixing`) based on the subtype.
     *   **Non-destructive transformations:** The primary output is the embedded content. Return `DirectiveResult` containing the `newState` (which might be unchanged if only embedding) and a `replacementNode` (a `TextNode` containing the resolved content).
     *   **`SourceLocation` Tracking:** The `replacementNode`'s `location` should match the original `@embed` directive (`node.location`). The content itself doesn't inherently carry source location from its origin *within* this handler's result; tracking the origin is implicit in the embedding process. The `EmbedResult` type from the spec could be used internally or returned if needed for more complex scenarios.
-*   **Testing:**
-    *   Update `EmbedDirectiveHandler.test.ts` and `EmbedDirectiveHandler.transformation.test.ts`.
-    *   Add tests specifically for each `subtype` based on `node.subtype`.
-    *   Verify handler correctly uses pre-parsed AST fields (`node.path`, `node.content`, `node.path.variable`).
+*   **Testing:** **(Partially Complete)**
+    *   Update `EmbedDirectiveHandler.test.ts` **(Partially complete - beforeEach updated, first test case refactored for embedPath)** and `EmbedDirectiveHandler.transformation.test.ts` **(Completed - Updated for InterpreterServiceClientFactory dependency)**.
+    *   Add tests specifically for each `subtype` based on `node.subtype`. **(Partially addressed - Refactored basic test covers 'embedPath')**
+    *   Verify handler correctly uses pre-parsed AST fields (`node.path`, `node.content`, `node.path.variable`). **(Ongoing via test refactoring)**
 
 ### 3. `@run` Handler
 

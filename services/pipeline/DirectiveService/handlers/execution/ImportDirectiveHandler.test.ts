@@ -14,7 +14,7 @@ import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/Directive
 import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
 import { MeldResolutionError, ResolutionErrorDetails } from '@core/errors/MeldResolutionError.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
-import {
+import { 
   expectToThrowDirectiveError,
   expectToThrowErrorOfType
 } from '@tests/utils/errorTestUtils.js';
@@ -194,8 +194,8 @@ describe('ImportDirectiveHandler', () => {
     resolutionService.resolveVariableReference.mockResolvedValue(undefined);
 
     fileSystemService.exists.mockResolvedValue(true);
-    fileSystemService.readFile.mockResolvedValue('');
-    parserService.parse.mockResolvedValue({ nodes: [] });
+    fileSystemService.readFile.mockResolvedValue(''); 
+    parserService.parse.mockResolvedValue({ nodes: [] }); 
     circularityService.beginImport.mockImplementation(() => {});
     circularityService.endImport.mockImplementation(() => {});
     urlContentResolver.validateURL.mockResolvedValue(undefined);
@@ -204,7 +204,7 @@ describe('ImportDirectiveHandler', () => {
     context.registerClass(ImportDirectiveHandler);
 
     await context.initialize();
-
+    
     handler = await context.resolve(ImportDirectiveHandler);
   });
 
@@ -319,7 +319,7 @@ describe('ImportDirectiveHandler', () => {
       const finalPath = '/project/local_docs/file.meld';
       fileSystemService.exists.mockResolvedValue(true);
       fileSystemService.readFile.mockResolvedValue('@text imported = "Imported content"');
-
+      
       const parsedNodes: MeldNode[] = [
         { type: 'Directive', directive: { kind: 'text', identifier: 'imported', source: 'literal', value: [{ type: 'Text', content: 'Imported content', location: createLocation(1,1) }] }, location: createLocation(1,1) } as any
       ];
@@ -527,7 +527,7 @@ describe('ImportDirectiveHandler', () => {
 
       await expectToThrowDirectiveError(
         () => handler.execute(node, directiveContext),
-        DirectiveErrorCode.CIRCULAR_REFERENCE,
+          DirectiveErrorCode.CIRCULAR_REFERENCE,
         /Circular import detected: \/project\/circular.meld/
       );
       expect(circularityService.beginImport).toHaveBeenCalledWith(resolvedPath.replace(/\\/g, '/'));
