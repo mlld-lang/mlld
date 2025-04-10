@@ -82,6 +82,17 @@ interface VariableReferenceNode extends BaseNode {
 *Grammar Rules:* `TextVar`, `DataVar`, `PathVar` (via `createVariableReferenceNode` helper)
 *Note:* The `valueType` field is crucial for downstream processing to understand how to resolve the variable.
 
+## Interpolatable Value Type
+
+Many directive values (strings, paths, commands, templates) can now contain embedded `{{...}}` or `$var` references that are parsed directly into the AST structure. These are represented by the `InterpolatableValue` type:
+
+```typescript
+// Represents content that can contain embedded variable references
+type InterpolatableValue = Array<TextNode | VariableReferenceNode>;
+```
+
+When a field below is typed as `InterpolatableValue`, it means the parser returns this array structure, allowing downstream services to process the mix of literal text and variable references without re-parsing.
+
 ## Directive Nodes
 
 Directives are the core functional elements in Meld (`@directive [...]`). They share a common structure:
@@ -130,6 +141,7 @@ interface PathValueObject {
   normalized?: string; // A normalized representation of the path
   isPathVariable?: boolean; // True if the path itself is a path variable (e.g., $myPath)
   variable_warning?: boolean; // True if text variables were found (often requires resolution)
+  interpolatedValue?: InterpolatableValue; // <<< ADDED: Parsed nodes if path came from brackets/quotes
 }
 ```
 
@@ -157,11 +169,10 @@ interface EmbedDirectiveNode extends BaseDirectiveNode {
     names?: string[];       // Optional list of specific names to embed (from syntax @embed {n1,n2} from [...])
 
     // subtype = 'embedTemplate' specific fields
-    content?: string;          // The raw inline template content (from [[...]])
-    isTemplateContent?: true;  // Flag indicating inline template content
+    content?: InterpolatableValue; // <<< CHANGED: Represents parsed [[...]] content
 
     // subtype = 'embedVariable' specific fields
-    // 'path' field is used, but its structure differs slightly:
+    // 'path' field is used, but structure varies:
     // path?: PathValueObject (for $pathVar) OR 
     //        { raw: string, isVariableReference: true, variable: VariableReferenceNode, structured: { variables: {...} } } (for {{textVar}} or {{dataVar}})
 
@@ -192,10 +203,10 @@ interface RunDirectiveNode extends BaseDirectiveNode {
     subtype: 'runCommand' | 'runCode' | 'runCodeParams' | 'runDefined'; // Determined by syntax
     
     // subtype = 'runCommand' specific fields
-    command?: string; // The command string (e.g., "ls -la", "{{variable}}")
+    command?: InterpolatableValue; // <<< CHANGED: Represents parsed [...] content
 
     // subtype = 'runCode' | 'runCodeParams' specific fields
-    command?: string;          // The multi-line script content (from [[...]])
+    command?: InterpolatableValue; // <<< CHANGED: Represents parsed [[...]] script content
     language?: string;         // Optional language identifier (e.g., python)
     isMultiLine?: true;        // Flag indicating multi-line content
     parameters?: Array<VariableReferenceNode | string>; // Parameters for runCodeParams (from lang (...) [[...]])
@@ -204,7 +215,8 @@ interface RunDirectiveNode extends BaseDirectiveNode {
     command?: { // Object representing the command reference
       raw: string; // Raw text (e.g., "$cmd(1, 'arg')")
       name: string; // Name of the command definition
-      args: Array<{ type: 'string' | 'variable' | 'raw', value: any }>; // Parsed arguments
+      // Arguments are parsed but strings remain literal strings, NOT InterpolatableValue
+      args: Array<{ type: 'string' | 'variable' | 'raw', value: string | VariableReferenceNode | any }>; // <<< CLARIFIED type
     };
 
     // Optional fields
@@ -235,10 +247,11 @@ interface DefineDirectiveNode extends BaseDirectiveNode {
     parameters?: string[]; // Optional list of parameter names
     
     // EITHER value OR command will be present
-    value?: string;      // String literal value (less common now)
-    command?: {         // Details if defined using @run
+    value?: InterpolatableValue; // <<< CHANGED: String literal definitions are interpolatable
+    command?: {         // Details if defined using @run (structure from RunRHSAst)
       kind: 'run';
-      command: string;
+      command: InterpolatableValue; // <<< UPDATED based on RunRHSAst changes
+      // ... other fields from RunRHSAst subtype ...
     };
   };
 }
@@ -262,24 +275,28 @@ interface DataDirectiveNode extends BaseDirectiveNode {
     source: 'literal' | 'embed' | 'run'; // Where the value comes from
     
     // Based on source:
-    value?: any;          // source = 'literal' (parsed JSON-like object/array/primitive)
-    embed?: EmbedRHSAst;  // source = 'embed' (Result from _EmbedRHS rule)
-    run?: RunRHSAst;      // source = 'run' (Result from _RunRHS rule)
+    value?: InterpolatableValue | any; // <<< CHANGED: Literal strings/objects/arrays etc. String literals are interpolatable.
+    embed?: EmbedRHSAst;  // source = 'embed' (Result from _EmbedRHS rule - see definition below)
+    run?: RunRHSAst;      // source = 'run' (Result from _RunRHS rule - see definition below)
   };
 }
 
 // Represents the structure returned by _EmbedRHS when used in DataValue/TextValue
 type EmbedRHSAst = {
     subtype: 'embedPath' | 'embedVariable' | 'embedTemplate';
-    // ... fields corresponding to the subtype, same as in EmbedDirectiveNode
-    // (e.g., path, section, content, options)
+    // subtype = 'embedTemplate' fields:
+    content?: InterpolatableValue; // <<< UPDATED
+    // ... other fields corresponding to the subtype, same as in EmbedDirectiveNode
+    // (e.g., path, section, options)
 };
 
 // Represents the structure returned by _RunRHS when used in DataValue/TextValue
 type RunRHSAst = {
     subtype: 'runCommand' | 'runCode' | 'runCodeParams' | 'runDefined';
-    // ... fields corresponding to the subtype, same as in RunDirectiveNode
-    // (e.g., command object/string, language, parameters, isMultiLine)
+    // subtype = 'runCommand' | 'runCode' | 'runCodeParams' fields:
+    command?: InterpolatableValue; // <<< UPDATED
+    // ... other fields corresponding to the subtype, same as in RunDirectiveNode
+    // (e.g., language, parameters, isMultiLine for runCode*, or command object for runDefined)
 };
 ```
 
@@ -301,9 +318,9 @@ interface TextDirectiveNode extends BaseDirectiveNode {
     source: 'literal' | 'embed' | 'run'; // Where the value comes from
 
     // Based on source:
-    value?: string;       // source = 'literal' (string or multiline template literal)
-    embed?: EmbedRHSAst;  // source = 'embed' (Result from _EmbedRHS rule)
-    run?: RunRHSAst;      // source = 'run' (Result from _RunRHS rule)
+    value?: InterpolatableValue; // <<< CHANGED: Literal strings/templates are interpolatable
+    embed?: EmbedRHSAst;  // source = 'embed' (Result from _EmbedRHS rule - see @data definition)
+    run?: RunRHSAst;      // source = 'run' (Result from _RunRHS rule - see @data definition)
   };
 }
 ```
@@ -342,7 +359,8 @@ interface VarDirectiveNode extends BaseDirectiveNode {
     identifier: string; // Name of the variable being assigned
     value: {
       type: 'string' | 'number' | 'boolean' | 'null' | 'array' | 'object';
-      value: any; // The parsed literal value
+      // String literals assigned via @var are NOT interpolatable by the parser
+      value: any; // The parsed literal value (string remains string)
     };
   };
 }

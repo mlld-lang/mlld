@@ -10,9 +10,9 @@ This document details the step-by-step implementation plan for Phase 4, focusing
 
 **Assumptions:**
 *   Phases 1-3 are complete: `StateService`, `PathService`, `ResolutionService` are refactored and use strict types defined in `_spec/types/`. **The `meld.pegjs` grammar has been refactored** to produce a more structured AST, including directive subtypes and parsed RHS for definition directives.
-*   Core variable types (`MeldVariable` subtypes, `SourceLocation`, etc.) are defined in `core/types/variables.ts` based on `@_spec/types/variables-spec.md`.
-*   Core path types (`MeldPath` subtypes, `StructuredPath`, etc.) are defined in `core/types/paths.ts` based on `@_spec/types/import-spec.md`.
-*   The AST structure follows `docs/dev/AST.md` **(needs update)** with explicit `subtype` fields for directives and structured RHS representations (e.g., results from `_EmbedRHS`, `_RunRHS` grammar rules).
+*   Core variable types (`MeldVariable` subtypes, `SourceLocation`, etc.) are defined in `core/types/variables.ts` based on `_spec/types/variables-spec.md`.
+*   Core path types (`MeldPath` subtypes, `StructuredPath`, etc.) are defined in `core/types/paths.ts` based on `_spec/types/import-spec.md`.
+*   The AST structure follows `docs/dev/AST.md` with explicit `subtype` fields for directives and structured RHS representations (e.g., results from `_EmbedRHS`, `_RunRHS` grammar rules).
 *   Directive-specific types (e.g., `EmbedParams`, `RunDirective`, `ICommandDefinition`, `ImportDefinition`) are available, potentially imported from `_spec/types/` or defined locally within handlers initially.
 
 ## A. Type Refinement Proposals
