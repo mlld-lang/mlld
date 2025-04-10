@@ -94,6 +94,12 @@ Please update this document as more definitive information is uncovered.
 - **Non-Existent Codes:** `PROCESSING_FAILED`.
 - **Evidence:** Direct reading of `DirectiveError.ts`.
 
+### `InterpreterServiceClientFactory`
+- **Source:** `services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory.ts`
+- **Finding:** This is a **concrete class**, not an interface (`IInterpreterServiceClientFactory`). It implements `ClientFactory<IInterpreterServiceClient>`.
+- **Implication:** Dependency injection and mocking should use the concrete class name and path.
+- **Evidence:** Direct reading of `InterpreterServiceClientFactory.ts`. Persistent linter errors when trying to import `IInterpreterServiceClientFactory`.
+
 ## Test Utilities
 
 ### `createLocation`
@@ -103,7 +109,7 @@ Please update this document as more definitive information is uncovered.
 
 ## Unresolved / Low Confidence (<98%)
 
-*   Exact import path for `IInterpreterServiceClientFactory`.
+- **RESOLVED:** Exact import path for `IInterpreterServiceClientFactory` (it's the class path).
 *   Exact import path for `@core/ast` parser.
 *   Exact structure of `DirectiveData` beyond requiring `kind`.
 *   Location/implementation of heading/wrapping utilities (`adjustHeadingLevels`, `wrapUnderHeader`).

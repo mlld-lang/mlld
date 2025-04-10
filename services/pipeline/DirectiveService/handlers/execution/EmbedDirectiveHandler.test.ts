@@ -21,7 +21,7 @@ import type { ResolutionContext } from '@core/types/resolution.js';
 import type { IStateService } from '@services/state/StateService/IStateService.js';
 import type { ICircularityService } from '@services/resolution/CircularityService/ICircularityService.js';
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
-import type { IInterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/interfaces/IInterpreterServiceClientFactory.js';
+import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory.js';
 import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import type { DirectiveContext } from '@services/pipeline/DirectiveService/IDirectiveService.js';
 import { createLocation } from '@tests/utils/testFactories.js';
@@ -122,7 +122,7 @@ describe('EmbedDirectiveHandler', () => {
   let stateService: ReturnType<typeof createStateServiceMock>;
   let fileSystemService: ReturnType<typeof createFileSystemServiceMock>;
   let circularityService: any;
-  let interpreterServiceClientFactory: DeepMockProxy<IInterpreterServiceClientFactory>;
+  let interpreterServiceClientFactory: DeepMockProxy<InterpreterServiceClientFactory>;
   let clonedState: any;
   let context: TestContextDI;
 
@@ -192,7 +192,7 @@ describe('EmbedDirectiveHandler', () => {
     };
 
     // Create interpreter service client factory mock
-    interpreterServiceClientFactory = mockDeep<IInterpreterServiceClientFactory>();
+    interpreterServiceClientFactory = mockDeep<InterpreterServiceClientFactory>();
     // Configure getClient if needed for specific tests later
     // interpreterServiceClientFactory.getClient.mockReturnValue(...);
 
@@ -218,7 +218,7 @@ describe('EmbedDirectiveHandler', () => {
     });
 
     // Mock resolvePath for 'embedPath' subtype
-    resolutionService.resolvePath.mockImplementation(async (pathInput: MeldPath | string, context: ResolutionContext): Promise<MeldPath> => {
+    resolutionService.resolvePath.mockImplementation(async (pathInput: string | StructuredPath, context: ResolutionContext): Promise<MeldPath> => {
       // Simulate resolving various path inputs (string, structured path, variable path)
       if (typeof pathInput === 'string') {
         if (pathInput === 'path_variable') return createMeldPath('/path/to/resolved_path.md');
@@ -242,28 +242,6 @@ describe('EmbedDirectiveHandler', () => {
       throw new Error(`Mock resolvePath cannot handle input: ${JSON.stringify(pathInput)}`);
     });
 
-    // Mock resolveVariable for 'embedVariable' subtype
-    resolutionService.resolveVariable.mockImplementation(async (variableNode: VariableReferenceNode, context: ResolutionContext): Promise<string | number | unknown> => {
-      if (variableNode.identifier === 'varName') return 'Resolved Variable Content';
-      if (variableNode.identifier === 'nonStringVar') return 123;
-      throw new Error(`Mock resolveVariable cannot resolve: ${variableNode.identifier}`);
-    });
-
-    // Mock resolveTemplate for 'embedTemplate' subtype
-    resolutionService.resolveTemplate.mockImplementation(async (contentNodes: (TextNode | VariableReferenceNode)[], context: ResolutionContext): Promise<string> => {
-      // Simulate resolving a mix of text and variables
-      let result = '';
-      for (const node of contentNodes) {
-        if (node.type === 'Text') {
-          result += node.content;
-        } else if (node.type === 'VariableReference') {
-          if (node.identifier === 'templateVar') result += 'TEMPLATE_VAR_VALUE';
-          else result += `{{${node.identifier}}}`;
-        }
-      }
-      return result;
-    });
-
     // NOTE: extractSection, adjustHeadingLevels, wrapUnderHeader are still needed
     // but are called *after* content retrieval within the handler. We might need
     // to mock them specifically within tests that use those options.
@@ -275,7 +253,7 @@ describe('EmbedDirectiveHandler', () => {
     context.registerMock('IFileSystemService', fileSystemService);
     context.registerMock('IPathService', pathService);
     context.registerMock('ICircularityService', circularityService);
-    context.registerMock('IInterpreterServiceClientFactory', interpreterServiceClientFactory);
+    context.registerMock('InterpreterServiceClientFactory', interpreterServiceClientFactory);
 
     // Register the logger mock - this is the correct way
     context.registerMock('ILogger', mockLogger);
@@ -400,110 +378,9 @@ describe('EmbedDirectiveHandler', () => {
       });
     });
 
-    it('should handle embed with heading level (subtype: embedPath)', async () => {
-      // Assume parser provides subtype, path, and options
-      const mockPath = { raw: 'file.md', structured: { segments: ['file.md'] } };
-      const headingLevelOption = 3;
-      const node: DirectiveNode = {
-        type: 'Directive',
-        subtype: 'embedPath',
-        path: mockPath,
-        options: { headingLevel: headingLevelOption }, // headingLevel in options
-        directive: { kind: 'embed' },
-        location: createLocation(1, 1, 0, 1)
-      } as DirectiveNode;
-
-      const context: DirectiveContext = { currentFilePath: 'test.meld', state: stateService as any, parentState: stateService as any };
-
-      // Mock path resolution and file reading
-      const resolvedPath: MeldPath = createMeldPath('/path/to/file.md');
-      const rawContent = 'Test content';
-      const adjustedContent = '### Test content'; // Expected result from adjustHeadingLevels
-
-      resolutionService.resolvePath.mockResolvedValue(resolvedPath);
-      fileSystemService.exists.mockResolvedValue(true);
-      fileSystemService.readFile.mockResolvedValue(rawContent);
-
-      // Mock adjustHeadingLevels specifically for this test
-      resolutionService.adjustHeadingLevels.mockReturnValue(adjustedContent);
-
-      const result = await handler.execute(node, context);
-
-      expect(validationService.validate).toHaveBeenCalledWith(node);
-      expect(stateService.clone).toHaveBeenCalled();
-      expect(resolutionService.resolvePath).toHaveBeenCalledWith(mockPath, expect.any(Object));
-      expect(fileSystemService.readFile).toHaveBeenCalledWith(resolvedPath.validatedPath);
-      expect(resolutionService.adjustHeadingLevels).toHaveBeenCalledWith(rawContent, headingLevelOption);
-
-      // No longer expect parsing or interpreting
-      expect(clonedState.mergeChildState).not.toHaveBeenCalled();
-
-      // Align expectations with actual behavior - just expecting a TextNode with the content
-      expect(result.state).toBe(clonedState);
-      expect(result.replacement).toBeDefined();
-      expect(result.replacement).toEqual({
-        type: 'Text',
-        content: adjustedContent,
-        location: node.location,
-        formattingMetadata: {
-          isFromDirective: true,
-          originalNodeType: 'Directive',
-          preserveFormatting: true
-        }
-      });
-    });
-
-    it('should handle embed with under header (subtype: embedPath)', async () => {
-      // Assume parser provides subtype, path, and options
-      const mockPath = { raw: 'doc.md', structured: { segments: ['doc.md'] } };
-      const underHeaderOption = 'My Header';
-      const node: DirectiveNode = {
-        type: 'Directive',
-        subtype: 'embedPath',
-        path: mockPath,
-        options: { underHeader: underHeaderOption }, // underHeader in options
-        directive: { kind: 'embed' },
-        location: createLocation(1, 1, 0, 1)
-      } as DirectiveNode;
-
-      const context: DirectiveContext = { currentFilePath: 'test.meld', state: stateService as any, parentState: stateService as any };
-
-      // Mock path resolution and file reading
-      const resolvedPath: MeldPath = createMeldPath('/path/to/doc.md');
-      const rawContent = 'Test content';
-      const wrappedContent = 'My Header\n\nTest content'; // Expected result from wrapUnderHeader
-
-      resolutionService.resolvePath.mockResolvedValue(resolvedPath);
-      fileSystemService.exists.mockResolvedValue(true);
-      fileSystemService.readFile.mockResolvedValue(rawContent);
-
-      // Mock wrapUnderHeader specifically for this test
-      resolutionService.wrapUnderHeader.mockReturnValue(wrappedContent);
-
-      const result = await handler.execute(node, context);
-
-      expect(stateService.clone).toHaveBeenCalled();
-      expect(resolutionService.resolvePath).toHaveBeenCalledWith(mockPath, expect.any(Object));
-      expect(fileSystemService.readFile).toHaveBeenCalledWith(resolvedPath.validatedPath);
-      expect(resolutionService.wrapUnderHeader).toHaveBeenCalledWith(rawContent, underHeaderOption);
-
-      // No longer expect parsing or interpreting
-      expect(clonedState.mergeChildState).not.toHaveBeenCalled();
-
-      // Align expectations with actual behavior
-      expect(result.state).toBe(clonedState);
-      expect(result.replacement).toBeDefined();
-      expect(result.replacement).toEqual({
-        type: 'Text',
-        content: wrappedContent,
-        location: node.location,
-        formattingMetadata: {
-          isFromDirective: true,
-          originalNodeType: 'Directive',
-          preserveFormatting: true
-        }
-      });
-    });
+    // Tests for heading level and under header removed as the corresponding methods
+    // do not exist on IResolutionService and handler logic was updated.
+    // New tests should verify the warning logs if needed.
   });
 
   describe('error handling', () => {
@@ -535,10 +412,11 @@ describe('EmbedDirectiveHandler', () => {
       const result = await handler.execute(node, context);
 
       // Assert - Check that content is UNMODIFIED because adjustHeadingLevels doesn't exist on service
+      expect(result.replacement?.type).toBe('Text'); // Check type first
       if (result.replacement?.type === 'Text') {
-        expect(result.replacement.content).toBe('# Header');
-      } else {
-        expect.fail('Replacement node should be a TextNode');
+          const replacementTextNode = result.replacement as TextNode; // Cast
+          expect(replacementTextNode.content).toBe('# Header');
+          expect(replacementTextNode.location).toEqual(node.location);
       }
       // Optionally check for a log warning
       expect(mockLogger.warn).toHaveBeenCalledWith(expect.stringContaining('Invalid headingLevel option'), expect.any(Object));
@@ -599,18 +477,23 @@ describe('EmbedDirectiveHandler', () => {
   describe('Path variables', () => {
     it('should handle user-defined path variables with $ syntax', async () => {
       // Mock to simulate a path variable starting with $
-      resolutionService.resolveInContext.mockImplementation(async (value) => {
+      // The handler now uses resolvePath, so mock that instead
+      resolutionService.resolvePath.mockImplementation(async (value: string | StructuredPath): Promise<MeldPath> => {
         if (value === '$docs/file.md') {
-          return '/path/to/docs/file.md';
+          // Return a MeldPath object
+          return createMeldPath('/path/to/docs/file.md');
         }
-        return value;
+        // Fallback or handle other cases if needed
+        if (typeof value === 'string') return createMeldPath(`/path/to/${value}`);
+        throw new Error('Unhandled path for mock');
       });
       
       const embedCode = `@embed [$docs/file.md]`;
       const node: DirectiveNode = {
         type: 'Directive',
         subtype: 'embedPath',
-        path: { raw: '$docs/file.md' },
+        // Assuming parser provides string for path containing variable reference
+        path: '$docs/file.md', 
         options: {},
         directive: { kind: 'embed' },
         location: createLocation(1, 1, 0, 1)
@@ -621,15 +504,12 @@ describe('EmbedDirectiveHandler', () => {
       (fileSystemService.readFile as any).mockResolvedValue('# File content');
       
       // Execute the directive
-      const context = {
-        state: stateService,
-        currentFilePath: '/project/test.meld'
-      };
+      const context: DirectiveContext = { currentFilePath: '/project/test.meld', state: stateService as any, parentState: stateService as any };
       
       await handler.execute(node, context);
       
       // Verify path resolution using the user-defined path variable
-      expect(resolutionService.resolveInContext).toHaveBeenCalled();
+      expect(resolutionService.resolvePath).toHaveBeenCalledWith('$docs/file.md', expect.any(Object));
       expect(fileSystemService.exists).toHaveBeenCalled();
       expect(fileSystemService.readFile).toHaveBeenCalled();
       
@@ -800,18 +680,21 @@ describe('EmbedDirectiveHandler', () => {
       expect(clonedState.mergeChildState).not.toHaveBeenCalled();
       
       // Align expectations with actual behavior
-      expect(result.replacement).toBeDefined();
-      expect(result.replacement).toEqual({
-        type: 'Text',
-        content: 'Variable Content',
-        location: node.location,
-        formattingMetadata: {
-          isFromDirective: true,
-          originalNodeType: 'Directive',
-          preserveFormatting: true
-        }
-      });
-      
+      expect(result.replacement?.type).toBe('Text');
+      if (result.replacement?.type === 'Text') {
+        const replacementTextNode = result.replacement as TextNode; // Cast
+        expect(replacementTextNode.content).toBe('Variable Content');
+        expect(replacementTextNode.location).toEqual(node.location);
+        // Optionally check formattingMetadata if needed
+        expect(replacementTextNode.formattingMetadata).toEqual({
+            isFromDirective: true,
+            originalNodeType: 'Directive',
+            preserveFormatting: true
+        });
+      } else {
+          expect.fail('Replacement node should be a TextNode');
+      }
+
       // The file system should never be checked
       expect(fileSystemService.exists).not.toHaveBeenCalled();
       expect(fileSystemService.readFile).not.toHaveBeenCalled();
