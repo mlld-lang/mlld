@@ -4,6 +4,14 @@ This document serves as a reference for verified type definitions and service in
 
 Please update this document as more definitive information is uncovered.
 
+## General Guidance for Refactoring (Learnings from Embed Handler)
+
+1.  **Prioritize Interface Alignment (Solve Root Cause):** Persistent type errors often stem from mismatches between interfaces used in different contexts (e.g., `IStateService` vs `StateServiceLike`). **Before resorting to workarounds (`as any`), investigate and refactor the consuming component (e.g., `DirectiveContext`) to expect the *actual* service interface (`IStateService`) implemented by the core service and provided by mock factories.** This ensures type safety and reflects the intended architecture.
+2.  **Verify Service Methods Exist:** Before implementing or testing handler logic based on plans (`@PLAN-PHASE-4.md`), **verify that the required service methods actually exist on the target service's current interface definition (`I*.ts`)**. If a method is missing (e.g., `resolveVariable`), find the appropriate *existing* method (e.g., `resolveInContext`) and update the plan/implementation accordingly.
+3.  **Standardize Core Type Imports:** **Always import core types directly from their canonical source definition file** within `@core/types/` or `@core/errors/` (e.g., `import { ResolutionContext } from '@core/types/resolution.js'`). Avoid relying on potentially incomplete or outdated re-exports from intermediate files (like service interfaces or index files).
+4.  **Synchronize Mock Factories:** Test mock factories (`create*Mock` in `tests/utils/mocks/serviceMocks.ts`) **must be kept synchronized with the interfaces (`I*Service`) they mock.** When an interface is updated, immediately update the factory to provide default mocks (`vi.fn()`) for all methods. Use these factories where possible. If persistent type errors occur with `DeepMockProxy`, investigate potential signature mismatches before resorting to `as any`.
+5.  **Clarify Transformation Flag Role:** The `isTransformationEnabled` flag (and related `get/setTransformedNodes`, `transformNode` methods on `IStateService`) **appears primarily used by the `OutputService`** to select between original vs. transformed nodes for final rendering. Transformation seems generally **enabled by default** in end-to-end runs. Unless specifically isolating state (e.g., potentially `@import`), assume transformation is active. Directive handlers should focus on returning correct `DirectiveResult` objects.
+
 ## Core Types (`@core/types`, `@core/syntax/types/index.js`, `@core/shared-service-types.js`)
 
 ### `ResolutionContext`
@@ -64,14 +72,14 @@ Please update this document as more definitive information is uncovered.
 - **Source:** `services/pipeline/DirectiveService/IDirectiveService.ts`
 - **Definition:** Defined and exported in this file.
 - **Required Properties:**
-    - `state: StateServiceLike`
+    - `state: IStateService`
 - **Optional Properties:**
-    - `parentState?: StateServiceLike`
+    - `parentState?: IStateService`
     - `currentFilePath?: string`
     - `workingDirectory?: string`
     - `resolutionContext?: ResolutionContext` (Correct type)
     - `formattingContext?: {...}`
-- **Usage:** Passed to `IDirectiveHandler.execute`. Test contexts need `state` (matching `StateServiceLike`) and `parentState` (if applicable).
+- **Usage:** Passed to `IDirectiveHandler.execute`. Test contexts need `state` and `parentState` (if applicable).
 
 ### `IResolutionService`
 - **Source:** `services/resolution/ResolutionService/IResolutionService.ts`
@@ -99,11 +107,10 @@ Please update this document as more definitive information is uncovered.
 - **Source of `StateServiceLike`:** `@core/shared-service-types.ts` (Verified by file read).
 - **Key Differences:** `StateServiceLike` includes methods like `enableTransformation`, `getNodes`, `getCommand`, `setCommand`, `shouldTransform`, etc., which are absent from the stricter `IStateService` definition used by the core `StateService` implementation.
 - **Evidence:** Direct comparison of `core/shared-service-types.ts` and `services/state/StateService/IStateService.ts`. Linter errors `Type '_MockProxy<IStateService> & IStateService' is missing the following properties from type 'StateServiceLike': ...` when passing `stateService` mock to `handler.execute` in tests.
-- **Resolution Plan:** 
-    1. Update `IStateService` interface (`services/state/StateService/IStateService.ts`) to include the missing methods from `StateServiceLike`.
-    2. Update `StateService` implementation (`services/state/StateService/StateService.ts`) to implement these new methods.
-    3. Update `createStateServiceMock` factory (`@tests/utils/mocks/serviceMocks.js`) to mock the new methods.
-    4. Remove `as any` casts from test files once mocks are aligned.
+- **Resolution Plan:** Refactor `DirectiveContext` (in `IDirectiveService.ts`) to use `IStateService` instead of `StateServiceLike`. This aligns the context with the actual service interface (`IStateService`) and the capabilities provided by the mock factory (`createStateServiceMock`).
+    1. Modify `DirectiveContext` definition in `IDirectiveService.ts`.
+    2. Address any downstream type errors caused by the change.
+    3. Remove `as any` casts in test files.
 
 ### `DirectiveErrorCode`
 - **Source:** `services/pipeline/DirectiveService/errors/DirectiveError.ts`

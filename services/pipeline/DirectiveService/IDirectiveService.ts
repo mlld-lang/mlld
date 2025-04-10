@@ -8,7 +8,8 @@ import type {
   ParserServiceLike,
   CircularityServiceLike,
   ResolutionServiceLike,
-  DirectiveServiceLike
+  DirectiveServiceLike,
+  IStateService
 } from '@core/shared-service-types.js';
 import type { DirectiveResult } from '@services/pipeline/DirectiveService/types.js';
 
@@ -18,9 +19,9 @@ import type { DirectiveResult } from '@services/pipeline/DirectiveService/types.
  */
 export interface DirectiveContext extends DirectiveContextBase {
   /** Parent state for nested contexts */
-  parentState?: StateServiceLike;
+  parentState?: IStateService;
   /** Current state for this directive */
-  state: StateServiceLike;
+  state: IStateService;
   /** Current file being processed */
   currentFilePath?: string;
   /** Working directory for command execution */
