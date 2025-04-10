@@ -256,10 +256,10 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
       case 'embedVariable':
         this.logger.debug('Handling embedVariable subtype');
 
-        // Ensure path and variable reference exist in the AST node
-        if (!node.path || !node.path.variable) {
+        // Ensure path object exists (might contain string or variable ref)
+        if (!node.path) {
           throw new DirectiveError(
-            `Missing path or variable reference for embedVariable subtype.`,
+            `Missing path property for embedVariable subtype.`,
             this.kind,
             DirectiveErrorCode.VALIDATION_FAILED,
             node.location
@@ -267,14 +267,15 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
         }
 
         try {
-          this.logger.debug(`Resolving embed variable`, { variableNode: node.path.variable });
-          // Assuming node.path.variable is a VariableReferenceNode
-          const resolvedValue = await this.resolutionService.resolveVariable(node.path.variable, resolutionContext);
-          
+          this.logger.debug(`Resolving embed variable/path`, { pathObject: node.path });
+          // Use resolveInContext, which can handle strings or structured paths (inc. variable refs)
+          // The node.path for embedVariable likely holds the variable structure.
+          const resolvedValue = await this.resolutionService.resolveInContext(node.path, resolutionContext);
+
           // Embed expects string content
           if (typeof resolvedValue !== 'string') {
             this.logger.warn('Resolved embed variable content is not a string', {
-              variable: node.path.variable.name,
+              variable: JSON.stringify(node.path), // Log the whole path object
               type: typeof resolvedValue,
               value: JSON.stringify(resolvedValue).substring(0, 100) // Log snippet
             });
@@ -288,7 +289,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
           this.logger.debug(`Resolved embed variable content`, { length: content.length });
         } catch (error) {
           throw new DirectiveError(
-            `Error resolving embed variable: ${error instanceof Error ? error.message : String(error)}`,
+            `Error resolving embed variable/path: ${error instanceof Error ? error.message : String(error)}`,
             this.kind,
             DirectiveErrorCode.RESOLUTION_FAILED,
             node.location,
@@ -312,8 +313,8 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
 
         try {
           this.logger.debug(`Resolving embed template`, { contentNodes: node.content.length });
-          // Assuming node.content is an array of TextNode/VariableReferenceNode
-          content = await this.resolutionService.resolveTemplate(node.content, resolutionContext);
+          // Use resolveContent, which processes an array of nodes
+          content = await this.resolutionService.resolveContent(node.content, resolutionContext);
           this.logger.debug(`Resolved embed template content`, { length: content.length });
         } catch (error) {
           throw new DirectiveError(
@@ -361,17 +362,19 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
     // Handle heading level adjustment if specified
     const headingLevel = options.headingLevel;
     if (headingLevel) {
-      this.logger.debug(`Adjusting heading level by: ${headingLevel}`);
-      content = this.resolutionService.adjustHeadingLevels(content, headingLevel);
-      this.logger.debug(`Heading levels adjusted`, { newLength: content.length });
+      // TODO: Find appropriate service/utility for heading adjustment
+      this.logger.warn(`Heading level adjustment specified (+${headingLevel}) but not currently supported by ResolutionService. Content unchanged.`, { location: node.location });
+      // Validate the option format here if needed, e.g., ensure it's a number
+      if (typeof headingLevel !== 'number' || !Number.isInteger(headingLevel) || headingLevel < 1) {
+        this.logger.warn(`Invalid headingLevel option: ${headingLevel}. Must be a positive integer.`, { location: node.location });
+      }
     }
 
     // Handle under-header wrapping if specified
     const underHeader = options.underHeader;
     if (underHeader) {
-      this.logger.debug(`Wrapping content under header: ${underHeader}`);
-      content = this.resolutionService.wrapUnderHeader(content, underHeader);
-      this.logger.debug(`Content wrapped under header`, { newLength: content.length });
+      // TODO: Find appropriate service/utility for header wrapping
+      this.logger.warn(`Under-header wrapping specified ("${underHeader}") but not currently supported by ResolutionService. Content unchanged.`, { location: node.location });
     }
 
     // Create the replacement node
