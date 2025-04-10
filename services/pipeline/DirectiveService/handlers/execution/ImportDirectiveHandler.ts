@@ -39,6 +39,7 @@ import { inject, injectable } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
 import type { IPathService } from '@services/fs/PathService/IPathService.js';
 import type { IURLContentResolver, URLFetchOptions, URLValidationOptions } from '@services/resolution/URLContentResolver/IURLContentResolver.js';
+import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
 
 /**
  * Handler for @import directives
@@ -113,54 +114,44 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
 
       // 2. Extract path object and imports from the new AST structure
       const { path: pathObject, imports } = node.directive;
-      isURLImport = !!pathObject.structured.url;
+      isURLImport = !!pathObject.structured?.url;
 
       // Use the context state directly
       targetState = context.state;
 
-      // 3. Resolve the PathValueObject
-      const resolutionContext = {
-        currentFilePath: context.currentFilePath,
-        state: context.state,
-        allowedVariableTypes: {
-          text: true,
-          data: true,
-          path: true,
-          command: false
-        }
-      };
+      // 3. Resolve the PathValueObject using ResolutionService.resolvePath
+      const resolutionContext = ResolutionContextFactory.create(
+        targetState,
+        context.currentFilePath
+      );
 
-      let finalPathString: string;
-      if (pathObject.interpolatedValue) {
-         finalPathString = await this.resolutionService.resolveInterpolatableValue(
-             pathObject.interpolatedValue,
-             resolutionContext
-         );
-      } else if (pathObject.isPathVariable && pathObject.structured.variables?.path?.length) {
-         const resolvedPathVar = await this.resolutionService.resolveVariableReference(
-             { type: 'VariableReference', identifier: pathObject.structured.variables.path[0], valueType: 'path', location: node.location },
-             resolutionContext
-         );
-         if (!resolvedPathVar || typeof resolvedPathVar.value !== 'string') {
-            throw new DirectiveError(`Could not resolve path variable: ${pathObject.raw}`, this.kind, DirectiveErrorCode.VARIABLE_NOT_FOUND);
-         }
-         finalPathString = resolvedPathVar.value;
-      } else {
-         finalPathString = await this.resolutionService.resolvePathString(
-            pathObject.raw,
-            resolutionContext
-         );
+      let resolvedPath: MeldPath;
+      try {
+        // Let resolvePath handle strings, variables, interpolation, etc.
+        resolvedPath = await this.resolutionService.resolvePath(pathObject, resolutionContext);
+        resolvedIdentifier = resolvedPath.validatedPath; // Get the final string path
+        // Determine if it's a URL based on the resolved MeldPath type
+        isURLImport = resolvedPath.contentType === 'url'; 
+        logger.debug(`Resolved import path`, { input: pathObject.raw, resolved: resolvedIdentifier, isURL: isURLImport });
+      } catch (error) {
+          // Wrap resolution errors
+          throw new DirectiveError(
+            `Failed to resolve import path \"${pathObject.raw}\": ${error instanceof Error ? error.message : String(error)}`,
+            this.kind,
+            DirectiveErrorCode.RESOLUTION_FAILED,
+            { location: node.location, cause: error instanceof Error ? error : undefined }
+          );
       }
-
-      resolvedIdentifier = finalPathString;
-
+      
       let fileContent: string;
 
-      // 4. Handle URL vs. File Path based on resolved identifier or pathObject structure
+      // 4. Handle URL vs. File Path based on resolved isURLImport flag
       if (isURLImport) {
+        // Use resolvedIdentifier directly as it's the validated URL string
         const urlToFetch = resolvedIdentifier;
         if (!urlToFetch) {
-           throw new DirectiveError('URL import requires a valid URL string after resolution', this.kind, DirectiveErrorCode.VALIDATION_FAILED);
+           // This check might be redundant if resolvePath guarantees a string path
+           throw new DirectiveError('URL import path resolved to an empty string', this.kind, DirectiveErrorCode.VALIDATION_FAILED, { location: node.location });
         }
 
         try {
@@ -214,12 +205,14 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
             }
           }
           if (error instanceof DirectiveError) { throw error; }
-          throw new DirectiveError(`URL import error: ${error instanceof Error ? error.message : String(error)}`, this.kind, DirectiveErrorCode.EXECUTION_FAILED, { cause: error instanceof Error ? error : undefined });
+          throw new DirectiveError(`URL import error: ${error instanceof Error ? error.message : String(error)}`, this.kind, DirectiveErrorCode.EXECUTION_FAILED, { location: node.location, cause: error instanceof Error ? error : undefined });
         }
       } else {
+        // Use resolvedIdentifier directly as it's the validated file path string
         const filePathToRead = resolvedIdentifier;
         if (!filePathToRead) {
-           throw new DirectiveError('Path could not be resolved to a string', this.kind, DirectiveErrorCode.VALIDATION_FAILED);
+           // This check might be redundant if resolvePath guarantees a string path
+           throw new DirectiveError('File import path resolved to an empty string', this.kind, DirectiveErrorCode.VALIDATION_FAILED, { location: node.location });
         }
 
         const fileExists = await this.fileSystemService.exists(filePathToRead);
