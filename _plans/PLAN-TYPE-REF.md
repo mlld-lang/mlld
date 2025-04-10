@@ -7,9 +7,10 @@ Please update this document as more definitive information is uncovered.
 ## Core Types (`@core/types`, `@core/syntax/types/index.js`)
 
 ### `ResolutionContext`
-- **Source:** `@core/types/resolution.ts`
+- **Source:** `@core/types/resolution.ts` (Verified by grep)
 - **Definition:** Defined and exported from `@core/types/resolution.ts`.
-- **Evidence:** `grep` search located the definition; import needed in test file.
+- **Issue:** Linter sometimes reports it as not exported from `@services/resolution/ResolutionService/IResolutionService.js` when imported there. Import directly from `@core/types/resolution.js` in consuming files.
+- **Evidence:** `grep` search located the definition; persistent linter errors in test files when importing through `IResolutionService`.
 
 ### `IDirectiveNode`
 - **Source:** `@core/syntax/types/index.js` (Assumed based on imports)
@@ -34,6 +35,12 @@ Please update this document as more definitive information is uncovered.
 - **Property:** Uses `.identifier` to store the variable name (not `.name`).
     - **Evidence:** Linter errors `Property 'name' does not exist...` resolved by changing to `.identifier` in `EmbedDirectiveHandler.test.ts` mocks.
 
+### `DataVariable`
+- **Source:** `@core/types/variables.ts` (Verified by grep)
+- **Definition:** Defined and exported from `@core/types/variables.ts`.
+- **Issue:** Linter sometimes reports it as not exported from `@services/state/StateService/IStateService.js` when imported there. Import directly from `@core/types/variables.js` in consuming files.
+- **Evidence:** `grep` search located the definition; persistent linter errors in test files when importing through `IStateService`.
+
 ### `MeldPath`
 - **Source:** `@core/types/paths.ts`
 - **Definition:** Defined and exported from `@core/types/paths.ts`.
@@ -45,6 +52,11 @@ Please update this document as more definitive information is uncovered.
     - `.raw` property does *not* exist directly on `MeldPath` or its members.
     - **Implication for FS calls:** `IFileSystemService` methods (`exists`, `readFile`) expect a `string` path. Use `resolvedPath.validatedPath` (the validated string path) when calling these services after getting a `MeldPath` from `resolvePath`.
     - **Evidence:** Direct reading of `core/types/paths.ts`. Test mocks updated to use `createMeldPath` helper and access `.validatedPath` for FS calls.
+
+### `FieldAccessError`
+- **Source:** `@core/types/common.js` (Assumed based on imports in `IResolutionService`)
+- **Issue:** Linter reports it's not exported from `@core/types/common.js`. Needs verification.
+- **Evidence:** Linter errors in transformation test file.
 
 ## Service Interfaces & Contexts
 
@@ -84,14 +96,15 @@ Please update this document as more definitive information is uncovered.
 
 ### `StateServiceLike` vs `IStateService`
 - **Finding:** Mocks created based on `IStateService` (e.g., via `createStateServiceMock`) do not fully satisfy the `StateServiceLike` interface required by `DirectiveContext.state`.
+- **Source of `StateServiceLike`:** Likely `@core/shared-service-types.js` (based on imports in `IDirectiveService.ts`). Needs verification.
 - **Missing Properties (Observed):** `enableTransformation`, `getNodes`, `getCommand`, `setCommand`, `shouldTransform` (and potentially others).
 - **Evidence:** Linter errors `Type '_MockProxy<IStateService> & IStateService' is missing the following properties from type 'StateServiceLike': ...` when passing `stateService` mock to `handler.execute` in `EmbedDirectiveHandler.test.ts`.
-- **Implication:** Test mocks for `stateService` need careful construction or casting (e.g., `as any`) to satisfy `StateServiceLike` when used in `DirectiveContext`, or the mock factory/interfaces need updating.
+- **Implication:** Test mocks for `stateService` need careful construction or casting (e.g., `as any`) to satisfy `StateServiceLike` when used in `DirectiveContext`, OR the mock factory (`createStateServiceMock`) needs to be updated to return a `StateServiceLike` compatible mock, OR `DirectiveContext` needs to be updated to use `IStateService`.
 
 ### `DirectiveErrorCode`
 - **Source:** `services/pipeline/DirectiveService/errors/DirectiveError.ts`
-- **Available Codes (Verified):** `VALIDATION_FAILED`, `RESOLUTION_FAILED`, `EXECUTION_FAILED`, `HANDLER_NOT_FOUND`, `FILE_NOT_FOUND`, `CIRCULAR_REFERENCE`, `VARIABLE_NOT_FOUND`, `STATE_ERROR`, `INVALID_CONTEXT`, `SECTION_NOT_FOUND`.
-- **Non-Existent Codes:** `PROCESSING_FAILED`.
+- **Available Codes (Verified):** `VALIDATION_FAILED`, `RESOLUTION_FAILED`, `EXECUTION_FAILED`, `HANDLER_NOT_FOUND`, `FILE_NOT_FOUND`, `CIRCULAR_REFERENCE`, `VARIABLE_NOT_FOUND`, `STATE_ERROR`, `INVALID_CONTEXT`, `SECTION_NOT_FOUND`, `INITIALIZATION_FAILED` (missed previously).
+- **Non-Existent Codes:** `PROCESSING_FAILED`, `CIRCULAR_IMPORT` (use `CIRCULAR_REFERENCE`).
 - **Evidence:** Direct reading of `DirectiveError.ts`.
 
 ### `InterpreterServiceClientFactory`
@@ -109,8 +122,10 @@ Please update this document as more definitive information is uncovered.
 
 ## Unresolved / Low Confidence (<98%)
 
-- **RESOLVED:** Exact import path for `IInterpreterServiceClientFactory` (it's the class path).
 *   Exact import path for `@core/ast` parser.
 *   Exact structure of `DirectiveData` beyond requiring `kind`.
 *   Location/implementation of heading/wrapping utilities (`adjustHeadingLevels`, `wrapUnderHeader`).
-*   Full definition of `StateServiceLike` and how it differs from `IStateService`.
+*   Full definition of `StateServiceLike` and **resolution for mismatch** with `IStateService` mocks.
+*   Verification of `FieldAccessError` export from `@core/types/common.js`.
+*   Correct import path for `IInterpreterServiceClient`.
+*   Reason for `transformNode` mock signature error `Expected 0-1 type arguments, but got 2`.
