@@ -1,4 +1,25 @@
-import { DirectiveNode, MeldNode, TextNode } from '@core/syntax/types/index.js';
+import { DirectiveNode, MeldNode, TextNode, VariableReferenceNode } from '@core/syntax/types/index.js';
+import type {
+  ImportDirectiveNode,
+  PathValueObject,
+  InterpolatableValue,
+} from '@core/syntax/types/index.js';
+import type {
+  TextVariable,
+  DataVariable,
+  IPathVariable,
+  CommandVariable,
+  VariableMetadata,
+  VariableOrigin,
+  MeldVariable,
+  JsonValue,
+} from '@core/types/variables.js';
+import type {
+  MeldPath,
+  NormalizedAbsoluteFilePath,
+  URLPath,
+} from '@core/types/paths.js';
+import type { SourceLocation } from '@core/syntax/types/location.js';
 import type { DirectiveContext, IDirectiveHandler } from '@services/pipeline/DirectiveService/IDirectiveService.js';
 import type { DirectiveResult } from '@services/pipeline/DirectiveService/types.js';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
@@ -31,7 +52,6 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
   readonly kind = 'import';
   private debugEnabled: boolean = false;
   private stateTrackingService?: IStateTrackingService;
-  private stateVariableCopier: StateVariableCopier;
   private interpreterServiceClient?: IInterpreterServiceClient;
 
   constructor(
@@ -48,7 +68,11 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
   ) {
     this.stateTrackingService = trackingService;
     this.debugEnabled = !!trackingService && (process.env.MELD_DEBUG === 'true');
-    this.stateVariableCopier = new StateVariableCopier(trackingService);
+    try {
+      this.interpreterServiceClient = this.interpreterServiceClientFactory.createClient();
+    } catch (error) {
+       logger.warn('Failed to get interpreter service client from factory during construction', { error });
+    }
   }
 
   private ensureInterpreterServiceClient(): IInterpreterServiceClient {
@@ -63,48 +87,11 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
       }
     }
     
-    // If we still don't have an interpreter client and we're in a test environment, create a test mock
-    if (!this.interpreterServiceClient && process.env.NODE_ENV === 'test') {
-      logger.debug('Creating test mock for interpreter service client');
-      this.interpreterServiceClient = {
-        interpret: async (nodes, options) => {
-          // Return the initial state if provided, otherwise create a mock state
-          logger.debug('Using test mock for interpreter service');
-          if (options?.initialState) {
-            return options.initialState;
-          }
-          
-          // Create a basic mock state if needed - this is just for tests
-          return {
-            addNode: () => {},
-            getNodes: () => [],
-            createChildState: () => ({ ...this }),
-            getAllTextVars: () => new Map(),
-            getAllDataVars: () => new Map(),
-            getAllPathVars: () => new Map(),
-            getAllCommands: () => new Map(),
-            getTextVar: () => undefined,
-            getDataVar: () => undefined,
-            getPathVar: () => undefined,
-            getCommand: () => undefined,
-            setTextVar: () => {},
-            setDataVar: () => {},
-            setPathVar: () => {},
-            setCommand: () => {},
-            getCurrentFilePath: () => '',
-            setCurrentFilePath: () => {},
-            clone: () => ({ ...this }),
-            isTransformationEnabled: () => false
-          } as unknown as IStateService;
-        },
-        createChildContext: async (parentState) => parentState
-      };
-    }
-    
-    // If we still don't have a client, throw an error
+    // If we still don't have a client (because factory failed or wasn't available),
+    // throw an error. Tests MUST provide a mock via TestContextDI.
     if (!this.interpreterServiceClient) {
       throw new DirectiveError(
-        'Interpreter service client is not available',
+        'Interpreter service client is not available. Ensure InterpreterServiceClientFactory is registered and resolvable, or provide a mock in tests.',
         this.kind,
         DirectiveErrorCode.INITIALIZATION_FAILED
       );
@@ -113,37 +100,25 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
     return this.interpreterServiceClient;
   }
 
-  async execute(node: DirectiveNode, context: DirectiveContext): Promise<DirectiveResult | IStateService> {
-    let resolvedFullPath: string | undefined;
+  async execute(node: ImportDirectiveNode, context: DirectiveContext): Promise<DirectiveResult | IStateService> {
+    let resolvedIdentifier: string | undefined;
     let targetState: IStateService;
     let resultState: IStateService;
     let isURLImport = false;
-    
+    const importDirectiveLocation = node.location;
+
     try {
       // 1. Validate directive structure
       await this.validationService.validate(node);
 
-      // 2. Extract path and imports
-      const { path, url, allowURLs, urlOptions, imports } = node.directive;
+      // 2. Extract path object and imports from the new AST structure
+      const { path: pathObject, imports } = node.directive;
+      isURLImport = !!pathObject.structured.url;
 
-      // 3. Process path
-      if (!path && !url) {
-        throw new DirectiveError(
-          'Import directive requires a path or url',
-          this.kind,
-          DirectiveErrorCode.VALIDATION_FAILED
-        );
-      }
-      
-      // We need to check if this is a URL
-      // URL support is not yet fully implemented in the directive handlers
-      // For now, we'll just treat url parameter as a flag
-      isURLImport = !!url || !!allowURLs;
-
-      // Use the context state directly for transformation mode
+      // Use the context state directly
       targetState = context.state;
 
-      // Resolve variables in path
+      // 3. Resolve the PathValueObject
       const resolutionContext = {
         currentFilePath: context.currentFilePath,
         state: context.state,
@@ -154,80 +129,74 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
           command: false
         }
       };
-      
+
+      let finalPathString: string;
+      if (pathObject.interpolatedValue) {
+         finalPathString = await this.resolutionService.resolveInterpolatableValue(
+             pathObject.interpolatedValue,
+             resolutionContext
+         );
+      } else if (pathObject.isPathVariable && pathObject.structured.variables?.path?.length) {
+         const resolvedPathVar = await this.resolutionService.resolveVariableReference(
+             { type: 'VariableReference', identifier: pathObject.structured.variables.path[0], valueType: 'path', location: node.location },
+             resolutionContext
+         );
+         if (!resolvedPathVar || typeof resolvedPathVar.value !== 'string') {
+            throw new DirectiveError(`Could not resolve path variable: ${pathObject.raw}`, this.kind, DirectiveErrorCode.VARIABLE_NOT_FOUND);
+         }
+         finalPathString = resolvedPathVar.value;
+      } else {
+         finalPathString = await this.resolutionService.resolvePathString(
+            pathObject.raw,
+            resolutionContext
+         );
+      }
+
+      resolvedIdentifier = finalPathString;
+
       let fileContent: string;
-      
-      // Handle URL and path differently
+
+      // 4. Handle URL vs. File Path based on resolved identifier or pathObject structure
       if (isURLImport) {
-        const urlToFetch = url || (typeof path === 'string' ? path : '');
-        
+        const urlToFetch = resolvedIdentifier;
         if (!urlToFetch) {
-          throw new DirectiveError(
-            'URL import requires a valid URL',
-            this.kind,
-            DirectiveErrorCode.VALIDATION_FAILED
-          );
+           throw new DirectiveError('URL import requires a valid URL string after resolution', this.kind, DirectiveErrorCode.VALIDATION_FAILED);
         }
-        
+
         try {
-          // Use URLContentResolver if available, otherwise fall back to PathService
-          // This maintains backward compatibility during the transition period
+          const urlOptions = {};
           if (this.urlContentResolver) {
             logger.debug('Using URLContentResolver for URL validation and fetching', { url: urlToFetch });
-            
-            // Validate URL according to security policy
             await this.urlContentResolver.validateURL(urlToFetch, urlOptions);
           } else {
-            // Backward compatibility path - use PathService
             logger.debug('URLContentResolver not available, falling back to PathService', { url: urlToFetch });
             await this.pathService.validateURL(urlToFetch, urlOptions);
           }
-          
-          // Check for circular imports using the URL as the identifier
+
           try {
-            // Normalize the URL to ensure consistent format with CircularityService
-            const normalizedUrl = urlToFetch.replace(/\\/g, '/');
-            logger.debug('Checking for circular imports in URL import', { 
-              url: urlToFetch,
-              normalizedUrl,
-              isUrlDifferent: normalizedUrl !== urlToFetch
-            });
-            
+            const normalizedUrl = urlToFetch.replace(/\\\\/g, '/');
+            logger.debug('Checking for circular imports in URL import', { url: urlToFetch, normalizedUrl });
             this.circularityService.beginImport(normalizedUrl);
           } catch (error: any) {
-            // Rethrow as a directive error
-            throw new DirectiveError(
-              `Circular import detected: ${error.message}`,
-              this.kind,
-              DirectiveErrorCode.CIRCULAR_REFERENCE
-            );
+            throw new DirectiveError(`Circular import detected: ${error.message}`, this.kind, DirectiveErrorCode.CIRCULAR_REFERENCE);
           }
-          
-          // Fetch content with caching - use URLContentResolver if available, otherwise PathService
-          const response = this.urlContentResolver 
-            ? await this.urlContentResolver.fetchURL(urlToFetch, {
-                bypassCache: false,
-                timeout: urlOptions?.timeout
-              })
-            : await this.pathService.fetchURL(urlToFetch, {
-                bypassCache: false,
-                timeout: urlOptions?.timeout
-              });
-          
-          // Set the URL as the resolved path for source mapping and error reporting
-          resolvedFullPath = urlToFetch;
+
+          const response = this.urlContentResolver
+            ? await this.urlContentResolver.fetchURL(urlToFetch, { bypassCache: false })
+            : await this.pathService.fetchURL(urlToFetch, { bypassCache: false });
+
           fileContent = response.content;
-          
+
           // Register for source mapping
           try {
             const { registerSource, addMapping } = require('@core/utils/sourceMapUtils.js');
-            registerSource(resolvedFullPath, fileContent);
+            registerSource(resolvedIdentifier, fileContent);
             
             if (node.location && node.location.start) {
               addMapping(
-                resolvedFullPath,
-                1, // Start at line 1 of the imported file
-                1, // Start at column 1
+                resolvedIdentifier,
+                1,
+                1,
                 node.location.start.line,
                 node.location.start.column
               );
@@ -236,198 +205,91 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
             logger.debug('Source mapping not available, skipping', { error: err });
           }
         } catch (error: any) {
-          // Handle URL-specific errors
           if (typeof error === 'object' && error !== null) {
-            // Check for URL validation errors
             if (error.name === 'URLValidationError' || error.name === 'URLSecurityError') {
-              throw new DirectiveError(
-                `URL validation error: ${error.message}`,
-                this.kind,
-                DirectiveErrorCode.VALIDATION_FAILED,
-                { cause: error as Error }
-              );
+              throw new DirectiveError(`URL validation error: ${error.message}`, this.kind, DirectiveErrorCode.VALIDATION_FAILED, { cause: error as Error });
             }
-            
-            // Check for URL fetch errors
             if (error.name === 'URLFetchError') {
-              throw new DirectiveError(
-                `Failed to fetch URL: ${error.message}`,
-                this.kind,
-                DirectiveErrorCode.FILE_NOT_FOUND, // Use FILE_NOT_FOUND for fetch errors
-                { cause: error as Error }
-              );
+              throw new DirectiveError(`Failed to fetch URL: ${error.message}`, this.kind, DirectiveErrorCode.FILE_NOT_FOUND, { cause: error as Error });
             }
           }
-          
-          // Re-throw if it's already a DirectiveError
-          if (error instanceof DirectiveError) {
-            throw error;
-          }
-          
-          // Wrap other errors
-          throw new DirectiveError(
-            `URL import error: ${error instanceof Error ? error.message : String(error)}`,
-            this.kind,
-            DirectiveErrorCode.EXECUTION_FAILED,
-            { cause: error instanceof Error ? error : undefined }
-          );
+          if (error instanceof DirectiveError) { throw error; }
+          throw new DirectiveError(`URL import error: ${error instanceof Error ? error.message : String(error)}`, this.kind, DirectiveErrorCode.EXECUTION_FAILED, { cause: error instanceof Error ? error : undefined });
         }
       } else {
-        // For file path imports
-        if (path !== undefined) {
-          resolvedFullPath = await this.resolutionService.resolveInContext(
-            path,
-            resolutionContext
-          );
-        } else {
-          throw new DirectiveError(
-            'Path is undefined, unable to resolve in context',
-            this.kind,
-            DirectiveErrorCode.VALIDATION_FAILED
-          );
+        const filePathToRead = resolvedIdentifier;
+        if (!filePathToRead) {
+           throw new DirectiveError('Path could not be resolved to a string', this.kind, DirectiveErrorCode.VALIDATION_FAILED);
         }
 
-        if (!resolvedFullPath) {
-          throw new DirectiveError(
-            `Could not resolve path: ${path}`,
-            this.kind,
-            DirectiveErrorCode.VARIABLE_NOT_FOUND
-          );
-        }
-
-        // Check if the file exists
-        const fileExists = await this.fileSystemService.exists(resolvedFullPath);
+        const fileExists = await this.fileSystemService.exists(filePathToRead);
         if (!fileExists) {
-          throw new DirectiveError(
-            `File not found: ${resolvedFullPath}`,
-            this.kind,
-            DirectiveErrorCode.FILE_NOT_FOUND
-          );
+          throw new DirectiveError(`File not found: ${filePathToRead}`, this.kind, DirectiveErrorCode.FILE_NOT_FOUND);
         }
 
-        // Check for circular imports
         try {
-          // Normalize the path to ensure consistent format with CircularityService
-          // This ensures paths with different formats (e.g., backslashes vs forward slashes)
-          // are properly compared for circular import detection
-          const normalizedPath = resolvedFullPath.replace(/\\/g, '/');
-          logger.debug('Checking for circular imports', { 
-            originalPath: resolvedFullPath,
-            normalizedPath,
-            isPathDifferent: normalizedPath !== resolvedFullPath
-          });
-          
+          const normalizedPath = filePathToRead.replace(/\\\\/g, '/');
+          logger.debug('Checking for circular imports', { originalPath: filePathToRead, normalizedPath });
           this.circularityService.beginImport(normalizedPath);
         } catch (error: any) {
-          // Rethrow as a directive error
-          throw new DirectiveError(
-            `Circular import detected: ${error.message}`,
-            this.kind,
-            DirectiveErrorCode.CIRCULAR_REFERENCE
-          );
+          throw new DirectiveError(`Circular import detected: ${error.message}`, this.kind, DirectiveErrorCode.CIRCULAR_REFERENCE);
         }
 
-        // Read the file
-        fileContent = await this.fileSystemService.readFile(resolvedFullPath);
+        fileContent = await this.fileSystemService.readFile(filePathToRead);
       }
-      
-      // Register the source file with source mapping service if available
+
       try {
         const { registerSource, addMapping } = require('@core/utils/sourceMapUtils.js');
-        
-        // Register the source file content
-        registerSource(resolvedFullPath, fileContent);
-        
-        // Add a mapping from the first line of the source file to the location of the import directive
+        registerSource(resolvedIdentifier, fileContent);
         if (node.location && node.location.start) {
           addMapping(
-            resolvedFullPath,
-            1, // Start at line 1 of the imported file
-            1, // Start at column 1
+            resolvedIdentifier,
+            1,
+            1,
             node.location.start.line,
             node.location.start.column
           );
-          
-          logger.debug(`Added source mapping from ${resolvedFullPath}:1:1 to line ${node.location.start.line}:${node.location.start.column}`);
+          logger.debug(`Added source mapping from ${resolvedIdentifier}:1:1 to line ${node.location.start.line}:${node.location.start.column}`);
         }
       } catch (err) {
-        // Source mapping is optional, so just log a debug message if it fails
         logger.debug('Source mapping not available, skipping', { error: err });
       }
 
-      // Parse the file - ensuring we handle both old and new ParserService return formats
       const parsedResults = await this.parserService.parse(fileContent, {
-        filePath: resolvedFullPath
+        filePath: resolvedIdentifier
       });
+      const nodesToInterpret = Array.isArray(parsedResults) ? parsedResults : (parsedResults as any).nodes || [];
 
-      // Create a child state for the imported file
       const importedState = context.state.createChildState();
-      
-      try {
-        if (resolvedFullPath) {
-          importedState.setCurrentFilePath(resolvedFullPath);
-        }
-      } catch (error) {
-        logger.warn('Failed to set current file path on imported state', {
-          resolvedFullPath,
-          error: error instanceof Error ? error.message : String(error)
-        });
+      if (resolvedIdentifier) {
+        importedState.setCurrentFilePath(resolvedIdentifier);
       }
 
-      // Interpret the file
-      // Use ensureInterpreterServiceClient to make sure we have a valid client
       try {
         const interpreterClient = this.ensureInterpreterServiceClient();
-        
-        // Log for debugging
-        logger.debug('Interpreting imported file', {
-          filePath: resolvedFullPath,
-          hasInitialState: !!importedState
-        });
-        
-        // Set the current file path in the imported state - this is important for nested imports
-        if (importedState && resolvedFullPath) {
-          importedState.setCurrentFilePath(resolvedFullPath);
-        }
-        
-        // Extract nodes array based on return format from parser
-        // ParserService.parse can return either an array of nodes directly or an object with nodes property
-        const nodes = Array.isArray(parsedResults) 
-          ? parsedResults 
-          : (parsedResults as any).nodes || [];
-        
-        if (nodes.length === 0) {
-          logger.warn('Empty nodes array from parser', {
-            filePath: resolvedFullPath,
-            parsedResults: typeof parsedResults
-          });
-        }
-        
-        // Perform the interpretation with the extracted nodes
-        resultState = await interpreterClient.interpret(nodes, {
+        logger.debug('Interpreting imported file', { filePath: resolvedIdentifier, hasInitialState: !!importedState });
+
+        resultState = await interpreterClient.interpret(nodesToInterpret, {
           initialState: importedState,
-          currentFilePath: resolvedFullPath
+          currentFilePath: resolvedIdentifier
         });
-        
-        // After interpretation, log the state debug info
+
         logger.debug('Import interpretation complete', {
-          filePath: resolvedFullPath,
+          filePath: resolvedIdentifier,
           textVarsCount: resultState?.getAllTextVars().size || 0,
           dataVarsCount: resultState?.getAllDataVars().size || 0,
           pathVarsCount: resultState?.getAllPathVars().size || 0,
           commandsCount: resultState?.getAllCommands().size || 0
         });
-        
-        // If the imported state has a parent state, propagate variables to it
+
         if (resultState) {
-          // First try to get parent state from importedState
           let parentState = null;
           
           if (importedState.getParentState && typeof importedState.getParentState === 'function') {
             try {
               parentState = importedState.getParentState();
               logger.debug('Found parent state via getParentState() method', {
-                filePath: resolvedFullPath,
+                filePath: resolvedIdentifier,
                 parentStateId: parentState?.getStateId?.() || 'unknown'
               });
             } catch (error) {
@@ -435,22 +297,19 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
             }
           }
           
-          // If no parent state from method, check context.parentState
           if (!parentState && context && context.parentState) {
             parentState = context.parentState;
             logger.debug('Using context.parentState as fallback', {
-              filePath: resolvedFullPath,
+              filePath: resolvedIdentifier,
               parentStateId: parentState?.getStateId?.() || 'unknown'
             });
           }
           
-          // If we found a parent state, propagate variables
           if (parentState) {
             logger.debug('Propagating variables to parent state from imported file', {
-              filePath: resolvedFullPath
+              filePath: resolvedIdentifier
             });
             
-            // Copy text variables up to parent
             const textVars = resultState.getAllTextVars();
             textVars.forEach((value, key) => {
               try {
@@ -461,7 +320,6 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
               }
             });
             
-            // Copy data variables up to parent
             const dataVars = resultState.getAllDataVars();
             dataVars.forEach((value, key) => {
               try {
@@ -472,7 +330,6 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
               }
             });
             
-            // Copy path variables up to parent
             const pathVars = resultState.getAllPathVars();
             pathVars.forEach((value, key) => {
               try {
@@ -483,7 +340,6 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
               }
             });
             
-            // Copy commands up to parent
             const commands = resultState.getAllCommands();
             commands.forEach((value, key) => {
               try {
@@ -495,233 +351,135 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
             });
           }
         }
-        
       } catch (error) {
-        // If we can't get a client or interpret, handle it gracefully
-        if (error instanceof DirectiveError) {
-          throw error;
-        }
-        
-        throw new DirectiveError(
-          `Failed to interpret imported file: ${error instanceof Error ? error.message : String(error)}`,
-          this.kind,
-          DirectiveErrorCode.EXECUTION_FAILED
-        );
+        if (error instanceof DirectiveError) { throw error; }
+        throw new DirectiveError(`Failed to interpret imported file: ${error instanceof Error ? error.message : String(error)}`, this.kind, DirectiveErrorCode.EXECUTION_FAILED);
       }
 
-      // Process imports
-      if (imports) {
-        // Resolve variables in imports if it's a string
-        if (typeof imports === 'string') {
-          const resolvedImports = await this.resolutionService.resolveInContext(imports, resolutionContext);
-          
-          // Parse the import list
-          const parsedImports = this.parseImportList(resolvedImports);
-          
-          // Process the structured imports
-          this.processStructuredImports(parsedImports, resultState, targetState);
-        } else if (Array.isArray(imports)) {
-          // If imports is already an array of ImportItem objects, use it directly
-          this.processStructuredImports(imports, resultState, targetState);
-        } else {
-          // Handle unexpected type
-          throw new DirectiveError(
-            `Import directive has invalid imports format: ${typeof imports}`,
-            this.kind,
-            DirectiveErrorCode.VALIDATION_FAILED
-          );
-        }
+      if (!imports || imports.length === 0 || imports.some(i => i.name === '*')) {
+          this.importAllVariables(resultState, targetState, importDirectiveLocation);
       } else {
-        // No import list - import all variables
-        this.importAllVariables(resultState, targetState);
+          this.processStructuredImports(imports, resultState, targetState, importDirectiveLocation);
       }
 
-      // End import tracking
-      if (resolvedFullPath) {
-        // Use the same normalization approach as in beginImport
-        const normalizedPath = resolvedFullPath.replace(/\\/g, '/');
-        this.circularityService.endImport(normalizedPath);
-        
-        // Log for debugging
-        if (isURLImport) {
-          logger.debug('Ended import tracking for URL', {
-            url: resolvedFullPath,
-            normalizedPath
-          });
-        }
+      if (resolvedIdentifier) {
+        const normalizedIdentifier = resolvedIdentifier.replace(/\\\\/g, '/');
+        this.circularityService.endImport(normalizedIdentifier);
+        logger.debug(`Ended import tracking for ${isURLImport ? 'URL' : 'file'}`, { identifier: resolvedIdentifier, normalizedIdentifier });
       }
 
-      // Check if transformation is enabled
       if (targetState.isTransformationEnabled && targetState.isTransformationEnabled()) {
-        // Replace the directive with empty content
         const replacement: TextNode = {
           type: 'Text',
           content: '',
-          location: node.location ? {
-            start: node.location.start,
-            end: node.location.end
-          } : undefined
+          location: node.location
         };
-
         return {
           state: targetState,
           replacement
         };
       } else {
-        // In regular mode, just return the target state
         return targetState;
       }
     } catch (error: unknown) {
-      // Handle errors
       let errorObj: DirectiveError;
-      
-      if (!(error instanceof DirectiveError)) {
-        // For specific error types, create standardized DirectiveError with expected messages
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        
-        if (error instanceof Error && error.name === 'MeldResolutionError' && errorMessage.includes('Variable not found')) {
-          errorObj = new DirectiveError(
-            errorMessage,
-            this.kind,
-            DirectiveErrorCode.VARIABLE_NOT_FOUND
-          );
-        } else if (errorMessage === 'Parse error') {
-          errorObj = new DirectiveError(
-            errorMessage,
-            this.kind,
-            DirectiveErrorCode.EXECUTION_FAILED
-          );
-        } else if (errorMessage === 'Interpretation error') {
-          errorObj = new DirectiveError(
-            errorMessage,
-            this.kind,
-            DirectiveErrorCode.EXECUTION_FAILED
-          );
-        } else if (errorMessage === 'Read error') {
-          errorObj = new DirectiveError(
-            errorMessage,
-            this.kind,
-            DirectiveErrorCode.FILE_NOT_FOUND
-          );
-        } else {
-          // Generic wrapper for other error types
-          errorObj = new DirectiveError(
-            `Import directive error: ${errorMessage}`,
-            this.kind,
-            DirectiveErrorCode.EXECUTION_FAILED,
-            DirectiveErrorSeverity.Fatal,
-            {
-              cause: error instanceof Error ? error : undefined
-            }
-          );
-        }
-      } else {
+      if (error instanceof DirectiveError) {
         errorObj = error;
-      }
-      
-      // End import tracking if necessary
-      if (resolvedFullPath) {
-        try {
-          // Use the same normalization approach as in beginImport
-          const normalizedPath = resolvedFullPath.replace(/\\/g, '/');
-          this.circularityService.endImport(normalizedPath);
-        } catch (cleanupError) {
-          logger.warn('Error during import cleanup', { error: cleanupError });
-        }
+      } else {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+         errorObj = new DirectiveError(
+           `Import directive error: ${errorMessage}`,
+           this.kind,
+           DirectiveErrorCode.EXECUTION_FAILED,
+           DirectiveErrorSeverity.Fatal,
+           { cause: error instanceof Error ? error : undefined }
+         );
       }
 
-      // Always throw the error, even in transformation mode
+      if (resolvedIdentifier) {
+        try {
+          const normalizedIdentifier = resolvedIdentifier.replace(/\\\\/g, '/');
+          this.circularityService.endImport(normalizedIdentifier);
+        } catch (cleanupError) {
+          logger.warn('Error during import cleanup on error path', { error: cleanupError });
+        }
+      }
       throw errorObj;
     }
   }
 
-  private parseImportList(importList: string | Array<{ name: string; alias?: string }>): Array<{ name: string; alias?: string }> {
-    // Handle undefined or null importList
-    if (!importList) {
-      return [{ name: '*' }]; // Default to importing everything
-    }
-    
-    // If importList is already an array, return it directly
-    if (Array.isArray(importList)) {
-      return importList;
-    }
-    
-    // Ensure importList is a string
-    if (typeof importList !== 'string') {
-      throw new DirectiveError(
-        `Import list must be a string or array, got ${typeof importList}`,
-        this.kind,
-        DirectiveErrorCode.VALIDATION_FAILED
-      );
-    }
-    
-    // Split by commas, but handle potential quoted strings
-    const result: Array<{ name: string; alias?: string }> = [];
-    
-    // Simple split for now, might need more robust parsing later
-    const parts = importList.split(',').map(p => p.trim());
-    
-    for (const part of parts) {
-      // Check for 'as' keyword to identify aliases
-      if (part.includes(' as ')) {
-        // Format: "name as alias"
-        const [name, alias] = part.split(' as ').map(p => p.trim());
-        result.push({ name, alias });
-      } else {
-        // Just a name without alias
-        result.push({ name: part });
-      }
-    }
-    
-    return result;
-  }
-
-  private importAllVariables(sourceState: IStateService, targetState: IStateService): void {
+  private importAllVariables(
+      sourceState: IStateService,
+      targetState: IStateService,
+      importLocation: SourceLocation
+    ): void {
     if (!sourceState || !targetState) {
       logger.warn('Cannot import variables - null or undefined state');
       return;
     }
-    
+
+    const createMetadata = (originalVar?: MeldVariable): VariableMetadata => ({
+      definedAt: importLocation,
+      origin: VariableOrigin.IMPORT,
+      context: originalVar?.metadata ? { importedFrom: originalVar.metadata.definedAt } : undefined,
+    });
+
     try {
-      // Copy all text variables
       const textVars = sourceState.getAllTextVars();
-      textVars.forEach((value, key) => {
+      textVars.forEach((originalVar, key) => {
         try {
-          targetState.setTextVar(key, value);
+          const newVar: TextVariable = {
+            type: 'text',
+            value: originalVar.value,
+            metadata: createMetadata(originalVar)
+          };
+          targetState.setTextVar(key, newVar);
           logger.debug(`Imported text variable: ${key}`);
         } catch (error) {
           logger.warn(`Failed to import text variable ${key}`, { error });
         }
       });
-      
-      // Copy all data variables
+
       const dataVars = sourceState.getAllDataVars();
-      dataVars.forEach((value, key) => {
+      dataVars.forEach((originalVar, key) => {
         try {
-          targetState.setDataVar(key, value);
+          const valueCopy = JSON.parse(JSON.stringify(originalVar.value)) as JsonValue;
+          const newVar: DataVariable = {
+            type: 'data',
+            value: valueCopy,
+            schema: originalVar.schema,
+            metadata: createMetadata(originalVar)
+          };
+          targetState.setDataVar(key, newVar);
           logger.debug(`Imported data variable: ${key}`);
         } catch (error) {
           logger.warn(`Failed to import data variable ${key}`, { error });
         }
       });
-      
-      // Copy all path variables
+
       const pathVars = sourceState.getAllPathVars();
-      pathVars.forEach((value, key) => {
+      pathVars.forEach((originalVar, key) => {
         try {
-          targetState.setPathVar(key, value);
-          logger.debug(`Imported path variable: ${key}`);
+           const newVar: IPathVariable = {
+             ...originalVar,
+             metadata: createMetadata(originalVar)
+           };
+           targetState.setPathVar(key, newVar);
+           logger.debug(`Imported path variable: ${key}`);
         } catch (error) {
           logger.warn(`Failed to import path variable ${key}`, { error });
         }
       });
-      
-      // Copy all commands
+
       const commands = sourceState.getAllCommands();
-      commands.forEach((value, key) => {
+      commands.forEach((originalVar, key) => {
         try {
-          targetState.setCommand(key, value);
-          logger.debug(`Imported command: ${key}`);
+           const newVar: CommandVariable = {
+             ...originalVar,
+             metadata: createMetadata(originalVar)
+           };
+           targetState.setCommand(key, newVar);
+           logger.debug(`Imported command: ${key}`);
         } catch (error) {
           logger.warn(`Failed to import command ${key}`, { error });
         }
@@ -732,58 +490,65 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
   }
 
   private processStructuredImports(
-    imports: Array<{ name: string; alias?: string }>, 
-    sourceState: IStateService, 
-    targetState: IStateService
+    imports: Array<{ name: string; alias?: string | null }>,
+    sourceState: IStateService,
+    targetState: IStateService,
+    importLocation: SourceLocation
   ): void {
-    // If imports is empty or contains a wildcard, import everything
-    if (imports.length === 0 || imports.some(i => i.name === '*')) {
-      this.importAllVariables(sourceState, targetState);
-      return;
-    }
-    
-    // Import each variable individually
+    const createMetadata = (originalVar?: MeldVariable): VariableMetadata => ({
+      definedAt: importLocation,
+      origin: VariableOrigin.IMPORT,
+      context: originalVar?.metadata ? { importedFrom: originalVar.metadata.definedAt } : undefined,
+    });
+
     for (const item of imports) {
       try {
         const { name, alias } = item;
-        
-        // Try as text variable
-        const textValue = sourceState.getTextVar(name);
-        if (textValue !== undefined) {
-          targetState.setTextVar(alias || name, textValue);
-          logger.debug(`Imported text variable: ${name}${alias ? ` as ${alias}` : ''}`);
+        const targetName = alias || name;
+        let variableFound = false;
+
+        const textVar = sourceState.getTextVar(name);
+        if (textVar) {
+          const newVar: TextVariable = { type: 'text', value: textVar.value, metadata: createMetadata(textVar) };
+          targetState.setTextVar(targetName, newVar);
+          logger.debug(`Imported text variable: ${name} as ${targetName}`);
+          variableFound = true;
           continue;
         }
-        
-        // Try as data variable
-        const dataValue = sourceState.getDataVar(name);
-        if (dataValue !== undefined) {
-          targetState.setDataVar(alias || name, dataValue);
-          logger.debug(`Imported data variable: ${name}${alias ? ` as ${alias}` : ''}`);
+
+        const dataVar = sourceState.getDataVar(name);
+        if (dataVar) {
+          const valueCopy = JSON.parse(JSON.stringify(dataVar.value)) as JsonValue;
+          const newVar: DataVariable = { type: 'data', value: valueCopy, schema: dataVar.schema, metadata: createMetadata(dataVar) };
+          targetState.setDataVar(targetName, newVar);
+          logger.debug(`Imported data variable: ${name} as ${targetName}`);
+          variableFound = true;
           continue;
         }
-        
-        // Try as path variable
-        const pathValue = sourceState.getPathVar(name);
-        if (pathValue !== undefined) {
-          targetState.setPathVar(alias || name, pathValue);
-          logger.debug(`Imported path variable: ${name}${alias ? ` as ${alias}` : ''}`);
-          continue;
+
+        const pathVar = sourceState.getPathVar(name);
+        if (pathVar) {
+           const newVar: IPathVariable = { ...pathVar, metadata: createMetadata(pathVar) };
+           targetState.setPathVar(targetName, newVar);
+           logger.debug(`Imported path variable: ${name} as ${targetName}`);
+           variableFound = true;
+           continue;
         }
-        
-        // Try as command
-        const commandValue = sourceState.getCommand(name);
-        if (commandValue !== undefined) {
-          targetState.setCommand(alias || name, commandValue);
-          logger.debug(`Imported command: ${name}${alias ? ` as ${alias}` : ''}`);
-          continue;
+
+        const commandVar = sourceState.getCommand(name);
+        if (commandVar) {
+           const newVar: CommandVariable = { ...commandVar, metadata: createMetadata(commandVar) };
+           targetState.setCommand(targetName, newVar);
+           logger.debug(`Imported command: ${name} as ${targetName}`);
+           variableFound = true;
+           continue;
         }
-        
-        // Variable not found
-        logger.warn(`Variable "${name}" not found in imported file`);
+
+        if (!variableFound) {
+           logger.warn(`Variable "${name}" not found in imported state for structured import.`);
+        }
       } catch (error) {
-        // Log warning but continue with other imports
-        logger.warn(`Error importing variable ${item.name}: ${error instanceof Error ? error.message : String(error)}`);
+         logger.warn(`Failed to import variable ${item.name} as ${item.alias || item.name}`, { error });
       }
     }
   }

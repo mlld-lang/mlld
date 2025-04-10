@@ -15,13 +15,14 @@ import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 import { embedLogger } from '@core/utils/logger.js';
 import { StateVariableCopier } from '@services/state/utilities/StateVariableCopier.js';
-import type { IInterpreterServiceClient } from '@services/pipeline/InterpreterService/interfaces/IInterpreterServiceClient.js'; 
+import type { IInterpreterServiceClient } from '@services/pipeline/InterpreterService/interfaces/IInterpreterServiceClient.js';
 import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory.js';
 import type { IStateTrackingService } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
 import { inject, injectable } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
 import { InterpreterOptionsBase, StructuredPath, StateServiceLike } from '@core/shared-service-types.js';
 import type { IPathService } from '@services/fs/PathService/IPathService.js';
+import type { IInterpreterServiceClientFactory } from '@services/interpreter-client/IInterpreterServiceClientFactory.js';
 
 // Define the embed directive parameters interface
 interface EmbedDirectiveParams {
@@ -78,9 +79,6 @@ export interface ILogger {
 })
 export class EmbedDirectiveHandler implements IDirectiveHandler {
   readonly kind = 'embed';
-  private debugEnabled: boolean = false;
-  private stateTrackingService?: IStateTrackingService;
-  private stateVariableCopier: StateVariableCopier;
   private interpreterServiceClient?: IInterpreterServiceClient;
 
   constructor(
@@ -89,22 +87,17 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
     @inject('IStateService') private stateService: IStateService,
     @inject('ICircularityService') private circularityService: ICircularityService,
     @inject('IFileSystemService') private fileSystemService: IFileSystemService,
-    @inject('IParserService') private parserService: IParserService,
     @inject('IPathService') private pathService: IPathService,
-    @inject('InterpreterServiceClientFactory') private interpreterServiceClientFactory: InterpreterServiceClientFactory,
-    private logger: ILogger = embedLogger,
-    @inject('StateTrackingService') trackingService?: IStateTrackingService
+    @inject('IInterpreterServiceClientFactory') private interpreterServiceClientFactory: IInterpreterServiceClientFactory,
+    private logger: ILogger = embedLogger
   ) {
-    this.stateTrackingService = trackingService;
-    this.debugEnabled = !!trackingService && (process.env.MELD_DEBUG === 'true');
-    this.stateVariableCopier = new StateVariableCopier(trackingService);
   }
 
   private ensureInterpreterServiceClient(): IInterpreterServiceClient {
     // First try to get the client from the factory
     if (!this.interpreterServiceClient && this.interpreterServiceClientFactory) {
       try {
-        this.interpreterServiceClient = this.interpreterServiceClientFactory.createClient();
+        this.interpreterServiceClient = this.interpreterServiceClientFactory.getClient();
       } catch (error) {
         this.logger.warn('Failed to get interpreter service client from factory', {
           error: error instanceof Error ? error.message : String(error)
@@ -112,140 +105,16 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
       }
     }
     
-    // If we still don't have an interpreter client and we're in a test environment, create a test mock
-    if (!this.interpreterServiceClient && process.env.NODE_ENV === 'test') {
-      this.logger.debug('Creating test mock for interpreter service client');
-      this.interpreterServiceClient = {
-        interpret: async (nodes: MeldNode[], options?: InterpreterOptionsBase) => {
-          // Return the initial state if provided, otherwise create a mock state
-          this.logger.debug('Using test mock for interpreter service');
-          if (options && 'initialState' in options) {
-            return options.initialState as StateServiceLike;
-          }
-          
-          // Create a basic mock state if needed - this is just for tests
-          return {
-            addNode: () => {},
-            getNodes: () => [],
-            createChildState: () => ({ ...this }),
-            getAllTextVars: () => new Map(),
-            getAllDataVars: () => new Map(),
-            getAllPathVars: () => new Map(),
-            getAllCommands: () => new Map(),
-            getTextVar: () => undefined,
-            getDataVar: () => undefined,
-            getPathVar: () => undefined,
-            getCommand: () => undefined,
-            setTextVar: () => {},
-            setDataVar: () => {},
-            setPathVar: () => {},
-            setCommand: () => {},
-            getCurrentFilePath: () => '',
-            setCurrentFilePath: () => {},
-            clone: () => ({ ...this }),
-            isTransformationEnabled: () => false
-          } as unknown as IStateService;
-        },
-        createChildContext: async (parentState: IStateService) => parentState
-      };
-    }
-    
     // If we still don't have a client, throw an error
     if (!this.interpreterServiceClient) {
       throw new DirectiveError(
-        'Interpreter service client is not available',
+        'Interpreter service client is not available. Ensure InterpreterServiceClientFactory is registered and resolvable, or provide a mock in tests.',
         this.kind,
-        DirectiveErrorCode.EXECUTION_FAILED
+        DirectiveErrorCode.INITIALIZATION_FAILED
       );
     }
     
     return this.interpreterServiceClient;
-  }
-
-  /**
-   * Track context boundary between states
-   */
-  private trackContextBoundary(sourceState: IStateService, targetState: IStateService, filePath?: string): void {
-    if (!this.debugEnabled || !this.stateTrackingService) {
-      return;
-    }
-
-    try {
-      const sourceId = sourceState.getStateId();
-      const targetId = targetState.getStateId();
-      
-      if (!sourceId || !targetId) {
-        this.logger.debug('Cannot track context boundary - missing state ID', {
-          source: sourceState,
-          target: targetState
-        });
-        return;
-      }
-      
-      this.logger.debug('Tracking context boundary', {
-        sourceId,
-        targetId,
-        filePath
-      });
-      
-      // Call the tracking service with the correct parameters
-      this.stateTrackingService.trackContextBoundary(
-        sourceId,
-        targetId,
-        'embed',
-        filePath || ''
-      );
-    } catch (error) {
-      // Don't let tracking errors affect normal operation
-      this.logger.debug('Error tracking context boundary', { error });
-    }
-  }
-
-  /**
-   * Track variable copying between contexts
-   */
-  private trackVariableCrossing(
-    variableName: string,
-    variableType: 'text' | 'data' | 'path' | 'command',
-    sourceState: IStateService,
-    targetState: IStateService,
-    alias?: string
-  ): void {
-    if (!this.debugEnabled || !this.stateTrackingService) {
-      return;
-    }
-
-    try {
-      const sourceId = sourceState.getStateId();
-      const targetId = targetState.getStateId();
-      
-      if (!sourceId || !targetId) {
-        this.logger.debug('Cannot track variable crossing - missing state ID', {
-          source: sourceState,
-          target: targetState
-        });
-        return;
-      }
-      
-      this.logger.debug('Tracking variable crossing', {
-        variableName,
-        variableType,
-        sourceId,
-        targetId,
-        alias
-      });
-      
-      this.stateTrackingService.trackVariableCrossing(
-        sourceId,
-        targetId,
-        variableName,
-        variableType,
-        alias
-      );
-    } catch (error) {
-      // Don't let tracking errors affect normal operation
-      this.logger.debug('Error tracking variable crossing', { error });
-    }
   }
 
   /**
@@ -315,779 +184,209 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
       location: node.location
     });
 
-    // Validate the directive structure
+    // Validate the directive structure (basic validation)
     this.validationService.validate(node);
-    
-    // Extract properties from the directive
-    const { path, url, allowURLs, urlOptions, section, headingLevel, underHeader, fuzzy } = node.directive as EmbedDirectiveParams;
-
-    // Check if we have a path or URL
-    if (!path && !url) {
-      throw new DirectiveError(
-        'Either path or url is required for embed directive',
-        this.kind,
-        DirectiveErrorCode.VALIDATION_FAILED
-      );
-    }
-    
-    // We need to check if this is a URL
-    // URL support is not yet fully implemented in the directive handlers
-    // For now, we'll just treat url parameter as a flag
-    const isURLEmbed = !!url || !!allowURLs;
 
     // Clone the current state for modifications
-    const newState = context.state.clone();
-    
-    // Create a child state for embedded content processing
-    // This is crucial for tests that expect variables to be in childState
-    const childState = newState.createChildState();
-    
+    const newState = context.state.clone(); // Keep state cloning
+
     // Create a resolution context
-    const resolutionContext = ResolutionContextFactory.forImportDirective(
+    // TODO: Adjust ResolutionContextFactory usage based on directive subtype
+    const resolutionContext = ResolutionContextFactory.create(
       context.currentFilePath,
       newState
     );
 
-    // Handle custom path variables - process the path before resolution
-    let processedPath = path;
-    
-    // Check if this is a string path that might contain user-defined path variables
-    if (typeof path === 'string' && path.includes('$')) {
-      // Check for user-defined path variables ($varname)
-      const userPathVarRegex = /\$([a-zA-Z_][a-zA-Z0-9_]*)/g;
-      const userVarMatches = [...path.matchAll(userPathVarRegex)];
-      
-      if (userVarMatches && userVarMatches.length > 0) {
-        this.logger.debug(`Found user-defined path variables in embed directive: ${path}`, {
-          matches: userVarMatches.map(m => m[0]),
-          location: node.location
-        });
+    let content: string = ''; // Initialize content string
 
-        // Process all user-defined path variables
-        let modifiedPath = path;
-        for (const match of userVarMatches) {
-          const varName = match[1]; // Extract variable name without $
-          const varFullName = match[0]; // The full variable reference with $
-          
-          // Skip special variables which are handled by ResolutionService
-          if (['PROJECTPATH', 'HOMEPATH', '~', '.'].includes(varName)) {
-            continue;
-          }
-          
-          // Get the path variable value
-          const varValue = newState.getPathVar(varName);
-          if (varValue) {
-            this.logger.debug(`Replacing path variable $${varName} with value: ${JSON.stringify(varValue)}`);
-            
-            // Replace all occurrences of the variable in the path
-            if (typeof varValue === 'string') {
-              modifiedPath = modifiedPath.replace(new RegExp('\\$' + varName, 'g'), varValue);
-            } else if (typeof varValue === 'object' && varValue !== null && 
-                      'raw' in varValue && typeof (varValue as { raw: string }).raw === 'string') {
-              // Handle structured path objects
-              modifiedPath = modifiedPath.replace(new RegExp('\\$' + varName, 'g'), (varValue as { raw: string }).raw);
-            }
-          } else {
-            this.logger.warn(`Path variable $${varName} not found in state`, {
-              varName,
-              availableVars: Array.from(newState.getAllPathVars().keys())
-            });
-          }
+    // Determine content based on directive subtype
+    switch (node.subtype) {
+      case 'embedPath':
+        this.logger.debug('Handling embedPath subtype');
+
+        // Ensure path is provided in the AST node
+        if (!node.path) {
+          throw new DirectiveError(
+            `Missing path property for embedPath subtype.`,
+            this.kind,
+            DirectiveErrorCode.VALIDATION_FAILED,
+            node.location
+          );
         }
-        
-        processedPath = modifiedPath;
-        this.logger.debug(`Processed path after variable substitution: ${processedPath}`);
-      }
-    } 
-    // Handle structured path objects that might contain user-defined path variables
-    else if (typeof path === 'object' && path !== null && 'raw' in path && !('isVariableReference' in path && path.isVariableReference === true)) {
-      const rawPath = path.raw;
-      if (rawPath && rawPath.includes('$')) {
-        // Check for user-defined path variables in the raw path
-        const userPathVarRegex = /\$([a-zA-Z_][a-zA-Z0-9_]*)/g;
-        const userVarMatches = [...rawPath.matchAll(userPathVarRegex)];
-        
-        if (userVarMatches && userVarMatches.length > 0) {
-          this.logger.debug(`Found user-defined path variables in structured path: ${rawPath}`, {
-            matches: userVarMatches.map(m => m[0]),
-            location: node.location
-          });
-          
-          // Process all user-defined path variables
-          let modifiedRawPath = rawPath;
-          for (const match of userVarMatches) {
-            const varName = match[1]; // Extract variable name without $
-            
-            // Skip special variables which are handled by ResolutionService
-            if (['PROJECTPATH', 'HOMEPATH', '~', '.'].includes(varName)) {
-              continue;
-            }
-            
-            // Get the path variable value
-            const varValue = newState.getPathVar(varName);
-            if (varValue) {
-              this.logger.debug(`Replacing path variable $${varName} in structured path with value: ${JSON.stringify(varValue)}`);
-              
-              // Replace all occurrences of the variable in the path
-              if (typeof varValue === 'string') {
-                modifiedRawPath = modifiedRawPath.replace(new RegExp('\\$' + varName, 'g'), varValue);
-              } else if (typeof varValue === 'object' && varValue !== null && 
-                        'raw' in varValue && typeof (varValue as { raw: string }).raw === 'string') {
-                // Handle structured path objects
-                modifiedRawPath = modifiedRawPath.replace(new RegExp('\\$' + varName, 'g'), (varValue as { raw: string }).raw);
-              }
-            }
-          }
-          
-          // Create a new structured path with the modified raw value
-          processedPath = {
-            ...path,
-            raw: modifiedRawPath
-          };
-          
-          this.logger.debug(`Processed structured path after variable substitution: ${JSON.stringify(processedPath)}`);
-        }
-      }
-    }
 
-    // Track path resolution for finally block
-    let resolvedPath: string | undefined;
-    let content: string;
-
-    try {
-      // Check if this is a variable reference embed
-      const isVariableReference = typeof processedPath === 'object' && 
-                                'isVariableReference' in processedPath && 
-                                processedPath.isVariableReference === true;
-
-      this.logger.debug(`Processing embed directive with ${isVariableReference ? 'variable reference' : 'file path'}`, {
-        isVariableReference,
-        path: typeof processedPath === 'object' ? JSON.stringify(processedPath) : processedPath,
-        originalPath: typeof path === 'object' ? JSON.stringify(path) : path
-      });
-
-      // Resolve variables in the path
-      if (processedPath !== undefined) {
-        resolvedPath = await this.resolutionService.resolveInContext(
-          processedPath,
-          resolutionContext
-        );
-      } else {
-        this.logger.warn('Path is undefined, unable to resolve in context', {
-          originalPath: path
-        });
-        resolvedPath = '';
-      }
-      
-      // Special handling for when the resolved path might be an object from a data variable
-      if (resolvedPath !== null && typeof resolvedPath === 'object') {
-        // Convert object to string to ensure consistent handling
-        this.logger.debug('Converting object path to string:', resolvedPath);
-        resolvedPath = JSON.stringify(resolvedPath);
-      }
-
-      /**
-       * variableEmbed:
-       * If this is a variable reference, use the resolved value directly as content.
-       * No file system operations are performed, and content is treated as literal text.
-       */
-      if (isVariableReference) {
-        // Enhanced variable reference handling for field access patterns
-        // This is especially important for array indexing and complex field access
+        let resolvedPath: string;
         try {
-          // Check if this is a field access pattern like {{variable.field}} or {{variable.0}}
-          if (typeof processedPath === 'object' && 
-              'identifier' in processedPath && 
-              'content' in processedPath && 
-              processedPath.identifier && 
-              processedPath.content) {
-            // Extract the variable reference parts
-            const variableName = processedPath.identifier;
-            const originalContent = processedPath.content as string;
-            this.logger.debug(`Processing variable embed with content: ${originalContent}`);
-            
-            // Check if we have a complex variable reference with field access (contains dots)
-            if (originalContent.includes('.')) {
-              // Parse out the variable base name and field path
-              const parts = originalContent.split('.');
-              const variableNameStr = typeof variableName === 'string' ? variableName : String(variableName);
-              const fieldPath = parts.slice(1).join('.');
-              
-              this.logger.debug(`Detected complex field access in variable embed: ${variableNameStr}.${fieldPath}`);
-              
-              // First, attempt to get the base variable from state
-              const baseVariable = newState.getDataVar(variableNameStr);
-              
-              if (baseVariable !== undefined) {
-                // Directly resolve the field access using ResolutionService's resolveFieldAccess
-                // This properly handles array indices, nested objects, etc.
-                // Create a properly typed context to avoid TypeScript declaration issues
-                const typedContext: any = {
-                  currentFilePath: resolutionContext?.currentFilePath || undefined,
-                  allowedVariableTypes: {
-                    text: true,
-                    data: true,
-                    path: true,
-                    command: true
-                  },
-                  allowNested: true,
-                  pathValidation: {
-                    requireAbsolute: false,
-                    allowedRoots: []
-                  },
-                  state: resolutionContext?.state || newState,
-                  formattingContext: context.formattingContext
-                };
-                
-                // Create field access options for this resolution
-                const fieldAccessOptions = {
-                  preserveType: true, // Preserve the original type
-                  variableName: variableNameStr, // For error reporting
-                  formattingContext: { 
-                    isBlock: true, // Treat as block content by default
-                    nodeType: 'embed',
-                    linePosition: 'start', // Default position
-                    isOutputLiteral: newState.isTransformationEnabled(), // Use new terminology
-                    preserveFormatting: true, // Explicitly request format preservation
-                    originalNodeType: node.type // Pass the original node type for context
-                  }
-                };
-                
-                // Merge context and options in a way compatible with the interface
-                const resolvedContext = {
-                  ...typedContext,
-                  fieldAccessOptions // Add fieldAccessOptions to the context object
-                };
-                
-                const resolvedField = await this.resolutionService.resolveFieldAccess(
-                  variableNameStr,
-                  fieldPath,
-                  resolvedContext
-                );
-                
-                this.logger.debug(`Resolved field access ${variableNameStr}.${fieldPath} to:`, resolvedField);
-                
-                // Use the resolved field value directly
-                if (resolvedField === undefined || resolvedField === null) {
-                  content = '';
-                } else if (typeof resolvedField === 'string') {
-                  content = resolvedField;
-                } else if (typeof resolvedField === 'object') {
-                  // Use pretty formatting for objects and arrays when in transform mode
-                  if (newState.isTransformationEnabled() && fieldAccessOptions.preserveType) {
-                    try {
-                      // Use formatting context for consistent output
-                      content = await this.resolutionService.convertToFormattedString(
-                        resolvedField,
-                        fieldAccessOptions
-                      );
-                      
-                      this.logger.debug('Using context-aware formatting for variable content', {
-                        fieldPath,
-                        formattingContext: fieldAccessOptions.formattingContext,
-                        contentType: typeof resolvedField
-                      });
-                    } catch (error) {
-                      // Fall back to JSON.stringify if formatting fails
-                      this.logger.warn('Failed to format object with formatting context, using JSON.stringify', {
-                        error: error instanceof Error ? error.message : String(error)
-                      });
-                      content = JSON.stringify(resolvedField, null, 2);
-                    }
-                  } else {
-                    content = JSON.stringify(resolvedField, null, 2);
-                  }
-                } else {
-                  content = String(resolvedField);
-                }
-              } else {
-                // Fall back to standard resolution if variable not found
-                this.logger.warn(`Base variable ${variableNameStr} not found, falling back to standard resolution`);
-                content = resolvedPath || '';
-              }
-            } else {
-              // No field access, use standard resolution
-              content = resolvedPath || '';
-            }
-          } else {
-            // Standard handling for simple variable references
-            // Ensure we have a string value for the content
-            if (resolvedPath === undefined || resolvedPath === null) {
-              content = '';
-              this.logger.warn('Variable reference resolved to undefined or null', {
-                processedPath,
-                originalPath: path
-              });
-            } else if (typeof resolvedPath === 'string') {
-              content = resolvedPath;
-            } else {
-              // For non-string values (objects, arrays, etc.), convert to string
-              try {
-                // Use JSON.stringify for objects and arrays
-                if (typeof resolvedPath === 'object') {
-                  content = JSON.stringify(resolvedPath, null, 2);
-                } else {
-                  // For other types (numbers, booleans), use String()
-                  content = String(resolvedPath);
-                }
-                this.logger.debug('Converted non-string variable reference to string', {
-                  originalType: typeof resolvedPath,
-                  convertedContent: content
-                });
-              } catch (error) {
-                this.logger.error('Failed to convert variable reference to string', {
-                  error: error instanceof Error ? error.message : String(error),
-                  resolvedPath
-                });
-                content = String(resolvedPath);
-              }
-            }
-          }
+          this.logger.debug(`Resolving embed path`, { pathObject: node.path });
+          // Assuming node.path is compatible with resolvePath input
+          resolvedPath = await this.resolutionService.resolvePath(node.path, resolutionContext);
+          this.logger.debug(`Resolved embed path to: ${resolvedPath}`);
         } catch (error) {
-          this.logger.error('Error processing variable reference in embed directive', {
-            error: error instanceof Error ? error.message : String(error),
-            path: processedPath
-          });
-          // Fall back to standard resolution
-          content = resolvedPath || '';
+          throw new DirectiveError(
+            `Error resolving embed path: ${error instanceof Error ? error.message : String(error)}`,
+            this.kind,
+            DirectiveErrorCode.RESOLUTION_FAILED,
+            node.location,
+            error
+          );
         }
-        
-        this.logger.debug(`Using variable reference directly as content`, {
-          content,
-          resolvedPath,
-          processedPath,
-          originalPath: path,
-          contentType: typeof content
-        });
-        
-        // IMPORTANT: Do not perform path extraction for variable content
-        // The earlier code was removing parts of the content that happened to contain slashes
-        // This was causing the embed directive to fail when embedding variable content containing slashes
-        
-        // Instead, make sure the content is properly preserved without modification
-        this.logger.debug('Preserving full variable reference content without path modifications', {
-          content,
-          resolvedPath
-        });
-        
-        // We never parse variable references in the actual implementation
-        this.logger.debug('Not parsing variable reference content (standard behavior)');
-      } 
-      /**
-       * fileEmbed or urlEmbed:
-       * If this is a file path, read the content from the file system.
-       * If this is a URL, fetch the content from the URL.
-       * Content is treated as literal text and not parsed.
-       */
-      else {
-        // Handle URL embeds
-        if (isURLEmbed) {
-          const urlToFetch = url || (typeof path === 'string' ? path : '');
-          
-          if (!urlToFetch) {
-            throw new DirectiveError(
-              'URL embedding requires a valid URL',
-              this.kind,
-              DirectiveErrorCode.VALIDATION_FAILED
-            );
-          }
-          
-          try {
-            // Validate URL according to security policy
-            await this.pathService.validateURL(urlToFetch, urlOptions);
-            
-            // Fetch content with caching
-            const response = await this.pathService.fetchURL(urlToFetch, {
-              bypassCache: false,
-              timeout: urlOptions?.timeout
-            });
-            
-            // Use the fetched content
-            content = response.content;
-            
-            // Register source for debugging and error reporting
-            try {
-              const { registerSource, addMapping } = require('@core/utils/sourceMapUtils.js');
-              registerSource(urlToFetch, content);
-              
-              if (node.location && node.location.start) {
-                addMapping(
-                  urlToFetch,
-                  1, // Start at line 1 of the fetched content
-                  1, // Start at column 1
-                  node.location.start.line,
-                  node.location.start.column
-                );
-              }
-            } catch (err) {
-              this.logger.debug('Source mapping not available, skipping', { error: err });
-            }
-          } catch (error: any) {
-            // Handle URL-specific errors
-            if (typeof error === 'object' && error !== null) {
-              // First check if the error is one of our known URL error types
-              if (error.name === 'URLValidationError' || 
-                  error.name === 'URLSecurityError' || 
-                  error.name === 'URLFetchError') {
-                throw new DirectiveError(
-                  `URL embedding failed: ${error.message}`,
-                  this.kind,
-                  DirectiveErrorCode.VALIDATION_FAILED,
-                  { cause: error as Error }
-                );
-              }
-            }
-            
-            // Re-throw if it's already a DirectiveError
-            if (error instanceof DirectiveError) {
-              throw error;
-            }
-            
-            // Wrap other errors
-            throw new DirectiveError(
-              `URL embedding failed: ${error instanceof Error ? error.message : String(error)}`,
-              this.kind,
-              DirectiveErrorCode.EXECUTION_FAILED,
-              { cause: error instanceof Error ? error : undefined }
-            );
-          }
-        } 
-        // Handle file system embeds
-        else {
-          // Begin import tracking for file paths
-          if (resolvedPath) {
-            this.circularityService.beginImport(resolvedPath);
-          }
 
-          // Check for circular imports
-          try {
-            if (resolvedPath && this.circularityService.isInStack(resolvedPath)) {
-              throw new Error(`Circular import detected: ${resolvedPath}`);
-            }
-          } catch (error: any) {
-            // Circular imports during embedding should be logged but not fail normal operation
-            this.logger.warn(`Circular import detected in embed directive: ${error.message}`, {
-              error,
-              path: resolvedPath,
-              currentFile: context.currentFilePath
-            });
-          }
-
-          // Check if the file exists
+        // Read file content
+        try {
+          this.logger.debug(`Attempting to read file: ${resolvedPath}`);
           if (!(await this.fileSystemService.exists(resolvedPath))) {
             throw new MeldFileNotFoundError(
-              resolvedPath,
-              {
-                context: { 
-                  directive: this.kind,
-                  location: node.location
-                }
-              }
+              `Embed source file not found: ${resolvedPath}`,
+              node.location
             );
           }
-
-          // Read the file content
           content = await this.fileSystemService.readFile(resolvedPath);
-        }
-        
-        // Register the source file with source mapping service if available
-        try {
-          const { registerSource, addMapping } = require('@core/utils/sourceMapUtils.js');
-          
-          // Register the source file content
-          registerSource(resolvedPath, content);
-          
-          // Create mappings for every line in the embedded file
-          if (node.location && node.location.start) {
-            const contentLines = content.split('\n');
-            const directiveLine = node.location.start.line;
-            const directiveColumn = node.location.start.column;
-            
-            // Create mappings for each line in the embedded content
-            contentLines.forEach((line, index) => {
-              // Map each line from the source file to its position in the combined output
-              // Line numbers are 1-based in source maps
-              const sourceLine = index + 1;
-              const targetLine = directiveLine + index;
-              
-              // For the first line, use the directive column as offset
-              // For subsequent lines, start at column 1
-              const sourceColumn = 1;
-              const targetColumn = index === 0 ? directiveColumn : 1;
-              
-              addMapping(
-                resolvedPath,
-                sourceLine,
-                sourceColumn,
-                targetLine,
-                targetColumn
-              );
-            });
-            
-            this.logger.debug(`Added source mappings for ${resolvedPath} (${contentLines.length} lines) starting at line ${directiveLine}:${directiveColumn}`);
-          }
-        } catch (err) {
-          // Source mapping is optional, so just log a debug message if it fails
-          this.logger.debug('Source mapping not available, skipping', { error: err });
-        }
-      }
-      
-      /**
-       * Section extraction (applies to both fileEmbed and variableEmbed):
-       * If a section parameter is provided, extract only that section from the content.
-       */
-      if (section) {
-        // Create a properly typed context to avoid TypeScript declaration issues
-        const typedContextForSection: ResolutionContext = {
-          currentFilePath: resolutionContext?.currentFilePath || undefined,
-          allowedVariableTypes: {
-            text: true,
-            data: true,
-            path: true,
-            command: true
-          },
-          allowNested: true,
-          pathValidation: {
-            requireAbsolute: false,
-            allowedRoots: []
-          },
-          state: resolutionContext?.state || newState
-        };
-        
-        // Ensure section is a string before passing to resolveInContext
-        const sectionStr = typeof section === 'string' ? section : '';
-        
-        const sectionName = await this.resolutionService.resolveInContext(
-          sectionStr,
-          typedContextForSection
-        );
-        
-        try {
-          content = await this.resolutionService.extractSection(
-            content,
-            sectionName,
-            fuzzy ? parseFloat(fuzzy) : undefined
-          );
-        } catch (error: unknown) {
-          // If section extraction fails, log a warning and continue with the full content
-          const errorMessage = error instanceof Error ? error.message : String(error);
-          this.logger.warn(`Section extraction failed for ${sectionName}: ${errorMessage}`, {
-            error,
-            section: sectionName,
-            content: content.substring(0, 100) + '...'
-          });
-          // Section extraction failure is not fatal
-        }
-      }
-      
-      /**
-       * Heading level adjustment (applies to both fileEmbed and variableEmbed):
-       * If a headingLevel parameter is provided, adjust the heading level of the content.
-       */
-      // Apply heading level if specified
-      if (headingLevel) {
-        try {
-          content = this.applyHeadingLevel(content, parseInt(headingLevel, 10));
-        } catch (error: unknown) {
-          // If heading level application fails, log a warning and continue with unmodified content
-          const errorMessage = error instanceof Error ? error.message : String(error);
-          this.logger.warn(`Failed to apply heading level ${headingLevel}: ${errorMessage}`, {
-            error,
-            headingLevel
-          });
-          // Heading level failure is not fatal
-        }
-      }
-      
-      /**
-       * Header wrapping (applies to both fileEmbed and variableEmbed):
-       * If an underHeader parameter is provided, wrap the content under that header.
-       */
-      // Wrap under header if specified
-      if (underHeader) {
-        try {
-          // Create a properly typed context to avoid TypeScript declaration issues
-          const typedContextForHeader: ResolutionContext = {
-            currentFilePath: resolutionContext?.currentFilePath || undefined,
-            allowedVariableTypes: {
-              text: true,
-              data: true,
-              path: true,
-              command: true
-            },
-            allowNested: true,
-            pathValidation: {
-              requireAbsolute: false,
-              allowedRoots: []
-            },
-            state: resolutionContext?.state || newState
-          };
-          
-          // Ensure underHeader is a string before passing to resolveInContext
-          const headerStr = typeof underHeader === 'string' ? underHeader : '';
-          
-          const resolvedHeader = await this.resolutionService.resolveInContext(
-            headerStr,
-            typedContextForHeader
-          );
-          content = this.wrapUnderHeader(content, resolvedHeader);
-        } catch (error: unknown) {
-          // If header wrapping fails, log a warning and continue with unmodified content
-          const errorMessage = error instanceof Error ? error.message : String(error);
-          this.logger.warn(`Failed to wrap content under header ${underHeader}: ${errorMessage}`, {
-            error,
-            underHeader: underHeader
-          });
-          // Header wrapping failure is not fatal
-        }
-      }
-      
-      /**
-       * IMPORTANT: Content handling in @embed
-       * 
-       * For BOTH fileEmbed and variableEmbed:
-       * - Content is ALWAYS treated as literal text in the final output
-       * - Content is NOT parsed for directives or other Meld syntax
-       * - This ensures that embedded content appears exactly as written
-       */
-      
-      this.logger.debug(`Successfully processed embed directive`, {
-        path: resolvedPath,
-        section: section || undefined,
-        headingLevel: headingLevel || undefined,
-        underHeader: underHeader || undefined
-      });
-
-      /**
-       * Variable propagation in transformation mode:
-       * If in transformation mode, copy variables from child state to parent state.
-       * This applies to both fileEmbed and variableEmbed.
-       */
-      // If in transformation mode (parentState exists), copy variables to parent state
-      if (context.parentState) {
-        this.logger.debug('Transformation mode detected, copying variables to parent state', {
-          childStateId: childState.getStateId?.() || 'unknown',
-          parentStateId: context.parentState.getStateId?.() || 'unknown'
-        });
-        
-        try {
-          // Get all variables from the child state
-          const textVars = childState.getAllTextVars?.() || {};
-          const dataVars = childState.getAllDataVars?.() || {};
-          const pathVars = childState.getAllPathVars?.() || {};
-          const commandVars = childState.getAllCommands?.() || {};
-          
-          this.logger.debug('Variables available for copying', {
-            textVars: Object.keys(textVars),
-            dataVars: Object.keys(dataVars),
-            pathVars: Object.keys(pathVars),
-            commandVars: Object.keys(commandVars)
-          });
-          
-          // Copy each variable type to parent state
-          Object.entries(textVars).forEach(([name, value]) => {
-            this.logger.debug(`Copying text variable: ${name}`);
-            context.parentState!.setTextVar(name, value);
-            this.trackVariableCrossing(name, 'text', childState, context.parentState!);
-          });
-          
-          Object.entries(dataVars).forEach(([name, value]) => {
-            this.logger.debug(`Copying data variable: ${name}`);
-            context.parentState!.setDataVar(name, value);
-            this.trackVariableCrossing(name, 'data', childState, context.parentState!);
-          });
-          
-          Object.entries(pathVars).forEach(([name, value]) => {
-            this.logger.debug(`Copying path variable: ${name}`);
-            context.parentState!.setPathVar(name, value);
-            this.trackVariableCrossing(name, 'path', childState, context.parentState!);
-          });
-          
-          Object.entries(commandVars).forEach(([name, value]) => {
-            this.logger.debug(`Copying command variable: ${name}`);
-            context.parentState!.setCommand(name, value);
-            this.trackVariableCrossing(name, 'command', childState, context.parentState!);
-          });
-          
-          // Track context boundary for debugging
-          this.trackContextBoundary(childState, context.parentState, context.currentFilePath);
+          this.logger.debug(`Read file content successfully`, { path: resolvedPath, length: content.length });
         } catch (error) {
-          // Log but don't throw - variable copying shouldn't break functionality
-          this.logger.warn(`Error copying variables to parent state: ${error instanceof Error ? error.message : String(error)}`, {
+          const errorCode = error instanceof MeldFileNotFoundError
+            ? DirectiveErrorCode.FILE_NOT_FOUND
+            : DirectiveErrorCode.EXTERNAL_ERROR;
+          const message = error instanceof MeldFileNotFoundError
+            ? error.message
+            : `Error reading embed source file: ${resolvedPath}: ${error instanceof Error ? error.message : String(error)}`;
+
+          throw new DirectiveError(message, this.kind, errorCode, node.location, error);
+        }
+        break;
+
+      case 'embedVariable':
+        this.logger.debug('Handling embedVariable subtype');
+
+        // Ensure path and variable reference exist in the AST node
+        if (!node.path || !node.path.variable) {
+          throw new DirectiveError(
+            `Missing path or variable reference for embedVariable subtype.`,
+            this.kind,
+            DirectiveErrorCode.VALIDATION_FAILED,
+            node.location
+          );
+        }
+
+        try {
+          this.logger.debug(`Resolving embed variable`, { variableNode: node.path.variable });
+          // Assuming node.path.variable is a VariableReferenceNode
+          const resolvedValue = await this.resolutionService.resolveVariable(node.path.variable, resolutionContext);
+          
+          // Embed expects string content
+          if (typeof resolvedValue !== 'string') {
+            this.logger.warn('Resolved embed variable content is not a string', {
+              variable: node.path.variable.name,
+              type: typeof resolvedValue,
+              value: JSON.stringify(resolvedValue).substring(0, 100) // Log snippet
+            });
+            // Convert non-string values (like numbers, booleans) to string representation
+            // For complex objects/arrays, consider if this should be an error or stringified.
+            // Let's stringify for now, aligning with how text directives might handle non-strings.
+            content = String(resolvedValue);
+          } else {
+            content = resolvedValue;
+          }
+          this.logger.debug(`Resolved embed variable content`, { length: content.length });
+        } catch (error) {
+          throw new DirectiveError(
+            `Error resolving embed variable: ${error instanceof Error ? error.message : String(error)}`,
+            this.kind,
+            DirectiveErrorCode.RESOLUTION_FAILED,
+            node.location,
             error
-          });
+          );
         }
-      }
+        break;
 
-      // Always return the content as literal text in a TextNode
-      /**
-       * Final output generation (applies to both fileEmbed and variableEmbed):
-       * Return the content as a literal text node in the Meld AST.
-       * This ensures consistent handling of embedded content regardless of source.
-       */
-      // This applies to both transformation mode and normal mode
-      const replacement = this.createReplacementNode(content, node, context);
+      case 'embedTemplate':
+        this.logger.debug('Handling embedTemplate subtype');
 
-      // In transformation mode, register the replacement
-      if (newState.isTransformationEnabled()) {
-        this.logger.debug('EmbedDirectiveHandler - registering transformation:', {
-          nodeLocation: node.location,
-          transformEnabled: newState.isTransformationEnabled(),
-          replacementContent: content.substring(0, 50) + (content.length > 50 ? '...' : ''),
-          hasFormattingContext: !!context.formattingContext,
-          isVariableReference: typeof path === 'object' && 
-                             path !== null && 
-                             'isVariableReference' in path && 
-                             path.isVariableReference === true
-        });
-        
-        // Register the transformation regardless of path type (file or variable)
-        newState.transformNode(node, replacement);
-      }
+        // Ensure content array exists in the AST node
+        if (!node.content || !Array.isArray(node.content)) {
+          throw new DirectiveError(
+            `Missing or invalid content array for embedTemplate subtype.`,
+            this.kind,
+            DirectiveErrorCode.VALIDATION_FAILED,
+            node.location
+          );
+        }
 
-      return {
-        state: newState,
-        replacement,
-        formattingContext: context.formattingContext
-      } as any;
-    } catch (error: any) {
-      // Don't log MeldFileNotFoundError since it will be logged by the CLI
-      if (!(error instanceof MeldFileNotFoundError)) {
-        // Handle and log errors
-        this.logger.error(`Error executing embed directive: ${error.message}`, {
-          error,
-          node
-        });
-      }
-      
-      // Wrap the error in a DirectiveError if it's not already one
-      if (!(error instanceof DirectiveError)) {
+        try {
+          this.logger.debug(`Resolving embed template`, { contentNodes: node.content.length });
+          // Assuming node.content is an array of TextNode/VariableReferenceNode
+          content = await this.resolutionService.resolveTemplate(node.content, resolutionContext);
+          this.logger.debug(`Resolved embed template content`, { length: content.length });
+        } catch (error) {
+          throw new DirectiveError(
+            `Error resolving embed template: ${error instanceof Error ? error.message : String(error)}`,
+            this.kind,
+            DirectiveErrorCode.RESOLUTION_FAILED,
+            node.location,
+            error
+          );
+        }
+        break;
+
+      default:
         throw new DirectiveError(
-          `Failed to execute embed directive: ${error.message}`,
+          `Unsupported embed subtype: ${node.subtype}`,
           this.kind,
-          DirectiveErrorCode.EXECUTION_FAILED,
-          { cause: error }
+          DirectiveErrorCode.VALIDATION_FAILED,
+          node.location
         );
-      }
-      
-      throw error;
-    } finally {
-      // Always end import tracking, even if there was an error
-      // Only do this for file paths, not variable references
+    }
+
+    // Handle section extraction if specified
+    const options = node.options || {};
+    const section = options.section;
+    if (section) {
+      this.logger.debug(`Extracting section: ${section}`);
       try {
-        // Check if this was a variable reference (in which case we didn't call beginImport)
-        const isVariableReference = typeof path === 'object' && 
-                                 'isVariableReference' in path && 
-                                 path.isVariableReference === true;
-        
-        if (resolvedPath && !isVariableReference) {
-          this.circularityService.endImport(resolvedPath);
-        }
-      } catch (error: any) {
-        // Don't let errors in endImport affect the main flow
-        this.logger.debug(`Error ending import tracking: ${error.message}`, { error });
+        content = await this.resolutionService.extractSection(
+          content,
+          section,
+          { fuzzy: options.fuzzy === 'true' } // Use options.fuzzy
+        );
+        this.logger.debug(`Section extracted successfully`, { section, length: content.length });
+      } catch (error) {
+        throw new DirectiveError(
+          `Error extracting section \"${section}\": ${error instanceof Error ? error.message : String(error)}`,
+          this.kind,
+          DirectiveErrorCode.PROCESSING_FAILED,
+          node.location,
+          error
+        );
       }
     }
+
+    // Handle heading level adjustment if specified
+    const headingLevel = options.headingLevel;
+    if (headingLevel) {
+      this.logger.debug(`Adjusting heading level by: ${headingLevel}`);
+      content = this.resolutionService.adjustHeadingLevels(content, headingLevel);
+      this.logger.debug(`Heading levels adjusted`, { newLength: content.length });
+    }
+
+    // Handle under-header wrapping if specified
+    const underHeader = options.underHeader;
+    if (underHeader) {
+      this.logger.debug(`Wrapping content under header: ${underHeader}`);
+      content = this.resolutionService.wrapUnderHeader(content, underHeader);
+      this.logger.debug(`Content wrapped under header`, { newLength: content.length });
+    }
+
+    // Create the replacement node
+    const replacementNode = this.createReplacementNode(content, node, context);
+    this.logger.debug(`Created replacement node`, { type: replacementNode.type });
+
+    // NOTE: Removed complex interpretation logic that previously existed here.
+    // Embed primarily replaces content textually. The cloned `newState` is usually
+    // sufficient as the returned state. If transformations *after* embedding are
+    // needed, they should occur in the main interpreter loop.
+
+    return {
+      state: newState, // Return the cloned state, embed usually doesn't modify state itself
+      replacement: replacementNode
+    };
   }
 
   /**

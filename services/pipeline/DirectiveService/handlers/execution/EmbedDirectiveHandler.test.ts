@@ -136,13 +136,9 @@ describe('EmbedDirectiveHandler', () => {
   let stateService: ReturnType<typeof createStateServiceMock>;
   let fileSystemService: ReturnType<typeof createFileSystemServiceMock>;
   let circularityService: any;
-  let parserService: any;
-  let interpreterService: any;
-  let interpreterServiceClientFactory: InterpreterServiceClientFactory;
+  let interpreterServiceClientFactory: DeepMockProxy<IInterpreterServiceClientFactory>; // Use mock proxy
   let clonedState: any;
-  let childState: any;
   let context: TestContextDI;
-  let trackingService: StateTrackingService;
 
   beforeEach(async () => {
     // Create context with isolated container
@@ -150,25 +146,6 @@ describe('EmbedDirectiveHandler', () => {
     
     // Initialize the context
     await context.initialize();
-
-    childState = {
-      setTextVar: vi.fn(),
-      setDataVar: vi.fn(),
-      setPathVar: vi.fn(),
-      setCommand: vi.fn(),
-      clone: vi.fn(),
-      mergeChildState: vi.fn(),
-      isTransformationEnabled: vi.fn().mockReturnValue(false),
-      getStateId: vi.fn().mockReturnValue('child-state-id'),
-      getAllTextVars: vi.fn().mockReturnValue({}),
-      getAllDataVars: vi.fn().mockReturnValue({}),
-      getAllPathVars: vi.fn().mockReturnValue({}),
-      getAllCommands: vi.fn().mockReturnValue({}),
-      getPathVar: vi.fn().mockImplementation((name) => {
-        if (name === 'docs') return '/path/to/docs';
-        return undefined;
-      })
-    };
 
     clonedState = {
       setTextVar: vi.fn(),
@@ -195,16 +172,12 @@ describe('EmbedDirectiveHandler', () => {
     
     // Configure state service
     stateService.clone.mockReturnValue(clonedState);
-    stateService.createChildState.mockReturnValue(childState);
     stateService.isTransformationEnabled.mockReturnValue(false);
     stateService.getPathVar = vi.fn().mockImplementation((name) => {
       if (name === 'docs') return '/path/to/docs';
       return undefined;
     });
 
-    // Create parser service mock
-    parserService = createRealParserService();
-    
     // Create path service mock
     const pathService = {
       resolve: vi.fn().mockImplementation((path) => {
@@ -233,19 +206,10 @@ describe('EmbedDirectiveHandler', () => {
       isInStack: vi.fn().mockReturnValue(false)
     };
 
-    // Create interpreter service mock
-    interpreterService = {
-      interpret: vi.fn().mockImplementation(async (nodes, contextParam) => {
-        return contextParam.state;
-      })
-    };
-
     // Create interpreter service client factory mock
-    interpreterServiceClientFactory = new InterpreterServiceClientFactory();
-    interpreterServiceClientFactory.setInterpreterServiceForTests(interpreterService);
-
-    // Create state tracking service
-    trackingService = new StateTrackingService();
+    interpreterServiceClientFactory = mockDeep<IInterpreterServiceClientFactory>();
+    // Configure getClient if needed for specific tests later
+    // interpreterServiceClientFactory.getClient.mockReturnValue(...);
 
     // Configure file system service mock
     fileSystemService.exists.mockImplementation(async (path) => {
@@ -268,39 +232,60 @@ describe('EmbedDirectiveHandler', () => {
       throw new Error(`File not found: ${path}`);
     });
 
-    // Configure resolution service for path resolution
-    resolutionService.resolveInContext.mockImplementation(async (value, context) => {
-      if (value === 'path_variable') {
-        return '/path/to/resolved_path.md';
+    // Configure new ResolutionService mocks based on refactored handler usage
+
+    // Mock resolvePath for 'embedPath' subtype
+    resolutionService.resolvePath.mockImplementation(async (pathInput, context) => {
+      // Simulate resolving various path inputs (string, structured path, variable path)
+      if (typeof pathInput === 'string') {
+        if (pathInput === 'path_variable') return '/path/to/resolved_path.md';
+        return `/path/to/${pathInput}`;
+      } else if (pathInput && typeof pathInput === 'object' && 'raw' in pathInput) {
+        // Handle structured path object resolution (basic simulation)
+        return `/path/to/${pathInput.raw}`;
+      } 
+      // Handle potential variable reference within path object (mock needs refinement based on actual AST structure)
+      else if (pathInput && typeof pathInput === 'object' && 'variable' in pathInput) {
+          return `/path/to/from_variable_${pathInput.variable.name}.md`;
       }
-      return value;
+      throw new Error(`Mock resolvePath cannot handle input: ${JSON.stringify(pathInput)}`);
     });
-    
-    // For extractSection method
-    resolutionService.extractSection.mockImplementation(async (content, section, fuzzy) => {
-      if (section === 'Section 1') {
-        return 'This is section 1.\n## Subsection\nThis is a subsection.';
-      }
-      if (section === 'Section 2') {
-        return 'This is section 2.';
-      }
-      if (section === 'Nonexistent Section') {
-        throw new Error(`Section '${section}' not found`);
-      }
-      return content;
+
+    // Mock resolveVariable for 'embedVariable' subtype
+    resolutionService.resolveVariable.mockImplementation(async (variableNode, context) => {
+      if (variableNode.name === 'varName') return 'Resolved Variable Content';
+      if (variableNode.name === 'nonStringVar') return 123; // Test non-string case
+      throw new Error(`Mock resolveVariable cannot resolve: ${variableNode.name}`);
     });
-    
+
+    // Mock resolveTemplate for 'embedTemplate' subtype
+    resolutionService.resolveTemplate.mockImplementation(async (contentNodes, context) => {
+      // Simulate resolving a mix of text and variables
+      let result = '';
+      for (const node of contentNodes) {
+        if (node.type === 'Text') {
+          result += node.content;
+        } else if (node.type === 'VariableReference') {
+          if (node.name === 'templateVar') result += 'TEMPLATE_VAR_VALUE';
+          else result += `{{${node.name}}}`;
+        }
+      }
+      return result;
+    });
+
+    // NOTE: extractSection, adjustHeadingLevels, wrapUnderHeader are still needed
+    // but are called *after* content retrieval within the handler. We might need
+    // to mock them specifically within tests that use those options.
+
     // Register all mocks with the context
     context.registerMock('IValidationService', validationService);
     context.registerMock('IStateService', stateService);
     context.registerMock('IResolutionService', resolutionService);
     context.registerMock('IFileSystemService', fileSystemService);
     context.registerMock('IPathService', pathService);
-    context.registerMock('IParserService', parserService);
     context.registerMock('ICircularityService', circularityService);
-    context.registerMock('InterpreterServiceClientFactory', interpreterServiceClientFactory);
-    context.registerMock('StateTrackingService', trackingService);
-    
+    context.registerMock('IInterpreterServiceClientFactory', interpreterServiceClientFactory);
+
     // Register the logger mock - this is the correct way
     context.registerMock('ILogger', mockLogger);
     
@@ -317,14 +302,25 @@ describe('EmbedDirectiveHandler', () => {
   });
 
   describe('basic embed functionality', () => {
-    it('should handle basic embed without modifiers', async () => {
+    it('should handle basic embed without modifiers (subtype: embedPath)', async () => {
       // Get example for simple embed
-      const example = embedDirectiveExamples.atomic.simpleEmbed;
-      const node = await createNodeFromExample(example.code);
-      
+      const exampleCode = embedDirectiveExamples.atomic.simpleEmbed.code;
+      // Assume parser provides subtype and structured path
+      const mockPath = { raw: 'embed.md', structured: { segments: ['embed.md'] } }; // Example structure
+      const node: DirectiveNode = {
+        type: 'Directive',
+        name: 'embed',
+        subtype: 'embedPath', // Explicitly set subtype
+        path: mockPath, // Provide structured path
+        options: {},
+        location: createLocation(1, 1, 0, 1, exampleCode.length)
+      };
+
       const context = { currentFilePath: 'test.meld', state: stateService };
 
-      vi.mocked(resolutionService.resolveInContext).mockResolvedValue('embed.md');
+      // Mock resolutionService.resolvePath for this test
+      const resolvedPath = '/path/to/embed.md';
+      resolutionService.resolvePath.mockResolvedValue(resolvedPath);
       vi.mocked(fileSystemService.exists).mockResolvedValue(true);
       vi.mocked(fileSystemService.readFile).mockResolvedValue('Test content');
 
@@ -332,13 +328,11 @@ describe('EmbedDirectiveHandler', () => {
 
       expect(validationService.validate).toHaveBeenCalledWith(node);
       expect(stateService.clone).toHaveBeenCalled();
-      expect(resolutionService.resolveInContext).toHaveBeenCalled();
-      expect(fileSystemService.exists).toHaveBeenCalled();
-      expect(fileSystemService.readFile).toHaveBeenCalled();
+      expect(resolutionService.resolvePath).toHaveBeenCalledWith(mockPath, expect.any(Object));
+      expect(fileSystemService.exists).toHaveBeenCalledWith(resolvedPath);
+      expect(fileSystemService.readFile).toHaveBeenCalledWith(resolvedPath);
       
       // No longer expect parsing or interpreting - we treat embedded content as literal text
-      expect(parserService.parse).not.toHaveBeenCalled();
-      expect(interpreterService.interpret).not.toHaveBeenCalled();
       expect(clonedState.mergeChildState).not.toHaveBeenCalled();
       
       // Should return the content as a text node
@@ -380,8 +374,6 @@ describe('EmbedDirectiveHandler', () => {
       );
       
       // No longer expect parsing or interpreting
-      expect(parserService.parse).not.toHaveBeenCalled();
-      expect(interpreterService.interpret).not.toHaveBeenCalled();
       expect(clonedState.mergeChildState).not.toHaveBeenCalled();
       
       // Should return extracted section as text node
@@ -415,8 +407,6 @@ describe('EmbedDirectiveHandler', () => {
       expect(stateService.clone).toHaveBeenCalled();
       
       // No longer expect parsing or interpreting
-      expect(parserService.parse).not.toHaveBeenCalled();
-      expect(interpreterService.interpret).not.toHaveBeenCalled();
       expect(clonedState.mergeChildState).not.toHaveBeenCalled();
       
       // Align expectations with actual behavior - just expecting a TextNode with the content
@@ -449,8 +439,6 @@ describe('EmbedDirectiveHandler', () => {
       expect(stateService.clone).toHaveBeenCalled();
       
       // No longer expect parsing or interpreting
-      expect(parserService.parse).not.toHaveBeenCalled();
-      expect(interpreterService.interpret).not.toHaveBeenCalled();
       expect(clonedState.mergeChildState).not.toHaveBeenCalled();
       
       // Align expectations with actual behavior
@@ -664,8 +652,7 @@ describe('EmbedDirectiveHandler', () => {
       expect(circularityService.beginImport).not.toHaveBeenCalled();
       
       // No parsing or interpreting
-      expect(parserService.parse).not.toHaveBeenCalled();
-      expect(interpreterService.interpret).not.toHaveBeenCalled();
+      expect(clonedState.mergeChildState).not.toHaveBeenCalled();
       
       // Should return variable content as text node
       expect(result.replacement).toBeDefined();
@@ -713,8 +700,7 @@ describe('EmbedDirectiveHandler', () => {
       expect(fileSystemService.readFile).not.toHaveBeenCalled();
       
       // No parsing or interpreting
-      expect(parserService.parse).not.toHaveBeenCalled();
-      expect(interpreterService.interpret).not.toHaveBeenCalled();
+      expect(clonedState.mergeChildState).not.toHaveBeenCalled();
       
       // Final state should include correct result
       expect(result.state).toBe(clonedState);
@@ -764,8 +750,7 @@ describe('EmbedDirectiveHandler', () => {
       const result = await handler.execute(node, context);
       
       // No parsing or interpreting
-      expect(parserService.parse).not.toHaveBeenCalled();
-      expect(interpreterService.interpret).not.toHaveBeenCalled();
+      expect(clonedState.mergeChildState).not.toHaveBeenCalled();
       
       // Align expectations with actual behavior
       expect(result.replacement).toBeDefined();
@@ -817,8 +802,7 @@ describe('EmbedDirectiveHandler', () => {
       expect(resolutionService.resolveInContext).toHaveBeenCalledWith(variablePath, expect.any(Object));
       
       // No parsing or interpreting
-      expect(parserService.parse).not.toHaveBeenCalled();
-      expect(interpreterService.interpret).not.toHaveBeenCalled();
+      expect(clonedState.mergeChildState).not.toHaveBeenCalled();
       
       // Should return resolved value as text node
       expect(result.replacement).toBeDefined();

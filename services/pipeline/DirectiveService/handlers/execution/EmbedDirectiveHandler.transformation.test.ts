@@ -7,7 +7,9 @@ import type { IStateService } from '@services/state/StateService/IStateService.j
 import type { ICircularityService } from '@services/resolution/CircularityService/ICircularityService.js';
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
-import type { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js';
+import type { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService.js'\
+import type { IInterpreterServiceClient } from '@services/interpreter-client/IInterpreterServiceClient.js';
+import type { IInterpreterServiceClientFactory } from '@services/interpreter-client/IInterpreterServiceClientFactory.js';
 import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { createLocation, createEmbedDirective } from '@tests/utils/testFactories.js';
 // Import centralized syntax examples and helpers
@@ -16,6 +18,7 @@ import {
 } from '@core/syntax/index.js';
 import { createNodeFromExample } from '@core/syntax/helpers.js';
 import { TestContextDI } from '@tests/utils/di/TestContextDI.js';
+import { mockDeep, type DeepMockProxy } from 'vitest-mock-extended';
 import {
   createValidationServiceMock,
   createStateServiceMock,
@@ -43,6 +46,12 @@ import {
  * 4. Maintained use of centralized syntax examples 
  * 5. Added proper cleanup with afterEach hook
  */
+
+// Define a type for the mock factory
+type MockFactory<T> = () => DeepMockProxy<T>;
+
+// Create mock factory for InterpreterServiceClientFactory
+const createInterpreterServiceClientFactoryMock: MockFactory<IInterpreterServiceClientFactory> = () => mockDeep<IInterpreterServiceClientFactory>();
 
 /**
  * Creates a DirectiveNode from example code string
@@ -92,13 +101,15 @@ vi.mock('../../../../core/utils/logger', () => ({
 
 describe('EmbedDirectiveHandler Transformation', () => {
   let handler: EmbedDirectiveHandler;
-  let validationService: ReturnType<typeof createValidationServiceMock>;
-  let resolutionService: ReturnType<typeof createResolutionServiceMock>;
-  let stateService: ReturnType<typeof createStateServiceMock>;
-  let fileSystemService: ReturnType<typeof createFileSystemServiceMock>;
-  let circularityService: any;
-  let parserService: any;
-  let interpreterService: any;
+  let validationService: DeepMockProxy<IValidationService>;
+  let resolutionService: DeepMockProxy<IResolutionService>;
+  let stateService: DeepMockProxy<IStateService>;
+  let fileSystemService: DeepMockProxy<IFileSystemService>;
+  let circularityService: DeepMockProxy<ICircularityService>;
+  let parserService: DeepMockProxy<IParserService>;
+  let interpreterService: DeepMockProxy<IInterpreterService>;
+  let interpreterServiceClientFactory: DeepMockProxy<IInterpreterServiceClientFactory>;
+  let interpreterServiceClient: DeepMockProxy<IInterpreterServiceClient>;
   let clonedState: any;
   let childState: any;
   let context: TestContextDI;
@@ -141,23 +152,21 @@ describe('EmbedDirectiveHandler Transformation', () => {
     stateService.isTransformationEnabled.mockReturnValue(true);
     stateService.transformNode = vi.fn();
 
-    circularityService = {
-      beginImport: vi.fn(),
-      endImport: vi.fn()
-    };
+    circularityService = mockDeep<ICircularityService>();
 
     // Configure file system service
     fileSystemService.dirname.mockReturnValue('/workspace');
     fileSystemService.join.mockImplementation((...args) => args.join('/'));
     fileSystemService.normalize.mockImplementation(path => path);
 
-    parserService = {
-      parse: vi.fn()
-    };
+    parserService = mockDeep<IParserService>();
 
-    interpreterService = {
-      interpret: vi.fn().mockResolvedValue(childState)
-    };
+    interpreterService = mockDeep<IInterpreterService>();
+    interpreterServiceClientFactory = createInterpreterServiceClientFactoryMock();
+    interpreterServiceClient = mockDeep<IInterpreterServiceClient>();
+
+    // Configure interpreter client factory to return the client mock
+    interpreterServiceClientFactory.getClient.mockReturnValue(interpreterServiceClient);
 
     // Create handler directly with the mocks
     handler = new EmbedDirectiveHandler(
@@ -168,6 +177,7 @@ describe('EmbedDirectiveHandler Transformation', () => {
       fileSystemService,
       parserService,
       interpreterService,
+      interpreterServiceClientFactory,
       mockLogger
     );
   });
@@ -582,6 +592,24 @@ describe('EmbedDirectiveHandler Transformation', () => {
       // Verify transformation was registered correctly on the cloned state
       // Not on the original stateService
       expect(clonedState.transformNode).toHaveBeenCalledWith(node, result.replacement);
+    });
+
+    it('should throw INITIALIZATION_FAILED if interpreter client is not available', async () => {
+      // Arrange
+      const node = await createNodeFromExample(embedDirectiveExamples.atomic.simpleEmbed.code);
+      const execContext = { currentFilePath: 'test.meld', state: stateService };
+
+      // Configure factory to return undefined
+      interpreterServiceClientFactory.getClient.mockReturnValue(undefined);
+
+      // Act & Assert
+      await expect(handler.execute(node, execContext)).rejects.toThrow(
+        new DirectiveError(
+          'Interpreter service client is not available. Ensure InterpreterServiceClientFactory is registered or provide a mock in tests.',
+          DirectiveErrorCode.INITIALIZATION_FAILED,
+          node.location
+        )
+      );
     });
   });
 }); 
