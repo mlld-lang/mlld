@@ -3,10 +3,9 @@
  */
 
 import type { VariableType } from './variables.js';
-import type { IStateService } from './state.js';
+import type { IStateService } from '@services/state/StateService/IStateService';
 import type { StringLiteralType } from './common.js';
-import type { MeldNode } from './ast-types.js';
-import type { MeldValue } from './variables.js';
+import type { MeldNode } from '@core/ast/ast/astTypes.js';
 import type { Result } from './common.js';
 import type { MeldPath, PathContentType, PathPurpose } from './paths.js';
 
