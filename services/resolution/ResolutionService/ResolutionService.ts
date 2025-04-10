@@ -882,7 +882,7 @@ export class ResolutionService implements IResolutionService {
         logger.debug(`resolveInContext: Resolving nodes from StructuredPath.interpolatedValue`);
         try {
           return await this.resolveNodes(value.interpolatedValue, context);
-        } catch (error) {
+    } catch (error) {
           logger.error('resolveInContext failed resolving nodes from StructuredPath.interpolatedValue', { error });
           if (context.strict) throw error;
           return value.raw ?? ''; // Return raw value in non-strict mode
