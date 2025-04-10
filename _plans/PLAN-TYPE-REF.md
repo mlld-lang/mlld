@@ -4,7 +4,7 @@ This document serves as a reference for verified type definitions and service in
 
 Please update this document as more definitive information is uncovered.
 
-## Core Types (`@core/types`, `@core/syntax/types/index.js`)
+## Core Types (`@core/types`, `@core/syntax/types/index.js`, `@core/shared-service-types.js`)
 
 ### `ResolutionContext`
 - **Source:** `@core/types/resolution.ts` (Verified by grep)
@@ -95,15 +95,15 @@ Please update this document as more definitive information is uncovered.
 - **Evidence:** Direct reading of the interface definition file (`IResolutionService.ts`). Linter errors `Property 'resolveVariable' does not exist...` etc. in `EmbedDirectiveHandler.test.ts`.
 
 ### `StateServiceLike` vs `IStateService`
-- **Finding:** Mocks created based on `IStateService` (e.g., via `createStateServiceMock`) do not fully satisfy the `StateServiceLike` interface required by `DirectiveContext.state`.
-- **Source of `StateServiceLike`:** Likely `@core/shared-service-types.js` (based on imports in `IDirectiveService.ts`). Needs verification.
-- **Missing Properties (Observed):** `enableTransformation`, `getNodes`, `getCommand`, `setCommand`, `shouldTransform` (and potentially others).
-- **Evidence:** Linter errors `Type '_MockProxy<IStateService> & IStateService' is missing the following properties from type 'StateServiceLike': ...` when passing `stateService` mock to `handler.execute` in `EmbedDirectiveHandler.test.ts`.
-- **Implication:** Test mocks for `stateService` need careful construction or casting (e.g., `as any`) to satisfy `StateServiceLike` when used in `DirectiveContext`, OR the mock factory (`createStateServiceMock`) needs to be updated to return a `StateServiceLike` compatible mock, OR `DirectiveContext` needs to be updated to use `IStateService`.
+- **Finding:** `StateServiceLike` (defined in `@core/shared-service-types.ts`) is a broader interface than `IStateService` (defined in `services/state/StateService/IStateService.ts`). Mocks created based on `IStateService` (e.g., via `createStateServiceMock`) do not fully satisfy the `StateServiceLike` interface required by `DirectiveContext.state`.
+- **Source of `StateServiceLike`:** `@core/shared-service-types.ts` (Verified by file read).
+- **Key Differences:** `StateServiceLike` includes methods like `enableTransformation`, `getNodes`, `getCommand`, `setCommand`, `shouldTransform`, etc., which are absent from the stricter `IStateService` definition used by the core `StateService` implementation.
+- **Evidence:** Direct comparison of `core/shared-service-types.ts` and `services/state/StateService/IStateService.ts`. Linter errors `Type '_MockProxy<IStateService> & IStateService' is missing the following properties from type 'StateServiceLike': ...` when passing `stateService` mock to `handler.execute` in tests.
+- **Implication:** Test mocks for `stateService` need careful construction or casting (e.g., `as any`) to satisfy `StateServiceLike` when used in `DirectiveContext`, OR the mock factory (`createStateServiceMock`) needs to be updated to return a `StateServiceLike` compatible mock, OR `DirectiveContext` needs to be updated to use `IStateService` (less likely).
 
 ### `DirectiveErrorCode`
 - **Source:** `services/pipeline/DirectiveService/errors/DirectiveError.ts`
-- **Available Codes (Verified):** `VALIDATION_FAILED`, `RESOLUTION_FAILED`, `EXECUTION_FAILED`, `HANDLER_NOT_FOUND`, `FILE_NOT_FOUND`, `CIRCULAR_REFERENCE`, `VARIABLE_NOT_FOUND`, `STATE_ERROR`, `INVALID_CONTEXT`, `SECTION_NOT_FOUND`, `INITIALIZATION_FAILED` (missed previously).
+- **Available Codes (Verified):** `VALIDATION_FAILED`, `RESOLUTION_FAILED`, `EXECUTION_FAILED`, `HANDLER_NOT_FOUND`, `FILE_NOT_FOUND`, `CIRCULAR_REFERENCE`, `VARIABLE_NOT_FOUND`, `STATE_ERROR`, `INVALID_CONTEXT`, `SECTION_NOT_FOUND`, `INITIALIZATION_FAILED`.
 - **Non-Existent Codes:** `PROCESSING_FAILED`, `CIRCULAR_IMPORT` (use `CIRCULAR_REFERENCE`).
 - **Evidence:** Direct reading of `DirectiveError.ts`.
 
@@ -122,10 +122,11 @@ Please update this document as more definitive information is uncovered.
 
 ## Unresolved / Low Confidence (<98%)
 
+- **RESOLVED:** Exact import path for `IInterpreterServiceClientFactory` (it's the class path).
 *   Exact import path for `@core/ast` parser.
 *   Exact structure of `DirectiveData` beyond requiring `kind`.
 *   Location/implementation of heading/wrapping utilities (`adjustHeadingLevels`, `wrapUnderHeader`).
-*   Full definition of `StateServiceLike` and **resolution for mismatch** with `IStateService` mocks.
+*   **Resolution for `StateServiceLike` vs `IStateService` mismatch** in tests/mocks.
 *   Verification of `FieldAccessError` export from `@core/types/common.js`.
 *   Correct import path for `IInterpreterServiceClient`.
 *   Reason for `transformNode` mock signature error `Expected 0-1 type arguments, but got 2`.

@@ -2,18 +2,16 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import type { DirectiveNode, DirectiveData, MeldNode, VariableReferenceNode, TextNode } from '@core/syntax/types/index.js';
 import type { MeldPath, StructuredPath } from '@core/types/paths.js';
 import { createMeldPath } from '@core/types/paths.js';
-import { EmbedDirectiveHandler } from '@services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler.js';
-import type { ILogger } from '@core/utils/logger.js';
+import { EmbedDirectiveHandler, type ILogger } from '@services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler.js';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import type { IResolutionService, ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
-import type { IStateService } from '@services/state/StateService/IStateService.js';
-import type { DataVariable } from '@core/types/variables.js';
+import type { IStateService, DataVariable } from '@services/state/StateService/IStateService.js';
 import type { Result, FieldAccessError } from '@core/types/common.js';
 import { success, failure } from '@core/types/common.js';
 import type { ICircularityService } from '@services/resolution/CircularityService/ICircularityService.js';
 import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
 import type { IParserService } from '@services/pipeline/ParserService/IParserService.js';
-import type { IInterpreterServiceClient } from '@services/pipeline/InterpreterService/interfaces/IInterpreterServiceClient.js';
+import type { IInterpreterServiceClient } from '@services/interpreter-client/IInterpreterServiceClient.js';
 import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory.js';
 import { DirectiveError, DirectiveErrorCode } from '@services/pipeline/DirectiveService/errors/DirectiveError.js';
 import { createLocation, createEmbedDirective } from '@tests/utils/testFactories.js';
@@ -88,7 +86,7 @@ describe('EmbedDirectiveHandler Transformation', () => {
       mergeChildState: vi.fn(),
       clone: vi.fn(),
       isTransformationEnabled: vi.fn().mockReturnValue(true),
-      transformNode: vi.fn<[MeldNode, MeldNode | MeldNode[]], void>()
+      transformNode: vi.fn()
     };
 
     validationService = createValidationServiceMock();
@@ -122,7 +120,9 @@ describe('EmbedDirectiveHandler Transformation', () => {
     // Configure ResolutionService mocks
     resolutionService.resolvePath.mockImplementation(async (pathInput: string | StructuredPath, context: ResolutionContext): Promise<MeldPath> => {
       if (typeof pathInput === 'string') return createMeldPath(`/path/to/${pathInput}`);
-      if (pathInput && typeof pathInput === 'object' && 'raw' in pathInput) return createMeldPath(`/path/to/${pathInput.raw}`);
+      if (pathInput && typeof pathInput === 'object' && 'raw' in pathInput && typeof pathInput.raw === 'string') {
+        return createMeldPath(`/path/to/${pathInput.raw}`);
+      }
       throw new Error(`Mock resolvePath cannot handle input: ${JSON.stringify(pathInput)}`);
     });
     resolutionService.resolveInContext.mockImplementation(async (value: string | StructuredPath, context: ResolutionContext): Promise<string> => {
@@ -142,7 +142,6 @@ describe('EmbedDirectiveHandler Transformation', () => {
       stateService,
       circularityService,
       fileSystemService,
-      parserService,
       {} as any,
       interpreterServiceClientFactory,
       mockLogger
@@ -484,7 +483,7 @@ describe('EmbedDirectiveHandler Transformation', () => {
       resolutionService.resolvePath.mockResolvedValue(resolvedPath);
       vi.mocked(fileSystemService.exists).mockResolvedValue(true);
       vi.mocked(circularityService.beginImport).mockImplementation(() => {
-        throw new DirectiveError('Circular import detected', 'embed', DirectiveErrorCode.CIRCULAR_IMPORT);
+        throw new DirectiveError('Circular import detected', 'embed', DirectiveErrorCode.CIRCULAR_REFERENCE);
       });
 
       await expect(handler.execute(node, context)).rejects.toThrow(DirectiveError);
@@ -631,7 +630,7 @@ describe('EmbedDirectiveHandler Transformation', () => {
         new DirectiveError(
           'Interpreter service client is not available. Ensure InterpreterServiceClientFactory is registered or provide a mock in tests.',
           DirectiveErrorCode.INITIALIZATION_FAILED,
-          node.location
+          { location: node.location }
         )
       );
     });
