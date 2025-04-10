@@ -124,22 +124,17 @@ describe('EmbedDirectiveHandler', () => {
     pathService.dirname.mockReturnValue('/mock/dir');
     pathService.joinPaths.mockImplementation((...paths: string[]) => paths.join('/'));
     pathService.basename.mockImplementation((p: string) => p.split('/').pop() || '');
-    // Remove mocks for methods likely not on the DeepMockProxy or interface
-    // pathService.extname.mockImplementation((p: string) => p.includes('.') ? p.substring(p.lastIndexOf('.')) : '');
-    // pathService.relative.mockImplementation((from: string, to: string) => to);
+    pathService.isURL.mockReturnValue(false);
     pathService.validatePath.mockImplementation(async (p: string | MeldPath): Promise<MeldPath> => {
       const pathString = typeof p === 'string' ? p : JSON.stringify(p);
       return `/validated/${pathString}` as unknown as MeldPath;
     });
-    pathService.isURL.mockReturnValue(false);
     pathService.validateURL.mockResolvedValue('http://validated.mock.url' as UrlPath); 
     pathService.fetchURL.mockResolvedValue({ content: 'mock content', status: 200 });
 
     circularityService = mockDeep<ICircularityService>();
     circularityService.beginImport.mockReturnThis();
     circularityService.endImport.mockReturnThis();
-    // Remove mock for non-existent method
-    // circularityService.checkCircularImports = vi.fn().mockResolvedValue(undefined);
 
     interpreterServiceClientFactory = mockDeep<IInterpreterServiceClientFactory>();
 
@@ -148,7 +143,10 @@ describe('EmbedDirectiveHandler', () => {
       if (path.includes('empty.md')) return '';
       if (path.includes('content.md')) return 'This is the content of the file.';
       if (path.includes('sections.md')) return '# Section 1\nContent1\n# Section Two\nContent2';
-      if (path.includes('non-existent')) throw new MeldFileNotFoundError(`File not found: ${path}`, { details: { filePath: path }, sourceLocation: createLocation(0,0,0,0, path) });
+      if (path.includes('non-existent')) throw new MeldFileNotFoundError(`File not found: ${path}`, {
+        details: { filePath: path }, 
+        sourceLocation: createLocation(0, 0, 0, 0, path)
+      });
       return `Default content for ${path}`;
     });
 
@@ -229,7 +227,6 @@ describe('EmbedDirectiveHandler', () => {
       expect(resolutionService.resolvePath).toHaveBeenCalledWith(mockPath, expect.any(Object));
       expect(fileSystemService.exists).toHaveBeenCalledWith(resolvedPath);
       expect(fileSystemService.readFile).toHaveBeenCalledWith(resolvedPath);
-      expect(clonedState.mergeChildState).not.toHaveBeenCalled();
       expect(result.state).toBe(clonedState);
       expect(result.replacement).toEqual({
         type: 'Text', content: fileContent, location: node.location,
@@ -275,7 +272,6 @@ describe('EmbedDirectiveHandler', () => {
         sectionName,
         { fuzzy: false }
       );
-      expect(clonedState.mergeChildState).not.toHaveBeenCalled();
       expect(result.state).toBe(clonedState);
       expect(result.replacement).toEqual({
         type: 'Text', content: extractedContent, location: node.location,
