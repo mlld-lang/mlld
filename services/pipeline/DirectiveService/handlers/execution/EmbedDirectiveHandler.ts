@@ -15,7 +15,7 @@ import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
 import { ErrorSeverity } from '@core/errors/MeldError.js';
 import { embedLogger } from '@core/utils/logger.js';
 import { StateVariableCopier } from '@services/state/utilities/StateVariableCopier.js';
-import type { IInterpreterServiceClient } from '@services/pipeline/InterpreterService/interfaces/IInterpreterServiceClient.js';
+import type { IInterpreterServiceClient } from '@services/pipeline/InterpreterService/interfaces/IInterpreterServiceClient.js'; 
 import { InterpreterServiceClientFactory } from '@services/pipeline/InterpreterService/factories/InterpreterServiceClientFactory.js';
 import type { IStateTrackingService } from '@tests/utils/debug/StateTrackingService/IStateTrackingService.js';
 import { inject, injectable } from 'tsyringe';
@@ -189,7 +189,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
 
     // Clone the current state for modifications
     const newState = context.state.clone(); // Keep state cloning
-
+    
     // Create a resolution context
     // TODO: Adjust ResolutionContextFactory usage based on directive subtype
     const resolutionContext = ResolutionContextFactory.create(
@@ -221,9 +221,9 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
           resolvedPath = await this.resolutionService.resolvePath(node.path, resolutionContext);
           this.logger.debug(`Resolved embed path to: ${resolvedPath}`);
         } catch (error) {
-          throw new DirectiveError(
+            throw new DirectiveError(
             `Error resolving embed path: ${error instanceof Error ? error.message : String(error)}`,
-            this.kind,
+              this.kind,
             DirectiveErrorCode.RESOLUTION_FAILED,
             node.location,
             error
