@@ -253,7 +253,7 @@ describe('EmbedDirectiveHandler', () => {
     context.registerMock('IFileSystemService', fileSystemService);
     context.registerMock('IPathService', pathService);
     context.registerMock('ICircularityService', circularityService);
-    context.registerMock('InterpreterServiceClientFactory', interpreterServiceClientFactory);
+    context.registerMock('IInterpreterServiceClientFactory', interpreterServiceClientFactory);
 
     // Register the logger mock - this is the correct way
     context.registerMock('ILogger', mockLogger);
