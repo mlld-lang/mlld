@@ -583,38 +583,18 @@ export class ResolutionService implements IResolutionService {
   /**
    * Resolves a data variable reference, including potential field access.
    *
-   * @param ref - The variable reference string (e.g., "myData.field[0]").
+   * @param node - The VariableReferenceNode representing the variable and its field access path.
    * @param context - The resolution context.
    * @returns The resolved JSON value.
    * @throws {VariableResolutionError} If the variable is not found or resolution fails.
    * @throws {FieldAccessError} If field access fails.
    */
-  async resolveData(ref: string, context: ResolutionContext): Promise<JsonValue> {
-    logger.debug(`resolveData called`, { ref, contextFlags: context.flags });
+  async resolveData(node: VariableReferenceNode, context: ResolutionContext): Promise<JsonValue> {
+    // Use node.identifier directly, remove string 'ref' parameter
+    logger.debug(`resolveData called for node`, { identifier: node.identifier, fieldCount: node.fields?.length, contextFlags: context.flags });
 
     try {
-      // 1. Parse the reference string (assuming template format like {{var.field}})
-      // Use parseForResolution which handles parser client/service logic
-      const nodes = await this.parseForResolution(`{{${ref}}}`, context);
-
-      if (!nodes || nodes.length === 0 || nodes[0].type !== 'VariableReference') {
-        // If parsing fails or doesn't yield a VariableReference, try direct lookup?
-        // Or should this be an error?
-        logger.warn(`resolveData: Could not parse '${ref}' as a standard variable reference.`);
-        // Attempt direct lookup as fallback (handles cases where ref is just 'varName')
-        const directVar = this.stateService.getDataVar(ref);
-        if (directVar) {
-           logger.debug(`resolveData: Direct lookup successful for '${ref}'.`);
-           return directVar.value;
-        }
-        // If direct lookup also fails, consider it not found
-        throw new VariableResolutionError(`Variable or reference not found: ${ref}`, {
-             code: 'E_VAR_NOT_FOUND',
-             details: { variableName: ref }
-         });
-      }
-
-      const node = nodes[0] as VariableReferenceNode;
+      // 1. Get identifier and fields directly from the node
       const varName = node.identifier;
       const fields = node.fields || []; // Ensure fields is an array
 
@@ -635,13 +615,12 @@ export class ResolutionService implements IResolutionService {
           if (!this.variableReferenceResolver) {
               throw new Error('Internal Error: variableReferenceResolver not initialized before field access in resolveData');
           }
-          // Call the CORRECTED accessFields with AST Field[]
+          // Call accessFields with AstField[] from node
           const result = await this.variableReferenceResolver.accessFields(baseValue, fields, varName, context);
           if (result.success) {
               finalValue = result.value;
           } else {
-              // Fix: Throw the error so the catch block handles it, instead of returning rejected promise
-              throw result.error; 
+              throw result.error; // Throw the FieldAccessError on failure
           }
       } else {
           // No fields, return the base value
@@ -652,33 +631,17 @@ export class ResolutionService implements IResolutionService {
       return finalValue === undefined ? null : finalValue;
 
     } catch (error) {
-      logger.error('resolveData failed', { error, ref });
+      // Keep existing error handling, but update logging context if needed
+      logger.error('resolveData failed', { error, identifier: node.identifier });
       if (context.strict) {
-        // Remove detailed logging
-        /*
-        process.stdout.write(`\n[resolveData CATCH STDOUT] Inspecting caught error:\n`);
-        process.stdout.write(`  Error Name: ${(error as Error)?.name}\n`);
-        process.stdout.write(`  Error Code: ${(error as any)?.code}\n`);
-        process.stdout.write(`  Error Message: ${(error as Error)?.message}\n`);
-        process.stdout.write(`  Error Object: ${JSON.stringify(error)}\n`);
-        */
-        
-        // Generalize duck-typing check to re-throw any MeldError-like object
         if (error instanceof Error && 'code' in error && 'name' in error) { 
-            // Remove logging
-            // process.stdout.write(`[resolveData CATCH STDOUT] Re-throwing original MeldError (duck-typed), Name: ${error.name}, Code: ${(error as MeldError).code}\n`);
-            logger.debug('[resolveData CATCH] Re-throwing original MeldError (duck-typed)', { name: error.name, code: (error as MeldError).code }); // Keep logger call
-            throw error; // Re-throw original MeldError
+            logger.debug('[resolveData CATCH] Re-throwing original MeldError (duck-typed)', { name: error.name, code: (error as MeldError).code });
+            throw error;
         } else {
-            // Wrap truly unexpected errors
-            const errorName = error instanceof Error ? error.name : 'Unknown Type';
-            const errorCode = typeof error === 'object' && error !== null && 'code' in error ? (error as any).code : 'Unknown Code';
-            // Remove logging
-            // process.stdout.write(`[resolveData CATCH STDOUT] Error did not look like MeldError, wrapping. Name: ${errorName}, Code: ${errorCode}\n`);
-            logger.warn('[resolveData CATCH] Wrapping non-MeldError (duck-typed)', { errorName, errorCode }); // Keep logger call
-            const meldError = new MeldResolutionError(`Failed to resolve data reference: ${ref}`, {
+            logger.warn('[resolveData CATCH] Wrapping non-MeldError (duck-typed)', { errorName: error instanceof Error ? error.name : 'Unknown Type' });
+            const meldError = new MeldResolutionError(`Failed to resolve data reference: ${node.identifier}`, {
                 code: 'E_RESOLVE_DATA_FAILED',
-                details: { reference: ref, context },
+                details: { identifier: node.identifier, context },
                 cause: error
             });
             throw meldError;

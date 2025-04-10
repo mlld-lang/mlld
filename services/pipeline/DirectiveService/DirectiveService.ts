@@ -1011,20 +1011,20 @@ export class DirectiveService implements IDirectiveService, DirectiveServiceLike
     
     if (this.resolutionClient) {
       try {
-        return await this.resolutionClient.resolveText(text, context.resolutionContext || {
+        return await this.resolutionClient.resolveInContext(text, context.resolutionContext || {
           currentFilePath: context.currentFilePath,
           workingDirectory: context.workingDirectory
-        });
+        } as ResolutionContext);
       } catch (error) {
-        directiveLogger.warn('Error using resolutionClient.resolveText', { error });
+        directiveLogger.warn('Error using resolutionClient.resolveInContext', { error });
       }
     }
     
     // Fallback to direct resolution service
-    return this.resolutionService.resolveText(text, {
+    return this.resolutionService.resolveInContext(text, {
       currentFilePath: context.currentFilePath,
       workingDirectory: context.workingDirectory
-    });
+    } as ResolutionContext);
   }
 
   /**

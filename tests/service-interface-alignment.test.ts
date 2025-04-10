@@ -9,6 +9,8 @@ import type { IResolutionServiceClientForDirective } from '@services/resolution/
 import type { IResolutionService, ResolutionContext } from '@services/resolution/ResolutionService/IResolutionService.js';
 import { mockDeep } from 'vitest-mock-extended';
 import { Service } from '@core/ServiceProvider.js';
+import type { VariableReferenceNode } from '@core/ast/ast/astTypes';
+import { VariableType } from '@core/types';
 
 /**
  * Mock implementation of the ResolutionService for testing
@@ -22,8 +24,10 @@ class MockResolutionService implements IResolutionService {
     return `Resolved text: ${text}`;
   }
 
-  async resolveData(ref: string, context: ResolutionContext): Promise<any> {
-    return { data: `Resolved data: ${ref}` };
+  async resolveData(node: VariableReferenceNode, context: ResolutionContext): Promise<any> {
+    const fieldsString = node.fields?.map(f => f.value).join('.') || '';
+    const refString = node.identifier + (fieldsString ? '.' + fieldsString : '');
+    return { data: `Resolved data: ${refString}` };
   }
 
   async resolvePath(path: string, context: ResolutionContext): Promise<string> {
@@ -165,23 +169,36 @@ describe('Service Interface Alignment for Resolution Service', () => {
       
       // Create a basic resolution context
       const context: ResolutionContext = {
-        allowedVariableTypes: {
-          text: true,
-          data: true,
-          path: true,
-          command: true
+        state: mockState,
+        strict: false,
+        depth: 0,
+        flags: {
+          isVariableEmbed: false,
+          isTransformation: false,
+          allowRawContentResolution: false,
+          isDirectiveHandler: false,
+          isImportContext: false,
+          processNestedVariables: true
         },
-        state: mockState
-      };
+      } as ResolutionContext;
       
-      // Call the client methods
+      // Create a mock VariableReferenceNode for data.field
+      const mockDataNode: VariableReferenceNode = {
+        type: 'VariableReference',
+        identifier: 'data',
+        valueType: VariableType.DATA,
+        fields: [{ type: 'field', value: 'field' }],
+        isVariableReference: true,
+      } as VariableReferenceNode;
+      
+      // Call the client methods, using the node for resolveData
       await client.resolveText('{{variable}}', context);
-      await client.resolveData('data.field', context);
+      await client.resolveData(mockDataNode, context);
       await client.resolvePath('/path/to/file', context);
       
       // Verify the spies were called with the correct parameters
       expect(textSpy).toHaveBeenCalledWith('{{variable}}', context);
-      expect(dataSpy).toHaveBeenCalledWith('data.field', context);
+      expect(dataSpy).toHaveBeenCalledWith(mockDataNode, context);
       expect(pathSpy).toHaveBeenCalledWith('/path/to/file', context);
     });
   });

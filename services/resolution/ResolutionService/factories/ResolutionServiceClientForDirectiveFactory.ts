@@ -3,7 +3,8 @@ import { Service } from '@core/ServiceProvider.js';
 import type { IResolutionService, ResolutionContext, StructuredPath } from '@services/resolution/ResolutionService/IResolutionService.js';
 import type { IResolutionServiceClientForDirective } from '@services/resolution/ResolutionService/interfaces/IResolutionServiceClientForDirective.js';
 import { resolutionLogger as logger } from '@core/utils/logger.js';
-import type { MeldNode } from '@core/syntax/types.js';
+import type { MeldNode, VariableReferenceNode } from '@core/syntax/types.js';
+import { JsonValue } from '@core/types';
 
 /**
  * Factory for creating resolution service clients for DirectiveService
@@ -32,11 +33,11 @@ export class ResolutionServiceClientForDirectiveFactory {
         return this.resolutionService.resolveText(text, context);
       },
       
-      resolveData: (ref: string, context: ResolutionContext): Promise<any> => {
-        return this.resolutionService.resolveData(ref, context);
+      resolveData: (node: VariableReferenceNode, context: ResolutionContext): Promise<JsonValue> => {
+        return this.resolutionService.resolveData(node, context);
       },
       
-      resolvePath: (path: string, context: ResolutionContext): Promise<string> => {
+      resolvePath: (path: string | StructuredPath, context: ResolutionContext): Promise<string> => {
         return this.resolutionService.resolvePath(path, context);
       },
       

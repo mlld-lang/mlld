@@ -1261,7 +1261,7 @@ export class OutputService implements IOutputService {
             // First try the resolution client if available
             if (this.resolutionClient) {
               try {
-                const resolvedContent = await this.resolutionClient.resolveText(content, context);
+                const resolvedContent = await this.resolutionClient.resolveInContext(content, context);
                 // Apply proper newline handling 
                 return this.handleNewlines(resolvedContent, formattingContext);
               } catch (clientError) {
@@ -1274,7 +1274,7 @@ export class OutputService implements IOutputService {
             // Fall back to resolution service if client fails or is not available
             if (this.resolutionService) {
               try {
-                const resolvedContent = await this.resolutionService.resolveText(content, context);
+                const resolvedContent = await this.resolutionService.resolveInContext(content, context);
                 logger.debug('Resolved variable references using ResolutionService', {
                   original: content,
                   resolved: resolvedContent
@@ -1354,11 +1354,11 @@ export class OutputService implements IOutputService {
                 state.getCurrentFilePath() ?? undefined // Provide file path
               );
 
-              resolvedValue = await this.resolutionService.resolveText(serializedString, resolveContext);
-              logger.debug(`Resolved VariableReferenceNode ${varNode.identifier} via resolveText to: ${resolvedValue}`);
+              resolvedValue = await this.resolutionService.resolveInContext(serializedString, resolveContext);
+              logger.debug(`Resolved VariableReferenceNode ${varNode.identifier} via resolveInContext to: ${resolvedValue}`);
 
             } catch (error) {
-              logger.error('Error resolving VariableReference node via resolveText', { 
+              logger.error('Error resolving VariableReference node via resolveInContext', { 
                 serializedString,
                 error: error instanceof Error ? error.message : String(error) 
               });
@@ -1578,7 +1578,7 @@ export class OutputService implements IOutputService {
               // Try client first if available
               if (this.resolutionClient) {
                 try {
-                  dataVarContent = await this.resolutionClient.resolveText(dataVarContent, context);
+                  dataVarContent = await this.resolutionClient.resolveInContext(dataVarContent, context);
                   logger.debug('Processed nested variables in DataVar using client', {
                     finalContent: dataVarContent
                   });
@@ -1592,7 +1592,7 @@ export class OutputService implements IOutputService {
               // Try service if client failed or not available
               if (typeof dataVarContent === 'string' && dataVarContent.includes('{{') && this.resolutionService) {
                 try {
-                  dataVarContent = await this.resolutionService.resolveText(dataVarContent, context);
+                  dataVarContent = await this.resolutionService.resolveInContext(dataVarContent, context);
                   logger.debug('Processed nested variables in DataVar using service', {
                     finalContent: dataVarContent
                   });

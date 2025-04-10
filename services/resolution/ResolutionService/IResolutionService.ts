@@ -11,6 +11,7 @@ import type { IStateService } from '@services/state/StateService/IStateService.j
 import { VariableResolutionTracker, ResolutionTrackingConfig } from '@tests/utils/debug/VariableResolutionTracker/index.js';
 import type { MeldResolutionError, PathValidationError } from '@core/types.js';
 import type { Field } from '@core/syntax/types/shared-types.js';
+import type { VariableReferenceNode } from '@core/ast/ast/astTypes.js';
 
 /**
  * Service responsible for resolving variables, commands, and paths in Meld content.
@@ -51,22 +52,15 @@ interface IResolutionService {
   resolveText(text: string, context: ResolutionContext): Promise<string>;
 
   /**
-   * Resolve data variables and fields ({{data.field}}) to their JSON values.
+   * Resolves a data variable reference, including potential field access.
    * 
-   * @param ref - The data variable reference string (e.g., "user.profile.name") to resolve
-   * @param context - The resolution context with state and configuration flags
-   * @returns The resolved data value (JSON primitive, object, or array)
-   * @throws {MeldResolutionError} If resolution fails and context.strict is true
-   * 
-   * @example
-   * ```ts
-   * const name = await resolutionService.resolveData(
-   *   "user.profile.name",
-   *   createResolutionContext(state, { allowedVariableTypes: [VariableType.DATA] })
-   * );
-   * ```
+   * @param node - The VariableReferenceNode representing the variable and its field access path.
+   * @param context - The resolution context.
+   * @returns The resolved JSON value.
+   * @throws {VariableResolutionError} If the variable is not found or resolution fails.
+   * @throws {FieldAccessError} If field access fails.
    */
-  resolveData(ref: string, context: ResolutionContext): Promise<JsonValue>;
+  resolveData(node: VariableReferenceNode, context: ResolutionContext): Promise<JsonValue>;
 
   /**
    * Resolve path variables ($path) and constructs to MeldPath objects.
