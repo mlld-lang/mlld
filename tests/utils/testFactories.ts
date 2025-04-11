@@ -204,36 +204,72 @@ export function createPathDirective(
 
 // Create a run directive node for testing (Matching refactored handler expectations)
 export function createRunDirective(
-  identifier: string, // Identifier for the @text directive using this
-  command: string | InterpolatableValue,
+  commandInput: string | InterpolatableValue | { name: string, args: any[], raw: string }, 
   location?: Location,
-  subtype: 'runCommand' | 'runCode' | 'runCodeParams' | 'runDefined' = 'runCommand' 
+  // Determine subtype based on input if not explicitly provided
+  subtype?: 'runCommand' | 'runCode' | 'runCodeParams' | 'runDefined',
+  language?: string,
+  parameters?: Array<VariableReferenceNode | string>,
+  outputVar?: string // Added for custom output test
 ): DirectiveNode {
-  let commandValue: InterpolatableValue;
-  if (typeof command === 'string') {
-    // If given a string, wrap it in a TextNode array
-    commandValue = [createTextNode(command, location)]; 
-  } else {
-    commandValue = command;
+  
+  let determinedSubtype: 'runCommand' | 'runCode' | 'runCodeParams' | 'runDefined';
+  let commandProperty: InterpolatableValue | { name: string, args: any[], raw: string };
+
+  // Determine subtype and structure command property
+  if (subtype) {
+      determinedSubtype = subtype;
+      // Assign commandProperty based on known subtype - requires input matching subtype
+      if (determinedSubtype === 'runDefined') {
+        if (typeof commandInput !== 'object' || !commandInput.name) throw new Error('Invalid input for runDefined subtype');
+        commandProperty = commandInput;
+      } else { // runCommand, runCode, runCodeParams expect string or InterpolatableValue
+         if (typeof commandInput === 'string') {
+           commandProperty = [createTextNode(commandInput, location)];
+         } else if (isInterpolatableValueArray(commandInput)) {
+           commandProperty = commandInput;
+         } else {
+           throw new Error('Invalid input for runCommand/runCode subtype');
+         }
+      }
+    } else {
+      // Infer subtype if not provided
+      if (typeof commandInput === 'object' && commandInput.name) {
+        determinedSubtype = 'runDefined';
+        commandProperty = commandInput;
+      } else { // Assume runCommand for string or InterpolatableValue
+        determinedSubtype = 'runCommand';
+        if (typeof commandInput === 'string') {
+           commandProperty = [createTextNode(commandInput, location)];
+         } else if (isInterpolatableValueArray(commandInput)) {
+           commandProperty = commandInput;
+         } else {
+            throw new Error('Invalid input for createRunDirective commandInput');
+         }
+      }
+    }
+
+  // Construct the directive data according to RunDirectiveNode structure
+  const directiveData: any = {
+      kind: 'run',
+      subtype: determinedSubtype,
+      command: commandProperty,
+      ...(outputVar && { output: outputVar }) // Add output variable if provided
+  };
+
+  // Add subtype-specific properties
+  if ((determinedSubtype === 'runCode' || determinedSubtype === 'runCodeParams')) {
+    if (language) directiveData.language = language;
+    directiveData.isMultiLine = true; 
+  }
+  if (determinedSubtype === 'runCodeParams' && parameters) {
+    directiveData.parameters = parameters;
   }
 
-  // Create the structure expected by the handler for @text x = @run [...]
-  // The outer node is @text, its value has source:'run' and a run object
   return {
     type: 'Directive',
     location: location || DEFAULT_LOCATION,
-    directive: { 
-      kind: 'text', // Outer directive is @text
-      identifier: identifier,
-      source: 'run',
-      // The 'run' property contains the details of the @run command
-      run: { 
-          subtype: subtype, // Subtype of the run command itself
-          command: commandValue // Command content (InterpolatableValue)
-          // Add language/parameters here if testing runCode/runCodeParams
-      },
-      value: null // The top-level value for @text is null when source is run/embed
-    }
+    directive: directiveData 
   };
 }
 

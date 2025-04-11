@@ -12,7 +12,8 @@ import { inject, injectable } from 'tsyringe';
 import { Service } from '@core/ServiceProvider.js';
 import type { RunDirectiveNode } from '@core/syntax/types.js';
 import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
-import { FieldAccessError, PathValidationError, ResolutionError } from '@core/errors';
+import { FieldAccessError, PathValidationError, MeldResolutionError, MeldError } from '@core/errors';
+import { isInterpolatableValueArray } from '@core/syntax/types/guards.js';
 
 /**
  * Handler for @run directives
@@ -165,6 +166,7 @@ export class RunDirectiveHandler implements IDirectiveHandler {
       
       // --- Execute the command --- 
       directiveLogger.debug(`Executing command: ${commandToExecute}`);
+      process.stdout.write(`>>> RUN HANDLER - About to execute command: '${commandToExecute}' (Type: ${typeof commandToExecute})\n`);
       this.showRunningCommandFeedback(commandToExecute);
       
       try {
@@ -276,10 +278,12 @@ export class RunDirectiveHandler implements IDirectiveHandler {
         `Failed to execute command: ${error.message}` :
         'Failed to execute command';
 
-      // Attach code and severity based on specific error types if possible
+      // Default code and severity
       let errorCode = DirectiveErrorCode.EXECUTION_FAILED;
       let severity = DirectiveErrorSeverity[DirectiveErrorCode.EXECUTION_FAILED];
-      if (error instanceof ResolutionError || error instanceof FieldAccessError || error instanceof PathValidationError) {
+      
+      // Check if it was a resolution-related error based on its type
+      if (error instanceof MeldResolutionError || error instanceof FieldAccessError || error instanceof PathValidationError) {
         errorCode = DirectiveErrorCode.RESOLUTION_FAILED;
         severity = DirectiveErrorSeverity[DirectiveErrorCode.RESOLUTION_FAILED];
       }
@@ -290,9 +294,9 @@ export class RunDirectiveHandler implements IDirectiveHandler {
         errorCode,
         { 
           node, 
-          context, // Pass full context
+          context,
           cause: error instanceof Error ? error : undefined,
-          severity: severity // Use determined severity
+          severity: severity
         }
       );
     }
