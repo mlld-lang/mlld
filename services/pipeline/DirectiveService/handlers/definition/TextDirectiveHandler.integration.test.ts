@@ -275,11 +275,10 @@ describe('TextDirectiveHandler Integration', () => {
       console.log('Collected Error:', JSON.stringify(collectedError, null, 2));
       console.log('Collected Error Context:', JSON.stringify(collectedError.context, null, 2));
       
-      expect(collectedError.context).toBeDefined(); 
-      expect((collectedError.context as any).node).toBeDefined(); // Access nested node
-      expect((collectedError.context as any).node.location.start.line).toBe(5); // Check line on nested node
-      expect((collectedError.context as any).context).toBeDefined(); // Access nested context
-      expect((collectedError.context as any).context.currentFilePath).toBe('test.meld'); // Check file path on nested context
+      expect(collectedError.details).toBeDefined(); 
+      expect(collectedError.details?.node).toBeDefined(); 
+      expect(collectedError.details?.node?.location?.start?.line).toBe(5); 
+      expect(collectedError.details?.context?.currentFilePath).toBe('test.meld');
     });
 
     it.todo('should handle mixed directive types - Complex directive interaction deferred for V1');

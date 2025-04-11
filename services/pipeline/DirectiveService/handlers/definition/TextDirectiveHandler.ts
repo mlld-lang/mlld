@@ -292,10 +292,12 @@ export class TextDirectiveHandler implements IDirectiveHandler {
               DirectiveErrorCode.RESOLUTION_FAILED,
               {
                 node,
-                context,
                 cause: error,
                 location: node.location,
-                severity: DirectiveErrorSeverity[DirectiveErrorCode.RESOLUTION_FAILED]
+                severity: DirectiveErrorSeverity[DirectiveErrorCode.RESOLUTION_FAILED],
+                context: { 
+                   currentFilePath: context.currentFilePath,
+                }
               }
             );
           }
@@ -317,10 +319,12 @@ export class TextDirectiveHandler implements IDirectiveHandler {
       // Ensure location is passed correctly, even if potentially undefined
       const details = {
           node,
-          context,
           cause: error instanceof Error ? error : undefined,
           location: node?.location,
-          severity: DirectiveErrorSeverity[DirectiveErrorCode.EXECUTION_FAILED]
+          severity: DirectiveErrorSeverity[DirectiveErrorCode.EXECUTION_FAILED],
+          context: { 
+              currentFilePath: context.currentFilePath 
+          }
       };
       
       throw new DirectiveError(
