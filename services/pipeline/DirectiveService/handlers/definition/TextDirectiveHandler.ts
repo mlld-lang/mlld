@@ -169,7 +169,8 @@ export class TextDirectiveHandler implements IDirectiveHandler {
               resolvedCommandString,
               { cwd: this.fileSystemService.getCwd() } // Use CWD from FileSystem
           );
-          resolvedValue = stdout; // Use stdout as the value
+          // Trim trailing newline from command output (common shell behavior)
+          resolvedValue = stdout.replace(/\n$/, ''); 
 
           logger.debug('Directly executed command for @text directive', {
             originalCommandNodes: commandNodes,
@@ -254,7 +255,8 @@ export class TextDirectiveHandler implements IDirectiveHandler {
       }
       // Handle regular @text with value
       else {
-        const { value } = node.directive;
+        // Get the InterpolatableValue from the directive
+        const interpolatableValue = node.directive.value;
         
         // Log the resolution context
         logger.debug('Created resolution context for text directive', {
@@ -262,14 +264,27 @@ export class TextDirectiveHandler implements IDirectiveHandler {
           allowedVariableTypes: resolutionContext.allowedVariableTypes,
           stateIsPresent: !!resolutionContext.state,
           parentStateExists: !!context.parentState,
-          value: value
+          value: interpolatableValue
         });
 
         // SIMPLIFIED LOGIC: Always attempt to resolve the value using ResolutionService
-        // resolveInContext now handles strings, StructuredPath, and InterpolatableValue arrays.
+        // resolveNodes now handles InterpolatableValue arrays.
         try {
-          resolvedValue = await this.resolutionService.resolveInContext(value, resolutionContext);
+          // Pass the InterpolatableValue array to resolveNodes
+          resolvedValue = await this.resolutionService.resolveNodes(interpolatableValue, resolutionContext);
         } catch (error) {
+          // <<< Add logging for resolution errors >>>
+          logger.error('Error resolving nodes in TextDirectiveHandler:', {
+            identifier,
+            interpolatableValue: JSON.stringify(interpolatableValue),
+            context: {
+              currentFilePath: resolutionContext.currentFilePath,
+              allowedTypes: resolutionContext.allowedVariableTypes
+            },
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined
+          });
+          
           if (error instanceof MeldResolutionError || error instanceof FieldAccessError) {
             throw new DirectiveError(
               'Failed to resolve value in text directive',
@@ -293,20 +308,26 @@ export class TextDirectiveHandler implements IDirectiveHandler {
 
       return newState;
     } catch (error) {
+      // If it's already a DirectiveError, just rethrow
       if (error instanceof DirectiveError) {
         throw error;
       }
-      throw new DirectiveError(
-        'Failed to process text directive',
-        this.kind,
-        DirectiveErrorCode.EXECUTION_FAILED,
-        {
+      
+      // Otherwise, wrap it in a DirectiveError
+      // Ensure location is passed correctly, even if potentially undefined
+      const details = {
           node,
           context,
           cause: error instanceof Error ? error : undefined,
-          location: node.location,
+          location: node?.location,
           severity: DirectiveErrorSeverity[DirectiveErrorCode.EXECUTION_FAILED]
-        }
+      };
+      
+      throw new DirectiveError(
+        `Failed to process text directive: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        this.kind,
+        DirectiveErrorCode.EXECUTION_FAILED,
+        details
       );
     }
   }

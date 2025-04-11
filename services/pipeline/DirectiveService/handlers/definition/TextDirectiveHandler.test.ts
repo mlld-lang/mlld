@@ -155,9 +155,24 @@ describe('TextDirectiveHandler', () => {
             if (node.type === 'Text') {
                 result += node.content;
             } else if (node.type === 'VariableReference') {
-                if (node.identifier === 'name') result += 'World';
-                else if (node.identifier === 'user' && node.fields?.[0]?.value === 'name') result += 'Alice'; 
-                else result += `{{${node.identifier}}}`; 
+                const identifier = node.identifier;
+                let resolvedVarValue: string | undefined;
+                
+                // Simulate basic variable lookup (extend as needed for tests)
+                if (identifier === 'greeting') resolvedVarValue = 'Hello';
+                else if (identifier === 'subject') resolvedVarValue = 'World';
+                else if (identifier === 'name') resolvedVarValue = 'World'; 
+                else if (identifier === 'user') resolvedVarValue = '{{user}}'; // Placeholder for data/object
+                else if (identifier === 'config') resolvedVarValue = '$config'; // Placeholder for path
+                // Add other specific variable lookups needed by tests
+                
+                // Simulate basic field access if needed (very simplified)
+                if (node.fields && node.fields.length > 0) {
+                   if (identifier === 'user' && node.fields[0].value === 'name') resolvedVarValue = 'Alice';
+                   // Add more complex field access simulation if required by tests
+                }
+                
+                result += resolvedVarValue ?? `{{${identifier}}}`; // Use resolved value or placeholder
             }
         }
         return result;

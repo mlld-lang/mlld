@@ -404,6 +404,25 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
         state: newState, // Return the cloned state, embed usually doesn't modify state itself
         replacement: replacementNode
       };
+    } catch (error) {
+      // Final catch-all for errors during embed execution
+      if (error instanceof DirectiveError) {
+        throw error;
+      }
+      
+      // Wrap other errors, ensuring location is handled safely
+      const details = {
+        node,
+        context,
+        cause: error instanceof Error ? error : undefined,
+        location: node?.location // <<< Use optional chaining
+      };
+      throw new DirectiveError(
+        `Error processing embed directive: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        this.kind,
+        DirectiveErrorCode.EXECUTION_FAILED,
+        details
+      );
     } finally {
       // Remove incorrect endImport call
       // this.circularityService.endImport();

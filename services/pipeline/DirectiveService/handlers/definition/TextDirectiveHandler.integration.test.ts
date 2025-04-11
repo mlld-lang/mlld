@@ -75,7 +75,14 @@ describe('TextDirectiveHandler Integration', () => {
         directive: {
           kind: 'text',
           identifier: 'greeting',
-          value: 'Hello {{user.{{type}}.name}}!'
+          // Represent value as InterpolatableValue array
+          value: [
+            { type: 'Text', content: 'Hello ' }, 
+            { type: 'VariableReference', identifier: 'user', fields: [
+              { type: 'field', value: '{{type}}.name' } // This nested ref needs careful mocking
+            ]},
+            { type: 'Text', content: '!' }
+          ]
         }
       };
 
@@ -84,8 +91,15 @@ describe('TextDirectiveHandler Integration', () => {
         currentFilePath: 'test.meld'
       };
 
-      vi.mocked(resolutionService.resolveInContext)
-        .mockResolvedValue('Hello Alice!');
+      // Mock resolveNodes to return the final string for the specific input array
+      vi.mocked(resolutionService.resolveNodes)
+        .mockImplementation(async (nodes, context) => {
+          // Basic mock: Check if input roughly matches expected structure
+          if (Array.isArray(nodes) && nodes.length === 3 && nodes[1].type === 'VariableReference') {
+            return 'Hello Alice!'; // Return the final expected string
+          }
+          return ''; // Default empty string
+        });
 
       const result = await handler.execute(node, testContext);
       expect(clonedState.setTextVar).toHaveBeenCalledWith('greeting', 'Hello Alice!');
@@ -97,7 +111,14 @@ describe('TextDirectiveHandler Integration', () => {
         directive: {
           kind: 'text',
           identifier: 'message',
-          value: '{{prefix}} "quoted {{name}}" {{suffix}}'
+          // Represent value as InterpolatableValue array
+          value: [
+            { type: 'VariableReference', identifier: 'prefix' }, 
+            { type: 'Text', content: ' "quoted ' }, 
+            { type: 'VariableReference', identifier: 'name' }, 
+            { type: 'Text', content: '" ' }, 
+            { type: 'VariableReference', identifier: 'suffix' }
+          ]
         }
       };
 
@@ -106,8 +127,14 @@ describe('TextDirectiveHandler Integration', () => {
         currentFilePath: 'test.meld'
       };
 
-      vi.mocked(resolutionService.resolveInContext)
-        .mockResolvedValue('Hello "quoted World" !');
+      // Mock resolveNodes
+      vi.mocked(resolutionService.resolveNodes)
+        .mockImplementation(async (nodes, context) => {
+           if (Array.isArray(nodes) && nodes.length === 5) { // Basic check
+             return 'Hello "quoted World" !';
+           }
+           return '';
+        });
 
       const result = await handler.execute(node, testContext);
       expect(clonedState.setTextVar).toHaveBeenCalledWith('message', 'Hello "quoted World" !');
@@ -119,7 +146,14 @@ describe('TextDirectiveHandler Integration', () => {
         directive: {
           kind: 'text',
           identifier: 'userInfo',
-          value: '{{user.contacts[{{index}}].email}}'
+          // Represent value as InterpolatableValue array
+          value: [
+            { type: 'VariableReference', identifier: 'user', fields: [
+              { type: 'field', value: 'contacts' }, 
+              { type: 'index', value: '{{index}}' }, // Needs careful mocking 
+              { type: 'field', value: 'email' }
+            ]}
+          ]
         }
       };
 
@@ -128,8 +162,14 @@ describe('TextDirectiveHandler Integration', () => {
         currentFilePath: 'test.meld'
       };
 
-      vi.mocked(resolutionService.resolveInContext)
-        .mockResolvedValue('second@example.com');
+      // Mock resolveNodes
+      vi.mocked(resolutionService.resolveNodes)
+         .mockImplementation(async (nodes, context) => {
+            if (Array.isArray(nodes) && nodes.length === 1 && nodes[0].identifier === 'user') { // Basic check
+              return 'second@example.com';
+            }
+            return '';
+         });
 
       const result = await handler.execute(node, testContext);
       expect(clonedState.setTextVar).toHaveBeenCalledWith('userInfo', 'second@example.com');
@@ -141,7 +181,12 @@ describe('TextDirectiveHandler Integration', () => {
         directive: {
           kind: 'text',
           identifier: 'config',
-          value: '{{ENV_HOST:-localhost}}:{{ENV_PORT:-3000}}'
+          // Represent value as InterpolatableValue array
+          value: [
+            { type: 'VariableReference', identifier: 'ENV_HOST', fallback: 'localhost' },
+            { type: 'Text', content: ':' },
+            { type: 'VariableReference', identifier: 'ENV_PORT', fallback: '3000' }
+          ]
         }
       };
 
@@ -153,8 +198,14 @@ describe('TextDirectiveHandler Integration', () => {
       process.env.ENV_HOST = 'example.com';
       // ENV_PORT not set, should use fallback
 
-      vi.mocked(resolutionService.resolveInContext)
-        .mockResolvedValue('example.com:3000');
+      // Mock resolveNodes
+      vi.mocked(resolutionService.resolveNodes)
+        .mockImplementation(async (nodes, context) => {
+           if (Array.isArray(nodes) && nodes.length === 3) { // Basic check
+             return 'example.com:3000';
+           }
+           return '';
+        });
 
       const result = await handler.execute(node, testContext);
       expect(clonedState.setTextVar).toHaveBeenCalledWith('config', 'example.com:3000');

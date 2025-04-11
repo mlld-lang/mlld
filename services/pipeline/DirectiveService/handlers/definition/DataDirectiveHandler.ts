@@ -70,6 +70,8 @@ export class DataDirectiveHandler implements IDirectiveHandler {
       let resolvedValue: unknown;
 
       if (source === 'literal') {
+        // The 'value' property can be an array, object, or primitive.
+        // We need to recursively traverse it and resolve any InterpolatableValue arrays.
         resolvedValue = await this.resolveInterpolatableValuesInData(value, resolutionContext);
       } else if (source === 'run' && directive.run) {
         try {
