@@ -73,11 +73,11 @@ export class RunDirectiveHandler implements IDirectiveHandler {
           
           directiveLogger.debug(`Resolving defined command: ${commandName}`, { args: commandArgs });
 
-          // Get the command definition from state
-          const commandDefVar = clonedState.getCommandVar(commandName); // Use clonedState
+          // Get the command definition from the *original* state
+          const commandDefVar = state.getCommandVar(commandName); // <<< Use original state
           if (!commandDefVar) {
               throw new DirectiveError(`Command definition '${commandName}' not found`, this.kind, DirectiveErrorCode.VARIABLE_NOT_FOUND, { node, context });
-        }
+          }
           const commandDef = commandDefVar.value; // This is ICommandDefinition
           
           // Resolve arguments

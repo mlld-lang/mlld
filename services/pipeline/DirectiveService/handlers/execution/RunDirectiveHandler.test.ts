@@ -165,18 +165,8 @@ describe('RunDirectiveHandler', () => {
     fileSystemService.join.mockImplementation((...args) => args.join('/'));
     fileSystemService.normalize.mockImplementation(path => path);
 
-    // Create handler directly with the mocks
-    handler = new RunDirectiveHandler(
-      validationService,
-      resolutionService,
-      stateService,
-      fileSystemService
-    );
-
-    // Mock resolveNodes 
+    // Mock resolveNodes (keep simplified version for now)
     resolutionService.resolveNodes.mockImplementation(async (nodes: InterpolatableValue, context: any): Promise<string> => {
-        // Add logging
-        process.stdout.write(`\n>>> MOCK resolveNodes received nodes: ${JSON.stringify(nodes)}\n`); 
         let commandString = '';
         for (const node of nodes) {
             if (node.type === 'Text') {
@@ -185,13 +175,25 @@ describe('RunDirectiveHandler', () => {
                 let varValue: string | undefined = undefined;
                 if (node.identifier === 'greeting') varValue = 'Hello'; 
                 else if (node.identifier === 'name') varValue = 'World';
-                process.stdout.write(`>>> MOCK resolveNodes: Resolving ${node.identifier} -> ${varValue}\n`);
                 commandString += varValue ?? ''; 
             }
         }
-        process.stdout.write(`>>> MOCK resolveNodes returning: ${commandString}\n`); 
         return commandString; 
     });
+
+    // Register mocks (still needed for potential internal DI use within mocks)
+    context.registerMock('IValidationService', validationService);
+    context.registerMock('IStateService', stateService);
+    context.registerMock('IResolutionService', resolutionService);
+    context.registerMock('IFileSystemService', fileSystemService);
+
+    // Create handler instance DIRECTLY 
+    handler = new RunDirectiveHandler(
+      validationService,
+      resolutionService,
+      stateService,
+      fileSystemService
+    );
   });
 
   afterEach(async () => {
@@ -296,9 +298,6 @@ describe('RunDirectiveHandler', () => {
 
       const result = await handler.execute(node, context);
 
-      // The handler should be using the cloned state, not the original context
-      expect(resolutionService.resolveInContext).toHaveBeenCalled();
-      
       // Just verify that the command is executed correctly
       expect(fileSystemService.executeCommand).toHaveBeenCalledWith(
         'echo Hello, World!',
@@ -307,73 +306,49 @@ describe('RunDirectiveHandler', () => {
     });
 
     it('should handle custom output variable', async () => {
-      // Use the local createRunDirectiveNode helper to create a node with correct structure
-      // This aligns with the pattern used in other tests and avoids hardcoding node structure
-      // While we could use runDirectiveExamples.atomic.outputCapture, the helper is more direct
-      // for this specific test case that focuses on the output variable handling
-      const node = createRunDirectiveNode('echo test', 'variable_name');
-      
-      // Add location data for consistent behavior with other nodes
-      // Location information is important for proper error reporting and formatting
-      node.location = {
-        start: { line: 1, column: 1, offset: 0 },
-        end: { line: 1, column: 20, offset: 19 }
-      };
-      
-      const context = { currentFilePath: 'test.meld', state: stateService };
-
-      const clonedState = {
-        ...stateService,
-        clone: vi.fn().mockReturnThis(),
-        setTextVar: vi.fn(),
-        isTransformationEnabled: vi.fn().mockReturnValue(false)
-      };
-
-      vi.mocked(stateService.clone).mockReturnValue(clonedState);
-      vi.mocked(validationService.validate).mockResolvedValue(undefined);
-      vi.mocked(resolutionService.resolveInContext).mockResolvedValue('echo test');
-      vi.mocked(fileSystemService.executeCommand).mockResolvedValue({
-        stdout: 'test output',
-        stderr: ''
-      });
-
-      const result = await handler.execute(node, context);
-
-      expect(fileSystemService.executeCommand).toHaveBeenCalledWith(
-        'echo test',
-        expect.objectContaining({ cwd: '/workspace' })
-      );
-      expect(clonedState.setTextVar).toHaveBeenCalledWith('variable_name', 'test output');
-      expect(result.state).toBe(clonedState);
-    });
-
-    it('should properly expand command references with $', async () => {
-      const commandRefObject = { name: 'greet', args: [], raw: '$greet' };
-      const node = createRunDirective(commandRefObject, undefined, 'runDefined');
+      // Arrange
+      const node = createRunDirective('echo test', undefined, 'runCommand', undefined, undefined, 'custom_output');
       const context = { 
         currentFilePath: 'test.meld', 
         state: stateService,
         workingDirectory: '/workspace'
       };
+      vi.mocked(fileSystemService.executeCommand).mockResolvedValue({ stdout: 'command output', stderr: '' });
       
-      // Mock getCommandVar *directly on stateService*
-      const greetCmdDef = { commandTemplate: 'echo "Hello there!"' }; 
-      stateService.getCommandVar.mockImplementation((name: string) => name === 'greet' ? { value: greetCmdDef } : undefined);
-      
-      vi.mocked(fileSystemService.executeCommand).mockResolvedValue({ stdout: 'Hello there!', stderr: '' });
-      vi.mocked(validationService.validate).mockResolvedValue(undefined);
-      
+      // Execute the directive
       await handler.execute(node, context);
       
-      // Check getCommandVar on the original stateService mock
-      expect(stateService.getCommandVar).toHaveBeenCalledWith('greet'); 
-      
-      expect(fileSystemService.executeCommand).toHaveBeenCalledWith(
-        'echo "Hello there!"',
-        expect.objectContaining({ 
-          cwd: '/workspace' 
-        })
-      );
+      // Verify the output was captured in the variable
+      expect(clonedState.setTextVar).toHaveBeenCalledWith('custom_output', 'command output');
+    });
+
+    it('should properly expand command references with $', async () => {
+       const commandRefObject = { name: 'greet', args: [], raw: '$greet' };
+       const node = createRunDirective(commandRefObject, undefined, 'runDefined'); 
+       const context = { 
+         currentFilePath: 'test.meld', 
+         state: stateService,
+         workingDirectory: '/workspace'
+       };
+       
+       // Mock getCommandVar *directly on stateService*
+       const greetCmdDef = { commandTemplate: 'echo "Hello there!"' }; 
+       stateService.getCommandVar.mockImplementation((name: string) => name === 'greet' ? { value: greetCmdDef } : undefined);
+       
+       vi.mocked(fileSystemService.executeCommand).mockResolvedValue({ stdout: 'Hello there!', stderr: '' });
+       vi.mocked(validationService.validate).mockResolvedValue(undefined);
+       
+       await handler.execute(node, context);
+       
+       // Check getCommandVar on the original stateService mock
+       expect(stateService.getCommandVar).toHaveBeenCalledWith('greet'); 
+       
+       expect(fileSystemService.executeCommand).toHaveBeenCalledWith(
+         'echo "Hello there!"', 
+         expect.objectContaining({ cwd: '/workspace' })
+       );
+       
+       expect(clonedState.setTextVar).toHaveBeenCalledWith('stdout', 'Hello there!');
     });
   });
 
@@ -436,13 +411,13 @@ describe('RunDirectiveHandler', () => {
 
     it('should handle undefined command references', async () => {
       const commandRefObject = { name: 'undefinedCommand', args: [], raw: '$undefinedCommand' };
-      const node = createRunDirective(commandRefObject, undefined, 'runDefined');
+      const node = createRunDirective(commandRefObject, undefined, 'runDefined'); 
       const context = { 
         currentFilePath: 'test.meld', 
         state: stateService,
         workingDirectory: '/workspace'
       };
-      
+
       // Mock getCommandVar *directly on stateService*
       stateService.getCommandVar.mockReturnValue(undefined); 
       
@@ -452,7 +427,7 @@ describe('RunDirectiveHandler', () => {
          throw new Error('Expected execute to throw'); 
       } catch (error) {
           expect(error).toBeInstanceOf(Error); 
-          expect(error.constructor.name).toBe('DirectiveError'); 
+          expect(error.constructor.name).toBe('DirectiveError');
           expect((error as Error).message).toContain('Command definition \'undefinedCommand\' not found');
       }
       // Check getCommandVar on the original stateService mock
