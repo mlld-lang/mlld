@@ -91,7 +91,10 @@ describe('EmbedDirectiveHandler Transformation', () => {
     parserService = mockDeep<IParserService>();
 
     contextDI.registerMock<IStateService>('IStateService', stateService);
+    contextDI.registerMock<IResolutionService>('IResolutionService', resolutionService);
+    contextDI.registerMock<IValidationService>('IValidationService', validationService);
     contextDI.registerMock<IFileSystemService>('IFileSystemService', fileSystemService);
+    contextDI.registerMock<IPathService>('IPathService', pathService);
     contextDI.registerMock<ICircularityService>('ICircularityService', circularityService);
     contextDI.registerMock<ILogger>('ILogger', logger);
     contextDI.registerMock<InterpreterServiceClientFactory>('InterpreterServiceClientFactory', interpreterServiceClientFactory);
@@ -104,18 +107,42 @@ describe('EmbedDirectiveHandler Transformation', () => {
     stateService.isTransformationEnabled.mockReturnValue(true);
     validationService.validate.mockResolvedValue(undefined);
     
+    fileSystemService.exists.mockImplementation(async (p) => !p.includes('nonexistent'));
+    fileSystemService.readFile.mockImplementation(async (p) => {
+      if (p.includes('nonexistent')) throw new Error('File not found');
+      if (p.includes('sections.md')) return '# Title\n## Section 1\nContent 1\n## Section 2\nContent 2';
+      if (p.includes('heading.md')) return '# Title\n## Heading 2\nContent for H2';
+      if (p.includes('underheader.md')) return '# Title\n## Target Header\nContent under header';
+      if (p.includes('actual/file.md')) return 'Content from field access';
+      if (p.includes('user@example.com')) return 'Content from contact email path';
+      if (p.includes('any.md')) return 'Some content';
+      return 'Default embedded content';
+    });
+
     resolutionService.resolveInContext.mockImplementation(async (val: any): Promise<string> => {
-        if (typeof val === 'string') return val;
+        if (typeof val === 'string') {
+           if (val === '{{filePath}}') return 'resolved/path.md';
+           if (val === '{{vars.myPath.nested}}') return 'actual/file.md';
+           if (val === '{{contact.email}}') return 'user@example.com';
+           return val;
+        } 
         if (val && typeof val === 'object' && 'raw' in val) return val.raw;
         return JSON.stringify(val);
     });
     
-    resolutionService.resolvePath.mockImplementation(async (pathStr) => 
-      createMeldPath(pathStr, unsafeCreateValidatedResourcePath(`/project/root/${pathStr}`))
-    );
+    resolutionService.resolvePath.mockImplementation(async (resolvedPathString: string): Promise<MeldPath> => {
+      const isAbsolute = resolvedPathString.startsWith('/');
+      const validatedPath = isAbsolute ? resolvedPathString : `/project/root/${resolvedPathString}`;
+      return createMeldPath(resolvedPathString, unsafeCreateValidatedResourcePath(validatedPath), isAbsolute);
+    });
+    
+    resolutionService.extractSection.mockImplementation(async (content, section) => {
+      const regex = new RegExp(`## ${section}\n([\s\S]*?)(?:\n##|$)`);
+      const match = content.match(regex);
+      return match ? match[1].trim() : '';
+    });
 
     await contextDI.initialize();
-    // Instantiate handler directly
     handler = new EmbedDirectiveHandler(
       validationService,
       resolutionService,

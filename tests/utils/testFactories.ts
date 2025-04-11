@@ -275,70 +275,65 @@ export function createRunDirective(
 
 // Create an embed directive node for testing
 export function createEmbedDirective(
-  pathOrContent: string | InterpolatableValue | AstStructuredPath, // Path string, variable string like '{{var}}', template nodes, or path object
+  pathOrContent: string | InterpolatableValue | AstStructuredPath, 
   section?: string,
   location?: Location,
+  subtype?: 'embedPath' | 'embedVariable' | 'embedTemplate',
   options?: { 
     names?: string[];
     headingLevel?: number;
     underHeader?: string;
-    fuzzy?: number; // Note: 'fuzzy' is not a standard option, usually handled in extractSection
-    format?: string; // Note: 'format' is not a standard option
   }
 ): DirectiveNode {
-  let subtype: 'embedPath' | 'embedVariable' | 'embedTemplate';
+  let determinedSubtype: 'embedPath' | 'embedVariable' | 'embedTemplate';
   let pathProperty: AstStructuredPath | undefined = undefined;
   let contentProperty: InterpolatableValue | undefined = undefined;
   let namesProperty = options?.names;
 
-  if (isInterpolatableValueArray(pathOrContent)) {
-    subtype = 'embedTemplate';
-    contentProperty = pathOrContent;
-    pathProperty = undefined;
-  } else if (typeof pathOrContent === 'object' && 'raw' in pathOrContent) {
-    // It's an AstStructuredPath object (likely from path directive test usage)
-    subtype = 'embedPath'; // Assume path if object is given
-    pathProperty = pathOrContent;
-  } else if (typeof pathOrContent === 'string') {
-    // Determine subtype based on string content
-    if (pathOrContent.startsWith('{{') || pathOrContent.startsWith('$')) {
-       subtype = 'embedVariable';
-       // Create a simplified AstStructuredPath for variable reference
-       pathProperty = { 
-         raw: pathOrContent, 
-         structured: { segments: [], base: '.' } // Basic structure needed
-         // The parser would add more detail here (isVariableReference, etc.)
-       };
+  if (subtype) {
+    determinedSubtype = subtype;
+    if (subtype === 'embedTemplate') {
+      if (!isInterpolatableValueArray(pathOrContent)) throw new Error('embedTemplate requires InterpolatableValue array');
+      contentProperty = pathOrContent;
     } else {
-       subtype = 'embedPath';
-       // Assume it's a simple path string, create basic AstStructuredPath
-       pathProperty = { 
-          raw: pathOrContent, 
-          structured: { segments: pathOrContent.split('/').filter(Boolean), base: '.'} 
-          // The parser would create a more detailed structure
-       };
+      if (typeof pathOrContent === 'object' && 'raw' in pathOrContent) {
+        pathProperty = pathOrContent;
+      } else if (typeof pathOrContent === 'string') {
+        pathProperty = { raw: pathOrContent, structured: { segments: pathOrContent.split('/').filter(Boolean), base: '.'} };
+      } else {
+         throw new Error('Invalid pathOrContent for embedPath/embedVariable');
+      }
     }
   } else {
-     throw new Error('Invalid input for createEmbedDirective pathOrContent');
+    if (isInterpolatableValueArray(pathOrContent)) {
+      determinedSubtype = 'embedTemplate';
+      contentProperty = pathOrContent;
+    } else if (typeof pathOrContent === 'object' && 'raw' in pathOrContent) {
+      determinedSubtype = 'embedPath';
+      pathProperty = pathOrContent;
+    } else if (typeof pathOrContent === 'string') {
+      if (pathOrContent.startsWith('{{') || pathOrContent.startsWith('$')) {
+         determinedSubtype = 'embedVariable';
+         pathProperty = { raw: pathOrContent, structured: { segments: [], base: '.' } };
+      } else {
+         determinedSubtype = 'embedPath';
+         pathProperty = { raw: pathOrContent, structured: { segments: pathOrContent.split('/').filter(Boolean), base: '.'} };
+      }
+    } else {
+       throw new Error('Invalid input for createEmbedDirective pathOrContent');
+    }
   }
 
-  // Construct the directive data
   const directiveData: EmbedDirectiveData = {
     kind: 'embed',
-    subtype: subtype,
-    ...(subtype === 'embedTemplate' ? { content: contentProperty } : { path: pathProperty }),
+    subtype: determinedSubtype,
+    ...(determinedSubtype === 'embedTemplate' ? { content: contentProperty } : { path: pathProperty }),
     ...(section && { section }),
     ...(namesProperty && { names: namesProperty }),
-    ...(options?.headingLevel && { headerLevel: options.headingLevel }),
+    ...(options?.headingLevel && { headingLevel: options.headingLevel }),
     ...(options?.underHeader && { underHeader: options.underHeader })
-    // Keep standard options, ignore fuzzy/format unless part of EmbedDirectiveData
   };
   
-  // <<< Add Logging >>>
-  if (subtype === 'embedTemplate') {
-      console.log('>>> FACTORY createEmbedDirective (Template Subtype) directiveData:', JSON.stringify(directiveData, null, 2));
-  }
-
   return {
     type: 'Directive',
     directive: directiveData,

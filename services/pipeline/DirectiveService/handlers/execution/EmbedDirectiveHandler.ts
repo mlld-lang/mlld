@@ -242,7 +242,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
                 `Embed source file not found: ${resolvedPath.validatedPath}`,
                 {
                   details: { filePath: resolvedPath.validatedPath, operation: 'embed' },
-                  sourceLocation: node.location ? { line: node.location.start.line, column: node.location.start.column, filePath: context.currentFilePath } : undefined
+                  sourceLocation: node?.location ? { line: node.location.start.line, column: node.location.start.column, filePath: context.currentFilePath } : undefined
                 }
               );
             }

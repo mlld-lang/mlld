@@ -64,7 +64,7 @@ export class DirectiveError extends MeldDirectiveError {
     let directiveLocation: DirectiveLocation | undefined;
     const loc = details?.location ?? details?.node?.location;
     
-    if (loc) {
+    if (loc?.start) {
       directiveLocation = {
         line: loc.start.line,
         column: loc.start.column,
