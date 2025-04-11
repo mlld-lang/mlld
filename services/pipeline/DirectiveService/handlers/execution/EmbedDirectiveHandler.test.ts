@@ -6,7 +6,7 @@ const mockLogger = {
   error: vi.fn()
 };
 
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi, afterEach, type Mock } from 'vitest';
 import type { DirectiveNode, DirectiveData, MeldNode, VariableReferenceNode, TextNode } from '@core/syntax/types/index.js';
 import type { StructuredPath, MeldPath } from '@core/types/paths.js';
 import { createMeldPath } from '@core/types/paths.js';
@@ -41,6 +41,8 @@ import { VariableType, TextVariable, DataVariable } from '@core/types';
 import type { InterpolatableValue } from '@core/syntax/types/nodes.js';
 import type { StructuredPath as AstStructuredPath } from '@core/syntax/types/nodes.js';
 import { isInterpolatableValueArray } from '@core/syntax/types/guards.js';
+import type { IPathService } from '@services/fs/PathService/IPathService.js';
+import type { PathValidationContext } from '@core/types/paths.js';
 
 /**
  * EmbedDirectiveHandler Test Status
@@ -167,24 +169,54 @@ describe('EmbedDirectiveHandler', () => {
       return undefined;
     });
 
-    // Create path service mock
-    const pathService = {
-      resolve: vi.fn().mockImplementation((path) => {
-        if (path === 'does-not-exist.md') {
+    // Create path service mock that satisfies IPathService
+    const pathService: DeepMockProxy<IPathService> = mockDeep<IPathService>();
+    // Basic necessary mocks
+    pathService.resolvePath.mockImplementation(((filePath: any, baseDir?: any): string => {
+        // Simple mock logic based on previous simple object
+        let pathStr = typeof filePath === 'string' ? filePath : filePath?.raw;
+        if (pathStr === 'does-not-exist.md') {
           return '/nonexistent/does-not-exist.md';
         }
-        if (path === 'invalid_path..md') {
-          return null;
+        if (pathStr === 'invalid_path..md') {
+          // Simulate validation failure by throwing
+          throw new Error('Invalid path');
         }
-        return `/path/to/${path}`;
-      }),
-      dirname: vi.fn().mockImplementation((path) => {
-        return '/path/to';
-      }),
-      join: vi.fn().mockImplementation((...paths) => {
-        return paths.join('/');
-      })
-    };
+        if (pathStr) {
+            return `/path/to/${pathStr}`;
+        }
+        throw new Error('Invalid path input to mock resolvePath');
+    }) as any); // Assert as any to bypass complex type check
+    pathService.dirname.mockImplementation((filePath: string) => {
+        // Basic dirname logic
+        const lastSlash = filePath.lastIndexOf('/');
+        return lastSlash >= 0 ? filePath.substring(0, lastSlash) : '.';
+    });
+    pathService.joinPaths.mockImplementation((...paths: string[]) => paths.join('/'));
+    pathService.getProjectPath.mockReturnValue('/project/root');
+    pathService.getHomePath.mockReturnValue('/user/home');
+    // Add stubs for other IPathService methods
+    pathService.initialize.mockReturnValue(undefined);
+    pathService.enableTestMode.mockReturnValue(undefined);
+    pathService.disableTestMode.mockReturnValue(undefined);
+    pathService.isTestMode.mockReturnValue(true); // Assume test mode
+    pathService.setHomePath.mockReturnValue(undefined);
+    pathService.setProjectPath.mockReturnValue(undefined);
+    pathService.resolveProjectPath.mockResolvedValue('/project/root');
+    // pathService.resolvePath is mocked above
+    pathService.validatePath.mockImplementation(async (p: string | MeldPath, c: PathValidationContext) => 
+        createMeldPath(typeof p === 'string' ? p : p.originalValue)
+    ); // Simple pass-through
+    // pathService.joinPaths is mocked above
+    pathService.basename.mockImplementation((filePath: string) => {
+        const lastSlash = filePath.lastIndexOf('/');
+        return lastSlash >= 0 ? filePath.substring(lastSlash + 1) : filePath;
+    });
+    // <<< Cast optional method explicitly to Mock >>>
+    (pathService.normalizePath! as Mock).mockImplementation((filePath: string) => filePath); // Simple pass-through
+    pathService.isURL.mockReturnValue(false); // Assume not URL by default
+    pathService.validateURL.mockRejectedValue(new Error('URL validation not implemented in mock'));
+    pathService.fetchURL.mockRejectedValue(new Error('URL fetching not implemented in mock'));
 
     // Create circularity service mock
     circularityService = {
@@ -255,12 +287,14 @@ describe('EmbedDirectiveHandler', () => {
       if (name === 'dataVar') return { type: VariableType.DATA, name: 'dataVar', value: { user: { name: 'Alice' } } };
       return undefined;
     });
-    // Updated resolveInContext mock - using 'any' for value type
+    // Updated resolveInContext mock - using 'any' for value type but with safer access
     resolutionService.resolveInContext.mockImplementation(async (value: any, context: any): Promise<string> => { 
       console.log('>>> MOCK resolveInContext received:', typeof value, JSON.stringify(value));
       let resolved = ''; 
       let processed = false; 
-      let rawValue = (typeof value === 'object' && value !== null && typeof value.raw === 'string') ? value.raw : undefined;
+      
+      // Safer access to .raw
+      let rawValue = (typeof value === 'object' && value !== null && 'raw' in value && typeof value.raw === 'string') ? value.raw : undefined;
       let stringValue = typeof value === 'string' ? value : undefined;
 
       // Prioritize exact matches needed for failing tests
@@ -289,14 +323,10 @@ describe('EmbedDirectiveHandler', () => {
       
       // Fallback if not processed by any specific logic
       if (!processed) {
-          // If it has a raw value we didn't handle, use that
-          if (rawValue !== undefined) {
-             resolved = rawValue;
-          } 
-          // Otherwise use original string or stringify
-          else {
-             resolved = typeof value === 'string' ? value : JSON.stringify(value);
-          }
+          // Add other cases if needed by the test
+          // Safer access to value.raw in fallback
+          const fallbackRaw = (typeof value === 'object' && value !== null && 'raw' in value && typeof value.raw === 'string') ? value.raw : undefined;
+          return typeof value === 'string' ? value : fallbackRaw ?? JSON.stringify(value);
       }
 
       console.log('>>> MOCK resolveInContext returning:', resolved);
@@ -339,7 +369,12 @@ describe('EmbedDirectiveHandler', () => {
   describe('basic embed functionality', () => {
     it('should handle basic embed without modifiers (subtype: embedPath)', async () => {
       // Arrange
-      const node = createEmbedDirective('./some/file.txt');
+      const node = createEmbedDirective(
+        './some/file.txt', // pathOrContent
+        undefined, // section
+        createLocation(1, 1), // location
+        'embedPath' // <<< Pass subtype explicitly
+      );
       const context: DirectiveContext = { currentFilePath: 'test.meld', state: stateService, parentState: stateService };
 
       const resolvedPathString = '/path/to/some/file.txt'; // Define expected resolved string
@@ -347,7 +382,9 @@ describe('EmbedDirectiveHandler', () => {
       resolutionService.resolvePath.mockResolvedValue(resolvedPath);
       // Mock resolveInContext to return the expected resolved string
       resolutionService.resolveInContext.mockImplementation(async (value) => {
-          if (value === './some/file.txt' || (typeof value === 'object' && value?.raw === './some/file.txt')) {
+          // <<< Safer check for .raw >>>
+          const rawValue = (typeof value === 'object' && value !== null && 'raw' in value) ? value.raw as string : undefined;
+          if (value === './some/file.txt' || rawValue === './some/file.txt') {
              return resolvedPathString;
           }
           // Fallback for other values if needed by other parts of the test
@@ -384,7 +421,12 @@ describe('EmbedDirectiveHandler', () => {
 
     it('should handle embed with section (subtype: embedPath)', async () => {
       // Arrange
-      const node = createEmbedDirective('./some/file.txt', 'Section 1');
+      const node = createEmbedDirective(
+        './some/file.txt', // pathOrContent
+        'Section 1', // section
+        createLocation(1, 1), // location
+        'embedPath' // <<< Pass subtype explicitly
+      );
       const context: DirectiveContext = { currentFilePath: 'test.meld', state: stateService, parentState: stateService };
 
       const resolvedPathString = '/path/to/some/file.txt'; // Define expected resolved string
@@ -394,10 +436,15 @@ describe('EmbedDirectiveHandler', () => {
 
       // Mock resolveInContext to return the expected resolved string
       resolutionService.resolveInContext.mockImplementation(async (value) => {
-          if (value === './some/file.txt' || (typeof value === 'object' && value?.raw === './some/file.txt')) {
+          // <<< Safer check for .raw >>>
+          const rawValue = (typeof value === 'object' && value !== null && 'raw' in value) ? value.raw as string : undefined;
+          if (value === './some/file.txt' || rawValue === './some/file.txt') {
              return resolvedPathString;
           }
-          return typeof value === 'string' ? value : JSON.stringify(value);
+          // Fallback for other values if needed by other parts of the test
+          // Safer access to value.raw in fallback
+          const fallbackRaw = (typeof value === 'object' && value !== null && 'raw' in value) ? value.raw as string : undefined;
+          return typeof value === 'string' ? value : fallbackRaw ?? JSON.stringify(value);
       });
       resolutionService.resolvePath.mockResolvedValue(resolvedPath);
       fileSystemService.exists.mockResolvedValue(true);
@@ -443,7 +490,12 @@ describe('EmbedDirectiveHandler', () => {
 
   describe('error handling', () => {
     it('should throw error if file not found', async () => {
-      const node = createEmbedDirective('non-existent-file.txt');
+      const node = createEmbedDirective(
+        'non-existent-file.txt', // pathOrContent
+        undefined, // section
+        createLocation(1, 1), // location
+        'embedPath' // <<< Pass subtype explicitly
+      );
       const context = { currentFilePath: 'test.meld', state: stateService, parentState: stateService };
 
       // Use resolvePath mock for consistency
@@ -459,7 +511,13 @@ describe('EmbedDirectiveHandler', () => {
     // Skipping for now to unblock progress.
     it.skip('should handle heading level validation', async () => { 
       // Arrange
-      const node = createEmbedDirective('./some/file.txt', undefined, createLocation(1,1), { headingLevel: 7 });
+      const node = createEmbedDirective(
+        './some/file.txt', // pathOrContent
+        undefined, // section
+        createLocation(1,1), // location
+        'embedPath', // <<< Pass subtype explicitly
+        { headingLevel: 7 } // options
+      );
       const context = { currentFilePath: 'test.meld', state: stateService, parentState: stateService };
 
       // Use resolvePath mock for consistency
@@ -485,7 +543,12 @@ describe('EmbedDirectiveHandler', () => {
     // TODO: Fix failing test - mock rejection not propagating correctly (tried mockImplementation/throw, Promise.reject, mockRejectedValueOnce).
     it.skip('should handle section extraction gracefully', async () => {
       // Create directive with a section that doesn't exist
-      const node = createEmbedDirective('./some/file.txt', 'non-existent-section');
+      const node = createEmbedDirective(
+        './some/file.txt', // pathOrContent
+        'non-existent-section', // section
+        createLocation(1, 1), // location
+        'embedPath' // <<< Pass subtype explicitly
+      );
       const context = { currentFilePath: 'test.meld', state: stateService, parentState: stateService };
 
       const resolvedPath: MeldPath = createMeldPath('/path/to/some/file.txt');
@@ -523,30 +586,33 @@ describe('EmbedDirectiveHandler', () => {
         'document.pdf',
         undefined, // section
         createLocation(1, 1),
-        'embedPath' // subtype
+        'embedPath' // <<< Pass subtype explicitly
       );
+      const context = { currentFilePath: 'test.meld', state: stateService, parentState: stateService }; // Added context
       // Expect execute to throw, perhaps a generic Error if type validation happens early
       await expect(handler.execute(node, context)).rejects.toThrow(); 
     });
 
     it('should handle error during path resolution', async () => {
       const node = createEmbedDirective(
-        '{{errorPath}}',
-        undefined,
-        createLocation(1, 1),
-        'embedVariable' // subtype
+        '{{errorPath}}', // pathOrContent (implies variable)
+        undefined, // section
+        createLocation(1, 1), // location
+        'embedVariable' // <<< Pass subtype explicitly
       );
+      const context = { currentFilePath: 'test.meld', state: stateService, parentState: stateService }; // Added context
       resolutionService.resolveInContext.mockRejectedValue(new Error('Cannot resolve path'));
       await expect(handler.execute(node, context)).rejects.toThrow(DirectiveError);
     });
 
     it('should handle error during file reading', async () => {
       const node = createEmbedDirective(
-        'read_error.txt',
-        undefined,
-        createLocation(1, 1),
-        'embedPath' // subtype
+        'read_error.txt', // pathOrContent
+        undefined, // section
+        createLocation(1, 1), // location
+        'embedPath' // <<< Pass subtype explicitly
       );
+      const context = { currentFilePath: 'test.meld', state: stateService, parentState: stateService }; // Added context
       const resolvedPath = createMeldPath('read_error.txt', unsafeCreateValidatedResourcePath('/project/root/read_error.txt'));
       resolutionService.resolvePath.mockResolvedValue(resolvedPath);
       fileSystemService.exists.mockResolvedValue(true);
@@ -556,11 +622,12 @@ describe('EmbedDirectiveHandler', () => {
 
     it('should handle error during section extraction', async () => {
       const node = createEmbedDirective(
-        'doc.md',
-        'MissingSection',
-        createLocation(1, 1),
-        'embedPath' // subtype
+        'doc.md', // pathOrContent
+        'MissingSection', // section
+        createLocation(1, 1), // location
+        'embedPath' // <<< Pass subtype explicitly
       );
+      const context = { currentFilePath: 'test.meld', state: stateService, parentState: stateService }; // Added context
       const resolvedPath = createMeldPath('doc.md', unsafeCreateValidatedResourcePath('/project/root/doc.md'));
       resolutionService.resolvePath.mockResolvedValue(resolvedPath);
       fileSystemService.exists.mockResolvedValue(true);
@@ -571,11 +638,12 @@ describe('EmbedDirectiveHandler', () => {
 
     it('should handle variable resolution failure in path', async () => {
       const node = createEmbedDirective(
-        '{{undefinedVar}}/file.txt',
-        undefined,
-        createLocation(1, 1),
-        'embedPath' // subtype (path derived from variable)
+        '{{undefinedVar}}/file.txt', // pathOrContent (implies variable)
+        undefined, // section
+        createLocation(1, 1), // location
+        'embedVariable' // <<< Pass subtype explicitly
       );
+      const context = { currentFilePath: 'test.meld', state: stateService, parentState: stateService }; // Added context
       resolutionService.resolveInContext.mockRejectedValue(new Error('Var not found'));
       await expect(handler.execute(node, context)).rejects.toThrow(DirectiveError);
     });
@@ -586,11 +654,12 @@ describe('EmbedDirectiveHandler', () => {
           createVariableReferenceNode('nonExistent', 'text')
         ];
         const node = createEmbedDirective(
-           templateNodes,
-           undefined,
-           createLocation(1, 1),
-           'embedTemplate' // subtype
+           templateNodes, // pathOrContent (InterpolatableValue)
+           undefined, // section
+           createLocation(1, 1), // location
+           'embedTemplate' // <<< Pass subtype explicitly
         );
+        const context = { currentFilePath: 'test.meld', state: stateService, parentState: stateService }; // Added context
         resolutionService.resolveNodes.mockRejectedValue(new Error('Var not found'));
         await expect(handler.execute(node, context)).rejects.toThrow(DirectiveError);
      });
@@ -599,7 +668,11 @@ describe('EmbedDirectiveHandler', () => {
   describe('Path variables', () => {
     it('should handle user-defined path variables with $ syntax', async () => {
       // Arrange
-      const node = createEmbedDirective('$docsPath/file.txt');
+      const node = createEmbedDirective(
+        '$docsPath/file.txt', // pathOrContent (string starting with $)
+        undefined, // section
+        createLocation(1, 1) // location
+      );
       const context: DirectiveContext = { currentFilePath: '/project/test.meld', state: stateService, parentState: stateService };
       
       // Define expected resolved string
@@ -639,7 +712,12 @@ describe('EmbedDirectiveHandler', () => {
   describe('Variable reference embeds', () => {
     it('should handle simple variable reference embeds without trying to load a file', async () => {
       // Arrange
-      const node = createEmbedDirective('{{textVar}}');
+      const node = createEmbedDirective(
+        '{{textVar}}', // pathOrContent (implies variable)
+        undefined, // section
+        createLocation(1, 1), // location
+        'embedVariable' // <<< Pass subtype explicitly
+      );
       const context = { currentFilePath: 'test.meld', state: stateService, parentState: stateService };
 
       // Mock variable resolution to return the variable's content
@@ -680,7 +758,12 @@ describe('EmbedDirectiveHandler', () => {
     
     it('should handle text variable embeds correctly', async () => {
       // Arrange
-      const node = createEmbedDirective('{{textVar}}');
+      const node = createEmbedDirective(
+        '{{textVar}}', // pathOrContent (implies variable)
+        undefined, // section
+        createLocation(1, 1), // location
+        'embedVariable' // <<< Pass subtype explicitly
+      );
       const context = { currentFilePath: 'test.meld', state: stateService, parentState: stateService };
       
       // Mock variable resolution to return a text variable
@@ -714,10 +797,16 @@ describe('EmbedDirectiveHandler', () => {
     
     it('should apply modifiers (heading level, under header) to variable content', async () => {
       // Arrange
-      const node = createEmbedDirective('{{textVar}}', undefined, createLocation(1,1), 'embedVariable', {
-        headingLevel: 2,
-        underHeader: 'Parent Header'
-      });
+      const node = createEmbedDirective(
+        '{{textVar}}', // pathOrContent (implies variable)
+        undefined, // section
+        createLocation(1,1), // location
+        'embedVariable', // <<< Pass subtype explicitly
+        { // options
+          headingLevel: 2,
+          underHeader: 'Parent Header'
+        }
+      );
       const context = { currentFilePath: 'test.meld', state: stateService, parentState: stateService };
       
       // Variable resolves to plain text
