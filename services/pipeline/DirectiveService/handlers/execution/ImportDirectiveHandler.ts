@@ -266,9 +266,8 @@ export class ImportDirectiveHandler implements IDirectiveHandler {
 
         resultState = await interpreterClient.interpret(
           nodesToInterpret,
-          // Try with NO options - client might get path from state implicitly
-          // { currentFilePath: resolvedIdentifier } 
-        );
+          // Options removed
+        ) as unknown as IStateService; // Double assertion: Like -> unknown -> IStateService
 
         logger.debug('Import interpretation complete', {
           filePath: resolvedIdentifier,

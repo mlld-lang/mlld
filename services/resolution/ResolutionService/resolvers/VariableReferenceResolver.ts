@@ -393,7 +393,7 @@ export class VariableReferenceResolver {
          const errorMsg = `Cannot access field '${field.value}' on null or undefined value at path ${currentPathString}`;
          const errorDetails: FieldAccessErrorDetails = { 
              baseValue,
-             fieldAccessChain: fields as any, 
+             fieldAccessChain: fields,
              failedAtIndex: i, 
              failedKey: field.value
          };
@@ -415,7 +415,7 @@ export class VariableReferenceResolver {
             logger.warn(`[ACCESS FIELDS] Error: ${errorMsg}`); // Log warning before failure
             const errorDetails: FieldAccessErrorDetails = { 
                 baseValue: current, // The object being accessed
-                fieldAccessChain: fields as any, 
+                fieldAccessChain: fields,
                 failedAtIndex: i, 
                 failedKey: key // The key that failed
             };
@@ -426,7 +426,7 @@ export class VariableReferenceResolver {
           logger.warn(`[ACCESS FIELDS] Error: Cannot access property '${key}' on non-object/array`, { currentType: typeof current, isArray: Array.isArray(current) });
           const errorDetails: FieldAccessErrorDetails = { 
               baseValue: current, // The non-object value
-              fieldAccessChain: fields as any, 
+              fieldAccessChain: fields,
               failedAtIndex: i, 
               failedKey: key // The key that failed
           };
@@ -439,7 +439,7 @@ export class VariableReferenceResolver {
             logger.warn(`[ACCESS FIELDS] Error: Invalid array index '${field.value}'`);
             const errorDetails: FieldAccessErrorDetails = { 
                 baseValue: current,
-                fieldAccessChain: fields as any, 
+                fieldAccessChain: fields,
                 failedAtIndex: i, 
                 failedKey: field.value
             };
@@ -454,7 +454,7 @@ export class VariableReferenceResolver {
             logger.warn(`[ACCESS FIELDS] Error: Index '${index}' out of bounds for array`, { length: current.length }); // Log warning
             const errorDetails: FieldAccessErrorDetails = { 
                 baseValue: current,
-                fieldAccessChain: fields as any, 
+                fieldAccessChain: fields,
                 failedAtIndex: i, 
                 failedKey: index
             };
@@ -464,7 +464,7 @@ export class VariableReferenceResolver {
           logger.warn(`[ACCESS FIELDS] Error: Cannot access index '${index}' on non-array value`, { currentType: typeof current }); // Log warning
           const errorDetails: FieldAccessErrorDetails = { 
               baseValue: current,
-              fieldAccessChain: fields as any, 
+              fieldAccessChain: fields,
               failedAtIndex: i, 
               failedKey: index
           };
@@ -474,7 +474,7 @@ export class VariableReferenceResolver {
           const unknownType = (field as any).type;
           const errorDetails: FieldAccessErrorDetails = { 
               baseValue: current,
-              fieldAccessChain: fields as any, 
+              fieldAccessChain: fields,
               failedAtIndex: i, 
               failedKey: 'unknown'
           };
