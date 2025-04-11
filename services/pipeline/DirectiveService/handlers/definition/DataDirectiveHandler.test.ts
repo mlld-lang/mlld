@@ -92,6 +92,50 @@ describe('DataDirectiveHandler', () => {
       stateService,
       resolutionService
     );
+
+    // Mock resolveNodes 
+    resolutionService.resolveNodes.mockImplementation(async (nodes: InterpolatableValue, context: any): Promise<string> => {
+        let result = '';
+        for (const node of nodes) {
+            if (node.type === 'Text') {
+                result += node.content; // Append text content directly
+            } else if (node.type === 'VariableReference') {
+                // Simulate resolution based on mocks or test setup
+                if (node.identifier === 'name') {
+                    result += 'World'; // Example: resolve {{name}}
+                } else if (node.identifier === 'user' && node.fields?.[0]?.value === 'name') {
+                    result += 'Alice';
+                } else if (node.identifier === 'var') {
+                     // Assume 'var' resolves to '2' for the test case
+                    result += '2'; 
+                } else {
+                    // Fallback for unmocked variables
+                    result += ``; // Return empty string for unresolved vars in tests
+                }
+            }
+        }
+        return result;
+    });
+
+    // Mock resolveInContext (can be simplified if resolveNodes handles most cases)
+    resolutionService.resolveInContext.mockImplementation(async (value: string | AstStructuredPath | InterpolatableValue, context: any): Promise<string> => {
+        if (isInterpolatableValueArray(value)) {
+            // Delegate directly to resolveNodes mock
+            return resolutionService.resolveNodes(value, context);
+        } else if (typeof value === 'string') {
+            // Basic string variable simulation
+            if (value.includes('{{name}}')) return value.replace(/\{\{name\}\}/g, 'World');
+            if (value.includes('{{user.name}}')) return value.replace(/\{\{user\.name\}\}/g, 'Alice');
+             if (value === '{{var}}') return '2'; // Handle specific var reference if needed
+            // Return string literals without quotes
+            if (value.startsWith('"') && value.endsWith('"')) return value.slice(1, -1);
+            if (value.startsWith('\'') && value.endsWith('\'')) return value.slice(1, -1);
+            return value;
+        } else if (typeof value === 'object' && value !== null && 'raw' in value) { 
+            return value.raw ?? ''; // Return raw for StructuredPath
+        }
+        return JSON.stringify(value); // Fallback
+    });
   });
 
   afterEach(async () => {
@@ -376,6 +420,7 @@ describe('DataDirectiveHandler', () => {
         },
         env: 'test'
       });
+      expect(result).toBe(clonedState);
     });
 
     it('should handle JSON strings containing variable references', async () => {
@@ -410,6 +455,7 @@ describe('DataDirectiveHandler', () => {
       expect(clonedState.setDataVar).toHaveBeenCalledWith('message', {
         text: 'Hello Alice!'
       });
+      expect(result).toBe(clonedState);
     });
 
     it('should preserve JSON structure when resolving variables', async () => {
@@ -444,6 +490,7 @@ describe('DataDirectiveHandler', () => {
         array: [1, '2', 3],
         object: { key: '2' }
       });
+      expect(result).toBe(clonedState);
     });
   });
   

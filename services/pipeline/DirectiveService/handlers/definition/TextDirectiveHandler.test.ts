@@ -17,6 +17,12 @@ import {
   createResolutionServiceMock,
   createDirectiveErrorMock
 } from '@tests/utils/mocks/serviceMocks.js';
+// Import the type guard used in mocks
+import { isInterpolatableValueArray } from '@core/syntax/types/guards.js';
+// Import necessary types for mocks
+import type { InterpolatableValue } from '@core/syntax/types/nodes.js';
+import type { StructuredPath as AstStructuredPath } from '@core/syntax/types/nodes.js'; 
+import type { MeldPath } from '@core/types';
 
 /**
  * TextDirectiveHandler Test Status
@@ -106,47 +112,76 @@ describe('TextDirectiveHandler', () => {
     realStringLiteralHandler = new StringLiteralHandler();
     realStringConcatenationHandler = new StringConcatenationHandler(resolutionService);
     
-    // Set up better mocking for variable resolution
-    resolutionService.resolveInContext.mockImplementation(async (value: string, context: any) => {
-      // Use real string literal handler for string literals
-      if (realStringLiteralHandler.isStringLiteral(value)) {
-        return realStringLiteralHandler.parseLiteral(value);
+    // Set up resolution service mocks
+    // Mock resolveInContext to handle string, StructuredPath (based on raw), and InterpolatableValue
+    resolutionService.resolveInContext.mockImplementation(async (value: string | AstStructuredPath | InterpolatableValue, context: any): Promise<string> => {
+      if (typeof value === 'string') {
+          // Simulate simple string resolution (e.g., variable lookup)
+          if (value.includes('{{name}}')) return value.replace(/\{\{name\}\}/g, 'World');
+          if (value.includes('{{user.name}}')) return value.replace(/\{\{user\.name\}\}/g, 'Alice');
+          if (value.includes('{{ENV_HOME}}')) return value.replace(/\{\{ENV_HOME\}\}/g, '/home/user');
+          if (value.includes('{{missing}}')) throw new Error('Variable not found: missing');
+          // Handle literal strings passed directly (quotes might be present)
+          if (value.startsWith('"') && value.endsWith('"')) return value.slice(1, -1);
+          if (value.startsWith('\'') && value.endsWith('\'')) return value.slice(1, -1);
+          return value; // Return other strings as is
+      } else if (isInterpolatableValueArray(value)) {
+          // Simulate resolving an InterpolatableValue array
+          let result = '';
+          for (const node of value) {
+              if (node.type === 'Text') {
+                  result += node.content;
+              } else if (node.type === 'VariableReference') {
+                  if (node.identifier === 'name') result += 'World';
+                  else if (node.identifier === 'user' && node.fields?.[0]?.value === 'name') result += 'Alice'; // Basic field access simulation
+                  else result += `{{${node.identifier}}}`; // Placeholder for others
+              }
+          }
+          return result;
+      } else if (typeof value === 'object' && value !== null && 'raw' in value) { // Handle AstStructuredPath
+          // For tests, just resolve the raw string part if it contains variables
+          const raw = value.raw ?? '';
+          if (raw.includes('{{name}}')) return raw.replace(/\{\{name\}\}/g, 'World');
+          // Add more specific raw path resolutions if needed for tests
+          return raw; // Return raw value if no interpolation needed
       }
-      
-      // Handle common test case values - this simulates what the real ResolutionService would do
-      if (value.includes('{{name}}')) {
-        return value.replace(/\{\{name\}\}/g, 'World');
-      }
-      if (value.includes('{{user.name}}')) {
-        return value.replace(/\{\{user\.name\}\}/g, 'Alice');
-      }
-      if (value.includes('{{ENV_HOME}}')) {
-        return value.replace(/\{\{ENV_HOME\}\}/g, '/home/user');
-      }
-      if (value.includes('{{missing}}')) {
-        throw new Error('Variable not found: missing');
-      }
-      
-      // Special case for pass-through directives test
-      if (value === '"@run echo \\"test\\""') {
-        return '@run echo "test"';
-      }
-      
-      // For string concatenation tests
-      if (value === '"Hello" ++ " " ++ "World"') {
-        return 'Hello World';
-      }
-      if (value === '"Hello " ++ "{{name}}"') {
-        return 'Hello World';
-      }
-      if (value === '"Prefix: " ++ "Header" ++ "Footer"') {
-        return 'Prefix: HeaderFooter';
-      }
-      if (value === '"double" ++ \'single\' ++ `backtick`') {
-        return 'doublesinglebacktick';
-      }
-      
-      return value;
+      return JSON.stringify(value); // Fallback
+    });
+
+    // Mock resolveNodes (similar logic to InterpolatableValue case above for simulation)
+    resolutionService.resolveNodes.mockImplementation(async (nodes: InterpolatableValue, context: any): Promise<string> => {
+        let result = '';
+        for (const node of nodes) {
+            if (node.type === 'Text') {
+                result += node.content;
+            } else if (node.type === 'VariableReference') {
+                if (node.identifier === 'name') result += 'World';
+                else if (node.identifier === 'user' && node.fields?.[0]?.value === 'name') result += 'Alice'; 
+                else result += `{{${node.identifier}}}`; 
+            }
+        }
+        return result;
+    });
+
+    // Mock resolvePath just to return a basic MeldPath object based on input string
+    resolutionService.resolvePath.mockImplementation(async (resolvedPathString: string, context: any): Promise<MeldPath> => {
+      // Basic mock: create a MeldPath-like object. Adjust if tests need more specifics.
+      return {
+        contentType: 'filesystem', // Assume filesystem for tests
+        originalValue: resolvedPathString, // Use resolved string as original for mock
+        validatedPath: resolvedPathString, // Assume validation passes
+        isAbsolute: resolvedPathString.startsWith('/'),
+        isSecure: true,
+        isValidSyntax: true,
+        value: { // Mock the internal state needed by PathDirectiveHandler
+           contentType: 'filesystem',
+           originalValue: resolvedPathString,
+           validatedPath: resolvedPathString,
+           isAbsolute: resolvedPathString.startsWith('/'),
+           isSecure: true,
+           isValidSyntax: true,
+        }
+      } as unknown as MeldPath; // Cast needed as mock is simplified
     });
   });
 

@@ -22,19 +22,9 @@ import { MeldPath, PathValidationContext, PathPurpose, RawPath, NormalizedAbsolu
 import type { IPathService } from '@services/fs/PathService/IPathService';
 import {
   Field as AstField
-} from '@core/syntax/types/shared-types';
-import type { InterpolatableValue } from '@core/syntax/types/ast';
-
-/**
- * Type guard to check if a value is an InterpolatableValue array.
- * Checks if it's an array and if the first element (if any) looks like a TextNode or VariableReferenceNode.
- */
-function isInterpolatableValueArray(value: unknown): value is InterpolatableValue {
-  return Array.isArray(value) && 
-         (value.length === 0 || 
-          (value[0] && typeof value[0] === 'object' && ('type' in value[0]) && 
-           (value[0].type === 'Text' || value[0].type === 'VariableReference')));
-}
+} from '@core/syntax/types/shared-types.js';
+import type { InterpolatableValue } from '@core/syntax/types/nodes.js';
+import { isInterpolatableValueArray } from '@core/syntax/types/guards.js';
 
 /**
  * Handles resolution of variable references based on VariableReferenceNode AST.
@@ -161,20 +151,19 @@ export class VariableReferenceResolver {
     const newContext = context.withIncreasedDepth();
 
     try {
-      const variable = await this.stateService.getVariable(node.identifier);
+      const variable = await this.getVariable(node, newContext);
       
       if (!variable) {
           if (!newContext.strict) return '';
           throw new VariableResolutionError(`Variable not found: ${node.identifier}`, {
               code: 'E_VAR_NOT_FOUND',
               severity: ErrorSeverity.Recoverable, 
-              details: { variableName: node.identifier }
+              details: { variableName: node.identifier, valueType: node.valueType }
           });
       }
 
-      // --- >>> NEW CHECK FOR INTERPOLATABLE VALUE <<< ---
+      // --- Check for InterpolatableValue first --- 
       if (isInterpolatableValueArray(variable.value)) {
-          // Ensure ResolutionService instance is available for recursion
           if (!this.resolutionService) {
               throw new MeldResolutionError('Cannot recursively resolve variable: ResolutionService instance is missing.', {
                   code: 'E_SERVICE_UNAVAILABLE',
@@ -182,228 +171,170 @@ export class VariableReferenceResolver {
               });
           }
           logger.debug(`Variable '${node.identifier}' contains an InterpolatableValue array. Performing recursive resolution.`);
-          // Recursively call ResolutionService.resolveNodes
           return await this.resolutionService.resolveNodes(variable.value, newContext);
       }
 
       // --- Path Variable Handling --- 
       if (isPathVariable(variable)) {
           logger.debug(`Resolving PathVariable '${node.identifier}'`);
-          const meldPathValue = variable.value;
+          const meldPathValueState = variable.value; // This is IFilesystemPathState or IUrlPathState
           
-          try {
-              const pathValidationContext: PathValidationContext = {
-                  workingDirectory: (newContext.pathContext?.baseDir ?? '.') as NormalizedAbsoluteDirectoryPath,
-                  allowExternalPaths: newContext.pathContext?.allowTraversal ?? !newContext.strict,
-                  rules: {
-                      ...(newContext.pathContext?.constraints ?? {}),
-                      allowAbsolute: true,
-                      allowRelative: true,
-                      allowParentTraversal: !newContext.strict
-                  }
-              };
-              
-              const pathInput = meldPathValue.originalValue as RawPath;
-              // Reinstate ignore due to flow analysis issue
-              // @ts-ignore - TS unable to guarantee state/method is defined here
-              const baseDir = newContext.state.getCurrentFilePath() ?? '.';
-              
-              if (!this.pathService) {
-                  throw new MeldResolutionError('PathService unavailable', { code: 'E_SERVICE_UNAVAILABLE'});
-              }
-              
-              // Assign to local constant after check
-              const pathService = this.pathService!;
-              
-              // Put ts-ignore back above the line
-              // @ts-ignore - TS unable to guarantee non-null despite checks/assertions
-              const resolvedPath = 
-                  await pathService.resolvePath(pathInput, baseDir as RawPath);
-              const validatedPath = await pathService.validatePath(resolvedPath, pathValidationContext);
-              
-              return validatedPath.validatedPath as string; 
-
-          } catch (error) {
-              logger.error(`Error resolving/validating path variable ${node.identifier}`, { error });
-              if (newContext.strict) throw error;
-              return '';
-          }
+          // Path variables themselves are considered resolved; return their original string value.
+          // Validation happens when the path is USED via resolvePath.
+          // TODO: Confirm this interpretation - should it return validated path?
+          // For now, returning originalValue aligns with how $vars were used previously.
+          return meldPathValueState.originalValue;
       }
       
       // --- Command Variable Handling ---
       else if (isCommandVariable(variable)) {
           logger.debug(`Resolving CommandVariable '${node.identifier}'`);
-          return JSON.stringify(variable.value); 
+          // Return a string representation (e.g., JSON) as commands aren't directly substituted as strings.
+          // The @run handler deals with the definition object.
+          try {
+              return JSON.stringify(variable.value);
+          } catch (e) {
+              logger.error(`Error stringifying command definition for ${node.identifier}`, { error: e });
+              if (newContext.strict) {
+                  throw new MeldResolutionError(`Could not stringify command definition for ${node.identifier}`, {
+                      code: 'E_STRINGIFY_FAILED',
+                      cause: e
+                  });
+              }
+              return '';
+          }
       }
       
       // --- Text/Data Variable Handling ---
-      else {
-          let variableValue: JsonValue | string | undefined;
-          let dataForAccess: JsonValue | undefined;
-          const originalVariable = variable; // Keep reference to original variable object
-          
-          if (isTextVariable(variable)) {
-              variableValue = variable.value;
-          } else if (isDataVariable(variable)) {
-              variableValue = variable.value;
-              dataForAccess = variable.value;
-          } else {
-              // This case should ideally not be hit if variable type checks are exhaustive
-              throw new VariableResolutionError(`Unexpected variable type for ${node.identifier}`, { 
-                code: 'E_UNEXPECTED_TYPE', 
-                details: { variableName: node.identifier }
-              });
-          }
-
+      else if (isTextVariable(variable) || isDataVariable(variable)) {
+          let baseValue: JsonValue | string | undefined = variable.value;
           let finalResolvedValue: JsonValue | string | undefined;
           
           if (node.fields && node.fields.length > 0) {
-             if (dataForAccess !== undefined) {
-                  const fieldAccessResult = await this.accessFields(dataForAccess, node.fields, node.identifier, newContext);
+             // Ensure field access is only attempted on data variables (or potentially objects from text vars)
+             if (typeof baseValue === 'object' && baseValue !== null) {
+                  const fieldAccessResult = await this.accessFields(baseValue as JsonValue, node.fields, node.identifier, newContext);
                   if (fieldAccessResult.success) {
                       finalResolvedValue = fieldAccessResult.value;
                   } else {
+                      // accessFields returned failure(FieldAccessError)
                       if (newContext.strict) {
-                          throw fieldAccessResult.error;
+                          throw fieldAccessResult.error; // Throw the FieldAccessError
                       }
-                      finalResolvedValue = undefined; // Represent failure as undefined before final string conversion
+                      finalResolvedValue = undefined; // Non-strict, treat as undefined
                   }
              } else {
+                  // Tried to access fields on a non-object (e.g., primitive string from TextVariable)
                   if (newContext.strict) {
-                      const errorMsg = `Cannot access fields on non-data variable '${node.identifier}'`;
+                      const errorMsg = `Cannot access fields on non-object variable '${node.identifier}'`;
                       throw new FieldAccessError(errorMsg, { 
-                         baseValue: variableValue, 
+                         baseValue: baseValue, 
                          fieldAccessChain: node.fields, 
                          failedAtIndex: 0, 
                          failedKey: node.fields[0]?.value ?? 'unknown' 
                       });
                   }
-                  finalResolvedValue = undefined;
+                  finalResolvedValue = undefined; // Non-strict
              }
           } else {
-              finalResolvedValue = variableValue; // Use the direct value if no fields
+              finalResolvedValue = baseValue; // Use the direct value if no fields
           }
           
-          // Convert the final resolved value to a string appropriately
-          if (finalResolvedValue === undefined) {
-              return ''; // Return empty string for failed/undefined resolution
-          } else if (finalResolvedValue === null) {
-              return 'null';
-          } else if (typeof finalResolvedValue === 'string') {
-              // This correctly handles the case where the original was TextVariable with no fields,
-              // as finalResolvedValue would be the string value itself.
-              return finalResolvedValue;
-          } else {
-              // For DataVariables, results of field access, or other complex types, JSON.stringify
-              try {
-                  return JSON.stringify(finalResolvedValue);
-              } catch (e) {
-                  logger.error(`Error stringifying resolved value for ${node.identifier}`, { value: finalResolvedValue, error: e });
-                  if (newContext.strict) {
-                      throw new MeldResolutionError(`Could not stringify resolved value for ${node.identifier}`, {
-                          code: 'E_STRINGIFY_FAILED',
-                          cause: e
-                      });
-                  }
-                  return '';
-              }
-          }
+          // Convert the final resolved value (which might be primitive, object, array) to a string
+          return this.convertToString(finalResolvedValue, newContext);
+
+      } else {
+           // Should not be reached if type guards are exhaustive
+           throw new VariableResolutionError(`Unexpected variable type encountered for ${node.identifier}`, {
+              code: 'E_UNEXPECTED_TYPE', 
+              details: { variableName: node.identifier }
+           });
       }
 
     } catch (error) {
         logger.warn(`[RESOLVE CATCH] Error resolving ${node.identifier}:`, { error });
         
-        if (newContext.strict) {
-            throw error; 
+        // Always re-throw FieldAccessErrors if strict mode was enabled during accessFields call
+        if (error instanceof FieldAccessError && newContext.strict) {
+            throw error;
         }
         
-        if (error instanceof MeldError && 
-            (error.severity === ErrorSeverity.Fatal)) { 
-             logger.error(`[RESOLVE] Throwing non-suppressed fatal/critical error for ${node.identifier} in non-strict mode`, { error });
+        if (newContext.strict) {
+            // Ensure other errors are MeldErrors or wrapped
+            if (error instanceof MeldError) {
+                throw error;
+            } else {
+                throw new MeldResolutionError(`Failed to resolve variable ${node.identifier}`, {
+                    code: 'E_RESOLVE_FAILED', // Generic code
+                    cause: error instanceof Error ? error : undefined,
+                    details: { variableName: node.identifier }
+                });
+            }
+        }
+        
+        // Non-strict mode: Check for fatal errors that shouldn't be suppressed
+        if (error instanceof MeldError && error.severity === ErrorSeverity.Fatal) { 
+             logger.error(`[RESOLVE] Throwing non-suppressed fatal error for ${node.identifier} in non-strict mode`, { error });
              throw error;
         }
         
-        console.warn(`[RESOLVE] Non-strict mode, suppressing error for ${node.identifier}, returning empty string.`);
+        // Suppress non-fatal errors in non-strict mode
+        logger.warn(`[RESOLVE] Non-strict mode, suppressing error for ${node.identifier}, returning empty string.`);
         return ''; 
     }
   }
   
   /**
    * Gets a variable from state, using the node's valueType for targeted lookup.
-   * This assumes StateService is refactored to return MeldVariable types.
-   * 
-   * @param node The VariableReferenceNode specifying the variable to get.
-   * @param context Resolution context
-   * @returns The MeldVariable or undefined if not found.
    */
   private async getVariable(node: VariableReferenceNode, context: ResolutionContext): Promise<MeldVariable | undefined> {
-    // Add logging: Entry point
-    console.log(`[getVariable] Entered for identifier: ${node.identifier}, typeHint: ${node.valueType}`);
-    
     const name = node.identifier;
-    const type = node.valueType || VariableType.TEXT; // Default to TEXT if not specified
-    this.resolutionTracker?.trackAttemptStart(name, `getVariable (type: ${type})`);
+    // Use the specific type hint from the node if available, otherwise check all types.
+    const specificType = node.valueType;
+
+    this.resolutionTracker?.trackAttemptStart(name, `getVariable (type hint: ${specificType ?? 'any'})`);
     
     let variable: MeldVariable | undefined = undefined;
 
-    // Use node.valueType for targeted lookup
-    switch(type) {
-        case VariableType.TEXT:
-            // Add logging: Calling stateService method
-            console.log(`[getVariable] Calling stateService.getTextVar('${name}')`);
-            variable = this.stateService.getTextVar(name);
-            break;
-        case VariableType.DATA:
-            // Add logging: Calling stateService method
-            console.log(`[getVariable] Calling stateService.getDataVar('${name}')`);
-            variable = this.stateService.getDataVar(name);
-            break;
-        case VariableType.PATH:
-            // Add logging: Calling stateService method
-            console.log(`[getVariable] Calling stateService.getPathVar('${name}')`);
-            variable = this.stateService.getPathVar(name);
-            break;
-        case VariableType.COMMAND:
-            // Add logging: Calling stateService method
-            console.log(`[getVariable] Calling stateService.getCommandVar('${name}')`);
-            variable = this.stateService.getCommandVar(name);
-            break;
-        default:
-            logger.warn(`Unsupported variable type specified in node: ${type}`);
-            // Fall through to variable not found
+    if (specificType) {
+        switch(specificType) {
+            case VariableType.TEXT:    variable = this.stateService.getTextVar(name); break;
+            case VariableType.DATA:    variable = this.stateService.getDataVar(name); break;
+            case VariableType.PATH:    variable = this.stateService.getPathVar(name); break;
+            case VariableType.COMMAND: variable = this.stateService.getCommandVar(name); break;
+            default: logger.warn(`Unsupported specific variable type hint: ${specificType}`);
+        }
+    } else {
+        // No type hint, check all types (generic getVariable)
+        variable = await this.stateService.getVariable(name); 
     }
 
     if (variable) {
-        this.resolutionTracker?.trackResolutionAttempt(name, `${type}-variable`, true, variable.value);
-        logger.debug(`Found ${type} variable '${name}'.`);
-        // Add logging: Variable found
-        console.log(`[getVariable] Found variable '${name}':`, JSON.stringify(variable, null, 2));
+        // If a specific type was requested, ensure the found variable matches
+        if (specificType && variable.type !== specificType) {
+            logger.warn(`Variable '${name}' found, but type mismatch. Expected ${specificType}, got ${variable.type}.`);
+            this.resolutionTracker?.trackResolutionAttempt(name, `variable-type-mismatch`, false);
+            return undefined; // Treat as not found if type doesn't match hint
+        }
+        this.resolutionTracker?.trackResolutionAttempt(name, `${variable.type}-variable`, true, variable.value);
+        logger.debug(`Found ${variable.type} variable '${name}'.`);
         return variable;
     } else {
-        // Variable of the specific type not found
-        logger.warn(`${type.charAt(0).toUpperCase() + type.slice(1)} variable '${name}' not found in state.`);
-        this.resolutionTracker?.trackResolutionAttempt(name, `variable-not-found (type: ${type})`, false);
-        // Add logging: Variable not found
-        console.log(`[getVariable] Variable '${name}' of type ${type} NOT FOUND.`);
+        logger.warn(`Variable '${name}'${specificType ? ' of type ' + specificType : ''} not found in state.`);
+        this.resolutionTracker?.trackResolutionAttempt(name, `variable-not-found (type hint: ${specificType ?? 'any'})`, false);
         return undefined;
     }
   }
 
   /**
    * Access fields on a value based on an AST Field array.
-   *
-   * @param baseValue The starting value (object or array).
-   * @param fields The ordered array of AST Field objects ({ type: 'field' | 'index', value: string | number }).
-   * @param variableName The name of the base variable (for error reporting).
-   * @param context The resolution context.
-   * @returns A Result containing the final value or a FieldAccessError.
    */
   public async accessFields(
     baseValue: JsonValue, 
     fields: AstField[],
     variableName: string,
     context: ResolutionContext
-  ): Promise<Result<JsonValue | undefined>> {
+  ): Promise<Result<JsonValue | undefined, FieldAccessError>> { // <<< Explicit error type
     let current: JsonValue | undefined = baseValue;
     logger.debug(`[ACCESS FIELDS ENTRY] Starting accessFields`, { baseValue: JSON.stringify(baseValue), fields: JSON.stringify(fields), variableName });
 
@@ -412,138 +343,93 @@ export class VariableReferenceResolver {
       const currentPathString = fields.slice(0, i + 1).map(f => f.type === 'index' ? `[${f.value}]` : `.${f.value}`).join('');
       logger.debug(`[ACCESS FIELDS] Accessing field: ${currentPathString}`, { currentValueType: typeof current });
 
-      try {
-          // Use process.stdout.write for debug logging
-          process.stdout.write(`[DEBUG VariableReferenceResolver.accessFields] field.type = ${field.type}, field.value = ${JSON.stringify(field.value)}\n`);
-    
+      try { // Wrap potential runtime errors
           if (current === undefined || current === null) {
              const errorMsg = `Cannot access field '${field.value}' on null or undefined value at path ${currentPathString}`;
-             const errorDetails: FieldAccessErrorDetails = { 
-                 baseValue,
-                 fieldAccessChain: fields,
-                 failedAtIndex: i, 
-                 failedKey: field.value
-             };
+             const errorDetails: FieldAccessErrorDetails = { baseValue, fieldAccessChain: fields, failedAtIndex: i, failedKey: field.value };
              return failure(new FieldAccessError(errorMsg, errorDetails));
           }
-
+    
           if (field.type === 'field') { 
             const key = String(field.value);
-            logger.debug(`[ACCESS FIELDS] Processing field type 'field'`, { key, currentType: typeof current }); // Log current type
             if (typeof current === 'object' && current !== null && !Array.isArray(current)) {
-              // Log before checking property
-              logger.debug(`[ACCESS FIELDS] Checking property '${key}' on object`, { keys: Object.keys(current) });
               if (Object.prototype.hasOwnProperty.call(current, key)) {
                 current = (current as Record<string, JsonValue>)[key];
-                logger.debug(`[ACCESS FIELDS] Property '${key}' found. New current value: ${JSON.stringify(current)}`); // Log new value
               } else {
                 const availableKeys = Object.keys(current).join(', ') || '(none)';
                 const errorMsg = `Field '${key}' not found in object. Available keys: ${availableKeys}`;
-                logger.warn(`[ACCESS FIELDS] Error: ${errorMsg}`); // Log warning before failure
-                const errorDetails: FieldAccessErrorDetails = { 
-                    baseValue: current, // The object being accessed
-                    fieldAccessChain: fields,
-                    failedAtIndex: i, 
-                    failedKey: key // The key that failed
-                };
+                const errorDetails: FieldAccessErrorDetails = { baseValue: current, fieldAccessChain: fields, failedAtIndex: i, failedKey: key };
                 return failure(new FieldAccessError(errorMsg, errorDetails));
               }
             } else {
-              // Log type issue
-              logger.warn(`[ACCESS FIELDS] Error: Cannot access property '${key}' on non-object/array`, { currentType: typeof current, isArray: Array.isArray(current) });
-              const errorDetails: FieldAccessErrorDetails = { 
-                  baseValue: current, // The non-object value
-                  fieldAccessChain: fields,
-                  failedAtIndex: i, 
-                  failedKey: key // The key that failed
-              };
-              return failure(new FieldAccessError(`Cannot access property '${key}' on non-object or array`, errorDetails));
+              const errorMsg = `Cannot access property '${key}' on non-object or array`;
+              const errorDetails: FieldAccessErrorDetails = { baseValue: current, fieldAccessChain: fields, failedAtIndex: i, failedKey: key };
+              return failure(new FieldAccessError(errorMsg, errorDetails));
             }
           } else if (field.type === 'index') {
             const index = Number(field.value);
-            logger.debug(`[ACCESS FIELDS] Processing field type 'index'`, { index, currentType: typeof current }); // Log current type
             if (isNaN(index) || !Number.isInteger(index)) {
-                logger.warn(`[ACCESS FIELDS] Error: Invalid array index '${field.value}'`);
-                const errorDetails: FieldAccessErrorDetails = { 
-                    baseValue: current,
-                    fieldAccessChain: fields,
-                    failedAtIndex: i, 
-                    failedKey: field.value
-                };
-                return failure(new FieldAccessError(`Invalid array index '${field.value}'`, errorDetails));
+                const errorMsg = `Invalid array index '${field.value}'`;
+                const errorDetails: FieldAccessErrorDetails = { baseValue: current, fieldAccessChain: fields, failedAtIndex: i, failedKey: field.value };
+                return failure(new FieldAccessError(errorMsg, errorDetails));
             }
             if (Array.isArray(current)) {
-              logger.debug(`[ACCESS FIELDS] Checking index '${index}' on array`, { length: current.length }); // Log array length
               if (index >= 0 && index < current.length) {
                 current = current[index];
-                logger.debug(`[ACCESS FIELDS] Index '${index}' found. New current value: ${JSON.stringify(current)}`); // Log new value
               } else {
-                logger.warn(`[ACCESS FIELDS] Error: Index '${index}' out of bounds for array`, { length: current.length }); // Log warning
-                const errorDetails: FieldAccessErrorDetails = { 
-                    baseValue: current,
-                    fieldAccessChain: fields,
-                    failedAtIndex: i, 
-                    failedKey: index
-                };
-                return failure(new FieldAccessError(`Index '${index}' out of bounds for array of length ${current.length}`, errorDetails));
+                const errorMsg = `Index '${index}' out of bounds for array of length ${current.length}`;
+                const errorDetails: FieldAccessErrorDetails = { baseValue: current, fieldAccessChain: fields, failedAtIndex: i, failedKey: index };
+                return failure(new FieldAccessError(errorMsg, errorDetails));
               }
             } else {
-              logger.warn(`[ACCESS FIELDS] Error: Cannot access index '${index}' on non-array value`, { currentType: typeof current }); // Log warning
-              const errorDetails: FieldAccessErrorDetails = { 
-                  baseValue: current,
-                  fieldAccessChain: fields,
-                  failedAtIndex: i, 
-                  failedKey: index
-              };
-              return failure(new FieldAccessError(`Cannot access index '${index}' on non-array value`, errorDetails));
+              const errorMsg = `Cannot access index '${index}' on non-array value`;
+              const errorDetails: FieldAccessErrorDetails = { baseValue: current, fieldAccessChain: fields, failedAtIndex: i, failedKey: index };
+              return failure(new FieldAccessError(errorMsg, errorDetails));
             }
           } else {
               const unknownType = (field as any).type;
-              const errorDetails: FieldAccessErrorDetails = { 
-                  baseValue: current,
-                  fieldAccessChain: fields,
-                  failedAtIndex: i, 
-                  failedKey: 'unknown'
-              };
-              return failure(new FieldAccessError(`Unknown field access type: '${unknownType}'`, errorDetails));
+              const errorMsg = `Unknown field access type: '${unknownType}'`;
+              const errorDetails: FieldAccessErrorDetails = { baseValue: current, fieldAccessChain: fields, failedAtIndex: i, failedKey: 'unknown' };
+              return failure(new FieldAccessError(errorMsg, errorDetails));
           }
-      } catch (internalError) {
+      } catch (internalError) { 
           logger.error(`[ACCESS FIELDS] Unexpected internal error during field access`, { variableName, field: field, currentPathString, internalError });
           const errorMsg = `Internal error accessing field '${field.value}'`;
-          const errorDetails: FieldAccessErrorDetails = {
-              baseValue,
-              fieldAccessChain: fields,
-              failedAtIndex: i,
-              failedKey: field.value
-          };
-          // Wrap the internal error in a FieldAccessError and return failure
+          const errorDetails: FieldAccessErrorDetails = { baseValue, fieldAccessChain: fields, failedAtIndex: i, failedKey: field.value };
           return failure(new FieldAccessError(errorMsg, errorDetails, internalError instanceof Error ? internalError : undefined));
       }
     }
-    // Use process.stdout.write for debug logging
-    process.stdout.write(`[DEBUG VariableReferenceResolver.accessFields EXIT] Completed successfully. Final value: ${JSON.stringify(current)}\n`);
+    logger.debug(`[ACCESS FIELDS EXIT] Completed successfully. Final value: ${JSON.stringify(current)}`);
     return success(current);
   }
 
-  // Updated convertToString to handle potentially undefined input from field access failure
+  /**
+   * Converts a resolved value to its string representation for final output/use.
+   */
   private convertToString(value: JsonValue | string | undefined, context: ResolutionContext): string {
       if (value === undefined || value === null) {
+          // Use strict mode to determine if null/undefined become empty string or throw?
+          // For now, standard behavior is empty string.
           return '';
       }
       if (typeof value === 'string') {
           return value;
       }
+      // For non-string JSON values (number, boolean, object, array), stringify.
       try {
-          const indent = context.formattingContext?.isBlock ? 2 : undefined;
+          // Consider formatting context if available (e.g., indentation for objects/arrays)
+          const indent = context.formattingContext?.indentationLevel;
           return JSON.stringify(value, null, indent);
       } catch (e) {
-          logger.error('Error stringifying value for conversion', { e });
-          try {
-              return String(value);
-          } catch (e2) {
-               logger.error('Fallback String() conversion failed', { e2 });
-               return '[Unstringifiable Object]';
+          logger.error('Error stringifying value for conversion', { error: e });
+          // Fallback for complex objects that might fail stringify (e.g., circular refs not caught earlier)
+          if (context.strict) {
+               throw new MeldResolutionError('Could not stringify resolved value', {
+                   code: 'E_STRINGIFY_FAILED',
+                   cause: e instanceof Error ? e : undefined
+               });
           }
+          return '[Unstringifiable Value]'; 
       }
   }
 }
