@@ -33,7 +33,8 @@ import {
 // Import the AST Field type correctly
 import type { Field as AstField } from '@core/syntax/types/shared-types';
 // Import AST types from their actual location
-import type { MeldNode, TextNode, VariableReferenceNode } from '@core/syntax/types'; // Keep extensionless
+    // Import AST types from their actual location
+import type { MeldNode, TextNode, VariableReferenceNode, CommentNode, DirectiveNode } from '@core/syntax/types'; // Keep extensionless
 // Import path-related types from core/types
 import {
   MeldPath,
@@ -110,7 +111,7 @@ const createMockCommandVariable = (name: string, commandTemplateString: string):
       type: 'basic',
       commandTemplate: commandTemplateString,
       parameters: [
-        { name: 'output', type: 'string', position: 0 } // Add position
+        { name: 'output', position: 0 } // Add position
       ],
       name: name,
       isMultiline: false 
@@ -243,8 +244,15 @@ describe('ResolutionService', () => {
            // Simulate echo output - might need refinement based on actual usage
            return { stdout: `${argsString.replace('"$@"' ,'test')}`, stderr: '' }; // Basic arg replace
         }
-        // Default mock behavior for other commands
-        return { stdout: command, stderr: '' };
+        // Simulate echo output - might need refinement based on actual usage
+        let output = argsString.replace('"$@"' ,'test');
+        if (output.startsWith('(') && output.endsWith(')')) {
+          output = output.slice(1, -1);
+        }
+        if (output.startsWith('\"') && output.endsWith('\"')) {
+          output = output.slice(1, -1);
+        }
+        return { stdout: output, stderr: '' }; // Basic arg replace
       }),
       // Add other necessary IFileSystemService methods
       dirname: vi.fn(p => typeof p === 'string' ? p.substring(0, p.lastIndexOf('/') || 0) : ''), // Needed by CommandResolver
@@ -787,7 +795,7 @@ describe('ResolutionService', () => {
             await service.resolveData(node, strictContext);
         }, {
             type: 'FieldAccessError', 
-            code: 'E_FIELD_ACCESS_FAILED', // Assuming this code is used
+            code: 'FIELD_ACCESS_ERROR', // Assuming this code is used
             messageContains: 'nonexistent' 
         });
     });
@@ -814,7 +822,7 @@ describe('ResolutionService', () => {
             await service.resolveData(node, strictContext);
         }, {
             type: 'FieldAccessError', 
-            code: 'E_FIELD_ACCESS_FAILED', // Assuming this code is used
+            code: 'FIELD_ACCESS_ERROR', // Assuming this code is used
             messageContains: 'Cannot access fields on non-data variable' // Or similar, check error message
         });
     });
@@ -823,8 +831,23 @@ describe('ResolutionService', () => {
 
   describe('resolveData', () => {
     it('should resolve nested data with field access', async () => {
+      // Mock data variable with nested structure (assuming beforeEach does this or add here)
       stateService.getDataVar = vi.fn().mockReturnValue(createMockDataVariable('nested', { data: { level1: { value: 'deep' } } }));
-      const result = await service.resolveData('nested.data.level1.value', defaultContext);
+      
+      // <<< Pass VariableReferenceNode instead of string >>>
+      const node: VariableReferenceNode = {
+        type: 'VariableReference',
+        identifier: 'nested',
+        valueType: VariableType.DATA,
+        fields: [
+          { type: 'field', value: 'data' }, 
+          { type: 'field', value: 'level1' }, 
+          { type: 'field', value: 'value' }
+        ],
+        isVariableReference: true,
+        location: { start: {line: 1, column: 1}, end: {line: 1, column: 20} } // Mock location
+      };
+      const result = await service.resolveData(node, defaultContext);
       expect(result).toBe('deep');
     });
 
@@ -1007,8 +1030,8 @@ describe('ResolutionService', () => {
 
   // ADD tests for resolveContent
   describe('resolveContent', () => {
-    let mockCommentNode: MeldNode;
-    let mockDirectiveNode: MeldNode;
+    let mockCommentNode: CommentNode;
+    let mockDirectiveNode: DirectiveNode;
     let textNode1: TextNode;
     let textNode2: TextNode;
     let varNode1: VariableReferenceNode;
