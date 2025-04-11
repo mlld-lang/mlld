@@ -240,19 +240,19 @@ describe('ResolutionService', () => {
         if (command.startsWith('echo')) {
            // Simple mock: return command string as stdout
            // Extract args (everything after echo and space)
-           const argsString = command.substring(5).trim();
+           const argsString = command.substring(5).trim(); // <<< Define argsString here
            // Simulate echo output - might need refinement based on actual usage
-           return { stdout: `${argsString.replace('"$@"' ,'test')}`, stderr: '' }; // Basic arg replace
+           let output = argsString.replace('"$@"' ,'test');
+           if (output.startsWith('(') && output.endsWith(')')) {
+             output = output.slice(1, -1);
+           }
+           if (output.startsWith('\"') && output.endsWith('\"')) {
+             output = output.slice(1, -1);
+           }
+           return { stdout: output, stderr: '' }; // Basic arg replace
         }
-        // Simulate echo output - might need refinement based on actual usage
-        let output = argsString.replace('"$@"' ,'test');
-        if (output.startsWith('(') && output.endsWith(')')) {
-          output = output.slice(1, -1);
-        }
-        if (output.startsWith('\"') && output.endsWith('\"')) {
-          output = output.slice(1, -1);
-        }
-        return { stdout: output, stderr: '' }; // Basic arg replace
+        // Default mock behavior for other commands
+        return { stdout: command, stderr: '' };
       }),
       // Add other necessary IFileSystemService methods
       dirname: vi.fn(p => typeof p === 'string' ? p.substring(0, p.lastIndexOf('/') || 0) : ''), // Needed by CommandResolver
