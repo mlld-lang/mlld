@@ -1,5 +1,6 @@
 import { DirectiveNode, DirectiveData } from '@core/syntax/types/nodes.js';
-import { StructuredPath } from '@core/syntax/types/nodes.js';
+import type { MeldNode, TextNode, VariableReferenceNode } from '@core/syntax/types/nodes.js';
+import type { StructuredPath } from '@core/syntax/types/nodes.js';
 
 export type DirectiveKind = 
   | 'run'
@@ -28,9 +29,28 @@ export interface ImportDirectiveData extends DirectiveData {
 /**
  * Embed directive data
  */
+type EmbedSubtype = 'embedPath' | 'embedVariable' | 'embedTemplate';
+type InterpolatableValue = Array<TextNode | VariableReferenceNode>;
+
 export interface EmbedDirectiveData extends DirectiveData {
   kind: 'embed';
-  path: StructuredPath;
+  subtype: EmbedSubtype;
+
+  // --- Common --- 
+  // Used for subtype = 'embedPath' AND 'embedVariable'
+  // For embedVariable, the structure within PathValueObject differs for text vs path vars
+  path?: StructuredPath;
+  
+  // --- Optional Modifiers --- 
+  section?: string; // Optional section identifier (subtype = 'embedPath')
+  names?: string[]; // Optional list of specific names (subtype = 'embedPath')
+  options?: { [key: string]: string }; // Key-value options (multiple subtypes)
+  headerLevel?: number; // Header level adjustment (multiple subtypes)
+  underHeader?: string; // Target header for embedding (multiple subtypes)
+
+  // --- Specific to subtypes --- 
+  // subtype = 'embedTemplate' only
+  content?: InterpolatableValue;
 }
 
 /**

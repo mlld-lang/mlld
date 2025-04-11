@@ -1,4 +1,4 @@
-import { DirectiveNode, MeldNode, TextNode } from '@core/syntax/types/index.js';
+import type { DirectiveNode, MeldNode, TextNode } from '@core/syntax/types/index.js';
 import { IDirectiveHandler, DirectiveContext } from '@services/pipeline/DirectiveService/IDirectiveService.js';
 import type { DirectiveResult } from '@services/pipeline/DirectiveService/types.js';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
@@ -24,24 +24,7 @@ import { Service } from '@core/ServiceProvider.js';
 import { InterpreterOptionsBase, StructuredPath, StateServiceLike } from '@core/shared-service-types.js';
 import type { IPathService } from '@services/fs/PathService/IPathService.js';
 import type { MeldPath } from '@core/types/paths.js';
-
-// Define the embed directive parameters interface
-interface EmbedDirectiveParams {
-  path?: string | StructuredPath;
-  url?: string;
-  allowURLs?: boolean;
-  urlOptions?: {
-    allowedProtocols?: string[];
-    allowedDomains?: string[];
-    blockedDomains?: string[];
-    maxResponseSize?: number;
-    timeout?: number;
-  };
-  section?: string;
-  headingLevel?: string;
-  underHeader?: string;
-  fuzzy?: string;
-}
+import type { EmbedDirectiveData } from '@core/syntax/types/directives.js';
 
 export interface ILogger {
   debug: (message: string, ...args: any[]) => void;
@@ -181,7 +164,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
    */
   async execute(node: DirectiveNode, context: DirectiveContext): Promise<DirectiveResult> {
     this.logger.debug(`Processing embed directive`, {
-      node: JSON.stringify(node),
+      // Avoid stringifying potentially large node object
       location: node.location
     });
 
@@ -202,12 +185,12 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
       let content: string = ''; // Initialize content string
 
       // Determine content based on directive subtype
-      switch ((node as any).subtype) { // Use type assertion if needed
+      switch (node.directive.subtype) {
         case 'embedPath':
           this.logger.debug('Handling embedPath subtype');
 
           // Ensure path is provided in the AST node
-          if (!(node as any).path) { // Use type assertion
+          if (!node.directive.path) {
             throw new DirectiveError(
               `Missing path property for embedPath subtype.`,
               this.kind,
@@ -219,9 +202,9 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
           // Change type to MeldPath
           let resolvedPath: MeldPath;
           try {
-            this.logger.debug(`Resolving embed path`, { pathObject: (node as any).path }); // Use type assertion
+            this.logger.debug(`Resolving embed path`, { pathObject: node.directive.path });
             // Assuming node.path is compatible with resolvePath input
-            resolvedPath = await this.resolutionService.resolvePath((node as any).path, resolutionContext); // Use type assertion
+            resolvedPath = await this.resolutionService.resolvePath(node.directive.path.raw, resolutionContext);
             // Use validatedPath for logging string
             this.logger.debug(`Resolved embed path to: ${resolvedPath.validatedPath}`);
           } catch (error) {
@@ -267,7 +250,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
           this.logger.debug('Handling embedVariable subtype');
 
           // Ensure path object exists (might contain string or variable ref)
-          if (!(node as any).path) { // Use type assertion
+          if (!node.directive.path) {
             throw new DirectiveError(
               `Missing path property for embedVariable subtype.`,
               this.kind,
@@ -277,15 +260,15 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
           }
           
           try {
-            this.logger.debug(`Resolving embed variable/path`, { pathObject: (node as any).path }); // Use type assertion
+            this.logger.debug(`Resolving embed variable/path`, { pathObject: node.directive.path });
             // Use resolveInContext, which can handle strings or structured paths (inc. variable refs)
-            // The node.path for embedVariable likely holds the variable structure.
-            const resolvedValue = await this.resolutionService.resolveInContext((node as any).path, resolutionContext); // Use type assertion
+            // Pass raw string from directive.path
+            const resolvedValue = await this.resolutionService.resolveInContext(node.directive.path.raw, resolutionContext);
 
             // Embed expects string content
             if (typeof resolvedValue !== 'string') {
               this.logger.warn('Resolved embed variable content is not a string', {
-                variable: JSON.stringify((node as any).path), // Use type assertion
+                variable: JSON.stringify(node.directive.path),
                 type: typeof resolvedValue,
                 value: JSON.stringify(resolvedValue).substring(0, 100) // Log snippet
               });
@@ -308,7 +291,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
           this.logger.debug('Handling embedTemplate subtype');
 
           // Ensure content array exists in the AST node
-          if (!(node as any).content || !Array.isArray((node as any).content)) { // Use type assertions
+          if (!node.directive.content || !Array.isArray(node.directive.content)) {
             throw new DirectiveError(
               `Missing or invalid content array for embedTemplate subtype.`,
               this.kind,
@@ -318,9 +301,9 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
           }
 
           try {
-            this.logger.debug(`Resolving embed template`, { contentNodes: (node as any).content.length }); // Use type assertion
+            this.logger.debug(`Resolving embed template`, { contentNodes: node.directive.content.length });
             // Use resolveContent, which processes an array of nodes
-            content = await this.resolutionService.resolveContent((node as any).content, resolutionContext); // Use type assertion
+            content = await this.resolutionService.resolveContent(node.directive.content, resolutionContext);
             this.logger.debug(`Resolved embed template content`, { length: content.length });
           } catch (error) {
             throw new DirectiveError(
@@ -334,7 +317,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
 
         default:
           throw new DirectiveError(
-            `Unsupported embed subtype: ${(node as any).subtype}`,
+            `Unsupported embed subtype: ${node.directive.subtype}`,
             this.kind,
             DirectiveErrorCode.VALIDATION_FAILED,
             { location: node.location }
@@ -342,7 +325,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
       }
 
       // Handle section extraction if specified
-      const options = (node as any).options || {}; // Use type assertion
+      const options = node.directive.options || {};
       const section = options.section;
       if (section) {
         this.logger.debug(`Extracting section: ${section}`);
@@ -360,7 +343,7 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
           // process.stderr.write(`EmbedDirectiveHandler: Caught error during section extraction: ${error instanceof Error ? error.message : String(error)}\n`);
           // process.stderr.write(`EmbedDirectiveHandler: About to throw DirectiveError for section extraction failure. Section: ${section}\n`);
           throw new DirectiveError(
-            `Error extracting section \"${section}\": ${error instanceof Error ? error.message : String(error)}`,
+            `Error extracting section "${section}": ${error instanceof Error ? error.message : String(error)}`,
             this.kind,
             DirectiveErrorCode.EXECUTION_FAILED,
             { location: node.location, cause: error instanceof Error ? error : undefined }

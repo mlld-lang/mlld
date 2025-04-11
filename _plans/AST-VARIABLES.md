@@ -60,175 +60,123 @@ Our debugging revealed that the **order of rule definitions** in the `.pegjs` fi
 
 Based on the lessons learned, we will proceed with the **inline, delimiter-specific parsing strategy** for handling interpolation within directive values.
 
+**Phase 1: Parser and Type Modifications (Completed)**
+
+This phase focused on updating the parser grammar and core type definitions.
+
 **1. Detailed `meld.pegjs` Modification Strategy (Inline Approach):**
 
-*   **Adhere to Strict Rule Order:** (NEW) Implement all grammar changes following the **Critical Lesson: PEG.js Grammar Structure & Rule Order** section above. Place new rules and modify existing rules according to that structure.
-*   **Top-Level Parsing:** (REVISED)
-    *   Remove the old `TopLevelNode`, `TopLevelTextBlock`, and `TopLevelTextPart` concepts.
-    *   Define the main entry point `Start` *after* complex/layout rules but *before* fundamentals/whitespace: `Start = nodes:(LineStartComment / Comment / CodeFence / Directive / TextBlock)* EOF { return nodes.filter(n => n !== null); }`. This order dictates parsing precedence.
-    *   Define `TextBlock` and `TextPart` just before `Start`. `TextBlock = content:TextPart+ { ... }`.
-    *   Define `TextPart` to use lookaheads to avoid consuming higher-precedence elements and ensure it always consumes one character:
-        ```pegjs
-        TextPart "part of a text block"
-          = ( // Group lookaheads
-              !Directive          // Check full rules if defined before TextPart
-              !CodeFence
-              !LineStartComment
-              !Comment
-              // Add other top-level lookaheads if needed
-            )
-            char:. // Consume one character MANDATORY
-            { return text(); }
-        ```
-    *   This approach treats any line not starting with `@`, ``` ` ```, `>>`, `/*` etc. as plain text within a `TextBlock` -> `TextNode`. Variable syntax (`{{...}}`, `$var`) within these blocks will be treated as literal text.
-*   **Core Rule Preservation:** Ensure essential rules (`_`, `__`, `EOF`, `Identifier`, `StringLiteral` etc.) are correctly placed according to the structure (likely in Fundamentals or Whitespace/EOF sections) and are never accidentally deleted. Perform edits atomically, build and run tests frequently.
-*   **Delimiter-Specific Interpolation Rules:** (Minor Update)
-    *   Define these rules (`XxxAllowedLiteralChar`, `XxxLiteralTextSegment`, `XxxInterpolatableContent`, `XxxInterpolatableContentOrEmpty`) within the "Core Data Structure / Complex Parsing Rules" section.
-    *   (Keep existing example)
-*   **Update Literal/Template Parsing Rules:** (REVISED)
-    *   Define `InterpolatedStringLiteral` and `InterpolatedMultilineTemplate` in the "Core Data Structure / Complex Parsing Rules" section.
-    *   These rules should **directly** embed the `XxxInterpolatableContentOrEmpty` rules to parse their content. Do **not** use the `parseInterpolated` helper.
-    *   These rules should return the `InterpolatableValue` array directly (e.g., `[ TextNode(...), VariableReferenceNode(...) ]`).
-    *   Example (`InterpolatedStringLiteral`):
-        ```pegjs
-        InterpolatedStringLiteral "String literal with potential variable interpolation"
-          = '"' content:DoubleQuoteInterpolatableContentOrEmpty '"' { return content; }
-          / "'" content:SingleQuoteInterpolatableContentOrEmpty "'" { return content; }
-          / "`" content:BacktickInterpolatableContentOrEmpty "`" { return content; }
-        ```
-    *   Example (`InterpolatedMultilineTemplate`):
-        ```pegjs
-        InterpolatedMultilineTemplate "Multiline template with potential variable interpolation"
-          = "[[" content:MultilineInterpolatableContentOrEmpty "]]" { return content; }
-        ```
-*   **Update Directive Value Rules:** (Minor Update) Modify rules like `TextValue`, `PropertyValue` (for `@data`), `DefineValue` to use `InterpolatedStringLiteral` or `InterpolatedMultilineTemplate` where they previously used `StringLiteral` or `MultilineTemplateLiteral`. These rules will now receive an `InterpolatableValue` array.
-*   **Path Handling:** (Minor Update) Modify `PathDirective`'s right-hand side (`rhs`) to accept `InterpolatedStringLiteral` or `PathVar`.
-    *   If `rhs` is `InterpolatedStringLiteral` (which now returns an `InterpolatableValue` array): Use a *separate* rule or capture mechanism (like the `{raw, interpolated}` object approach *specifically for paths if needed*) to get the **raw** string for `validatePath`. Store the returned `InterpolatableValue` array in the `interpolatedValue` property of the path object.
-    *   If `rhs` is `PathVar`, proceed as before.
-*   **Helper Functions:** Keep JS helpers (`combineAdjacentTextNodes`, `validatePath`, etc.) in the top `{}` block. **Remove the `parseInterpolated` helper.**
+*   **Adhere to Strict Rule Order:** (DONE)
+*   **Top-Level Parsing:** (DONE)
+*   **Core Rule Preservation:** (DONE)
+*   **Delimiter-Specific Interpolation Rules:** (DONE)
+*   **Update Literal/Template Parsing Rules:** (DONE)
+*   **Update Directive Value Rules:** (DONE)
+*   **Path Handling:** (DONE - Parser generates `interpolatedValue`)
+*   **Helper Functions:** (DONE - `parseInterpolated` removed, `helpers` pattern implemented)
 
 **2. AST Type Updates (`@core/types/`, `@core/syntax/types/`)**
 
-*   **Define `InterpolatableValue`:** (Already Done) Add to `core/types/common.ts`:
-    ```typescript
-    import type { TextNode, VariableReferenceNode } from '@core/syntax/types/nodes';
-    export type InterpolatableValue = (TextNode | VariableReferenceNode)[];
-    ```
-*   **Define Specific `DirectiveData` Interfaces:** (Already Done) Create `core/syntax/types/directives.ts` with specific interfaces (`TextDirectiveData`, `EmbedDirectiveData`, etc.) using `InterpolatableValue` for relevant properties.
-*   **Update `StructuredPath`:** (Already Done) Modify `StructuredPath` in `core/syntax/types/nodes.ts` to include `interpolatedValue?: InterpolatableValue`.
+*   **Define `InterpolatableValue`:** (DONE)
+*   **Define Specific `DirectiveData` Interfaces:** (DONE)
+*   **Update `StructuredPath`:** (DONE - Added `interpolatedValue?: InterpolatableValue;` to definition in `core/syntax/types/nodes.ts`)
 
 **3. AST Test Update Strategy (`meld-spec`, `*.test.ts`)**
 
-*   **Role of Tests:** Primary validation mechanism. Failures are expected and guide implementation.
-*   **Plain Text Tests:** Update tests for inputs *outside* directives (e.g., `{{var}}`, `Hello {{var}}`, `$path`) to assert they produce a single `TextNode` with the literal content.
-*   **Directive Interpolation Tests:**
-    *   Add *new* test cases for each directive type where interpolation is now supported (text literals, multiline templates, paths, commands).
-    *   Assert that the relevant property (e.g., `value`, `command`, `path.interpolatedValue`) contains the correct `InterpolatableValue` array structure (`[ TextNode(...), VariableReferenceNode(...), TextNode(...) ]`).
-    *   Cover edge cases: adjacent variables, start/end of string variables, empty content, content with only variables.
-*   **Existing Literal Tests:** Update tests that previously asserted simple string values for directives to now expect an `InterpolatableValue` array containing a single `TextNode`.
-*   **Rejection Tests:** Review tests that expect parsing to fail (e.g., invalid syntax). Ensure they still fail correctly after the changes.
-*   **Debugging Workflow:** Use `npm run build:grammar && npm test core/ast` frequently. Employ `test/debug-test.js` to analyze AST differences.
+*   **Role of Tests:** (DONE - Used for validation)
+*   **Plain Text Tests:** (DONE)
+*   **Directive Interpolation Tests:** (DONE - Added/Updated)
+*   **Existing Literal Tests:** (DONE)
+*   **Rejection Tests:** (DONE)
+*   **Debugging Workflow:** (DONE - Used)
 
-**4. Downstream Impact Outline (High-Level)**
+**4. Build Script (`build-grammar.mjs`)**
 
-*   **`ResolutionService`:**
-    *   **Input Change:** Core methods processing directive content will receive `InterpolatableValue` arrays instead of raw strings needing re-parsing.
-    *   **Logic Change:** Implement iteration over the `InterpolatableValue` array. For `TextNode`, append `content`. For `VariableReferenceNode`, resolve the variable using existing mechanisms and append the result.
-    *   **Cleanup:** Remove any secondary/fallback `{{...}}` parsing logic.
-*   **Directive Handlers (`TextDirectiveHandler`, `DataDirectiveHandler`, etc.):**
-    *   **Input Change:** Will receive AST nodes with `InterpolatableValue` arrays for relevant properties.
-    *   **Logic Change:** Adapt internal logic. May involve calling updated `ResolutionService` methods or performing the array iteration directly.
-*   **Path Resolution Logic:**
-    *   **Processing Order:** Path resolution will now first process the `interpolatedValue` array (resolving variables) to construct the target path string *before* applying filesystem/URL validation and resolution steps using services like `PathService`.
-*   **General AST Consumers:** Any code directly accessing affected directive node properties (e.g., `node.value` where `value` was previously `string`) must be updated to handle the new `InterpolatableValue` array structure.
+*   (DONE - Verified)
 
-**5. Build Script (`build-grammar.mjs`)**
+**Phase 2: Consuming the InterpolatableValue AST (To Do)**
 
-*   Ensure `allowedStartRules` in *all* `peggy.generate` calls contains *only* `['Start']`.
+This phase focuses on refactoring downstream services and handlers to correctly process and leverage the new `InterpolatableValue` structure produced by the parser.
 
-## Implementation Steps (Fourth Attempt - Order Focused - Revised Again)
+**5. Refactor `ResolutionService` Core Logic:**
+
+*   **Goal:** Centralize the logic for processing `InterpolatableValue` arrays within `ResolutionService`, removing the need for other components to handle this structure directly or perform regex-based variable searching.
+*   **Identify/Create Core Helper:** Locate or create the internal `ResolutionService` method responsible for processing an array of nodes (e.g., `resolveNodes` or similar). This method will become the primary implementation site.
+*   **Implement `resolveNodes` (or similar):**
+    *   Input: `nodes: InterpolatableValue` (or `MeldNode[]`), `context: ResolutionContext`.
+    *   Output: `Promise<string>` (the final resolved string).
+    *   Logic: Iterate through the `nodes` array.
+        *   If `node.type === 'Text'`, append `node.content` to the result string.
+        *   If `node.type === 'VariableReference'`, call `VariableReferenceResolver.resolve(node, context)` (or the appropriate internal method) to get the variable's resolved string value, and append it.
+        *   Handle potential errors during variable resolution based on `context.strict`.
+*   **Remove Regex Parsing:** Completely remove any existing logic within `ResolutionService` that uses regular expressions (e.g., `/\{\{.*?\}\}/g`) to find and replace variables in strings. Resolution should now rely solely on processing the AST nodes.
+
+**6. Update Public `ResolutionService` Methods:**
+
+*   **`resolveInContext(value: string | StructuredPath, ...)`:**
+    *   If `value` is `StructuredPath` and `value.interpolatedValue` exists, call `resolveNodes(value.interpolatedValue, context)` and return the result.
+    *   If `value` is `string`:
+        *   Check if string contains variable markers (`{{`, `$`). If not, return string directly (optimization).
+        *   Use `ParserServiceClient` (or injected `IParserService`) to parse the `value` string into an `InterpolatableValue` array (e.g., using a specific parser rule designed for inline content or a lightweight parsing mode).
+        *   Call `resolveNodes` on the resulting array.
+    *   If `value` is `StructuredPath` *without* `interpolatedValue`, pass `value.raw` to the string-handling logic above.
+*   **`resolvePath(pathString: string, ...)`:**
+    *   Current signature expects `string`. Keep this signature for now.
+    *   Internally, the implementation should first check if the `pathString` contains variable markers.
+    *   If markers exist, parse the `pathString` into an `InterpolatableValue` array (using `ParserServiceClient` or similar).
+    *   Call `resolveNodes` on the array to get the fully resolved path string.
+    *   Use the *resolved* path string for subsequent path validation (`validatePath`) and normalization logic to produce the final `MeldPath`.
+    *   *(Alternative Future Enhancement: Overload `resolvePath` to directly accept `StructuredPath`. If `interpolatedValue` exists, resolve it first using `resolveNodes`. If not, use `raw` string. This avoids redundant parsing if the caller already has the `StructuredPath` object.)*
+*   **`resolveText(text: string, ...)`:**
+    *   Similar to `resolveInContext`'s string handling: Parse the input `text` string into an `InterpolatableValue` array using `ParserServiceClient`, then call `resolveNodes`. Remove any old regex logic.
+*   **`resolveContent(nodes: MeldNode[], ...)`:**
+    *   This method already takes `MeldNode[]`. Review its implementation. If it calls other methods like `resolveText` internally on node content, ensure those calls are updated. If it directly iterates and resolves, ensure its logic aligns with the new `resolveNodes` pattern (using `VariableReferenceResolver` for `VariableReferenceNode`s).
+
+**7. Refactor Directive Handlers:**
+
+*   **General Principle:** Identify directive properties that are now typed as `InterpolatableValue` or `StructuredPath`. Instead of using raw strings or performing local resolution, call the appropriate updated `ResolutionService` method (`resolveInContext`, `resolvePath`, `resolveText`, `resolveNodes`) to get the final resolved string value needed by the handler's logic.
+*   **Specific Handlers:**
+    *   **`@text`, `@data`:** Resolve `directive.value` (if `InterpolatableValue`) using `resolveNodes` or `resolveInContext`. Use the resulting string/value for assignment. For `embed`/`run` sources, resolve the relevant properties within `directive.embed` or `directive.run` before assignment.
+    *   **`@define`:** Resolve `directive.value` (if `InterpolatableValue`) or `directive.command.command` (if `InterpolatableValue`) using `resolveNodes` or `resolveInContext` before storing the definition.
+    *   **`@path`:** Resolve `directive.path.interpolatedValue` using `resolveNodes` to get the target path *string*. Pass this resolved string to `PathService` or for further validation/assignment. *(Update: Current handler likely uses `resolvePath` which should now internally handle the interpolation based on Step 6).* Confirm `PathDirectiveHandler` calls `resolutionService.resolvePath(directive.path.raw, ...)` and relies on `resolvePath`'s updated internal logic.
+    *   **`@run`:** Resolve `directive.command` (if `InterpolatableValue`) using `resolveNodes` or `resolveInContext` to get the final command string or script content before execution. Resolve arguments if they are `VariableReferenceNode`s.
+    *   **`@embed`:**
+        *   `embedTemplate`: Resolve `directive.content` (`InterpolatableValue`) using `resolveContent` (or `resolveNodes`).
+        *   `embedVariable`: Resolve `directive.path` (which holds variable structure or `StructuredPath`) using `resolveInContext`. *(Update: Current handler passes `directive.path.raw`)*. Update handler to pass `directive.path` object if `resolveInContext` correctly handles `StructuredPath` with `interpolatedValue` after Step 6.
+        *   `embedPath`: Resolve `directive.path.interpolatedValue` *first* using `resolveNodes` to get the target path string. Then use *that string* with `PathService`/`FileSystemService` calls. *(Update: Current handler uses `resolvePath(directive.path.raw, ...)` which relies on `resolvePath`'s updated internal logic).* Confirm `EmbedDirectiveHandler` relies on `resolvePath` for `embedPath`.
+    *   **`@import`:** Resolve `directive.path.interpolatedValue` using `resolveNodes` to get the target path string *before* attempting to locate and parse the imported file. *(Update: Current handler uses `resolvePath(directive.path.raw, ...)`).* Confirm `ImportDirectiveHandler` relies on `resolvePath`.
+
+**8. Update Tests:**
+
+*   **`ResolutionService` Tests:** Update unit tests to pass `InterpolatableValue` arrays and `StructuredPath` objects (with `interpolatedValue`) to relevant methods. Assert that the output strings are correctly resolved. Mock `VariableReferenceResolver` and `ParserServiceClient` as needed.
+*   **Directive Handler Tests:** Update unit tests. Mock the updated `ResolutionService` methods (`resolveInContext`, `resolvePath`, etc.) to return expected resolved strings based on the handler's input AST node (containing `InterpolatableValue` etc.). Verify the handler uses the resolved value correctly.
+*   **Integration Tests (`api.test.ts`, etc.):** Ensure end-to-end tests involving directives with interpolated values (strings, paths, templates, commands) produce the correct final output.
+
+**9. Verification:**
+
+*   Perform manual testing with various interpolation scenarios in different directive contexts.
+*   Run the full test suite (`npm test`) to ensure no regressions.
+
+## Downstream Impact Outline (Updated)
+
+*   **`ResolutionService`:** **Major refactoring required** to implement AST-based resolution (iterate `InterpolatableValue`, call `VariableReferenceResolver`) and remove regex-based logic. Public methods need updating to handle `StructuredPath` with `interpolatedValue` or parse input strings into `InterpolatableValue` before calling core resolution logic.
+*   **Directive Handlers (`Text`, `Data`, `Define`, `Path`, `Run`, `Embed`, `Import`):** **Significant refactoring required.** Must adapt to receive `InterpolatableValue` / `StructuredPath` properties and call updated `ResolutionService` methods for resolution instead of handling raw strings or doing local parsing.
+*   **Path Resolution Logic:** Needs careful review. Logic using path strings must ensure they are fully resolved (via `resolveNodes` or updated `resolvePath`) *before* being passed to `PathService` or `FileSystemService`.
+*   **General AST Consumers:** Any code directly accessing affected directive node properties must handle `InterpolatableValue`.
+*   **Tests:** **Extensive updates required** across unit and integration tests to reflect the new AST structures and `ResolutionService` behavior.
+
+## Implementation Steps (Updated)
 
 1.  **Prepare:** Ensure `@_plans/AST-VARIABLES.md` reflects this updated plan. **(DONE)**
-2.  **Clean Grammar & Verify Structure:** Start with a known-good version of `meld.pegjs` or carefully **restructure the existing file** to match the **Recommended Stable Structure** outlined above. Place existing rules into their correct sections. **Run `build:grammar`**. Fix any build errors resulting *only* from reordering before proceeding. **(DONE)**
-    *   _Note:_ Performed grammar restructuring. Ran build and tests (`npm run build:grammar && npm test core/ast`). All tests passed, confirming the structural integrity after reordering.
-
-3.  **Refactor Helper Function Access:** Implement the `helpers` object pattern for robust access to helper functions within rule actions. **(DONE)**
-    *   **Rationale:** To ensure consistent access to helper functions within rule actions, avoiding potential scoping issues encountered with direct function calls or reliance on the `options` object's state during test runs, and to facilitate easier mocking/testing.
-    *   **Sub-steps (Perform Surgically with Frequent Build/Test Cycles):**
-        *   **3a. Define `helpers` Structure:** In the grammar initializer block (`{...}`), define `const helpers = { ... };`, including the `...(options && options.helpers ? options.helpers : {})` spread for overrides.
-        *   **3b. Move Helper Functions:** Incrementally move the existing standalone function definitions (`debug`, `isLineStart`, `validatePath`, `createNode`, `reconstructRawString`, etc.) *inside* the `helpers` object definition. Remove the original standalone definitions. **Run `build:grammar` frequently.**
-        *   **3c. Update Rule Action Calls:** Systematically go through all grammar rule actions (`{ ... }`) and prepend `helpers.` to all calls to the moved functions (e.g., `validatePath(...)` becomes `helpers.validatePath(...)`). Do this section by section or rule by rule. **Run `build:grammar && npm test core/ast` frequently.**
-        *   **3d. Final Verification:** Once all calls are updated, run `npm run build:grammar && npm test core/ast` to ensure all tests still pass with the refactored helper access.
-
-4.  **Implement Delimiter-Specific Rules:** Add the rules necessary for parsing content *within* various delimiters, accounting for potential variables. Place these in the "Core Data Structure / Complex Parsing Rules" section. **Run `build:grammar`** after adding each set to verify syntax immediately. **(DONE)**
-    *   **4a. Double Quotes (`"..."`):** Add `DoubleQuoteAllowedLiteralChar`, `DoubleQuoteLiteralTextSegment`, `DoubleQuoteInterpolatableContent`, `DoubleQuoteInterpolatableContentOrEmpty`. Ensure `DoubleQuoteAllowedLiteralChar` uses lookahead `!('"' / '{{' / '\\')` to stop at quotes, escapes, or variable starts.
-    *   **4b. Single Quotes (`'...'`):** Add `SingleQuote...` rules, similar to Double Quotes but looking for `'`.
-    *   **4c. Backticks (``` `...` ```):** Add `Backtick...` rules, similar but looking for `` ` ``.
-    *   **4d. Multiline (`[[...]]`):** Add `Multiline...` rules. `MultilineAllowedLiteralChar` needs `!']]' !'{{'` lookahead.
-    *   **4e. Brackets (`[...]`):** Add `Bracket...` rules. **Crucially**, ensure `BracketAllowedLiteralChar` uses `!(']' / '{{' / '$')` lookahead. This allows literal nested brackets `[` but stops correctly for the closing `]`, text/data variables `{{`, and path variables `$`, fixing a previously identified parse error.
-    *   _Note:_ The `XxxInterpolatableContent` rules should generally try `Variable` before `XxxLiteralTextSegment` (`parts:(Variable / XxxLiteralTextSegment)+`) if Path Variables (`$var`) need to be parsed within that context (like Brackets). Otherwise, `parts:(XxxLiteralTextSegment / Variable)+` is fine. Ensure `Variable` matches all types (`TextVar | DataVar | PathVar`).
-
-5.  **Implement Interpolated Literals:** Define the top-level rules for string and multiline templates that consume the rules from Step 4 and produce the final `InterpolatableValue` array. Place these after the delimiter-specific rules in the "Core Data Structure / Complex Parsing Rules" section. **Run `build:grammar`** after adding each rule. **(DONE)**
-    *   **5a. `InterpolatedStringLiteral`:** Define to handle `"..."`, `'...'`, and ``` `...` ```, using the corresponding `XxxInterpolatableContentOrEmpty` rules. The action code should simply be `{ return content; }` as `content` will hold the desired `InterpolatableValue` array.
-    *   **5b. `InterpolatedMultilineTemplate`:** Define to handle `[[...]]` using `MultilineInterpolatableContentOrEmpty`. Action code is `{ return content; }`.
-
-6.  **Update Directive Value Rules (One by One):** Modify existing rules that previously consumed simple literals (`StringLiteral`, `MultilineTemplateLiteral`, `DirectiveContent` for paths/commands) to use the new `Interpolated...` rules where appropriate. **Run `build:grammar`** after modifying each rule. **(DONE)**
-    *   **6a. `TextValue` (@text):** Replace `StringLiteral` alternative with `InterpolatedStringLiteral`. Replace `MultilineTemplateLiteral` alternative with `InterpolatedMultilineTemplate`. The `value` property will now hold an `InterpolatableValue` array.
-    *   **6b. `PropertyValue` (@data):** Replace `StringLiteral` alternative with `InterpolatedStringLiteral`. String values within data structures will now be `InterpolatableValue` arrays.
-    *   **6c. `DefineValue` (@define):** Replace `StringLiteral` alternative with `InterpolatedStringLiteral`. The `value` property for string definitions will now hold an `InterpolatableValue` array.
-    *   **6d. `PathValue` (@path):** Replace `StringLiteral` alternative with `InterpolatedStringLiteral`. In the action code:
-        *   Call `helpers.reconstructRawString(interpolatedArray)` to get the raw path string.
-        *   Call `helpers.validatePath(rawString, { context: 'pathDirective' })` to get the validation result object.
-        *   Attach the original `interpolatedArray` to the result object as `interpolatedValue`.
-        *   Ensure the `PathVar` alternative returns the correct structured object (as fixed previously).
-    *   **6e. `_EmbedRHS` (helper for @embed, @data, @text):**
-        *   Modify the `[[...]]` alternative to use `MultilineInterpolatableContentOrEmpty`. The `content` property will now hold an `InterpolatableValue` array.
-        *   Modify the `[...]` alternative to use `BracketInterpolatableContentOrEmpty`. In the action code, follow the same pattern as `PathValue` (reconstruct raw, validate raw, attach original array as `interpolatedValue` to the resulting `path` object). Note the current simplification for handling sections (`#`) - the full array is attached.
-    *   **6f. `_RunRHS` (helper for @run, @data, @text, @define):**
-        *   Modify the `[[...]]` alternative to use `MultilineInterpolatableContentOrEmpty`. The `command` property will now hold an `InterpolatableValue` array.
-        *   Modify the `[...]` alternative to use `BracketInterpolatableContentOrEmpty`. The `command` property will now hold an `InterpolatableValue` array.
-
-7.  **Run Full Tests:** Once Step 6 is complete and the grammar builds, run `npm test core/ast`. **(DONE)**
-
-## Progress Summary (As of <Current Date>)
-
-We successfully completed the foundational steps:
-1.  **Grammar Restructuring (Step 2):** The `meld.pegjs` file was reorganized according to the "Recommended Stable Structure", improving maintainability and resolving potential build issues. All tests passed after this step.
-2.  **Helper Function Refactoring (Step 3):** Implemented the `helpers` object pattern for robust and consistent access to helper functions within grammar actions, resolving previous scope-related runtime errors. Tests passed.
-3.  **Interpolation Re-implementation (Steps 4-6):** We re-introduced the delimiter-specific rules (`XxxAllowedLiteralChar`, etc.), the `InterpolatedStringLiteral` and `InterpolatedMultilineTemplate` rules, and updated the core directive value rules (`TextValue`, `PropertyValue`, `PathValue`, `_EmbedRHS`, `_RunRHS`) to use these new interpolation mechanisms. The grammar now correctly produces `InterpolatableValue` arrays for string/template/path/command values where appropriate.
-
-Running the full test suite (`npm test core/ast`) after completing Step 6 revealed 9 test failures, indicating mismatches between the generated AST and the test expectations. These failures fall into two categories:
-
-1.  **Specific Grammar/Parsing Issues (2 failures):**
-    *   `parser.test.ts`: A test expecting the parser to *reject* `@path config = $HOMEPATH/file` (unquoted path value) is currently passing, indicating the grammar incorrectly allows this syntax.
-    *   ~~`embed.test.ts` (`path-with-brackets` case): A test expecting `@embed [file[1].md]` to parse correctly is failing. This suggests an issue in the `BracketInterpolatableContentOrEmpty` rule (or related rules) potentially misinterpreting the `[` within the path.~~ *(Deferred: This is a known issue tracked separately, see GitHub issue #29)*
-
-2.  **Test Fixture Deep Equality Mismatches (7 failures):**
-    *   Files affected: `data.test.ts`, `define.test.ts`, `embed.test.ts` (3 cases), `run.test.ts`, `text.test.ts`.
-    *   These failures stem from tests using fixtures defined in `core/syntax/types/test-fixtures.ts`. The generated AST nodes include a full `location` object (e.g., `{ start: { offset: ..., line: ..., column: ... }, end: {...} }`), while the expected fixtures use `location: expect.any(Object)`. The deep equality check (`toEqual`) combined with `expect.objectContaining` seems unable to correctly handle this nested `expect.any(Object)` comparison within the larger node structure.
-
-## Next Steps & Path Forward
-
-To resolve the remaining issues, we will proceed as follows:
-
-1.  **Address Test Fixture Mismatches:**
-    *   **Update `test-fixtures.ts`:** Modify the expected node structures in `core/syntax/types/test-fixtures.ts` for the 7 failing tests. Instead of relying on `expect.objectContaining` for the entire node, explicitly define the expected structure for each node type, retaining `location: expect.any(Object)` *only* for the location property itself. This will make the comparisons more precise and should resolve the deep equality failures.
-    *   **Example (TextNode):**
-        ```javascript
-        {
-          type: 'Text',
-          content: 'Some content',
-          location: expect.any(Object) // Keep expect.any only for location
-        }
-        ```
-    *   Apply this pattern to all relevant node expectations in the fixtures. Run tests after updating the fixtures to confirm resolution.
-
-2.  **Fix Grammar/Parsing Issues:**
-    *   **Unquoted Path Rejection (`parser.test.ts`):** Investigate the `PathValue` rule in `meld.pegjs`. Ensure it strictly requires the path value to be one of the `InterpolatedStringLiteral` types (double, single, or backtick quoted) or a `PathVar`, and explicitly disallows unquoted values like `$HOMEPATH/file`. Adjust the grammar rule and confirm the test now correctly rejects the input.
-    *   ~~**Bracket Path Parsing (`embed.test.ts`):** Re-examine the `BracketInterpolatableContentOrEmpty`, `BracketLiteralTextSegment`, and `BracketAllowedLiteralChar` rules. Verify that literal `[` characters are correctly handled within bracketed paths (`[...]`) and do not prematurely terminate parsing or get misinterpreted. Debug the parsing flow for `@embed [file[1].md]` and adjust the rules as needed.~~ *(Deferred: Known issue)*
-
-3.  **Final Verification:** Run the full test suite (`npm test core/ast`) to ensure all tests pass.
+2.  **Phase 1: Parser/Type Changes (Steps 2-7 of original plan):** **(DONE)**
+3.  **Phase 2 Step 5: Refactor `ResolutionService` Core Logic:** Implement `resolveNodes` (or similar) to iterate `InterpolatableValue` and call `VariableReferenceResolver.resolve`. Remove regex logic. **(TO DO - High Priority)**
+4.  **Phase 2 Step 6: Update Public `ResolutionService` Methods:** Refactor `resolveInContext`, `resolvePath`, `resolveText`, `resolveContent` to use `resolveNodes` and handle string parsing via `ParserServiceClient`. **(TO DO - High Priority)**
+5.  **Phase 2 Step 8: Update `ResolutionService` Tests:** Write/update unit tests for the refactored `ResolutionService` methods. **(TO DO - High Priority)**
+6.  **Phase 2 Step 7: Refactor Directive Handlers:** Update handlers one by one (`@text`, `@data`, `@path`, `@embed`, `@run`, `@import`, `@define`) to call the refactored `ResolutionService` methods. **(TO DO - Medium Priority)**
+7.  **Phase 2 Step 8: Update Handler Tests:** Update unit tests for each refactored handler. **(TO DO - Medium Priority)**
+8.  **Phase 2 Step 8: Update Integration Tests:** Update end-to-end tests. **(TO DO - Medium Priority)**
+9.  **Phase 2 Step 9: Verification:** Perform final testing. **(TO DO - Low Priority)**
 
 ## Priority
 
-**High.** Completing the AST variable parsing refactor is crucial for accurate syntax representation and simplifying downstream logic. Resolving the test failures and grammar issues is the immediate next step. 
+**High.** Completing Phase 2 (consuming the `InterpolatableValue` AST) is critical for realizing the benefits of the parser refactoring, simplifying downstream logic, and improving overall system robustness. Refactoring `ResolutionService` is the most critical next step. 

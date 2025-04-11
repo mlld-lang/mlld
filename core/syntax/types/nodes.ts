@@ -99,6 +99,11 @@ export interface VariableNode extends MeldNode {
 export type { VariableType, Field, VariableReferenceNode };
 
 /**
+ * Type alias for interpolated content parsed from strings/templates/paths.
+ */
+export type InterpolatableValue = Array<TextNode | VariableReferenceNode>;
+
+/**
  * Structured representation of a path with segments and variable information
  */
 export interface StructuredPath {
@@ -130,4 +135,6 @@ export interface StructuredPath {
   isVariableReference?: boolean;
   /** Whether this is a path variable reference like $path_var */
   isPathVariable?: boolean;
+  /** Parsed nodes if path came from brackets/quotes (as per AST-VARIABLES.md) */
+  interpolatedValue?: InterpolatableValue;
 } 
