@@ -906,9 +906,6 @@ export class DirectiveService implements IDirectiveService, DirectiveServiceLike
         );
       }
 
-      // Validate directive before handling
-      await this.validateDirective(node);
-
       // Execute the directive and handle both possible return types
       const result = await handler.execute(node, context);
       
