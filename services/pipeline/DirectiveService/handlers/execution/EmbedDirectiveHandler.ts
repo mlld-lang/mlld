@@ -28,6 +28,7 @@ import { StructuredPath as AstStructuredPath } from '@core/syntax/types/nodes.js
 import type { VariableReferenceNode } from '@core/ast/ast/astTypes.js';
 import type { InterpolatableValue } from '@core/syntax/types/nodes.js';
 import type { EmbedDirectiveData } from '@core/syntax/types/directives.js';
+import { vi } from 'vitest';
 
 function isInterpolatableValueArray(value: unknown): value is InterpolatableValue {
     return Array.isArray(value) && 
@@ -374,8 +375,10 @@ export class EmbedDirectiveHandler implements IDirectiveHandler {
       const headingLevel = options.headingLevel;
       if (headingLevel) {
         // TODO: Find appropriate service/utility for heading adjustment
+        // <<< Log the logger object >>>
+        process.stdout.write(`>>> EMBED HANDLER - Logger object: ${typeof this.logger}, Warn is mock: ${vi.isMockFunction(this.logger?.warn)}\n`);
         this.logger.warn(`Heading level adjustment specified (+${headingLevel}) but not currently supported by ResolutionService. Content unchanged.`, { location: node.location });
-        // Validate the option format here if needed, e.g., ensure it's a number
+        // Validate the option format here if needed
         if (typeof headingLevel !== 'number' || !Number.isInteger(headingLevel) || headingLevel < 1) {
           this.logger.warn(`Invalid headingLevel option: ${headingLevel}. Must be a positive integer.`, { location: node.location });
         }
