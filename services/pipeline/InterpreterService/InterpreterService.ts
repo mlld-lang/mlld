@@ -10,6 +10,7 @@ import { Service } from '@core/ServiceProvider.js';
 import { inject, injectable, delay, container } from 'tsyringe';
 import { DirectiveServiceClientFactory } from '@services/pipeline/DirectiveService/factories/DirectiveServiceClientFactory.js';
 import { IDirectiveServiceClient } from '@services/pipeline/DirectiveService/interfaces/IDirectiveServiceClient.js';
+import { ResolutionContextFactory } from '@services/resolution/ResolutionService/ResolutionContextFactory.js';
 
 const DEFAULT_OPTIONS: Required<Omit<InterpreterOptions, 'initialState' | 'errorHandler'>> = {
   filePath: '',
@@ -400,9 +401,28 @@ export class InterpreterService implements IInterpreterService, InterpreterServi
       // Process based on node type
       switch (node.type) {
         case 'Text':
-          // Create new state for text node
+          // <<< Resolve variables within TextNode content >>>
+          let resolvedContent = (node as TextNode).content;
+          if (this.resolutionService) { // Check if resolutionService exists
+             try {
+                // Create appropriate context for text resolution
+                const resolutionContext = ResolutionContextFactory.create(state, state.getCurrentFilePath());
+                resolvedContent = await this.resolutionService.resolveText(resolvedContent, resolutionContext);
+             } catch (resolutionError) {
+                logger.warn('Failed to resolve text content during interpretation', { 
+                  originalContent: (node as TextNode).content, 
+                  error: resolutionError 
+                });
+                // Keep original content if resolution fails?
+             }
+          }
+          // Create a new node with potentially resolved content
+          const resolvedTextNode: TextNode = { 
+              ...node, 
+              content: resolvedContent 
+          };
           const textState = currentState.clone();
-          textState.addNode(node);
+          textState.addNode(resolvedTextNode); // Add the resolved node
           currentState = textState;
           break;
 

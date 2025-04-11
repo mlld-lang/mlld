@@ -146,11 +146,11 @@ export class TextDirectiveHandler implements IDirectiveHandler {
       // 4. Handle different types of text directives
       let resolvedValue: string;
       
-      // Create a resolution context that includes the parent state to access variables from previous directives
+      // <<< Use the injected stateService directly for the context >>>
       const resolutionContext = ResolutionContextFactory.forTextDirective(
-        context.currentFilePath,
-        context.parentState || newState
-      );
+        this.stateService, // Use the injected service instance
+        context.currentFilePath
+     );
 
       // Handle @text with @run value
       if (node.directive.source === 'run' && node.directive.run) {

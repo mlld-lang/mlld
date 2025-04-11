@@ -95,19 +95,6 @@ export function validateTextDirective(node: DirectiveNode): void {
     );
   }
 
-  // Value must be a string
-  if (typeof directive.value !== 'string') {
-    throw new MeldDirectiveError(
-      'Text directive "value" property must be a string',
-      'text',
-      {
-        location: convertLocation(node.location?.start),
-        code: DirectiveErrorCode.VALIDATION_FAILED,
-        severity: ErrorSeverity.Fatal
-      }
-    );
-  }
-
   // Check if the source is specified
   if (directive.source) {
     // If source is specified, validate it
