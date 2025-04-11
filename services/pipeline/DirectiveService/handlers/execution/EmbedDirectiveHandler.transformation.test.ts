@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import type { DirectiveNode, DirectiveData, MeldNode, VariableReferenceNode, TextNode } from '@core/syntax/types/index.js';
 import type { MeldPath, StructuredPath } from '@core/types/paths.js';
-import { createMeldPath } from '@core/types/paths.js';
+import { createMeldPath, unsafeCreateValidatedResourcePath } from '@core/types/paths.js';
 import { EmbedDirectiveHandler, type ILogger } from '@services/pipeline/DirectiveService/handlers/execution/EmbedDirectiveHandler.js';
 import type { IValidationService } from '@services/resolution/ValidationService/IValidationService.js';
 import type { IResolutionService } from '@services/resolution/ResolutionService/IResolutionService.js';
@@ -31,6 +31,7 @@ import {
   createFileSystemServiceMock,
   createDirectiveErrorMock
 } from '@tests/utils/mocks/serviceMocks.js';
+import { StringConcatenationHandler } from '@services/resolution/ResolutionService/resolvers/StringConcatenationHandler.js';
 
 /**
  * EmbedDirectiveHandler Transformation Test Status
@@ -158,6 +159,9 @@ describe('EmbedDirectiveHandler Transformation', () => {
 
   describe('transformation behavior', () => {
     it('should return replacement node with file contents when transformation enabled', async () => {
+      const contextDI = TestContextDI.create({ isolatedContainer: true });
+      const context = await contextDI.getTestContext({ transformation: true });
+      
       // MIGRATION: Using centralized syntax example
       const example = embedDirectiveExamples.atomic.simpleEmbed;
       // Manually create node
@@ -170,7 +174,6 @@ describe('EmbedDirectiveHandler Transformation', () => {
         directive: { kind: 'embed' },
         location: createLocation(1, 1, 0, 1)
       } as DirectiveNode;
-      const context: DirectiveContext = { currentFilePath: 'test.meld', state: stateService, parentState: stateService };
 
       const resolvedPath = createMeldPath('/path/to/doc.md');
       resolutionService.resolvePath.mockResolvedValue(resolvedPath);
@@ -302,11 +305,12 @@ describe('EmbedDirectiveHandler Transformation', () => {
     });
 
     it('should handle variable interpolation in path during transformation', async () => {
-      const context = createTestContext({ transformation: true });
+      const contextDI = TestContextDI.create({ isolatedContainer: true });
+      const context = await contextDI.getTestContext({ transformation: true });
 
       // Create a mock EmbedDirective node with variable path
       const node = createEmbedDirective(
-        { path: '{{filePath}}' }, // Use variable syntax
+        { path: '{{filePath}}' } as any, // <<< Use 'any' to bypass strict type checking for mock
         undefined,
         'embedPath' // subtype
       );
@@ -314,7 +318,8 @@ describe('EmbedDirectiveHandler Transformation', () => {
 
       // Mock state and resolution
       stateService.getTextVar.mockReturnValue({ type:'text', value: 'resolved/path.md' } as any);
-      resolutionService.resolveInContext.mockImplementation(async (val) => {
+      // Fix: Adjust mock implementation signature if needed by vitest-mock-extended
+      resolutionService.resolveInContext.mockImplementation(async (val: any): Promise<any> => {
         if (typeof val === 'string' && val === '{{filePath}}') return 'resolved/path.md';
         return val; // Pass through other values
       });
@@ -428,10 +433,11 @@ describe('EmbedDirectiveHandler Transformation', () => {
     });
 
     it('should preserve error handling during transformation', async () => {
-      const context = createTestContext({ transformation: true });
+      const contextDI = TestContextDI.create({ isolatedContainer: true });
+      const context = await contextDI.getTestContext({ transformation: true });
 
       const node = createEmbedDirective(
-        { path: 'nonexistent.md' },
+        { path: 'nonexistent.md' } as any, // <<< Use 'any' for mock
         undefined,
         'embedPath' // subtype
       );
@@ -471,11 +477,12 @@ describe('EmbedDirectiveHandler Transformation', () => {
     });
 
     it('should properly transform variable-based embed directive with field access', async () => {
-      const context = createTestContext({ transformation: true });
+      const contextDI = TestContextDI.create({ isolatedContainer: true });
+      const context = await contextDI.getTestContext({ transformation: true });
 
       // Node uses variable syntax with field access
       const node = createEmbedDirective(
-        { path: '{{vars.myPath.nested}}' }, 
+        { path: '{{vars.myPath.nested}}' } as any, // <<< Use 'any' for mock
         undefined,
         'embedPath' // subtype
       );
@@ -499,11 +506,12 @@ describe('EmbedDirectiveHandler Transformation', () => {
     });
 
     it('should properly transform variable-based embed directive with object field access', async () => {
-      const context = createTestContext({ transformation: true });
+      const contextDI = TestContextDI.create({ isolatedContainer: true });
+      const context = await contextDI.getTestContext({ transformation: true });
 
       // Node uses variable syntax with object field access
       const node = createEmbedDirective(
-        { path: '{{contact.email}}' }, 
+        { path: '{{contact.email}}' } as any, // <<< Use 'any' for mock
         undefined,
         'embedPath' // subtype
       );
@@ -527,10 +535,11 @@ describe('EmbedDirectiveHandler Transformation', () => {
     });
 
     it('should throw EXECUTION_FAILED if interpreter client is not available', async () => {
-      const context = createTestContext({ transformation: true });
+      const contextDI = TestContextDI.create({ isolatedContainer: true });
+      const context = await contextDI.getTestContext({ transformation: true });
       
       const node = createEmbedDirective(
-        { path: 'any.md' },
+        { path: 'any.md' } as any, // <<< Use 'any' for mock
         undefined,
         'embedPath' // subtype
       );
@@ -553,7 +562,7 @@ describe('EmbedDirectiveHandler Transformation', () => {
       
       // Execute and expect normal execution for embedPath, not an interpreter error
       const result = await handler.execute(node, context);
-      expect(result.replacement?.content).toBe('Some content');
+      expect((result.replacement as TextNode)?.content).toBe('Some content');
 
       // If the intent was to test a scenario needing the interpreter (e.g., a future subtype?),
       // the node creation and mocks would need significant adjustment.

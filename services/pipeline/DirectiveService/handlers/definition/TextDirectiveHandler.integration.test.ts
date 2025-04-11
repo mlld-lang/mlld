@@ -290,15 +290,12 @@ describe('TextDirectiveHandler Integration', () => {
       
       // Verify error contains location information
       const error = errorCollector.getAllErrors()[0];
-      expect(error.context).toBeDefined();
-      
-      // With the refactored code, the location is now in a different structure
-      // The DirectiveError wraps the location in the context.node.location
-      expect(error.context.node).toBeDefined();
-      expect(error.context.node.location).toBeDefined();
-      expect(error.context.node.location.start.line).toBe(5);
-      expect(error.context.context).toBeDefined();
-      expect(error.context.context.currentFilePath).toBe('test.meld');
+      expect(error.details).toBeDefined();
+      expect(error.details.node).toBeDefined();
+      expect(error.details.node.location).toBeDefined();
+      expect(error.details.node.location.start.line).toBe(5);
+      expect(error.details.context).toBeDefined();
+      expect(error.details.context.currentFilePath).toBe('test.meld');
     });
 
     it.todo('should handle mixed directive types - Complex directive interaction deferred for V1');
