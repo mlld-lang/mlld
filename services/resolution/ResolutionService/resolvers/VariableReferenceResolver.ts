@@ -261,11 +261,16 @@ export class VariableReferenceResolver {
             if (error instanceof MeldError) {
                 throw error;
             } else {
-                throw new MeldResolutionError(`Failed to resolve variable ${node.identifier}`, {
-                    code: 'E_RESOLVE_FAILED', // Generic code
-                    cause: error instanceof Error ? error : undefined,
-                    details: { variableName: node.identifier }
-                });
+                 // <<< Include node and context in details >>>
+                 throw new MeldResolutionError(`Failed to resolve variable ${node.identifier}`, {
+                     code: 'E_RESOLVE_FAILED', // Generic code
+                     cause: error instanceof Error ? error : undefined,
+                     details: { 
+                         variableName: node.identifier,
+                         node: node,       // Add original node
+                         context: context  // Add original context
+                     }
+                 });
             }
         }
         

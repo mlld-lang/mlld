@@ -154,14 +154,8 @@ describe('TextDirectiveHandler', () => {
                 else if (node.identifier === 'user') resolvedVar = { name: 'Alice', id: 123 }; // Sample object for field access
                 else if (node.identifier === 'config') resolvedVar = '$PROJECTPATH/docs'; // Path variable
                 else if (node.identifier === 'missing') {
-                   // <<< Throw MeldResolutionError with correct signature (message, { code, details }) >>>
-                   throw new MeldResolutionError(
-                     'Variable not found: missing', 
-                     { 
-                       code: DirectiveErrorCode.VARIABLE_NOT_FOUND, 
-                       details: { identifier: 'missing' } 
-                     }
-                   );
+                   // <<< Throw generic Error instead of MeldResolutionError >>>
+                   throw new Error('Variable not found: missing');
                 }
                 else resolvedVar = `{{${node.identifier}}}`; // Placeholder
                 
@@ -174,21 +168,15 @@ describe('TextDirectiveHandler', () => {
                       if (field.value in current) {
                         current = current[field.value as string];
                       } else {
-                         // <<< Throw MeldResolutionError instead >>>
-                         throw new MeldResolutionError(\
-                           `Field \'${field.value}\' not found on object\`, \
-                           { code: DirectiveErrorCode.RESOLUTION_FAILED, details: { identifier: node.identifier, field: field.value } }\
-                         );\
-                      }\
+                         // <<< Throw generic Error >>>
+                         throw new Error(`Field '${field.value}' not found`); 
+                      }
                     } else {
                       // Handle other field types (index) or non-object access if needed
-                       // <<< Throw MeldResolutionError instead >>>
-                       throw new MeldResolutionError(\
-                         `Cannot access field \'${field.value}\' on non-object\`, \
-                         { code: DirectiveErrorCode.RESOLUTION_FAILED, details: { identifier: node.identifier, field: field.value } }\
-                       );\
-                    }\
-                  }\
+                       // <<< Throw generic Error >>>
+                      throw new Error(`Cannot access field '${field.value}' on non-object`); 
+                    }
+                  }
                   resolvedVar = current;
                 }
                 
@@ -246,9 +234,9 @@ describe('TextDirectiveHandler', () => {
       const example = textDirectiveExamples.atomic.escapedCharacters;
       const node = await createNodeFromExample(example.code);
       
-      // Special case - direct mock to handle expected behavior
-      resolutionService.resolveInContext.mockImplementation(async () => {
-        return 'Line 1\nLine 2\t"Quoted"';
+      // <<< Ensure mockImplementationOnce returns the unescaped string >>>
+      resolutionService.resolveNodes.mockImplementationOnce(async () => {
+        return 'Line 1\nLine 2\t"Quoted"'; // The actual string value after unescaping
       });
 
       const testContext = {
@@ -326,14 +314,8 @@ describe('TextDirectiveHandler', () => {
       
       // <<< Use mockImplementationOnce to throw the specific error >>>
       resolutionService.resolveNodes.mockImplementationOnce(async () => {
-        // <<< Throw MeldResolutionError with correct signature (message, { code, details }) >>>
-        throw new MeldResolutionError(
-           'Variable not found: undefined_var', 
-           { 
-             code: DirectiveErrorCode.VARIABLE_NOT_FOUND, 
-             details: { identifier: 'undefined_var' } 
-           }
-         );
+        // <<< Throw generic Error >>>
+        throw new Error('Variable not found: undefined_var');
       });
 
       const node = await createNodeFromExample(example.code);
