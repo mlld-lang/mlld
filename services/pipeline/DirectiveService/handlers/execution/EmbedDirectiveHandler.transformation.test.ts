@@ -137,9 +137,9 @@ describe('EmbedDirectiveHandler Transformation', () => {
     });
     
     resolutionService.extractSection.mockImplementation(async (content, section) => {
-      const regex = new RegExp(`^#+\\s*${section}\s*$([\s\S]*?)(^#+\\s|$)`, 'm');
+      const regex = new RegExp(`(^|\n)#+\s*${section}\s*\n([\s\S]*?)(?:\n#+\s|$)`, 'm');
       const match = content.match(regex);
-      return match ? match[1].trim() : '';
+      return match ? match[2].trim() : '';
     });
 
     await contextDI.initialize();
