@@ -2,17 +2,17 @@
 
 ## Goal
 
-Refactor the `@core/ast` parser to be context-aware regarding variable interpolation syntax (`{{...}}`, `$var`). The parser should generate an AST that accurately reflects whether variable syntax represents a reference needing resolution or literal text, based on Meld's language rules.
+Refactor the `@core/ast` parser to be context-aware regarding variable interpolation syntax (`{{...}}`, `$var`). The parser should generate an AST that accurately reflects whether variable syntax represents a reference needing resolution or literal text, based on Meld's language rules. This eliminates the need for downstream services to re-parse strings originating from the AST.
 
 ## Problem Statement
 
-Currently, the parser (`@core/ast/grammar/meld.pegjs`) incorrectly parses variable syntax (`{{...}}` or `$identifier`) as `VariableReferenceNode` even in plain text contexts (outside of directives). This forces downstream services (`ResolutionService`, directive handlers) to:
+Previously, the parser (`@core/ast/grammar/meld.pegjs`) incorrectly parsed variable syntax (`{{...}}` or `$identifier`) as `VariableReferenceNode` even in plain text contexts (outside of directives). It also didn't pre-parse interpolated values within directives. This forced downstream services (`ResolutionService`, directive handlers) to:
 
-1.  **Re-parse** strings during the resolution phase to find potential variables.
-2.  **Carry context** about the string's origin to determine *if* interpolation should even occur (since `{{...}}` in plain text should be literal).
-3.  **Risk inconsistency** if the secondary parsing logic differs from the main parser.
+1.  **Re-parse** strings during the resolution phase to find potential variables using regex or secondary parsers.
+2.  **Carry context** about the string's origin to determine *if* interpolation should occur.
+3.  **Risk inconsistency** between the main parser and secondary parsing logic.
 
-This violates the principle of the AST fully representing the parsed structure, pushes syntactic concerns into the semantic resolution phase, and increases complexity and fragility.
+This violated the principle of the AST fully representing the parsed structure, pushed syntactic concerns into the semantic resolution phase, and increased complexity and fragility.
 
 ## Implementation Challenges & Lessons Learned (First Attempt)
 
@@ -56,127 +56,132 @@ Our debugging revealed that the **order of rule definitions** in the `.pegjs` fi
 
 **Rationale:** This order ensures that when Peggy processes any rule (like `Start` or `TextPart`), all other non-terminal rules it references (or uses in lookaheads) have already been fully defined and registered by the parser generator. Fundamental/terminal rules are defined last as they don't typically depend on complex rules. Adhering to this structure dramatically reduces "Rule not defined" build errors.
 
-## Revised Implementation Strategy (Second Attempt)
+## Revised Implementation Strategy & Progress
 
-Based on the lessons learned, we will proceed with the **inline, delimiter-specific parsing strategy** for handling interpolation within directive values.
+The refactoring is divided into two phases:
 
 **Phase 1: Parser and Type Modifications (Completed)**
 
-This phase focused on updating the parser grammar and core type definitions.
+This phase focused on updating the parser grammar (`meld.pegjs`) and core type definitions (`@core/syntax/types/`, `@core/types/`) to produce the desired AST structure.
 
-**1. Detailed `meld.pegjs` Modification Strategy (Inline Approach):**
-
-*   **Adhere to Strict Rule Order:** (DONE)
-*   **Top-Level Parsing:** (DONE)
-*   **Core Rule Preservation:** (DONE)
-*   **Delimiter-Specific Interpolation Rules:** (DONE)
-*   **Update Literal/Template Parsing Rules:** (DONE)
-*   **Update Directive Value Rules:** (DONE)
-*   **Path Handling:** (DONE - Parser generates `interpolatedValue`)
-*   **Helper Functions:** (DONE - `parseInterpolated` removed, `helpers` pattern implemented)
-
-**2. AST Type Updates (`@core/types/`, `@core/syntax/types/`)**
-
-*   **Define `InterpolatableValue`:** (DONE)
-*   **Define Specific `DirectiveData` Interfaces:** (DONE)
-*   **Update `StructuredPath`:** (DONE - Added `interpolatedValue?: InterpolatableValue;` to definition in `core/syntax/types/nodes.ts`)
-
-**3. AST Test Update Strategy (`meld-spec`, `*.test.ts`)**
-
-*   **Role of Tests:** (DONE - Used for validation)
-*   **Plain Text Tests:** (DONE)
-*   **Directive Interpolation Tests:** (DONE - Added/Updated)
-*   **Existing Literal Tests:** (DONE)
-*   **Rejection Tests:** (DONE)
-*   **Debugging Workflow:** (DONE - Used)
-
-**4. Build Script (`build-grammar.mjs`)**
-
-*   (DONE - Verified)
+*   **Parser (`meld.pegjs`):**
+    *   Grammar restructured for stability.
+    *   Helper function access refactored (`helpers` object).
+    *   Delimiter-specific rules (`DoubleQuote...`, `Multiline...`, `Bracket...`, etc.) implemented to handle interpolation contextually.
+    *   `InterpolatedStringLiteral`, `InterpolatedMultilineTemplate` rules added to produce `InterpolatableValue` arrays.
+    *   Directive value rules (`TextValue`, `DataValue`, `PathValue`, `_EmbedRHS`, `_RunRHS`, etc.) updated to use interpolation rules, generating `InterpolatableValue` arrays or attaching them to `StructuredPath` (as `interpolatedValue`) where appropriate.
+*   **AST Types:**
+    *   `InterpolatableValue` type alias (`Array<TextNode | VariableReferenceNode>`) defined and used.
+    *   Specific `DirectiveData` interfaces (`EmbedDirectiveData`, `TextDirectiveData`, etc. in `directives.ts`) updated to use `InterpolatableValue` for relevant properties.
+    *   `StructuredPath` interface (in `nodes.ts`) updated to include `interpolatedValue?: InterpolatableValue`.
+*   **AST Tests:** Updated to reflect the new AST structure, including expectations for `InterpolatableValue` arrays and literal `TextNode`s in plain text contexts. Grammar parsing issues and test fixture mismatches were resolved.
+*   **Build Script:** Verified.
 
 **Phase 2: Consuming the InterpolatableValue AST (To Do)**
 
-This phase focuses on refactoring downstream services and handlers to correctly process and leverage the new `InterpolatableValue` structure produced by the parser.
+This phase focuses on refactoring downstream services and handlers to correctly process and leverage the new `InterpolatableValue` structure produced by the parser, **eliminating redundant parsing** of strings originating from the AST.
 
-**5. Refactor `ResolutionService` Core Logic:**
+**5. Refactor `ResolutionService` Core Logic (`resolveNodes`):**
 
-*   **Goal:** Centralize the logic for processing `InterpolatableValue` arrays within `ResolutionService`, removing the need for other components to handle this structure directly or perform regex-based variable searching.
-*   **Identify/Create Core Helper:** Locate or create the internal `ResolutionService` method responsible for processing an array of nodes (e.g., `resolveNodes` or similar). This method will become the primary implementation site.
-*   **Implement `resolveNodes` (or similar):**
-    *   Input: `nodes: InterpolatableValue` (or `MeldNode[]`), `context: ResolutionContext`.
-    *   Output: `Promise<string>` (the final resolved string).
-    *   Logic: Iterate through the `nodes` array.
-        *   If `node.type === 'Text'`, append `node.content` to the result string.
-        *   If `node.type === 'VariableReference'`, call `VariableReferenceResolver.resolve(node, context)` (or the appropriate internal method) to get the variable's resolved string value, and append it.
-        *   Handle potential errors during variable resolution based on `context.strict`.
-*   **Remove Regex Parsing:** Completely remove any existing logic within `ResolutionService` that uses regular expressions (e.g., `/\{\{.*?\}\}/g`) to find and replace variables in strings. Resolution should now rely solely on processing the AST nodes.
+*   **Goal:** Create or refine the central internal method for processing `InterpolatableValue` arrays.
+*   **Method Signature (Example):** `private async resolveNodes(nodes: InterpolatableValue, context: ResolutionContext): Promise<string>`
+*   **Logic:**
+    *   Initialize an empty result string.
+    *   Iterate through the input `nodes` array.
+    *   If `node.type === 'Text'`, append `node.content` to the result.
+    *   If `node.type === 'VariableReference'`:
+        *   Call `VariableReferenceResolver.resolve(node, context)` (or appropriate internal method).
+        *   **Crucially:** The resolver must return the **fully resolved string value** of the variable. If the variable's stored value is *itself* an `InterpolatableValue` array (due to its definition), the resolver must recursively call back into `this.resolveNodes` (or a public equivalent like `resolveInContext`) to resolve that array before returning the final string. (See Step 7).
+        *   Append the resolved string to the result.
+    *   Handle potential errors during variable resolution based on `context.strict`.
+*   **Cleanup:** Remove all internal regex-based variable searching/replacement logic previously used on strings derived from the AST.
 
 **6. Update Public `ResolutionService` Methods:**
 
-*   **`resolveInContext(value: string | StructuredPath, ...)`:**
-    *   If `value` is `StructuredPath` and `value.interpolatedValue` exists, call `resolveNodes(value.interpolatedValue, context)` and return the result.
+*   **Goal:** Adapt public methods to either directly use `resolveNodes` for pre-parsed inputs or parse plain string inputs *before* calling `resolveNodes`.
+*   **`resolveInContext(value: string | StructuredPath, context)`:**
+    *   If `value` is `StructuredPath` and `value.interpolatedValue` exists: Call `this.resolveNodes(value.interpolatedValue, context)`.
+    *   If `value` is `StructuredPath` *without* `interpolatedValue`: Treat `value.raw` as a plain string input (see next case).
     *   If `value` is `string`:
-        *   Check if string contains variable markers (`{{`, `$`). If not, return string directly (optimization).
-        *   Use `ParserServiceClient` (or injected `IParserService`) to parse the `value` string into an `InterpolatableValue` array (e.g., using a specific parser rule designed for inline content or a lightweight parsing mode).
-        *   Call `resolveNodes` on the resulting array.
-    *   If `value` is `StructuredPath` *without* `interpolatedValue`, pass `value.raw` to the string-handling logic above.
-*   **`resolvePath(pathString: string, ...)`:**
-    *   Current signature expects `string`. Keep this signature for now.
-    *   Internally, the implementation should first check if the `pathString` contains variable markers.
-    *   If markers exist, parse the `pathString` into an `InterpolatableValue` array (using `ParserServiceClient` or similar).
-    *   Call `resolveNodes` on the array to get the fully resolved path string.
-    *   Use the *resolved* path string for subsequent path validation (`validatePath`) and normalization logic to produce the final `MeldPath`.
-    *   *(Alternative Future Enhancement: Overload `resolvePath` to directly accept `StructuredPath`. If `interpolatedValue` exists, resolve it first using `resolveNodes`. If not, use `raw` string. This avoids redundant parsing if the caller already has the `StructuredPath` object.)*
-*   **`resolveText(text: string, ...)`:**
-    *   Similar to `resolveInContext`'s string handling: Parse the input `text` string into an `InterpolatableValue` array using `ParserServiceClient`, then call `resolveNodes`. Remove any old regex logic.
-*   **`resolveContent(nodes: MeldNode[], ...)`:**
-    *   This method already takes `MeldNode[]`. Review its implementation. If it calls other methods like `resolveText` internally on node content, ensure those calls are updated. If it directly iterates and resolves, ensure its logic aligns with the new `resolveNodes` pattern (using `VariableReferenceResolver` for `VariableReferenceNode`s).
+        *   Optimization: Check for `{{` or `$`. If none, return `value`.
+        *   **Parse the string:** Use `ParserServiceClient` (or injected `IParserService`) to parse the input `value` string into an `InterpolatableValue` array. This handles strings not originating from the main AST parse.
+        *   Call `this.resolveNodes` on the resulting array.
+*   **`resolveText(text: string, context)`:**
+    *   Optimization: Check for `{{` or `$`. If none, return `text`.
+    *   **Parse the string:** Use `ParserServiceClient` to parse the input `text` into an `InterpolatableValue` array.
+    *   Call `this.resolveNodes` on the resulting array.
+*   **`resolveContent(nodes: MeldNode[], context)`:**
+    *   This method already receives a node array. Ensure its internal logic correctly identifies and handles `TextNode` vs `VariableReferenceNode` consistent with the `resolveNodes` pattern, likely by calling `resolveNodes` directly or using `VariableReferenceResolver` appropriately for variable nodes. Remove any assumptions that child nodes are simple strings needing `resolveText`.
+*   **`resolvePath(pathString: string, context)`:**
+    *   **Responsibility:** This method's core job is path validation and normalization *after* any variables within the path string have already been resolved.
+    *   **Remove Internal Resolution:** Remove any logic within `resolvePath` that attempts to find or resolve variables using regex or parsing.
+    *   **Caller Responsibility:** Callers (like directive handlers) are responsible for obtaining the fully resolved path string (by calling `resolveNodes` on `directive.path.interpolatedValue` if available, or `resolveInContext` on `directive.path.raw` otherwise) *before* passing that final string to `resolvePath`.
 
-**7. Refactor Directive Handlers:**
+**7. Refactor `VariableReferenceResolver`:**
 
-*   **General Principle:** Identify directive properties that are now typed as `InterpolatableValue` or `StructuredPath`. Instead of using raw strings or performing local resolution, call the appropriate updated `ResolutionService` method (`resolveInContext`, `resolvePath`, `resolveText`, `resolveNodes`) to get the final resolved string value needed by the handler's logic.
-*   **Specific Handlers:**
-    *   **`@text`, `@data`:** Resolve `directive.value` (if `InterpolatableValue`) using `resolveNodes` or `resolveInContext`. Use the resulting string/value for assignment. For `embed`/`run` sources, resolve the relevant properties within `directive.embed` or `directive.run` before assignment.
-    *   **`@define`:** Resolve `directive.value` (if `InterpolatableValue`) or `directive.command.command` (if `InterpolatableValue`) using `resolveNodes` or `resolveInContext` before storing the definition.
-    *   **`@path`:** Resolve `directive.path.interpolatedValue` using `resolveNodes` to get the target path *string*. Pass this resolved string to `PathService` or for further validation/assignment. *(Update: Current handler likely uses `resolvePath` which should now internally handle the interpolation based on Step 6).* Confirm `PathDirectiveHandler` calls `resolutionService.resolvePath(directive.path.raw, ...)` and relies on `resolvePath`'s updated internal logic.
-    *   **`@run`:** Resolve `directive.command` (if `InterpolatableValue`) using `resolveNodes` or `resolveInContext` to get the final command string or script content before execution. Resolve arguments if they are `VariableReferenceNode`s.
+*   **Goal:** Handle recursive resolution when a variable's value is an `InterpolatableValue` array.
+*   **Method:** `resolve(node: VariableReferenceNode, context)`
+*   **Logic:**
+    *   Retrieve the variable's value using `stateService.getVariable(node.identifier)`.
+    *   **Check Value Type:** If the retrieved `variable.value` is detected to be an `InterpolatableValue` array (needs a reliable check - maybe store metadata or use a type guard):
+        *   Call `resolutionService.resolveNodes(variable.value, context)` (or equivalent public method like `resolveInContext`) to recursively resolve the array.
+        *   Return the resulting resolved string.
+    *   If the value is a primitive string, number, boolean, null: Handle field access (if `node.fields` exist) using `accessFields`, then convert the final result to a string using the existing `convertToString` logic.
+    *   If the value is a complex object/array (DataVariable): Handle field access using `accessFields`, then convert result using `convertToString`.
+    *   Handle path/command variables appropriately (likely returning validated path string or command structure representation).
+
+**8. Refactor Directive Handlers:**
+
+*   **Goal:** Ensure handlers correctly pass AST structures to `ResolutionService` and use the returned resolved strings. Eliminate direct use of `.raw` where `interpolatedValue` exists and is relevant. Eliminate handler-level string parsing.
+*   **General Pattern:**
+    1.  Identify directive properties that are `InterpolatableValue` or `StructuredPath`.
+    2.  If `StructuredPath` and `interpolatedValue` exists: Call `resolutionService.resolveNodes(directive.path.interpolatedValue, context)` to get the resolved string.
+    3.  If `InterpolatableValue`: Call `resolutionService.resolveNodes(directive.property, context)` to get the resolved string.
+    4.  If `StructuredPath` without `interpolatedValue`, or other potentially unresolved string from AST: Call `resolutionService.resolveInContext(directive.property.raw, context)` or `resolutionService.resolveText(directive.stringProperty, context)` to get the resolved string.
+    5.  Use the **resolved string** for the handler's logic (e.g., pass to `FileSystemService`, `PathService.resolvePath`, state assignment, command execution).
+*   **Specific Handlers (Examples):**
+    *   **`@text`, `@data`, `@define`:** Use `resolveNodes` on `directive.value` (or `directive.command.command`) if it's `InterpolatableValue`.
+    *   **`@path`:** Call `resolveNodes` on `directive.path.interpolatedValue` to get resolved path string. Pass resolved string to `PathService` methods if needed.
+    *   **`@run`:** Call `resolveNodes` on `directive.command` if it's `InterpolatableValue`.
     *   **`@embed`:**
-        *   `embedTemplate`: Resolve `directive.content` (`InterpolatableValue`) using `resolveContent` (or `resolveNodes`).
-        *   `embedVariable`: Resolve `directive.path` (which holds variable structure or `StructuredPath`) using `resolveInContext`. *(Update: Current handler passes `directive.path.raw`)*. Update handler to pass `directive.path` object if `resolveInContext` correctly handles `StructuredPath` with `interpolatedValue` after Step 6.
-        *   `embedPath`: Resolve `directive.path.interpolatedValue` *first* using `resolveNodes` to get the target path string. Then use *that string* with `PathService`/`FileSystemService` calls. *(Update: Current handler uses `resolvePath(directive.path.raw, ...)` which relies on `resolvePath`'s updated internal logic).* Confirm `EmbedDirectiveHandler` relies on `resolvePath` for `embedPath`.
-    *   **`@import`:** Resolve `directive.path.interpolatedValue` using `resolveNodes` to get the target path string *before* attempting to locate and parse the imported file. *(Update: Current handler uses `resolvePath(directive.path.raw, ...)`).* Confirm `ImportDirectiveHandler` relies on `resolvePath`.
+        *   `embedTemplate`: Call `resolveContent` or `resolveNodes` on `directive.content`.
+        *   `embedVariable`: Call `resolveInContext` on `directive.path` (which is `StructuredPath` potentially containing `interpolatedValue` if defined via brackets, or other structure if `{{var}}`). `resolveInContext` handles the different cases.
+        *   `embedPath`: Call `resolveNodes` on `directive.path.interpolatedValue` to get resolved path string. Use resolved string with `FileSystemService`. Pass resolved string to `resolutionService.resolvePath` *only if* the `MeldPath` object itself is still needed.
+    *   **`@import`:** Call `resolveNodes` on `directive.path.interpolatedValue` to get resolved path string. Use resolved string to locate/load the file. Pass resolved string to `resolutionService.resolvePath` *only if* the `MeldPath` object itself is still needed.
 
-**8. Update Tests:**
+**9. Update Tests:**
 
-*   **`ResolutionService` Tests:** Update unit tests to pass `InterpolatableValue` arrays and `StructuredPath` objects (with `interpolatedValue`) to relevant methods. Assert that the output strings are correctly resolved. Mock `VariableReferenceResolver` and `ParserServiceClient` as needed.
-*   **Directive Handler Tests:** Update unit tests. Mock the updated `ResolutionService` methods (`resolveInContext`, `resolvePath`, etc.) to return expected resolved strings based on the handler's input AST node (containing `InterpolatableValue` etc.). Verify the handler uses the resolved value correctly.
-*   **Integration Tests (`api.test.ts`, etc.):** Ensure end-to-end tests involving directives with interpolated values (strings, paths, templates, commands) produce the correct final output.
+*   **`ResolutionService` Tests:** Focus on inputs (`InterpolatableValue`, `StructuredPath` w/ `interpolatedValue`, plain strings) and assert correct resolved string outputs. Mock `VariableReferenceResolver`, `ParserServiceClient`. Test recursive resolution.
+*   **`VariableReferenceResolver` Tests:** Test the case where `getVariable` returns an `InterpolatableValue` array; mock `resolutionService.resolveNodes` and verify it's called correctly.
+*   **Directive Handler Tests:** Update mocks for `ResolutionService` methods to reflect they now take AST structures/arrays and return resolved strings. Verify handlers call the correct methods and use the returned strings properly.
+*   **Integration Tests:** Verify end-to-end scenarios with various levels of interpolation work correctly.
 
-**9. Verification:**
+**10. Verification:**
 
-*   Perform manual testing with various interpolation scenarios in different directive contexts.
-*   Run the full test suite (`npm test`) to ensure no regressions.
+*   Manual testing.
+*   Full test suite (`npm test`).
 
-## Downstream Impact Outline (Updated)
+## Downstream Impact Outline (Revised)
 
-*   **`ResolutionService`:** **Major refactoring required** to implement AST-based resolution (iterate `InterpolatableValue`, call `VariableReferenceResolver`) and remove regex-based logic. Public methods need updating to handle `StructuredPath` with `interpolatedValue` or parse input strings into `InterpolatableValue` before calling core resolution logic.
-*   **Directive Handlers (`Text`, `Data`, `Define`, `Path`, `Run`, `Embed`, `Import`):** **Significant refactoring required.** Must adapt to receive `InterpolatableValue` / `StructuredPath` properties and call updated `ResolutionService` methods for resolution instead of handling raw strings or doing local parsing.
-*   **Path Resolution Logic:** Needs careful review. Logic using path strings must ensure they are fully resolved (via `resolveNodes` or updated `resolvePath`) *before* being passed to `PathService` or `FileSystemService`.
-*   **General AST Consumers:** Any code directly accessing affected directive node properties must handle `InterpolatableValue`.
-*   **Tests:** **Extensive updates required** across unit and integration tests to reflect the new AST structures and `ResolutionService` behavior.
+*   **`ResolutionService`:** Major refactoring. Becomes the sole owner of resolving `InterpolatableValue` AST structures. Removes regex parsing for AST-derived values. Requires careful handling of recursive resolution and distinguishing between pre-parsed AST inputs and plain string inputs (which still need parsing).
+*   **`VariableReferenceResolver`:** Needs update to handle recursive resolution by calling back into `ResolutionService` when a variable's value is an `InterpolatableValue`.
+*   **Directive Handlers:** Simplified logic. No longer parse strings from AST. Consistently call `ResolutionService` with appropriate AST structures/arrays and use the returned resolved string.
+*   **`ParserServiceClient`:** Becomes crucial for `ResolutionService` to handle plain string inputs that need parsing *before* node resolution.
+*   **Tests:** Extensive updates required.
 
-## Implementation Steps (Updated)
+## Implementation Steps (Revised for Phase 2)
 
-1.  **Prepare:** Ensure `@_plans/AST-VARIABLES.md` reflects this updated plan. **(DONE)**
-2.  **Phase 1: Parser/Type Changes (Steps 2-7 of original plan):** **(DONE)**
-3.  **Phase 2 Step 5: Refactor `ResolutionService` Core Logic:** Implement `resolveNodes` (or similar) to iterate `InterpolatableValue` and call `VariableReferenceResolver.resolve`. Remove regex logic. **(TO DO - High Priority)**
-4.  **Phase 2 Step 6: Update Public `ResolutionService` Methods:** Refactor `resolveInContext`, `resolvePath`, `resolveText`, `resolveContent` to use `resolveNodes` and handle string parsing via `ParserServiceClient`. **(TO DO - High Priority)**
-5.  **Phase 2 Step 8: Update `ResolutionService` Tests:** Write/update unit tests for the refactored `ResolutionService` methods. **(TO DO - High Priority)**
-6.  **Phase 2 Step 7: Refactor Directive Handlers:** Update handlers one by one (`@text`, `@data`, `@path`, `@embed`, `@run`, `@import`, `@define`) to call the refactored `ResolutionService` methods. **(TO DO - Medium Priority)**
-7.  **Phase 2 Step 8: Update Handler Tests:** Update unit tests for each refactored handler. **(TO DO - Medium Priority)**
-8.  **Phase 2 Step 8: Update Integration Tests:** Update end-to-end tests. **(TO DO - Medium Priority)**
-9.  **Phase 2 Step 9: Verification:** Perform final testing. **(TO DO - Low Priority)**
+1.  **Phase 1: Parser/Type Changes:** **(DONE)**
+2.  **Phase 2 Step 5: Refactor `ResolutionService` Core Logic (`resolveNodes`):** Implement the internal `resolveNodes` method to process `InterpolatableValue` arrays, calling `VariableReferenceResolver` for variables. **Crucially, ensure this step does NOT yet handle recursion.** Remove internal regex parsing for AST values. **(TO DO - High Priority)**
+3.  **Phase 2 Step 7: Refactor `VariableReferenceResolver`:** Update `resolve` to detect when a variable's value is an `InterpolatableValue` array. **Temporarily,** return a placeholder string or reconstruct the raw string representation for this case (e.g., using `helpers.reconstructRawString`). This isolates the recursion dependency. **(TO DO - High Priority)**
+4.  **Phase 2 Step 6: Update Public `ResolutionService` Methods:** Refactor `resolveInContext`, `resolveText`, `resolveContent` to use `resolveNodes` for AST inputs and `ParserServiceClient -> resolveNodes` for string inputs. Update `resolvePath` to *remove* internal variable resolution. **(TO DO - High Priority)**
+5.  **Phase 2 Step 9: Update `ResolutionService` Tests:** Update tests for non-recursive cases based on Steps 2 & 4. **(TO DO - High Priority)**
+6.  **Phase 2 Step 5 & 7 (Recursion):** Now, implement the recursive call within `VariableReferenceResolver` (Step 3) and ensure `resolveNodes` (Step 2) correctly handles being called recursively. Update tests (Step 5) to cover recursion. **(TO DO - High Priority)**
+7.  **Phase 2 Step 8: Refactor Directive Handlers:** Update handlers (`@text`, `@data`, `@path`, `@embed`, `@run`, `@import`, `@define`) one by one to call the refactored `ResolutionService` methods with AST structures and use the returned resolved strings. **(TO DO - Medium Priority)**
+8.  **Phase 2 Step 9: Update Handler Tests:** Update unit tests for each refactored handler. **(TO DO - Medium Priority)**
+9.  **Phase 2 Step 9: Update Integration Tests:** Update end-to-end tests. **(TO DO - Medium Priority)**
+10. **Phase 2 Step 10: Verification:** Perform final testing. **(TO DO - Low Priority)**
 
 ## Priority
 
-**High.** Completing Phase 2 (consuming the `InterpolatableValue` AST) is critical for realizing the benefits of the parser refactoring, simplifying downstream logic, and improving overall system robustness. Refactoring `ResolutionService` is the most critical next step. 
+**High.** Completing Phase 2 is essential. Refactoring `ResolutionService` and `VariableReferenceResolver` (Steps 2-6) is the immediate priority. 
