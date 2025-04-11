@@ -18,6 +18,12 @@ import { VariableType, TextVariable, DataVariable, MeldVariable, JsonValue } fro
 import { VariableResolutionError } from '@core/errors/VariableResolutionError.js';
 import { expectToThrowWithConfig } from '@tests/utils/ErrorTestUtils.js';
 import { FieldAccessError } from '@core/errors/FieldAccessError.js';
+import type { IPathService } from '@services/fs/PathService/IPathService.js';
+import type { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService.js';
+import { createStateServiceMock } from '@tests/utils/mocks/serviceMocks.js';
+import { isInterpolatableValueArray } from '@core/syntax/types/guards.js';
+import type { InterpolatableValue } from '@core/syntax/types/nodes.js';
+import type { StructuredPath as AstStructuredPath } from '@core/syntax/types/nodes.js';
 
 describe('VariableReferenceResolver Edge Cases', () => {
   let contextDI: TestContextDI;
@@ -27,6 +33,7 @@ describe('VariableReferenceResolver Edge Cases', () => {
   let resolutionService: DeepMockProxy<IResolutionService>;
   let resolutionContext: ResolutionContext;
   let mockVariableNodeFactory: VariableNodeFactory;
+  let pathService: DeepMockProxy<IPathService>;
 
   // --- Define mock variables used in edge tests --- 
   const mockGreetingVar: TextVariable = { name: 'greeting', type: VariableType.TEXT, value: 'Hello' };
@@ -40,6 +47,7 @@ describe('VariableReferenceResolver Edge Cases', () => {
     stateService = mockDeep<IStateService>();
     parserService = mockDeep<IParserService>();
     resolutionService = mockDeep<IResolutionService>();
+    pathService = mockDeep<IPathService>();
     
     mockVariableNodeFactory = {
       createVariableReferenceNode: vi.fn().mockImplementation(createVariableReferenceNode),
@@ -55,6 +63,7 @@ describe('VariableReferenceResolver Edge Cases', () => {
     contextDI.registerMock<IStateService>('IStateService', stateService);
     contextDI.registerMock<IParserService>('IParserService', parserService);
     contextDI.registerMock<IResolutionService>('IResolutionService', resolutionService);
+    contextDI.registerMock<IPathService>('IPathService', pathService as IPathService);
     contextDI.registerMock<VariableNodeFactory>(VariableNodeFactory, mockVariableNodeFactory);
     
     // Remove parser mock - we will create nodes directly in tests
@@ -102,7 +111,11 @@ describe('VariableReferenceResolver Edge Cases', () => {
         return undefined;
     });
 
-    resolver = await contextDI.resolve(VariableReferenceResolver);
+    // Explicitly resolve mocks (optional)
+    await contextDI.resolve<IStateService>('IStateService');
+    // ... resolve others if needed ...
+
+    resolver = new VariableReferenceResolver(stateService, pathService as IPathService, resolutionService, parserService);
     
     resolutionContext = ResolutionContextFactory.create(stateService, 'test.meld')
                           .withStrictMode(true);
@@ -253,7 +266,21 @@ describe('VariableReferenceResolver Edge Cases', () => {
     // Mock the resolution service for nested calls - simulate failure for 'nested'
     resolutionService.resolveInContext.mockImplementation(async (value, ctx) => {
       // Ensure return is always Promise<string>
-      const stringValue = typeof value === 'string' ? value : value?.original ?? '';
+      let stringValue = '';
+      if (typeof value === 'string') {
+          stringValue = value;
+      } else if (isInterpolatableValueArray(value)) {
+          // Delegate to resolveNodes mock for InterpolatableValue arrays
+          return await resolutionService.resolveNodes(value, ctx); // Value is already InterpolatableValue here
+      } else if (typeof value === 'object' && value !== null && 'raw' in value && typeof value.raw === 'string') {
+          // Handle AstStructuredPath (identified by 'raw' property)
+          stringValue = value.raw;
+      } else {
+          // Fallback for unexpected types
+          stringValue = JSON.stringify(value);
+      }
+      
+      // Original logic for nested variable simulation
       if (stringValue.includes('{{nested}}')) {
         console.log(`[DEBUG MOCK resolveInContext] Simulating failure for: ${stringValue}`);
         throw new VariableResolutionError('Variable not found: nested');

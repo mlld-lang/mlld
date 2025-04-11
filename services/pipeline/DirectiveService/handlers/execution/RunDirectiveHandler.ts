@@ -76,12 +76,12 @@ export class RunDirectiveHandler implements IDirectiveHandler {
           const commandDefVar = clonedState.getCommandVar(commandName); // Use clonedState
           if (!commandDefVar) {
               throw new DirectiveError(`Command definition '${commandName}' not found`, this.kind, DirectiveErrorCode.VARIABLE_NOT_FOUND, { node, context });
-          }
+        }
           const commandDef = commandDefVar.value; // This is ICommandDefinition
           
           // Resolve arguments
           const resolvedArgs: string[] = [];
-          for (const arg of commandArgs) {
+        for (const arg of commandArgs) {
               if (arg.type === 'variable') {
                   const varNode = arg.value as VariableReferenceNode;
                   try {
@@ -99,7 +99,7 @@ export class RunDirectiveHandler implements IDirectiveHandler {
                       }
                       resolvedArgs.push(''); // Use empty string in non-strict
                   }
-              } else {
+        } else {
                   // String or Raw type - use value directly (already string)
                   resolvedArgs.push(String(arg.value)); 
               }
@@ -110,8 +110,8 @@ export class RunDirectiveHandler implements IDirectiveHandler {
           const commandTemplate = commandDef.commandTemplate;
           if (commandTemplate === undefined || commandTemplate === null) {
                throw new DirectiveError(`Command definition '${commandName}' is missing command template`, this.kind, DirectiveErrorCode.VALIDATION_FAILED, { node, context });
-          }
-
+        }
+        
           // Substitute positional arguments ($1, $2, ...)
           let processedTemplate: string | InterpolatableValue;
           if (typeof commandTemplate === 'string') {
@@ -140,7 +140,7 @@ export class RunDirectiveHandler implements IDirectiveHandler {
                   }
               });
               directiveLogger.debug(`Substituted args into InterpolatableValue template for ${commandName}`);
-          } else {
+        } else {
               throw new DirectiveError(`Command definition '${commandName}' has unexpected template type`, this.kind, DirectiveErrorCode.VALIDATION_FAILED, { node, context });
           }
 
@@ -148,7 +148,7 @@ export class RunDirectiveHandler implements IDirectiveHandler {
           if (isInterpolatableValueArray(processedTemplate)) {
               // Resolve using the *cloned* state's context, as the command runs within the directive's scope
               commandToExecute = await this.resolutionService.resolveNodes(processedTemplate, resolutionContext);
-          } else {
+        } else {
               commandToExecute = processedTemplate; // Already a string
           }
           directiveLogger.debug(`Resolved final command for ${commandName}: ${commandToExecute}`);
@@ -289,7 +289,7 @@ export class RunDirectiveHandler implements IDirectiveHandler {
         this.kind,
         errorCode,
         { 
-          node,
+          node, 
           context, // Pass full context
           cause: error instanceof Error ? error : undefined,
           severity: severity // Use determined severity

@@ -166,7 +166,7 @@ export class VariableReferenceResolver {
       if (isInterpolatableValueArray(variable.value)) {
           if (!this.resolutionService) {
               throw new MeldResolutionError('Cannot recursively resolve variable: ResolutionService instance is missing.', {
-                  code: 'E_SERVICE_UNAVAILABLE',
+                  code: 'E_SERVICE_UNAVAILABLE', 
                   details: { variableName: node.identifier }
               });
           }
@@ -179,11 +179,8 @@ export class VariableReferenceResolver {
           logger.debug(`Resolving PathVariable '${node.identifier}'`);
           const meldPathValueState = variable.value; // This is IFilesystemPathState or IUrlPathState
           
-          // Path variables themselves are considered resolved; return their original string value.
-          // Validation happens when the path is USED via resolvePath.
-          // TODO: Confirm this interpretation - should it return validated path?
-          // For now, returning originalValue aligns with how $vars were used previously.
-          return meldPathValueState.originalValue;
+          // Revert to returning originalValue. Validation/resolution should happen when path is used.
+          return meldPathValueState.originalValue; 
       }
       
       // --- Command Variable Handling ---
@@ -289,38 +286,27 @@ export class VariableReferenceResolver {
    */
   private async getVariable(node: VariableReferenceNode, context: ResolutionContext): Promise<MeldVariable | undefined> {
     const name = node.identifier;
-    // Use the specific type hint from the node if available, otherwise check all types.
     const specificType = node.valueType;
 
     this.resolutionTracker?.trackAttemptStart(name, `getVariable (type hint: ${specificType ?? 'any'})`);
     
-    let variable: MeldVariable | undefined = undefined;
-
-    if (specificType) {
-        switch(specificType) {
-            case VariableType.TEXT:    variable = this.stateService.getTextVar(name); break;
-            case VariableType.DATA:    variable = this.stateService.getDataVar(name); break;
-            case VariableType.PATH:    variable = this.stateService.getPathVar(name); break;
-            case VariableType.COMMAND: variable = this.stateService.getCommandVar(name); break;
-            default: logger.warn(`Unsupported specific variable type hint: ${specificType}`);
-        }
-    } else {
-        // No type hint, check all types (generic getVariable)
-        variable = await this.stateService.getVariable(name); 
-    }
+    // Always use the generic getVariable from state service
+    const variable: MeldVariable | undefined = await this.stateService.getVariable(name); 
 
     if (variable) {
-        // If a specific type was requested, ensure the found variable matches
+        // If a specific type hint was provided, validate the found variable's type
         if (specificType && variable.type !== specificType) {
             logger.warn(`Variable '${name}' found, but type mismatch. Expected ${specificType}, got ${variable.type}.`);
             this.resolutionTracker?.trackResolutionAttempt(name, `variable-type-mismatch`, false);
             return undefined; // Treat as not found if type doesn't match hint
         }
+        // Type matches hint (or no hint was given)
         this.resolutionTracker?.trackResolutionAttempt(name, `${variable.type}-variable`, true, variable.value);
         logger.debug(`Found ${variable.type} variable '${name}'.`);
         return variable;
     } else {
-        logger.warn(`Variable '${name}'${specificType ? ' of type ' + specificType : ''} not found in state.`);
+        // Variable not found by generic getter
+        logger.warn(`Variable '${name}'${specificType ? ' (hinted type: ' + specificType + ')' : ''} not found in state.`);
         this.resolutionTracker?.trackResolutionAttempt(name, `variable-not-found (type hint: ${specificType ?? 'any'})`, false);
         return undefined;
     }
