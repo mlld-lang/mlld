@@ -174,15 +174,21 @@ describe('TextDirectiveHandler', () => {
                       if (field.value in current) {
                         current = current[field.value as string];
                       } else {
-                         // <<< Throw FieldAccessError with correct signature (message, { fieldName }) >>>
-                         throw new FieldAccessError(`Field '${field.value}' not found`, { fieldName: field.value }); 
-                      }
+                         // <<< Throw MeldResolutionError instead >>>
+                         throw new MeldResolutionError(\
+                           `Field \'${field.value}\' not found on object\`, \
+                           { code: DirectiveErrorCode.RESOLUTION_FAILED, details: { identifier: node.identifier, field: field.value } }\
+                         );\
+                      }\
                     } else {
                       // Handle other field types (index) or non-object access if needed
-                       // <<< Throw FieldAccessError with correct signature (message, { fieldName }) >>>
-                      throw new FieldAccessError(`Cannot access field '${field.value}' on non-object`, { fieldName: field.value }); 
-                    }
-                  }
+                       // <<< Throw MeldResolutionError instead >>>
+                       throw new MeldResolutionError(\
+                         `Cannot access field \'${field.value}\' on non-object\`, \
+                         { code: DirectiveErrorCode.RESOLUTION_FAILED, details: { identifier: node.identifier, field: field.value } }\
+                       );\
+                    }\
+                  }\
                   resolvedVar = current;
                 }
                 
